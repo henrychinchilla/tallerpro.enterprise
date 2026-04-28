@@ -1,0 +1,6 @@
+{
+  "appId": "com.tuempresa.tallerpro",
+  "appName": "TallerPro",
+  "webDir": "tallerpro",
+  "bundledWebRuntime": false
+}

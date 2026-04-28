@@ -1,0 +1,1601 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<meta name="theme-color" content="#F59E0B">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="TallerPro">
+<link rel="manifest" href="manifest.json">
+<title>TallerPro Enterprise</title>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Mono:wght@300;400;500&family=Manrope:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+:root {
+  --bg: #080C10;
+  --surface: #0D1219;
+  --surface2: #111923;
+  --surface3: #162030;
+  --border: #1E2D3D;
+  --border2: #243444;
+  --amber: #F59E0B;
+  --amber-dim: #92600A;
+  --amber-glow: rgba(245,158,11,0.12);
+  --cyan: #06B6D4;
+  --cyan-dim: rgba(6,182,212,0.12);
+  --green: #10B981;
+  --green-dim: rgba(16,185,129,0.12);
+  --red: #EF4444;
+  --red-dim: rgba(239,68,68,0.12);
+  --purple: #8B5CF6;
+  --purple-dim: rgba(139,92,246,0.12);
+  --text: #E8EDF2;
+  --text2: #7A9BB5;
+  --text3: #3D5570;
+  --sidebar-w: 240px;
+  --header-h: 56px;
+}
+
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--text);font-family:'Manrope',sans-serif;font-size:14px;line-height:1.6;overflow-x:hidden;min-height:100vh}
+
+/* SCROLLBAR */
+::-webkit-scrollbar{width:4px;height:4px}
+::-webkit-scrollbar-track{background:var(--bg)}
+::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px}
+
+/* ─── GRID BG ─── */
+body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(rgba(30,45,61,0.4) 1px,transparent 1px),linear-gradient(90deg,rgba(30,45,61,0.4) 1px,transparent 1px);background-size:40px 40px;pointer-events:none;z-index:0}
+
+/* ─── LOGIN ─── */
+#login-screen{position:fixed;inset:0;z-index:1000;display:flex;align-items:center;justify-content:center;background:var(--bg)}
+#login-screen::before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse 70% 60% at 50% 40%,rgba(245,158,11,0.06) 0%,transparent 70%)}
+.login-box{position:relative;z-index:1;width:100%;max-width:420px;padding:0 20px}
+.login-logo{text-align:center;margin-bottom:40px}
+.login-logo-icon{font-size:42px;display:block;margin-bottom:12px}
+.login-logo h1{font-family:'Bebas Neue',sans-serif;font-size:42px;letter-spacing:.08em;color:var(--amber)}
+.login-logo p{font-family:'DM Mono',monospace;font-size:10px;color:var(--text3);letter-spacing:.15em;text-transform:uppercase;margin-top:4px}
+.login-card{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:36px;position:relative;overflow:hidden}
+.login-card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,var(--amber),transparent)}
+.form-group{margin-bottom:20px}
+.form-label{display:block;font-family:'DM Mono',monospace;font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--text2);margin-bottom:8px}
+.form-input{width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:12px 16px;color:var(--text);font-family:'Manrope',sans-serif;font-size:14px;outline:none;transition:border-color .2s}
+.form-input:focus{border-color:var(--amber)}
+.form-input::placeholder{color:var(--text3)}
+.form-select{width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:12px 16px;color:var(--text);font-family:'Manrope',sans-serif;font-size:14px;outline:none;cursor:pointer;appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%237A9BB5' stroke-width='1.5' fill='none'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 14px center}
+.btn-primary{width:100%;background:var(--amber);color:#080C10;border:none;border-radius:6px;padding:14px;font-family:'Manrope',sans-serif;font-weight:700;font-size:14px;letter-spacing:.04em;cursor:pointer;transition:opacity .2s,transform .1s;margin-top:8px}
+.btn-primary:hover{opacity:.9}
+.btn-primary:active{transform:scale(.99)}
+.login-demo{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:20px}
+.demo-btn{background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:8px 6px;font-family:'DM Mono',monospace;font-size:9px;letter-spacing:.06em;color:var(--text2);cursor:pointer;text-align:center;transition:border-color .2s,color .2s}
+.demo-btn:hover{border-color:var(--amber);color:var(--amber)}
+.login-sep{display:flex;align-items:center;gap:12px;margin:20px 0;color:var(--text3);font-family:'DM Mono',monospace;font-size:10px}
+.login-sep::before,.login-sep::after{content:'';flex:1;height:1px;background:var(--border)}
+
+/* ─── APP SHELL ─── */
+#app{display:none;min-height:100vh;position:relative;z-index:1}
+#app.visible{display:flex}
+
+/* ─── SIDEBAR ─── */
+#sidebar{width:var(--sidebar-w);min-height:100vh;background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;position:fixed;left:0;top:0;bottom:0;z-index:200;transition:transform .3s}
+.sidebar-brand{padding:20px 20px 16px;border-bottom:1px solid var(--border)}
+.sidebar-brand-name{font-family:'Bebas Neue',sans-serif;font-size:22px;letter-spacing:.05em;color:var(--amber)}
+.sidebar-brand-sub{font-family:'DM Mono',monospace;font-size:9px;color:var(--text3);letter-spacing:.1em;text-transform:uppercase;margin-top:2px}
+.sidebar-tenant{padding:14px 20px;border-bottom:1px solid var(--border);background:var(--surface2)}
+.sidebar-tenant-name{font-size:12px;font-weight:700;color:var(--text)}
+.sidebar-tenant-plan{font-family:'DM Mono',monospace;font-size:9px;color:var(--cyan);letter-spacing:.08em}
+.sidebar-nav{flex:1;padding:12px 0;overflow-y:auto}
+.nav-section-label{font-family:'DM Mono',monospace;font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:var(--text3);padding:12px 20px 6px}
+.nav-item{display:flex;align-items:center;gap:12px;padding:10px 20px;cursor:pointer;transition:background .15s,color .15s;color:var(--text2);font-size:13px;font-weight:500;border-left:2px solid transparent}
+.nav-item:hover{background:var(--surface2);color:var(--text)}
+.nav-item.active{background:var(--amber-glow);color:var(--amber);border-left-color:var(--amber)}
+.nav-icon{font-size:16px;min-width:20px;text-align:center}
+.nav-badge{margin-left:auto;background:var(--red);color:#fff;font-family:'DM Mono',monospace;font-size:9px;padding:2px 6px;border-radius:10px}
+.sidebar-user{padding:16px 20px;border-top:1px solid var(--border);display:flex;align-items:center;gap:12px}
+.user-avatar{width:34px;height:34px;border-radius:6px;background:var(--amber-glow);border:1px solid var(--amber-dim);display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0}
+.user-name{font-size:12px;font-weight:700;color:var(--text)}
+.user-role{font-family:'DM Mono',monospace;font-size:9px;color:var(--text3);letter-spacing:.06em}
+.user-logout{margin-left:auto;cursor:pointer;color:var(--text3);font-size:16px;transition:color .2s}
+.user-logout:hover{color:var(--red)}
+
+/* ─── MAIN CONTENT ─── */
+#main{margin-left:var(--sidebar-w);min-height:100vh;display:flex;flex-direction:column}
+.page-header{padding:20px 28px 0;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px}
+.page-title{font-family:'Bebas Neue',sans-serif;font-size:32px;letter-spacing:.04em;color:var(--text)}
+.page-subtitle{font-family:'DM Mono',monospace;font-size:10px;color:var(--text3);letter-spacing:.1em;margin-top:2px}
+.page-actions{display:flex;gap:10px;flex-wrap:wrap}
+.page-body{padding:20px 28px 40px;flex:1}
+
+/* ─── BUTTONS ─── */
+.btn{display:inline-flex;align-items:center;gap:8px;padding:9px 18px;border-radius:6px;font-family:'Manrope',sans-serif;font-size:13px;font-weight:600;cursor:pointer;border:none;transition:all .2s;white-space:nowrap}
+.btn-sm{padding:6px 14px;font-size:12px}
+.btn-amber{background:var(--amber);color:#080C10}
+.btn-amber:hover{opacity:.88}
+.btn-ghost{background:transparent;color:var(--text2);border:1px solid var(--border)}
+.btn-ghost:hover{border-color:var(--border2);color:var(--text)}
+.btn-danger{background:var(--red-dim);color:var(--red);border:1px solid rgba(239,68,68,.2)}
+.btn-danger:hover{background:rgba(239,68,68,.2)}
+.btn-success{background:var(--green-dim);color:var(--green);border:1px solid rgba(16,185,129,.2)}
+.btn-cyan{background:var(--cyan-dim);color:var(--cyan);border:1px solid rgba(6,182,212,.2)}
+
+/* ─── CARDS ─── */
+.card{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:24px;position:relative;overflow:hidden}
+.card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px}
+.card-amber::before{background:linear-gradient(90deg,var(--amber),transparent)}
+.card-cyan::before{background:linear-gradient(90deg,var(--cyan),transparent)}
+.card-green::before{background:linear-gradient(90deg,var(--green),transparent)}
+.card-red::before{background:linear-gradient(90deg,var(--red),transparent)}
+.card-purple::before{background:linear-gradient(90deg,var(--purple),transparent)}
+.card-title{font-weight:700;font-size:14px;color:var(--text);margin-bottom:4px}
+.card-sub{font-family:'DM Mono',monospace;font-size:10px;color:var(--text3);letter-spacing:.08em;text-transform:uppercase}
+
+/* ─── KPI CARDS ─── */
+.kpi-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px;margin-bottom:28px}
+.kpi-card{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:20px 24px;display:flex;flex-direction:column;gap:4px}
+.kpi-val{font-family:'Bebas Neue',sans-serif;font-size:40px;line-height:1;color:var(--text)}
+.kpi-val.amber{color:var(--amber)}
+.kpi-val.cyan{color:var(--cyan)}
+.kpi-val.green{color:var(--green)}
+.kpi-val.red{color:var(--red)}
+.kpi-label{font-family:'DM Mono',monospace;font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--text3)}
+.kpi-trend{font-size:11px;color:var(--green);margin-top:4px}
+.kpi-trend.down{color:var(--red)}
+
+/* ─── TABLES ─── */
+.table-wrap{background:var(--surface);border:1px solid var(--border);border-radius:8px;overflow:hidden}
+.data-table{width:100%;border-collapse:collapse;font-size:13px}
+.data-table th{background:var(--surface2);color:var(--text2);font-family:'DM Mono',monospace;font-size:10px;letter-spacing:.08em;text-transform:uppercase;padding:12px 16px;text-align:left;border-bottom:1px solid var(--border);font-weight:400}
+.data-table td{padding:12px 16px;border-bottom:1px solid var(--border);color:var(--text2);vertical-align:middle}
+.data-table tr:last-child td{border-bottom:none}
+.data-table tr:hover td{background:rgba(255,255,255,.015)}
+.data-table tbody tr{cursor:pointer}
+
+/* ─── SEARCH BAR ─── */
+.search-bar{display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap}
+.search-input{flex:1;min-width:200px;background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:10px 14px;color:var(--text);font-family:'Manrope',sans-serif;font-size:13px;outline:none;transition:border-color .2s}
+.search-input:focus{border-color:var(--amber)}
+.search-input::placeholder{color:var(--text3)}
+.filter-select{background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:10px 14px;color:var(--text2);font-family:'DM Mono',monospace;font-size:11px;outline:none;cursor:pointer}
+
+/* ─── STATUS BADGES ─── */
+.badge{display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border-radius:12px;font-family:'DM Mono',monospace;font-size:9px;letter-spacing:.08em;text-transform:uppercase;font-weight:500}
+.badge::before{content:'';width:5px;height:5px;border-radius:50%;background:currentColor}
+.badge-amber{background:var(--amber-glow);color:var(--amber);border:1px solid rgba(245,158,11,.2)}
+.badge-cyan{background:var(--cyan-dim);color:var(--cyan);border:1px solid rgba(6,182,212,.2)}
+.badge-green{background:var(--green-dim);color:var(--green);border:1px solid rgba(16,185,129,.2)}
+.badge-red{background:var(--red-dim);color:var(--red);border:1px solid rgba(239,68,68,.2)}
+.badge-purple{background:var(--purple-dim);color:var(--purple);border:1px solid rgba(139,92,246,.2)}
+.badge-gray{background:rgba(255,255,255,.04);color:var(--text2);border:1px solid var(--border)}
+
+/* ─── MODALS ─── */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.7);backdrop-filter:blur(4px);z-index:500;display:flex;align-items:center;justify-content:center;padding:20px;opacity:0;pointer-events:none;transition:opacity .2s}
+.modal-overlay.open{opacity:1;pointer-events:auto}
+.modal{background:var(--surface);border:1px solid var(--border);border-radius:10px;width:100%;max-width:560px;max-height:90vh;overflow-y:auto;position:relative}
+.modal-lg{max-width:780px}
+.modal-header{padding:24px 24px 0;display:flex;align-items:center;justify-content:space-between}
+.modal-title{font-family:'Bebas Neue',sans-serif;font-size:24px;letter-spacing:.04em;color:var(--text)}
+.modal-close{cursor:pointer;color:var(--text3);font-size:20px;transition:color .2s;background:none;border:none;color:var(--text3);font-size:22px}
+.modal-close:hover{color:var(--text)}
+.modal-body{padding:20px 24px 24px}
+.form-row{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+
+/* ─── GRID LAYOUTS ─── */
+.grid-2{display:grid;grid-template-columns:repeat(2,1fr);gap:20px}
+.grid-3{display:grid;grid-template-columns:repeat(3,1fr);gap:20px}
+.grid-4{display:grid;grid-template-columns:repeat(4,1fr);gap:16px}
+.grid-auto{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:20px}
+
+/* ─── OT KANBAN ─── */
+.kanban{display:flex;gap:12px;overflow-x:auto;padding-bottom:12px}
+.kanban-col{min-width:230px;flex-shrink:0}
+.kanban-header{background:var(--surface);border:1px solid var(--border);border-radius:6px 6px 0 0;padding:10px 14px;display:flex;align-items:center;justify-content:space-between}
+.kanban-header-title{font-family:'DM Mono',monospace;font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--text2)}
+.kanban-count{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:1px 7px;font-family:'DM Mono',monospace;font-size:10px;color:var(--text3)}
+.kanban-body{background:var(--surface2);border:1px solid var(--border);border-top:none;border-radius:0 0 6px 6px;padding:10px;display:flex;flex-direction:column;gap:8px;min-height:200px}
+.ot-card{background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:12px;cursor:pointer;transition:border-color .2s,transform .1s}
+.ot-card:hover{border-color:var(--border2);transform:translateY(-1px)}
+.ot-card-num{font-family:'DM Mono',monospace;font-size:10px;color:var(--amber);letter-spacing:.06em}
+.ot-card-vehicle{font-weight:700;font-size:13px;color:var(--text);margin:4px 0}
+.ot-card-client{font-size:11px;color:var(--text2)}
+.ot-card-footer{display:flex;align-items:center;justify-content:space-between;margin-top:10px}
+.ot-card-mec{font-size:11px;color:var(--text3)}
+.priority-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.prio-high{background:var(--red)}
+.prio-med{background:var(--amber)}
+.prio-low{background:var(--green)}
+
+/* ─── INVENTORY ─── */
+.stock-bar{height:4px;background:var(--surface2);border-radius:2px;overflow:hidden;margin-top:6px}
+.stock-fill{height:100%;border-radius:2px;transition:width .3s}
+.stock-ok{background:var(--green)}
+.stock-warn{background:var(--amber)}
+.stock-crit{background:var(--red)}
+
+/* ─── CALENDAR ─── */
+.cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:2px;margin-top:12px}
+.cal-day-name{text-align:center;font-family:'DM Mono',monospace;font-size:9px;letter-spacing:.08em;color:var(--text3);padding:8px 0;text-transform:uppercase}
+.cal-day{background:var(--surface);border:1px solid var(--border);border-radius:4px;min-height:80px;padding:6px;cursor:pointer;transition:border-color .2s}
+.cal-day:hover{border-color:var(--border2)}
+.cal-day.today{border-color:var(--amber);background:var(--amber-glow)}
+.cal-day.other-month{opacity:.3}
+.cal-day-num{font-family:'DM Mono',monospace;font-size:11px;color:var(--text2);margin-bottom:4px}
+.cal-event{background:var(--cyan-dim);border:1px solid rgba(6,182,212,.3);border-radius:3px;padding:2px 5px;font-size:9px;color:var(--cyan);margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cal-event.amber{background:var(--amber-glow);border-color:rgba(245,158,11,.3);color:var(--amber)}
+.cal-event.green{background:var(--green-dim);border-color:rgba(16,185,129,.3);color:var(--green)}
+
+/* ─── CHART CONTAINER ─── */
+.chart-box{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:20px}
+.chart-title{font-weight:700;font-size:13px;color:var(--text);margin-bottom:4px}
+.chart-sub{font-family:'DM Mono',monospace;font-size:9px;color:var(--text3);letter-spacing:.08em;margin-bottom:16px}
+.chart-canvas{position:relative;height:220px}
+
+/* ─── PROFILE MODULE ─── */
+.module-header-row{display:flex;align-items:center;gap:14px;margin-bottom:20px}
+.module-icon-lg{width:50px;height:50px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:22px}
+.detail-section{background:var(--surface);border:1px solid var(--border);border-radius:8px;overflow:hidden;margin-bottom:16px}
+.detail-section-header{background:var(--surface2);padding:12px 18px;border-bottom:1px solid var(--border);font-family:'DM Mono',monospace;font-size:10px;letter-spacing:.08em;color:var(--text2);text-transform:uppercase;display:flex;align-items:center;justify-content:space-between}
+.detail-row{display:grid;grid-template-columns:160px 1fr;gap:0;border-bottom:1px solid var(--border)}
+.detail-row:last-child{border-bottom:none}
+.detail-key{padding:10px 18px;font-family:'DM Mono',monospace;font-size:10px;letter-spacing:.06em;color:var(--text3);text-transform:uppercase;background:rgba(255,255,255,.015)}
+.detail-val{padding:10px 18px;font-size:13px;color:var(--text2)}
+
+/* ─── ALERT STRIPS ─── */
+.alert{display:flex;align-items:flex-start;gap:12px;padding:14px 18px;border-radius:6px;margin-bottom:12px;border:1px solid}
+.alert-amber{background:var(--amber-glow);border-color:rgba(245,158,11,.25)}
+.alert-red{background:var(--red-dim);border-color:rgba(239,68,68,.2)}
+.alert-green{background:var(--green-dim);border-color:rgba(16,185,129,.2)}
+.alert-cyan{background:var(--cyan-dim);border-color:rgba(6,182,212,.2)}
+.alert-icon{font-size:16px;flex-shrink:0;margin-top:1px}
+.alert-title{font-weight:700;font-size:12px;margin-bottom:3px}
+.alert-body{font-size:12px;color:var(--text2);line-height:1.5}
+.alert-amber .alert-title{color:var(--amber)}
+.alert-red .alert-title{color:var(--red)}
+.alert-green .alert-title{color:var(--green)}
+.alert-cyan .alert-title{color:var(--cyan)}
+
+/* ─── TIMELINE ─── */
+.ot-timeline{position:relative;padding-left:28px}
+.ot-timeline::before{content:'';position:absolute;left:7px;top:0;bottom:0;width:1px;background:var(--border)}
+.tl-event{position:relative;margin-bottom:20px}
+.tl-event::before{content:'';position:absolute;left:-23px;top:4px;width:10px;height:10px;border-radius:50%;background:var(--amber);border:2px solid var(--bg)}
+.tl-event-time{font-family:'DM Mono',monospace;font-size:9px;color:var(--text3);letter-spacing:.06em;margin-bottom:3px}
+.tl-event-text{font-size:13px;color:var(--text2)}
+
+/* ─── EMPLOYEE CARD ─── */
+.emp-card{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:20px;display:flex;align-items:center;gap:16px;cursor:pointer;transition:border-color .2s}
+.emp-card:hover{border-color:var(--border2)}
+.emp-avatar{width:46px;height:46px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;border:2px solid var(--border)}
+.emp-info{flex:1}
+.emp-name{font-weight:700;font-size:14px;color:var(--text)}
+.emp-role{font-family:'DM Mono',monospace;font-size:10px;color:var(--text3);letter-spacing:.06em;margin-top:2px}
+.emp-stats{display:flex;gap:20px;text-align:center;margin-left:auto}
+.emp-stat-val{font-family:'Bebas Neue',sans-serif;font-size:22px;line-height:1;color:var(--text)}
+.emp-stat-lbl{font-family:'DM Mono',monospace;font-size:8px;color:var(--text3);letter-spacing:.08em;text-transform:uppercase}
+
+/* ─── MOBILE ─── */
+.mobile-header{display:none;position:fixed;top:0;left:0;right:0;height:54px;background:var(--surface);border-bottom:1px solid var(--border);z-index:300;align-items:center;padding:0 16px;gap:12px}
+.mobile-menu-btn{background:none;border:none;color:var(--text);font-size:20px;cursor:pointer;padding:4px}
+.sidebar-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:150}
+@media(max-width:768px){
+  .mobile-header{display:flex}
+  #sidebar{transform:translateX(-100%);z-index:200}
+  #sidebar.open{transform:translateX(0)}
+  .sidebar-overlay.open{display:block}
+  #main{margin-left:0;padding-top:54px}
+  .page-body{padding:16px}
+  .page-header{padding:16px 16px 0}
+  .grid-2,.grid-3,.grid-4{grid-template-columns:1fr}
+  .kpi-grid{grid-template-columns:1fr 1fr}
+  .form-row{grid-template-columns:1fr}
+  .kanban{flex-direction:column}
+  .kanban-col{min-width:auto}
+  .cal-grid{gap:1px}
+  .cal-day{min-height:60px}
+  .emp-stats{gap:12px}
+}
+
+/* ─── ANIMATIONS ─── */
+@keyframes fadeUp{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)}}
+@keyframes spinIn{from{opacity:0;transform:scale(.9)}to{opacity:1;transform:scale(1)}}
+.page-enter{animation:fadeUp .25s ease}
+.modal-enter{animation:spinIn .2s ease}
+
+/* ─── MISC ─── */
+.divider{border:none;border-top:1px solid var(--border);margin:20px 0}
+.tag{display:inline-block;padding:2px 8px;border-radius:3px;font-family:'DM Mono',monospace;font-size:9px;letter-spacing:.08em;text-transform:uppercase}
+.mono{font-family:'DM Mono',monospace;font-size:11px}
+.text-amber{color:var(--amber)}
+.text-cyan{color:var(--cyan)}
+.text-green{color:var(--green)}
+.text-red{color:var(--red)}
+.text-muted{color:var(--text3)}
+.text-right{text-align:right}
+.flex{display:flex}
+.items-center{align-items:center}
+.gap-2{gap:8px}
+.gap-3{gap:12px}
+.mb-4{margin-bottom:16px}
+.mb-5{margin-bottom:20px}
+.w-full{width:100%}
+.hidden{display:none!important}
+.pointer{cursor:pointer}
+</style>
+</head>
+<body>
+
+<!-- ══════════════════════════════════ LOGIN ══════════════════════════════════ -->
+<div id="login-screen">
+  <div class="login-box">
+    <div class="login-logo">
+      <span class="login-logo-icon">🔧</span>
+      <h1>TallerPro</h1>
+      <p>Enterprise · AI-Driven SaaS</p>
+    </div>
+    <div class="login-card modal-enter">
+      <div class="form-group">
+        <label class="form-label">Dominio del Taller</label>
+        <input class="form-input" id="l-tenant" placeholder="mi-taller.tallerpro.gt" value="automotriz-torres">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Correo Electrónico</label>
+        <input class="form-input" id="l-email" type="email" placeholder="admin@taller.gt" value="admin@torres.gt">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Contraseña</label>
+        <input class="form-input" id="l-pass" type="password" placeholder="••••••••" value="Admin1234">
+      </div>
+      <button class="btn-primary" onclick="doLogin()">Iniciar Sesión →</button>
+      <div class="login-sep">demo rápido</div>
+      <div class="login-demo">
+        <button class="demo-btn" onclick="quickLogin('admin')">👑 Admin</button>
+        <button class="demo-btn" onclick="quickLogin('recepcionista')">📋 Recep.</button>
+        <button class="demo-btn" onclick="quickLogin('jefe')">🔧 Jefe</button>
+        <button class="demo-btn" onclick="quickLogin('mecanico')">🪛 Mecánico</button>
+        <button class="demo-btn" onclick="quickLogin('cliente')">🚗 Cliente</button>
+        <button class="demo-btn" onclick="quickLogin('admin')" style="border-color:var(--cyan);color:var(--cyan)">⚡ Super Admin</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════ MOBILE HEADER ══════════════════════════════════ -->
+<div class="mobile-header">
+  <button class="mobile-menu-btn" onclick="toggleSidebar()">☰</button>
+  <span style="font-family:'Bebas Neue',sans-serif;font-size:20px;color:var(--amber)">TallerPro</span>
+  <span id="mobile-page-title" style="font-family:'DM Mono',monospace;font-size:10px;color:var(--text3);margin-left:4px"></span>
+</div>
+<div class="sidebar-overlay" id="sidebar-overlay" onclick="toggleSidebar()"></div>
+
+<!-- ══════════════════════════════════ APP ══════════════════════════════════ -->
+<div id="app">
+  <!-- SIDEBAR -->
+  <nav id="sidebar">
+    <div class="sidebar-brand">
+      <div class="sidebar-brand-name">TallerPro</div>
+      <div class="sidebar-brand-sub">Enterprise v2.0</div>
+    </div>
+    <div class="sidebar-tenant" id="sidebar-tenant-info">
+      <div class="sidebar-tenant-name">Cargando...</div>
+      <div class="sidebar-tenant-plan">Plan Pro</div>
+    </div>
+    <div class="sidebar-nav" id="sidebar-nav"></div>
+    <div class="sidebar-user" id="sidebar-user"></div>
+  </nav>
+
+  <!-- MAIN -->
+  <main id="main">
+    <div id="page-content" class="page-enter"></div>
+  </main>
+</div>
+
+<!-- ══════════════════════════════════ MODALS ══════════════════════════════════ -->
+<div class="modal-overlay" id="modal-overlay" onclick="closeModal(event)">
+  <div class="modal" id="modal-box" onclick="event.stopPropagation()">
+    <div class="modal-header">
+      <span class="modal-title" id="modal-title">Modal</span>
+      <button class="modal-close" onclick="closeModal()">✕</button>
+    </div>
+    <div class="modal-body" id="modal-body"></div>
+  </div>
+</div>
+
+<script>
+// ══════════════════════════════════════════════════════════════════
+//  DATA STORE — localStorage-backed (swap for Supabase in prod)
+// ══════════════════════════════════════════════════════════════════
+const DB = {
+  get(key){try{return JSON.parse(localStorage.getItem('tp_'+key))||null}catch{return null}},
+  set(key,val){localStorage.setItem('tp_'+key,JSON.stringify(val))},
+  del(key){localStorage.removeItem('tp_'+key)},
+  id(){return 'id_'+Math.random().toString(36).slice(2,10)}
+};
+
+// ── SEED DATA ──────────────────────────────────────────────────
+function seed(){
+  if(DB.get('seeded')) return;
+
+  DB.set('tenants',{
+    'automotriz-torres':{name:'Automotriz Torres & Asociados',plan:'Pro',nit:'1234567-8',tel:'2456-7890',email:'info@torres.gt',logo:'🔧',address:'7a Av. 12-34, Zona 1, Ciudad de Guatemala'}
+  });
+
+  DB.set('clientes',[
+    {id:'c1',nombre:'Carlos Mendoza',email:'carlos@gmail.com',tel:'5540-1234',nit:'9876543-2',direccion:'Zona 10, Guatemala',created:'2024-01-15',vehiculos:['v1','v2']},
+    {id:'c2',nombre:'María García',email:'maria@outlook.com',tel:'4412-5678',nit:'1122334-5',direccion:'Zona 7, Guatemala',created:'2024-02-20',vehiculos:['v3']},
+    {id:'c3',nombre:'Roberto Lima',email:'rlima@empresa.gt',tel:'3340-9900',nit:'5544332-1',direccion:'Mixco, Guatemala',created:'2024-03-05',vehiculos:['v4']},
+    {id:'c4',nombre:'Ana Pérez',email:'ana.perez@gmail.com',tel:'2290-4411',nit:'7788990-3',direccion:'Villa Nueva, Guatemala',created:'2024-04-10',vehiculos:['v5']},
+    {id:'c5',nombre:'Luis Castillo',email:'lcastillo@hotmail.com',tel:'5566-7788',nit:'3344556-7',direccion:'Zona 15, Guatemala',created:'2024-04-18',vehiculos:['v6']}
+  ]);
+
+  DB.set('vehiculos',[
+    {id:'v1',placa:'P 247 AKZ',marca:'Toyota',modelo:'Hilux',anio:2020,color:'Blanco',motor:'2.4L Diesel',vin:'JT3HP10V6W0123456',cliente_id:'c1',km:78200,ultima_visita:'2025-04-01'},
+    {id:'v2',placa:'C 112 BQR',marca:'Nissan',modelo:'Frontier',anio:2019,color:'Gris',motor:'2.5L Diesel',vin:'VNFUD22Y0KX765432',cliente_id:'c1',km:112500,ultima_visita:'2025-03-15'},
+    {id:'v3',placa:'M 033 XYT',marca:'Honda',modelo:'CR-V',anio:2022,color:'Negro',motor:'1.5T',vin:'5J6RW2H54KA001234',cliente_id:'c2',km:32100,ultima_visita:'2025-04-10'},
+    {id:'v4',placa:'O 455 KLM',marca:'Chevrolet',modelo:'Silverado',anio:2018,color:'Rojo',motor:'5.3L V8',vin:'1GCVKREC0KZ765432',cliente_id:'c3',km:145600,ultima_visita:'2025-02-20'},
+    {id:'v5',placa:'U 688 ZAB',marca:'Hyundai',modelo:'Tucson',anio:2021,color:'Plata',motor:'2.0L',vin:'KM8J3CAL0MU234567',cliente_id:'c4',km:45800,ultima_visita:'2025-04-12'},
+    {id:'v6',placa:'G 901 PQS',marca:'Ford',modelo:'F-150',anio:2023,color:'Azul',motor:'3.5L EcoBoost',vin:'1FTFW1E54PFB12345',cliente_id:'c5',km:18900,ultima_visita:'2025-04-20'}
+  ]);
+
+  DB.set('ordenes',[
+    {id:'ot1',num:'OT-2025-0141',vehiculo_id:'v1',cliente_id:'c1',estado:'en_trabajo',prioridad:'alta',mecanico_id:'e3',descripcion:'Cambio de aceite + revisión frenos + alineación',servicios:['Cambio de aceite 5W-30','Revisión de frenos','Alineación y balanceo'],repuestos:[{rep:'r2',qty:5},{rep:'r4',qty:1}],total:1250.00,fecha_ingreso:'2025-04-28',fecha_estimada:'2025-04-29',fotos:['📸','📸'],notas:'Cliente indica ruido en frenos al frenar'},
+    {id:'ot2',num:'OT-2025-0140',vehiculo_id:'v3',cliente_id:'c2',estado:'diagnostico',prioridad:'media',mecanico_id:'e4',descripcion:'Revisión general y cambio faja de distribución',servicios:['Diagnóstico computarizado','Cambio faja de distribución'],repuestos:[{rep:'r1',qty:1}],total:2800.00,fecha_ingreso:'2025-04-28',fecha_estimada:'2025-04-30',notas:''},
+    {id:'ot3',num:'OT-2025-0139',vehiculo_id:'v4',cliente_id:'c3',estado:'espera_repuestos',prioridad:'alta',mecanico_id:'e3',descripcion:'Reparación transmisión automática',servicios:['Desmontaje transmisión','Reparación interna','Montaje y prueba'],repuestos:[{rep:'r3',qty:2}],total:8500.00,fecha_ingreso:'2025-04-25',fecha_estimada:'2025-05-02',notas:'Esperando kit de sellos del proveedor'},
+    {id:'ot4',num:'OT-2025-0138',vehiculo_id:'v5',cliente_id:'c4',estado:'listo',prioridad:'baja',mecanico_id:'e4',descripcion:'Servicio de 45,000 km',servicios:['Cambio aceite','Filtros aire y combustible','Revisión 30 puntos'],repuestos:[{rep:'r2',qty:4},{rep:'r4',qty:1}],total:950.00,fecha_ingreso:'2025-04-24',fecha_estimada:'2025-04-25',notas:'Listo para entrega'},
+    {id:'ot5',num:'OT-2025-0137',vehiculo_id:'v6',cliente_id:'c5',estado:'recibido',prioridad:'media',mecanico_id:null,descripcion:'Instalación de accesorios',servicios:['Instalación calcoblock','Instalación cámara reversa'],repuestos:[],total:1800.00,fecha_ingreso:'2025-04-28',fecha_estimada:'2025-04-29',notas:''},
+    {id:'ot6',num:'OT-2025-0136',vehiculo_id:'v2',cliente_id:'c1',estado:'entregado',prioridad:'baja',mecanico_id:'e3',descripcion:'Limpieza inyectores + cambio bujías',servicios:['Limpieza inyectores ultrasonido','Cambio bujías NGK'],repuestos:[{rep:'r5',qty:4}],total:680.00,fecha_ingreso:'2025-04-22',fecha_estimada:'2025-04-23',notas:'Entregado el 23/04'}
+  ]);
+
+  DB.set('inventario',[
+    {id:'r1',codigo:'REP-001',nombre:'Faja de Distribución Toyota',marca:'Gates',categoria:'Motor',stock:3,min_stock:2,precio_costo:480.00,precio_venta:720.00,ubicacion:'Estante A-1',proveedor:'Importadora GT'},
+    {id:'r2',codigo:'REP-002',nombre:'Aceite Motor 5W-30 1L',marca:'Castrol',categoria:'Lubricantes',stock:48,min_stock:20,precio_costo:42.00,precio_venta:65.00,ubicacion:'Estante B-3',proveedor:'Lubricantes S.A.'},
+    {id:'r3',codigo:'REP-003',nombre:'Kit Sellos Transmisión',marca:'Sonnax',categoria:'Transmisión',stock:1,min_stock:3,precio_costo:1200.00,precio_venta:1800.00,ubicacion:'Estante C-2',proveedor:'Auto Parts GT'},
+    {id:'r4',codigo:'REP-004',nombre:'Filtro de Aceite Universal',marca:'Mann',categoria:'Filtros',stock:15,min_stock:10,precio_costo:28.00,precio_venta:45.00,ubicacion:'Estante A-4',proveedor:'Filtros CR'},
+    {id:'r5',codigo:'REP-005',nombre:'Bujías NGK Iridium',marca:'NGK',categoria:'Ignición',stock:22,min_stock:8,precio_costo:38.00,precio_venta:65.00,ubicacion:'Estante D-1',proveedor:'NGK Guatemala'},
+    {id:'r6',codigo:'REP-006',nombre:'Pastillas de Freno Delantero',marca:'Brembo',categoria:'Frenos',stock:4,min_stock:6,precio_costo:185.00,precio_venta:295.00,ubicacion:'Estante E-2',proveedor:'Frenos GT'},
+    {id:'r7',codigo:'REP-007',nombre:'Amortiguador Delantero Toyota',marca:'KYB',categoria:'Suspensión',stock:0,min_stock:2,precio_costo:420.00,precio_venta:680.00,ubicacion:'Estante F-1',proveedor:'Importadora GT'},
+    {id:'r8',codigo:'REP-008',nombre:'Líquido de Frenos DOT4 500ml',marca:'ATE',categoria:'Líquidos',stock:9,min_stock:5,precio_costo:55.00,precio_venta:90.00,ubicacion:'Estante B-1',proveedor:'Lubricantes S.A.'}
+  ]);
+
+  DB.set('facturas',[
+    {id:'f1',num:'FEL-2025-000456',ot_id:'ot6',cliente_id:'c1',nit:'9876543-2',fecha:'2025-04-23',subtotal:566.10,iva:83.90,total:650.00,estado:'certificada',fel_uuid:'FEL-UUID-ABC123',descripcion:'Servicios de mantenimiento'},
+    {id:'f2',num:'FEL-2025-000455',ot_id:'ot4',cliente_id:'c4',nit:'7788990-3',fecha:'2025-04-25',subtotal:839.29,iva:110.71,total:950.00,estado:'certificada',fel_uuid:'FEL-UUID-DEF456',descripcion:'Servicio 45,000 km'},
+    {id:'f3',num:'FEL-2025-000454',ot_id:'ot2',cliente_id:'c2',nit:'1122334-5',fecha:'2025-04-28',subtotal:2477.88,iva:322.12,total:2800.00,estado:'pendiente',fel_uuid:null,descripcion:'Diagnóstico y faja distribución'},
+    {id:'f4',num:'FEL-2025-000453',ot_id:'ot1',cliente_id:'c1',nit:'9876543-2',fecha:'2025-04-28',subtotal:1107.14,iva:142.86,total:1250.00,estado:'borrador',fel_uuid:null,descripcion:'Mantenimiento Hilux'}
+  ]);
+
+  DB.set('empleados',[
+    {id:'e1',nombre:'Diego Torres',rol:'admin',cargo:'Administrador / Dueño',email:'admin@torres.gt',tel:'5540-0001',fecha_ingreso:'2020-01-01',salario:8500,igss:true,asistencias_mes:22,ots_mes:0,avatar:'👑'},
+    {id:'e2',nombre:'Sandra López',rol:'recepcionista',cargo:'Recepcionista',email:'slopez@torres.gt',tel:'5540-0002',fecha_ingreso:'2021-03-15',salario:3800,igss:true,asistencias_mes:21,ots_mes:0,avatar:'📋'},
+    {id:'e3',nombre:'Juan Revolorio',rol:'mecanico',cargo:'Mecánico Senior',email:'jrevolorio@torres.gt',tel:'5540-0003',fecha_ingreso:'2020-06-01',salario:4500,igss:true,asistencias_mes:22,ots_mes:8,avatar:'🔧'},
+    {id:'e4',nombre:'Pedro Sajquim',rol:'mecanico',cargo:'Mecánico',email:'psajquim@torres.gt',tel:'5540-0004',fecha_ingreso:'2022-09-01',salario:3500,igss:true,asistencias_mes:20,ots_mes:5,avatar:'🪛'},
+    {id:'e5',nombre:'Marco Barrios',rol:'jefe',cargo:'Jefe de Taller',email:'mbarrios@torres.gt',tel:'5540-0005',fecha_ingreso:'2021-01-10',salario:6000,igss:true,asistencias_mes:22,ots_mes:0,avatar:'📊'}
+  ]);
+
+  DB.set('citas',[
+    {id:'ap1',fecha:'2025-04-28',hora:'09:00',vehiculo_id:'v1',cliente_id:'c1',servicio:'Cambio de aceite',estado:'confirmada'},
+    {id:'ap2',fecha:'2025-04-28',hora:'11:00',vehiculo_id:'v3',cliente_id:'c2',servicio:'Revisión general',estado:'confirmada'},
+    {id:'ap3',fecha:'2025-04-29',hora:'08:00',vehiculo_id:'v5',cliente_id:'c4',servicio:'Diagnóstico ABS',estado:'pendiente'},
+    {id:'ap4',fecha:'2025-04-29',hora:'14:00',vehiculo_id:'v6',cliente_id:'c5',servicio:'Cambio bujías',estado:'confirmada'},
+    {id:'ap5',fecha:'2025-04-30',hora:'10:00',vehiculo_id:'v4',cliente_id:'c3',servicio:'Entrega OT transmisión',estado:'pendiente'},
+    {id:'ap6',fecha:'2025-05-02',hora:'09:00',vehiculo_id:'v2',cliente_id:'c1',servicio:'Alineación',estado:'pendiente'}
+  ]);
+
+  DB.set('seeded', true);
+}
+
+// ══════════════════════════════════════════════════════════════════
+//  AUTH & ROLES
+// ══════════════════════════════════════════════════════════════════
+const ROLES = {
+  admin:{label:'Admin / Dueño',icon:'👑',color:'amber'},
+  recepcionista:{label:'Recepcionista',icon:'📋',color:'cyan'},
+  jefe:{label:'Jefe de Taller',icon:'📊',color:'purple'},
+  mecanico:{label:'Mecánico',icon:'🪛',color:'green'},
+  cliente:{label:'Cliente',icon:'🚗',color:'red'}
+};
+
+const NAV = [
+  {id:'dashboard',icon:'📊',label:'Dashboard',roles:['admin','recepcionista','jefe','mecanico','cliente']},
+  {id:'clientes',icon:'👥',label:'Clientes & Vehículos',roles:['admin','recepcionista','jefe']},
+  {id:'ordenes',icon:'📋',label:'Órdenes de Trabajo',roles:['admin','recepcionista','jefe','mecanico']},
+  {id:'inventario',icon:'📦',label:'Inventario',roles:['admin','jefe','mecanico']},
+  {id:'calendario',icon:'📅',label:'Calendario',roles:['admin','recepcionista','jefe']},
+  {id:'facturacion',icon:'🧾',label:'Facturación FEL',roles:['admin','recepcionista']},
+  {id:'rrhh',icon:'👤',label:'RRHH & Nómina',roles:['admin']},
+  {id:'mi-ot',icon:'🔧',label:'Mis OTs',roles:['mecanico']},
+  {id:'mi-vehiculo',icon:'🚗',label:'Mi Vehículo',roles:['cliente']},
+  {id:'config',icon:'⚙️',label:'Configuración',roles:['admin']}
+];
+
+let App = {
+  user: null,
+  tenant: null,
+  currentPage: 'dashboard',
+  charts: {}
+};
+
+const DEMO_USERS = {
+  admin:{id:'e1',nombre:'Diego Torres',rol:'admin',tenant:'automotriz-torres'},
+  recepcionista:{id:'e2',nombre:'Sandra López',rol:'recepcionista',tenant:'automotriz-torres'},
+  jefe:{id:'e5',nombre:'Marco Barrios',rol:'jefe',tenant:'automotriz-torres'},
+  mecanico:{id:'e3',nombre:'Juan Revolorio',rol:'mecanico',tenant:'automotriz-torres'},
+  cliente:{id:'c1',nombre:'Carlos Mendoza',rol:'cliente',tenant:'automotriz-torres',vehiculos:['v1','v2']}
+};
+
+function quickLogin(role){
+  const u = DEMO_USERS[role];
+  App.user = u;
+  App.tenant = DB.get('tenants')['automotriz-torres'];
+  startApp();
+}
+
+function doLogin(){
+  const tenant = document.getElementById('l-tenant').value.trim();
+  const tenants = DB.get('tenants');
+  if(!tenants[tenant]){showToast('Taller no encontrado','error');return}
+  App.tenant = tenants[tenant];
+  App.user = DEMO_USERS.admin;
+  startApp();
+}
+
+function startApp(){
+  document.getElementById('login-screen').style.display='none';
+  const app = document.getElementById('app');
+  app.style.display='flex';
+  renderSidebar();
+  navigate('dashboard');
+  if('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(()=>{});
+}
+
+function logout(){
+  App.user=null;App.tenant=null;
+  document.getElementById('login-screen').style.display='flex';
+  document.getElementById('app').style.display='none';
+  destroyCharts();
+}
+
+// ══════════════════════════════════════════════════════════════════
+//  SIDEBAR
+// ══════════════════════════════════════════════════════════════════
+function renderSidebar(){
+  const t = document.getElementById('sidebar-tenant-info');
+  t.innerHTML=`<div class="sidebar-tenant-name">${App.tenant.name}</div><div class="sidebar-tenant-plan">Plan Pro · FEL Activo</div>`;
+
+  const nav = document.getElementById('sidebar-nav');
+  const userRole = App.user.rol;
+  let html = '<div class="nav-section-label">Módulos</div>';
+  NAV.forEach(item=>{
+    if(!item.roles.includes(userRole)) return;
+    const alerts = item.id==='inventario' ? '<span class="nav-badge">2</span>' : '';
+    html+=`<div class="nav-item${App.currentPage===item.id?' active':''}" onclick="navigate('${item.id}')" id="nav-${item.id}">
+      <span class="nav-icon">${item.icon}</span>${item.label}${alerts}
+    </div>`;
+  });
+  nav.innerHTML=html;
+
+  const role = ROLES[userRole];
+  const u = document.getElementById('sidebar-user');
+  u.innerHTML=`<div class="user-avatar">${role.icon}</div>
+    <div><div class="user-name">${App.user.nombre}</div><div class="user-role">${role.label}</div></div>
+    <div class="user-logout" onclick="logout()" title="Cerrar sesión">⏻</div>`;
+}
+
+function toggleSidebar(){
+  document.getElementById('sidebar').classList.toggle('open');
+  document.getElementById('sidebar-overlay').classList.toggle('open');
+}
+
+// ══════════════════════════════════════════════════════════════════
+//  ROUTER
+// ══════════════════════════════════════════════════════════════════
+function navigate(page){
+  destroyCharts();
+  App.currentPage = page;
+  document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
+  const active = document.getElementById('nav-'+page);
+  if(active) active.classList.add('active');
+  const mob = document.getElementById('mobile-page-title');
+  const item = NAV.find(n=>n.id===page);
+  if(mob&&item) mob.textContent='/ '+item.label;
+  document.getElementById('sidebar').classList.remove('open');
+  document.getElementById('sidebar-overlay').classList.remove('open');
+
+  const pages = {
+    dashboard: renderDashboard,
+    clientes: renderClientes,
+    ordenes: renderOrdenes,
+    inventario: renderInventario,
+    calendario: renderCalendario,
+    facturacion: renderFacturacion,
+    rrhh: renderRRHH,
+    'mi-ot': renderMiOT,
+    'mi-vehiculo': renderMiVehiculo,
+    config: renderConfig
+  };
+  const fn = pages[page];
+  const el = document.getElementById('page-content');
+  el.className='page-enter';
+  el.innerHTML='';
+  void el.offsetWidth;
+  if(fn) fn();
+  else el.innerHTML=`<div class="page-header"><h1 class="page-title">${item?.label||page}</h1></div><div class="page-body"><p class="text-muted">Módulo en desarrollo.</p></div>`;
+}
+
+function destroyCharts(){
+  Object.values(App.charts).forEach(c=>{try{c.destroy()}catch(e){}});
+  App.charts={};
+}
+
+// ══════════════════════════════════════════════════════════════════
+//  DASHBOARD
+// ══════════════════════════════════════════════════════════════════
+function renderDashboard(){
+  const ordenes = DB.get('ordenes')||[];
+  const facturas = DB.get('facturas')||[];
+  const inv = DB.get('inventario')||[];
+  const clientes = DB.get('clientes')||[];
+
+  const ingresos = facturas.filter(f=>f.estado==='certificada').reduce((s,f)=>s+f.total,0);
+  const otAbiertas = ordenes.filter(o=>o.estado!=='entregado').length;
+  const stockBajo = inv.filter(i=>i.stock<=i.min_stock).length;
+
+  let html = `<div class="page-header">
+    <div><h1 class="page-title">Dashboard</h1><p class="page-subtitle">// Vista Gerencial — ${new Date().toLocaleDateString('es-GT',{weekday:'long',year:'numeric',month:'long',day:'numeric'})}</p></div>
+  </div><div class="page-body">`;
+
+  // ALERTS
+  if(stockBajo>0) html+=`<div class="alert alert-amber"><div class="alert-icon">⚠️</div><div><div class="alert-title">Inventario Bajo</div><div class="alert-body">${stockBajo} producto(s) por debajo del stock mínimo. <span class="text-amber pointer" onclick="navigate('inventario')">Ver inventario →</span></div></div></div>`;
+
+  // KPIs
+  html+=`<div class="kpi-grid">
+    <div class="kpi-card card-amber"><div class="kpi-label">Ingresos del Mes</div><div class="kpi-val amber">Q${ingresos.toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g,',')}</div><div class="kpi-trend">↑ 12% vs mes anterior</div></div>
+    <div class="kpi-card card-cyan"><div class="kpi-label">OTs Activas</div><div class="kpi-val cyan">${otAbiertas}</div><div class="kpi-trend">↑ 3 nuevas hoy</div></div>
+    <div class="kpi-card card-green"><div class="kpi-label">Clientes Activos</div><div class="kpi-val green">${clientes.length}</div><div class="kpi-trend">↑ 2 este mes</div></div>
+    <div class="kpi-card card-red"><div class="kpi-label">Stock Bajo</div><div class="kpi-val red">${stockBajo}</div><div class="kpi-trend ${stockBajo>0?'down':''}">Requieren atención</div></div>
+  </div>`;
+
+  // Charts row
+  html+=`<div class="grid-2" style="margin-bottom:20px">
+    <div class="chart-box"><div class="chart-title">Ingresos Mensuales</div><div class="chart-sub">ÚLTIMOS 6 MESES · Q GUATEMALTECOS</div><div class="chart-canvas"><canvas id="chart-ingresos"></canvas></div></div>
+    <div class="chart-box"><div class="chart-title">OTs por Estado</div><div class="chart-sub">DISTRIBUCIÓN ACTUAL</div><div class="chart-canvas"><canvas id="chart-estados"></canvas></div></div>
+  </div>`;
+
+  // OTs recientes
+  html+=`<div style="margin-bottom:20px"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px"><span style="font-weight:700;font-size:14px">OTs Recientes</span><button class="btn btn-sm btn-ghost" onclick="navigate('ordenes')">Ver todas →</button></div>
+  <div class="table-wrap"><table class="data-table">
+    <thead><tr><th>Número</th><th>Vehículo</th><th>Cliente</th><th>Estado</th><th>Total</th></tr></thead>
+    <tbody>`;
+  const vehiculos = DB.get('vehiculos')||[];
+  ordenes.slice(0,5).forEach(o=>{
+    const v=vehiculos.find(x=>x.id===o.vehiculo_id);
+    const c=clientes.find(x=>x.id===o.cliente_id);
+    html+=`<tr onclick="viewOT('${o.id}')"><td class="mono text-amber">${o.num}</td><td><b>${v?.marca} ${v?.modelo}</b><br><span class="text-muted mono" style="font-size:10px">${v?.placa}</span></td><td>${c?.nombre||'-'}</td><td>${estadoBadge(o.estado)}</td><td class="mono">Q${o.total.toLocaleString()}</td></tr>`;
+  });
+  html+=`</tbody></table></div></div>`;
+
+  // Alertas de mantenimiento AI
+  html+=`<div class="card card-purple"><div class="card-sub" style="margin-bottom:10px">🤖 Motor de Recomendaciones AI</div>
+    <div class="alert alert-amber" style="margin-bottom:8px"><div class="alert-icon">⚠️</div><div><div class="alert-title">Toyota Hilux P 247 AKZ</div><div class="alert-body">Kilometraje actual: 78,200 km. <b>Cambio de faja de distribución recomendado a los 80,000 km.</b> Se recomienda programar servicio preventivo.</div></div></div>
+    <div class="alert alert-cyan"><div class="alert-icon">📊</div><div><div class="alert-title">Chevrolet Silverado O 455 KLM</div><div class="alert-body">145,600 km. Revisión de amortiguadores recomendada. El vehículo supera el intervalo recomendado de 130,000 km.</div></div></div>
+  </div>`;
+
+  html+='</div>';
+  document.getElementById('page-content').innerHTML=html;
+
+  // Draw charts
+  setTimeout(()=>{
+    const ctx1 = document.getElementById('chart-ingresos');
+    if(ctx1) App.charts.ingresos = new Chart(ctx1,{
+      type:'bar',
+      data:{labels:['Nov','Dic','Ene','Feb','Mar','Abr'],datasets:[{label:'Ingresos Q',data:[18200,22400,19800,24100,21500,26800],backgroundColor:'rgba(245,158,11,0.3)',borderColor:'#F59E0B',borderWidth:2,borderRadius:4}]},
+      options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{grid:{color:'rgba(30,45,61,0.6)'},ticks:{color:'#7A9BB5',font:{size:10}}},y:{grid:{color:'rgba(30,45,61,0.6)'},ticks:{color:'#7A9BB5',font:{size:10},callback:v=>'Q'+v.toLocaleString()}}}}
+    });
+    const ctx2 = document.getElementById('chart-estados');
+    const estados = ['recibido','diagnostico','en_trabajo','espera_repuestos','listo','entregado'];
+    const counts = estados.map(e=>ordenes.filter(o=>o.estado===e).length);
+    if(ctx2) App.charts.estados = new Chart(ctx2,{
+      type:'doughnut',
+      data:{labels:['Recibido','Diagnóstico','En Trabajo','Esp. Repuestos','Listo','Entregado'],datasets:[{data:counts,backgroundColor:['#3D5570','#06B6D4','#F59E0B','#8B5CF6','#10B981','#243444'],borderWidth:0}]},
+      options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'right',labels:{color:'#7A9BB5',font:{size:10},boxWidth:10}}}}
+    });
+  },100);
+}
+
+// ══════════════════════════════════════════════════════════════════
+//  CLIENTES & VEHÍCULOS
+// ══════════════════════════════════════════════════════════════════
+function renderClientes(){
+  const clientes = DB.get('clientes')||[];
+  let html=`<div class="page-header">
+    <div><h1 class="page-title">Clientes & Vehículos</h1><p class="page-subtitle">// ${clientes.length} CLIENTES REGISTRADOS</p></div>
+    <div class="page-actions"><button class="btn btn-amber" onclick="modalNuevoCliente()">＋ Nuevo Cliente</button></div>
+  </div><div class="page-body">
+  <div class="search-bar">
+    <input class="search-input" placeholder="🔍 Buscar cliente, placa, NIT..." id="search-clientes" oninput="filterClientes()" >
+  </div>
+  <div class="table-wrap"><table class="data-table">
+    <thead><tr><th>Cliente</th><th>NIT</th><th>Teléfono</th><th>Vehículos</th><th>Última Visita</th><th>Acciones</th></tr></thead>
+    <tbody id="clientes-tbody">`;
+
+  const vehiculos = DB.get('vehiculos')||[];
+  clientes.forEach(c=>{
+    const cvs = vehiculos.filter(v=>c.vehiculos?.includes(v.id));
+    const lastVisit = cvs.map(v=>v.ultima_visita).sort().pop()||'-';
+    html+=`<tr onclick="viewCliente('${c.id}')">
+      <td><b>${c.nombre}</b><br><span class="mono text-muted" style="font-size:10px">${c.email}</span></td>
+      <td class="mono">${c.nit}</td><td>${c.tel}</td>
+      <td>${cvs.map(v=>`<span class="badge badge-cyan" style="margin:1px">${v.placa}</span>`).join('')||'—'}</td>
+      <td class="mono text-muted" style="font-size:11px">${lastVisit}</td>
+      <td onclick="event.stopPropagation()"><button class="btn btn-sm btn-ghost" onclick="viewCliente('${c.id}')">Ver</button></td>
+    </tr>`;
+  });
+
+  html+=`</tbody></table></div></div>`;
+  document.getElementById('page-content').innerHTML=html;
+}
+// Estas las obtienes en Project Settings > API en Supabase
+const SUPABASE_URL = 'https://tu-id.supabase.co';
+const SUPABASE_KEY = 'tu-anon-key';
+const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+// El nombre del esquema que creó la función anterior
+const CURRENT_SCHEMA = 'taller_taller_primero';
+function filterClientes(){
+  const q=(document.getElementById('search-clientes').value||'').toLowerCase();
+  const rows=document.querySelectorAll('#clientes-tbody tr');
+  rows.forEach(r=>r.style.display=r.textContent.toLowerCase().includes(q)?'':'none');
+}
+
+function viewCliente(id){
+  const clientes=DB.get('clientes')||[];
+  const vehiculos=DB.get('vehiculos')||[];
+  const ordenes=DB.get('ordenes')||[];
+  const c=clientes.find(x=>x.id===id);if(!c)return;
+  const cvs=vehiculos.filter(v=>c.vehiculos?.includes(v.id));
+
+  let html=`<div class="module-header-row">
+    <div class="module-icon-lg" style="background:var(--cyan-dim)">👤</div>
+    <div><h2 style="font-family:'Bebas Neue',sans-serif;font-size:28px;letter-spacing:.04em">${c.nombre}</h2>
+    <span class="badge badge-cyan">Cliente desde ${new Date(c.created).getFullYear()}</span></div>
+  </div>
+  <div class="detail-section">
+    <div class="detail-section-header">Información Personal</div>
+    <div class="detail-row"><div class="detail-key">NIT</div><div class="detail-val mono">${c.nit}</div></div>
+    <div class="detail-row"><div class="detail-key">Teléfono</div><div class="detail-val">${c.tel}</div></div>
+    <div class="detail-row"><div class="detail-key">Email</div><div class="detail-val">${c.email}</div></div>
+    <div class="detail-row"><div class="detail-key">Dirección</div><div class="detail-val">${c.direccion}</div></div>
+  </div>
+  <div style="font-weight:700;font-size:13px;margin:16px 0 10px">🚗 Vehículos Registrados</div>`;
+  cvs.forEach(v=>{
+    const ots=ordenes.filter(o=>o.vehiculo_id===v.id);
+    html+=`<div class="detail-section" style="margin-bottom:10px">
+      <div class="detail-section-header"><span>${v.placa} — ${v.marca} ${v.modelo} ${v.anio}</span><span class="badge badge-amber">${v.km.toLocaleString()} km</span></div>
+      <div class="detail-row"><div class="detail-key">Color</div><div class="detail-val">${v.color}</div></div>
+      <div class="detail-row"><div class="detail-key">Motor</div><div class="detail-val">${v.motor}</div></div>
+      <div class="detail-row"><div class="detail-key">VIN</div><div class="detail-val mono" style="font-size:11px">${v.vin}</div></div>
+      <div class="detail-row"><div class="detail-key">Visitas</div><div class="detail-val">${ots.length} órdenes de trabajo registradas</div></div>
+    </div>`;
+  });
+
+  openModal('Cliente: '+c.nombre, html, 'modal-lg');
+}
+
+function modalNuevoCliente(){
+  const html=`<div class="form-group"><label class="form-label">Nombre Completo</label><input class="form-input" id="nc-nombre" placeholder="Juan García Pérez"></div>
+  <div class="form-row">
+    <div class="form-group"><label class="form-label">NIT</label><input class="form-input" id="nc-nit" placeholder="1234567-8"></div>
+    <div class="form-group"><label class="form-label">Teléfono</label><input class="form-input" id="nc-tel" placeholder="5540-1234"></div>
+  </div>
+  <div class="form-group"><label class="form-label">Correo Electrónico</label><input class="form-input" id="nc-email" type="email" placeholder="juan@gmail.com"></div>
+  <div class="form-group"><label class="form-label">Dirección</label><input class="form-input" id="nc-dir" placeholder="Zona 10, Guatemala"></div>
+  <div style="margin-top:20px;display:flex;gap:10px;justify-content:flex-end">
+    <button class="btn btn-ghost" onclick="closeModal()">Cancelar</button>
+    <button class="btn btn-amber" onclick="guardarCliente()">Guardar Cliente</button>
+  </div>`;
+  openModal('Nuevo Cliente', html);
+}
+
+function guardarCliente(){
+  const c={id:DB.id(),nombre:document.getElementById('nc-nombre').value,nit:document.getElementById('nc-nit').value,tel:document.getElementById('nc-tel').value,email:document.getElementById('nc-email').value,direccion:document.getElementById('nc-dir').value,created:new Date().toISOString().slice(0,10),vehiculos:[]};
+  if(!c.nombre){showToast('El nombre es requerido','error');return}
+  const clientes=DB.get('clientes')||[];
+  clientes.push(c);
+  DB.set('clientes',clientes);
+  closeModal();
+  showToast('Cliente guardado exitosamente');
+  renderClientes();
+}
+
+// ══════════════════════════════════════════════════════════════════
+//  ÓRDENES DE TRABAJO
+// ══════════════════════════════════════════════════════════════════
+const ESTADOS={
+  recibido:{label:'Recibido',color:'gray'},
+  diagnostico:{label:'Diagnóstico',color:'cyan'},
+  en_trabajo:{label:'En Trabajo',color:'amber'},
+  espera_repuestos:{label:'Esp. Repuestos',color:'purple'},
+  listo:{label:'Listo',color:'green'},
+  entregado:{label:'Entregado',color:'gray'}
+};
+
+function estadoBadge(e){
+  const s=ESTADOS[e]||{label:e,color:'gray'};
+  return`<span class="badge badge-${s.color}">${s.label}</span>`;
+}
+
+function renderOrdenes(){
+  const ordenes=DB.get('ordenes')||[];
+  let html=`<div class="page-header">
+    <div><h1 class="page-title">Órdenes de Trabajo</h1><p class="page-subtitle">// ${ordenes.filter(o=>o.estado!=='entregado').length} OTs ACTIVAS</p></div>
+    <div class="page-actions">
+      <button class="btn btn-ghost" onclick="toggleKanban()" id="btn-toggle-view">📋 Vista Lista</button>
+      <button class="btn btn-amber" onclick="modalNuevaOT()">＋ Nueva OT</button>
+    </div>
+  </div><div class="page-body">
+  <div id="ot-view-kanban">`;
+
+  // Kanban
+  html+=`<div class="kanban">`;
+  Object.entries(ESTADOS).forEach(([key,s])=>{
+    const col=ordenes.filter(o=>o.estado===key);
+    html+=`<div class="kanban-col">
+      <div class="kanban-header"><span class="kanban-header-title">${s.label}</span><span class="kanban-count">${col.length}</span></div>
+      <div class="kanban-body">`;
+    if(col.length===0) html+=`<div style="text-align:center;padding:20px;color:var(--text3);font-family:'DM Mono',monospace;font-size:10px">Sin órdenes</div>`;
+    col.forEach(o=>{
+      const v=(DB.get('vehiculos')||[]).find(x=>x.id===o.vehiculo_id);
+      const c=(DB.get('clientes')||[]).find(x=>x.id===o.cliente_id);
+      html+=`<div class="ot-card" onclick="viewOT('${o.id}')">
+        <div class="ot-card-num">${o.num}</div>
+        <div class="ot-card-vehicle">${v?.marca} ${v?.modelo}</div>
+        <div class="ot-card-client">${v?.placa} · ${c?.nombre}</div>
+        <div class="ot-card-footer"><span class="ot-card-mec">Q${o.total.toLocaleString()}</span><span class="priority-dot prio-${o.prioridad==='alta'?'high':o.prioridad==='media'?'med':'low'}"></span></div>
+      </div>`;
+    });
+    html+=`</div></div>`;
+  });
+  html+=`</div></div>`;
+
+  // Table view (hidden by default)
+  html+=`<div id="ot-view-lista" class="hidden">
+    <div class="search-bar">
+      <input class="search-input" placeholder="🔍 Buscar OT, vehículo, cliente..." id="search-ot" oninput="filterOTs()">
+      <select class="filter-select" onchange="filterOTs()" id="filter-ot-estado">
+        <option value="">Todos los estados</option>
+        ${Object.entries(ESTADOS).map(([k,v])=>`<option value="${k}">${v.label}</option>`).join('')}
+      </select>
+    </div>
+    <div class="table-wrap"><table class="data-table">
+      <thead><tr><th>Número</th><th>Vehículo / Placa</th><th>Cliente</th><th>Mecánico</th><th>Estado</th><th>Prioridad</th><th>Total</th></tr></thead>
+      <tbody id="ot-tbody">`;
+  const vehiculos=DB.get('vehiculos')||[];
+  const clientes=DB.get('clientes')||[];
+  const empleados=DB.get('empleados')||[];
+  ordenes.forEach(o=>{
+    const v=vehiculos.find(x=>x.id===o.vehiculo_id);
+    const c=clientes.find(x=>x.id===o.cliente_id);
+    const m=empleados.find(x=>x.id===o.mecanico_id);
+    const pcolors={alta:'red',media:'amber',baja:'green'};
+    html+=`<tr onclick="viewOT('${o.id}')">
+      <td class="mono text-amber">${o.num}</td>
+      <td><b>${v?.marca} ${v?.modelo}</b><br><span class="mono text-muted" style="font-size:10px">${v?.placa}</span></td>
+      <td>${c?.nombre||'-'}</td>
+      <td>${m?.nombre||'<span class="text-muted">Sin asignar</span>'}</td>
+      <td>${estadoBadge(o.estado)}</td>
+      <td><span class="badge badge-${pcolors[o.prioridad]||'gray'}">${o.prioridad}</span></td>
+      <td class="mono">Q${o.total.toLocaleString()}</td>
+    </tr>`;
+  });
+  html+=`</tbody></table></div></div></div>`;
+  document.getElementById('page-content').innerHTML=html;
+}
+
+let kanbanView=true;
+function toggleKanban(){
+  kanbanView=!kanbanView;
+  document.getElementById('ot-view-kanban').classList.toggle('hidden',!kanbanView);
+  document.getElementById('ot-view-lista').classList.toggle('hidden',kanbanView);
+  document.getElementById('btn-toggle-view').textContent=kanbanView?'📋 Vista Lista':'📌 Vista Kanban';
+}
+
+function filterOTs(){
+  const q=(document.getElementById('search-ot')?.value||'').toLowerCase();
+  const estado=document.getElementById('filter-ot-estado')?.value||'';
+  document.querySelectorAll('#ot-tbody tr').forEach(r=>{
+    const matches=r.textContent.toLowerCase().includes(q)&&(estado===''||r.dataset.estado===estado);
+    r.style.display=matches?'':'none';
+  });
+}
+
+function viewOT(id){
+  const ordenes=DB.get('ordenes')||[];
+  const o=ordenes.find(x=>x.id===id);if(!o)return;
+  const vehiculos=DB.get('vehiculos')||[];
+  const clientes=DB.get('clientes')||[];
+  const empleados=DB.get('empleados')||[];
+  const inventario=DB.get('inventario')||[];
+  const v=vehiculos.find(x=>x.id===o.vehiculo_id);
+  const c=clientes.find(x=>x.id===o.cliente_id);
+  const m=empleados.find(x=>x.id===o.mecanico_id);
+
+  const repsList = o.repuestos?.map(r=>{
+    const rep=inventario.find(i=>i.id===r.rep);
+    return rep?`<tr><td>${rep.nombre}</td><td class="mono text-muted">${rep.codigo}</td><td class="mono">${r.qty}</td><td class="mono">Q${(rep.precio_venta*r.qty).toLocaleString()}</td></tr>`:'';
+  }).join('')||'';
+
+  let html=`<div class="flex items-center gap-3" style="margin-bottom:16px;flex-wrap:wrap">
+    <h2 class="mono" style="font-size:16px;color:var(--amber)">${o.num}</h2>
+    ${estadoBadge(o.estado)}
+    <span class="badge badge-${o.prioridad==='alta'?'red':o.prioridad==='media'?'amber':'green'}">Prioridad ${o.prioridad}</span>
+    <span style="margin-left:auto;font-family:'DM Mono',monospace;font-size:11px;color:var(--text3)">Ingreso: ${o.fecha_ingreso}</span>
+  </div>
+  <div class="grid-2" style="margin-bottom:16px">
+    <div class="detail-section">
+      <div class="detail-section-header">Vehículo</div>
+      <div class="detail-row"><div class="detail-key">Placa</div><div class="detail-val mono text-amber">${v?.placa}</div></div>
+      <div class="detail-row"><div class="detail-key">Vehículo</div><div class="detail-val">${v?.marca} ${v?.modelo} ${v?.anio}</div></div>
+      <div class="detail-row"><div class="detail-key">Kilometraje</div><div class="detail-val mono">${v?.km?.toLocaleString()} km</div></div>
+    </div>
+    <div class="detail-section">
+      <div class="detail-section-header">Cliente & Mecánico</div>
+      <div class="detail-row"><div class="detail-key">Cliente</div><div class="detail-val">${c?.nombre}</div></div>
+      <div class="detail-row"><div class="detail-key">Teléfono</div><div class="detail-val">${c?.tel}</div></div>
+      <div class="detail-row"><div class="detail-key">Mecánico</div><div class="detail-val">${m?.nombre||'<span class="text-muted">Sin asignar</span>'}</div></div>
+    </div>
+  </div>
+  <div class="detail-section" style="margin-bottom:16px">
+    <div class="detail-section-header">Descripción del Trabajo</div>
+    <div style="padding:14px 18px;font-size:13px;color:var(--text2)">${o.descripcion}</div>
+    ${o.notas?`<div style="padding:0 18px 14px;font-size:12px;color:var(--text3);font-style:italic">Nota: ${o.notas}</div>`:''}
+  </div>
+  <div class="detail-section" style="margin-bottom:16px">
+    <div class="detail-section-header">Servicios</div>
+    <div style="padding:14px 18px">${(o.servicios||[]).map(s=>`<div class="flex items-center gap-2" style="padding:4px 0;border-bottom:1px solid var(--border);font-size:13px;color:var(--text2)"><span style="color:var(--green)">✓</span> ${s}</div>`).join('')}</div>
+  </div>
+  ${repsList?`<div class="detail-section" style="margin-bottom:16px">
+    <div class="detail-section-header">Repuestos Utilizados</div>
+    <table class="data-table"><thead><tr><th>Repuesto</th><th>Código</th><th>Cant.</th><th>Subtotal</th></tr></thead><tbody>${repsList}</tbody></table>
+  </div>`:''}
+  <div class="flex items-center" style="justify-content:space-between;padding:14px 0;border-top:1px solid var(--border);margin-top:4px">
+    <div>
+      <select class="filter-select" id="cambiar-estado-${o.id}" onchange="cambiarEstado('${o.id}')">
+        ${Object.entries(ESTADOS).map(([k,s])=>`<option value="${k}"${o.estado===k?' selected':''}>${s.label}</option>`).join('')}
+      </select>
+    </div>
+    <div class="mono" style="font-size:18px;color:var(--amber);font-weight:700">Total: Q${o.total.toLocaleString()}</div>
+  </div>
+  <div class="flex gap-2" style="margin-top:12px">
+    <button class="btn btn-ghost btn-sm" onclick="closeModal()">Cerrar</button>
+    <button class="btn btn-cyan btn-sm" onclick="showToast('Enviando WhatsApp al cliente...','info')">💬 WhatsApp</button>
+    <button class="btn btn-amber btn-sm" onclick="generarPDFOT('${o.id}')">🖨️ Imprimir OT</button>
+  </div>`;
+
+  openModal('Orden de Trabajo', html, 'modal-lg');
+}
+
+function cambiarEstado(otId){
+  const nuevo=document.getElementById('cambiar-estado-'+otId)?.value;
+  if(!nuevo) return;
+  const ordenes=DB.get('ordenes')||[];
+  const idx=ordenes.findIndex(o=>o.id===otId);
+  if(idx>=0){ordenes[idx].estado=nuevo;DB.set('ordenes',ordenes);}
+  showToast('Estado actualizado: '+ESTADOS[nuevo].label);
+}
+
+function modalNuevaOT(){
+  const vehiculos=DB.get('vehiculos')||[];
+  const clientes=DB.get('clientes')||[];
+  const empleados=(DB.get('empleados')||[]).filter(e=>e.rol==='mecanico');
+
+  let html=`<div class="form-group"><label class="form-label">Vehículo</label>
+    <select class="form-select" id="not-vehiculo">
+      <option value="">Seleccionar vehículo...</option>
+      ${vehiculos.map(v=>`<option value="${v.id}">${v.placa} — ${v.marca} ${v.modelo} ${v.anio}</option>`).join('')}
+    </select></div>
+  <div class="form-row">
+    <div class="form-group"><label class="form-label">Mecánico</label>
+      <select class="form-select" id="not-mec">
+        <option value="">Sin asignar</option>
+        ${empleados.map(e=>`<option value="${e.id}">${e.nombre}</option>`).join('')}
+      </select></div>
+    <div class="form-group"><label class="form-label">Prioridad</label>
+      <select class="form-select" id="not-prio">
+        <option value="baja">Baja</option><option value="media" selected>Media</option><option value="alta">Alta</option>
+      </select></div>
+  </div>
+  <div class="form-group"><label class="form-label">Descripción del Trabajo</label>
+    <textarea class="form-input" id="not-desc" rows="3" placeholder="Describir el trabajo solicitado..." style="resize:vertical"></textarea></div>
+  <div class="form-row">
+    <div class="form-group"><label class="form-label">Fecha Estimada Entrega</label>
+      <input class="form-input" id="not-fecha" type="date"></div>
+    <div class="form-group"><label class="form-label">Total Estimado (Q)</label>
+      <input class="form-input" id="not-total" type="number" placeholder="0.00"></div>
+  </div>
+  <div style="margin-top:16px;display:flex;gap:10px;justify-content:flex-end">
+    <button class="btn btn-ghost" onclick="closeModal()">Cancelar</button>
+    <button class="btn btn-amber" onclick="guardarOT()">Crear OT</button>
+  </div>`;
+  openModal('Nueva Orden de Trabajo', html);
+}
+
+function guardarOT(){
+  const vid=document.getElementById('not-vehiculo').value;
+  if(!vid){showToast('Selecciona un vehículo','error');return}
+  const v=(DB.get('vehiculos')||[]).find(x=>x.id===vid);
+  const c_id=v?.cliente_id;
+  const ordenes=DB.get('ordenes')||[];
+  const num='OT-2025-0'+(141+ordenes.length+1).toString().padStart(3,'0');
+  const ot={id:DB.id(),num,vehiculo_id:vid,cliente_id:c_id,estado:'recibido',prioridad:document.getElementById('not-prio').value,mecanico_id:document.getElementById('not-mec').value||null,descripcion:document.getElementById('not-desc').value,servicios:[],repuestos:[],total:parseFloat(document.getElementById('not-total').value)||0,fecha_ingreso:new Date().toISOString().slice(0,10),fecha_estimada:document.getElementById('not-fecha').value,notas:''};
+  ordenes.unshift(ot);
+  DB.set('ordenes',ordenes);
+  closeModal();
+  showToast('OT '+num+' creada exitosamente');
+  renderOrdenes();
+}
+
+function generarPDFOT(id){
+  showToast('Generando PDF de la OT...','info');
+  setTimeout(()=>showToast('PDF listo. Abriendo impresión...'),1500);
+}
+
+// ══════════════════════════════════════════════════════════════════
+//  INVENTARIO
+// ══════════════════════════════════════════════════════════════════
+function renderInventario(){
+  const inv=DB.get('inventario')||[];
+  const bajo=inv.filter(i=>i.stock<=i.min_stock);
+
+  let html=`<div class="page-header">
+    <div><h1 class="page-title">Inventario</h1><p class="page-subtitle">// ${inv.length} PRODUCTOS · ${bajo.length} CON STOCK BAJO</p></div>
+    <div class="page-actions">
+      <button class="btn btn-ghost" onclick="modalEntradaSalida()">↕ Entrada / Salida</button>
+      <button class="btn btn-amber" onclick="modalNuevoProducto()">＋ Nuevo Producto</button>
+    </div>
+  </div><div class="page-body">`;
+
+  if(bajo.length>0) html+=`<div class="alert alert-red" style="margin-bottom:16px"><div class="alert-icon">🚨</div><div><div class="alert-title">Alerta de Stock Bajo</div><div class="alert-body">${bajo.map(i=>`<b>${i.nombre}</b> (${i.stock} unidades, mínimo ${i.min_stock})`).join(' · ')}</div></div></div>`;
+
+  html+=`<div class="search-bar">
+    <input class="search-input" placeholder="🔍 Buscar producto, código, marca..." id="search-inv" oninput="filterInv()">
+    <select class="filter-select" onchange="filterInv()" id="filter-cat">
+      <option value="">Todas las categorías</option>
+      ${[...new Set(inv.map(i=>i.categoria))].map(c=>`<option value="${c}">${c}</option>`).join('')}
+    </select>
+  </div>
+  <div class="table-wrap"><table class="data-table">
+    <thead><tr><th>Código</th><th>Producto</th><th>Categoría</th><th>Marca</th><th>Stock</th><th>Precio Venta</th><th>Ubicación</th><th>QR</th></tr></thead>
+    <tbody id="inv-tbody">`;
+
+  inv.forEach(i=>{
+    const pct=Math.min((i.stock/Math.max(i.min_stock*2,1))*100,100);
+    const stockClass=i.stock===0?'stock-crit':i.stock<=i.min_stock?'stock-warn':'stock-ok';
+    const estatus=i.stock===0?'badge-red':i.stock<=i.min_stock?'badge-amber':'badge-green';
+    html+=`<tr data-cat="${i.categoria}" data-text="${i.nombre.toLowerCase()} ${i.codigo.toLowerCase()} ${i.marca.toLowerCase()}">
+      <td class="mono text-cyan" style="font-size:11px">${i.codigo}</td>
+      <td><b>${i.nombre}</b><br><span class="text-muted" style="font-size:11px">${i.proveedor}</span></td>
+      <td><span class="badge badge-gray">${i.categoria}</span></td>
+      <td style="font-size:12px">${i.marca}</td>
+      <td>
+        <span class="badge ${estatus}">${i.stock} uds</span>
+        <div class="stock-bar" style="width:80px;margin-top:4px"><div class="stock-fill ${stockClass}" style="width:${pct}%"></div></div>
+      </td>
+      <td class="mono">Q${i.precio_venta.toFixed(2)}</td>
+      <td class="mono text-muted" style="font-size:10px">${i.ubicacion}</td>
+      <td><button class="btn btn-sm btn-cyan" onclick="event.stopPropagation();showQR('${i.id}')">QR</button></td>
+    </tr>`;
+  });
+
+  html+=`</tbody></table></div></div>`;
+  document.getElementById('page-content').innerHTML=html;
+}
+
+function filterInv(){
+  const q=(document.getElementById('search-inv')?.value||'').toLowerCase();
+  const cat=document.getElementById('filter-cat')?.value||'';
+  document.querySelectorAll('#inv-tbody tr').forEach(r=>{
+    const t=r.dataset.text||'';
+    const rc=r.dataset.cat||'';
+    r.style.display=(t.includes(q)||q==='')&&(cat===''||rc===cat)?'':'none';
+  });
+}
+
+function showQR(id){
+  const inv=DB.get('inventario')||[];
+  const item=inv.find(i=>i.id===id);if(!item)return;
+  const html=`<div style="text-align:center">
+    <div class="mono text-amber" style="font-size:18px;margin-bottom:8px">${item.codigo}</div>
+    <div style="font-weight:700;margin-bottom:16px">${item.nombre}</div>
+    <canvas id="qr-canvas" style="border:1px solid var(--border);border-radius:4px;padding:12px;background:#fff"></canvas>
+    <div style="margin-top:12px;color:var(--text3);font-family:'DM Mono',monospace;font-size:10px">Escanear para despacho de inventario</div>
+    <div style="margin-top:4px;color:var(--text2);font-size:11px">Ubicación: ${item.ubicacion} · Stock: ${item.stock} uds</div>
+    <button class="btn btn-amber" style="margin-top:16px" onclick="window.print()">🖨️ Imprimir Etiqueta</button>
+  </div>`;
+  openModal('QR: '+item.nombre, html);
+  setTimeout(()=>{
+    QRCode.toCanvas(document.getElementById('qr-canvas'),`TALLERPRO:${item.codigo}:${item.nombre}`,{width:200,margin:2},()=>{});
+  },100);
+}
+
+function modalEntradaSalida(){
+  const inv=DB.get('inventario')||[];
+  const html=`<div class="form-group"><label class="form-label">Tipo de Movimiento</label>
+    <select class="form-select" id="mov-tipo"><option value="entrada">Entrada (Compra / Recepción)</option><option value="salida">Salida (Despacho OT)</option></select></div>
+  <div class="form-group"><label class="form-label">Producto</label>
+    <select class="form-select" id="mov-prod">${inv.map(i=>`<option value="${i.id}">${i.codigo} — ${i.nombre} (Stock: ${i.stock})</option>`).join('')}</select></div>
+  <div class="form-row">
+    <div class="form-group"><label class="form-label">Cantidad</label><input class="form-input" id="mov-qty" type="number" min="1" value="1"></div>
+    <div class="form-group"><label class="form-label">Referencia</label><input class="form-input" id="mov-ref" placeholder="No. factura / OT"></div>
+  </div>
+  <div style="margin-top:16px;display:flex;gap:10px;justify-content:flex-end">
+    <button class="btn btn-ghost" onclick="closeModal()">Cancelar</button>
+    <button class="btn btn-amber" onclick="registrarMovimiento()">Registrar</button>
+  </div>`;
+  openModal('Entrada / Salida de Inventario', html);
+}
+
+function registrarMovimiento(){
+  const tipo=document.getElementById('mov-tipo').value;
+  const prodId=document.getElementById('mov-prod').value;
+  const qty=parseInt(document.getElementById('mov-qty').value)||0;
+  if(qty<1){showToast('Cantidad inválida','error');return}
+  const inv=DB.get('inventario')||[];
+  const idx=inv.findIndex(i=>i.id===prodId);
+  if(idx<0) return;
+  if(tipo==='salida'&&inv[idx].stock<qty){showToast('Stock insuficiente','error');return}
+  inv[idx].stock+=tipo==='entrada'?qty:-qty;
+  DB.set('inventario',inv);
+  closeModal();
+  showToast(`Movimiento registrado: ${tipo==='entrada'?'+':'-'}${qty} uds`);
+  renderInventario();
+}
+
+function modalNuevoProducto(){
+  const html=`<div class="form-row">
+    <div class="form-group"><label class="form-label">Código</label><input class="form-input" id="np-cod" placeholder="REP-009"></div>
+    <div class="form-group"><label class="form-label">Categoría</label>
+      <select class="form-select" id="np-cat"><option>Motor</option><option>Transmisión</option><option>Frenos</option><option>Suspensión</option><option>Lubricantes</option><option>Filtros</option><option>Ignición</option><option>Líquidos</option><option>Otros</option></select></div>
+  </div>
+  <div class="form-group"><label class="form-label">Nombre del Producto</label><input class="form-input" id="np-nombre" placeholder="Nombre completo del repuesto"></div>
+  <div class="form-row">
+    <div class="form-group"><label class="form-label">Marca</label><input class="form-input" id="np-marca" placeholder="Marca"></div>
+    <div class="form-group"><label class="form-label">Proveedor</label><input class="form-input" id="np-prov" placeholder="Nombre proveedor"></div>
+  </div>
+  <div class="form-row">
+    <div class="form-group"><label class="form-label">Precio Costo (Q)</label><input class="form-input" id="np-costo" type="number" placeholder="0.00"></div>
+    <div class="form-group"><label class="form-label">Precio Venta (Q)</label><input class="form-input" id="np-venta" type="number" placeholder="0.00"></div>
+  </div>
+  <div class="form-row">
+    <div class="form-group"><label class="form-label">Stock Inicial</label><input class="form-input" id="np-stock" type="number" placeholder="0"></div>
+    <div class="form-group"><label class="form-label">Stock Mínimo</label><input class="form-input" id="np-min" type="number" placeholder="2"></div>
+  </div>
+  <div class="form-group"><label class="form-label">Ubicación en Bodega</label><input class="form-input" id="np-ubic" placeholder="Ej: Estante A-5"></div>
+  <div style="margin-top:16px;display:flex;gap:10px;justify-content:flex-end">
+    <button class="btn btn-ghost" onclick="closeModal()">Cancelar</button>
+    <button class="btn btn-amber" onclick="guardarProducto()">Guardar Producto</button>
+  </div>`;
+  openModal('Nuevo Producto', html);
+}
+
+function guardarProducto(){
+  const nombre=document.getElementById('np-nombre').value;
+  if(!nombre){showToast('El nombre es requerido','error');return}
+  const inv=DB.get('inventario')||[];
+  inv.push({id:DB.id(),codigo:document.getElementById('np-cod').value,nombre,marca:document.getElementById('np-marca').value,categoria:document.getElementById('np-cat').value,stock:parseInt(document.getElementById('np-stock').value)||0,min_stock:parseInt(document.getElementById('np-min').value)||2,precio_costo:parseFloat(document.getElementById('np-costo').value)||0,precio_venta:parseFloat(document.getElementById('np-venta').value)||0,ubicacion:document.getElementById('np-ubic').value,proveedor:document.getElementById('np-prov').value});
+  DB.set('inventario',inv);
+  closeModal();
+  showToast('Producto guardado exitosamente');
+  renderInventario();
+}
+
+// ══════════════════════════════════════════════════════════════════
+//  CALENDARIO
+// ══════════════════════════════════════════════════════════════════
+function renderCalendario(){
+  const today=new Date();
+  const year=today.getFullYear(),month=today.getMonth();
+  const firstDay=new Date(year,month,1).getDay();
+  const daysInMonth=new Date(year,month+1,0).getDate();
+  const citas=DB.get('citas')||[];
+  const clientes=DB.get('clientes')||[];
+  const vehiculos=DB.get('vehiculos')||[];
+
+  const monthNames=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+
+  let html=`<div class="page-header">
+    <div><h1 class="page-title">Calendario</h1><p class="page-subtitle">// ${monthNames[month].toUpperCase()} ${year}</p></div>
+    <div class="page-actions"><button class="btn btn-amber" onclick="modalNuevaCita()">＋ Nueva Cita</button></div>
+  </div><div class="page-body">`;
+
+  // Citas del día
+  const todayStr=today.toISOString().slice(0,10);
+  const citasHoy=citas.filter(c=>c.fecha===todayStr);
+  if(citasHoy.length>0){
+    html+=`<div class="alert alert-cyan" style="margin-bottom:16px"><div class="alert-icon">📅</div><div>
+      <div class="alert-title">Citas de Hoy (${citasHoy.length})</div>
+      <div class="alert-body">${citasHoy.map(c=>{
+        const cl=clientes.find(x=>x.id===c.cliente_id);
+        const v=vehiculos.find(x=>x.id===c.vehiculo_id);
+        return`<b>${c.hora}</b> — ${cl?.nombre}: ${c.servicio} (${v?.placa})`;
+      }).join(' · ')}</div>
+    </div></div>`;
+  }
+
+  html+=`<div class="cal-grid">
+    ${['DOM','LUN','MAR','MIE','JUE','VIE','SAB'].map(d=>`<div class="cal-day-name">${d}</div>`).join('')}`;
+
+  // Empty cells before first day
+  for(let i=0;i<firstDay;i++) html+=`<div class="cal-day other-month"></div>`;
+
+  for(let d=1;d<=daysInMonth;d++){
+    const dateStr=`${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    const isToday=d===today.getDate();
+    const dayCitas=citas.filter(c=>c.fecha===dateStr);
+    html+=`<div class="cal-day${isToday?' today':''}">
+      <div class="cal-day-num">${d}</div>
+      ${dayCitas.map(c=>`<div class="cal-event ${c.estado==='confirmada'?'green':'amber'}">${c.hora} ${c.servicio.slice(0,12)}</div>`).join('')}
+    </div>`;
+  }
+
+  html+=`</div>`;
+
+  // Upcoming citas list
+  html+=`<div style="margin-top:24px"><div style="font-weight:700;font-size:14px;margin-bottom:12px">📋 Próximas Citas</div>
+  <div class="table-wrap"><table class="data-table">
+    <thead><tr><th>Fecha</th><th>Hora</th><th>Cliente</th><th>Vehículo</th><th>Servicio</th><th>Estado</th></tr></thead>
+    <tbody>`;
+  citas.filter(c=>c.fecha>=todayStr).sort((a,b)=>a.fecha.localeCompare(b.fecha)||a.hora.localeCompare(b.hora)).forEach(c=>{
+    const cl=clientes.find(x=>x.id===c.cliente_id);
+    const v=vehiculos.find(x=>x.id===c.vehiculo_id);
+    html+=`<tr><td class="mono">${c.fecha}</td><td class="mono text-amber">${c.hora}</td><td>${cl?.nombre||'-'}</td><td class="mono">${v?.placa}</td><td>${c.servicio}</td><td>${c.estado==='confirmada'?'<span class="badge badge-green">Confirmada</span>':'<span class="badge badge-amber">Pendiente</span>'}</td></tr>`;
+  });
+  html+=`</tbody></table></div></div></div>`;
+  document.getElementById('page-content').innerHTML=html;
+}
+
+function modalNuevaCita(){
+  const clientes=DB.get('clientes')||[];
+  const vehiculos=DB.get('vehiculos')||[];
+  const html=`<div class="form-row">
+    <div class="form-group"><label class="form-label">Fecha</label><input class="form-input" id="nc2-fecha" type="date" value="${new Date().toISOString().slice(0,10)}"></div>
+    <div class="form-group"><label class="form-label">Hora</label>
+      <select class="form-select" id="nc2-hora">${['07:00','07:30','08:00','08:30','09:00','09:30','10:00','10:30','11:00','11:30','12:00','13:00','14:00','14:30','15:00','15:30','16:00','16:30'].map(h=>`<option>${h}</option>`).join('')}</select></div>
+  </div>
+  <div class="form-group"><label class="form-label">Cliente</label>
+    <select class="form-select" id="nc2-cli">${clientes.map(c=>`<option value="${c.id}">${c.nombre}</option>`).join('')}</select></div>
+  <div class="form-group"><label class="form-label">Vehículo</label>
+    <select class="form-select" id="nc2-veh">${vehiculos.map(v=>`<option value="${v.id}">${v.placa} — ${v.marca} ${v.modelo}</option>`).join('')}</select></div>
+  <div class="form-group"><label class="form-label">Servicio</label><input class="form-input" id="nc2-srv" placeholder="Ej: Cambio de aceite y filtros"></div>
+  <div style="margin-top:16px;display:flex;gap:10px;justify-content:flex-end">
+    <button class="btn btn-ghost" onclick="closeModal()">Cancelar</button>
+    <button class="btn btn-amber" onclick="guardarCita()">Agendar Cita</button>
+  </div>`;
+  openModal('Nueva Cita', html);
+}
+
+function guardarCita(){
+  const citas=DB.get('citas')||[];
+  citas.push({id:DB.id(),fecha:document.getElementById('nc2-fecha').value,hora:document.getElementById('nc2-hora').value,cliente_id:document.getElementById('nc2-cli').value,vehiculo_id:document.getElementById('nc2-veh').value,servicio:document.getElementById('nc2-srv').value,estado:'pendiente'});
+  DB.set('citas',citas);
+  closeModal();
+  showToast('Cita agendada exitosamente');
+  renderCalendario();
+}
+
+// ══════════════════════════════════════════════════════════════════
+//  FACTURACIÓN FEL
+// ══════════════════════════════════════════════════════════════════
+function renderFacturacion(){
+  const facturas=DB.get('facturas')||[];
+  const total=facturas.filter(f=>f.estado==='certificada').reduce((s,f)=>s+f.total,0);
+
+  let html=`<div class="page-header">
+    <div><h1 class="page-title">Facturación FEL</h1><p class="page-subtitle">// SAT GUATEMALA · FACTURA ELECTRÓNICA EN LÍNEA</p></div>
+    <div class="page-actions"><button class="btn btn-amber" onclick="showToast('Abriendo módulo de facturación...','info')">＋ Nueva Factura</button></div>
+  </div><div class="page-body">
+  <div class="kpi-grid" style="grid-template-columns:repeat(3,1fr)">
+    <div class="kpi-card card-green"><div class="kpi-label">Total Facturado (Mes)</div><div class="kpi-val green">Q${total.toLocaleString()}</div></div>
+    <div class="kpi-card card-amber"><div class="kpi-label">Pendientes FEL</div><div class="kpi-val amber">${facturas.filter(f=>f.estado==='pendiente').length}</div></div>
+    <div class="kpi-card card-cyan"><div class="kpi-label">Certificadas SAT</div><div class="kpi-val cyan">${facturas.filter(f=>f.estado==='certificada').length}</div></div>
+  </div>
+  <div class="alert alert-amber" style="margin-bottom:16px"><div class="alert-icon">🔐</div><div><div class="alert-title">Certificador FEL Activo</div><div class="alert-body">Conectado con <b>INFILE S.A.</b> · NIT Emisor: 1234567-8 · Establecimiento: 001 · Estado: Activo</div></div></div>
+  <div class="table-wrap"><table class="data-table">
+    <thead><tr><th>Número</th><th>Cliente / NIT</th><th>Fecha</th><th>Subtotal</th><th>IVA (12%)</th><th>Total</th><th>Estado FEL</th><th>Acciones</th></tr></thead>
+    <tbody>`;
+
+  const clientes=DB.get('clientes')||[];
+  facturas.forEach(f=>{
+    const c=clientes.find(x=>x.id===f.cliente_id);
+    const estadoFEL={certificada:'<span class="badge badge-green">✓ Certificada</span>',pendiente:'<span class="badge badge-amber">⏳ Pendiente</span>',borrador:'<span class="badge badge-gray">Borrador</span>'}[f.estado]||f.estado;
+    html+=`<tr>
+      <td class="mono text-amber" style="font-size:11px">${f.num}</td>
+      <td>${c?.nombre||'—'}<br><span class="mono text-muted" style="font-size:10px">NIT: ${f.nit}</span></td>
+      <td class="mono" style="font-size:11px">${f.fecha}</td>
+      <td class="mono">Q${f.subtotal.toFixed(2)}</td>
+      <td class="mono">Q${f.iva.toFixed(2)}</td>
+      <td class="mono" style="font-weight:700;color:var(--amber)">Q${f.total.toFixed(2)}</td>
+      <td>${estadoFEL}</td>
+      <td>
+        ${f.estado==='borrador'?`<button class="btn btn-sm btn-success" onclick="certificarFEL('${f.id}')">Certificar</button>`:''}
+        ${f.estado==='certificada'?`<button class="btn btn-sm btn-ghost" onclick="showToast('Descargando PDF...')">PDF</button>`:''}
+      </td>
+    </tr>`;
+  });
+
+  html+=`</tbody></table></div></div>`;
+  document.getElementById('page-content').innerHTML=html;
+}
+
+function certificarFEL(id){
+  showToast('Enviando a certificador SAT...','info');
+  setTimeout(()=>{
+    const facturas=DB.get('facturas')||[];
+    const idx=facturas.findIndex(f=>f.id===id);
+    if(idx>=0){facturas[idx].estado='certificada';facturas[idx].fel_uuid='FEL-'+Math.random().toString(36).slice(2,10).toUpperCase();DB.set('facturas',facturas);}
+    showToast('Factura certificada exitosamente ✓');
+    renderFacturacion();
+  },1800);
+}
+
+// ══════════════════════════════════════════════════════════════════
+//  RRHH & NÓMINA
+// ══════════════════════════════════════════════════════════════════
+function renderRRHH(){
+  const empleados=DB.get('empleados')||[];
+  const totalNomina=empleados.reduce((s,e)=>s+e.salario,0);
+
+  let html=`<div class="page-header">
+    <div><h1 class="page-title">RRHH & Nómina</h1><p class="page-subtitle">// ${empleados.length} EMPLEADOS · IGSS · MINTRAB COMPLIANT</p></div>
+    <div class="page-actions"><button class="btn btn-amber" onclick="showToast('Módulo de nómina en construcción','info')">🧾 Calcular Nómina</button></div>
+  </div><div class="page-body">
+  <div class="kpi-grid">
+    <div class="kpi-card card-amber"><div class="kpi-label">Planilla Mensual</div><div class="kpi-val amber">Q${totalNomina.toLocaleString()}</div></div>
+    <div class="kpi-card card-cyan"><div class="kpi-label">Total Empleados</div><div class="kpi-val cyan">${empleados.length}</div></div>
+    <div class="kpi-card card-green"><div class="kpi-label">Con IGSS</div><div class="kpi-val green">${empleados.filter(e=>e.igss).length}</div></div>
+    <div class="kpi-card"><div class="kpi-label">IGSS Patronal (12.67%)</div><div class="kpi-val">Q${(totalNomina*0.1267).toLocaleString('es-GT',{minimumFractionDigits:0,maximumFractionDigits:0})}</div></div>
+  </div>`;
+
+  html+=`<div style="display:flex;flex-direction:column;gap:12px">`;
+  empleados.forEach(e=>{
+    const igssLaboral=e.salario*0.0483;
+    const igssPatronal=e.salario*0.1267;
+    const liquido=e.salario-igssLaboral;
+    html+=`<div class="emp-card" onclick="viewEmpleado('${e.id}')">
+      <div class="emp-avatar" style="background:var(--${ROLES[e.rol]?.color}-dim||var(--surface2))">${e.avatar}</div>
+      <div class="emp-info">
+        <div class="emp-name">${e.nombre}</div>
+        <div class="emp-role">${e.cargo} · ${ROLES[e.rol]?.label||e.rol}</div>
+      </div>
+      <div class="emp-stats">
+        <div><div class="emp-stat-val">Q${e.salario.toLocaleString()}</div><div class="emp-stat-lbl">Salario</div></div>
+        <div><div class="emp-stat-val">${e.asistencias_mes}/22</div><div class="emp-stat-lbl">Asist.</div></div>
+        ${e.ots_mes>0?`<div><div class="emp-stat-val">${e.ots_mes}</div><div class="emp-stat-lbl">OTs Mes</div></div>`:''}
+      </div>
+    </div>`;
+  });
+  html+=`</div></div>`;
+  document.getElementById('page-content').innerHTML=html;
+}
+
+function viewEmpleado(id){
+  const emp=(DB.get('empleados')||[]).find(e=>e.id===id);if(!emp)return;
+  const igssLab=(emp.salario*0.0483).toFixed(2);
+  const igssPatr=(emp.salario*0.1267).toFixed(2);
+  const liquido=(emp.salario-parseFloat(igssLab)).toFixed(2);
+  const html=`<div class="detail-section">
+    <div class="detail-section-header">Datos Personales</div>
+    <div class="detail-row"><div class="detail-key">Nombre</div><div class="detail-val">${emp.nombre}</div></div>
+    <div class="detail-row"><div class="detail-key">Cargo</div><div class="detail-val">${emp.cargo}</div></div>
+    <div class="detail-row"><div class="detail-key">Email</div><div class="detail-val">${emp.email}</div></div>
+    <div class="detail-row"><div class="detail-key">Teléfono</div><div class="detail-val">${emp.tel}</div></div>
+    <div class="detail-row"><div class="detail-key">Fecha Ingreso</div><div class="detail-val mono">${emp.fecha_ingreso}</div></div>
+  </div>
+  <div class="detail-section">
+    <div class="detail-section-header">Datos Salariales</div>
+    <div class="detail-row"><div class="detail-key">Salario Base</div><div class="detail-val mono text-amber">Q${emp.salario.toLocaleString()}</div></div>
+    <div class="detail-row"><div class="detail-key">IGSS Laboral (4.83%)</div><div class="detail-val mono text-red">-Q${igssLab}</div></div>
+    <div class="detail-row"><div class="detail-key">Líquido a Pagar</div><div class="detail-val mono text-green">Q${parseFloat(liquido).toLocaleString()}</div></div>
+    <div class="detail-row"><div class="detail-key">IGSS Patronal (12.67%)</div><div class="detail-val mono">Q${igssPatr} (taller)</div></div>
+    <div class="detail-row"><div class="detail-key">Bonificación MINTRAB</div><div class="detail-val mono">Q250.00</div></div>
+  </div>
+  <div style="display:flex;gap:10px;margin-top:16px">
+    <button class="btn btn-ghost" onclick="closeModal()">Cerrar</button>
+    <button class="btn btn-amber" onclick="showToast('Generando boleta de pago...','info')">🖨️ Boleta de Pago</button>
+  </div>`;
+  openModal('Empleado: '+emp.nombre, html);
+}
+
+// ══════════════════════════════════════════════════════════════════
+//  MI OT (MECÁNICO)
+// ══════════════════════════════════════════════════════════════════
+function renderMiOT(){
+  const ordenes=DB.get('ordenes')||[];
+  const vehiculos=DB.get('vehiculos')||[];
+  const clientes=DB.get('clientes')||[];
+  const misOTs=ordenes.filter(o=>o.mecanico_id===App.user.id&&o.estado!=='entregado');
+
+  let html=`<div class="page-header">
+    <div><h1 class="page-title">Mis Órdenes</h1><p class="page-subtitle">// ${misOTs.length} OTs ASIGNADAS</p></div>
+  </div><div class="page-body">`;
+
+  if(misOTs.length===0){
+    html+=`<div class="card" style="text-align:center;padding:40px"><div style="font-size:32px;margin-bottom:12px">✅</div><div style="font-weight:700;color:var(--text)">Sin órdenes pendientes</div><div class="text-muted" style="margin-top:6px">No tienes órdenes asignadas en este momento.</div></div>`;
+  } else {
+    misOTs.forEach(o=>{
+      const v=vehiculos.find(x=>x.id===o.vehiculo_id);
+      const c=clientes.find(x=>x.id===o.cliente_id);
+      html+=`<div class="card card-amber" style="margin-bottom:16px">
+        <div class="flex items-center gap-2 mb-4">
+          <span class="mono text-amber">${o.num}</span>${estadoBadge(o.estado)}
+          <span class="priority-dot prio-${o.prioridad==='alta'?'high':o.prioridad==='media'?'med':'low'}" style="margin-left:auto"></span>
+        </div>
+        <div style="font-size:16px;font-weight:700;margin-bottom:4px">${v?.marca} ${v?.modelo} ${v?.anio}</div>
+        <div class="mono text-amber" style="font-size:12px;margin-bottom:8px">${v?.placa}</div>
+        <div class="text-muted" style="font-size:13px;margin-bottom:12px">${o.descripcion}</div>
+        <div class="flex gap-2">
+          <select class="filter-select" style="flex:1" onchange="cambiarEstado('${o.id}')">
+            ${Object.entries(ESTADOS).map(([k,s])=>`<option value="${k}"${o.estado===k?' selected':''}>${s.label}</option>`).join('')}
+          </select>
+          <button class="btn btn-amber btn-sm" onclick="showToast('Cámara activada para fotos de OT','info')">📷 Fotos</button>
+          <button class="btn btn-cyan btn-sm" onclick="showToast('Escaneando QR de repuesto...','info')">QR</button>
+        </div>
+      </div>`;
+    });
+  }
+
+  html+=`</div>`;
+  document.getElementById('page-content').innerHTML=html;
+}
+
+// ══════════════════════════════════════════════════════════════════
+//  MI VEHÍCULO (CLIENTE)
+// ══════════════════════════════════════════════════════════════════
+function renderMiVehiculo(){
+  const vids=App.user.vehiculos||[];
+  const vehiculos=DB.get('vehiculos')||[];
+  const ordenes=DB.get('ordenes')||[];
+  const misV=vehiculos.filter(v=>vids.includes(v.id));
+
+  let html=`<div class="page-header">
+    <div><h1 class="page-title">Mis Vehículos</h1><p class="page-subtitle">// PORTAL DE CLIENTE</p></div>
+  </div><div class="page-body">
+  <div class="alert alert-green"><div class="alert-icon">👋</div><div><div class="alert-title">Bienvenido, ${App.user.nombre}</div><div class="alert-body">Aquí puedes ver el estado de tu vehículo, historial de servicios y tus facturas.</div></div></div>`;
+
+  misV.forEach(v=>{
+    const miOT=ordenes.filter(o=>o.vehiculo_id===v.id);
+    const activa=miOT.find(o=>o.estado!=='entregado');
+    html+=`<div class="card card-cyan" style="margin-bottom:16px">
+      <div class="flex items-center gap-3 mb-4">
+        <span style="font-size:28px">🚗</span>
+        <div><div style="font-size:18px;font-weight:700">${v.marca} ${v.modelo} ${v.anio}</div>
+        <div class="mono text-amber">${v.placa}</div></div>
+      </div>
+      <div class="detail-section" style="margin-bottom:12px">
+        <div class="detail-row"><div class="detail-key">Kilometraje</div><div class="detail-val mono">${v.km.toLocaleString()} km</div></div>
+        <div class="detail-row"><div class="detail-key">Color</div><div class="detail-val">${v.color}</div></div>
+        <div class="detail-row"><div class="detail-key">Motor</div><div class="detail-val">${v.motor}</div></div>
+      </div>
+      ${activa?`<div class="alert alert-amber"><div class="alert-icon">🔧</div><div>
+        <div class="alert-title">OT Activa: ${activa.num}</div>
+        <div class="alert-body">${activa.descripcion}<br>Estado: ${estadoBadge(activa.estado)}</div>
+      </div></div>`:'<div class="alert alert-green"><div class="alert-icon">✅</div><div><div class="alert-title">Sin órdenes activas</div><div class="alert-body">Tu vehículo no tiene órdenes de trabajo en proceso.</div></div></div>'}
+      <div style="font-weight:700;font-size:13px;margin:16px 0 8px">Historial de Servicios</div>
+      <div class="ot-timeline">
+        ${miOT.slice(0,5).map(o=>`<div class="tl-event"><div class="tl-event-time">${o.fecha_ingreso} · ${o.num}</div><div class="tl-event-text">${o.descripcion} <span class="mono" style="color:var(--amber)">Q${o.total.toLocaleString()}</span></div></div>`).join('')}
+      </div>
+    </div>`;
+  });
+
+  html+=`</div>`;
+  document.getElementById('page-content').innerHTML=html;
+}
+
+// ══════════════════════════════════════════════════════════════════
+//  CONFIGURACIÓN
+// ══════════════════════════════════════════════════════════════════
+function renderConfig(){
+  const t=App.tenant;
+  let html=`<div class="page-header">
+    <div><h1 class="page-title">Configuración</h1><p class="page-subtitle">// GESTIÓN DEL TENANT</p></div>
+  </div><div class="page-body">
+  <div class="grid-2" style="margin-bottom:20px">
+    <div class="card card-amber">
+      <div class="card-sub" style="margin-bottom:12px">⚙️ Información del Taller</div>
+      <div class="form-group"><label class="form-label">Nombre del Taller</label><input class="form-input" id="cfg-nombre" value="${t.name}"></div>
+      <div class="form-group"><label class="form-label">NIT</label><input class="form-input" id="cfg-nit" value="${t.nit}"></div>
+      <div class="form-group"><label class="form-label">Teléfono</label><input class="form-input" id="cfg-tel" value="${t.tel}"></div>
+      <div class="form-group"><label class="form-label">Email</label><input class="form-input" id="cfg-email" value="${t.email}"></div>
+      <div class="form-group"><label class="form-label">Dirección</label><input class="form-input" id="cfg-addr" value="${t.address}"></div>
+      <button class="btn btn-amber" onclick="guardarConfig()">Guardar Cambios</button>
+    </div>
+    <div>
+      <div class="card card-cyan" style="margin-bottom:16px">
+        <div class="card-sub" style="margin-bottom:12px">🔗 Integraciones</div>
+        ${[
+          {name:'INFILE FEL',status:'Activo',color:'green',icon:'🧾'},
+          {name:'WhatsApp Business (Twilio)',status:'No configurado',color:'amber',icon:'💬'},
+          {name:'SendGrid Email',status:'Activo',color:'green',icon:'📧'},
+          {name:'CarMD Automotive API',status:'No configurado',color:'gray',icon:'🚗'}
+        ].map(i=>`<div class="flex items-center gap-3" style="padding:10px 0;border-bottom:1px solid var(--border)">
+          <span>${i.icon}</span><span style="flex:1;font-size:13px">${i.name}</span>
+          <span class="badge badge-${i.color}">${i.status}</span>
+          <button class="btn btn-sm btn-ghost" onclick="showToast('Configurar: ${i.name}','info')">Configurar</button>
+        </div>`).join('')}
+      </div>
+      <div class="card card-purple">
+        <div class="card-sub" style="margin-bottom:12px">👥 Usuarios del Sistema</div>
+        ${(DB.get('empleados')||[]).map(e=>`<div class="flex items-center gap-2" style="padding:8px 0;border-bottom:1px solid var(--border)">
+          <span>${e.avatar}</span><div style="flex:1"><div style="font-size:13px;font-weight:600">${e.nombre}</div><div class="mono text-muted" style="font-size:9px">${ROLES[e.rol]?.label}</div></div>
+          <span class="badge badge-${ROLES[e.rol]?.color||'gray'}">${e.rol}</span>
+        </div>`).join('')}
+        <button class="btn btn-amber btn-sm" style="margin-top:12px" onclick="showToast('Invitar nuevo usuario al taller','info')">＋ Invitar Usuario</button>
+      </div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-sub" style="margin-bottom:16px">📊 Plan & Facturación SaaS</div>
+    <div class="kpi-grid" style="grid-template-columns:repeat(4,1fr)">
+      <div class="kpi-card"><div class="kpi-label">Plan Actual</div><div class="kpi-val amber" style="font-size:28px">PRO</div></div>
+      <div class="kpi-card"><div class="kpi-label">Usuarios</div><div class="kpi-val">5/10</div></div>
+      <div class="kpi-card"><div class="kpi-label">Almacenamiento</div><div class="kpi-val">2.4 GB</div></div>
+      <div class="kpi-card"><div class="kpi-label">Renovación</div><div class="kpi-val" style="font-size:22px">2025-05-01</div></div>
+    </div>
+    <button class="btn btn-amber" style="margin-top:12px" onclick="showToast('Redirigiendo a portal de pagos...','info')">⬆ Actualizar a Enterprise</button>
+  </div>
+  </div>`;
+  document.getElementById('page-content').innerHTML=html;
+}
+
+function guardarConfig(){
+  const tenants=DB.get('tenants')||{};
+  tenants['automotriz-torres'].name=document.getElementById('cfg-nombre').value;
+  tenants['automotriz-torres'].nit=document.getElementById('cfg-nit').value;
+  tenants['automotriz-torres'].tel=document.getElementById('cfg-tel').value;
+  tenants['automotriz-torres'].email=document.getElementById('cfg-email').value;
+  tenants['automotriz-torres'].address=document.getElementById('cfg-addr').value;
+  DB.set('tenants',tenants);
+  App.tenant=tenants['automotriz-torres'];
+  showToast('Configuración guardada exitosamente');
+  renderSidebar();
+}
+
+// ══════════════════════════════════════════════════════════════════
+//  MODAL HELPERS
+// ══════════════════════════════════════════════════════════════════
+function openModal(title, body, cls=''){
+  document.getElementById('modal-title').textContent=title;
+  document.getElementById('modal-body').innerHTML=body;
+  const box=document.getElementById('modal-box');
+  box.className='modal modal-enter'+(cls?' '+cls:'');
+  document.getElementById('modal-overlay').classList.add('open');
+}
+
+function closeModal(e){
+  if(e&&e.target!==document.getElementById('modal-overlay')) return;
+  document.getElementById('modal-overlay').classList.remove('open');
+}
+
+// ══════════════════════════════════════════════════════════════════
+//  TOAST
+// ══════════════════════════════════════════════════════════════════
+function showToast(msg, type='success'){
+  const existing=document.getElementById('toast');
+  if(existing) existing.remove();
+  const colors={success:'var(--green)',error:'var(--red)',info:'var(--cyan)',warn:'var(--amber)'};
+  const t=document.createElement('div');
+  t.id='toast';
+  t.style.cssText=`position:fixed;bottom:24px;right:24px;z-index:9999;background:var(--surface);border:1px solid ${colors[type]||colors.success};border-left:3px solid ${colors[type]||colors.success};border-radius:6px;padding:14px 20px;font-size:13px;color:var(--text);box-shadow:0 8px 30px rgba(0,0,0,.4);max-width:360px;animation:fadeUp .2s ease`;
+  t.textContent=msg;
+  document.body.appendChild(t);
+  setTimeout(()=>{t.style.opacity='0';t.style.transition='opacity .3s';setTimeout(()=>t.remove(),300)},3000);
+}
+
+// ══════════════════════════════════════════════════════════════════
+//  INIT
+// ══════════════════════════════════════════════════════════════════
+seed();
+</script>
+</body>
+</html>
