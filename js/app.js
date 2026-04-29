@@ -98,6 +98,7 @@ const App = {
       vehiculos:   Pages.vehiculos,
       calendario:  Pages.calendario,
       facturacion: Pages.facturacion,
+      finanzas:    Pages.finanzas,
       rrhh:        Pages.rrhh,
       'mi-ot':     Pages.miOT,
       'mi-vehiculo':Pages.miVehiculo,

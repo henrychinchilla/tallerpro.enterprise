@@ -19,6 +19,7 @@ const NAV = [
   { id: 'inventario',   icon: '📦', label: 'Inventario',           roles: ['admin','jefe','mecanico'], badge: 2 },
   { id: 'calendario',   icon: '📅', label: 'Calendario',           roles: ['admin','recepcionista','jefe'] },
   { id: 'facturacion',  icon: '🧾', label: 'Facturación FEL',      roles: ['admin','recepcionista'] },
+  { id: 'finanzas',     icon: '💰', label: 'Finanzas',              roles: ['admin'] },
   { id: 'rrhh',         icon: '👤', label: 'RRHH & Nómina',        roles: ['admin'] },
   { id: 'mi-ot',        icon: '🔧', label: 'Mis OTs',              roles: ['mecanico'] },
   { id: 'mi-vehiculo',  icon: '🚗', label: 'Mi Vehículo',          roles: ['cliente'] },

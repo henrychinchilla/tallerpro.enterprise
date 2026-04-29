@@ -344,6 +344,117 @@ const DB = {
     return !error;
   },
 
+  /* ── CONFIG FISCAL ────────────────────────────────── */
+  async getConfigFiscal() {
+    const id = await getTenantId();
+    const { data } = await getSupabase()
+      .from('config_fiscal')
+      .select('*')
+      .eq('tenant_id', id)
+      .single();
+    return data || {};
+  },
+
+  async updateConfigFiscal(fields) {
+    const id = await getTenantId();
+    const { error } = await getSupabase()
+      .from('config_fiscal')
+      .upsert({ ...fields, tenant_id: id, updated_at: new Date().toISOString() });
+    return !error;
+  },
+
+  /* ── INGRESOS ─────────────────────────────────────── */
+  async getIngresos() {
+    const id = await getTenantId();
+    const { data } = await getSupabase()
+      .from('ingresos')
+      .select('*, clientes(nombre), ordenes(num)')
+      .eq('tenant_id', id)
+      .order('fecha', { ascending: false });
+    return data || [];
+  },
+
+  async insertIngreso(fields) {
+    const id = await getTenantId();
+    const { data, error } = await getSupabase()
+      .from('ingresos')
+      .insert({ ...fields, tenant_id: id })
+      .select().single();
+    return { data, error };
+  },
+
+  async deleteIngreso(ingresoId) {
+    const { error } = await getSupabase()
+      .from('ingresos').delete().eq('id', ingresoId);
+    return !error;
+  },
+
+  /* ── EGRESOS ──────────────────────────────────────── */
+  async getEgresos() {
+    const id = await getTenantId();
+    const { data } = await getSupabase()
+      .from('egresos')
+      .select('*')
+      .eq('tenant_id', id)
+      .order('fecha', { ascending: false });
+    return data || [];
+  },
+
+  async insertEgreso(fields) {
+    const id = await getTenantId();
+    const { data, error } = await getSupabase()
+      .from('egresos')
+      .insert({ ...fields, tenant_id: id })
+      .select().single();
+    return { data, error };
+  },
+
+  async deleteEgreso(egresoId) {
+    const { error } = await getSupabase()
+      .from('egresos').delete().eq('id', egresoId);
+    return !error;
+  },
+
+  /* ── CUENTAS POR COBRAR ───────────────────────────── */
+  async getCuentasCobrar() {
+    const id = await getTenantId();
+    const { data } = await getSupabase()
+      .from('cuentas_cobrar')
+      .select('*, clientes(nombre), ordenes(num)')
+      .eq('tenant_id', id)
+      .order('created_at', { ascending: false });
+    return data || [];
+  },
+
+  async insertCXC(fields) {
+    const id = await getTenantId();
+    const { data, error } = await getSupabase()
+      .from('cuentas_cobrar')
+      .insert({ ...fields, tenant_id: id })
+      .select().single();
+    return { data, error };
+  },
+
+  async insertAbono(fields) {
+    const id = await getTenantId();
+    // Insertar abono
+    const { error } = await getSupabase()
+      .from('abonos')
+      .insert({ ...fields, tenant_id: id });
+    if (error) return { error };
+    // Actualizar monto pagado en cuenta
+    const { data: cuenta } = await getSupabase()
+      .from('cuentas_cobrar').select('monto_total, monto_pagado').eq('id', fields.cuenta_id).single();
+    if (cuenta) {
+      const nuevoPagado = (cuenta.monto_pagado || 0) + fields.monto;
+      const estado = nuevoPagado >= cuenta.monto_total ? 'pagada' : 'parcial';
+      await getSupabase().from('cuentas_cobrar')
+        .update({ monto_pagado: nuevoPagado, estado })
+        .eq('id', fields.cuenta_id);
+    }
+    return { error: null };
+  },
+
   /* ── ACTUALIZAR VEHÍCULO ──────────────────────────── */
   async updateVehiculo(vehiculoId, fields) {
     const { error } = await getSupabase()
