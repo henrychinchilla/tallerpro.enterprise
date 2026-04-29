@@ -335,6 +335,15 @@ const DB = {
     return { totalClientes: totalClientes || 0, otActivas: otActivas || 0, ingresos, stockBajo };
   },
 
+  /* ── ACTUALIZAR EMPLEADO ──────────────────────────── */
+  async updateEmpleado(empleadoId, fields) {
+    const { error } = await getSupabase()
+      .from('empleados')
+      .update(fields)
+      .eq('id', empleadoId);
+    return !error;
+  },
+
   /* ── ACTUALIZAR VEHÍCULO ──────────────────────────── */
   async updateVehiculo(vehiculoId, fields) {
     const { error } = await getSupabase()
