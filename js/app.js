@@ -71,6 +71,27 @@ const App = {
     App.destroyCharts();
     App.currentPage = page;
 
+    /* Actualizar badge inventario dinámicamente */
+    DB.getInventario().then(inv => {
+      const bajo = inv.filter(i => i.stock <= i.min_stock).length;
+      const badge = document.querySelector('#nav-inventario .nav-badge');
+      if (bajo > 0) {
+        if (!badge) {
+          const navItem = document.getElementById('nav-inventario');
+          if (navItem) {
+            const b = document.createElement('span');
+            b.className = 'nav-badge';
+            b.textContent = bajo;
+            navItem.appendChild(b);
+          }
+        } else {
+          badge.textContent = bajo;
+        }
+      } else if (badge) {
+        badge.remove();
+      }
+    }).catch(() => {});
+
     /* Marca activo en sidebar */
     document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
     document.getElementById('nav-' + page)?.classList.add('active');

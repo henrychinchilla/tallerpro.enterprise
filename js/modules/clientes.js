@@ -55,6 +55,7 @@ Pages.clientes = async function () {
       <td onclick="event.stopPropagation()">
         <div style="display:flex;gap:4px">
           <button class="btn btn-sm btn-ghost" onclick="Pages.verCliente('${c.id}')">Ver</button>
+          <button class="btn btn-sm btn-cyan" title="Editar" onclick="Pages.modalEditarCliente('${c.id}')">✏️</button>
           ${c.tel ? `<button class="btn btn-sm btn-success" title="WhatsApp"
             onclick="Pages.enviarWACliente('${c.id}')">💬</button>` : ''}
           <button class="btn btn-sm btn-danger" title="Eliminar"
@@ -237,6 +238,7 @@ Pages.verCliente = async function (id) {
     <div class="modal-footer">
       <button class="btn btn-ghost" onclick="UI.closeModal()">Cerrar</button>
       <button class="btn btn-ghost" onclick="Pages.imprimirHistorialCliente('${c.id}')">🖨️ Historial</button>
+      <button class="btn btn-cyan" onclick="UI.closeModal();Pages.modalEditarCliente('${c.id}')">✏️ Editar</button>
       <button class="btn btn-danger" onclick="Pages.eliminarCliente('${c.id}','${(c.nombre_empresa||c.nombre).replace(/'/g,'')}')">🗑 Eliminar</button>
     </div>
   `, 'modal-lg');
@@ -556,4 +558,109 @@ Pages.imprimirHistorialCliente = async function (id) {
   win.document.write(html);
   win.document.close();
   setTimeout(() => win.print(), 400);
+};
+
+/* ── EDITAR CLIENTE ───────────────────────────────── */
+Pages.modalEditarCliente = async function (id) {
+  const clientes = Pages._clientesData || await DB.getClientes();
+  const c = clientes.find(x => x.id === id); if (!c) return;
+  const esEmpresa = c.tipo === 'empresa';
+
+  UI.openModal('✏️ Editar Cliente', `
+    <!-- Tipo -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:20px">
+      <label id="elbl-individual" style="display:flex;align-items:center;gap:10px;padding:12px;
+             background:var(--surface2);border:2px solid ${!esEmpresa?'var(--amber)':'var(--border)'};
+             border-radius:6px;cursor:pointer;font-size:13px;font-weight:600;
+             color:${!esEmpresa?'var(--amber)':'var(--text2)'}">
+        <input type="radio" name="ec-tipo" value="individual" ${!esEmpresa?'checked':''} style="display:none"
+               onchange="Pages._toggleTipoEditar('individual')">
+        <span style="font-size:20px">👤</span> Individual
+      </label>
+      <label id="elbl-empresa" style="display:flex;align-items:center;gap:10px;padding:12px;
+             background:var(--surface2);border:2px solid ${esEmpresa?'var(--amber)':'var(--border)'};
+             border-radius:6px;cursor:pointer;font-size:13px;font-weight:600;
+             color:${esEmpresa?'var(--amber)':'var(--text2)'}">
+        <input type="radio" name="ec-tipo" value="empresa" ${esEmpresa?'checked':''} style="display:none"
+               onchange="Pages._toggleTipoEditar('empresa')">
+        <span style="font-size:20px">🏢</span> Empresa
+      </label>
+    </div>
+
+    <div id="ec-campos-empresa" class="${!esEmpresa?'hidden':''}">
+      <div class="form-group">
+        <label class="form-label">Nombre de la Empresa *</label>
+        <input class="form-input" id="ec-empresa" value="${c.nombre_empresa||''}">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Representante Legal</label>
+        <input class="form-input" id="ec-representante" value="${c.representante||''}">
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label" id="ec-label-nombre">${esEmpresa?'Nombre del Contacto *':'Nombre Completo *'}</label>
+      <input class="form-input" id="ec-nombre" value="${c.nombre}">
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">NIT</label>
+        <input class="form-input" id="ec-nit" value="${c.nit||''}">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Teléfono *</label>
+        <input class="form-input" id="ec-tel" value="${c.tel||''}">
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Email</label>
+        <input class="form-input" id="ec-email" value="${c.email||''}">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Dirección</label>
+        <input class="form-input" id="ec-dir" value="${c.direccion||''}">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="UI.closeModal()">Cancelar</button>
+      <button class="btn btn-amber" onclick="Pages.actualizarCliente('${id}')">Guardar Cambios</button>
+    </div>`
+  );
+};
+
+Pages._toggleTipoEditar = function (tipo) {
+  const esEmpresa = tipo === 'empresa';
+  document.getElementById('ec-campos-empresa')?.classList.toggle('hidden', !esEmpresa);
+  document.getElementById('ec-label-nombre').textContent = esEmpresa ? 'Nombre del Contacto *' : 'Nombre Completo *';
+  ['individual','empresa'].forEach(t => {
+    const lbl = document.getElementById('elbl-' + t);
+    if (lbl) {
+      lbl.style.borderColor = t === tipo ? 'var(--amber)' : 'var(--border)';
+      lbl.style.color       = t === tipo ? 'var(--amber)' : 'var(--text2)';
+    }
+  });
+};
+
+Pages.actualizarCliente = async function (id) {
+  const nombre = document.getElementById('ec-nombre').value.trim();
+  const tel    = document.getElementById('ec-tel').value.trim();
+  const tipo   = document.querySelector('input[name="ec-tipo"]:checked')?.value || 'individual';
+  if (!nombre || !tel) { UI.toast('Nombre y teléfono son obligatorios', 'error'); return; }
+
+  const ok = await DB.updateCliente(id, {
+    tipo,
+    nombre,
+    nombre_empresa: tipo === 'empresa' ? (document.getElementById('ec-empresa')?.value.trim() || null) : null,
+    representante:  tipo === 'empresa' ? (document.getElementById('ec-representante')?.value.trim() || null) : null,
+    nit:       document.getElementById('ec-nit').value.trim() || null,
+    tel,
+    email:     document.getElementById('ec-email').value.trim() || null,
+    direccion: document.getElementById('ec-dir').value.trim() || null
+  });
+
+  if (!ok) { UI.toast('Error al actualizar', 'error'); return; }
+  UI.closeModal();
+  UI.toast('Cliente actualizado ✓');
+  Pages.clientes();
 };

@@ -208,7 +208,8 @@ Pages.verOT = async function (id) {
 
     <div class="modal-footer">
       <button class="btn btn-ghost" onclick="UI.closeModal()">Cerrar</button>
-      <button class="btn btn-cyan" onclick="UI.toast('WhatsApp próximamente','info')">💬 WhatsApp</button>
+      <button class="btn btn-cyan" onclick="Pages.enviarWAOT('${o.id}')">💬 WhatsApp</button>
+      <button class="btn btn-ghost" onclick="UI.closeModal();Pages.modalEditarOT('${o.id}')">✏️ Editar</button>
       <button class="btn btn-amber" onclick="UI.toast('Generando PDF...','info')">🖨️ Imprimir OT</button>
     </div>
   `, 'modal-lg');
@@ -337,4 +338,81 @@ Pages.eliminarOT = function (id, num) {
     UI.toast('OT ' + num + ' eliminada');
     Pages.ordenes();
   });
+};
+
+/* ── EDITAR OT ────────────────────────────────────── */
+Pages.modalEditarOT = async function (id) {
+  const o = await DB.getOrden(id); if (!o) return;
+  const empleados = (await DB.getEmpleados()).filter(e => e.rol === 'mecanico');
+
+  UI.openModal('✏️ Editar OT: ' + o.num, `
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Estado</label>
+        ${UI.estadoSelect(o.estado, `Pages._otEditEstado = this.value`)}
+      </div>
+      <div class="form-group">
+        <label class="form-label">Prioridad</label>
+        <select class="form-select" id="eot-prio">
+          ${['baja','media','alta','urgente'].map(p =>
+            `<option value="${p}" ${o.prioridad===p?'selected':''}>${p.charAt(0).toUpperCase()+p.slice(1)}</option>`
+          ).join('')}
+        </select>
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Mecánico Asignado</label>
+      <select class="form-select" id="eot-mec">
+        <option value="">Sin asignar</option>
+        ${empleados.map(e => `<option value="${e.id}" ${o.mecanico_id===e.id?'selected':''}>${e.nombre}</option>`).join('')}
+      </select>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Descripción del Trabajo</label>
+      <textarea class="form-input form-textarea" id="eot-desc" rows="3">${o.descripcion}</textarea>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Fecha Estimada Entrega</label>
+        <input class="form-input" id="eot-fecha" type="date" value="${o.fecha_estimada||''}">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Total (Q)</label>
+        <input class="form-input" id="eot-total" type="number" min="0" value="${o.total||0}">
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Notas Internas</label>
+      <textarea class="form-input form-textarea" id="eot-notas" rows="2">${o.notas||''}</textarea>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="UI.closeModal()">Cancelar</button>
+      <button class="btn btn-amber" onclick="Pages.actualizarOT('${id}')">Guardar Cambios</button>
+    </div>`
+  );
+  Pages._otEditEstado = o.estado;
+};
+
+Pages.actualizarOT = async function (id) {
+  const ok = await DB.updateOrden(id, {
+    estado:         Pages._otEditEstado || 'recibido',
+    prioridad:      document.getElementById('eot-prio').value,
+    mecanico_id:    document.getElementById('eot-mec').value || null,
+    descripcion:    document.getElementById('eot-desc').value.trim(),
+    fecha_estimada: document.getElementById('eot-fecha').value || null,
+    total:          parseFloat(document.getElementById('eot-total').value) || 0,
+    notas:          document.getElementById('eot-notas').value.trim() || null
+  });
+  if (!ok) { UI.toast('Error al actualizar', 'error'); return; }
+  UI.closeModal();
+  UI.toast('OT actualizada ✓');
+  Pages.ordenes();
+};
+
+/* ── WHATSAPP DESDE OT ────────────────────────────── */
+Pages.enviarWAOT = async function (otId) {
+  const o = await DB.getOrden(otId); if (!o) return;
+  const v = o.vehiculos, c = o.clientes;
+  if (!c?.tel) { UI.toast('El cliente no tiene teléfono registrado', 'warn'); return; }
+  await NOTIF.notificarOTLista(o, c, v);
 };
