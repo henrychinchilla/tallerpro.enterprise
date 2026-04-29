@@ -244,7 +244,26 @@ Pages.certificarFEL = async function (id) {
 
 
 /* ══════════════ RRHH & NÓMINA ══════════════ */
-
+// Dentro de js/modules/pages.js
+Pages.rrhh = {
+    render: function() {
+        return `
+            <div class="p-4">
+                <h2 class="text-2xl font-bold mb-4">Gestión de Personal</h2>
+                <div class="card p-0" id="empleados-container">
+                    <p class="p-4 text-muted">Cargando nómina y personal...</p>
+                </div>
+            </div>
+        `;
+    },
+    init: async function() {
+        // Aquí ejecutas la lógica de carga de datos (Supabase)
+        await this.loadEmpleados();
+    },
+    loadEmpleados: async function() {
+        // Implementación de fetch a la tabla 'empleados'
+    }
+};
 Pages.rrhh = async function () {
   const el = document.getElementById('page-content');
   el.innerHTML = `<div class="page-header"><h1 class="page-title">RRHH & Nómina</h1></div>
@@ -292,7 +311,31 @@ Pages.rrhh = async function () {
 
   Pages._empleadosData = empleados;
 };
+// Función para cargar empleados desde Supabase
+Pages.rrhh.load = async function() {
+  const { data, error } = await db.from('empleados')
+    .select('*')
+    .eq('tenant_id', CONFIG.tenantId); // Filtro multi-tenant
 
+  if (error) return UI.toast("Error al cargar personal", "error");
+
+  const container = document.getElementById('empleados-list');
+  container.innerHTML = data.map(emp => `
+    <tr>
+      <td>
+        <div class="flex-row items-center gap-2">
+          <span class="avatar-sm">${emp.nombre[0]}</span>
+          <span>${emp.nombre}</span>
+        </div>
+      </td>
+      <td>${emp.cargo} <br><small class="text-muted">${emp.rol}</small></td>
+      <td>${emp.dpi || '—'}<br><small>${emp.nit || '—'}</small></td>
+      <td>Q${emp.salario_base}</td>
+      <td><span class="badge-${emp.activo ? 'success' : 'danger'}">${emp.activo ? 'Activo' : 'Baja'}</span></td>
+      <td><button class="btn-icon" onclick="Pages.rrhh.edit('${emp.id}')">✏️</button></td>
+    </tr>
+  `).join('');
+};
 Pages.verEmpleado = function (id) {
   const emp = (Pages._empleadosData||[]).find(e => e.id === id);
   if (!emp) return;
