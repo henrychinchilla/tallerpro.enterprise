@@ -17,6 +17,7 @@ const NAV = [
   { id: 'vehiculos',    icon: '🚗', label: 'Vehículos',             roles: ['admin','recepcionista','jefe'] },
   { id: 'ordenes',      icon: '📋', label: 'Órdenes de Trabajo',   roles: ['admin','recepcionista','jefe','mecanico'] },
   { id: 'inventario',   icon: '📦', label: 'Inventario',           roles: ['admin','jefe','mecanico'], badge: 2 },
+  { id: 'proveedores',  icon: '🏪', label: 'Proveedores',           roles: ['admin','jefe'] },
   { id: 'calendario',   icon: '📅', label: 'Calendario',           roles: ['admin','recepcionista','jefe'] },
   { id: 'facturacion',  icon: '🧾', label: 'Facturación FEL',      roles: ['admin','recepcionista'] },
   { id: 'finanzas',     icon: '💰', label: 'Finanzas',              roles: ['admin'] },

@@ -335,6 +335,72 @@ const DB = {
     return { totalClientes: totalClientes || 0, otActivas: otActivas || 0, ingresos, stockBajo };
   },
 
+  /* ── PROVEEDORES ──────────────────────────────────── */
+  async getProveedores() {
+    const id = await getTenantId();
+    const { data } = await getSupabase()
+      .from('proveedores')
+      .select('*')
+      .eq('tenant_id', id)
+      .eq('activo', true)
+      .order('nombre');
+    return data || [];
+  },
+
+  async insertProveedor(fields) {
+    const id = await getTenantId();
+    const { data, error } = await getSupabase()
+      .from('proveedores')
+      .insert({ ...fields, tenant_id: id })
+      .select().single();
+    return { data, error };
+  },
+
+  async updateProveedor(proveedorId, fields) {
+    const { error } = await getSupabase()
+      .from('proveedores')
+      .update({ ...fields, updated_at: new Date().toISOString() })
+      .eq('id', proveedorId);
+    return !error;
+  },
+
+  /* ── ENTRADAS DE INVENTARIO ───────────────────────── */
+  async getEntradas() {
+    const id = await getTenantId();
+    const { data } = await getSupabase()
+      .from('entradas_inventario')
+      .select('*, proveedores(nombre)')
+      .eq('tenant_id', id)
+      .order('created_at', { ascending: false });
+    return data || [];
+  },
+
+  async getEntradasByProveedor(proveedorId) {
+    const { data } = await getSupabase()
+      .from('entradas_inventario')
+      .select('*')
+      .eq('proveedor_id', proveedorId)
+      .order('fecha', { ascending: false });
+    return data || [];
+  },
+
+  async insertEntrada(fields) {
+    const id = await getTenantId();
+    const { data, error } = await getSupabase()
+      .from('entradas_inventario')
+      .insert({ ...fields, tenant_id: id })
+      .select().single();
+    return { data, error };
+  },
+
+  async insertEntradaDetalle(fields) {
+    const { data, error } = await getSupabase()
+      .from('entradas_detalle')
+      .insert(fields)
+      .select().single();
+    return { data, error };
+  },
+
   /* ── ACTUALIZAR EMPLEADO ──────────────────────────── */
   async updateEmpleado(empleadoId, fields) {
     const { error } = await getSupabase()
