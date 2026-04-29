@@ -234,38 +234,13 @@ Pages.certificarFEL = async function (id) {
   UI.toast('Enviando a certificador SAT...', 'info');
   const result = await FEL.certificar(id);
   if (result.ok) {
-    // Crear ingreso automático desde la factura certificada
-    await Pages._crearIngresoDesdeFactura(id);
     const msg = result.simulado
-      ? 'Factura certificada ✓ Ingreso registrado automáticamente.'
+      ? 'Factura certificada ✓ (Sandbox)'
       : 'Factura certificada ✓ UUID: ' + result.uuid;
     UI.toast(msg);
     Pages.facturacion();
   } else {
     UI.toast('Error FEL: ' + result.error, 'error');
-  }
-};
-
-Pages._crearIngresoDesdeFactura = async function (facturaId) {
-  try {
-    const facturas = await DB.getFacturas();
-    const f = facturas.find(x => x.id === facturaId);
-    if (!f) return;
-    const config = await DB.getConfigFiscal();
-    await DB.insertIngreso({
-      tipo:        'cobro_ot',
-      concepto:    'Factura FEL ' + f.num + (f.descripcion ? ' — ' + f.descripcion : ''),
-      monto:       f.total,
-      iva:         f.iva,
-      fecha:       f.fecha || new Date().toISOString().slice(0,10),
-      factura_id:  facturaId,
-      ot_id:       f.ot_id || null,
-      cliente_id:  f.cliente_id,
-      metodo_pago: 'efectivo',
-      referencia:  f.fel_uuid || f.num
-    });
-  } catch(e) {
-    console.warn('No se pudo crear ingreso automático:', e);
   }
 };
 
@@ -512,63 +487,256 @@ Pages.guardarConfig = async function () {
 /* ══════════════ NUEVA FACTURA ══════════════ */
 
 Pages.modalNuevaFactura = async function () {
-  const [clientes, ordenes] = await Promise.all([
+  const [clientes, ordenes, config] = await Promise.all([
     DB.getClientes(),
-    DB.getOrdenes()
+    DB.getOrdenes(),
+    DB.getConfigFiscal()
   ]);
   const ordenesListas = ordenes.filter(o => o.estado === 'listo' || o.estado === 'entregado');
+  Pages._factConfig = config;
 
   UI.openModal('Nueva Factura FEL', `
-    <div class="form-group">
-      <label class="form-label">Cliente *</label>
-      <select class="form-select" id="nf-cliente" onchange="Pages.llenarNITFactura(this)">
-        <option value="">Seleccionar cliente...</option>
-        ${clientes.map(c => `<option value="${c.id}" data-nit="${c.nit||''}">${c.nombre}</option>`).join('')}
-      </select>
-    </div>
+    <!-- CLIENTE Y FECHA -->
     <div class="form-row">
       <div class="form-group">
-        <label class="form-label">NIT Receptor *</label>
-        <input class="form-input" id="nf-nit" placeholder="CF o NIT del cliente">
+        <label class="form-label">Cliente *</label>
+        <select class="form-select" id="nf-cliente" onchange="Pages.llenarNITFactura(this)">
+          <option value="">Seleccionar cliente...</option>
+          ${clientes.map(c => `<option value="${c.id}" data-nit="${c.nit||''}">${c.nombre}</option>`).join('')}
+        </select>
       </div>
       <div class="form-group">
         <label class="form-label">Fecha</label>
         <input class="form-input" id="nf-fecha" type="date" value="${new Date().toISOString().slice(0,10)}">
       </div>
     </div>
-    <div class="form-group">
-      <label class="form-label">Orden de Trabajo (opcional)</label>
-      <select class="form-select" id="nf-ot" onchange="Pages.llenarTotalFactura(this)">
-        <option value="">Sin OT asociada</option>
-        ${ordenesListas.map(o => {
-          const v = o.vehiculos;
-          return `<option value="${o.id}" data-total="${o.total}" data-cliente="${o.cliente_id}">
-            ${o.num} — ${v?.placa||''} ${v?.marca||''} — Q${o.total}
-          </option>`;
-        }).join('')}
-      </select>
+
+    <!-- NIT Y OT -->
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">NIT Receptor *</label>
+        <input class="form-input" id="nf-nit" placeholder="CF o NIT del cliente">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Orden de Trabajo</label>
+        <select class="form-select" id="nf-ot" onchange="Pages.llenarTotalFactura(this)">
+          <option value="">Sin OT asociada</option>
+          ${ordenesListas.map(o => {
+            const v = o.vehiculos;
+            return `<option value="${o.id}" data-total="${o.total}" data-cliente="${o.cliente_id}">
+              ${o.num} — ${v?.placa||''} ${v?.marca||''} — Q${o.total}
+            </option>`;
+          }).join('')}
+        </select>
+      </div>
     </div>
+
+    <!-- DESCRIPCIÓN Y MONTO -->
     <div class="form-group">
       <label class="form-label">Descripción</label>
       <input class="form-input" id="nf-desc" placeholder="Servicios de taller mecánico">
     </div>
     <div class="form-row">
       <div class="form-group">
-        <label class="form-label">Total (Q) *</label>
+        <label class="form-label">Total a Cobrar (Q) *</label>
         <input class="form-input" id="nf-total" type="number" min="0" step="0.01" placeholder="0.00"
                oninput="Pages.calcularIVA()">
       </div>
       <div class="form-group">
-        <label class="form-label">IVA (12%) — calculado</label>
+        <label class="form-label">IVA incluido — calculado</label>
         <input class="form-input" id="nf-iva" readonly placeholder="0.00" style="opacity:.6">
       </div>
     </div>
+
+    <!-- MÉTODO DE PAGO -->
+    <div style="border-top:1px solid var(--border);margin:16px 0;padding-top:16px">
+      <div style="font-weight:700;font-size:12px;color:var(--text2);letter-spacing:.06em;text-transform:uppercase;margin-bottom:12px">
+        💳 Forma de Pago
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px">
+        ${[
+          {v:'efectivo',          icon:'💵', label:'Efectivo'},
+          {v:'tarjeta_debito',    icon:'💳', label:'Débito'},
+          {v:'tarjeta_credito',   icon:'💳', label:'Crédito'},
+          {v:'cheque',            icon:'🗒️', label:'Cheque'},
+          {v:'transferencia',     icon:'🏦', label:'Transferencia'},
+          {v:'credito_cliente',   icon:'📋', label:'Crédito (CxC)'}
+        ].map(m => `
+          <label style="display:flex;align-items:center;gap:8px;padding:10px 12px;
+                 background:var(--surface2);border:1px solid var(--border);border-radius:6px;
+                 cursor:pointer;font-size:13px;transition:border-color .2s"
+                 onclick="Pages.seleccionarMetodoPago('${m.v}', this)">
+            <input type="radio" name="nf-metodo" value="${m.v}" style="display:none">
+            <span>${m.icon}</span> ${m.label}
+          </label>`).join('')}
+      </div>
+    </div>
+
+    <!-- CAMPOS TARJETA (ocultos por defecto) -->
+    <div id="nf-campos-tarjeta" class="hidden">
+      <div class="card" style="padding:14px;margin-bottom:14px;border-color:var(--cyan-border)">
+        <div class="card-sub mb-3">Detalles de Pago con Tarjeta</div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Franquicia</label>
+            <select class="form-select" id="nf-franquicia">
+              <option value="visa">Visa</option>
+              <option value="mastercard">Mastercard</option>
+              <option value="amex">American Express</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Proveedor POS</label>
+            <select class="form-select" id="nf-pos" onchange="Pages.autoComisionPOS()">
+              <option value="visanet">Visanet</option>
+              <option value="credomatic">BAC Credomatic</option>
+              <option value="otro">Otro</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Cuotas</label>
+            <select class="form-select" id="nf-cuotas">
+              <option value="1">Contado (1 cuota)</option>
+              <option value="3">3 cuotas</option>
+              <option value="6">6 cuotas</option>
+              <option value="10">10 cuotas</option>
+              <option value="12">12 cuotas</option>
+              <option value="18">18 cuotas</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">No. Autorización</label>
+            <input class="form-input" id="nf-autorizacion" placeholder="123456">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Comisión POS (%)</label>
+            <input class="form-input" id="nf-comision" type="number" step="0.01" value="3.00"
+                   oninput="Pages.calcularNetoTarjeta()">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Últimos 4 dígitos tarjeta</label>
+            <input class="form-input" id="nf-digitos" placeholder="1234" maxlength="4">
+          </div>
+        </div>
+        <!-- Resumen neto -->
+        <div style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:12px">
+          <div class="flex items-center justify-between mb-2">
+            <span class="text-muted" style="font-size:12px">Monto bruto</span>
+            <span class="mono-sm" id="nf-bruto">Q0.00</span>
+          </div>
+          <div class="flex items-center justify-between mb-2">
+            <span class="text-muted" style="font-size:12px">Comisión POS</span>
+            <span class="mono-sm text-red" id="nf-comision-monto">-Q0.00</span>
+          </div>
+          <div class="flex items-center justify-between" style="border-top:1px solid var(--border);padding-top:8px">
+            <span style="font-weight:700;font-size:12px">Ingreso neto al taller</span>
+            <span class="mono-sm text-green" id="nf-neto">Q0.00</span>
+          </div>
+        </div>
+        <div class="alert alert-cyan" style="margin-top:10px;margin-bottom:0">
+          <div class="alert-icon">ℹ️</div>
+          <div class="alert-body" style="font-size:11px">
+            Las cuotas son financiadas por el banco. El taller recibe el monto completo menos la comisión.
+            La comisión se registra como egreso automáticamente.
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- CAMPOS CHEQUE (ocultos) -->
+    <div id="nf-campos-cheque" class="hidden">
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Banco</label>
+          <input class="form-input" id="nf-banco" placeholder="Banco Industrial, G&T Continental...">
+        </div>
+        <div class="form-group">
+          <label class="form-label">No. de Cheque</label>
+          <input class="form-input" id="nf-cheque-num" placeholder="0001234">
+        </div>
+      </div>
+    </div>
+
+    <!-- REFERENCIA -->
+    <div class="form-group">
+      <label class="form-label">Referencia / Notas adicionales</label>
+      <input class="form-input" id="nf-ref" placeholder="Observaciones del pago...">
+    </div>
+
     <div class="modal-footer">
       <button class="btn btn-ghost" onclick="UI.closeModal()">Cancelar</button>
       <button class="btn btn-ghost" onclick="Pages.guardarFactura('borrador')">Guardar Borrador</button>
-      <button class="btn btn-amber" onclick="Pages.guardarFactura('pendiente')">Crear y Certificar</button>
+      <button class="btn btn-amber" onclick="Pages.guardarFactura('certificar')">Facturar y Certificar</button>
     </div>`
-  );
+  , 'modal-lg');
+
+  // Seleccionar efectivo por defecto
+  const defaultLabel = document.querySelector('label[onclick*="efectivo"]');
+  if (defaultLabel) Pages.seleccionarMetodoPago('efectivo', defaultLabel);
+};
+
+Pages.seleccionarMetodoPago = function (metodo, label) {
+  // Reset all
+  document.querySelectorAll('label[onclick*="seleccionarMetodoPago"]').forEach(l => {
+    l.style.borderColor = 'var(--border)';
+    l.style.color = 'var(--text2)';
+    l.style.background = 'var(--surface2)';
+  });
+  // Highlight selected
+  if (label) {
+    label.style.borderColor = 'var(--amber)';
+    label.style.color = 'var(--amber)';
+    label.style.background = 'var(--amber-dim)';
+  }
+  // Store value
+  document.querySelectorAll('input[name="nf-metodo"]').forEach(r => r.checked = r.value === metodo);
+
+  // Show/hide extra fields
+  const esTarjeta = metodo === 'tarjeta_debito' || metodo === 'tarjeta_credito';
+  const esCheque  = metodo === 'cheque';
+  document.getElementById('nf-campos-tarjeta')?.classList.toggle('hidden', !esTarjeta);
+  document.getElementById('nf-campos-cheque')?.classList.toggle('hidden', !esCheque);
+
+  if (esTarjeta) {
+    Pages.autoComisionPOS();
+    Pages.calcularNetoTarjeta();
+  }
+};
+
+Pages.autoComisionPOS = function () {
+  const pos     = document.getElementById('nf-pos')?.value || 'visanet';
+  const metodo  = document.querySelector('input[name="nf-metodo"]:checked')?.value || '';
+  const config  = Pages._factConfig || {};
+  let comision  = 3.00;
+
+  if (pos === 'visanet') {
+    comision = metodo === 'tarjeta_debito'
+      ? (config.com_debito_visanet    || 2.50)
+      : (config.com_credito_visanet   || 3.00);
+  } else if (pos === 'credomatic') {
+    comision = metodo === 'tarjeta_debito'
+      ? (config.com_debito_credomatic  || 2.50)
+      : (config.com_credito_credomatic || 3.00);
+  }
+
+  const el = document.getElementById('nf-comision');
+  if (el) { el.value = comision.toFixed(2); Pages.calcularNetoTarjeta(); }
+};
+
+Pages.calcularNetoTarjeta = function () {
+  const bruto    = parseFloat(document.getElementById('nf-total')?.value || 0);
+  const comPct   = parseFloat(document.getElementById('nf-comision')?.value || 0) / 100;
+  const comMonto = bruto * comPct;
+  const neto     = bruto - comMonto;
+
+  const setEl = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+  setEl('nf-bruto',         UI.q(bruto));
+  setEl('nf-comision-monto','-' + UI.q(comMonto));
+  setEl('nf-neto',          UI.q(neto));
 };
 
 Pages.llenarNITFactura = function (sel) {
@@ -582,29 +750,68 @@ Pages.llenarTotalFactura = function (sel) {
   document.getElementById('nf-total').value = total.toFixed(2);
   if (cid) document.getElementById('nf-cliente').value = cid;
   Pages.calcularIVA();
+  Pages.calcularNetoTarjeta();
 };
 
 Pages.calcularIVA = function () {
-  const total    = parseFloat(document.getElementById('nf-total').value) || 0;
+  const total    = parseFloat(document.getElementById('nf-total')?.value || 0);
   const subtotal = total / 1.12;
   const iva      = total - subtotal;
-  document.getElementById('nf-iva').value = iva.toFixed(2);
+  const el = document.getElementById('nf-iva');
+  if (el) el.value = iva.toFixed(2);
+  Pages.calcularNetoTarjeta();
 };
 
-Pages.guardarFactura = async function (estadoInicial) {
+Pages.guardarFactura = async function (accion) {
   const clienteId = document.getElementById('nf-cliente').value;
   const nit       = document.getElementById('nf-nit').value.trim();
   const total     = parseFloat(document.getElementById('nf-total').value) || 0;
+  const metodo    = document.querySelector('input[name="nf-metodo"]:checked')?.value || 'efectivo';
 
   if (!clienteId) { UI.toast('Selecciona un cliente', 'error'); return; }
-  if (!nit)       { UI.toast('El NIT es obligatorio (usa CF para consumidor final)', 'error'); return; }
+  if (!nit)       { UI.toast('El NIT es obligatorio (CF para consumidor final)', 'error'); return; }
   if (total <= 0) { UI.toast('El total debe ser mayor a 0', 'error'); return; }
 
   const subtotal = total / 1.12;
   const iva      = total - subtotal;
   const otId     = document.getElementById('nf-ot').value || null;
+  const esTarjeta = metodo === 'tarjeta_debito' || metodo === 'tarjeta_credito';
 
-  const { data, error } = await DB.insertFactura({
+  // Datos de tarjeta
+  let comisionMonto = 0, montoNeto = total, notasPago = '';
+  let referencia = document.getElementById('nf-ref').value.trim() || null;
+
+  if (esTarjeta) {
+    const comPct       = parseFloat(document.getElementById('nf-comision')?.value || 0) / 100;
+    const pos          = document.getElementById('nf-pos')?.value || '';
+    const franquicia   = document.getElementById('nf-franquicia')?.value || '';
+    const cuotas       = document.getElementById('nf-cuotas')?.value || '1';
+    const autorizacion = document.getElementById('nf-autorizacion')?.value.trim() || '';
+    const digitos      = document.getElementById('nf-digitos')?.value.trim() || '';
+
+    comisionMonto = total * comPct;
+    montoNeto     = total - comisionMonto;
+    referencia    = autorizacion || referencia;
+    notasPago     = [
+      `Franquicia: ${franquicia.toUpperCase()}`,
+      `POS: ${pos}`,
+      cuotas > 1 ? `Cuotas: ${cuotas}` : 'Contado',
+      digitos ? `Tarjeta: ****${digitos}` : '',
+      `Comisión: ${(comPct*100).toFixed(2)}% = Q${comisionMonto.toFixed(2)}`,
+      `Neto: Q${montoNeto.toFixed(2)}`
+    ].filter(Boolean).join(' | ');
+  }
+
+  if (metodo === 'cheque') {
+    const banco    = document.getElementById('nf-banco')?.value.trim() || '';
+    const numCheque= document.getElementById('nf-cheque-num')?.value.trim() || '';
+    notasPago = `Cheque ${banco} No.${numCheque}`;
+    referencia = numCheque || referencia;
+  }
+
+  // Guardar factura
+  const estado = accion === 'borrador' ? 'borrador' : 'pendiente';
+  const { data: factura, error } = await DB.insertFactura({
     cliente_id:  clienteId,
     ot_id:       otId,
     nit,
@@ -613,20 +820,65 @@ Pages.guardarFactura = async function (estadoInicial) {
     subtotal:    parseFloat(subtotal.toFixed(2)),
     iva:         parseFloat(iva.toFixed(2)),
     total:       parseFloat(total.toFixed(2)),
-    estado:      estadoInicial
+    estado
   });
 
   if (error) { UI.toast('Error: ' + error.message, 'error'); return; }
-
   UI.closeModal();
 
-  if (estadoInicial === 'pendiente' && data?.id) {
-    UI.toast('Factura creada. Certificando...', 'info');
-    const result = await FEL.certificar(data.id);
-    if (result.ok) UI.toast('Factura certificada ✓');
-    else UI.toast('Creada pero error FEL: ' + result.error, 'warn');
+  // Registrar ingreso inmediatamente (excepto borrador y crédito cliente)
+  if (accion !== 'borrador' && metodo !== 'credito_cliente') {
+    await DB.insertIngreso({
+      tipo:        'cobro_ot',
+      concepto:    `Factura ${factura.num}${factura.descripcion ? ' — ' + factura.descripcion : ''}`,
+      monto:       parseFloat(montoNeto.toFixed(2)),
+      iva:         parseFloat(iva.toFixed(2)),
+      fecha:       factura.fecha || new Date().toISOString().slice(0,10),
+      ot_id:       otId,
+      cliente_id:  clienteId,
+      factura_id:  factura.id,
+      metodo_pago: metodo,
+      referencia,
+      notas:       notasPago || null
+    });
+
+    // Registrar comisión como egreso si es tarjeta
+    if (esTarjeta && comisionMonto > 0) {
+      const pos = document.getElementById('nf-pos')?.value || '';
+      await DB.insertEgreso({
+        categoria:   'otros',
+        concepto:    `Comisión POS ${pos} — Factura ${factura.num}`,
+        monto:       parseFloat(comisionMonto.toFixed(2)),
+        fecha:       factura.fecha || new Date().toISOString().slice(0,10),
+        proveedor:   pos === 'visanet' ? 'Visanet Guatemala' : pos === 'credomatic' ? 'BAC Credomatic' : 'POS',
+        metodo_pago: 'transferencia',
+        notas:       `Comisión automática por pago con tarjeta`
+      });
+    }
+
+    // Si es crédito cliente, crear CxC
+    if (metodo === 'credito_cliente') {
+      await DB.insertCXC({
+        cliente_id:  clienteId,
+        ot_id:       otId,
+        concepto:    `Crédito — Factura ${factura.num}`,
+        monto_total: total,
+        monto_pagado:0,
+        estado:      'pendiente'
+      });
+    }
+  }
+
+  // Certificar FEL si se solicitó
+  if (accion === 'certificar' && factura?.id) {
+    UI.toast('Certificando con SAT...', 'info');
+    const result = await FEL.certificar(factura.id);
+    if (result.ok) UI.toast(`Factura ${factura.num} certificada y registrada ✓`);
+    else UI.toast('Factura creada, error FEL: ' + result.error, 'warn');
+  } else if (accion === 'borrador') {
+    UI.toast('Borrador guardado ✓');
   } else {
-    UI.toast('Factura guardada como borrador ✓');
+    UI.toast(`Factura ${factura.num} creada e ingreso registrado ✓`);
   }
 
   Pages.facturacion();
