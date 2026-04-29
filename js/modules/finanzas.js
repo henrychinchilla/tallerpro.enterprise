@@ -480,6 +480,51 @@ const FINANZAS = {
             </label>
           </div>
         </div>
+
+        <div style="margin-top:16px;padding-top:16px;border-top:1px solid var(--border)">
+          <div class="card-sub mb-3">💳 Configuración POS</div>
+          <div class="grid-2" style="gap:14px">
+            <div class="form-group">
+              <label class="form-label">Proveedor POS Principal</label>
+              <select class="form-select" id="cfg-pos-proveedor">
+                <option value="visanet"    ${config?.pos_proveedor==='visanet'   ?'selected':''}>Visanet Guatemala</option>
+                <option value="credomatic" ${config?.pos_proveedor==='credomatic'?'selected':''}>BAC Credomatic</option>
+                <option value="ambos"      ${config?.pos_proveedor==='ambos'     ?'selected':''}>Ambos</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Cargo Mensual POS (Q)</label>
+              <input class="form-input" id="cfg-pos-mensual" type="number" step="0.01"
+                     value="${config?.pos_cargo_mensual||0}" placeholder="0.00">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Comisión Débito Visanet (%)</label>
+              <input class="form-input" id="cfg-com-debito-visa" type="number" step="0.01"
+                     value="${config?.com_debito_visanet||2.50}" placeholder="2.50">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Comisión Crédito Visanet (%)</label>
+              <input class="form-input" id="cfg-com-credito-visa" type="number" step="0.01"
+                     value="${config?.com_credito_visanet||3.00}" placeholder="3.00">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Comisión Débito Credomatic (%)</label>
+              <input class="form-input" id="cfg-com-debito-credo" type="number" step="0.01"
+                     value="${config?.com_debito_credomatic||2.50}" placeholder="2.50">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Comisión Crédito Credomatic (%)</label>
+              <input class="form-input" id="cfg-com-credito-credo" type="number" step="0.01"
+                     value="${config?.com_credito_credomatic||3.00}" placeholder="3.00">
+            </div>
+          </div>
+          <div class="alert alert-cyan" style="margin-top:12px">
+            <div class="alert-icon">💡</div>
+            <div><div class="alert-title">Cuotas Visa / MasterCuotas</div>
+            <div class="alert-body">Las cuotas (3, 6, 10, 12, 18 meses) son financiadas por el banco emisor.
+            El taller recibe el monto completo menos la comisión por transacción. Solo se registran como referencia.</div></div>
+          </div>
+        </div>
         <button class="btn btn-amber mt-3" onclick="Pages.guardarConfigFiscal()">Guardar Configuración Fiscal</button>
       </div>`;
   },
@@ -593,20 +638,76 @@ Pages.modalNuevoIngreso = async function () {
     <div class="form-row">
       <div class="form-group">
         <label class="form-label">Monto Total (Q) *</label>
-        <input class="form-input" id="ni-monto" type="number" min="0" step="0.01" placeholder="0.00">
+        <input class="form-input" id="ni-monto" type="number" min="0" step="0.01" placeholder="0.00"
+               oninput="Pages.calcularComisionTarjeta()">
       </div>
       <div class="form-group">
         <label class="form-label">Método de Pago *</label>
-        <select class="form-select" id="ni-metodo">
+        <select class="form-select" id="ni-metodo" onchange="Pages.toggleCamposTarjeta()">
           <option value="efectivo">💵 Efectivo</option>
           <option value="tarjeta_debito">💳 Tarjeta Débito</option>
           <option value="tarjeta_credito">💳 Tarjeta Crédito</option>
           <option value="cheque">🗒️ Cheque</option>
           <option value="transferencia">🏦 Transferencia</option>
-          <option value="credito">📋 Crédito</option>
+          <option value="credito">📋 Crédito (CxC)</option>
         </select>
       </div>
     </div>
+
+    <!-- Campos tarjeta (se muestran solo con tarjeta) -->
+    <div id="campos-tarjeta" class="hidden">
+      <div class="card" style="padding:14px;margin-bottom:4px;border-color:var(--cyan-border)">
+        <div class="card-sub mb-3">💳 Detalles de Tarjeta</div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Proveedor POS</label>
+            <select class="form-select" id="ni-pos" onchange="Pages.calcularComisionTarjeta()">
+              <option value="visanet">Visanet</option>
+              <option value="credomatic">BAC Credomatic</option>
+              <option value="otro">Otro</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Comisión del POS (%)</label>
+            <input class="form-input" id="ni-comision" type="number" step="0.01" value="3.00" min="0" max="10"
+                   oninput="Pages.calcularComisionTarjeta()">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Cuotas (solo referencia)</label>
+            <select class="form-select" id="ni-cuotas">
+              <option value="1">Contado (1 cuota)</option>
+              <option value="3">3 cuotas</option>
+              <option value="6">6 cuotas</option>
+              <option value="10">10 cuotas</option>
+              <option value="12">12 cuotas</option>
+              <option value="18">18 cuotas</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">No. de Autorización</label>
+            <input class="form-input" id="ni-autorizacion" placeholder="123456">
+          </div>
+        </div>
+        <!-- Resumen comisión -->
+        <div style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:12px;margin-top:4px">
+          <div class="flex items-center justify-between mb-2">
+            <span class="text-muted" style="font-size:12px">Monto bruto</span>
+            <span class="mono-sm" id="ni-monto-bruto">Q0.00</span>
+          </div>
+          <div class="flex items-center justify-between mb-2">
+            <span class="text-muted" style="font-size:12px">Comisión POS</span>
+            <span class="mono-sm text-red" id="ni-monto-comision">-Q0.00</span>
+          </div>
+          <div class="flex items-center justify-between" style="border-top:1px solid var(--border);padding-top:8px;margin-top:4px">
+            <span style="font-weight:700;font-size:12px">Ingreso neto</span>
+            <span class="mono-sm text-green" id="ni-monto-neto">Q0.00</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <div class="form-group">
       <label class="form-label">Referencia / No. Documento</label>
       <input class="form-input" id="ni-ref" placeholder="No. cheque, autorización, etc.">
@@ -623,30 +724,99 @@ Pages.llenarMontoOT = function (sel) {
   if (total) document.getElementById('ni-monto').value = parseFloat(total).toFixed(2);
 };
 
+
+Pages.toggleCamposTarjeta = function () {
+  const metodo = document.getElementById('ni-metodo')?.value || '';
+  const campos = document.getElementById('campos-tarjeta');
+  if (!campos) return;
+  const esTarjeta = metodo === 'tarjeta_debito' || metodo === 'tarjeta_credito';
+  campos.classList.toggle('hidden', !esTarjeta);
+  if (esTarjeta) Pages.calcularComisionTarjeta();
+};
+
+Pages.calcularComisionTarjeta = function () {
+  const monto    = parseFloat(document.getElementById('ni-monto')?.value || 0);
+  const comPct   = parseFloat(document.getElementById('ni-comision')?.value || 0) / 100;
+  const comMonto = monto * comPct;
+  const neto     = monto - comMonto;
+
+  const setEl = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+  setEl('ni-monto-bruto',    UI.q(monto));
+  setEl('ni-monto-comision', '-' + UI.q(comMonto));
+  setEl('ni-monto-neto',     UI.q(neto));
+};
+
 Pages.guardarIngreso = async function () {
   const concepto = document.getElementById('ni-concepto').value.trim();
-  const monto    = parseFloat(document.getElementById('ni-monto').value) || 0;
-  if (!concepto)   { UI.toast('El concepto es obligatorio', 'error'); return; }
-  if (monto <= 0)  { UI.toast('El monto debe ser mayor a 0', 'error'); return; }
+  const montoBruto = parseFloat(document.getElementById('ni-monto').value) || 0;
+  const metodo     = document.getElementById('ni-metodo').value;
+  if (!concepto)     { UI.toast('El concepto es obligatorio', 'error'); return; }
+  if (montoBruto <= 0){ UI.toast('El monto debe ser mayor a 0', 'error'); return; }
 
   const config = Pages._finConfig;
-  const iva    = FINANZAS.calcularIVA(monto, config);
+  let montoNeto = montoBruto;
+  let comisionMonto = 0;
+  let referencia = document.getElementById('ni-ref').value.trim() || null;
+  let notas = '';
+
+  // Calcular comisión si es tarjeta
+  if (metodo === 'tarjeta_debito' || metodo === 'tarjeta_credito') {
+    const comisionPct = parseFloat(document.getElementById('ni-comision')?.value || 0) / 100;
+    comisionMonto = montoBruto * comisionPct;
+    montoNeto     = montoBruto - comisionMonto;
+    const proveedor = document.getElementById('ni-pos')?.value || '';
+    const cuotas    = document.getElementById('ni-cuotas')?.value || '1';
+    const autorizacion = document.getElementById('ni-autorizacion')?.value.trim() || '';
+    referencia = autorizacion || referencia;
+    notas = `Proveedor POS: ${proveedor} | Comisión: ${(comisionPct*100).toFixed(2)}% (Q${comisionMonto.toFixed(2)}) | Cuotas: ${cuotas} | Bruto: Q${montoBruto.toFixed(2)}`;
+
+    // Registrar egreso de comisión automáticamente
+    if (comisionMonto > 0) {
+      await DB.insertEgreso({
+        categoria:   'otros',
+        concepto:    `Comisión POS ${proveedor} — ${concepto}`,
+        monto:       parseFloat(comisionMonto.toFixed(2)),
+        fecha:       document.getElementById('ni-fecha').value,
+        proveedor:   proveedor === 'visanet' ? 'Visanet Guatemala' : proveedor === 'credomatic' ? 'BAC Credomatic' : 'POS',
+        metodo_pago: 'transferencia',
+        notas:       `Comisión automática por pago con tarjeta`
+      });
+    }
+
+    // Si es crédito (CxC), crear cuenta por cobrar
+    if (metodo === 'credito') {
+      const clienteId = document.getElementById('ni-cliente').value;
+      if (clienteId) {
+        await DB.insertCXC({
+          cliente_id:  clienteId,
+          ot_id:       document.getElementById('ni-ot').value || null,
+          concepto,
+          monto_total: montoBruto,
+          monto_pagado:0,
+          estado:      'pendiente'
+        });
+      }
+    }
+  }
+
+  const iva = FINANZAS.calcularIVA(montoNeto, config);
 
   const { error } = await DB.insertIngreso({
-    tipo:       document.getElementById('ni-tipo').value,
+    tipo:        document.getElementById('ni-tipo').value,
     concepto,
-    monto,
-    iva:        parseFloat(iva.toFixed(2)),
-    fecha:      document.getElementById('ni-fecha').value,
-    ot_id:      document.getElementById('ni-ot').value || null,
-    cliente_id: document.getElementById('ni-cliente').value || null,
-    metodo_pago:document.getElementById('ni-metodo').value,
-    referencia: document.getElementById('ni-ref').value.trim() || null
+    monto:       parseFloat(montoNeto.toFixed(2)),
+    iva:         parseFloat(iva.toFixed(2)),
+    fecha:       document.getElementById('ni-fecha').value,
+    ot_id:       document.getElementById('ni-ot').value || null,
+    cliente_id:  document.getElementById('ni-cliente').value || null,
+    metodo_pago: metodo,
+    referencia,
+    notas
   });
 
   if (error) { UI.toast('Error: ' + error.message, 'error'); return; }
   UI.closeModal();
-  UI.toast('Ingreso registrado ✓');
+  UI.toast(`Ingreso registrado ✓ Neto: ${UI.q(montoNeto)}`);
   Pages.finanzas(_finTab);
 };
 
@@ -875,17 +1045,24 @@ Pages.registrarAbono = async function (cuentaId) {
 };
 
 Pages.guardarConfigFiscal = async function () {
+  const regimen = document.getElementById('cfg-regimen').value;
   const ok = await DB.updateConfigFiscal({
-    num_patrono_igss: document.getElementById('cfg-igss-num').value.trim(),
-    regimen_iva:      document.getElementById('cfg-regimen').value,
-    tasa_iva:         document.getElementById('cfg-regimen').value === 'repc' ? 0.05 : 0.12,
-    tasa_isr:         document.getElementById('cfg-regimen').value === 'rsu'  ? 0.25 : 0.05,
-    cuota_laboral:    parseFloat(document.getElementById('cfg-igss-lab').value) / 100,
-    cuota_patronal:   parseFloat(document.getElementById('cfg-igss-pat').value) / 100,
-    intecap:          parseFloat(document.getElementById('cfg-intecap').value) / 100,
-    aplica_irtra:     document.getElementById('cfg-irtra').checked
+    num_patrono_igss:      document.getElementById('cfg-igss-num').value.trim(),
+    regimen_iva:           regimen,
+    tasa_iva:              regimen === 'repc' ? 0.05 : 0.12,
+    tasa_isr:              regimen === 'rsu'  ? 0.25 : 0.05,
+    cuota_laboral:         parseFloat(document.getElementById('cfg-igss-lab').value) / 100,
+    cuota_patronal:        parseFloat(document.getElementById('cfg-igss-pat').value) / 100,
+    intecap:               parseFloat(document.getElementById('cfg-intecap').value) / 100,
+    aplica_irtra:          document.getElementById('cfg-irtra').checked,
+    pos_proveedor:         document.getElementById('cfg-pos-proveedor')?.value || 'visanet',
+    pos_cargo_mensual:     parseFloat(document.getElementById('cfg-pos-mensual')?.value || 0),
+    com_debito_visanet:    parseFloat(document.getElementById('cfg-com-debito-visa')?.value || 2.5),
+    com_credito_visanet:   parseFloat(document.getElementById('cfg-com-credito-visa')?.value || 3),
+    com_debito_credomatic: parseFloat(document.getElementById('cfg-com-debito-credo')?.value || 2.5),
+    com_credito_credomatic:parseFloat(document.getElementById('cfg-com-credito-credo')?.value || 3)
   });
 
-  if (ok) { UI.toast('Configuración fiscal guardada ✓'); Pages.finanzas('fiscal'); }
+  if (ok) { UI.toast('Configuración fiscal y POS guardada ✓'); Pages.finanzas('fiscal'); }
   else UI.toast('Error al guardar', 'error');
 };

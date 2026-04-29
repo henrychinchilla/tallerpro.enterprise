@@ -357,9 +357,23 @@ const DB = {
 
   async updateConfigFiscal(fields) {
     const id = await getTenantId();
-    const { error } = await getSupabase()
-      .from('config_fiscal')
-      .upsert({ ...fields, tenant_id: id, updated_at: new Date().toISOString() });
+    // Check if config exists
+    const { data: existing } = await getSupabase()
+      .from('config_fiscal').select('id').eq('tenant_id', id).single();
+    
+    let error;
+    if (existing?.id) {
+      // Update existing record
+      ({ error } = await getSupabase()
+        .from('config_fiscal')
+        .update({ ...fields, updated_at: new Date().toISOString() })
+        .eq('tenant_id', id));
+    } else {
+      // Insert new record
+      ({ error } = await getSupabase()
+        .from('config_fiscal')
+        .insert({ ...fields, tenant_id: id }));
+    }
     return !error;
   },
 

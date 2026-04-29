@@ -234,13 +234,38 @@ Pages.certificarFEL = async function (id) {
   UI.toast('Enviando a certificador SAT...', 'info');
   const result = await FEL.certificar(id);
   if (result.ok) {
+    // Crear ingreso automático desde la factura certificada
+    await Pages._crearIngresoDesdeFactura(id);
     const msg = result.simulado
-      ? 'Factura certificada ✓ (Sandbox — UUID: ' + result.uuid.slice(0,20) + '...)'
+      ? 'Factura certificada ✓ Ingreso registrado automáticamente.'
       : 'Factura certificada ✓ UUID: ' + result.uuid;
     UI.toast(msg);
     Pages.facturacion();
   } else {
     UI.toast('Error FEL: ' + result.error, 'error');
+  }
+};
+
+Pages._crearIngresoDesdeFactura = async function (facturaId) {
+  try {
+    const facturas = await DB.getFacturas();
+    const f = facturas.find(x => x.id === facturaId);
+    if (!f) return;
+    const config = await DB.getConfigFiscal();
+    await DB.insertIngreso({
+      tipo:        'cobro_ot',
+      concepto:    'Factura FEL ' + f.num + (f.descripcion ? ' — ' + f.descripcion : ''),
+      monto:       f.total,
+      iva:         f.iva,
+      fecha:       f.fecha || new Date().toISOString().slice(0,10),
+      factura_id:  facturaId,
+      ot_id:       f.ot_id || null,
+      cliente_id:  f.cliente_id,
+      metodo_pago: 'efectivo',
+      referencia:  f.fel_uuid || f.num
+    });
+  } catch(e) {
+    console.warn('No se pudo crear ingreso automático:', e);
   }
 };
 
