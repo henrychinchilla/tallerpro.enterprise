@@ -95,6 +95,7 @@ const App = {
       clientes:    Pages.clientes,
       ordenes:     Pages.ordenes,
       inventario:  Pages.inventario,
+      vehiculos:   Pages.vehiculos,
       calendario:  Pages.calendario,
       facturacion: Pages.facturacion,
       rrhh:        Pages.rrhh,

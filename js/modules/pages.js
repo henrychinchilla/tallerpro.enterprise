@@ -205,7 +205,7 @@ Pages.facturacion = async function () {
         <p class="page-subtitle">// SAT GUATEMALA · FACTURA ELECTRÓNICA EN LÍNEA</p>
       </div>
       <div class="page-actions">
-        <button class="btn btn-amber" onclick="UI.toast('Módulo de nueva factura próximamente','info')">＋ Nueva Factura</button>
+        <button class="btn btn-amber" onclick="Pages.modalNuevaFactura()">＋ Nueva Factura</button>
       </div>
     </div>
     <div class="page-body">
@@ -561,4 +561,127 @@ Pages.guardarConfig = async function () {
   } else {
     UI.toast('Error al guardar', 'error');
   }
+};
+
+/* ══════════════ NUEVA FACTURA ══════════════ */
+
+Pages.modalNuevaFactura = async function () {
+  const [clientes, ordenes] = await Promise.all([
+    DB.getClientes(),
+    DB.getOrdenes()
+  ]);
+  const ordenesListas = ordenes.filter(o => o.estado === 'listo' || o.estado === 'entregado');
+
+  UI.openModal('Nueva Factura FEL', `
+    <div class="form-group">
+      <label class="form-label">Cliente *</label>
+      <select class="form-select" id="nf-cliente" onchange="Pages.llenarNITFactura(this)">
+        <option value="">Seleccionar cliente...</option>
+        ${clientes.map(c => `<option value="${c.id}" data-nit="${c.nit||''}">${c.nombre}</option>`).join('')}
+      </select>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">NIT Receptor *</label>
+        <input class="form-input" id="nf-nit" placeholder="CF o NIT del cliente">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Fecha</label>
+        <input class="form-input" id="nf-fecha" type="date" value="${new Date().toISOString().slice(0,10)}">
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Orden de Trabajo (opcional)</label>
+      <select class="form-select" id="nf-ot" onchange="Pages.llenarTotalFactura(this)">
+        <option value="">Sin OT asociada</option>
+        ${ordenesListas.map(o => {
+          const v = o.vehiculos;
+          return `<option value="${o.id}" data-total="${o.total}" data-cliente="${o.cliente_id}">
+            ${o.num} — ${v?.placa||''} ${v?.marca||''} — Q${o.total}
+          </option>`;
+        }).join('')}
+      </select>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Descripción</label>
+      <input class="form-input" id="nf-desc" placeholder="Servicios de taller mecánico">
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Total (Q) *</label>
+        <input class="form-input" id="nf-total" type="number" min="0" step="0.01" placeholder="0.00"
+               oninput="Pages.calcularIVA()">
+      </div>
+      <div class="form-group">
+        <label class="form-label">IVA (12%) — calculado</label>
+        <input class="form-input" id="nf-iva" readonly placeholder="0.00" style="opacity:.6">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="UI.closeModal()">Cancelar</button>
+      <button class="btn btn-ghost" onclick="Pages.guardarFactura('borrador')">Guardar Borrador</button>
+      <button class="btn btn-amber" onclick="Pages.guardarFactura('pendiente')">Crear y Certificar</button>
+    </div>`
+  );
+};
+
+Pages.llenarNITFactura = function (sel) {
+  const nit = sel.options[sel.selectedIndex]?.dataset.nit || '';
+  document.getElementById('nf-nit').value = nit || 'CF';
+};
+
+Pages.llenarTotalFactura = function (sel) {
+  const total = parseFloat(sel.options[sel.selectedIndex]?.dataset.total || 0);
+  const cid   = sel.options[sel.selectedIndex]?.dataset.cliente || '';
+  document.getElementById('nf-total').value = total.toFixed(2);
+  if (cid) document.getElementById('nf-cliente').value = cid;
+  Pages.calcularIVA();
+};
+
+Pages.calcularIVA = function () {
+  const total    = parseFloat(document.getElementById('nf-total').value) || 0;
+  const subtotal = total / 1.12;
+  const iva      = total - subtotal;
+  document.getElementById('nf-iva').value = iva.toFixed(2);
+};
+
+Pages.guardarFactura = async function (estadoInicial) {
+  const clienteId = document.getElementById('nf-cliente').value;
+  const nit       = document.getElementById('nf-nit').value.trim();
+  const total     = parseFloat(document.getElementById('nf-total').value) || 0;
+
+  if (!clienteId) { UI.toast('Selecciona un cliente', 'error'); return; }
+  if (!nit)       { UI.toast('El NIT es obligatorio (usa CF para consumidor final)', 'error'); return; }
+  if (total <= 0) { UI.toast('El total debe ser mayor a 0', 'error'); return; }
+
+  const subtotal = total / 1.12;
+  const iva      = total - subtotal;
+  const otId     = document.getElementById('nf-ot').value || null;
+
+  const { data, error } = await DB.insertFactura({
+    cliente_id:  clienteId,
+    ot_id:       otId,
+    nit,
+    fecha:       document.getElementById('nf-fecha').value,
+    descripcion: document.getElementById('nf-desc').value.trim() || 'Servicios de taller mecánico',
+    subtotal:    parseFloat(subtotal.toFixed(2)),
+    iva:         parseFloat(iva.toFixed(2)),
+    total:       parseFloat(total.toFixed(2)),
+    estado:      estadoInicial
+  });
+
+  if (error) { UI.toast('Error: ' + error.message, 'error'); return; }
+
+  UI.closeModal();
+
+  if (estadoInicial === 'pendiente' && data?.id) {
+    UI.toast('Factura creada. Certificando...', 'info');
+    const result = await FEL.certificar(data.id);
+    if (result.ok) UI.toast('Factura certificada ✓');
+    else UI.toast('Creada pero error FEL: ' + result.error, 'warn');
+  } else {
+    UI.toast('Factura guardada como borrador ✓');
+  }
+
+  Pages.facturacion();
 };

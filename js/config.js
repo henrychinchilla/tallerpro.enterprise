@@ -13,7 +13,8 @@ const ROLES = {
 
 const NAV = [
   { id: 'dashboard',    icon: '📊', label: 'Dashboard',           roles: ['admin','recepcionista','jefe','mecanico','cliente'] },
-  { id: 'clientes',     icon: '👥', label: 'Clientes & Vehículos', roles: ['admin','recepcionista','jefe'] },
+  { id: 'clientes',     icon: '👥', label: 'Clientes',             roles: ['admin','recepcionista','jefe'] },
+  { id: 'vehiculos',    icon: '🚗', label: 'Vehículos',             roles: ['admin','recepcionista','jefe'] },
   { id: 'ordenes',      icon: '📋', label: 'Órdenes de Trabajo',   roles: ['admin','recepcionista','jefe','mecanico'] },
   { id: 'inventario',   icon: '📦', label: 'Inventario',           roles: ['admin','jefe','mecanico'], badge: 2 },
   { id: 'calendario',   icon: '📅', label: 'Calendario',           roles: ['admin','recepcionista','jefe'] },
