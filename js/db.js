@@ -333,7 +333,7 @@ const DB = {
     const stockBajo = (invData || []).filter(i => i.stock <= i.min_stock);
 
     return { totalClientes: totalClientes || 0, otActivas: otActivas || 0, ingresos, stockBajo };
-  }
+  },
 
   /* ── ACTUALIZAR VEHÍCULO ──────────────────────────── */
   async updateVehiculo(vehiculoId, fields) {
