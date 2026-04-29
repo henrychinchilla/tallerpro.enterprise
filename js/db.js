@@ -334,7 +334,6 @@ const DB = {
 
     return { totalClientes: totalClientes || 0, otActivas: otActivas || 0, ingresos, stockBajo };
   }
-};
 
   /* ── ACTUALIZAR VEHÍCULO ──────────────────────────── */
   async updateVehiculo(vehiculoId, fields) {
@@ -343,4 +342,5 @@ const DB = {
       .update({ ...fields, updated_at: new Date().toISOString() })
       .eq('id', vehiculoId);
     return !error;
+  }
 };
