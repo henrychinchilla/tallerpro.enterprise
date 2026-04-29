@@ -193,7 +193,7 @@ Pages.facturacion = async function () {
       <td>${map[f.estado]||f.estado}</td>
       <td onclick="event.stopPropagation()">
         ${f.estado==='borrador' ? `<button class="btn btn-sm btn-success" onclick="Pages.certificarFEL('${f.id}')">Certificar</button>` : ''}
-        ${f.estado==='certificada' ? `<button class="btn btn-sm btn-ghost" onclick="UI.toast('Descargando PDF...','info')">PDF</button>` : ''}
+        ${f.estado==='certificada' ? `<button class="btn btn-sm btn-ghost" onclick="FEL.descargarPDF('${f.id}')">📄 PDF</button> <button class="btn btn-sm btn-danger" onclick="Pages.anularFEL('${f.id}')">Anular</button>` : ''}
       </td>
     </tr>`;
   }).join('');
@@ -232,38 +232,30 @@ Pages.facturacion = async function () {
 
 Pages.certificarFEL = async function (id) {
   UI.toast('Enviando a certificador SAT...', 'info');
-  setTimeout(async () => {
-    const ok = await DB.updateFactura(id, {
-      estado:   'certificada',
-      fel_uuid: 'FEL-' + Math.random().toString(36).slice(2,10).toUpperCase()
-    });
-    if (ok) { UI.toast('Factura certificada ✓'); Pages.facturacion(); }
-    else UI.toast('Error al certificar', 'error');
-  }, 1800);
+  const result = await FEL.certificar(id);
+  if (result.ok) {
+    const msg = result.simulado
+      ? 'Factura certificada ✓ (Sandbox — UUID: ' + result.uuid.slice(0,20) + '...)'
+      : 'Factura certificada ✓ UUID: ' + result.uuid;
+    UI.toast(msg);
+    Pages.facturacion();
+  } else {
+    UI.toast('Error FEL: ' + result.error, 'error');
+  }
+};
+
+Pages.anularFEL = async function (id) {
+  UI.confirm('¿Seguro que deseas anular esta factura? Esta acción no se puede deshacer.', async () => {
+    UI.toast('Anulando factura...', 'info');
+    const result = await FEL.anular(id);
+    if (result.ok) { UI.toast('Factura anulada ✓'); Pages.facturacion(); }
+    else UI.toast('Error: ' + result.error, 'error');
+  });
 };
 
 
 /* ══════════════ RRHH & NÓMINA ══════════════ */
-// Dentro de js/modules/pages.js
-Pages.rrhh = {
-    render: function() {
-        return `
-            <div class="p-4">
-                <h2 class="text-2xl font-bold mb-4">Gestión de Personal</h2>
-                <div class="card p-0" id="empleados-container">
-                    <p class="p-4 text-muted">Cargando nómina y personal...</p>
-                </div>
-            </div>
-        `;
-    },
-    init: async function() {
-        // Aquí ejecutas la lógica de carga de datos (Supabase)
-        await this.loadEmpleados();
-    },
-    loadEmpleados: async function() {
-        // Implementación de fetch a la tabla 'empleados'
-    }
-};
+
 Pages.rrhh = async function () {
   const el = document.getElementById('page-content');
   el.innerHTML = `<div class="page-header"><h1 class="page-title">RRHH & Nómina</h1></div>
@@ -311,31 +303,7 @@ Pages.rrhh = async function () {
 
   Pages._empleadosData = empleados;
 };
-// Función para cargar empleados desde Supabase
-Pages.rrhh.load = async function() {
-  const { data, error } = await db.from('empleados')
-    .select('*')
-    .eq('tenant_id', CONFIG.tenantId); // Filtro multi-tenant
 
-  if (error) return UI.toast("Error al cargar personal", "error");
-
-  const container = document.getElementById('empleados-list');
-  container.innerHTML = data.map(emp => `
-    <tr>
-      <td>
-        <div class="flex-row items-center gap-2">
-          <span class="avatar-sm">${emp.nombre[0]}</span>
-          <span>${emp.nombre}</span>
-        </div>
-      </td>
-      <td>${emp.cargo} <br><small class="text-muted">${emp.rol}</small></td>
-      <td>${emp.dpi || '—'}<br><small>${emp.nit || '—'}</small></td>
-      <td>Q${emp.salario_base}</td>
-      <td><span class="badge-${emp.activo ? 'success' : 'danger'}">${emp.activo ? 'Activo' : 'Baja'}</span></td>
-      <td><button class="btn-icon" onclick="Pages.rrhh.edit('${emp.id}')">✏️</button></td>
-    </tr>
-  `).join('');
-};
 Pages.verEmpleado = function (id) {
   const emp = (Pages._empleadosData||[]).find(e => e.id === id);
   if (!emp) return;
