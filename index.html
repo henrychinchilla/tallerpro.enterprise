@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <meta name="theme-color" content="#F59E0B">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="TallerPro">
+  <link rel="manifest" href="manifest.json">
+  <title>TallerPro Enterprise</title>
+
+  <!-- ── FUENTES ─────────────────────────────────────── -->
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Mono:wght@300;400;500&family=Manrope:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+
+  <!-- ── ESTILOS ─────────────────────────────────────── -->
+  <link rel="stylesheet" href="css/base.css">
+  <link rel="stylesheet" href="css/layout.css">
+  <link rel="stylesheet" href="css/components.css">
+
+  <!-- ── LIBRERÍAS EXTERNAS ──────────────────────────── -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js" defer></script>
+</head>
+<body>
+
+<!-- ══════════════════════════════════════════════════════
+     LOGIN
+════════════════════════════════════════════════════════ -->
+<div id="login-screen">
+  <div class="login-box">
+    <div class="login-logo">
+      <span class="login-logo-icon">🔧</span>
+      <h1>TallerPro</h1>
+      <p>Enterprise · AI-Driven SaaS · Guatemala</p>
+    </div>
+
+    <div class="login-card anim-scalein">
+      <div class="form-group">
+        <label class="form-label">Dominio del Taller</label>
+        <input class="form-input" id="l-tenant"
+               placeholder="mi-taller.tallerpro.gt"
+               value="automotriz-torres">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Correo Electrónico</label>
+        <input class="form-input" id="l-email"
+               type="email"
+               placeholder="admin@taller.gt"
+               value="admin@torres.gt">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Contraseña</label>
+        <input class="form-input" id="l-pass"
+               type="password"
+               placeholder="••••••••"
+               value="Admin1234">
+      </div>
+      <button class="btn-primary-block" onclick="doLogin()">
+        Iniciar Sesión →
+      </button>
+
+      <div class="login-sep">acceso demo rápido</div>
+      <div class="login-demo">
+        <button class="demo-btn" onclick="quickLogin('admin')">👑 Admin</button>
+        <button class="demo-btn" onclick="quickLogin('recepcionista')">📋 Recep.</button>
+        <button class="demo-btn" onclick="quickLogin('jefe')">📊 Jefe</button>
+        <button class="demo-btn" onclick="quickLogin('mecanico')">🪛 Mecánico</button>
+        <button class="demo-btn" onclick="quickLogin('cliente')">🚗 Cliente</button>
+        <button class="demo-btn"
+                style="border-color:var(--cyan);color:var(--cyan)"
+                onclick="quickLogin('admin')">⚡ Super</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════
+     MOBILE HEADER
+════════════════════════════════════════════════════════ -->
+<header class="mobile-header">
+  <button class="mobile-menu-btn" onclick="toggleSidebar()">☰</button>
+  <span style="font-family:'Bebas Neue',sans-serif;font-size:20px;color:var(--amber)">TallerPro</span>
+  <span id="mobile-page-label" class="mobile-page-label"></span>
+</header>
+<div class="sidebar-overlay" id="sidebar-overlay" onclick="toggleSidebar()"></div>
+
+<!-- ══════════════════════════════════════════════════════
+     APP SHELL
+════════════════════════════════════════════════════════ -->
+<div id="app">
+
+  <!-- SIDEBAR -->
+  <nav id="sidebar">
+    <div class="sidebar-brand">
+      <div class="sidebar-brand-name">TallerPro</div>
+      <div class="sidebar-brand-sub">Enterprise v2.0</div>
+    </div>
+    <div class="sidebar-tenant" id="sidebar-tenant-info">
+      <div class="sidebar-tenant-name">—</div>
+      <div class="sidebar-tenant-plan">—</div>
+    </div>
+    <div class="sidebar-nav" id="sidebar-nav"></div>
+    <div class="sidebar-user" id="sidebar-user"></div>
+  </nav>
+
+  <!-- MAIN -->
+  <main id="main">
+    <div id="page-content"></div>
+  </main>
+
+</div>
+
+<!-- ══════════════════════════════════════════════════════
+     MODAL GLOBAL
+════════════════════════════════════════════════════════ -->
+<div class="modal-overlay" id="modal-overlay" onclick="UI.closeModal(event)">
+  <div class="modal" id="modal-box" onclick="event.stopPropagation()">
+    <div class="modal-header">
+      <span class="modal-title" id="modal-title">—</span>
+      <button class="modal-close" onclick="UI.closeModal()">✕</button>
+    </div>
+    <div class="modal-body" id="modal-body"></div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════
+     JAVASCRIPT — orden de carga importa
+════════════════════════════════════════════════════════ -->
+
+<!-- 1. Constantes globales -->
+<script src="js/config.js"></script>
+
+<!-- 2. Capa de datos -->
+<script src="js/db.js"></script>
+
+<!-- 3. UI helpers (toast, modal, badges) -->
+<script src="js/ui.js"></script>
+
+<!-- 5. Autenticación -->
+<script src="js/auth.js"></script>
+
+<!-- 6. Namespace de páginas (debe existir antes de los módulos) -->
+<script>const Pages = {};</script>
+
+<!-- 7. Módulos de cada página -->
+<script src="js/modules/dashboard.js"></script>
+<script src="js/modules/clientes.js"></script>
+<script src="js/modules/ordenes.js"></script>
+<script src="js/modules/inventario.js"></script>
+<script src="js/modules/pages.js"></script><!-- calendario, facturación, rrhh, mi-ot, mi-vehículo, config -->
+
+<!-- 8. Shell principal (router, sidebar) -->
+<script src="js/app.js"></script>
+
+<!-- 9. Arranque -->
+<script>
+  // App arranca desde auth.js → startApp()
+</script>
+
+</body>
+</html>

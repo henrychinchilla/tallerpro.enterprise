@@ -1,0 +1,324 @@
+/* ═══════════════════════════════════════════════════════
+   layout.css — Sidebar, Header, Main Content, Mobile
+   TallerPro Enterprise v2.0
+═══════════════════════════════════════════════════════ */
+
+/* ─── LOGIN SCREEN ───────────────────────────────────── */
+#login-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg);
+}
+#login-screen::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse 70% 60% at 50% 40%, rgba(245,158,11,0.06) 0%, transparent 70%);
+  pointer-events: none;
+}
+
+.login-box {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  max-width: 420px;
+  padding: 0 20px;
+}
+.login-logo {
+  text-align: center;
+  margin-bottom: 36px;
+}
+.login-logo-icon {
+  font-size: 44px;
+  display: block;
+  margin-bottom: 10px;
+}
+.login-logo h1 {
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 44px;
+  letter-spacing: 0.08em;
+  color: var(--amber);
+}
+.login-logo p {
+  font-family: 'DM Mono', monospace;
+  font-size: 10px;
+  color: var(--text3);
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  margin-top: 4px;
+}
+.login-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 36px;
+  position: relative;
+  overflow: hidden;
+}
+.login-card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, var(--amber), transparent);
+}
+.login-sep {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 20px 0;
+  color: var(--text3);
+  font-family: 'DM Mono', monospace;
+  font-size: 10px;
+}
+.login-sep::before, .login-sep::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+.login-demo {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-top: 16px;
+}
+.demo-btn {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 8px 6px;
+  font-family: 'DM Mono', monospace;
+  font-size: 9px;
+  letter-spacing: 0.06em;
+  color: var(--text2);
+  cursor: pointer;
+  text-align: center;
+  transition: border-color 0.2s, color 0.2s;
+}
+.demo-btn:hover { border-color: var(--amber); color: var(--amber); }
+
+/* ─── APP SHELL ──────────────────────────────────────── */
+#app {
+  display: none;
+  min-height: 100vh;
+  position: relative;
+  z-index: 1;
+}
+#app.visible { display: flex; }
+
+/* ─── SIDEBAR ────────────────────────────────────────── */
+#sidebar {
+  width: var(--sidebar-w);
+  min-height: 100vh;
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  position: fixed;
+  left: 0; top: 0; bottom: 0;
+  z-index: 200;
+  transition: transform 0.3s ease;
+}
+
+.sidebar-brand {
+  padding: 20px 20px 16px;
+  border-bottom: 1px solid var(--border);
+}
+.sidebar-brand-name {
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 22px;
+  letter-spacing: 0.05em;
+  color: var(--amber);
+}
+.sidebar-brand-sub {
+  font-family: 'DM Mono', monospace;
+  font-size: 9px;
+  color: var(--text3);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  margin-top: 2px;
+}
+
+.sidebar-tenant {
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface2);
+}
+.sidebar-tenant-name {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.sidebar-tenant-plan {
+  font-family: 'DM Mono', monospace;
+  font-size: 9px;
+  color: var(--cyan);
+  letter-spacing: 0.08em;
+  margin-top: 2px;
+}
+
+.sidebar-nav {
+  flex: 1;
+  padding: 12px 0;
+  overflow-y: auto;
+}
+.nav-section-label {
+  font-family: 'DM Mono', monospace;
+  font-size: 9px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text3);
+  padding: 12px 20px 6px;
+}
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 20px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+  color: var(--text2);
+  font-size: 13px;
+  font-weight: 500;
+  border-left: 2px solid transparent;
+  user-select: none;
+}
+.nav-item:hover  { background: var(--surface2); color: var(--text); }
+.nav-item.active { background: var(--amber-dim); color: var(--amber); border-left-color: var(--amber); }
+.nav-icon        { font-size: 16px; min-width: 20px; text-align: center; }
+.nav-badge {
+  margin-left: auto;
+  background: var(--red);
+  color: #fff;
+  font-family: 'DM Mono', monospace;
+  font-size: 9px;
+  padding: 2px 6px;
+  border-radius: 10px;
+}
+
+.sidebar-user {
+  padding: 16px 20px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.user-avatar {
+  width: 34px; height: 34px;
+  border-radius: var(--radius);
+  background: var(--amber-dim);
+  border: 1px solid var(--amber-border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  flex-shrink: 0;
+}
+.user-name { font-size: 12px; font-weight: 700; color: var(--text); }
+.user-role { font-family: 'DM Mono', monospace; font-size: 9px; color: var(--text3); letter-spacing: 0.06em; }
+.user-logout {
+  margin-left: auto;
+  cursor: pointer;
+  color: var(--text3);
+  font-size: 16px;
+  background: none;
+  border: none;
+  transition: color 0.2s;
+  padding: 4px;
+}
+.user-logout:hover { color: var(--red); }
+
+/* ─── MAIN CONTENT ───────────────────────────────────── */
+#main {
+  margin-left: var(--sidebar-w);
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  width: calc(100% - var(--sidebar-w));
+}
+
+.page-header {
+  padding: 24px 28px 0;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.page-title {
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 34px;
+  letter-spacing: 0.04em;
+  color: var(--text);
+}
+.page-subtitle {
+  font-family: 'DM Mono', monospace;
+  font-size: 10px;
+  color: var(--text3);
+  letter-spacing: 0.1em;
+  margin-top: 3px;
+}
+.page-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.page-body {
+  padding: 20px 28px 48px;
+  flex: 1;
+}
+
+/* ─── MOBILE HEADER ──────────────────────────────────── */
+.mobile-header {
+  display: none;
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  height: 54px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  z-index: 300;
+  align-items: center;
+  padding: 0 16px;
+  gap: 12px;
+}
+.mobile-menu-btn {
+  background: none;
+  border: none;
+  color: var(--text);
+  font-size: 20px;
+  cursor: pointer;
+  padding: 4px;
+}
+.mobile-page-label {
+  font-family: 'DM Mono', monospace;
+  font-size: 10px;
+  color: var(--text3);
+}
+.sidebar-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.5);
+  z-index: 150;
+}
+
+/* ─── RESPONSIVE ─────────────────────────────────────── */
+@media (max-width: 768px) {
+  .mobile-header    { display: flex; }
+  #sidebar          { transform: translateX(-100%); }
+  #sidebar.open     { transform: translateX(0); }
+  .sidebar-overlay.open { display: block; }
+  #main             { margin-left: 0; width: 100%; padding-top: 54px; }
+  .page-body        { padding: 16px 16px 48px; }
+  .page-header      { padding: 16px 16px 0; }
+  .grid-2, .grid-3, .grid-4 { grid-template-columns: 1fr; }
+}
