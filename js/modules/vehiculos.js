@@ -18,16 +18,23 @@ Pages.vehiculos = async function () {
 
   const rows = vehiculos.map(v => {
     const c = v.clientes || clientes.find(x => x.id === v.cliente_id);
-    return `<tr onclick="Pages.verVehiculo('${v.id}')">
+    const nombre = c?.nombre || '—';
+    return `<tr onclick="Pages.verVehiculo('${v.id}')"
+                data-text="${v.placa} ${v.marca} ${v.modelo} ${nombre} ${v.color||''} ${v.motor||''}"
+                data-marca="${v.marca||''}">
       <td class="mono-sm text-amber">${v.placa}</td>
       <td><b>${v.marca} ${v.modelo}</b><br>
           <span class="mono-sm text-muted">${v.anio || '—'} · ${v.color || '—'}</span></td>
-      <td>${c?.nombre || '—'}</td>
+      <td>${nombre}</td>
       <td class="mono-sm">${(v.kilometraje || 0).toLocaleString()} km</td>
       <td class="mono-sm text-muted">${v.motor || '—'}</td>
       <td class="mono-sm text-muted">${v.ultima_visita || '—'}</td>
       <td onclick="event.stopPropagation()">
-        <button class="btn btn-sm btn-amber" onclick="Pages.modalNuevaOT('${v.id}')">+ OT</button>
+        <div style="display:flex;gap:4px">
+          <button class="btn btn-sm btn-amber" onclick="Pages.modalNuevaOT('${v.id}')">+ OT</button>
+          <button class="btn btn-sm btn-ghost" onclick="Pages.imprimirHistorialVehiculo('${v.id}')" title="Historial">🖨️</button>
+          <button class="btn btn-sm btn-danger" onclick="Pages.eliminarVehiculo('${v.id}','${v.placa}')" title="Eliminar">🗑</button>
+        </div>
       </td>
     </tr>`;
   }).join('');
@@ -46,6 +53,10 @@ Pages.vehiculos = async function () {
       <div class="search-bar">
         <input class="search-input" placeholder="🔍 Buscar placa, marca, modelo, cliente..."
                id="search-vehiculos" oninput="Pages.filterVehiculos()">
+        <select class="filter-select" id="filter-veh-marca" onchange="Pages.filterVehiculos()">
+          <option value="">Todas las marcas</option>
+          ${[...new Set(vehiculos.map(v=>v.marca).filter(Boolean))].sort().map(m=>`<option value="${m}">${m}</option>`).join('')}
+        </select>
       </div>
       <div class="table-wrap">
         <table class="data-table">
@@ -64,9 +75,12 @@ Pages.vehiculos = async function () {
 };
 
 Pages.filterVehiculos = function () {
-  const q = (document.getElementById('search-vehiculos')?.value || '').toLowerCase();
+  const q     = (document.getElementById('search-vehiculos')?.value || '').toLowerCase();
+  const marca = document.getElementById('filter-veh-marca')?.value || '';
   document.querySelectorAll('#vehiculos-tbody tr').forEach(r => {
-    r.style.display = r.textContent.toLowerCase().includes(q) ? '' : 'none';
+    const matchText  = !q || (r.dataset.text||'').toLowerCase().includes(q);
+    const matchMarca = !marca || r.dataset.marca === marca;
+    r.style.display  = matchText && matchMarca ? '' : 'none';
   });
 };
 
@@ -129,7 +143,9 @@ Pages.verVehiculo = async function (id) {
 
     <div class="modal-footer">
       <button class="btn btn-ghost" onclick="UI.closeModal()">Cerrar</button>
+      <button class="btn btn-ghost" onclick="Pages.imprimirHistorialVehiculo('${v.id}')">🖨️ Historial</button>
       <button class="btn btn-ghost" onclick="Pages.modalEditarVehiculo('${v.id}')">✏️ Editar</button>
+      <button class="btn btn-danger" onclick="Pages.eliminarVehiculo('${v.id}','${v.placa}')">🗑 Eliminar</button>
       <button class="btn btn-amber" onclick="UI.closeModal();Pages.modalNuevaOT('${v.id}')">+ Nueva OT</button>
     </div>
   `, 'modal-lg');
@@ -301,4 +317,83 @@ Pages.actualizarVehiculo = async function (id) {
   UI.closeModal();
   UI.toast('Vehículo actualizado ✓');
   Pages.vehiculos();
+};
+
+/* ── ELIMINAR VEHÍCULO ────────────────────────────── */
+Pages.eliminarVehiculo = function (id, placa) {
+  UI.confirm(`¿Eliminar el vehículo <b>${placa}</b>? Se perderá su historial. Esta acción no se puede deshacer.`, async () => {
+    const { error } = await getSupabase().from('vehiculos').delete().eq('id', id);
+    if (error) { UI.toast('Error: ' + error.message, 'error'); return; }
+    UI.closeModal();
+    UI.toast('Vehículo ' + placa + ' eliminado');
+    Pages.vehiculos();
+  });
+};
+
+/* ── HISTORIAL IMPRIMIBLE ─────────────────────────── */
+Pages.imprimirHistorialVehiculo = async function (id) {
+  const vehiculos = Pages._vehiculosData || await DB.getVehiculos();
+  const clientes  = Pages._clientesData  || await DB.getClientes();
+  const ordenes   = await DB.getOrdenes();
+
+  const v = vehiculos.find(x => x.id === id); if (!v) return;
+  const c = clientes.find(x => x.id === v.cliente_id);
+  const ots = ordenes.filter(o => o.vehiculo_id === v.id);
+  const total = ots.reduce((s, o) => s + (o.total||0), 0);
+
+  const html = `<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8">
+  <title>Historial — ${v.placa}</title>
+  <style>
+    body{font-family:Arial,sans-serif;font-size:12px;margin:24px;color:#000}
+    h1{font-size:18px} h2{font-size:14px;margin-top:20px;border-bottom:1px solid #ddd;padding-bottom:4px}
+    table{width:100%;border-collapse:collapse;margin:10px 0}
+    th{background:#f3f4f6;padding:6px 10px;text-align:left;border:1px solid #ddd;font-size:11px}
+    td{padding:6px 10px;border:1px solid #ddd;font-size:11px}
+    .header{display:flex;justify-content:space-between;border-bottom:2px solid #000;padding-bottom:10px;margin-bottom:16px}
+    .total{font-weight:bold;background:#fef3c7}
+    @media print{body{margin:0}}
+  </style></head><body>
+  <div class="header">
+    <div><h1>${Auth.tenant?.name}</h1><div style="color:#666">${Auth.tenant?.address||''}</div></div>
+    <div style="text-align:right"><div style="font-size:16px;font-weight:bold">${v.placa}</div>
+    <div style="color:#666">${new Date().toLocaleDateString('es-GT')}</div></div>
+  </div>
+
+  <h2>Datos del Vehículo</h2>
+  <table>
+    <tr><td><b>Placa</b></td><td>${v.placa}</td><td><b>Marca / Modelo</b></td><td>${v.marca} ${v.modelo} ${v.anio||''}</td></tr>
+    <tr><td><b>Color</b></td><td>${v.color||'—'}</td><td><b>Motor</b></td><td>${v.motor||'—'}</td></tr>
+    <tr><td><b>Transmisión</b></td><td>${v.transmision||'—'}</td><td><b>Combustible</b></td><td>${v.combustible||'—'}</td></tr>
+    <tr><td><b>VIN</b></td><td colspan="3">${v.vin||'—'}</td></tr>
+    <tr><td><b>Propietario</b></td><td>${c?.nombre||'—'}</td><td><b>Teléfono</b></td><td>${c?.tel||'—'}</td></tr>
+    <tr><td><b>Kilometraje actual</b></td><td colspan="3"><b>${(v.kilometraje||0).toLocaleString()} km</b></td></tr>
+  </table>
+
+  <h2>Historial de Servicios (${ots.length} OTs)</h2>
+  <table>
+    <thead><tr><th>OT</th><th>Fecha Ingreso</th><th>Descripción</th><th>Estado</th><th>Total</th></tr></thead>
+    <tbody>
+      ${ots.map(o=>`<tr>
+        <td>${o.num}</td>
+        <td>${o.fecha_ingreso||'—'}</td>
+        <td>${o.descripcion}</td>
+        <td>${o.estado}</td>
+        <td>Q${(o.total||0).toFixed(2)}</td>
+      </tr>`).join('')}
+      <tr class="total">
+        <td colspan="4" style="text-align:right">TOTAL ACUMULADO:</td>
+        <td>Q${total.toFixed(2)}</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div style="margin-top:30px;text-align:center;font-size:10px;color:#999">
+    Generado por TallerPro Enterprise · ${new Date().toLocaleDateString('es-GT')}
+  </div>
+  </body></html>`;
+
+  const win = window.open('', '_blank');
+  win.document.write(html);
+  win.document.close();
+  setTimeout(() => win.print(), 400);
 };

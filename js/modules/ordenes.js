@@ -48,7 +48,10 @@ Pages._buildKanban = function (ordenes) {
                 const v = o.vehiculos;
                 const c = o.clientes;
                 return `<div class="ot-card" onclick="Pages.verOT('${o.id}')">
-                  <div class="ot-card-num">${o.num}</div>
+                  <div class="ot-card-num">${o.num}
+                    <span onclick="event.stopPropagation();Pages.eliminarOT('${o.id}','${o.num}')"
+                      style="float:right;cursor:pointer;color:var(--text3);font-size:12px" title="Eliminar">🗑</span>
+                  </div>
                   <div class="ot-card-vehicle">${v?.marca||'—'} ${v?.modelo||''}</div>
                   <div class="ot-card-client">${v?.placa||''} · ${c?.nombre||'—'}</div>
                   <div class="ot-card-footer">
@@ -83,16 +86,23 @@ Pages._buildTablaOT = function (ordenes) {
 
   return `
     <div class="search-bar">
-      <input class="search-input" placeholder="🔍 Buscar OT, vehículo, cliente..."
+      <input class="search-input" placeholder="🔍 Buscar OT, vehículo, cliente, descripción..."
              id="search-ot" oninput="Pages.filterOT()">
       <select class="filter-select" id="filter-ot-estado" onchange="Pages.filterOT()">
         <option value="">Todos los estados</option>
         ${Object.entries(ESTADOS_OT).map(([k,v]) => `<option value="${k}">${v.label}</option>`).join('')}
       </select>
+      <select class="filter-select" id="filter-ot-prio" onchange="Pages.filterOT()">
+        <option value="">Todas las prioridades</option>
+        <option value="urgente">🔴 Urgente</option>
+        <option value="alta">🟠 Alta</option>
+        <option value="media">🟡 Media</option>
+        <option value="baja">🟢 Baja</option>
+      </select>
     </div>
     <div class="table-wrap">
       <table class="data-table">
-        <thead><tr><th>Número</th><th>Vehículo</th><th>Cliente</th><th>Mecánico</th><th>Estado</th><th>Prioridad</th><th>Total</th></tr></thead>
+        <thead><tr><th>Número</th><th>Vehículo</th><th>Cliente</th><th>Mecánico</th><th>Estado</th><th>Prioridad</th><th>Total</th><th></th></tr></thead>
         <tbody id="ot-tbody">${rows || `<tr><td colspan="7" style="text-align:center;color:var(--text3);padding:24px">Sin órdenes. <span class="text-amber" style="cursor:pointer" onclick="Pages.modalNuevaOT()">Crear primera OT →</span></td></tr>`}</tbody>
       </table>
     </div>`;
@@ -108,9 +118,13 @@ Pages.toggleOTView = function () {
 Pages.filterOT = function () {
   const q      = (document.getElementById('search-ot')?.value || '').toLowerCase();
   const estado = document.getElementById('filter-ot-estado')?.value || '';
+  const prio   = document.getElementById('filter-ot-prio')?.value || '';
   document.querySelectorAll('#ot-tbody tr').forEach(r => {
-    const text = (r.dataset.text || r.textContent).toLowerCase();
-    r.style.display = text.includes(q) && (!estado || r.dataset.estado === estado) ? '' : 'none';
+    const text     = (r.dataset.text || r.textContent).toLowerCase();
+    const matchQ   = !q      || text.includes(q);
+    const matchE   = !estado || r.dataset.estado === estado;
+    const matchP   = !prio   || r.dataset.prio   === prio;
+    r.style.display = matchQ && matchE && matchP ? '' : 'none';
   });
 };
 
@@ -312,4 +326,15 @@ Pages.guardarOT = async function () {
   } catch(e) { console.warn('Notif error:', e); }
 
   Pages.ordenes();
+};
+
+/* ── ELIMINAR OT ──────────────────────────────────── */
+Pages.eliminarOT = function (id, num) {
+  UI.confirm(`¿Eliminar la OT <b>${num}</b>? Esta acción no se puede deshacer.`, async () => {
+    const { error } = await getSupabase().from('ordenes').delete().eq('id', id);
+    if (error) { UI.toast('Error: ' + error.message, 'error'); return; }
+    UI.closeModal();
+    UI.toast('OT ' + num + ' eliminada');
+    Pages.ordenes();
+  });
 };
