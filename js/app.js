@@ -28,7 +28,7 @@ const App = {
   renderSidebar() {
     /* Info del tenant */
     const ti = document.getElementById('sidebar-tenant-info');
-    ti.querySelector('.sidebar-tenant-name').textContent = Auth.tenant.name;
+    ti.querySelector('.sidebar-tenant-name').textContent = Auth.tenant?.name || 'TallerPro';
 
     /* Navegación filtrada por rol */
     const nav   = document.getElementById('sidebar-nav');
