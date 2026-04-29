@@ -202,10 +202,23 @@ Pages.verOT = async function (id) {
 
 Pages.cambiarEstado = async function (otId, nuevoEstado) {
   const ok = await DB.updateOrdenEstado(otId, nuevoEstado);
-  if (ok) {
-    UI.toast('Estado actualizado: ' + ESTADOS_OT[nuevoEstado].label);
-  } else {
-    UI.toast('Error al actualizar', 'error');
+  if (!ok) { UI.toast('Error al actualizar', 'error'); return; }
+
+  UI.toast('Estado actualizado: ' + ESTADOS_OT[nuevoEstado].label);
+
+  // Notificar al cliente si OT está lista
+  if (nuevoEstado === 'listo') {
+    try {
+      const o = await DB.getOrden(otId);
+      if (o) {
+        const r = await NOTIF.notificarOTLista(o, o.clientes, o.vehiculos);
+        if (r.wa?.simulado || r.em?.simulado) {
+          UI.toast('Preview de notificación generado (modo dev)', 'info');
+        } else if (r.wa?.ok) {
+          UI.toast('Cliente notificado por WhatsApp ✓', 'info');
+        }
+      }
+    } catch(e) { console.warn('Notif error:', e); }
   }
 };
 
@@ -289,5 +302,14 @@ Pages.guardarOT = async function () {
   if (error) { UI.toast('Error: ' + error.message, 'error'); return; }
   UI.closeModal();
   UI.toast((data?.num || 'OT') + ' creada exitosamente ✓');
+
+  // Notificar recepción al cliente
+  try {
+    if (data?.id) {
+      const o = await DB.getOrden(data.id);
+      if (o?.clientes) await NOTIF.notificarOTRecibida(o, o.clientes, o.vehiculos);
+    }
+  } catch(e) { console.warn('Notif error:', e); }
+
   Pages.ordenes();
 };

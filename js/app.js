@@ -100,6 +100,7 @@ const App = {
       facturacion: Pages.facturacion,
       finanzas:    Pages.finanzas,
       rrhh:        Pages.rrhh,
+      comunicaciones: Pages.comunicaciones,
       'mi-ot':     Pages.miOT,
       'mi-vehiculo':Pages.miVehiculo,
       config:      Pages.config

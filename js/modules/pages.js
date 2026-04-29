@@ -158,6 +158,18 @@ Pages.guardarCita = async function () {
   if (error) { UI.toast('Error: ' + error.message, 'error'); return; }
   UI.closeModal();
   UI.toast('Cita agendada exitosamente ✓');
+
+  // Notificar al cliente
+  try {
+    const cli = clientes.find(c => c.id === document.getElementById('nc2-cli').value);
+    const veh = vehiculos.find(v => v.id === document.getElementById('nc2-veh').value);
+    if (cli) await NOTIF.notificarCitaConfirmada({
+      fecha:    document.getElementById('nc2-fecha').value,
+      hora:     document.getElementById('nc2-hora').value,
+      servicio: document.getElementById('nc2-srv').value
+    }, cli, veh);
+  } catch(e) { console.warn('Notif error:', e); }
+
   Pages.calendario();
 };
 
@@ -234,9 +246,16 @@ Pages.certificarFEL = async function (id) {
   UI.toast('Enviando a certificador SAT...', 'info');
   const result = await FEL.certificar(id);
   if (result.ok) {
-    const msg = result.simulado
-      ? 'Factura certificada ✓ (Sandbox)'
-      : 'Factura certificada ✓ UUID: ' + result.uuid;
+    // Notificar factura al cliente
+    try {
+      const facturas = await DB.getFacturas();
+      const f = facturas.find(x => x.id === id);
+      const clientes = await DB.getClientes();
+      const c = clientes.find(x => x.id === f?.cliente_id);
+      if (f && c) await NOTIF.notificarFacturaLista(f, c);
+    } catch(e) { console.warn('Notif error:', e); }
+
+    const msg = result.simulado ? 'Factura certificada ✓ (Sandbox)' : 'Factura certificada ✓ UUID: ' + result.uuid;
     UI.toast(msg);
     Pages.facturacion();
   } else {

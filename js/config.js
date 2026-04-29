@@ -21,6 +21,7 @@ const NAV = [
   { id: 'facturacion',  icon: '🧾', label: 'Facturación FEL',      roles: ['admin','recepcionista'] },
   { id: 'finanzas',     icon: '💰', label: 'Finanzas',              roles: ['admin'] },
   { id: 'rrhh',         icon: '👤', label: 'RRHH & Nómina',        roles: ['admin'] },
+  { id: 'comunicaciones', icon: '🔔', label: 'Comunicaciones',       roles: ['admin','jefe'], badge: 0 },
   { id: 'mi-ot',        icon: '🔧', label: 'Mis OTs',              roles: ['mecanico'] },
   { id: 'mi-vehiculo',  icon: '🚗', label: 'Mi Vehículo',          roles: ['cliente'] },
   { id: 'config',       icon: '⚙️', label: 'Configuración',        roles: ['admin'] }
