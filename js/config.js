@@ -4,28 +4,33 @@
 ═══════════════════════════════════════════════════════ */
 
 const ROLES = {
-  admin:         { label: 'Admin / Dueño',   icon: '👑', color: 'amber'  },
-  recepcionista: { label: 'Recepcionista',    icon: '📋', color: 'cyan'   },
-  jefe:          { label: 'Jefe de Taller',   icon: '📊', color: 'purple' },
-  mecanico:      { label: 'Mecánico',         icon: '🪛', color: 'green'  },
-  cliente:       { label: 'Cliente',          icon: '🚗', color: 'red'    }
+  superadmin:  { label: 'Super Admin',          icon: '⚡', color: 'red',    hidden: true  },
+  admin:       { label: 'Administrador',         icon: '👑', color: 'amber',  hidden: false },
+  gerente_fin: { label: 'Gerente Financiero',    icon: '💰', color: 'green',  hidden: false },
+  gerente_tal: { label: 'Gerente de Taller',     icon: '🔧', color: 'cyan',   hidden: false },
+  recepcionista:{ label: 'Recepcionista',         icon: '📋', color: 'purple', hidden: false },
+  mecanico:    { label: 'Mecánico',              icon: '🪛', color: 'gray',   hidden: false },
+  cliente:     { label: 'Cliente',               icon: '🚗', color: 'cyan',   hidden: false }
 };
 
 const NAV = [
-  { id: 'dashboard',    icon: '📊', label: 'Dashboard',           roles: ['admin','recepcionista','jefe','mecanico','cliente'] },
-  { id: 'clientes',     icon: '👥', label: 'Clientes',             roles: ['admin','recepcionista','jefe'] },
-  { id: 'vehiculos',    icon: '🚗', label: 'Vehículos',             roles: ['admin','recepcionista','jefe'] },
-  { id: 'ordenes',      icon: '📋', label: 'Órdenes de Trabajo',   roles: ['admin','recepcionista','jefe','mecanico'] },
-  { id: 'inventario',   icon: '📦', label: 'Inventario',           roles: ['admin','jefe','mecanico'] },
-  { id: 'proveedores',  icon: '🏪', label: 'Proveedores',           roles: ['admin','jefe'] },
-  { id: 'calendario',   icon: '📅', label: 'Calendario',           roles: ['admin','recepcionista','jefe'] },
-  { id: 'facturacion',  icon: '🧾', label: 'Facturación FEL',      roles: ['admin','recepcionista'] },
-  { id: 'finanzas',     icon: '💰', label: 'Finanzas',              roles: ['admin'] },
-  { id: 'rrhh',         icon: '👤', label: 'RRHH & Nómina',        roles: ['admin'] },
-  { id: 'comunicaciones', icon: '🔔', label: 'Comunicaciones',       roles: ['admin','jefe'] },
-  { id: 'mi-ot',        icon: '🔧', label: 'Mis OTs',              roles: ['mecanico'] },
-  { id: 'mi-vehiculo',  icon: '🚗', label: 'Mi Vehículo',          roles: ['cliente'] },
-  { id: 'config',       icon: '⚙️', label: 'Configuración',        roles: ['admin'] }
+  { id: 'dashboard',      icon: '📊', label: 'Dashboard',          roles: ['superadmin','admin','gerente_fin','gerente_tal'] },
+  { id: 'clientes',       icon: '👥', label: 'Clientes',           roles: ['superadmin','admin','gerente_tal','recepcionista'] },
+  { id: 'vehiculos',      icon: '🚗', label: 'Vehículos',          roles: ['superadmin','admin','gerente_tal','recepcionista'] },
+  { id: 'ordenes',        icon: '📋', label: 'Órdenes de Trabajo', roles: ['superadmin','admin','gerente_tal','recepcionista','mecanico'] },
+  { id: 'inventario',     icon: '📦', label: 'Inventario',         roles: ['superadmin','admin','gerente_tal','mecanico'] },
+  { id: 'proveedores',    icon: '🏪', label: 'Proveedores',        roles: ['superadmin','admin','gerente_tal','gerente_fin'] },
+  { id: 'calendario',     icon: '📅', label: 'Calendario',         roles: ['superadmin','admin','gerente_tal','recepcionista','mecanico'] },
+  { id: 'facturacion',    icon: '🧾', label: 'Facturación FEL',    roles: ['superadmin','admin','gerente_fin','recepcionista'] },
+  { id: 'finanzas',       icon: '💰', label: 'Finanzas',           roles: ['superadmin','admin','gerente_fin'] },
+  { id: 'rrhh',           icon: '👤', label: 'RRHH & Nómina',      roles: ['superadmin','admin','gerente_fin'] },
+  { id: 'comunicaciones', icon: '🔔', label: 'Comunicaciones',     roles: ['superadmin','admin','gerente_tal'] },
+  { id: 'config',         icon: '⚙️', label: 'Configuración',      roles: ['superadmin','admin'] },
+  { id: 'database',       icon: '🗄️', label: 'Base de Datos',      roles: ['superadmin','admin'] },
+  /* Vistas cliente */
+  { id: 'mi-vehiculo',    icon: '🚗', label: 'Mis Vehículos',      roles: ['cliente'] },
+  /* Vistas mecánico */
+  { id: 'mi-ot',          icon: '🔧', label: 'Mis Órdenes',        roles: ['mecanico'] }
 ];
 
 const ESTADOS_OT = {
@@ -39,25 +44,11 @@ const ESTADOS_OT = {
 };
 
 const DEMO_USERS = {
-  admin: {
-    id: 'e1', nombre: 'Diego Torres',
-    rol: 'admin', tenant: 'automotriz-torres'
-  },
-  recepcionista: {
-    id: 'e2', nombre: 'Sandra López',
-    rol: 'recepcionista', tenant: 'automotriz-torres'
-  },
-  jefe: {
-    id: 'e5', nombre: 'Marco Barrios',
-    rol: 'jefe', tenant: 'automotriz-torres'
-  },
-  mecanico: {
-    id: 'e3', nombre: 'Juan Revolorio',
-    rol: 'mecanico', tenant: 'automotriz-torres'
-  },
-  cliente: {
-    id: 'c1', nombre: 'Carlos Mendoza',
-    rol: 'cliente', tenant: 'automotriz-torres',
-    vehiculos: ['v1','v2']
-  }
+  superadmin:  { id:'u-sa',  rol:'superadmin',  nombre:'Super Admin',        email:'superadmin@tallerpro.gt' },
+  admin:       { id:'u-ad',  rol:'admin',        nombre:'Carlos Torres',      email:'admin@tallerpro.gt'      },
+  gerente_fin: { id:'u-gf',  rol:'gerente_fin',  nombre:'María López',        email:'finanzas@tallerpro.gt'   },
+  gerente_tal: { id:'u-gt',  rol:'gerente_tal',  nombre:'Roberto Méndez',     email:'taller@tallerpro.gt'     },
+  recepcionista:{ id:'u-rc', rol:'recepcionista', nombre:'Ana García',         email:'recep@tallerpro.gt'      },
+  mecanico:    { id:'u-me',  rol:'mecanico',     nombre:'Pedro Orozco',       email:'mecanico@tallerpro.gt'   },
+  cliente:     { id:'u-cl',  rol:'cliente',      nombre:'Juan Pérez',         email:'cliente@gmail.com'       }
 };

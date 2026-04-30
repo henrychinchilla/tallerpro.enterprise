@@ -33,6 +33,7 @@ async function getTenantId() {
 
 /* Expose getSupabase for direct use in modules */
 window.getSupabase = getSupabase;
+window.getTenantId = getTenantId;
 
 /* ═══════════════════════════════════════════════════════
    DB — API unificada para todos los módulos

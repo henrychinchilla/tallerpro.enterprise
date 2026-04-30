@@ -125,7 +125,8 @@ const App = {
       comunicaciones: Pages.comunicaciones,
       'mi-ot':     Pages.miOT,
       'mi-vehiculo':Pages.miVehiculo,
-      config:      Pages.config
+      config:      Pages.config,
+      database:    Pages.database
     };
 
     if (pages[page]) {
