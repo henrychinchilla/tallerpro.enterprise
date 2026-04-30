@@ -72,15 +72,28 @@ Pages._buildTablaOT = function (ordenes) {
     const v = o.vehiculos;
     const c = o.clientes;
     const m = o.empleados;
-    return `<tr onclick="Pages.verOT('${o.id}')" data-text="${o.num} ${v?.placa||''} ${v?.marca||''} ${c?.nombre||''}" data-estado="${o.estado}">
+    return `<tr onclick="Pages.verOT('${o.id}')"
+      data-text="${o.num} ${v?.placa||''} ${v?.marca||''} ${c?.nombre||''} ${o.descripcion||''}"
+      data-estado="${o.estado}" data-prio="${o.prioridad}">
       <td class="mono-sm text-amber">${o.num}</td>
       <td><b>${v?.marca||'—'} ${v?.modelo||''}</b><br>
           <span class="mono-sm text-muted">${v?.placa||''}</span></td>
-      <td>${c?.nombre || '—'}</td>
-      <td>${m?.nombre || '<span class="text-muted">Sin asignar</span>'}</td>
+      <td>${c?.nombre||'—'}</td>
+      <td>${m?.nombre||'<span class="text-muted">Sin asignar</span>'}</td>
       <td>${UI.estadoBadge(o.estado)}</td>
       <td><span class="badge badge-${pColors[o.prioridad]||'gray'}">${o.prioridad}</span></td>
       <td class="mono-sm">${UI.q(o.total)}</td>
+      <td onclick="event.stopPropagation()">
+        <div style="display:flex;gap:3px;flex-wrap:wrap">
+          <select style="font-size:10px;padding:3px 5px;height:26px;background:var(--surface2);border:1px solid var(--border);border-radius:4px;color:var(--text);cursor:pointer"
+                  onchange="Pages.cambiarEstado('${o.id}',this.value).then(()=>Pages.ordenes())"
+                  onclick="event.stopPropagation()">
+            ${Object.entries(ESTADOS_OT).map(([k,v])=>`<option value="${k}" ${o.estado===k?'selected':''}>${v.label}</option>`).join('')}
+          </select>
+          <button class="btn btn-sm btn-cyan"   onclick="event.stopPropagation();Pages.modalEditarOT('${o.id}')"            title="Editar">✏️</button>
+          <button class="btn btn-sm btn-danger" onclick="event.stopPropagation();Pages.eliminarOT('${o.id}','${o.num}')"    title="Eliminar">🗑</button>
+        </div>
+      </td>
     </tr>`;
   }).join('');
 
@@ -103,7 +116,7 @@ Pages._buildTablaOT = function (ordenes) {
     <div class="table-wrap">
       <table class="data-table">
         <thead><tr><th>Número</th><th>Vehículo</th><th>Cliente</th><th>Mecánico</th><th>Estado</th><th>Prioridad</th><th>Total</th><th></th></tr></thead>
-        <tbody id="ot-tbody">${rows || `<tr><td colspan="7" style="text-align:center;color:var(--text3);padding:24px">Sin órdenes. <span class="text-amber" style="cursor:pointer" onclick="Pages.modalNuevaOT()">Crear primera OT →</span></td></tr>`}</tbody>
+        <tbody id="ot-tbody">${rows || `<tr><td colspan="8" style="text-align:center;color:var(--text3);padding:24px">Sin órdenes. <span class="text-amber" style="cursor:pointer" onclick="Pages.modalNuevaOT()">Crear primera OT →</span></td></tr>`}</tbody>
       </table>
     </div>`;
 };
