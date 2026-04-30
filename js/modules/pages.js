@@ -619,6 +619,7 @@ Pages.config = async function () {
         <!-- Info del taller -->
         <div class="card card-amber">
           <div class="card-sub mb-4">⚙️ Información del Taller</div>
+          ${Pages._agregarLogoAConfig()}
           <div class="form-group"><label class="form-label">Nombre *</label><input class="form-input" id="cfg-nombre" value="${t?.name||''}"></div>
           <div class="form-group"><label class="form-label">NIT</label><input class="form-input" id="cfg-nit" value="${t?.nit||''}"></div>
           <div class="form-group"><label class="form-label">Teléfono</label><input class="form-input" id="cfg-tel" value="${t?.tel||''}"></div>
@@ -677,16 +678,20 @@ Pages.config = async function () {
 };
 
 Pages.guardarConfig = async function () {
-  const ok = await DB.updateTenant({
+  const fields = {
     name:    document.getElementById('cfg-nombre').value,
     nit:     document.getElementById('cfg-nit').value,
     tel:     document.getElementById('cfg-tel').value,
     email:   document.getElementById('cfg-email').value,
     address: document.getElementById('cfg-addr').value
-  });
+  };
+  if (Pages._logoBase64) fields.logo_base64 = Pages._logoBase64;
+
+  const ok = await DB.updateTenant(fields);
   if (ok) {
     Auth.tenant = await DB.getTenant();
     App.renderSidebar();
+    Pages._logoBase64 = null;
     UI.toast('Configuración guardada ✓');
   } else {
     UI.toast('Error al guardar', 'error');
@@ -1231,4 +1236,243 @@ Pages.guardarFELImportado = async function () {
   UI.closeModal();
   UI.toast(`${filas.length} registros FEL importados ✓`);
   Pages.facturacion();
+};
+
+/* ══════════════════════════════════════════════════════
+   FACTURAS RECIBIDAS — Importar CSV/Excel de compras
+══════════════════════════════════════════════════════ */
+Pages.modalImportarFELRecibidas = function () {
+  UI.openModal('📥 Importar Facturas Recibidas (Compras)', `
+    <div class="alert alert-cyan mb-4">
+      <div class="alert-icon">💡</div>
+      <div>
+        <div class="alert-title">Facturas recibidas de proveedores / compras</div>
+        <div class="alert-body" style="font-family:'DM Mono',monospace;font-size:11px">
+          fecha, serie, numero_dte, nit_emisor, nombre_emisor, gran_total, iva
+        </div>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">
+      <div style="border:2px dashed var(--border);border-radius:8px;padding:20px;text-align:center;cursor:pointer"
+           onclick="document.getElementById('rec-csv-file').click()">
+        <div style="font-size:28px;margin-bottom:8px">📄</div>
+        <div style="font-weight:600;font-size:13px">Archivo CSV</div>
+        <input type="file" id="rec-csv-file" accept=".csv,.txt" class="hidden"
+               onchange="Pages.procesarFELRecibidasCSV(this)">
+      </div>
+      <div style="border:2px dashed var(--border);border-radius:8px;padding:20px;text-align:center;cursor:pointer"
+           onclick="document.getElementById('rec-xls-file').click()">
+        <div style="font-size:28px;margin-bottom:8px">📊</div>
+        <div style="font-weight:600;font-size:13px">Archivo Excel</div>
+        <input type="file" id="rec-xls-file" accept=".xlsx,.xls" class="hidden"
+               onchange="Pages.procesarFELRecibidasExcel(this)">
+      </div>
+    </div>
+
+    <div id="rec-preview" class="hidden">
+      <div style="font-weight:700;font-size:13px;margin-bottom:8px" id="rec-preview-title">Vista Previa</div>
+      <div class="table-wrap" style="max-height:260px;overflow-y:auto">
+        <table class="data-table">
+          <thead><tr><th>Fecha</th><th>Serie</th><th>No. DTE</th><th>NIT Emisor</th><th>Nombre Emisor</th><th>Gran Total</th><th>IVA</th></tr></thead>
+          <tbody id="rec-preview-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="form-group mt-4">
+      <label class="form-label">
+        <input type="checkbox" id="rec-crear-egreso" checked style="margin-right:8px">
+        Crear egreso automático en Finanzas por cada factura
+      </label>
+    </div>
+
+    <div class="flex gap-2 mt-2">
+      <button class="btn btn-ghost btn-sm" onclick="Pages.descargarPlantillaFELRecibidas()">📥 Descargar Plantilla</button>
+    </div>
+
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="UI.closeModal()">Cancelar</button>
+      <button class="btn btn-amber" id="btn-importar-rec" disabled onclick="Pages.guardarFELRecibidas()">
+        ⬆ Importar Facturas Recibidas
+      </button>
+    </div>
+  `, 'modal-lg');
+  Pages._felRecibidasData = [];
+};
+
+Pages.procesarFELRecibidasCSV = function (input) {
+  const file = input.files[0]; if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    const lines  = e.target.result.split('\n').map(l=>l.trim()).filter(Boolean);
+    const header = lines[0].toLowerCase().split(',').map(h=>h.trim().replace(/"/g,''));
+    const getCol = (row, names) => {
+      for (const n of names) {
+        const idx = header.findIndex(h=>h.includes(n));
+        if (idx>=0) return (row[idx]||'').replace(/"/g,'').trim();
+      }
+      return '';
+    };
+    const filas = [];
+    for (let i=1;i<lines.length;i++) {
+      const cols = lines[i].split(',');
+      const f = {
+        fecha:         getCol(cols,['fecha']),
+        serie:         getCol(cols,['serie']),
+        numero_dte:    getCol(cols,['numero','dte','num']),
+        nit_emisor:    getCol(cols,['nit']),
+        nombre_emisor: getCol(cols,['nombre','emisor','razon']),
+        gran_total:    parseFloat(getCol(cols,['gran_total','total']))||0,
+        iva:           parseFloat(getCol(cols,['iva']))||0,
+        tipo_doc:      getCol(cols,['tipo'])||'FACT',
+        tipo_reporte:  'recibida'
+      };
+      if (f.fecha && f.numero_dte) filas.push(f);
+    }
+    Pages._mostrarPreviewFELRec(filas);
+  };
+  reader.readAsText(file);
+};
+
+Pages.procesarFELRecibidasExcel = async function (input) {
+  const file = input.files[0]; if (!file) return;
+  const buf  = await file.arrayBuffer();
+  try {
+    const XLSX = window.XLSX;
+    if (!XLSX) { UI.toast('Usa CSV — Excel no disponible en este contexto','warn'); return; }
+    const wb  = XLSX.read(buf,{type:'array'});
+    const ws  = wb.Sheets[wb.SheetNames[0]];
+    const data= XLSX.utils.sheet_to_json(ws,{defval:''});
+    const filas = data.map(row=>({
+      fecha:         String(row.Fecha||row.fecha||'').trim(),
+      serie:         String(row.Serie||row.serie||'').trim(),
+      numero_dte:    String(row['Numero DTE']||row.numero_dte||row.NumeroDTE||'').trim(),
+      nit_emisor:    String(row['NIT Emisor']||row.nit_emisor||row.NIT||'').trim(),
+      nombre_emisor: String(row['Nombre Emisor']||row.nombre_emisor||row.Nombre||'').trim(),
+      gran_total:    parseFloat(row['Gran Total']||row.gran_total||row.Total||0)||0,
+      iva:           parseFloat(row.IVA||row.iva||0)||0,
+      tipo_doc:      String(row.Tipo||row.tipo||'FACT').trim(),
+      tipo_reporte:  'recibida'
+    })).filter(f=>f.fecha&&f.numero_dte);
+    Pages._mostrarPreviewFELRec(filas);
+  } catch(e) { UI.toast('Error: '+e.message,'error'); }
+};
+
+Pages._mostrarPreviewFELRec = function (filas) {
+  Pages._felRecibidasData = filas;
+  const tbody   = document.getElementById('rec-preview-tbody');
+  const preview = document.getElementById('rec-preview');
+  if (tbody && preview) {
+    preview.classList.remove('hidden');
+    document.getElementById('rec-preview-title').textContent = `${filas.length} facturas recibidas`;
+    tbody.innerHTML = filas.map(f=>`<tr>
+      <td class="mono-sm">${f.fecha}</td>
+      <td class="mono-sm">${f.serie}</td>
+      <td class="mono-sm">${f.numero_dte}</td>
+      <td class="mono-sm">${f.nit_emisor}</td>
+      <td style="font-size:12px">${f.nombre_emisor}</td>
+      <td class="mono-sm text-amber">${UI.q(f.gran_total)}</td>
+      <td class="mono-sm">${UI.q(f.iva)}</td>
+    </tr>`).join('');
+  }
+  const btn = document.getElementById('btn-importar-rec');
+  if (btn) btn.disabled = false;
+  UI.toast(`${filas.length} facturas recibidas listas ✓`);
+};
+
+Pages.guardarFELRecibidas = async function () {
+  const filas = Pages._felRecibidasData||[];
+  if (!filas.length) { UI.toast('Sin datos','error'); return; }
+  const crearEgreso = document.getElementById('rec-crear-egreso')?.checked;
+  UI.toast('Importando...','info');
+
+  const {data, error} = await DB.insertFelImportados(filas);
+  if (error) { UI.toast('Error: '+error.message,'error'); return; }
+
+  // Crear egresos automáticos
+  if (crearEgreso) {
+    for (const f of filas) {
+      await DB.insertEgreso({
+        categoria:    'compra_inventario',
+        concepto:     `Factura recibida — ${f.nombre_emisor} · DTE ${f.serie}-${f.numero_dte}`,
+        monto:        f.gran_total,
+        iva_credito:  f.iva,
+        fecha:        f.fecha,
+        proveedor:    f.nombre_emisor,
+        num_factura:  `${f.serie}-${f.numero_dte}`,
+        metodo_pago:  'transferencia',
+        notas:        `NIT emisor: ${f.nit_emisor}`
+      }).catch(()=>{});
+    }
+    UI.toast(`${filas.length} facturas recibidas importadas y egresos registrados ✓`);
+  } else {
+    UI.toast(`${filas.length} facturas recibidas importadas ✓`);
+  }
+  UI.closeModal();
+  Pages.facturacion();
+};
+
+Pages.descargarPlantillaFELRecibidas = function () {
+  const csv = [
+    'fecha,serie,numero_dte,nit_emisor,nombre_emisor,gran_total,iva',
+    '2025-04-01,A,00000001,1234567-8,Proveedor Guatemala SA,1120.00,120.00',
+    '2025-04-05,B,00000002,9876543-2,Importadora de Repuestos GT,560.00,60.00'
+  ].join('\n');
+  const blob = new Blob([csv],{type:'text/csv;charset=utf-8;'});
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href=url; a.download='plantilla_facturas_recibidas.csv'; a.click();
+  URL.revokeObjectURL(url);
+};
+
+/* ══════════════════════════════════════════════════════
+   CONFIGURACIÓN — Logo del taller
+══════════════════════════════════════════════════════ */
+Pages._logoBase64 = null;
+
+Pages._agregarLogoAConfig = function () {
+  const logoHtml = `
+    <div class="card" style="margin-bottom:14px">
+      <div class="card-sub mb-3">🖼️ Logo del Taller</div>
+      <div class="form-group">
+        <label class="form-label">Subir logo (PNG, JPG — máx. 500KB)</label>
+        <input type="file" id="cfg-logo-file" accept="image/png,image/jpeg,image/webp"
+               class="form-input" onchange="Pages._onLogoChange(this)">
+      </div>
+      <div id="cfg-logo-preview" style="margin-top:12px;display:none">
+        <img id="cfg-logo-img" style="max-height:80px;max-width:200px;border:1px solid var(--border);border-radius:6px;padding:8px;background:#fff">
+        <button class="btn btn-sm btn-danger" style="margin-left:8px" onclick="Pages._quitarLogo()">Quitar logo</button>
+      </div>
+      ${Auth.tenant?.logo_base64 ? `
+      <div style="margin-top:8px">
+        <div class="text-muted" style="font-size:11px">Logo actual:</div>
+        <img src="${Auth.tenant.logo_base64}" style="max-height:60px;max-width:180px;border:1px solid var(--border);border-radius:4px;padding:6px;background:#fff;margin-top:4px">
+      </div>` : ''}
+    </div>`;
+  return logoHtml;
+};
+
+Pages._onLogoChange = function (input) {
+  const file = input.files[0]; if (!file) return;
+  if (file.size > 512000) { UI.toast('El logo no debe superar 500KB','error'); return; }
+  const reader = new FileReader();
+  reader.onload = e => {
+    Pages._logoBase64 = e.target.result;
+    const preview = document.getElementById('cfg-logo-preview');
+    const img     = document.getElementById('cfg-logo-img');
+    if (preview && img) {
+      img.src = Pages._logoBase64;
+      preview.style.display = 'block';
+    }
+  };
+  reader.readAsDataURL(file);
+};
+
+Pages._quitarLogo = function () {
+  Pages._logoBase64 = null;
+  const preview = document.getElementById('cfg-logo-preview');
+  const input   = document.getElementById('cfg-logo-file');
+  if (preview) preview.style.display = 'none';
+  if (input)   input.value = '';
 };
