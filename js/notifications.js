@@ -404,6 +404,32 @@ ${contenido}
       });
     });
 
+    /* Documentos de empleados vencidos o por vencer */
+    try {
+      const tid = await getTenantId();
+      const { data: docs } = await getSupabase()
+        .from('empleado_documentos')
+        .select('*, empleados(nombre)')
+        .eq('tenant_id', tid)
+        .not('fecha_vencimiento', 'is', null);
+
+      if (docs) {
+        docs.filter(d => !d.subido || (d.fecha_vencimiento && d.fecha_vencimiento <= hoy))
+          .forEach(d => {
+            const emp = d.empleados;
+            const vencido = d.fecha_vencimiento && d.fecha_vencimiento < hoy;
+            alertas.push({
+              tipo:   'doc_empleado',
+              nivel:  vencido ? 'critico' : 'warning',
+              titulo: (vencido ? 'Documento Vencido: ' : 'Documento Pendiente: ') + d.tipo.replace(/_/g,' '),
+              cuerpo: `Empleado: ${emp?.nombre||'—'} · Fecha límite: ${d.fecha_vencimiento||'—'}`,
+              icon:   '📄',
+              accion: "App.navigate('rrhh')"
+            });
+          });
+      }
+    } catch(e) { /* tabla puede no existir aún */ }
+
     NOTIF.INTERNAS = alertas;
     return alertas;
   },

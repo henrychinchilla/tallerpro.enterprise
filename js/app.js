@@ -152,5 +152,80 @@ function toggleSidebar() {
 
 /* ── ENTRYPOINT ─────────────────────────────────────── */
 function startApp() {
+  // Hide login, show app
   App.start();
 }
+
+/* ══════════════════════════════════════════════════════
+   THEME SWITCHER — Cambio rápido de tema
+══════════════════════════════════════════════════════ */
+const THEME = {
+  THEMES: [
+    { id: 'dark',   icon: '🌙', label: 'Oscuro'    },
+    { id: 'light',  icon: '☀️', label: 'Claro'     },
+    { id: 'blue',   icon: '🔵', label: 'Azul Navy' },
+    { id: 'green',  icon: '🟢', label: 'Verde'     },
+    { id: 'auto',   icon: '🌓', label: 'Auto'      }
+  ],
+
+  current() {
+    return localStorage.getItem('tp_theme') || 'dark';
+  },
+
+  apply(themeId) {
+    const root = document.documentElement;
+    root.removeAttribute('data-theme');
+    root.setAttribute('data-theme', themeId === 'auto'
+      ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
+      : themeId);
+    localStorage.setItem('tp_theme', themeId);
+    // Actualizar icono en sidebar si existe
+    const btn = document.getElementById('theme-toggle-btn');
+    if (btn) {
+      const t = THEME.THEMES.find(x=>x.id===themeId)||THEME.THEMES[0];
+      btn.textContent = t.icon;
+      btn.title = 'Tema: ' + t.label;
+    }
+  },
+
+  cycle() {
+    const ids   = THEME.THEMES.map(t=>t.id);
+    const curr  = THEME.current();
+    const next  = ids[(ids.indexOf(curr)+1) % ids.length];
+    THEME.apply(next);
+    const t = THEME.THEMES.find(x=>x.id===next);
+    UI.toast(`Tema: ${t.icon} ${t.label}`, 'info');
+  },
+
+  init() {
+    THEME.apply(THEME.current());
+    // Listener sistema
+    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
+      if (THEME.current() === 'auto') THEME.apply('auto');
+    });
+  },
+
+  renderPicker() {
+    UI.openModal('🎨 Cambiar Tema', `
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;padding:8px">
+        ${THEME.THEMES.map(t=>`
+        <button onclick="THEME.apply('${t.id}');UI.closeModal()"
+          style="padding:20px 12px;border:2px solid ${THEME.current()===t.id?'var(--amber)':'var(--border)'};
+                 background:${THEME.current()===t.id?'var(--amber-dim)':'var(--surface2)'};
+                 border-radius:8px;cursor:pointer;font-family:'Manrope',sans-serif;
+                 color:${THEME.current()===t.id?'var(--amber)':'var(--text2)'};
+                 display:flex;flex-direction:column;align-items:center;gap:8px">
+          <span style="font-size:28px">${t.icon}</span>
+          <span style="font-size:12px;font-weight:600">${t.label}</span>
+          ${THEME.current()===t.id?'<span style="font-size:9px;opacity:.7">Activo</span>':''}
+        </button>`).join('')}
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" onclick="UI.closeModal()">Cerrar</button>
+      </div>
+    `);
+  }
+};
+
+// Iniciar tema al cargar
+THEME.init();

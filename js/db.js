@@ -509,6 +509,53 @@ const DB = {
     return !error;
   },
 
+  /* ── DOCUMENTOS DE EMPLEADOS ──────────────────────── */
+  async getDocumentosEmpleado(empleadoId) {
+    const { data } = await getSupabase()
+      .from('empleado_documentos')
+      .select('*')
+      .eq('empleado_id', empleadoId)
+      .order('tipo');
+    return data || [];
+  },
+  async upsertDocumento(fields) {
+    const id = await getTenantId();
+    const { data, error } = await getSupabase()
+      .from('empleado_documentos')
+      .upsert({ ...fields, tenant_id: id }, { onConflict: 'empleado_id,tipo' })
+      .select().single();
+    return { data, error };
+  },
+  async deleteDocumento(docId) {
+    const { error } = await getSupabase().from('empleado_documentos').delete().eq('id', docId);
+    return !error;
+  },
+
+  /* ── PAGOS DE NÓMINA ──────────────────────────────── */
+  async getPagosNomina(empleadoId = null) {
+    const id = await getTenantId();
+    let q = getSupabase().from('pagos_nomina')
+      .select('*, empleados(nombre,cargo,banco,num_cuenta,nombre_cuenta)')
+      .eq('tenant_id', id)
+      .order('periodo_anio', { ascending: false })
+      .order('periodo_mes',  { ascending: false });
+    if (empleadoId) q = q.eq('empleado_id', empleadoId);
+    const { data } = await q;
+    return data || [];
+  },
+  async insertPagoNomina(fields) {
+    const id = await getTenantId();
+    const { data, error } = await getSupabase()
+      .from('pagos_nomina')
+      .insert({ ...fields, tenant_id: id })
+      .select().single();
+    return { data, error };
+  },
+  async updatePagoNomina(pagoId, fields) {
+    const { error } = await getSupabase().from('pagos_nomina').update(fields).eq('id', pagoId);
+    return !error;
+  },
+
   /* ── ACTUALIZAR EMPLEADO ──────────────────────────── */
   async updateEmpleado(empleadoId, fields) {
     const { error } = await getSupabase()

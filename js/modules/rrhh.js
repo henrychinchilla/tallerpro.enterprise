@@ -120,7 +120,7 @@ Pages._empCard = function (e) {
         <div><div class="emp-stat-val">${UI.q(liquido)}</div><div class="emp-stat-lbl">Líquido</div></div>
       </div>
       <div style="display:flex;gap:5px;margin-left:10px;flex-wrap:wrap">
-        <button class="btn btn-sm btn-ghost"  onclick="Pages.verEmpleado('${e.id}')">Ver</button>
+        <button class="btn btn-sm btn-ghost"  onclick="Pages._verEmpleadoCompleto('${e.id}')">Ver</button>
         <button class="btn btn-sm btn-cyan"   onclick="Pages.modalEditarEmpleado('${e.id}')">✏️</button>
         <button class="btn btn-sm btn-amber"  onclick="Pages.imprimirBoleta('${e.id}')">🖨️</button>
         <button class="btn btn-sm btn-danger" onclick="Pages.desactivarEmpleado('${e.id}','${e.nombre.replace(/'/g,'')}')">🗑</button>
@@ -1210,26 +1210,51 @@ Pages.verEmpleado = function (id) {
 };
 
 Pages.modalNuevoEmpleado = function () {
+  const BANCOS = ['Banco Industrial','G&T Continental','BAC Credomatic','Banrural','Bantrab','Visa Banco','Citibank','HDI Seguros','Otro'];
   UI.openModal('Nuevo Empleado', `
+
+    <!-- DATOS BÁSICOS -->
+    <div style="font-weight:700;font-size:11px;color:var(--text3);letter-spacing:.08em;text-transform:uppercase;margin-bottom:10px">1. Datos Personales</div>
     <div class="form-row">
-      <div class="form-group"><label class="form-label">Nombre *</label><input class="form-input" id="ne-nombre" placeholder="Nombre completo"></div>
-      <div class="form-group"><label class="form-label">Rol *</label>
+      <div class="form-group"><label class="form-label">Nombre Completo *</label>
+        <input class="form-input" id="ne-nombre" placeholder="Nombre completo"></div>
+      <div class="form-group"><label class="form-label">Rol en el Sistema *</label>
         <select class="form-select" id="ne-rol">
           ${Object.entries(ROLES).map(([k,v])=>`<option value="${k}">${v.icon} ${v.label}</option>`).join('')}
-        </select>
-      </div>
+        </select></div>
     </div>
     <div class="form-row">
-      <div class="form-group"><label class="form-label">Cargo</label><input class="form-input" id="ne-cargo" placeholder="Mecánico Senior..."></div>
-      <div class="form-group"><label class="form-label">NIT</label><input class="form-input" id="ne-nit" placeholder="1234567-8"></div>
+      <div class="form-group"><label class="form-label">Cargo / Puesto</label>
+        <input class="form-input" id="ne-cargo" placeholder="Mecánico Senior..."></div>
+      <div class="form-group"><label class="form-label">NIT</label>
+        <input class="form-input" id="ne-nit" placeholder="1234567-8"></div>
     </div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">Teléfono</label>
+        <input class="form-input" id="ne-telefono" placeholder="5540-1234"></div>
+      <div class="form-group"><label class="form-label">Estado Civil</label>
+        <select class="form-select" id="ne-estado-civil">
+          <option value="">Seleccionar...</option>
+          <option>Soltero/a</option><option>Casado/a</option>
+          <option>Divorciado/a</option><option>Viudo/a</option><option>Unión libre</option>
+        </select></div>
+    </div>
+    <div class="form-group"><label class="form-label">Dirección</label>
+      <input class="form-input" id="ne-dir" placeholder="Zona 12, Guatemala"></div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">Fecha de Ingreso</label>
+        <input class="form-input" id="ne-ingreso" type="date" value="${new Date().toISOString().slice(0,10)}"></div>
+      <div class="form-group"><label class="form-label">Avatar (emoji)</label>
+        <input class="form-input" id="ne-avatar" value="👤" maxlength="2"></div>
+    </div>
+
+    <!-- SALARIO -->
+    <div style="font-weight:700;font-size:11px;color:var(--text3);letter-spacing:.08em;text-transform:uppercase;margin:14px 0 10px;border-top:1px solid var(--border);padding-top:12px">2. Salario y Prestaciones</div>
     <div class="form-row">
       <div class="form-group"><label class="form-label">Salario Base (Q) *</label>
-        <input class="form-input" id="ne-salario" type="number" min="0" placeholder="3500.00" oninput="Pages.calcularLiquido()">
-      </div>
-      <div class="form-group"><label class="form-label">Bonificación (Q)</label>
-        <input class="form-input" id="ne-bonif" type="number" value="250" oninput="Pages.calcularLiquido()">
-      </div>
+        <input class="form-input" id="ne-salario" type="number" min="0" placeholder="3500.00" oninput="Pages.calcularLiquido()"></div>
+      <div class="form-group"><label class="form-label">Bonificación Incentivo (Q)</label>
+        <input class="form-input" id="ne-bonif" type="number" value="250" oninput="Pages.calcularLiquido()"></div>
     </div>
     <div class="card" style="padding:12px;margin-bottom:4px">
       <div class="grid-2" style="gap:8px">
@@ -1239,22 +1264,105 @@ Pages.modalNuevoEmpleado = function () {
         <div><div class="text-muted" style="font-size:11px">Costo total taller</div><div class="mono-sm text-amber" id="prev-total">Q0.00</div></div>
       </div>
     </div>
-    <div class="form-row">
-      <div class="form-group"><label class="form-label">Fecha de Ingreso</label>
-        <input class="form-input" id="ne-ingreso" type="date" value="${new Date().toISOString().slice(0,10)}">
-      </div>
-      <div class="form-group"><label class="form-label">Avatar (emoji)</label>
-        <input class="form-input" id="ne-avatar" value="👤" maxlength="2">
-      </div>
-    </div>
     <div class="form-group"><label class="form-label">
       <input type="checkbox" id="ne-igss" checked style="margin-right:8px"> Afiliado al IGSS
     </label></div>
+
+    <!-- BANCO -->
+    <div style="font-weight:700;font-size:11px;color:var(--text3);letter-spacing:.08em;text-transform:uppercase;margin:14px 0 10px;border-top:1px solid var(--border);padding-top:12px">3. Datos Bancarios (Pago de Nómina)</div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">Banco</label>
+        <select class="form-select" id="ne-banco">
+          <option value="">Seleccionar banco...</option>
+          ${BANCOS.map(b=>`<option value="${b}">${b}</option>`).join('')}
+        </select></div>
+      <div class="form-group"><label class="form-label">Tipo de Cuenta</label>
+        <select class="form-select" id="ne-tipo-cuenta">
+          <option value="monetaria">Monetaria</option>
+          <option value="ahorro">Ahorro</option>
+        </select></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">Número de Cuenta</label>
+        <input class="form-input" id="ne-num-cuenta" placeholder="000-000000-00"></div>
+      <div class="form-group"><label class="form-label">Nombre de la Cuenta *</label>
+        <input class="form-input" id="ne-nombre-cuenta"
+               placeholder="Debe coincidir con el nombre del empleado"
+               oninput="Pages._validarNombreCuenta(this)"></div>
+    </div>
+    <div id="aviso-nombre-cuenta" class="hidden" style="font-size:11px;color:var(--red);margin-top:-8px;margin-bottom:8px">
+      ⚠️ El nombre de la cuenta debe coincidir con el nombre del empleado.
+    </div>
+
+    <!-- CONTACTO EMERGENCIA -->
+    <div style="font-weight:700;font-size:11px;color:var(--text3);letter-spacing:.08em;text-transform:uppercase;margin:14px 0 10px;border-top:1px solid var(--border);padding-top:12px">4. Contacto de Emergencia</div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">Nombre del Contacto</label>
+        <input class="form-input" id="ne-emer-nombre" placeholder="María García"></div>
+      <div class="form-group"><label class="form-label">Parentesco</label>
+        <select class="form-select" id="ne-emer-parentesco">
+          <option value="">Seleccionar...</option>
+          <option>Cónyuge</option><option>Madre</option><option>Padre</option>
+          <option>Hijo/a</option><option>Hermano/a</option><option>Otro familiar</option>
+        </select></div>
+    </div>
+    <div class="form-group"><label class="form-label">Teléfono de Emergencia</label>
+      <input class="form-input" id="ne-emer-tel" placeholder="5555-1234"></div>
+
+    <!-- DOCUMENTOS REQUERIDOS -->
+    <div style="font-weight:700;font-size:11px;color:var(--text3);letter-spacing:.08em;text-transform:uppercase;margin:14px 0 10px;border-top:1px solid var(--border);padding-top:12px">5. Documentos Requeridos</div>
+    <div class="alert alert-cyan" style="margin-bottom:12px">
+      <div class="alert-icon">📄</div>
+      <div class="alert-body" style="font-size:11px">Puedes subir los documentos ahora o después. Si faltan documentos, define una fecha límite para recibirlos.</div>
+    </div>
+    ${[
+      {v:'dpi',label:'DPI (Documento de Identificación)'},
+      {v:'curriculum',label:'Currículum Vitae'},
+      {v:'licencia_conducir',label:'Licencia de Conducir'},
+      {v:'tarjeta_salud',label:'Tarjeta de Salud'},
+      {v:'tarjeta_pulmones',label:'Tarjeta de Pulmones'},
+      {v:'titulo_academico',label:'Título Académico'}
+    ].map(d=>`
+    <div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--border)">
+      <input type="file" id="doc-${d.v}" accept=".pdf,.jpg,.jpeg,.png" class="hidden"
+             onchange="Pages._onDocChange('${d.v}',this)">
+      <span style="flex:1;font-size:12px">${d.label}</span>
+      <span id="doc-${d.v}-status" class="badge badge-gray" style="font-size:9px">Pendiente</span>
+      <input type="date" id="doc-${d.v}-fecha" class="form-input" style="width:130px;font-size:11px;padding:4px 8px"
+             placeholder="Fecha límite">
+      <button class="btn btn-sm btn-ghost" onclick="document.getElementById('doc-${d.v}').click()">📎 Subir</button>
+    </div>`).join('')}
+
     <div class="modal-footer">
       <button class="btn btn-ghost" onclick="UI.closeModal()">Cancelar</button>
       <button class="btn btn-amber" onclick="Pages.guardarEmpleado()">Guardar Empleado</button>
     </div>`
-  );
+  , 'modal-lg');
+};
+
+Pages._validarNombreCuenta = function (input) {
+  const nombre = document.getElementById('ne-nombre')?.value.trim().toLowerCase() || '';
+  const cuenta = input.value.trim().toLowerCase();
+  const aviso  = document.getElementById('aviso-nombre-cuenta');
+  if (!aviso) return;
+  if (nombre && cuenta && !cuenta.includes(nombre.split(' ')[0])) {
+    aviso.classList.remove('hidden');
+  } else {
+    aviso.classList.add('hidden');
+  }
+};
+
+Pages._docFiles = {};
+Pages._onDocChange = function (tipo, input) {
+  const file = input.files[0]; if (!file) return;
+  Pages._docFiles[tipo] = file;
+  const status = document.getElementById(`doc-${tipo}-status`);
+  if (status) {
+    status.textContent = '✓ Listo';
+    status.className   = 'badge badge-green';
+    status.style.fontSize = '9px';
+  }
+  UI.toast(`${tipo.replace(/_/g,' ')}: archivo cargado ✓`);
 };
 
 Pages.calcularLiquido = function () {
@@ -1271,18 +1379,61 @@ Pages.guardarEmpleado = async function () {
   const salario = parseFloat(document.getElementById('ne-salario').value)||0;
   if (!nombre||!rol)  { UI.toast('Nombre y rol son obligatorios','error'); return; }
   if (salario<=0)     { UI.toast('El salario debe ser mayor a 0','error'); return; }
-  const {error} = await DB.insertEmpleado({
+
+  const {data: emp, error} = await DB.insertEmpleado({
     nombre, rol,
-    cargo:         document.getElementById('ne-cargo').value.trim()||null,
-    nit:           document.getElementById('ne-nit').value.trim()||null,
-    salario_base:  salario,
-    bonificacion:  parseFloat(document.getElementById('ne-bonif').value)||250,
-    fecha_ingreso: document.getElementById('ne-ingreso').value||null,
-    avatar:        document.getElementById('ne-avatar').value.trim()||'👤',
-    igss:          document.getElementById('ne-igss').checked
+    cargo:                 document.getElementById('ne-cargo').value.trim()||null,
+    nit:                   document.getElementById('ne-nit').value.trim()||null,
+    telefono:              document.getElementById('ne-telefono')?.value.trim()||null,
+    direccion:             document.getElementById('ne-dir')?.value.trim()||null,
+    estado_civil:          document.getElementById('ne-estado-civil')?.value||null,
+    salario_base:          salario,
+    bonificacion:          parseFloat(document.getElementById('ne-bonif').value)||250,
+    fecha_ingreso:         document.getElementById('ne-ingreso').value||null,
+    avatar:                document.getElementById('ne-avatar').value.trim()||'👤',
+    igss:                  document.getElementById('ne-igss').checked,
+    banco:                 document.getElementById('ne-banco')?.value||null,
+    tipo_cuenta:           document.getElementById('ne-tipo-cuenta')?.value||'monetaria',
+    num_cuenta:            document.getElementById('ne-num-cuenta')?.value.trim()||null,
+    nombre_cuenta:         document.getElementById('ne-nombre-cuenta')?.value.trim()||null,
+    emergencia_nombre:     document.getElementById('ne-emer-nombre')?.value.trim()||null,
+    emergencia_telefono:   document.getElementById('ne-emer-tel')?.value.trim()||null,
+    emergencia_parentesco: document.getElementById('ne-emer-parentesco')?.value||null
   });
+
   if (error) { UI.toast('Error: '+error.message,'error'); return; }
-  UI.closeModal(); UI.toast('Empleado agregado ✓'); Pages.rrhh('empleados');
+
+  /* Guardar documentos y fechas límite */
+  if (emp?.id) {
+    const TIPOS_DOC = ['dpi','curriculum','licencia_conducir','tarjeta_salud','tarjeta_pulmones','titulo_academico'];
+    for (const tipo of TIPOS_DOC) {
+      const file  = Pages._docFiles?.[tipo];
+      const fecha = document.getElementById(`doc-${tipo}-fecha`)?.value;
+
+      let base64 = null;
+      if (file) {
+        base64 = await new Promise(resolve => {
+          const r = new FileReader();
+          r.onload = e => resolve(e.target.result);
+          r.readAsDataURL(file);
+        });
+      }
+
+      await DB.upsertDocumento({
+        empleado_id:      emp.id,
+        tipo,
+        nombre_archivo:   file ? file.name : tipo,
+        base64:           base64,
+        fecha_vencimiento:fecha || null,
+        subido:           !!file
+      });
+    }
+    Pages._docFiles = {};
+  }
+
+  UI.closeModal();
+  UI.toast('Empleado guardado ✓');
+  Pages.rrhh('empleados');
 };
 
 Pages.modalEditarEmpleado = async function (id) {
@@ -1410,4 +1561,424 @@ Pages.calcularNomina = async function () {
       <button class="btn btn-ghost" onclick="UI.closeModal()">Cerrar</button>
       <button class="btn btn-amber" onclick="window.print()">🖨️ Imprimir Nómina</button>
     </div>`, 'modal-lg');
+};
+
+/* ══════════════════════════════════════════════════════
+   DOCUMENTOS DE EMPLEADOS
+══════════════════════════════════════════════════════ */
+Pages.modalDocumentosEmpleado = async function (empleadoId) {
+  const emp  = (Pages._empleadosData||[]).find(e=>e.id===empleadoId);
+  const docs = await DB.getDocumentosEmpleado(empleadoId);
+  const hoy  = new Date().toISOString().slice(0,10);
+
+  const TIPOS = [
+    {v:'dpi',            label:'DPI',                   icon:'🪪'},
+    {v:'curriculum',     label:'Currículum Vitae',       icon:'📄'},
+    {v:'licencia_conducir',label:'Licencia de Conducir', icon:'🚗'},
+    {v:'tarjeta_salud',  label:'Tarjeta de Salud',       icon:'🏥'},
+    {v:'tarjeta_pulmones',label:'Tarjeta de Pulmones',   icon:'🫁'},
+    {v:'titulo_academico',label:'Título Académico',       icon:'🎓'}
+  ];
+
+  const filas = TIPOS.map(t => {
+    const doc = docs.find(d=>d.tipo===t.v);
+    const vence = doc?.fecha_vencimiento;
+    const vencido = vence && vence < hoy;
+    const pronto  = vence && !vencido && vence <= new Date(Date.now()+7*86400000).toISOString().slice(0,10);
+    return `
+    <div style="display:flex;align-items:center;gap:10px;padding:12px 0;border-bottom:1px solid var(--border)">
+      <span style="font-size:20px">${t.icon}</span>
+      <div style="flex:1">
+        <div style="font-weight:600;font-size:13px">${t.label}</div>
+        ${vence ? `<div class="mono-sm" style="font-size:10px;color:${vencido?'var(--red)':pronto?'var(--amber)':'var(--text3)'}">
+          ${vencido?'⚠️ Vencido: ':'⏰ Vence: '}${vence}
+        </div>` : '<div class="text-muted" style="font-size:10px">Sin fecha límite</div>'}
+      </div>
+      ${doc?.subido
+        ? `<span class="badge badge-green">✓ Subido</span>
+           ${doc.base64 ? `<button class="btn btn-sm btn-ghost" onclick="Pages._verDocumento('${t.label}','${doc.base64 ? doc.base64.slice(0,50)+'...' : ''}','${doc.base64||''}')">Ver</button>` : ''}
+           <button class="btn btn-sm btn-danger" onclick="Pages._quitarDocumento('${doc.id}')">✕</button>`
+        : `<span class="badge badge-amber">Pendiente</span>`}
+      <div>
+        <input type="file" id="d-${t.v}" accept=".pdf,.jpg,.jpeg,.png" class="hidden"
+               onchange="Pages._subirDocumento('${empleadoId}','${t.v}',this)">
+        <input type="date" id="df-${t.v}" class="form-input" style="width:130px;font-size:11px;padding:4px 6px"
+               value="${vence||''}" onchange="Pages._actualizarFechaDoc('${empleadoId}','${t.v}',this.value)">
+        <button class="btn btn-sm btn-cyan" onclick="document.getElementById('d-${t.v}').click()" style="margin-left:4px">
+          📎 ${doc?.subido?'Reemplazar':'Subir'}
+        </button>
+      </div>
+    </div>`;
+  }).join('');
+
+  UI.openModal(`📄 Documentos: ${emp?.nombre||'Empleado'}`, `
+    <div class="alert alert-amber mb-4">
+      <div class="alert-icon">📅</div>
+      <div>
+        <div class="alert-title">Documentos pendientes recibirán alerta en el calendario</div>
+        <div class="alert-body" style="font-size:11px">Define una fecha límite para cada documento pendiente. Se mostrará en el calendario y en comunicaciones.</div>
+      </div>
+    </div>
+    ${filas}
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="UI.closeModal()">Cerrar</button>
+    </div>
+  `, 'modal-lg');
+};
+
+Pages._subirDocumento = async function (empleadoId, tipo, input) {
+  const file = input.files[0]; if (!file) return;
+  UI.toast('Subiendo documento...','info');
+
+  const base64 = await new Promise(resolve => {
+    const r = new FileReader();
+    r.onload = e => resolve(e.target.result);
+    r.readAsDataURL(file);
+  });
+
+  const fecha = document.getElementById(`df-${tipo}`)?.value || null;
+  const { error } = await DB.upsertDocumento({
+    empleado_id:      empleadoId,
+    tipo,
+    nombre_archivo:   file.name,
+    base64,
+    fecha_vencimiento:fecha,
+    subido:           true
+  });
+
+  if (error) { UI.toast('Error: '+error.message,'error'); return; }
+  UI.toast('Documento subido ✓');
+  Pages.modalDocumentosEmpleado(empleadoId);
+};
+
+Pages._actualizarFechaDoc = async function (empleadoId, tipo, fecha) {
+  await DB.upsertDocumento({
+    empleado_id:      empleadoId,
+    tipo,
+    nombre_archivo:   tipo,
+    fecha_vencimiento:fecha || null,
+    subido:           false
+  });
+};
+
+Pages._verDocumento = function (titulo, preview, base64Full) {
+  if (!base64Full) { UI.toast('Documento no disponible','warn'); return; }
+  const isPDF = base64Full.startsWith('data:application/pdf');
+  UI.openModal(`📄 ${titulo}`, `
+    <div style="text-align:center">
+      ${isPDF
+        ? `<iframe src="${base64Full}" style="width:100%;height:500px;border:1px solid var(--border);border-radius:6px"></iframe>`
+        : `<img src="${base64Full}" style="max-width:100%;max-height:500px;border-radius:6px;border:1px solid var(--border)">`}
+      <div class="modal-footer" style="justify-content:center;margin-top:12px">
+        <button class="btn btn-ghost" onclick="UI.closeModal()">Cerrar</button>
+        <button class="btn btn-amber" onclick="Pages._descargarDoc('${titulo}','${base64Full.slice(0,30)}')">💾 Descargar</button>
+      </div>
+    </div>`, 'modal-lg');
+};
+
+Pages._quitarDocumento = async function (docId) {
+  UI.confirm('¿Eliminar este documento?', async () => {
+    await DB.deleteDocumento(docId);
+    UI.closeModal();
+    UI.toast('Documento eliminado');
+  });
+};
+
+/* ══════════════════════════════════════════════════════
+   PAGO DE NÓMINA Y VOUCHER
+══════════════════════════════════════════════════════ */
+Pages.modalPagarNomina = async function (empleadoId) {
+  const emp = (Pages._empleadosData||[]).find(e=>e.id===empleadoId);
+  if (!emp) return;
+
+  const hoy  = new Date();
+  const mes  = hoy.getMonth()+1;
+  const anio = hoy.getFullYear();
+  const igssL = ((emp.salario_base||0)*0.0483);
+  const bonif = emp.bonificacion||250;
+  const liq   = (emp.salario_base||0)+bonif-igssL;
+
+  UI.openModal(`💵 Pago de Nómina: ${emp.nombre}`, `
+    <div class="detail-section mb-4">
+      <div class="detail-section-header">Empleado</div>
+      <div class="detail-row"><div class="detail-key">Nombre</div><div class="detail-val">${emp.nombre}</div></div>
+      <div class="detail-row"><div class="detail-key">Banco</div><div class="detail-val">${emp.banco||'—'} · ${emp.tipo_cuenta||'—'}</div></div>
+      <div class="detail-row"><div class="detail-key">No. Cuenta</div><div class="detail-val mono-sm">${emp.num_cuenta||'—'}</div></div>
+      <div class="detail-row"><div class="detail-key">Nombre Cuenta</div><div class="detail-val">${emp.nombre_cuenta||emp.nombre}</div></div>
+    </div>
+
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">Período — Mes</label>
+        <select class="form-select" id="pn-mes">
+          ${['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre']
+            .map((m,i)=>`<option value="${i+1}" ${mes===i+1?'selected':''}>${m}</option>`).join('')}
+        </select></div>
+      <div class="form-group"><label class="form-label">Año</label>
+        <input class="form-input" id="pn-anio" type="number" value="${anio}"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">Salario Base (Q)</label>
+        <input class="form-input" id="pn-salario" type="number" value="${(emp.salario_base||0).toFixed(2)}"
+               oninput="Pages._recalcPago()"></div>
+      <div class="form-group"><label class="form-label">Bonificación (Q)</label>
+        <input class="form-input" id="pn-bonif" type="number" value="${bonif.toFixed(2)}"
+               oninput="Pages._recalcPago()"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">Otros Ingresos (Q)</label>
+        <input class="form-input" id="pn-otros-ing" type="number" value="0" oninput="Pages._recalcPago()"></div>
+      <div class="form-group"><label class="form-label">Otros Descuentos (Q)</label>
+        <input class="form-input" id="pn-otros-desc" type="number" value="0" oninput="Pages._recalcPago()"></div>
+    </div>
+
+    <!-- Resumen -->
+    <div class="card card-amber" style="margin-bottom:12px">
+      <div class="card-sub mb-3">Resumen de Pago</div>
+      <div class="detail-row"><div class="detail-key">Salario Base</div><div class="detail-val mono-sm" id="pn-r-sal">Q${(emp.salario_base||0).toFixed(2)}</div></div>
+      <div class="detail-row"><div class="detail-key">Bonificación</div><div class="detail-val mono-sm text-green" id="pn-r-bonif">+Q${bonif.toFixed(2)}</div></div>
+      <div class="detail-row"><div class="detail-key">Otros Ingresos</div><div class="detail-val mono-sm text-green" id="pn-r-ing">+Q0.00</div></div>
+      <div class="detail-row"><div class="detail-key">IGSS Laboral (4.83%)</div><div class="detail-val mono-sm text-red" id="pn-r-igssl">-Q${igssL.toFixed(2)}</div></div>
+      <div class="detail-row"><div class="detail-key">Otros Descuentos</div><div class="detail-val mono-sm text-red" id="pn-r-desc">-Q0.00</div></div>
+      <div style="border-top:1px solid var(--border);padding-top:10px;margin-top:8px;display:flex;justify-content:space-between;align-items:center">
+        <span style="font-weight:700">LÍQUIDO A PAGAR</span>
+        <span class="mono" style="font-size:22px;color:var(--green);font-weight:700" id="pn-r-liq">Q${liq.toFixed(2)}</span>
+      </div>
+    </div>
+
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">Método de Pago</label>
+        <select class="form-select" id="pn-metodo">
+          <option value="transferencia">🏦 Transferencia Bancaria</option>
+          <option value="efectivo">💵 Efectivo</option>
+          <option value="cheque">🗒️ Cheque</option>
+        </select></div>
+      <div class="form-group"><label class="form-label">Fecha de Pago</label>
+        <input class="form-input" id="pn-fecha" type="date" value="${hoy.toISOString().slice(0,10)}"></div>
+    </div>
+    <div class="form-group"><label class="form-label">No. Cheque / Referencia</label>
+      <input class="form-input" id="pn-ref" placeholder="Número de cheque o referencia bancaria"></div>
+
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="UI.closeModal()">Cancelar</button>
+      <button class="btn btn-ghost" onclick="Pages.generarVoucherPago('${empleadoId}',false)">🖨️ Vista Previa</button>
+      <button class="btn btn-amber" onclick="Pages.registrarPagoNomina('${empleadoId}')">💵 Registrar y Generar Voucher</button>
+    </div>
+  `);
+
+  Pages._empParaPago = emp;
+};
+
+Pages._recalcPago = function () {
+  const sal   = parseFloat(document.getElementById('pn-salario')?.value)||0;
+  const bonif = parseFloat(document.getElementById('pn-bonif')?.value)||0;
+  const otros = parseFloat(document.getElementById('pn-otros-ing')?.value)||0;
+  const desc  = parseFloat(document.getElementById('pn-otros-desc')?.value)||0;
+  const igssL = sal*0.0483;
+  const liq   = sal+bonif+otros-igssL-desc;
+
+  const set=(id,v)=>{const el=document.getElementById(id);if(el)el.textContent=v;};
+  set('pn-r-sal',   `Q${sal.toFixed(2)}`);
+  set('pn-r-bonif', `+Q${bonif.toFixed(2)}`);
+  set('pn-r-ing',   `+Q${otros.toFixed(2)}`);
+  set('pn-r-igssl', `-Q${igssL.toFixed(2)}`);
+  set('pn-r-desc',  `-Q${desc.toFixed(2)}`);
+  set('pn-r-liq',   `Q${liq.toFixed(2)}`);
+};
+
+Pages.registrarPagoNomina = async function (empleadoId) {
+  const emp   = Pages._empParaPago || (Pages._empleadosData||[]).find(e=>e.id===empleadoId);
+  const sal   = parseFloat(document.getElementById('pn-salario')?.value)||0;
+  const bonif = parseFloat(document.getElementById('pn-bonif')?.value)||0;
+  const otros = parseFloat(document.getElementById('pn-otros-ing')?.value)||0;
+  const desc  = parseFloat(document.getElementById('pn-otros-desc')?.value)||0;
+  const igssL = sal*0.0483;
+  const igssP = sal*0.1267;
+  const liq   = sal+bonif+otros-igssL-desc;
+
+  const { data: pago, error } = await DB.insertPagoNomina({
+    empleado_id:     empleadoId,
+    periodo_mes:     parseInt(document.getElementById('pn-mes')?.value)||new Date().getMonth()+1,
+    periodo_anio:    parseInt(document.getElementById('pn-anio')?.value)||new Date().getFullYear(),
+    salario_base:    sal,
+    bonificacion:    bonif,
+    igss_laboral:    parseFloat(igssL.toFixed(2)),
+    igss_patronal:   parseFloat(igssP.toFixed(2)),
+    otros_ingresos:  otros,
+    otros_descuentos:desc,
+    liquido_pagar:   parseFloat(liq.toFixed(2)),
+    metodo_pago:     document.getElementById('pn-metodo')?.value||'transferencia',
+    num_cheque:      document.getElementById('pn-ref')?.value.trim()||null,
+    banco:           emp?.banco||null,
+    fecha_pago:      document.getElementById('pn-fecha')?.value,
+    pagado:          true
+  });
+
+  if (error) { UI.toast('Error: '+error.message,'error'); return; }
+
+  /* Registrar egreso automático en Finanzas */
+  await DB.insertEgreso({
+    categoria:   'nomina',
+    concepto:    `Pago nómina — ${emp?.nombre} · ${['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'][parseInt(document.getElementById('pn-mes')?.value)-1]} ${document.getElementById('pn-anio')?.value}`,
+    monto:       parseFloat(liq.toFixed(2)),
+    fecha:       document.getElementById('pn-fecha')?.value,
+    metodo_pago: document.getElementById('pn-metodo')?.value||'transferencia',
+    notas:       `IGSS Patronal: Q${igssP.toFixed(2)} (cargo adicional del taller)`
+  });
+
+  UI.closeModal();
+  UI.toast('Pago registrado ✓ Generando voucher...');
+  setTimeout(() => Pages.generarVoucherPago(empleadoId, true, pago), 500);
+};
+
+Pages.generarVoucherPago = async function (empleadoId, esRegistro = false, pagoData = null) {
+  const emp   = Pages._empParaPago || (Pages._empleadosData||[]).find(e=>e.id===empleadoId);
+  const logo  = Auth.tenant?.logo_base64 || null;
+
+  const sal    = parseFloat(document.getElementById('pn-salario')?.value || pagoData?.salario_base || 0);
+  const bonif  = parseFloat(document.getElementById('pn-bonif')?.value   || pagoData?.bonificacion || 0);
+  const otros  = parseFloat(document.getElementById('pn-otros-ing')?.value || pagoData?.otros_ingresos || 0);
+  const desc   = parseFloat(document.getElementById('pn-otros-desc')?.value || pagoData?.otros_descuentos || 0);
+  const igssL  = sal*0.0483;
+  const igssP  = sal*0.1267;
+  const liq    = sal+bonif+otros-igssL-desc;
+  const meses  = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+  const mesNum = parseInt(document.getElementById('pn-mes')?.value || pagoData?.periodo_mes || new Date().getMonth()+1);
+  const anio   = document.getElementById('pn-anio')?.value || pagoData?.periodo_anio || new Date().getFullYear();
+  const metodo = document.getElementById('pn-metodo')?.value || pagoData?.metodo_pago || '';
+  const ref    = document.getElementById('pn-ref')?.value || pagoData?.num_cheque || '';
+  const fecha  = document.getElementById('pn-fecha')?.value || pagoData?.fecha_pago || new Date().toISOString().slice(0,10);
+
+  /* Generar un voucher (usamos el mismo HTML con sello COPIA/ORIGINAL) */
+  const generarCopia = (tipo) => `<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8">
+  <title>Voucher de Pago — ${emp?.nombre}</title>
+  <style>
+    @page { size: A5; margin: 1cm; }
+    body { font-family: Arial, sans-serif; font-size: 11px; color: #000; position: relative; }
+    .watermark {
+      position: fixed; top: 50%; left: 50%; transform: translate(-50%,-50%) rotate(-30deg);
+      font-size: 72px; font-weight: 900; color: rgba(0,0,0,0.04); z-index: 0;
+      pointer-events: none; white-space: nowrap; letter-spacing: 8px;
+    }
+    .logo-watermark {
+      position: fixed; top: 50%; left: 50%; transform: translate(-50%,-50%);
+      opacity: 0.04; z-index: 0; width: 200px;
+    }
+    .sello {
+      position: absolute; top: 10px; right: 10px; border: 3px solid;
+      padding: 4px 12px; font-size: 14px; font-weight: 900;
+      letter-spacing: 4px; transform: rotate(-10deg);
+      ${tipo==='ORIGINAL'
+        ? 'border-color:#dc2626;color:#dc2626;'
+        : 'border-color:#2563eb;color:#2563eb;'}
+    }
+    .header { border-bottom: 2px solid #000; padding-bottom: 8px; margin-bottom: 10px; display:flex; gap:12px; align-items:center; }
+    table { width: 100%; border-collapse: collapse; margin: 8px 0; }
+    td { padding: 5px 8px; border: 1px solid #ddd; font-size: 11px; }
+    .lbl { background: #f3f4f6; font-weight: 600; width: 55%; }
+    .total-row { background: #fef3c7; font-weight: bold; font-size: 13px; }
+    .firma { border-top: 1px solid #000; margin-top: 40px; padding-top: 5px; text-align: center; font-size: 10px; }
+    @media print { body { margin: 0; } }
+  </style></head><body>
+
+  ${logo ? `<img src="${logo}" class="logo-watermark">` : `<div class="watermark">${Auth.tenant?.name||'TALLERPRO'}</div>`}
+  <div class="sello">${tipo}</div>
+
+  <div class="header">
+    ${logo ? `<img src="${logo}" style="height:40px;object-fit:contain">` : `<div style="font-size:24px">🔧</div>`}
+    <div>
+      <div style="font-weight:700;font-size:13px">${Auth.tenant?.name||'TallerPro'}</div>
+      <div style="font-size:10px;color:#666">NIT: ${Auth.tenant?.nit||'—'} · ${Auth.tenant?.address||''}</div>
+      <div style="font-size:11px;font-weight:600;margin-top:3px">VOUCHER DE PAGO DE NÓMINA</div>
+    </div>
+  </div>
+
+  <table>
+    <tr><td class="lbl">Empleado</td><td>${emp?.nombre||'—'}</td></tr>
+    <tr><td class="lbl">Cargo</td><td>${emp?.cargo||'—'}</td></tr>
+    <tr><td class="lbl">NIT Empleado</td><td>${emp?.nit||'—'}</td></tr>
+    <tr><td class="lbl">Período</td><td>${meses[mesNum-1]} ${anio}</td></tr>
+    <tr><td class="lbl">Fecha de Pago</td><td>${fecha}</td></tr>
+    <tr><td class="lbl">Método</td><td>${metodo} ${ref?'· Ref: '+ref:''}</td></tr>
+    <tr><td class="lbl">Banco / Cuenta</td><td>${emp?.banco||'—'} · ${emp?.num_cuenta||'—'}</td></tr>
+  </table>
+
+  <table>
+    <tr><td class="lbl">Salario Base</td><td>Q${sal.toFixed(2)}</td></tr>
+    <tr><td class="lbl">Bonificación Incentivo (MINTRAB)</td><td>Q${bonif.toFixed(2)}</td></tr>
+    ${otros>0?`<tr><td class="lbl">Otros Ingresos</td><td>Q${otros.toFixed(2)}</td></tr>`:''}
+    <tr><td class="lbl">IGSS Laboral (4.83%)</td><td>-Q${igssL.toFixed(2)}</td></tr>
+    ${desc>0?`<tr><td class="lbl">Otros Descuentos</td><td>-Q${desc.toFixed(2)}</td></tr>`:''}
+    <tr class="total-row"><td>LÍQUIDO A RECIBIR</td><td>Q${liq.toFixed(2)}</td></tr>
+  </table>
+
+  <p style="font-size:10px;color:#666">IGSS Patronal (12.67%): Q${igssP.toFixed(2)} — cargo adicional del empleador</p>
+
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:30px;margin-top:20px">
+    <div><div class="firma">Firma del Empleado<br>${emp?.nombre||'—'}</div></div>
+    <div><div class="firma">Autorizado por<br>${Auth.user?.nombre||'Administración'} — ${Auth.tenant?.name}</div></div>
+  </div>
+
+  <div style="text-align:center;font-size:9px;color:#999;margin-top:12px">
+    TallerPro Enterprise · ${new Date().toLocaleDateString('es-GT')} · ${tipo}
+  </div>
+  </body></html>`;
+
+  /* Imprimir original + copia en la misma ventana */
+  const html = `<!DOCTYPE html><html><head><meta charset="UTF-8">
+  <style>
+    .pagina { page-break-after: always; }
+    .pagina:last-child { page-break-after: avoid; }
+    @media print { body { margin: 0; } }
+  </style></head><body>
+  <div class="pagina">${generarCopia('ORIGINAL').replace(/<html.*?<body>/s,'').replace('</body></html>','')}</div>
+  <div class="pagina">${generarCopia('COPIA').replace(/<html.*?<body>/s,'').replace('</body></html>','')}</div>
+  </body></html>`;
+
+  const win = window.open('', '_blank');
+  win.document.write(html);
+  win.document.close();
+  setTimeout(() => win.print(), 500);
+};
+
+/* ══════════════════════════════════════════════════════
+   ACTUALIZAR verEmpleado con botones nuevos
+══════════════════════════════════════════════════════ */
+Pages._verEmpleadoCompleto = function (id) {
+  const emp = (Pages._empleadosData||[]).find(e=>e.id===id); if(!emp) return;
+  const igssLab  = ((emp.salario_base||0)*0.0483).toFixed(2);
+  const igssPatr = ((emp.salario_base||0)*0.1267).toFixed(2);
+  const bonif    = emp.bonificacion||250;
+  const liquido  = ((emp.salario_base||0)+bonif-parseFloat(igssLab)).toFixed(2);
+
+  UI.openModal('Empleado: '+emp.nombre, `
+    <div class="grid-2 mb-4">
+      <div class="detail-section">
+        <div class="detail-section-header">Datos Personales</div>
+        <div class="detail-row"><div class="detail-key">Nombre</div><div class="detail-val">${emp.nombre}</div></div>
+        <div class="detail-row"><div class="detail-key">Cargo</div><div class="detail-val">${emp.cargo||'—'}</div></div>
+        <div class="detail-row"><div class="detail-key">Rol</div><div class="detail-val">${ROLES[emp.rol]?.label||emp.rol}</div></div>
+        <div class="detail-row"><div class="detail-key">NIT</div><div class="detail-val mono-sm">${emp.nit||'—'}</div></div>
+        <div class="detail-row"><div class="detail-key">Teléfono</div><div class="detail-val">${emp.telefono||'—'}</div></div>
+        <div class="detail-row"><div class="detail-key">Ingreso</div><div class="detail-val mono-sm">${emp.fecha_ingreso||'—'}</div></div>
+        <div class="detail-row"><div class="detail-key">IGSS</div><div class="detail-val">${emp.igss?'✅':'❌'}</div></div>
+      </div>
+      <div class="detail-section">
+        <div class="detail-section-header">Salario & Banco</div>
+        <div class="detail-row"><div class="detail-key">Salario Base</div><div class="detail-val mono-sm text-amber">${UI.q(emp.salario_base||0)}</div></div>
+        <div class="detail-row"><div class="detail-key">Bonificación</div><div class="detail-val mono-sm text-green">+${UI.q(bonif)}</div></div>
+        <div class="detail-row"><div class="detail-key">IGSS Lab.(4.83%)</div><div class="detail-val mono-sm text-red">-${UI.q(igssLab)}</div></div>
+        <div class="detail-row"><div class="detail-key">Líquido</div><div class="detail-val mono-sm" style="font-weight:700;color:var(--green)">${UI.q(liquido)}</div></div>
+        <div class="detail-row"><div class="detail-key">Banco</div><div class="detail-val">${emp.banco||'—'}</div></div>
+        <div class="detail-row"><div class="detail-key">No. Cuenta</div><div class="detail-val mono-sm">${emp.num_cuenta||'—'}</div></div>
+        <div class="detail-row"><div class="detail-key">Emergencia</div><div class="detail-val">${emp.emergencia_nombre||'—'} ${emp.emergencia_telefono?'· '+emp.emergencia_telefono:''}</div></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="UI.closeModal()">Cerrar</button>
+      <button class="btn btn-ghost" onclick="Pages.modalDocumentosEmpleado('${emp.id}')">📄 Documentos</button>
+      <button class="btn btn-ghost" onclick="UI.closeModal();Pages.rrhh('liquidaciones')">📄 Liquidar</button>
+      <button class="btn btn-cyan"  onclick="Pages.modalPagarNomina('${emp.id}')">💵 Pagar Nómina</button>
+      <button class="btn btn-amber" onclick="Pages.imprimirBoleta('${emp.id}')">🖨️ Boleta</button>
+    </div>`
+  );
 };
