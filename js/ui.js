@@ -84,3 +84,16 @@ const UI = {
 function openModal(t, b, s)  { UI.openModal(t, b, s); }
 function closeModal(e)       { UI.closeModal(e); }
 function showToast(m, t)     { UI.toast(m, t); }
+
+/* ── TOGGLE PASS VISIBILITY ───────────────────────── */
+UI._togglePass = function (inputId, btn) {
+  const input = document.getElementById(inputId);
+  if (!input) return;
+  if (input.type === 'password') {
+    input.type = 'text';
+    if (btn) btn.textContent = '🙈';
+  } else {
+    input.type = 'password';
+    if (btn) btn.textContent = '👁';
+  }
+};

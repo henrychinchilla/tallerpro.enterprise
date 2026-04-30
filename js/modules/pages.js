@@ -654,8 +654,8 @@ Pages.config = async function () {
               <span class="badge badge-${ROLES[e.rol]?.color||'gray'}">${e.rol}</span>
             </div>`).join('') || '<div class="text-muted" style="font-size:13px">Sin empleados registrados.</div>'}
             <button class="btn btn-amber btn-sm mt-4"
-                    onclick="UI.toast('Invitar usuario disponible con Supabase Auth','info')">
-              ＋ Invitar Usuario
+                    onclick="Pages.modalGestionUsuarios()">
+              👥 Gestionar Usuarios
             </button>
           </div>
         </div>
