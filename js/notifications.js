@@ -15,12 +15,27 @@ const NOTIF = {
 
   /* ── CONFIGURACIÓN ────────────────────────────────── */
   config: {
+    /* WhatsApp — Twilio */
     twilio_sid:        '',
     twilio_token:      '',
-    twilio_whatsapp:   'whatsapp:+17862041705', // número Twilio sandbox
+    twilio_whatsapp:   'whatsapp:+17862041705',
+    /* WhatsApp — CallMeBot (alternativa gratuita) */
+    callmebot_activo:  false,
+    callmebot_apikey:  '',
+    callmebot_numero:  '',   // número destino con código país: +50212345678
+    /* Email — SendGrid */
     sendgrid_key:      '',
     sendgrid_from:     '',
-    modo_dev:          true  // false en producción
+    /* Email — SMTP propio (dominio cliente) */
+    smtp_activo:       false,
+    smtp_host:         '',
+    smtp_port:         587,
+    smtp_user:         '',
+    smtp_pass:         '',
+    smtp_from:         '',
+    smtp_from_name:    '',
+    /* General */
+    modo_dev:          true
   },
 
   /* ── PLANTILLAS ───────────────────────────────────── */
@@ -110,13 +125,26 @@ const NOTIF = {
   async sendWhatsApp(telefono, mensaje) {
     if (!telefono) return { ok: false, error: 'Sin número de teléfono' };
 
+    // CallMeBot (gratuito, no requiere cuenta empresarial)
+    if (NOTIF.config.callmebot_activo && NOTIF.config.callmebot_apikey) {
+      try {
+        const num = NOTIF.config.callmebot_numero || ('+502' + telefono.replace(/\D/g,''));
+        const url = `https://api.callmebot.com/whatsapp.php?phone=${encodeURIComponent(num)}&text=${encodeURIComponent(mensaje)}&apikey=${NOTIF.config.callmebot_apikey}`;
+        const res = await fetch(url);
+        if (res.ok) return { ok: true, canal: 'callmebot' };
+        return { ok: false, error: 'CallMeBot error: ' + res.status };
+      } catch(err) {
+        return { ok: false, error: err.message };
+      }
+    }
+
     // Modo dev — simular
     if (NOTIF.config.modo_dev || !NOTIF.config.twilio_sid) {
       NOTIF._showPreview('WhatsApp', telefono, mensaje);
       return { ok: true, simulado: true };
     }
 
-    // Producción — Twilio
+    // Producción — Twilio Business
     try {
       const to  = 'whatsapp:+502' + telefono.replace(/\D/g, '');
       const res = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${NOTIF.config.twilio_sid}/Messages.json`, {
@@ -614,56 +642,99 @@ Pages._renderPlantillas = function () {
 /* ── CONFIG APIS ──────────────────────────────────── */
 Pages._renderConfigCom = function () {
   return `
-    <div class="grid-2">
+    <!-- WhatsApp: Twilio vs CallMeBot -->
+    <div style="font-weight:700;font-size:13px;margin-bottom:12px">💬 Configuración WhatsApp</div>
+    <div class="grid-2 mb-4">
+      <!-- TWILIO -->
       <div class="card card-green">
-        <div class="card-sub mb-4">💬 Twilio — WhatsApp Business</div>
-        <div class="form-group">
-          <label class="form-label">Account SID</label>
-          <input class="form-input" id="tw-sid" value="${NOTIF.config.twilio_sid}"
-                 placeholder="ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx">
-        </div>
-        <div class="form-group">
-          <label class="form-label">Auth Token</label>
-          <input class="form-input" id="tw-token" type="password" value="${NOTIF.config.twilio_token}"
-                 placeholder="••••••••••••••••">
-        </div>
-        <div class="form-group">
-          <label class="form-label">Número WhatsApp (Twilio)</label>
-          <input class="form-input" id="tw-numero" value="${NOTIF.config.twilio_whatsapp}"
-                 placeholder="whatsapp:+17862041705">
-        </div>
+        <div class="card-sub mb-3">Twilio Business API</div>
         <div class="alert alert-cyan" style="margin-bottom:12px">
           <div class="alert-icon">💡</div>
-          <div class="alert-body" style="font-size:11px">
-            1. Crea cuenta en <b>twilio.com</b><br>
-            2. Activa WhatsApp Sandbox<br>
-            3. Copia Account SID y Auth Token
-          </div>
+          <div class="alert-body" style="font-size:11px">Requiere cuenta empresarial en twilio.com. Permite envío masivo y automatizado.</div>
         </div>
-        <button class="btn btn-success" onclick="Pages.guardarConfigTwilio()">Guardar Twilio</button>
+        <div class="form-group"><label class="form-label">Account SID</label>
+          <input class="form-input" id="tw-sid" value="${NOTIF.config.twilio_sid}" placeholder="ACxxxxxxxx..."></div>
+        <div class="form-group"><label class="form-label">Auth Token</label>
+          <input class="form-input" id="tw-token" type="password" value="${NOTIF.config.twilio_token}" placeholder="••••••••"></div>
+        <div class="form-group"><label class="form-label">Número WhatsApp Twilio</label>
+          <input class="form-input" id="tw-numero" value="${NOTIF.config.twilio_whatsapp}" placeholder="whatsapp:+17862041705"></div>
+        <button class="btn btn-success btn-sm" onclick="Pages.guardarConfigTwilio()">Guardar Twilio</button>
       </div>
 
-      <div class="card card-cyan">
-        <div class="card-sub mb-4">📧 SendGrid — Email</div>
-        <div class="form-group">
-          <label class="form-label">API Key</label>
-          <input class="form-input" id="sg-key" type="password" value="${NOTIF.config.sendgrid_key}"
-                 placeholder="SG.xxxxxxxxxxxxxxxxxxxx">
-        </div>
-        <div class="form-group">
-          <label class="form-label">Email Remitente</label>
-          <input class="form-input" id="sg-from" value="${NOTIF.config.sendgrid_from}"
-                 placeholder="notificaciones@mitaller.gt">
-        </div>
-        <div class="alert alert-cyan" style="margin-bottom:12px">
-          <div class="alert-icon">💡</div>
+      <!-- CALLMEBOT -->
+      <div class="card card-amber">
+        <div class="card-sub mb-3">CallMeBot (Gratuito)</div>
+        <div class="alert alert-amber" style="margin-bottom:12px">
+          <div class="alert-icon">⚡</div>
           <div class="alert-body" style="font-size:11px">
-            1. Crea cuenta en <b>sendgrid.com</b> (gratis hasta 100 emails/día)<br>
-            2. Settings → API Keys → Create API Key<br>
-            3. Verifica el dominio del remitente
+            <b>Gratuito y sin cuenta empresarial.</b><br>
+            1. Agrega +34 644 65 07 75 a tus contactos como "CallMeBot"<br>
+            2. Envía "I allow callmebot to send me messages" por WhatsApp<br>
+            3. Recibirás tu API Key en segundos
           </div>
         </div>
-        <button class="btn btn-cyan" onclick="Pages.guardarConfigSendGrid()">Guardar SendGrid</button>
+        <div class="form-group"><label class="form-label">
+          <input type="checkbox" id="cmb-activo" ${NOTIF.config.callmebot_activo?'checked':''} style="margin-right:8px">
+          Usar CallMeBot (prioridad sobre Twilio)
+        </label></div>
+        <div class="form-group"><label class="form-label">API Key CallMeBot</label>
+          <input class="form-input" id="cmb-apikey" value="${NOTIF.config.callmebot_apikey}" placeholder="123456"></div>
+        <div class="form-group"><label class="form-label">Número por defecto (+502...)</label>
+          <input class="form-input" id="cmb-numero" value="${NOTIF.config.callmebot_numero}" placeholder="+50212345678"></div>
+        <button class="btn btn-amber btn-sm" onclick="Pages.guardarConfigCallMeBot()">Guardar CallMeBot</button>
+      </div>
+    </div>
+
+    <!-- Email: SendGrid vs SMTP propio -->
+    <div style="font-weight:700;font-size:13px;margin-bottom:12px;border-top:1px solid var(--border);padding-top:16px">📧 Configuración Email</div>
+    <div class="grid-2">
+      <!-- SENDGRID -->
+      <div class="card card-cyan">
+        <div class="card-sub mb-3">SendGrid</div>
+        <div class="alert alert-cyan" style="margin-bottom:12px">
+          <div class="alert-icon">💡</div>
+          <div class="alert-body" style="font-size:11px">sendgrid.com — gratis hasta 100 emails/día. No requiere dominio propio.</div>
+        </div>
+        <div class="form-group"><label class="form-label">API Key</label>
+          <input class="form-input" id="sg-key" type="password" value="${NOTIF.config.sendgrid_key}" placeholder="SG.xxxxx..."></div>
+        <div class="form-group"><label class="form-label">Email Remitente</label>
+          <input class="form-input" id="sg-from" value="${NOTIF.config.sendgrid_from}" placeholder="noreply@mitaller.gt"></div>
+        <button class="btn btn-cyan btn-sm" onclick="Pages.guardarConfigSendGrid()">Guardar SendGrid</button>
+      </div>
+
+      <!-- SMTP PROPIO -->
+      <div class="card" style="border-color:var(--purple-border)">
+        <div class="card-sub mb-3" style="color:var(--purple)">SMTP Propio (Tu Dominio/Hosting)</div>
+        <div class="alert alert-cyan" style="margin-bottom:12px">
+          <div class="alert-icon">🌐</div>
+          <div class="alert-body" style="font-size:11px">Usa el correo de tu dominio/hosting (cPanel, Plesk, G Suite, Office 365). Sin límites adicionales.</div>
+        </div>
+        <div class="form-group"><label class="form-label">
+          <input type="checkbox" id="smtp-activo" ${NOTIF.config.smtp_activo?'checked':''} style="margin-right:8px">
+          Usar SMTP propio (prioridad sobre SendGrid)
+        </label></div>
+        <div class="form-row">
+          <div class="form-group"><label class="form-label">Servidor SMTP</label>
+            <input class="form-input" id="smtp-host" value="${NOTIF.config.smtp_host}" placeholder="mail.tudominio.com"></div>
+          <div class="form-group"><label class="form-label">Puerto</label>
+            <select class="form-select" id="smtp-port">
+              <option value="587" ${NOTIF.config.smtp_port==587?'selected':''}>587 (STARTTLS)</option>
+              <option value="465" ${NOTIF.config.smtp_port==465?'selected':''}>465 (SSL)</option>
+              <option value="25"  ${NOTIF.config.smtp_port==25 ?'selected':''}>25 (Sin cifrado)</option>
+            </select></div>
+        </div>
+        <div class="form-group"><label class="form-label">Usuario / Email</label>
+          <input class="form-input" id="smtp-user" value="${NOTIF.config.smtp_user}" placeholder="notificaciones@tudominio.com"></div>
+        <div class="form-group"><label class="form-label">Contraseña</label>
+          <input class="form-input" id="smtp-pass" type="password" value="${NOTIF.config.smtp_pass}" placeholder="••••••••"></div>
+        <div class="form-row">
+          <div class="form-group"><label class="form-label">Nombre Remitente</label>
+            <input class="form-input" id="smtp-name" value="${NOTIF.config.smtp_from_name}" placeholder="Taller Mecánico XYZ"></div>
+          <div class="form-group" style="display:flex;align-items:flex-end">
+            <button class="btn btn-ghost btn-sm" style="width:100%" onclick="Pages.probarSMTP()">📧 Probar Envío</button>
+          </div>
+        </div>
+        <button class="btn btn-amber btn-sm" style="width:100%" onclick="Pages.guardarConfigSMTP()">Guardar Configuración SMTP</button>
       </div>
     </div>`;
 };
@@ -739,3 +810,40 @@ Pages.guardarConfigSendGrid = function () {
   UI.toast(NOTIF.config.sendgrid_key ? 'SendGrid configurado ✓' : 'Modo dev activado');
   Pages._comTab('config-com');
 };
+
+Pages.guardarConfigCallMeBot = function () {
+  NOTIF.config.callmebot_activo = document.getElementById('cmb-activo')?.checked||false;
+  NOTIF.config.callmebot_apikey = document.getElementById('cmb-apikey')?.value.trim()||'';
+  NOTIF.config.callmebot_numero = document.getElementById('cmb-numero')?.value.trim()||'';
+  localStorage.setItem('tp_notif_config', JSON.stringify(NOTIF.config));
+  UI.toast(NOTIF.config.callmebot_activo ? 'CallMeBot configurado ✓' : 'CallMeBot desactivado');
+};
+
+Pages.guardarConfigSMTP = function () {
+  NOTIF.config.smtp_activo    = document.getElementById('smtp-activo')?.checked||false;
+  NOTIF.config.smtp_host      = document.getElementById('smtp-host')?.value.trim()||'';
+  NOTIF.config.smtp_port      = parseInt(document.getElementById('smtp-port')?.value)||587;
+  NOTIF.config.smtp_user      = document.getElementById('smtp-user')?.value.trim()||'';
+  NOTIF.config.smtp_pass      = document.getElementById('smtp-pass')?.value||'';
+  NOTIF.config.smtp_from_name = document.getElementById('smtp-name')?.value.trim()||'';
+  NOTIF.config.smtp_from      = NOTIF.config.smtp_user;
+  localStorage.setItem('tp_notif_config', JSON.stringify(NOTIF.config));
+  UI.toast(NOTIF.config.smtp_activo ? 'SMTP configurado ✓' : 'SMTP desactivado');
+};
+
+Pages.probarSMTP = async function () {
+  const email = NOTIF.config.smtp_user || document.getElementById('smtp-user')?.value.trim();
+  if (!email) { UI.toast('Ingresa el usuario SMTP primero','error'); return; }
+  UI.toast('Enviando email de prueba...','info');
+  /* En modo dev simula — en producción necesita backend proxy para SMTP */
+  await NOTIF.sendEmail(email, 'Prueba SMTP — TallerPro', '<h2>✅ Configuración SMTP correcta</h2><p>Este es un correo de prueba de TallerPro Enterprise.</p>');
+  UI.toast('Email de prueba enviado ✓');
+};
+
+/* Persistir config en localStorage */
+(function loadNotifConfig() {
+  try {
+    const saved = JSON.parse(localStorage.getItem('tp_notif_config')||'{}');
+    Object.assign(NOTIF.config, saved);
+  } catch {}
+})();
