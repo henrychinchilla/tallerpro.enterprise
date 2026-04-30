@@ -26,11 +26,12 @@ Pages.finanzas = async function (tab = 'dashboard') {
   Pages._finConfig   = config;
 
   const tabs = [
-    { id: 'dashboard', icon: '📊', label: 'Dashboard' },
-    { id: 'ingresos',  icon: '💰', label: 'Ingresos'  },
-    { id: 'egresos',   icon: '📉', label: 'Egresos'   },
-    { id: 'cxc',       icon: '📋', label: 'Cuentas x Cobrar' },
-    { id: 'fiscal',    icon: '🏛️', label: 'Fiscal & IGSS' }
+    { id: 'dashboard',  icon: '📊', label: 'Dashboard'        },
+    { id: 'ingresos',   icon: '💰', label: 'Ingresos'         },
+    { id: 'egresos',    icon: '📉', label: 'Egresos'          },
+    { id: 'cxc',        icon: '📋', label: 'Cuentas x Cobrar' },
+    { id: 'resultados', icon: '📈', label: 'Estado de Resultados' },
+    { id: 'fiscal',     icon: '🏛️', label: 'Fiscal & IGSS'    }
   ];
 
   el.innerHTML = `
@@ -63,6 +64,7 @@ Pages.finanzas = async function (tab = 'dashboard') {
         ${_finTab === 'ingresos'  ? FINANZAS.renderIngresos(ingresos) : ''}
         ${_finTab === 'egresos'   ? FINANZAS.renderEgresos(egresos) : ''}
         ${_finTab === 'cxc'       ? FINANZAS.renderCXC(cxc) : ''}
+        ${_finTab === 'resultados'? FINANZAS.renderResultados(ingresos, egresos, config) : ''}
         ${_finTab === 'fiscal'    ? FINANZAS.renderFiscal(ingresos, egresos, config) : ''}
       </div>
     </div>`;
@@ -527,6 +529,160 @@ const FINANZAS = {
         </div>
         <button class="btn btn-amber mt-3" onclick="Pages.guardarConfigFiscal()">Guardar Configuración Fiscal</button>
       </div>`;
+  },
+
+  /* ── ESTADO DE RESULTADOS ────────────────────────── */
+  renderResultados(ingresos, egresos, config) {
+    const MESES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+    const ahora = new Date();
+    const mes   = ahora.getMonth();
+    const anio  = ahora.getFullYear();
+    const mesStr= `${anio}-${String(mes+1).padStart(2,'0')}`;
+
+    /* Agrupar ingresos y egresos por categoría */
+    const ingMes  = ingresos.filter(i=>(i.fecha||'').startsWith(mesStr));
+    const egMes   = egresos.filter(e=>(e.fecha||'').startsWith(mesStr));
+
+    const totalIngresos   = ingMes.reduce((s,i)=>s+i.monto,0);
+    const costoServicios  = egMes.filter(e=>['compra_inventario','herramientas'].includes(e.categoria)).reduce((s,e)=>s+e.monto,0);
+    const utilBruta       = totalIngresos - costoServicios;
+    const gastoNomina     = egMes.filter(e=>e.categoria==='nomina').reduce((s,e)=>s+e.monto,0);
+    const gastoIGSS       = egMes.filter(e=>e.categoria==='igss').reduce((s,e)=>s+e.monto,0);
+    const gastoAlquiler   = egMes.filter(e=>e.categoria==='alquiler').reduce((s,e)=>s+e.monto,0);
+    const gastoServicios  = egMes.filter(e=>e.categoria==='servicios').reduce((s,e)=>s+e.monto,0);
+    const gastoPublicidad = egMes.filter(e=>e.categoria==='publicidad').reduce((s,e)=>s+e.monto,0);
+    const gastoOtros      = egMes.filter(e=>['combustible','otros'].includes(e.categoria)).reduce((s,e)=>s+e.monto,0);
+    const gastoImpuestos  = egMes.filter(e=>e.categoria==='impuestos').reduce((s,e)=>s+e.monto,0);
+    const totalGastosOp   = gastoNomina+gastoIGSS+gastoAlquiler+gastoServicios+gastoPublicidad+gastoOtros;
+    const utilOperativa   = utilBruta - totalGastosOp;
+    const isr             = FINANZAS.calcularISR(utilOperativa>0?utilOperativa:0, config);
+    const utilNeta        = utilOperativa - isr - gastoImpuestos;
+    const margenNeto      = totalIngresos>0 ? (utilNeta/totalIngresos*100).toFixed(1) : '0.0';
+
+    const fila = (label, monto, indent=0, bold=false, color='', separador=false) => `
+      <tr style="${separador?'border-top:2px solid var(--border);':''}${bold?'font-weight:700;':''}${color?'color:'+color+';':''}">
+        <td style="padding:7px 12px;padding-left:${12+indent*20}px;font-size:13px">${label}</td>
+        <td style="padding:7px 16px;text-align:right;font-family:'DM Mono',monospace;font-size:13px;${color?'color:'+color+';':''}">${monto>=0?'':'-'}${UI.q(Math.abs(monto))}</td>
+        <td style="padding:7px 8px;text-align:right;font-size:11px;color:var(--text3)">${totalIngresos>0?(monto/totalIngresos*100).toFixed(1)+'%':''}</td>
+      </tr>`;
+
+    return `
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:10px">
+        <div>
+          <div style="font-weight:700;font-size:15px">📈 Estado de Resultados</div>
+          <div class="text-muted" style="font-size:12px">Período: ${MESES[mes]} ${anio} · ${config?FINANZAS.regimen(config):'—'}</div>
+        </div>
+        <button class="btn btn-ghost btn-sm" onclick="FINANZAS.imprimirResultados()">🖨️ Imprimir</button>
+      </div>
+
+      <!-- Alertas y recomendaciones SAT -->
+      ${margenNeto < 10 && totalIngresos > 0 ? `
+      <div class="alert alert-amber mb-4">
+        <div class="alert-icon">💡</div>
+        <div>
+          <div class="alert-title">Margen neto bajo (${margenNeto}%)</div>
+          <div class="alert-body" style="font-size:12px">
+            Un taller mecánico saludable debería tener un margen neto entre 15-25%.
+            Revisa los gastos operativos y considera ajustar precios de mano de obra.
+          </div>
+        </div>
+      </div>` : ''}
+
+      <div id="estado-resultados-tabla">
+        <table style="width:100%;border-collapse:collapse;background:var(--surface);border:1px solid var(--border);border-radius:8px;overflow:hidden">
+          <thead>
+            <tr style="background:var(--surface2)">
+              <th style="padding:10px 12px;text-align:left;font-size:11px;color:var(--text3);letter-spacing:.06em;text-transform:uppercase">Concepto</th>
+              <th style="padding:10px 16px;text-align:right;font-size:11px;color:var(--text3);letter-spacing:.06em;text-transform:uppercase">Monto (Q)</th>
+              <th style="padding:10px 8px;text-align:right;font-size:11px;color:var(--text3);letter-spacing:.06em;text-transform:uppercase">% Ing.</th>
+            </tr>
+          </thead>
+          <tbody>
+            <!-- INGRESOS -->
+            ${fila('INGRESOS POR SERVICIOS', 0, 0, true, 'var(--text2)')}
+            ${fila('Cobros de Órdenes de Trabajo', ingMes.filter(i=>i.tipo==='cobro_ot').reduce((s,i)=>s+i.monto,0), 1)}
+            ${fila('Anticipos y Abonos', ingMes.filter(i=>['anticipo','abono'].includes(i.tipo)).reduce((s,i)=>s+i.monto,0), 1)}
+            ${fila('Otros Ingresos', ingMes.filter(i=>i.tipo==='otro').reduce((s,i)=>s+i.monto,0), 1)}
+            ${fila('TOTAL INGRESOS', totalIngresos, 0, true, 'var(--green)', true)}
+
+            <!-- COSTO DE SERVICIOS -->
+            ${fila('COSTO DE SERVICIOS Y REPUESTOS', 0, 0, true, 'var(--text2)')}
+            ${fila('Compra de Repuestos e Insumos', egMes.filter(e=>e.categoria==='compra_inventario').reduce((s,e)=>s+e.monto,0), 1)}
+            ${fila('Herramientas y Equipos', egMes.filter(e=>e.categoria==='herramientas').reduce((s,e)=>s+e.monto,0), 1)}
+            ${fila('COSTO TOTAL', costoServicios, 0, true, 'var(--red)', true)}
+            ${fila('UTILIDAD BRUTA', utilBruta, 0, true, utilBruta>=0?'var(--green)':'var(--red)', true)}
+
+            <!-- GASTOS OPERATIVOS -->
+            ${fila('GASTOS OPERATIVOS', 0, 0, true, 'var(--text2)')}
+            ${fila('Sueldos y Salarios', gastoNomina, 1)}
+            ${fila('Cuotas IGSS / INTECAP / IRTRA', gastoIGSS, 1)}
+            ${fila('Alquiler del Local', gastoAlquiler, 1)}
+            ${fila('Servicios (agua, luz, internet, tel.)', gastoServicios, 1)}
+            ${fila('Publicidad y Mercadeo', gastoPublicidad, 1)}
+            ${fila('Combustible y Otros', gastoOtros, 1)}
+            ${fila('TOTAL GASTOS OPERATIVOS', totalGastosOp, 0, true, 'var(--red)', true)}
+            ${fila('UTILIDAD OPERATIVA', utilOperativa, 0, true, utilOperativa>=0?'var(--green)':'var(--red)', true)}
+
+            <!-- IMPUESTOS -->
+            ${fila('IMPUESTOS Y OBLIGACIONES FISCALES', 0, 0, true, 'var(--text2)')}
+            ${fila('ISR Estimado (' + (config?.regimen_iva==='rsu'?'25%':config?.regimen_iva==='repc'?'N/A':'5-7%') + ')', isr, 1)}
+            ${fila('Otros Impuestos SAT', gastoImpuestos, 1)}
+
+            <!-- UTILIDAD NETA -->
+            ${fila('UTILIDAD NETA DEL PERÍODO', utilNeta, 0, true, utilNeta>=0?'var(--green)':'var(--red)', true)}
+          </tbody>
+          <tfoot>
+            <tr style="background:var(--surface2);border-top:2px solid var(--border)">
+              <td colspan="3" style="padding:12px;font-size:12px;color:var(--text2)">
+                <b>Margen Bruto:</b> ${totalIngresos>0?(utilBruta/totalIngresos*100).toFixed(1):0}% &nbsp;·&nbsp;
+                <b>Margen Operativo:</b> ${totalIngresos>0?(utilOperativa/totalIngresos*100).toFixed(1):0}% &nbsp;·&nbsp;
+                <b>Margen Neto:</b> <b>${margenNeto}%</b> &nbsp;&nbsp;·&nbsp;&nbsp;
+                Régimen: ${FINANZAS.regimen(config)}
+              </td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+
+      <!-- RECOMENDACIONES SAT GUATEMALA -->
+      <div class="card card-purple mt-5">
+        <div class="card-sub mb-4">💡 Guía de Cumplimiento Fiscal — SAT Guatemala</div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px">
+          ${[
+            {icon:'🗓️', titulo:'Declaración IVA', desc:'Presentar mensualmente antes del día 30. Régimen General: diferencia débito-crédito. Pequeño Contribuyente: 5% sobre ingresos (Formulario SAT-2046).'},
+            {icon:'📊', titulo:'ISR Mensual/Trimestral', desc:`${config?.regimen_iva==='rsu'?'Régimen Utilidades: 25% sobre utilidad neta. Pagos trimestrales. Cierre fiscal anual en diciembre.':config?.regimen_iva==='repc'?'Pequeño Contribuyente: IVA incluido al 5%. Sin ISR separado. Límite Q150,000/año.':'Régimen General/ROSE: 5% ingresos ≤Q30,000 trimestre, 7% sobre excedente.'}`},
+            {icon:'🏛️', titulo:'IGSS Patronal', desc:'Reportar y pagar antes del día 20 de cada mes. Cuota patronal 12.67%, laboral 4.83%. INTECAP 1%, IRTRA 1% sobre planilla.'},
+            {icon:'📚', titulo:'Libros Contables SAT', desc:'Obligatorio llevar: Diario, Mayor, Compras y Ventas. Deben estar habilitados por la SAT. Conservar por 4 años.'},
+            {icon:'🧾', titulo:'FEL Obligatorio', desc:'Toda factura debe ser FEL (Factura Electrónica en Línea). CF solo para montos ≤Q2,500. Arriba de ese monto, NIT o DPI del cliente obligatorio.'},
+            {icon:'⚠️', titulo:'Multas y Sanciones', desc:'Omisión de declaración: multa de Q1,000 a Q10,000 + intereses. Retención IVA no declarado: 100% del impuesto. Lleva tu contabilidad al día.'}
+          ].map(r=>`
+            <div style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:14px">
+              <div style="font-size:20px;margin-bottom:6px">${r.icon}</div>
+              <div style="font-weight:700;font-size:13px;margin-bottom:4px">${r.titulo}</div>
+              <div style="font-size:12px;color:var(--text2);line-height:1.5">${r.desc}</div>
+            </div>`).join('')}
+        </div>
+      </div>`;
+  },
+
+  imprimirResultados() {
+    const tabla = document.getElementById('estado-resultados-tabla');
+    if (!tabla) return;
+    const html = `<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8">
+    <title>Estado de Resultados</title>
+    <style>body{font-family:Arial,sans-serif;font-size:11px;margin:2cm;color:#000}
+    table{width:100%;border-collapse:collapse;margin:12px 0}
+    th{background:#f3f4f6;padding:7px;border:1px solid #ddd;text-align:left}
+    td{padding:6px 10px;border:1px solid #ddd}
+    .header{border-bottom:2px solid #000;margin-bottom:16px;padding-bottom:8px;display:flex;justify-content:space-between}
+    @media print{body{margin:1cm}}</style></head><body>
+    <div class="header">
+      <div><b>${Auth.tenant?.name}</b> · NIT: ${Auth.tenant?.nit||'—'}</div>
+      <div>Estado de Resultados · ${new Date().toLocaleDateString('es-GT')}</div>
+    </div>
+    ${tabla.innerHTML.replace(/style="[^"]*color:[^"]*"/g,'').replace(/<button[^>]*>[^<]*<\/button>/g,'')}
+    </body></html>`;
+    const win=window.open('','_blank');win.document.write(html);win.document.close();setTimeout(()=>win.print(),400);
   },
 
   /* ── CHARTS ───────────────────────────────────────── */

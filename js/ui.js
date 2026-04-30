@@ -97,3 +97,32 @@ UI._togglePass = function (inputId, btn) {
     if (btn) btn.textContent = '👁';
   }
 };
+
+/* ══════════════════════════════════════════════════════
+   ENTER KEY — Submit forms on Enter press
+   Escucha Enter en cualquier input dentro de un modal
+   y llama al botón btn-amber (guardar) si existe.
+══════════════════════════════════════════════════════ */
+(function initEnterKey() {
+  document.addEventListener('keydown', function (e) {
+    if (e.key !== 'Enter') return;
+
+    const tag = document.activeElement?.tagName?.toLowerCase();
+    // No hacer nada en textarea, select, botones
+    if (['textarea','button','select'].includes(tag)) return;
+
+    // Solo si el overlay modal está abierto
+    const overlay = document.getElementById('modal-overlay');
+    if (!overlay || !overlay.classList.contains('open')) return;
+
+    const isInsideModal = overlay.contains(document.activeElement);
+    if (!isInsideModal) return;
+
+    // Encontrar el botón primario (btn-amber) dentro del modal footer
+    const saveBtn = overlay.querySelector('.modal-footer .btn-amber:not([disabled])');
+    if (saveBtn) {
+      e.preventDefault();
+      saveBtn.click();
+    }
+  }, true);
+})();

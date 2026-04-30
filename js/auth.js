@@ -246,23 +246,12 @@ function renderLoginScreen() {
         </div>
       </div>
 
-      <div style="margin-top:20px;border-top:1px solid var(--border);padding-top:16px">
-        <div style="font-size:11px;color:var(--text3);text-align:center;margin-bottom:10px">
-          Demo rápido
-        </div>
-        <div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:center">
-          <button class="btn-quick" onclick="quickLogin('admin')">👑 Admin</button>
-          <button class="btn-quick" onclick="quickLogin('gerente_fin')">💰 G.Financiero</button>
-          <button class="btn-quick" onclick="quickLogin('gerente_tal')">🔧 G.Taller</button>
-          <button class="btn-quick" onclick="quickLogin('recepcionista')">📋 Recep.</button>
-          <button class="btn-quick" onclick="quickLogin('mecanico')">🪛 Mecánico</button>
-          <button class="btn-quick" onclick="quickLogin('cliente')">🚗 Cliente</button>
-          <span id="btn-superadmin-wrap" style="display:none">
-            <button class="btn-quick" style="background:rgba(239,68,68,0.15);border-color:rgba(239,68,68,0.4);color:#ef4444"
-                    onclick="quickLogin('superadmin')">⚡ Super Admin</button>
-          </span>
-          <button class="btn-quick" style="opacity:0.25;font-size:9px" onclick="Pages._activarModoSoporte()" title="Soporte">·</button>
-        </div>
+      <div style="text-align:center;margin-top:8px">
+        <span id="btn-superadmin-wrap" style="display:none">
+          <button class="btn-quick" style="background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);color:#ef4444;padding:4px 12px;font-size:11px;border-radius:4px;cursor:pointer"
+                  onclick="quickLogin('superadmin')">⚡ Super Admin</button>
+        </span>
+        <button style="opacity:0;font-size:8px;background:none;border:none;cursor:pointer;padding:4px" onclick="Pages._activarModoSoporte()" title="·">·</button>
       </div>`,
 
     /* ── SELECCIÓN DE MÉTODO RECOVERY ────────────────── */

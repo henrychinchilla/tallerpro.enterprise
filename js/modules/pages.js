@@ -986,6 +986,54 @@ Pages.guardarFactura = async function (accion) {
   if (!nit)       { UI.toast('El NIT es obligatorio (CF para consumidor final)', 'error'); return; }
   if (total <= 0) { UI.toast('El total debe ser mayor a 0', 'error'); return; }
 
+  /* ── VALIDACIÓN SAT Guatemala: CF no permitido > Q2,500 ── */
+  if (total > 2500 && nit.toUpperCase() === 'CF') {
+    UI.openModal('⚠️ NIT Requerido — SAT Guatemala', `
+      <div class="alert alert-red mb-4">
+        <div class="alert-icon">🚫</div>
+        <div>
+          <div class="alert-title">No se puede facturar como CF (Consumidor Final)</div>
+          <div class="alert-body">
+            Según el <b>Artículo 26 del Reglamento del IVA</b> y disposiciones de la SAT Guatemala,
+            las facturas mayores a <b>Q2,500.00</b> deben incluir el NIT o DPI del receptor.
+            No se puede emitir a Consumidor Final.
+          </div>
+        </div>
+      </div>
+      <div style="font-size:13px;color:var(--text2);margin-bottom:16px">
+        <b>Monto de la factura:</b> <span style="color:var(--amber);font-weight:700">${UI.q(total)}</span>
+      </div>
+      <div style="font-weight:700;font-size:13px;margin-bottom:10px">¿Qué NIT debe usarse?</div>
+      <div class="detail-section mb-4">
+        <div class="detail-row">
+          <div class="detail-key">✅ Con NIT activo</div>
+          <div class="detail-val">Usar el NIT del cliente registrado ante la SAT</div>
+        </div>
+        <div class="detail-row">
+          <div class="detail-key">📋 Sin NIT (persona individual)</div>
+          <div class="detail-val">Usar el número de <b>DPI (CUI)</b> — 13 dígitos sin guiones</div>
+        </div>
+        <div class="detail-row">
+          <div class="detail-key">🏢 Empresa</div>
+          <div class="detail-val">Obligatorio NIT empresarial vigente</div>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Ingresar NIT o DPI del cliente *</label>
+        <input class="form-input" id="nit-override" placeholder="1234567-8 o 1234567890101"
+               style="font-size:16px;letter-spacing:2px">
+        <div class="text-muted" style="font-size:11px;margin-top:4px">
+          NIT: formato 1234567-8 · DPI/CUI: 13 dígitos
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" onclick="UI.closeModal()">Cancelar</button>
+        <button class="btn btn-amber" onclick="Pages._aplicarNITOverride()">Aplicar y Continuar</button>
+      </div>
+    `);
+    return;
+  }
+
   const subtotal = total / 1.12;
   const iva      = total - subtotal;
   const otId     = document.getElementById('nf-ot').value || null;
@@ -1475,4 +1523,14 @@ Pages._quitarLogo = function () {
   const input   = document.getElementById('cfg-logo-file');
   if (preview) preview.style.display = 'none';
   if (input)   input.value = '';
+};
+
+
+Pages._aplicarNITOverride = function () {
+  const nit = document.getElementById('nit-override')?.value.trim();
+  if (!nit || nit.length < 5) { UI.toast('Ingresa un NIT o DPI válido','error'); return; }
+  const nitField = document.getElementById('nf-nit');
+  if (nitField) nitField.value = nit;
+  UI.closeModal();
+  UI.toast('NIT actualizado: ' + nit + '. Ahora puedes facturar.','info');
 };
