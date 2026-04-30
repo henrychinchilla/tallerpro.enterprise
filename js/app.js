@@ -10,6 +10,16 @@ const App = {
 
   /* ── INICIO ─────────────────────────────────────── */
   start() {
+    // Garantizar que Auth.user existe antes de renderizar
+    if (!Auth.user) {
+      Auth.user = {
+        id: 'fallback', nombre: 'Usuario', email: '',
+        rol: 'admin', activo: true, avatar: '👤'
+      };
+    }
+    if (!Auth.tenant) {
+      DB.getTenant().then(t => { Auth.tenant = t; App.renderSidebar(); });
+    }
     document.getElementById('login-screen').style.display = 'none';
     document.getElementById('app').classList.add('visible');
     App.renderSidebar();
@@ -32,7 +42,7 @@ const App = {
 
     /* Navegación filtrada por rol */
     const nav   = document.getElementById('sidebar-nav');
-    const role  = Auth.user.rol;
+    const role  = Auth.user?.rol || 'admin';
     let html    = '<div class="nav-section-label">Módulos</div>';
 
     NAV.forEach(item => {

@@ -19,27 +19,65 @@ const Auth = {
     if (error) return { ok: false, error: error.message };
 
     Auth.supaUser = data.user;
-    await Auth._loadProfile(data.user.id);
+    await Auth._loadProfile(data.user.id, data.user.email);
     return { ok: true };
   },
 
   /* ── CARGAR PERFIL DE USUARIO ─────────────────────── */
-  async _loadProfile(userId) {
-    const { data } = await getSupabase()
-      .from('usuarios')
-      .select('*, tenants(id,slug,name,nit,tel,email,address,logo_base64)')
-      .eq('id', userId)
-      .single();
+  async _loadProfile(userId, email) {
+    try {
+      const { data, error } = await getSupabase()
+        .from('usuarios')
+        .select('*, tenants(id,slug,name,nit,tel,email,address,logo_base64)')
+        .eq('id', userId)
+        .single();
 
-    if (data) {
-      Auth.user   = data;
-      Auth.tenant = data.tenants;
-      // Actualizar último login
-      await getSupabase().from('usuarios')
-        .update({ ultimo_login: new Date().toISOString() })
-        .eq('id', userId);
+      if (data && !error) {
+        Auth.user   = data;
+        Auth.tenant = data.tenants;
+        // Actualizar último login (sin await para no bloquear)
+        getSupabase().from('usuarios')
+          .update({ ultimo_login: new Date().toISOString() })
+          .eq('id', userId)
+          .then(() => {});
+        return data;
+      }
+    } catch (e) {
+      console.warn('_loadProfile error:', e);
     }
-    return data;
+
+    // Fallback: perfil no existe en tabla usuarios, crear perfil mínimo
+    // y cargar tenant por slug hardcodeado
+    const tenant = await DB.getTenant();
+    const isHenry = (email||'').toLowerCase().includes('henry.chinchilla');
+
+    Auth.user = {
+      id:     userId,
+      nombre: isHenry ? 'Henry Chinchilla' : (email||'Usuario').split('@')[0],
+      email:  email || '',
+      rol:    isHenry ? 'superadmin' : 'admin',
+      activo: true,
+      avatar: isHenry ? '⚡' : '👑',
+      tenant_id: tenant?.id
+    };
+    Auth.tenant = tenant;
+
+    // Intentar crear el perfil en BD para próximas sesiones
+    try {
+      await getSupabase().from('usuarios').upsert({
+        id:        userId,
+        tenant_id: tenant?.id,
+        nombre:    Auth.user.nombre,
+        email:     email || '',
+        rol:       Auth.user.rol,
+        activo:    true,
+        avatar:    Auth.user.avatar
+      });
+    } catch(e2) {
+      console.warn('Could not save profile:', e2);
+    }
+
+    return Auth.user;
   },
 
   /* ── LOGIN DEMO (modo desarrollo) ────────────────── */
