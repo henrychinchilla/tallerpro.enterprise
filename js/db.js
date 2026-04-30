@@ -31,6 +31,9 @@ async function getTenantId() {
   return _tenantId;
 }
 
+/* Expose getSupabase for direct use in modules */
+window.getSupabase = getSupabase;
+
 /* ═══════════════════════════════════════════════════════
    DB — API unificada para todos los módulos
 ═══════════════════════════════════════════════════════ */
@@ -399,6 +402,110 @@ const DB = {
       .insert(fields)
       .select().single();
     return { data, error };
+  },
+
+  /* ── VIÁTICOS ─────────────────────────────────────── */
+  async getViaticos(empleadoId = null) {
+    const id = await getTenantId();
+    let q = getSupabase().from('viaticos')
+      .select('*, empleados(nombre, cargo)')
+      .eq('tenant_id', id)
+      .order('fecha', { ascending: false });
+    if (empleadoId) q = q.eq('empleado_id', empleadoId);
+    const { data } = await q;
+    return data || [];
+  },
+  async insertViatico(fields) {
+    const id = await getTenantId();
+    const { data, error } = await getSupabase().from('viaticos')
+      .insert({ ...fields, tenant_id: id }).select().single();
+    return { data, error };
+  },
+  async updateViatico(viaticoId, fields) {
+    const { error } = await getSupabase().from('viaticos').update(fields).eq('id', viaticoId);
+    return !error;
+  },
+
+  /* ── ENTRENAMIENTOS ───────────────────────────────── */
+  async getEntrenamientos(empleadoId = null) {
+    const id = await getTenantId();
+    let q = getSupabase().from('entrenamientos')
+      .select('*, empleados(nombre)')
+      .eq('tenant_id', id)
+      .order('fecha_inicio', { ascending: false });
+    if (empleadoId) q = q.eq('empleado_id', empleadoId);
+    const { data } = await q;
+    return data || [];
+  },
+  async insertEntrenamiento(fields) {
+    const id = await getTenantId();
+    const { data, error } = await getSupabase().from('entrenamientos')
+      .insert({ ...fields, tenant_id: id }).select().single();
+    return { data, error };
+  },
+
+  /* ── LLAMADAS DE ATENCIÓN ─────────────────────────── */
+  async getLlamadasAtencion(empleadoId = null) {
+    const id = await getTenantId();
+    let q = getSupabase().from('llamadas_atencion')
+      .select('*, empleados(nombre)')
+      .eq('tenant_id', id)
+      .order('fecha', { ascending: false });
+    if (empleadoId) q = q.eq('empleado_id', empleadoId);
+    const { data } = await q;
+    return data || [];
+  },
+  async insertLlamadaAtencion(fields) {
+    const id = await getTenantId();
+    const { data, error } = await getSupabase().from('llamadas_atencion')
+      .insert({ ...fields, tenant_id: id }).select().single();
+    return { data, error };
+  },
+
+  /* ── LIQUIDACIONES ────────────────────────────────── */
+  async getLiquidaciones() {
+    const id = await getTenantId();
+    const { data } = await getSupabase().from('liquidaciones')
+      .select('*, empleados(nombre, cargo, fecha_ingreso)')
+      .eq('tenant_id', id)
+      .order('created_at', { ascending: false });
+    return data || [];
+  },
+  async insertLiquidacion(fields) {
+    const id = await getTenantId();
+    const { data, error } = await getSupabase().from('liquidaciones')
+      .insert({ ...fields, tenant_id: id }).select().single();
+    return { data, error };
+  },
+  async updateLiquidacion(id, fields) {
+    const { error } = await getSupabase().from('liquidaciones').update(fields).eq('id', id);
+    return !error;
+  },
+
+  /* ── FEL IMPORTADOS ───────────────────────────────── */
+  async getFelImportados() {
+    const id = await getTenantId();
+    const { data } = await getSupabase().from('fel_importados')
+      .select('*').eq('tenant_id', id)
+      .order('fecha', { ascending: false });
+    return data || [];
+  },
+  async insertFelImportados(rows) {
+    const id = await getTenantId();
+    const payload = rows.map(r => ({ ...r, tenant_id: id }));
+    const { data, error } = await getSupabase().from('fel_importados')
+      .upsert(payload, { onConflict: 'tenant_id,serie,numero_dte' }).select();
+    return { data, error };
+  },
+
+  /* ── CITAS (update con campos nuevos) ─────────────── */
+  async updateCita(citaId, fields) {
+    const { error } = await getSupabase().from('citas').update(fields).eq('id', citaId);
+    return !error;
+  },
+  async deleteCita(citaId) {
+    const { error } = await getSupabase().from('citas').delete().eq('id', citaId);
+    return !error;
   },
 
   /* ── ACTUALIZAR EMPLEADO ──────────────────────────── */

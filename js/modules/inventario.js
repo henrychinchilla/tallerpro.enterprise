@@ -62,6 +62,7 @@ Pages.inventario = async function () {
       </div>
       <div class="page-actions">
         <button class="btn btn-ghost" onclick="Pages.modalMovimiento()">↕ Entrada / Salida</button>
+        <button class="btn btn-ghost" onclick="Pages.modalCargaMasiva()">📥 Carga Masiva</button>
         <button class="btn btn-amber" onclick="Pages.modalNuevoProducto()">＋ Nuevo Producto</button>
       </div>
     </div>
@@ -584,4 +585,217 @@ Pages.guardarProducto = async function () {
   UI.closeModal();
   UI.toast('Producto guardado ✓');
   Pages.inventario();
+};
+
+/* ══════════════════════════════════════════════════════
+   CARGA MASIVA CSV / EXCEL
+══════════════════════════════════════════════════════ */
+
+Pages.modalCargaMasiva = function () {
+  UI.openModal('📥 Carga Masiva de Inventario', `
+    <div class="alert alert-cyan mb-4">
+      <div class="alert-icon">💡</div>
+      <div>
+        <div class="alert-title">Formato requerido</div>
+        <div class="alert-body" style="font-family:'DM Mono',monospace;font-size:11px">
+          codigo, nombre, categoria, marca, proveedor, ubicacion,<br>
+          stock, min_stock, precio_costo, precio_venta
+        </div>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">
+      <div style="border:2px dashed var(--border);border-radius:8px;padding:20px;text-align:center;cursor:pointer"
+           onclick="document.getElementById('inv-csv-file').click()">
+        <div style="font-size:28px;margin-bottom:8px">📄</div>
+        <div style="font-weight:600;font-size:13px">Archivo CSV</div>
+        <div class="text-muted" style="font-size:11px">Separado por comas</div>
+        <input type="file" id="inv-csv-file" accept=".csv,.txt" class="hidden"
+               onchange="Pages.procesarCSVInventario(this, 'csv')">
+      </div>
+      <div style="border:2px dashed var(--border);border-radius:8px;padding:20px;text-align:center;cursor:pointer"
+           onclick="document.getElementById('inv-xls-file').click()">
+        <div style="font-size:28px;margin-bottom:8px">📊</div>
+        <div style="font-weight:600;font-size:13px">Archivo Excel</div>
+        <div class="text-muted" style="font-size:11px">.xlsx / .xls</div>
+        <input type="file" id="inv-xls-file" accept=".xlsx,.xls" class="hidden"
+               onchange="Pages.procesarCSVInventario(this, 'excel')">
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">
+        <input type="checkbox" id="inv-actualizar" style="margin-right:8px" checked>
+        Actualizar productos existentes (mismo código)
+      </label>
+    </div>
+
+    <div id="inv-preview" class="hidden">
+      <div style="font-weight:700;font-size:13px;margin-bottom:8px" id="inv-preview-title">Vista Previa</div>
+      <div class="table-wrap" style="max-height:280px;overflow-y:auto">
+        <table class="data-table">
+          <thead>
+            <tr><th>Código</th><th>Nombre</th><th>Categoría</th><th>Stock</th><th>P.Costo</th><th>P.Venta</th><th>Estado</th></tr>
+          </thead>
+          <tbody id="inv-preview-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="flex gap-2 mt-4">
+      <button class="btn btn-ghost" onclick="Pages.descargarPlantillaInv()">📥 Descargar Plantilla</button>
+    </div>
+
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="UI.closeModal()">Cancelar</button>
+      <button class="btn btn-amber" id="btn-importar-inv" class="hidden"
+              onclick="Pages.importarInventarioMasivo()" disabled>
+        ⬆ Importar al Inventario
+      </button>
+    </div>
+  `, 'modal-lg');
+  Pages._invImportData = [];
+};
+
+Pages.procesarCSVInventario = async function (input, tipo) {
+  const file = input.files[0]; if (!file) return;
+  UI.toast('Procesando archivo...', 'info');
+
+  let filas = [];
+
+  if (tipo === 'csv') {
+    const text = await file.text();
+    const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+    const header = lines[0].toLowerCase().split(',').map(h => h.trim().replace(/"/g,''));
+    const getCol = (row, name) => {
+      const idx = header.findIndex(h => h.includes(name));
+      return idx >= 0 ? (row[idx]||'').replace(/"/g,'').trim() : '';
+    };
+    for (let i = 1; i < lines.length; i++) {
+      const cols = lines[i].split(',');
+      const fila = {
+        codigo:       getCol(cols,'codigo'),
+        nombre:       getCol(cols,'nombre'),
+        categoria:    getCol(cols,'categoria') || 'Otros',
+        marca:        getCol(cols,'marca'),
+        proveedor:    getCol(cols,'proveedor'),
+        ubicacion:    getCol(cols,'ubicacion'),
+        stock:        parseInt(getCol(cols,'stock')) || 0,
+        min_stock:    parseInt(getCol(cols,'min_stock')) || 2,
+        precio_costo: parseFloat(getCol(cols,'precio_costo')) || 0,
+        precio_venta: parseFloat(getCol(cols,'precio_venta')) || 0
+      };
+      if (fila.nombre) filas.push(fila);
+    }
+  } else {
+    // Excel via SheetJS
+    const buf = await file.arrayBuffer();
+    try {
+      const XLSX = window.XLSX || await import('https://cdn.jsdelivr.net/npm/xlsx@0.18.5/xlsx.mjs');
+      const wb   = XLSX.read(buf, { type: 'array' });
+      const ws   = wb.Sheets[wb.SheetNames[0]];
+      const data = XLSX.utils.sheet_to_json(ws, { defval: '' });
+      filas = data.map(row => ({
+        codigo:       String(row.codigo  || row.Codigo  || row.CODIGO  || '').trim(),
+        nombre:       String(row.nombre  || row.Nombre  || row.NOMBRE  || '').trim(),
+        categoria:    String(row.categoria|| row.Categoria|| '').trim() || 'Otros',
+        marca:        String(row.marca   || row.Marca   || '').trim(),
+        proveedor:    String(row.proveedor|| row.Proveedor|| '').trim(),
+        ubicacion:    String(row.ubicacion|| row.Ubicacion|| '').trim(),
+        stock:        parseInt(row.stock || row.Stock || 0) || 0,
+        min_stock:    parseInt(row.min_stock || row.MinStock || 2) || 2,
+        precio_costo: parseFloat(row.precio_costo || row.PrecioCosto || 0) || 0,
+        precio_venta: parseFloat(row.precio_venta || row.PrecioVenta || 0) || 0
+      })).filter(f => f.nombre);
+    } catch (e) {
+      UI.toast('Error al leer Excel: ' + e.message, 'error'); return;
+    }
+  }
+
+  if (filas.length === 0) { UI.toast('No se encontraron datos válidos', 'error'); return; }
+
+  // Comparar con inventario existente
+  const inv = Pages._invData || await DB.getInventario();
+  Pages._invImportData = filas;
+
+  const tbody = document.getElementById('inv-preview-tbody');
+  const preview = document.getElementById('inv-preview');
+  if (tbody && preview) {
+    preview.classList.remove('hidden');
+    document.getElementById('inv-preview-title').textContent =
+      `Vista Previa — ${filas.length} productos`;
+
+    tbody.innerHTML = filas.map(f => {
+      const existe = inv.find(i => i.codigo?.toLowerCase() === f.codigo?.toLowerCase());
+      const estado = existe
+        ? '<span class="badge badge-amber">Actualizar</span>'
+        : '<span class="badge badge-green">Nuevo</span>';
+      return `<tr>
+        <td class="mono-sm">${f.codigo||'—'}</td>
+        <td>${f.nombre}</td>
+        <td><span class="badge badge-gray">${f.categoria}</span></td>
+        <td class="mono-sm">${f.stock}</td>
+        <td class="mono-sm">${UI.q(f.precio_costo)}</td>
+        <td class="mono-sm">${UI.q(f.precio_venta)}</td>
+        <td>${estado}</td>
+      </tr>`;
+    }).join('');
+  }
+
+  const btn = document.getElementById('btn-importar-inv');
+  if (btn) { btn.disabled = false; btn.classList.remove('hidden'); }
+  UI.toast(`${filas.length} productos listos para importar ✓`);
+};
+
+Pages.importarInventarioMasivo = async function () {
+  const filas = Pages._invImportData || [];
+  if (filas.length === 0) { UI.toast('Sin datos para importar', 'error'); return; }
+
+  const actualizar = document.getElementById('inv-actualizar')?.checked;
+  const inv = Pages._invData || await DB.getInventario();
+  let creados = 0, actualizados = 0, errores = 0;
+
+  UI.toast('Importando...', 'info');
+
+  for (const f of filas) {
+    try {
+      const existe = inv.find(i => i.codigo?.toLowerCase() === f.codigo?.toLowerCase());
+      if (existe && actualizar) {
+        await getSupabase().from('inventario').update({
+          nombre:       f.nombre,
+          categoria:    f.categoria,
+          marca:        f.marca || existe.marca,
+          proveedor:    f.proveedor || existe.proveedor,
+          ubicacion:    f.ubicacion || existe.ubicacion,
+          stock:        f.stock,
+          min_stock:    f.min_stock,
+          precio_costo: f.precio_costo,
+          precio_venta: f.precio_venta,
+          updated_at:   new Date().toISOString()
+        }).eq('id', existe.id);
+        actualizados++;
+      } else if (!existe) {
+        await DB.insertProducto(f);
+        creados++;
+      }
+    } catch { errores++; }
+  }
+
+  UI.closeModal();
+  UI.toast(`Importación completa: ${creados} nuevos, ${actualizados} actualizados${errores ? ', ' + errores + ' errores' : ''} ✓`);
+  Pages.inventario();
+};
+
+Pages.descargarPlantillaInv = function () {
+  const csv = [
+    'codigo,nombre,categoria,marca,proveedor,ubicacion,stock,min_stock,precio_costo,precio_venta',
+    'REP-001,Aceite Motor 5W-30 1L,Lubricantes,Castrol,Lubricantes SA,Estante B-3,10,5,42.00,65.00',
+    'REP-002,Filtro de Aceite Universal,Filtros,Mann,Filtros CR,Estante A-4,8,4,28.00,45.00',
+    'REP-003,Bujías NGK Iridium,Ignición,NGK,NGK Guatemala,Estante D-1,12,4,38.00,65.00'
+  ].join('\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href = url; a.download = 'plantilla_inventario.csv'; a.click();
+  URL.revokeObjectURL(url);
 };

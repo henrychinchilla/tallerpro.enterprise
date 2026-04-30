@@ -46,6 +46,11 @@ Pages.proveedores = async function () {
           <option value="">Todas las categorías</option>
           ${CATS.map(c => `<option value="${c}">${c}</option>`).join('')}
         </select>
+        <select class="filter-select" id="filter-prov-cred" onchange="Pages.filterProveedores()">
+          <option value="">Todos</option>
+          <option value="credito">Con crédito</option>
+          <option value="contado">Contado</option>
+        </select>
       </div>
 
       ${proveedores.length === 0 ? `
@@ -65,8 +70,9 @@ Pages.proveedores = async function () {
           </thead>
           <tbody id="prov-tbody">
             ${proveedores.map(p => `
-            <tr data-text="${p.nombre} ${p.nit||''} ${p.categoria||''} ${p.contacto||''}"
+            <tr data-text="${p.nombre} ${p.nit||''} ${p.categoria||''} ${p.contacto||''} ${p.email||''}"
                 data-cat="${p.categoria||''}"
+                data-credito="${p.credito_dias||0}"
                 onclick="Pages.verProveedor('${p.id}')">
               <td class="mono-sm text-cyan">${p.codigo||'—'}</td>
               <td><b>${p.nombre}</b><br>
@@ -77,8 +83,12 @@ Pages.proveedores = async function () {
               <td><span class="badge badge-gray">${p.categoria||'—'}</span></td>
               <td class="mono-sm">${p.credito_dias ? p.credito_dias + ' días' : 'Contado'}</td>
               <td onclick="event.stopPropagation()">
-                <button class="btn btn-sm btn-ghost" onclick="Pages.verProveedor('${p.id}')">Ver</button>
-                <button class="btn btn-sm btn-cyan" onclick="Pages.modalNuevaEntrada('${p.id}')">＋ Recibir</button>
+                <div style="display:flex;gap:4px">
+                  <button class="btn btn-sm btn-ghost" onclick="Pages.verProveedor('${p.id}')">Ver</button>
+                  <button class="btn btn-sm btn-cyan" onclick="Pages.modalEditarProveedor('${p.id}')">✏️</button>
+                  <button class="btn btn-sm btn-ghost" onclick="Pages.modalNuevaEntrada('${p.id}')">＋ Recibir</button>
+                  <button class="btn btn-sm btn-danger" onclick="Pages.eliminarProveedor('${p.id}','${p.nombre.replace(/'/g,'')}')">🗑</button>
+                </div>
               </td>
             </tr>`).join('')}
           </tbody>
@@ -88,12 +98,14 @@ Pages.proveedores = async function () {
 };
 
 Pages.filterProveedores = function () {
-  const q   = (document.getElementById('search-prov')?.value || '').toLowerCase();
-  const cat = document.getElementById('filter-prov-cat')?.value || '';
+  const q    = (document.getElementById('search-prov')?.value || '').toLowerCase();
+  const cat  = document.getElementById('filter-prov-cat')?.value || '';
+  const cred = document.getElementById('filter-prov-cred')?.value || '';
   document.querySelectorAll('#prov-tbody tr').forEach(r => {
-    const match = (!q || (r.dataset.text||'').toLowerCase().includes(q)) &&
-                  (!cat || r.dataset.cat === cat);
-    r.style.display = match ? '' : 'none';
+    const matchQ    = !q   || (r.dataset.text||'').toLowerCase().includes(q);
+    const matchCat  = !cat || r.dataset.cat === cat;
+    const matchCred = !cred || (cred === 'credito' ? r.dataset.credito !== '0' : r.dataset.credito === '0');
+    r.style.display = matchQ && matchCat && matchCred ? '' : 'none';
   });
 };
 
@@ -781,4 +793,16 @@ Pages.verDetalleEntrada = async function (id) {
       <button class="btn btn-ghost" onclick="UI.closeModal()">Cerrar</button>
     </div>
   `, 'modal-lg');
+};
+
+/* ── ELIMINAR PROVEEDOR ───────────────────────────── */
+Pages.eliminarProveedor = function (id, nombre) {
+  UI.confirm(`¿Eliminar al proveedor <b>${nombre}</b>? Esta acción no se puede deshacer.`, async () => {
+    const { error } = await getSupabase().from('proveedores')
+      .update({ activo: false }).eq('id', id);
+    if (error) { UI.toast('Error: ' + error.message, 'error'); return; }
+    UI.closeModal();
+    UI.toast('Proveedor eliminado');
+    Pages.proveedores();
+  });
 };

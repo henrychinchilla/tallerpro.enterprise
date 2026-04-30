@@ -11,52 +11,50 @@ Pages.calendario = async function () {
   el.innerHTML = `<div class="page-header"><h1 class="page-title">Calendario</h1></div>
     <div class="page-body"><div class="text-muted">Cargando...</div></div>`;
 
-  const [citas, clientes, vehiculos] = await Promise.all([
-    DB.getCitas(),
-    DB.getClientes(),
-    DB.getVehiculos()
+  const [citas, clientes, vehiculos, ordenes] = await Promise.all([
+    DB.getCitas(), DB.getClientes(), DB.getVehiculos(), DB.getOrdenes()
   ]);
 
-  const today     = new Date();
-  const year      = today.getFullYear(), month = today.getMonth();
-  const firstDay  = new Date(year, month, 1).getDay();
-  const daysInM   = new Date(year, month + 1, 0).getDate();
-  const todayStr  = today.toISOString().slice(0, 10);
-  const MONTHS    = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
-  const citasHoy  = citas.filter(c => c.fecha === todayStr);
+  // Agregar OTs con fecha estimada como eventos
+  const hoy = new Date().toISOString().slice(0, 10);
+  const otsConFecha = ordenes.filter(o =>
+    o.fecha_estimada && o.estado !== 'entregado' && o.estado !== 'cancelado'
+  );
+
+  const today = new Date();
+  const year  = today.getFullYear(), month = today.getMonth();
+  const firstDay = new Date(year, month, 1).getDay();
+  const daysInM  = new Date(year, month + 1, 0).getDate();
+  const todayStr = today.toISOString().slice(0, 10);
+  const MONTHS   = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+
+  const citasHoy    = citas.filter(c => c.fecha === todayStr && !c.completada);
+  const citasFuturas= citas.filter(c => c.fecha > todayStr && !c.completada);
 
   let calDays = '';
   for (let i = 0; i < firstDay; i++) calDays += '<div class="cal-day other-month"></div>';
   for (let d = 1; d <= daysInM; d++) {
     const ds = `${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
     const dayCitas = citas.filter(c => c.fecha === ds);
+    const dayOTs   = otsConFecha.filter(o => o.fecha_estimada === ds);
     const isToday  = d === today.getDate();
     calDays += `
       <div class="cal-day${isToday ? ' today' : ''}">
         <div class="cal-day-num">${d}</div>
         ${dayCitas.map(c =>
-          `<div class="cal-event ${c.estado === 'confirmada' ? 'green' : 'amber'}">${c.hora} ${(c.servicio||'').slice(0,10)}</div>`
+          `<div class="cal-event ${c.completada?'':'c.estado === "confirmada" ? "green" : "amber"'}"
+               onclick="Pages.modalCitaDetalle('${c.id}')" style="cursor:pointer">
+            ${c.hora} ${(c.servicio||'').slice(0,10)}${c.completada?' ✓':''}
+          </div>`
+        ).join('')}
+        ${dayOTs.map(o =>
+          `<div class="cal-event" style="background:var(--purple-dim);border-color:var(--purple-border);color:var(--purple);cursor:pointer"
+               onclick="Pages.verOT('${o.id}')">
+            🔧 ${o.num?.slice(-4)||''} Entrega
+          </div>`
         ).join('')}
       </div>`;
   }
-
-  const proximasRows = citas
-    .filter(c => c.fecha >= todayStr)
-    .sort((a, b) => a.fecha.localeCompare(b.fecha) || a.hora.localeCompare(b.hora))
-    .map(c => {
-      const cl = c.clientes  || clientes.find(x => x.id === c.cliente_id);
-      const v  = c.vehiculos || vehiculos.find(x => x.id === c.vehiculo_id);
-      return `<tr>
-        <td class="mono-sm">${c.fecha}</td>
-        <td class="mono-sm text-amber">${c.hora}</td>
-        <td>${cl?.nombre || '—'}</td>
-        <td class="mono-sm">${v?.placa || '—'}</td>
-        <td>${c.servicio || '—'}</td>
-        <td>${c.estado === 'confirmada'
-          ? '<span class="badge badge-green">Confirmada</span>'
-          : '<span class="badge badge-amber">Pendiente</span>'}</td>
-      </tr>`;
-    }).join('');
 
   el.innerHTML = `
     <div class="page-header">
@@ -65,19 +63,31 @@ Pages.calendario = async function () {
         <p class="page-subtitle">// ${MONTHS[month].toUpperCase()} ${year}</p>
       </div>
       <div class="page-actions">
+        <button class="btn btn-ghost" onclick="Pages.notificarCitasHoy()">🔔 Notificar Hoy</button>
         <button class="btn btn-amber" onclick="Pages.modalNuevaCita()">＋ Nueva Cita</button>
       </div>
     </div>
     <div class="page-body">
+
       ${citasHoy.length > 0 ? `
       <div class="alert alert-cyan">
         <div class="alert-icon">📅</div>
-        <div>
+        <div style="flex:1">
           <div class="alert-title">Citas de Hoy (${citasHoy.length})</div>
           <div class="alert-body">${citasHoy.map(c => {
             const cl = clientes.find(x => x.id === c.cliente_id);
             return `<b>${c.hora}</b> — ${cl?.nombre||'—'}: ${c.servicio}`;
           }).join(' &nbsp;·&nbsp; ')}</div>
+        </div>
+        <button class="btn btn-sm btn-cyan" onclick="Pages.notificarCitasHoy()">💬 Notificar</button>
+      </div>` : ''}
+
+      ${citasFuturas.length > 0 ? `
+      <div class="alert alert-amber" style="margin-bottom:14px">
+        <div class="alert-icon">⏰</div>
+        <div>
+          <div class="alert-title">${citasFuturas.length} cita${citasFuturas.length>1?'s':''} próxima${citasFuturas.length>1?'s':''}</div>
+          <div class="alert-body">La más próxima: ${citasFuturas[0].fecha} ${citasFuturas[0].hora} — ${citasFuturas[0].servicio}</div>
         </div>
       </div>` : ''}
 
@@ -86,25 +96,189 @@ Pages.calendario = async function () {
         ${calDays}
       </div>
 
-      <div style="margin-top:24px">
-        <div style="font-weight:700;font-size:14px;margin-bottom:12px">📋 Próximas Citas</div>
-        <div class="table-wrap">
-          <table class="data-table">
-            <thead><tr><th>Fecha</th><th>Hora</th><th>Cliente</th><th>Placa</th><th>Servicio</th><th>Estado</th></tr></thead>
-            <tbody>${proximasRows || '<tr><td colspan="6" style="text-align:center;color:var(--text3);padding:24px">Sin citas próximas</td></tr>'}</tbody>
-          </table>
+      <div class="grid-2 mt-5">
+        <!-- Próximas citas -->
+        <div>
+          <div style="font-weight:700;font-size:14px;margin-bottom:12px">📋 Próximas Citas</div>
+          <div class="table-wrap">
+            <table class="data-table">
+              <thead><tr><th>Fecha</th><th>Hora</th><th>Cliente</th><th>Servicio</th><th>Estado</th><th></th></tr></thead>
+              <tbody>
+                ${[...citas].sort((a,b) => a.fecha.localeCompare(b.fecha)||a.hora.localeCompare(b.hora))
+                  .filter(c => c.fecha >= todayStr).slice(0, 8).map(c => {
+                    const cl = c.clientes || clientes.find(x => x.id === c.cliente_id);
+                    return `<tr>
+                      <td class="mono-sm">${c.fecha}</td>
+                      <td class="mono-sm text-amber">${c.hora}</td>
+                      <td>${cl?.nombre||'—'}</td>
+                      <td style="font-size:12px">${c.servicio||'—'}</td>
+                      <td>${c.completada
+                        ? '<span class="badge badge-green">✓ Completada</span>'
+                        : c.estado==='confirmada'
+                          ? '<span class="badge badge-green">Confirmada</span>'
+                          : '<span class="badge badge-amber">Pendiente</span>'}</td>
+                      <td onclick="event.stopPropagation()">
+                        <button class="btn btn-sm btn-ghost" onclick="Pages.modalCitaDetalle('${c.id}')">⋯</button>
+                      </td>
+                    </tr>`;
+                  }).join('') || '<tr><td colspan="6" style="text-align:center;color:var(--text3);padding:16px">Sin citas próximas</td></tr>'}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- OTs con fecha estimada -->
+        <div>
+          <div style="font-weight:700;font-size:14px;margin-bottom:12px">🔧 OTs con Fecha de Entrega</div>
+          <div class="table-wrap">
+            <table class="data-table">
+              <thead><tr><th>OT</th><th>Vehículo</th><th>Entrega</th><th>Estado</th></tr></thead>
+              <tbody>
+                ${otsConFecha.sort((a,b) => a.fecha_estimada.localeCompare(b.fecha_estimada)).slice(0,8).map(o => {
+                  const v = o.vehiculos;
+                  const vencida = o.fecha_estimada < hoy;
+                  return `<tr onclick="Pages.verOT('${o.id}')">
+                    <td class="mono-sm text-amber">${o.num}</td>
+                    <td class="mono-sm">${v?.placa||'—'}</td>
+                    <td class="mono-sm ${vencida?'text-red':''}">${o.fecha_estimada}${vencida?' ⚠️':''}</td>
+                    <td>${UI.estadoBadge(o.estado)}</td>
+                  </tr>`;
+                }).join('') || '<tr><td colspan="4" style="text-align:center;color:var(--text3);padding:16px">Sin OTs programadas</td></tr>'}
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
     </div>`;
 
-  Pages._citasClientes  = clientes;
-  Pages._citasVehiculos = vehiculos;
+  Pages._calCitas     = citas;
+  Pages._calClientes  = clientes;
+  Pages._calVehiculos = vehiculos;
+};
+
+/* ── DETALLE DE CITA ──────────────────────────────── */
+Pages.modalCitaDetalle = async function (id) {
+  const citas    = Pages._calCitas    || await DB.getCitas();
+  const clientes = Pages._calClientes || await DB.getClientes();
+  const vehiculos= Pages._calVehiculos|| await DB.getVehiculos();
+  const c = citas.find(x => x.id === id); if (!c) return;
+  const cl = c.clientes || clientes.find(x => x.id === c.cliente_id);
+  const v  = c.vehiculos|| vehiculos.find(x => x.id === c.vehiculo_id);
+
+  UI.openModal('Cita: ' + c.servicio, `
+    <div class="detail-section mb-4">
+      <div class="detail-section-header">Detalles</div>
+      <div class="detail-row"><div class="detail-key">Fecha</div><div class="detail-val mono-sm">${c.fecha}</div></div>
+      <div class="detail-row"><div class="detail-key">Hora</div><div class="detail-val mono-sm text-amber">${c.hora}</div></div>
+      <div class="detail-row"><div class="detail-key">Cliente</div><div class="detail-val">${cl?.nombre||'—'}</div></div>
+      <div class="detail-row"><div class="detail-key">Vehículo</div><div class="detail-val">${v?.placa||'—'} ${v?.marca||''} ${v?.modelo||''}</div></div>
+      <div class="detail-row"><div class="detail-key">Servicio</div><div class="detail-val">${c.servicio||'—'}</div></div>
+      <div class="detail-row"><div class="detail-key">Estado</div><div class="detail-val">${c.completada?'<span class="badge badge-green">✓ Completada</span>':c.estado==='confirmada'?'<span class="badge badge-green">Confirmada</span>':'<span class="badge badge-amber">Pendiente</span>'}</div></div>
+      ${c.email_invitado ? `<div class="detail-row"><div class="detail-key">Email invitado</div><div class="detail-val">${c.email_invitado}</div></div>` : ''}
+    </div>
+
+    <!-- Reprogramar -->
+    <div class="card" style="margin-bottom:12px;padding:14px">
+      <div class="card-sub mb-3">📅 Reprogramar</div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Nueva Fecha</label>
+          <input class="form-input" id="rep-fecha" type="date" value="${c.fecha}">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Nueva Hora</label>
+          <select class="form-select" id="rep-hora">
+            ${['07:00','07:30','08:00','08:30','09:00','09:30','10:00','10:30','11:00','11:30',
+               '12:00','13:00','14:00','14:30','15:00','15:30','16:00','16:30'].map(h =>
+              `<option ${c.hora===h?'selected':''}>${h}</option>`).join('')}
+          </select>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Email para notificar reprogramación</label>
+        <input class="form-input" id="rep-email" value="${c.email_invitado||cl?.email||''}"
+               placeholder="invitado@email.com">
+      </div>
+    </div>
+
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="UI.closeModal()">Cerrar</button>
+      <button class="btn btn-danger btn-sm" onclick="Pages.eliminarCita('${c.id}')">🗑 Eliminar</button>
+      ${cl?.tel ? `<button class="btn btn-success btn-sm" onclick="Pages.notificarCita('${c.id}')">💬 WhatsApp</button>` : ''}
+      <button class="btn btn-cyan btn-sm" onclick="Pages.reprogramarCita('${c.id}')">📅 Reprogramar</button>
+      ${!c.completada ? `<button class="btn btn-amber" onclick="Pages.completarCita('${c.id}')">✓ Marcar Completada</button>` : ''}
+    </div>`
+  );
+};
+
+Pages.completarCita = async function (id) {
+  const ok = await DB.updateCita(id, { completada: true, estado: 'completada' });
+  if (ok) { UI.closeModal(); UI.toast('Cita marcada como completada ✓'); Pages.calendario(); }
+  else UI.toast('Error al actualizar', 'error');
+};
+
+Pages.reprogramarCita = async function (id) {
+  const fecha = document.getElementById('rep-fecha')?.value;
+  const hora  = document.getElementById('rep-hora')?.value;
+  const email = document.getElementById('rep-email')?.value.trim();
+  if (!fecha || !hora) { UI.toast('Selecciona fecha y hora', 'error'); return; }
+
+  const ok = await DB.updateCita(id, { fecha, hora, email_invitado: email||null });
+  if (!ok) { UI.toast('Error al reprogramar', 'error'); return; }
+
+  // Notificar por email si hay
+  if (email) {
+    const asunto = `Cita Reprogramada — ${Auth.tenant?.name}`;
+    const body   = `<h2>Tu cita ha sido reprogramada</h2>
+      <p>Nueva fecha: <b>${fecha}</b><br>Nueva hora: <b>${hora}</b></p>
+      <p>Si tienes alguna pregunta contáctanos.<br><b>${Auth.tenant?.name}</b></p>`;
+    await NOTIF.sendEmail(email, asunto, body);
+    UI.toast('Cita reprogramada y email enviado ✓');
+  } else {
+    UI.toast('Cita reprogramada ✓');
+  }
+  UI.closeModal();
+  Pages.calendario();
+};
+
+Pages.eliminarCita = async function (id) {
+  const ok = await DB.deleteCita(id);
+  if (ok) { UI.closeModal(); UI.toast('Cita eliminada'); Pages.calendario(); }
+  else UI.toast('Error al eliminar', 'error');
+};
+
+Pages.notificarCita = async function (id) {
+  const citas    = Pages._calCitas    || [];
+  const clientes = Pages._calClientes || [];
+  const vehiculos= Pages._calVehiculos|| [];
+  const c  = citas.find(x => x.id === id); if (!c) return;
+  const cl = clientes.find(x => x.id === c.cliente_id);
+  const v  = vehiculos.find(x => x.id === c.vehiculo_id);
+  await NOTIF.notificarCitaConfirmada(c, cl, v);
+};
+
+Pages.notificarCitasHoy = async function () {
+  const citas    = Pages._calCitas    || [];
+  const clientes = Pages._calClientes || [];
+  const vehiculos= Pages._calVehiculos|| [];
+  const hoy = new Date().toISOString().slice(0, 10);
+  const citasHoy = citas.filter(c => c.fecha === hoy && !c.completada);
+  if (citasHoy.length === 0) { UI.toast('Sin citas pendientes hoy', 'info'); return; }
+
+  let enviadas = 0;
+  for (const c of citasHoy) {
+    const cl = clientes.find(x => x.id === c.cliente_id);
+    const v  = vehiculos.find(x => x.id === c.vehiculo_id);
+    if (cl) { await NOTIF.notificarCitaConfirmada(c, cl, v); enviadas++; }
+  }
+  UI.toast(`${enviadas} notificaciones enviadas ✓`);
 };
 
 Pages.modalNuevaCita = async function () {
-  const clientes  = Pages._citasClientes  || await DB.getClientes();
-  const vehiculos = Pages._citasVehiculos || await DB.getVehiculos();
-  const horas = ['07:00','07:30','08:00','08:30','09:00','09:30','10:00','10:30','11:00','11:30','12:00','13:00','14:00','14:30','15:00','15:30','16:00','16:30'];
+  const clientes  = Pages._calClientes  || await DB.getClientes();
+  const vehiculos = Pages._calVehiculos || await DB.getVehiculos();
+  const horas = ['07:00','07:30','08:00','08:30','09:00','09:30','10:00','10:30',
+                  '11:00','11:30','12:00','13:00','14:00','14:30','15:00','15:30','16:00','16:30'];
 
   UI.openModal('Nueva Cita', `
     <div class="form-row">
@@ -117,23 +291,29 @@ Pages.modalNuevaCita = async function () {
         <select class="form-select" id="nc2-hora">${horas.map(h=>`<option>${h}</option>`).join('')}</select>
       </div>
     </div>
-    <div class="form-group">
-      <label class="form-label">Cliente</label>
-      <select class="form-select" id="nc2-cli">
-        <option value="">Seleccionar cliente...</option>
-        ${clientes.map(c=>`<option value="${c.id}">${c.nombre}</option>`).join('')}
-      </select>
-    </div>
-    <div class="form-group">
-      <label class="form-label">Vehículo</label>
-      <select class="form-select" id="nc2-veh">
-        <option value="">Seleccionar vehículo...</option>
-        ${vehiculos.map(v=>`<option value="${v.id}">${v.placa} — ${v.marca} ${v.modelo}</option>`).join('')}
-      </select>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Cliente</label>
+        <select class="form-select" id="nc2-cli">
+          <option value="">Seleccionar...</option>
+          ${clientes.map(c=>`<option value="${c.id}">${c.nombre_empresa||c.nombre}</option>`).join('')}
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Vehículo</label>
+        <select class="form-select" id="nc2-veh">
+          <option value="">Seleccionar...</option>
+          ${vehiculos.map(v=>`<option value="${v.id}">${v.placa} — ${v.marca} ${v.modelo}</option>`).join('')}
+        </select>
+      </div>
     </div>
     <div class="form-group">
       <label class="form-label">Servicio *</label>
-      <input class="form-input" id="nc2-srv" placeholder="Ej: Cambio de aceite y filtros">
+      <input class="form-input" id="nc2-srv" placeholder="Cambio de aceite, revisión general...">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Email para notificar (opcional)</label>
+      <input class="form-input" id="nc2-email" type="email" placeholder="cliente@gmail.com">
     </div>
     <div class="modal-footer">
       <button class="btn btn-ghost" onclick="UI.closeModal()">Cancelar</button>
@@ -146,28 +326,38 @@ Pages.guardarCita = async function () {
   const srv = document.getElementById('nc2-srv').value.trim();
   if (!srv) { UI.toast('El servicio es obligatorio', 'error'); return; }
 
-  const { error } = await DB.insertCita({
-    fecha:       document.getElementById('nc2-fecha').value,
-    hora:        document.getElementById('nc2-hora').value,
-    cliente_id:  document.getElementById('nc2-cli').value || null,
-    vehiculo_id: document.getElementById('nc2-veh').value || null,
-    servicio:    srv,
-    estado:      'pendiente'
+  const cliId = document.getElementById('nc2-cli').value;
+  const vehId = document.getElementById('nc2-veh').value;
+  const email = document.getElementById('nc2-email')?.value.trim();
+
+  const { data, error } = await DB.insertCita({
+    fecha:            document.getElementById('nc2-fecha').value,
+    hora:             document.getElementById('nc2-hora').value,
+    cliente_id:       cliId || null,
+    vehiculo_id:      vehId || null,
+    servicio:         srv,
+    estado:           'pendiente',
+    email_invitado:   email || null
   });
 
   if (error) { UI.toast('Error: ' + error.message, 'error'); return; }
   UI.closeModal();
-  UI.toast('Cita agendada exitosamente ✓');
+  UI.toast('Cita agendada ✓');
 
   // Notificar al cliente
   try {
-    const cli = clientes.find(c => c.id === document.getElementById('nc2-cli').value);
-    const veh = vehiculos.find(v => v.id === document.getElementById('nc2-veh').value);
-    if (cli) await NOTIF.notificarCitaConfirmada({
-      fecha:    document.getElementById('nc2-fecha').value,
-      hora:     document.getElementById('nc2-hora').value,
-      servicio: document.getElementById('nc2-srv').value
-    }, cli, veh);
+    const clientes  = Pages._calClientes  || await DB.getClientes();
+    const vehiculos = Pages._calVehiculos || await DB.getVehiculos();
+    const cl = clientes.find(x => x.id === cliId);
+    const v  = vehiculos.find(x => x.id === vehId);
+    if (cl) await NOTIF.notificarCitaConfirmada(data, cl, v);
+    if (email) {
+      await NOTIF.sendEmail(email,
+        `Cita confirmada — ${Auth.tenant?.name}`,
+        `<h2>Cita Confirmada</h2><p>Fecha: <b>${data.fecha}</b> Hora: <b>${data.hora}</b></p>
+         <p>Servicio: ${srv}</p><p>${Auth.tenant?.name}</p>`
+      );
+    }
   } catch(e) { console.warn('Notif error:', e); }
 
   Pages.calendario();
@@ -900,5 +1090,145 @@ Pages.guardarFactura = async function (accion) {
     UI.toast(`Factura ${factura.num} creada e ingreso registrado ✓`);
   }
 
+  Pages.facturacion();
+};
+
+/* ══════════════════════════════════════════════════════
+   IMPORTAR REPORTE FEL SAT (CSV/Excel)
+══════════════════════════════════════════════════════ */
+Pages.modalImportarFEL = function () {
+  UI.openModal('📥 Importar Reporte FEL — SAT Guatemala', `
+    <div class="alert alert-cyan mb-4">
+      <div class="alert-icon">💡</div>
+      <div>
+        <div class="alert-title">Campos del reporte SAT</div>
+        <div class="alert-body" style="font-family:'DM Mono',monospace;font-size:11px">
+          fecha, serie, numero_dte, nit_emisor, nombre_emisor, gran_total, iva
+        </div>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">
+      <div style="border:2px dashed var(--border);border-radius:8px;padding:20px;text-align:center;cursor:pointer"
+           onclick="document.getElementById('fel-csv-file').click()">
+        <div style="font-size:28px;margin-bottom:8px">📄</div>
+        <div style="font-weight:600;font-size:13px">CSV del SAT</div>
+        <input type="file" id="fel-csv-file" accept=".csv,.txt" class="hidden"
+               onchange="Pages.procesarFELCSV(this)">
+      </div>
+      <div style="border:2px dashed var(--border);border-radius:8px;padding:20px;text-align:center;cursor:pointer"
+           onclick="document.getElementById('fel-xls-file').click()">
+        <div style="font-size:28px;margin-bottom:8px">📊</div>
+        <div style="font-weight:600;font-size:13px">Excel del SAT</div>
+        <input type="file" id="fel-xls-file" accept=".xlsx,.xls" class="hidden"
+               onchange="Pages.procesarFELExcel(this)">
+      </div>
+    </div>
+
+    <div id="fel-preview" class="hidden">
+      <div style="font-weight:700;font-size:13px;margin-bottom:8px" id="fel-preview-title">Vista Previa</div>
+      <div class="table-wrap" style="max-height:260px;overflow-y:auto">
+        <table class="data-table">
+          <thead><tr><th>Fecha</th><th>Serie</th><th>No. DTE</th><th>NIT Emisor</th><th>Nombre Emisor</th><th>Gran Total</th><th>IVA</th></tr></thead>
+          <tbody id="fel-preview-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="UI.closeModal()">Cancelar</button>
+      <button class="btn btn-amber" id="btn-importar-fel" disabled
+              onclick="Pages.guardarFELImportado()">⬆ Importar</button>
+    </div>
+  `, 'modal-lg');
+  Pages._felImportData = [];
+};
+
+Pages.procesarFELCSV = function (input) {
+  const file = input.files[0]; if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    const lines  = e.target.result.split('\n').map(l => l.trim()).filter(Boolean);
+    const header = lines[0].toLowerCase().split(',').map(h => h.trim().replace(/"/g,''));
+    const getCol = (row, names) => {
+      for (const name of names) {
+        const idx = header.findIndex(h => h.includes(name));
+        if (idx >= 0) return (row[idx]||'').replace(/"/g,'').trim();
+      }
+      return '';
+    };
+    const filas = [];
+    for (let i = 1; i < lines.length; i++) {
+      const cols = lines[i].split(',');
+      const f = {
+        fecha:         getCol(cols, ['fecha']),
+        serie:         getCol(cols, ['serie']),
+        numero_dte:    getCol(cols, ['numero','dte','num']),
+        nit_emisor:    getCol(cols, ['nit']),
+        nombre_emisor: getCol(cols, ['nombre','emisor','razon']),
+        gran_total:    parseFloat(getCol(cols, ['gran_total','total'])) || 0,
+        iva:           parseFloat(getCol(cols, ['iva'])) || 0,
+        tipo_doc:      getCol(cols, ['tipo']) || 'FACT'
+      };
+      if (f.fecha && f.numero_dte) filas.push(f);
+    }
+    Pages._mostrarPreviewFEL(filas);
+  };
+  reader.readAsText(file);
+};
+
+Pages.procesarFELExcel = async function (input) {
+  const file = input.files[0]; if (!file) return;
+  const buf  = await file.arrayBuffer();
+  try {
+    const XLSX = window.XLSX;
+    if (!XLSX) { UI.toast('Librería Excel no disponible, usa CSV', 'warn'); return; }
+    const wb   = XLSX.read(buf, { type: 'array' });
+    const ws   = wb.Sheets[wb.SheetNames[0]];
+    const data = XLSX.utils.sheet_to_json(ws, { defval: '' });
+    const filas = data.map(row => ({
+      fecha:         String(row.Fecha || row.fecha || '').trim(),
+      serie:         String(row.Serie || row.serie || '').trim(),
+      numero_dte:    String(row['Numero DTE'] || row.numero_dte || row.NumeroDTE || '').trim(),
+      nit_emisor:    String(row['NIT Emisor'] || row.nit_emisor || row.NIT || '').trim(),
+      nombre_emisor: String(row['Nombre Emisor'] || row.nombre_emisor || row.Nombre || '').trim(),
+      gran_total:    parseFloat(row['Gran Total'] || row.gran_total || row.Total || 0) || 0,
+      iva:           parseFloat(row.IVA || row.iva || 0) || 0,
+      tipo_doc:      String(row.Tipo || row.tipo || 'FACT').trim()
+    })).filter(f => f.fecha && f.numero_dte);
+    Pages._mostrarPreviewFEL(filas);
+  } catch(e) { UI.toast('Error: ' + e.message, 'error'); }
+};
+
+Pages._mostrarPreviewFEL = function (filas) {
+  Pages._felImportData = filas;
+  const tbody   = document.getElementById('fel-preview-tbody');
+  const preview = document.getElementById('fel-preview');
+  if (tbody && preview) {
+    preview.classList.remove('hidden');
+    document.getElementById('fel-preview-title').textContent = `${filas.length} registros FEL`;
+    tbody.innerHTML = filas.map(f => `<tr>
+      <td class="mono-sm">${f.fecha}</td>
+      <td class="mono-sm">${f.serie}</td>
+      <td class="mono-sm">${f.numero_dte}</td>
+      <td class="mono-sm">${f.nit_emisor}</td>
+      <td style="font-size:12px">${f.nombre_emisor}</td>
+      <td class="mono-sm text-amber">${UI.q(f.gran_total)}</td>
+      <td class="mono-sm">${UI.q(f.iva)}</td>
+    </tr>`).join('');
+  }
+  const btn = document.getElementById('btn-importar-fel');
+  if (btn) btn.disabled = false;
+  UI.toast(`${filas.length} registros FEL listos ✓`);
+};
+
+Pages.guardarFELImportado = async function () {
+  const filas = Pages._felImportData || [];
+  if (filas.length === 0) { UI.toast('Sin datos', 'error'); return; }
+  UI.toast('Importando...', 'info');
+  const { data, error } = await DB.insertFelImportados(filas);
+  if (error) { UI.toast('Error: ' + error.message, 'error'); return; }
+  UI.closeModal();
+  UI.toast(`${filas.length} registros FEL importados ✓`);
   Pages.facturacion();
 };

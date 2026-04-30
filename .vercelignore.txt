@@ -1,0 +1,53 @@
+vehículos necesitamos botón de editar.
+ordenes de trabajo se necesita edit, filtrar, eliminar, notificación al cliente por correo o whatsapp que esta terminada o el reportar el avance
+
+inventario partir carga masiva con archivos csv/excel
+proveedores: editar, filtrar, eliminar
+calendario: notificar citas futuras y citas del día. permitir marcar como completada, reprogramar y notificar por correo a invitados a asistir. agregar las OT que tengan fecha de entrega para seguimiento. cuando se cierre/termine/edite la OT actualizar en el calendario de acuerdo a su estatus. 
+
+configuración: agregar el logo del taller
+en facturación Fel: permitir agregar de manera masiva csv/excel el reporte de la SAT reporte de FEL emitidos. campos fecha, serie, numero de DTE, nit del emisor, nombre del emisor, gran total e IVA.
+Es importante tener control de los viáticos de los empleados cuando tiene esos gastos, estos deben ser reflejados en el control de ingresos y egresos.
+en recursos humanos agregar el control de liquidación de empleado de acuerdo a la ley de Guatemala, control de entrenamientos, llamadas de atención y generación del finiquito con su respectiva carta de despido, retiro o cualquiera que sea la situación de terminación de relación laboral. también poder subir los documentos en pdf que respaldan el perfil de los empleados, DPI, Curriculum, Licencia, tarjeta de Salud, tarjeta de Pulmones, Titulo académico. si al crear al empleado no tiene todo los documentos colocar una fecha en calendario limite para los documentos cargados y dar una notificación. en el formulario para crear empleado agregar información adicional como banco, tipo de cuenta, numero de cuenta y nombre de la cuenta (el nombre de la cuenta no puede ser otro mas que el empleado) para pago de nomina, además agregar Teléfono de Emergencia, contacto y parentesco. cuando se le pague el salario al empleado generar el registro y el voucher de pago para imprimir, permitir generar copia y original. incluir el logo de la empresa como marca de agua.
+
+
+inventario:  descripción del producto
+ Identificación Básica del Producto
+Código de Producto/SKU: Número único identificador.
+Código de Barras/QR: Para escaneo rápido.
+Nombre/Descripción del Repuesto: Descripción clara (ej. "Filtro de aceite", "Pastillas de freno").
+Número de Parte del Fabricante (OEM): Crucial para evitar errores de compatibilidad.
+Marca del Repuesto: (Ej. Bosch, ACDelco, Motorcraft).
+Categoría/Tipo: (Ej. Motor, Suspensión, Filtros, Lubricantes). 
+2. Compatibilidad y Aplicación (Crucial en Automotriz)
+Marca del Vehículo: (Ej. Toyota, Nissan).
+Modelo del Vehículo: (Ej. Corolla, Versa).
+Año del Vehículo: Rango de años compatible.
+Motorización: (Ej. 1.6L, 2.0L Diesel). 
+3. Control de Stock y Ubicación
+Cantidad Disponible (Stock Actual): Unidades físicas existentes.
+Stock Mínimo/Punto de Reorden: Cantidad mínima antes de solicitar más.
+Stock Máximo: Límite para evitar sobrestock.
+Ubicación Física: Pasillo, estantería o contenedor en el almacén.
+Unidad de Medida: (Ej. Pieza, Litro, Juego). 
+4. Información Financiera
+Costo Unitario: Precio de compra.
+Precio de Venta: Precio al público o cliente.
+Proveedor Principal: Nombre del proveedor. 
+5. Características Adicionales
+Imagen del producto: Para facilitar la identificación visual.
+Estado del artículo: (Ej. Nuevo, Reconstruido).
+Peso/Volumen: Para organizar el espacio físico. 
+
+
+agregar un modulo para manejo de la base de datos que permita borrar todo (con permiso de superusario y confirmación de alto nive, además que se pueda importar y exportar la base de datos cifrada.
+tenemos que trabajar ya con las licencias de uso. para las licencias creo que debemos dar un mes de uso demo, pero este demo permita continucar con los datos ingresados en el modo demo para echar a andar la licencia ya con datos que el cliente necesite sin borrar nada. luego dar la elección de pago por uso mensual y anual, si el pago es anual que el cliente pueda ver que existe una mejora en precio o por mas años. que permita el pago por medio de PayPal, tarjeta de crédito/debito o transferencia bancaria. habilitar que el cliente pueda enviar su código único de identificación de acuerdo a su ID en la PC y de su taller.  tu sabes mas como se puede hacer eso.  
+
+login: es necesario que cuando se cree un usuario se pueda recibir y recuperar el password por correo o mensaje de texto con un código de verificación si la olvida. es importante tener el api o motor para generar esto. tu sabes mas de como hacerlo.
+facturación: cuando el monto de factura supere los 2500 no se puede facturar con CF (consumidor Final), se debe colocar e l numero de NIT del cliente sino utilizar su DPI si no tiene.
+finanzas:  https://inbers.com/iniciando-un-negocio-en-guatemala-asi-es-como-una-firma-contable-te-ayudara-ante-la-sat/#elementor-toc__heading-anchor-16
+utiliza de esta web lo que sea importante para el negocio. recomendación para los usuarios/propietarios del taller/empresa
+este es un ejemplo de estado de resultados en guatemela del 2017 no se si te sirve o se debería actualizar https://www.scribd.com/document/409989051/Ejemplo-de-Estado-de-Resultados
+otro ejemplo: https://ingecop.gob.gt/wp-content/uploads/2022/03/Enero-BALANCE-GENERAL-Y-ESTADO-DE-RESULTADO.pdf
+
+Usuario del sistema: Generar los perfiles Admin, Recepcionista, Gerente Finaciero, Gerente Taller, Mecanico, Cliente,Super user. que el temporizador de actividad se pueda programar por horas del dia y por los días de la semana. para que la base de datos se pueda borrar totalmente o importart completamente se necesitara de un código único del SuperUser, este código sera generado y enviado por correo al superuser bajo demanda. y se cambiara cada vez que se solicite de manera randon.
