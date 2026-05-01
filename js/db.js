@@ -531,6 +531,95 @@ const DB = {
     return !error;
   },
 
+  /* ── LICENCIAS ────────────────────────────────────── */
+  async verificarLicencia(tenantId) {
+    try {
+      const { data, error } = await getSupabase()
+        .rpc('verificar_licencia', { p_tenant_id: tenantId });
+      if (error) throw error;
+      return data;
+    } catch(e) {
+      console.warn('verificarLicencia error:', e);
+      // Fallback: asumir demo válido si no se puede verificar
+      return { valida: true, tipo: 'demo', dias_restantes: 30, mensaje: 'Modo local' };
+    }
+  },
+
+  async getLicencia(tenantId) {
+    const { data } = await getSupabase()
+      .from('licencias')
+      .select('*')
+      .eq('tenant_id', tenantId)
+      .maybeSingle();
+    return data;
+  },
+
+  async activarLicencia(tenantId, codigo, activadoPor) {
+    // Verificar que el código no esté en uso
+    const { data: existing } = await getSupabase()
+      .from('licencias')
+      .select('tenant_id')
+      .eq('codigo', codigo)
+      .maybeSingle();
+    if (existing) return { ok: false, error: 'Este código ya fue utilizado' };
+
+    const { error } = await getSupabase()
+      .from('licencias')
+      .update({
+        tipo:             'completa',
+        codigo,
+        activa:           true,
+        activada_por:     activadoPor,
+        fecha_vencimiento:null,
+        updated_at:       new Date().toISOString()
+      })
+      .eq('tenant_id', tenantId);
+    return { ok: !error, error: error?.message };
+  },
+
+  /* ── CREAR TALLER NUEVO ───────────────────────────── */
+  async crearTaller(nombre, nit, email) {
+    try {
+      const { data, error } = await getSupabase()
+        .rpc('crear_taller', {
+          p_nombre: nombre,
+          p_nit:    nit || null,
+          p_email:  email || null
+        });
+      if (error) throw error;
+      return { ok: true, tenantId: data };
+    } catch(e) {
+      // Fallback manual si la función RPC no existe aún
+      const slug = nombre.toLowerCase().replace(/[^a-z0-9]/g,'-').replace(/-+/g,'-').slice(0,40)
+                   + '-' + Date.now().toString(36);
+      const { data: tenant, error: tErr } = await getSupabase()
+        .from('tenants')
+        .insert({ slug, name: nombre, nit: nit||null, email: email||null })
+        .select().single();
+      if (tErr) return { ok: false, error: tErr.message };
+      // Crear licencia demo
+      await getSupabase().from('licencias').insert({
+        tenant_id: tenant.id, tipo: 'demo',
+        fecha_inicio: new Date().toISOString().slice(0,10),
+        fecha_vencimiento: new Date(Date.now()+30*86400000).toISOString().slice(0,10)
+      });
+      // Crear config fiscal
+      await getSupabase().from('config_fiscal')
+        .insert({ tenant_id: tenant.id, regimen_iva: 'general', tasa_iva: 0.12, tasa_isr: 0.05 });
+      return { ok: true, tenantId: tenant.id, tenant };
+    }
+  },
+
+  /* ── BUSCAR TALLER ────────────────────────────────── */
+  async buscarTalleres(query) {
+    const { data } = await getSupabase()
+      .from('tenants')
+      .select('id,slug,name,nit,logo_base64')
+      .or(`name.ilike.%${query}%,nit.ilike.%${query}%`)
+      .limit(8);
+    return data || [];
+  },
+
   /* ── PAGOS DE NÓMINA ──────────────────────────────── */
   async getPagosNomina(empleadoId = null) {
     const id = await getTenantId();

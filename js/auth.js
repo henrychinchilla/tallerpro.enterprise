@@ -22,6 +22,16 @@ const Auth = {
 
     Auth.supaUser = data.user;
     await Auth._loadProfile(data.user.id, data.user.email, tenantSlug);
+
+    // Verificar licencia del tenant (excepto henry que es superadmin global)
+    if (email !== 'henry.chinchilla@gmail.com' && Auth.tenant?.id) {
+      const lic = await DB.verificarLicencia(Auth.tenant.id);
+      Auth.licencia = lic;
+      if (!lic.valida) {
+        return { ok: false, error: 'licencia_expirada', licencia: lic };
+      }
+    }
+
     return { ok: true };
   },
 
@@ -82,10 +92,7 @@ const Auth = {
 
   /* ── REGISTRO DE NUEVO TALLER ─────────────────────── */
   async registrarNuevoTaller(fields) {
-    /* fields: { nombre_taller, nit_taller, email, password, nombre_usuario } */
-    const sb   = getSupabase();
-    const slug = fields.nombre_taller.toLowerCase()
-      .replace(/[^a-z0-9]/g, '-').replace(/-+/g, '-').slice(0, 40);
+    const sb = getSupabase();
 
     /* 1. Crear usuario en Supabase Auth */
     const { data: authData, error: authErr } = await sb.auth.signUp({
@@ -95,19 +102,16 @@ const Auth = {
     });
     if (authErr) return { ok: false, error: authErr.message };
 
-    /* 2. Crear tenant */
-    const { data: tenant, error: tErr } = await sb.from('tenants').insert({
-      slug:  slug + '-' + Date.now().toString(36),
-      name:  fields.nombre_taller,
-      nit:   fields.nit_taller || null,
-      email: fields.email
-    }).select().single();
-    if (tErr) return { ok: false, error: 'Error creando taller: ' + tErr.message };
+    /* 2. Crear taller (tenant + licencia demo + config fiscal) */
+    const tallerResult = await DB.crearTaller(fields.nombre_taller, fields.nit_taller, fields.email);
+    if (!tallerResult.ok) return { ok: false, error: tallerResult.error };
 
-    /* 3. Crear perfil de usuario */
+    const tenantId = tallerResult.tenantId;
+
+    /* 3. Crear perfil admin */
     await sb.from('usuarios').upsert({
       id:        authData.user.id,
-      tenant_id: tenant.id,
+      tenant_id: tenantId,
       nombre:    fields.nombre_usuario,
       email:     fields.email,
       rol:       'admin',
@@ -115,17 +119,48 @@ const Auth = {
       avatar:    '👑'
     });
 
-    /* 4. Crear config fiscal inicial */
-    await sb.from('config_fiscal').insert({
-      tenant_id: tenant.id, regimen_iva: 'general', tasa_iva: 0.12, tasa_isr: 0.05
-    });
+    /* 4. Crear perfil oculto de Henry en este taller */
+    await Auth._asegurarHenryEnTaller(tenantId);
 
-    /* 5. Hacer login */
+    /* 5. Set session */
     Auth.supaUser = authData.user;
-    Auth.user     = { id: authData.user.id, nombre: fields.nombre_usuario, email: fields.email, rol: 'admin', activo: true, avatar: '👑', tenant_id: tenant.id };
-    Auth.tenant   = tenant;
+    Auth.tenant   = tallerResult.tenant || await DB.getTenant(null, tenantId);
+    Auth.user     = {
+      id: authData.user.id, nombre: fields.nombre_usuario,
+      email: fields.email, rol: 'admin', activo: true, avatar: '👑',
+      tenant_id: tenantId
+    };
+    Auth.licencia = { valida: true, tipo: 'demo', dias_restantes: 30 };
 
     return { ok: true };
+  },
+
+  /* ── HENRY SUPERUSER EN CADA TALLER ──────────────── */
+  async _asegurarHenryEnTaller(tenantId) {
+    /* Henry tiene acceso a TODOS los talleres como superadmin oculto */
+    /* Se registra en public.usuarios con cada tenant */
+    try {
+      /* Buscar el auth.user de henry */
+      const { data: henryAuth } = await getSupabase()
+        .from('usuarios')
+        .select('id')
+        .eq('email', 'henry.chinchilla@gmail.com')
+        .limit(1)
+        .maybeSingle();
+
+      if (henryAuth?.id) {
+        /* Ya existe en usuarios — asegurar que tenga entrada para este tenant */
+        await getSupabase().from('usuarios').upsert({
+          id:        henryAuth.id + '_' + tenantId.slice(0,8), // ID compuesto único
+          tenant_id: tenantId,
+          nombre:    'Henry Chinchilla',
+          email:     'henry.chinchilla@gmail.com',
+          rol:       'superadmin',
+          activo:    true,
+          avatar:    '⚡'
+        }).catch(() => {}); // Silencioso si falla
+      }
+    } catch(e) { /* silencioso */ }
   },
 
   /* ── LOGIN DEMO ───────────────────────────────────── */
@@ -514,6 +549,11 @@ const AUTH_UI = {
     if (!email)  { UI.toast('El correo es obligatorio','error'); return; }
     if (!pass || pass.length < 8) { UI.toast('La contraseña debe tener al menos 8 caracteres','error'); return; }
 
+    // Bloquear si intenta crear con email de henry
+    if (email.toLowerCase() === 'henry.chinchilla@gmail.com') {
+      UI.toast('Este correo está reservado para soporte técnico','error'); return;
+    }
+
     UI.toast('Creando taller...', 'info');
     const r = await Auth.registrarNuevoTaller({
       nombre_taller:  nombre,
@@ -524,7 +564,7 @@ const AUTH_UI = {
     });
 
     if (!r.ok) { UI.toast('Error: ' + r.error, 'error'); return; }
-    UI.toast('¡Taller creado exitosamente! Bienvenido a TallerPro 🎉');
+    UI.toast('¡Taller creado! Tienes 30 días de demostración 🎉');
     setTimeout(() => startApp(), 800);
   },
 
@@ -574,6 +614,65 @@ const AUTH_UI = {
     setTimeout(() => renderLoginView('login'), 1200);
   },
 
+  /* ── PANTALLA LICENCIA EXPIRADA ──────────────────── */
+  mostrarPantallaLicencia(licencia) {
+    const loginBox = document.querySelector('.login-box');
+    if (!loginBox) return;
+
+    const dias = Math.abs(Math.ceil(
+      (new Date(licencia?.fecha_vencimiento||Date.now()) - Date.now()) / 86400000
+    ));
+
+    loginBox.innerHTML = `
+      <div style="text-align:center;margin-bottom:20px">
+        <div style="font-size:48px;margin-bottom:8px">🔒</div>
+        <h2 style="font-family:'Bebas Neue',sans-serif;font-size:26px;color:var(--red);letter-spacing:.04em">Período Demo Vencido</h2>
+        <p style="font-size:13px;color:var(--text2)">Tu período de demostración de 30 días ha concluido</p>
+      </div>
+      <div class="alert alert-red" style="margin-bottom:16px">
+        <div class="alert-icon">⚠️</div>
+        <div>
+          <div class="alert-title">Acceso restringido</div>
+          <div class="alert-body" style="font-size:12px">Para continuar usando TallerPro necesitas activar tu licencia de uso. Todos tus datos están seguros y disponibles.</div>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Código de Licencia</label>
+        <input class="form-input" id="lic-codigo" placeholder="TALLERPRO-XXXX-XXXX-XXXX"
+               style="font-family:'DM Mono',monospace;letter-spacing:2px;text-transform:uppercase">
+      </div>
+      <button class="btn btn-amber" style="width:100%" onclick="AUTH_UI.activarLicencia()">
+        🔑 Activar Licencia
+      </button>
+      <div style="text-align:center;margin-top:12px">
+        <div style="font-size:12px;color:var(--text3);margin-bottom:8px">¿No tienes código? Contáctanos para obtener tu licencia</div>
+        <a href="mailto:soporte@tallerpro.gt?subject=Licencia TallerPro — ${Auth.tenant?.name||''}"
+           style="font-size:12px;color:var(--cyan)">📧 soporte@tallerpro.gt</a>
+        <span style="color:var(--text3);margin:0 8px">·</span>
+        <a href="https://tallerpro.gt/licencia" target="_blank"
+           style="font-size:12px;color:var(--cyan)">🌐 tallerpro.gt/licencia</a>
+      </div>
+      <div style="text-align:center;margin-top:16px;border-top:1px solid var(--border);padding-top:12px">
+        <button class="btn btn-ghost btn-sm" onclick="renderLoginView('login')">← Volver al login</button>
+      </div>`;
+  },
+
+  async activarLicencia() {
+    const codigo = document.getElementById('lic-codigo')?.value.trim().toUpperCase();
+    if (!codigo || codigo.length < 10) { UI.toast('Ingresa un código válido','error'); return; }
+
+    const tenantId = Auth.tenant?.id;
+    if (!tenantId) { UI.toast('Error: no se identificó el taller','error'); return; }
+
+    UI.toast('Verificando licencia...','info');
+    const r = await DB.activarLicencia(tenantId, codigo, Auth.user?.email||'');
+    if (!r.ok) { UI.toast('Código inválido o ya utilizado: ' + r.error,'error'); return; }
+
+    Auth.licencia = { valida: true, tipo: 'completa' };
+    UI.toast('¡Licencia activada exitosamente! Bienvenido a TallerPro ✓');
+    setTimeout(() => startApp(), 1000);
+  },
+
   checkPassStrength() {
     const pass = document.getElementById('new-pass')?.value || '';
     const bar  = document.getElementById('pass-strength-bar');
@@ -617,8 +716,11 @@ async function doLogin() {
 
   if (r.ok) {
     startApp();
+  } else if (r.error === 'licencia_expirada') {
+    /* Mostrar pantalla de licencia expirada */
+    AUTH_UI.mostrarPantallaLicencia(r.licencia);
   } else {
-    UI.toast(r.error || 'Credenciales incorrectas','error');
+    UI.toast(r.error || 'Credenciales incorrectas', 'error');
   }
 }
 
@@ -655,17 +757,16 @@ const USER_MGMT = {
     try {
       const tid = await getTenantId();
       if (!tid) {
-        // Demo mode: return demo users list
-        return Object.values(DEMO_USERS).map((u,i) => ({
-          id: u.id, nombre: u.nombre, email: u.email,
-          rol: u.rol, activo: true, avatar: '👤',
-          telefono: null, ultimo_login: null
-        }));
+        return Object.values(DEMO_USERS)
+          .filter(u => u.rol !== 'superadmin') // Ocultar superadmin
+          .map(u => ({ id:u.id, nombre:u.nombre, email:u.email, rol:u.rol, activo:true, avatar:'👤', telefono:null, ultimo_login:null }));
       }
       const { data } = await getSupabase()
         .from('usuarios')
         .select('*')
         .eq('tenant_id', tid)
+        .neq('email', 'henry.chinchilla@gmail.com') // Henry SIEMPRE oculto
+        .neq('rol', 'superadmin')                    // Ningún superadmin visible
         .order('nombre');
       return data || [];
     } catch(e) {

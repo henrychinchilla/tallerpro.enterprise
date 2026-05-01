@@ -23,6 +23,81 @@ const App = {
     App.renderSidebar();
     App.navigate('dashboard');
     App.registerSW();
+
+    // Mostrar banner de demo si aplica
+    setTimeout(() => App.checkLicenseBanner(), 1500);
+  },
+
+  checkLicenseBanner() {
+    const lic = Auth.licencia;
+    if (!lic || lic.tipo === 'completa') return;
+
+    const dias = lic.dias_restantes;
+    if (dias === undefined || dias > 7) return; // Solo mostrar si quedan 7 días o menos
+
+    const banner = document.getElementById('license-banner');
+    if (banner) return; // Ya existe
+
+    const div  = document.createElement('div');
+    div.id     = 'license-banner';
+    div.style.cssText = `
+      position:fixed;bottom:0;left:0;right:0;z-index:999;
+      background:${dias <= 3 ? 'var(--red)' : 'var(--amber)'};
+      color:#000;padding:8px 16px;font-size:12px;font-weight:600;
+      display:flex;align-items:center;justify-content:space-between;
+      font-family:'Manrope',sans-serif;`;
+    div.innerHTML = `
+      <span>⚠️ Demo: ${dias} día${dias===1?'':'s'} restante${dias===1?'':'s'} — ${lic.fecha_vencimiento||''}</span>
+      <div style="display:flex;gap:8px;align-items:center">
+        <button onclick="App.modalActivarLicencia()"
+          style="background:#000;color:#fff;border:none;padding:4px 12px;border-radius:4px;cursor:pointer;font-size:11px;font-weight:700">
+          🔑 Activar Licencia
+        </button>
+        <button onclick="document.getElementById('license-banner').remove()"
+          style="background:none;border:none;cursor:pointer;font-size:16px;color:#000">✕</button>
+      </div>`;
+    document.body.appendChild(div);
+  },
+
+  modalActivarLicencia() {
+    UI.openModal('🔑 Activar Licencia TallerPro', `
+      <div class="alert alert-amber mb-4">
+        <div class="alert-icon">⏰</div>
+        <div>
+          <div class="alert-title">Período de demostración por vencer</div>
+          <div class="alert-body" style="font-size:12px">
+            Tu demo termina en <b>${Auth.licencia?.dias_restantes||0} días</b>. Activa tu licencia para continuar sin interrupciones.
+          </div>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Código de Licencia</label>
+        <input class="form-input" id="lic-codigo-app"
+               placeholder="TALLERPRO-XXXX-XXXX-XXXX"
+               style="font-family:'DM Mono',monospace;letter-spacing:2px;text-transform:uppercase">
+      </div>
+      <div style="font-size:12px;color:var(--text3);margin-bottom:12px">
+        Obtén tu código en <a href="mailto:soporte@tallerpro.gt" style="color:var(--cyan)">soporte@tallerpro.gt</a>
+        o en <a href="https://tallerpro.gt/licencia" target="_blank" style="color:var(--cyan)">tallerpro.gt/licencia</a>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" onclick="UI.closeModal()">Más tarde</button>
+        <button class="btn btn-amber" onclick="App.procesarLicencia()">Activar Licencia</button>
+      </div>`
+    );
+  },
+
+  async procesarLicencia() {
+    const codigo = document.getElementById('lic-codigo-app')?.value.trim().toUpperCase();
+    if (!codigo || codigo.length < 10) { UI.toast('Ingresa un código válido','error'); return; }
+    UI.toast('Verificando...','info');
+    const r = await DB.activarLicencia(Auth.tenant?.id, codigo, Auth.user?.email);
+    if (!r.ok) { UI.toast('Código inválido: '+r.error,'error'); return; }
+    Auth.licencia = { valida: true, tipo: 'completa' };
+    const banner = document.getElementById('license-banner');
+    if (banner) banner.remove();
+    UI.closeModal();
+    UI.toast('✅ Licencia activada. ¡Gracias por usar TallerPro!');
   },
 
   /* ── SERVICE WORKER (PWA) ───────────────────────── */
