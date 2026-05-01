@@ -6,8 +6,6 @@
 const SUPABASE_URL = 'https://oanguccrxleznozumpbi.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9hbmd1Y2NyeGxlem5venVtcGJpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzczODk4MzEsImV4cCI6MjA5Mjk2NTgzMX0.DcQS5AMHV3s4k-tvLlpb8ZWzkODPOSaiQjP1rLJVPAs';
 
-const TENANT_SLUG = 'automotriz-torres';
-
 /* ── CLIENTE SUPABASE (via CDN en index.html) ───────── */
 let _supabase = null;
 
@@ -17,18 +15,29 @@ function getSupabase() {
   return _supabase;
 }
 
-/* ── TENANT ID (se carga una vez) ───────────────────── */
-let _tenantId = null;
+/* ══════════════════════════════════════════════════════
+   getTenantId — MULTI-TENANT REAL
+   Lee siempre de Auth.tenant.id (sesión activa).
+   Cada usuario ve SOLO los datos de su taller.
+   Se resetea al hacer logout.
+══════════════════════════════════════════════════════ */
+function getTenantId() {
+  /* Auth.tenant.id se establece al hacer login en auth.js */
+  const id = (typeof Auth !== 'undefined') ? Auth?.tenant?.id : null;
 
-async function getTenantId() {
-  if (_tenantId) return _tenantId;
-  const { data } = await getSupabase()
-    .from('tenants')
-    .select('id')
-    .eq('slug', TENANT_SLUG)
-    .single();
-  _tenantId = data?.id;
-  return _tenantId;
+  if (!id) {
+    /* Sin sesión activa — no devolver ningún tenant para no filtrar datos de otro */
+    console.warn('getTenantId: sin sesión de taller activa');
+    return Promise.resolve(null);
+  }
+
+  return Promise.resolve(id);
+}
+
+/* Resetear caché al cambiar de taller/sesión */
+function resetTenantCache() {
+  /* Ya no hay caché que resetear — siempre lee de Auth.tenant.id */
+  console.log('Session tenant:', typeof Auth !== 'undefined' ? Auth?.tenant?.name : 'none');
 }
 
 /* Expose getSupabase for direct use in modules */

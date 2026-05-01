@@ -59,20 +59,37 @@ const Auth = {
     } catch(e) { /* perfil no existe aún */ }
 
     /* Fallback: sin perfil en BD, construir desde email */
-    const tenant = await DB.getTenant(tenantSlug);
-    const isHenry = (email||'').toLowerCase().includes('henry.chinchilla');
+    const isHenry = (email||'').toLowerCase() === 'henry.chinchilla@gmail.com';
     const isDemo  = (email||'').toLowerCase() === 'demo@demo.com';
 
+    /* Si hay tenantSlug específico, cargar ese tenant. Si no, buscar por email */
+    let tenant = null;
+    if (tenantSlug) {
+      tenant = await DB.getTenant(tenantSlug);
+    }
+    if (!tenant && !isHenry) {
+      /* Buscar el tenant asociado al usuario en la BD */
+      const { data: uData } = await getSupabase()
+        .from('usuarios')
+        .select('tenant_id, tenants(id,slug,name,nit,logo_base64)')
+        .eq('id', userId)
+        .maybeSingle();
+      if (uData?.tenants) tenant = uData.tenants;
+    }
+    if (!tenant) {
+      tenant = await DB.getTenant('automotriz-torres');
+    }
+
+    Auth.tenant = tenant;
     Auth.user = {
-      id:     userId,
-      nombre: isHenry ? 'Henry Chinchilla' : isDemo ? 'Demo Admin' : (email||'').split('@')[0],
-      email:  email || '',
-      rol:    isHenry ? 'superadmin' : 'admin',
-      activo: true,
-      avatar: isHenry ? '⚡' : '👑',
+      id:        userId,
+      nombre:    isHenry ? 'Henry Chinchilla' : isDemo ? 'Demo Admin' : (email||'').split('@')[0],
+      email:     email || '',
+      rol:       isHenry ? 'superadmin' : 'admin',
+      activo:    true,
+      avatar:    isHenry ? '⚡' : '👑',
       tenant_id: tenant?.id
     };
-    Auth.tenant = tenant;
 
     /* Guardar perfil para próximas sesiones */
     try {
@@ -94,24 +111,30 @@ const Auth = {
   async registrarNuevoTaller(fields) {
     const sb = getSupabase();
 
-    /* 1. Crear usuario en Supabase Auth */
-    const { data: authData, error: authErr } = await sb.auth.signUp({
-      email:    fields.email,
-      password: fields.password,
-      options:  { data: { nombre: fields.nombre_usuario, rol: 'admin' } }
-    });
-    if (authErr) return { ok: false, error: authErr.message };
-
-    /* 2. Crear taller (tenant + licencia demo + config fiscal) */
+    /* 1. Crear taller PRIMERO para obtener el tenant_id */
     const tallerResult = await DB.crearTaller(fields.nombre_taller, fields.nit_taller, fields.email);
-    if (!tallerResult.ok) return { ok: false, error: tallerResult.error };
+    if (!tallerResult.ok) return { ok: false, error: 'Error creando taller: ' + tallerResult.error };
 
     const tenantId = tallerResult.tenantId;
 
-    /* 3. Crear perfil admin */
+    /* 2. Crear usuario en Supabase Auth con tenant_id en metadata */
+    const { data: authData, error: authErr } = await sb.auth.signUp({
+      email:    fields.email,
+      password: fields.password,
+      options:  {
+        data: {
+          nombre:    fields.nombre_usuario,
+          rol:       'admin',
+          tenant_id: tenantId
+        }
+      }
+    });
+    if (authErr) return { ok: false, error: authErr.message };
+
+    /* 3. Crear perfil admin vinculado a ESTE taller */
     await sb.from('usuarios').upsert({
       id:        authData.user.id,
-      tenant_id: tenantId,
+      tenant_id: tenantId,           // ← CLAVE: vinculado al taller nuevo
       nombre:    fields.nombre_usuario,
       email:     fields.email,
       rol:       'admin',
@@ -119,15 +142,19 @@ const Auth = {
       avatar:    '👑'
     });
 
-    /* 4. Crear perfil oculto de Henry en este taller */
-    await Auth._asegurarHenryEnTaller(tenantId);
+    /* 4. Cargar tenant completo */
+    const tenant = await DB.getTenant(null, tenantId);
 
-    /* 5. Set session */
+    /* 5. Establecer sesión correctamente */
     Auth.supaUser = authData.user;
-    Auth.tenant   = tallerResult.tenant || await DB.getTenant(null, tenantId);
+    Auth.tenant   = tenant;          // ← Taller nuevo, NO automotriz-torres
     Auth.user     = {
-      id: authData.user.id, nombre: fields.nombre_usuario,
-      email: fields.email, rol: 'admin', activo: true, avatar: '👑',
+      id:        authData.user.id,
+      nombre:    fields.nombre_usuario,
+      email:     fields.email,
+      rol:       'admin',
+      activo:    true,
+      avatar:    '👑',
       tenant_id: tenantId
     };
     Auth.licencia = { valida: true, tipo: 'demo', dias_restantes: 30 };
@@ -165,14 +192,33 @@ const Auth = {
 
   /* ── LOGIN DEMO ───────────────────────────────────── */
   async quickLogin(role) {
-    Auth.tenant = await DB.getTenant();
-    Auth.user   = { ...DEMO_USERS[role], activo: true };
+    /* Demo: usa el primer taller disponible o crea estructura demo en memoria */
+    try {
+      Auth.tenant = await DB.getTenant('automotriz-torres');
+    } catch(e) { Auth.tenant = null; }
+
+    if (!Auth.tenant) {
+      /* Sin taller configurado — crear tenant virtual para demo */
+      Auth.tenant = {
+        id:   'demo-tenant-id',
+        slug: 'demo',
+        name: 'Taller Demo',
+        nit:  'CF'
+      };
+    }
+
+    Auth.user     = { ...DEMO_USERS[role], activo: true, tenant_id: Auth.tenant.id };
+    Auth.licencia = { valida: true, tipo: 'demo', dias_restantes: 30 };
   },
 
   /* ── LOGOUT ───────────────────────────────────────── */
   async logout() {
     if (Auth.supaUser) await getSupabase().auth.signOut();
-    Auth.user = null; Auth.tenant = null; Auth.supaUser = null;
+    Auth.user     = null;
+    Auth.tenant   = null;
+    Auth.supaUser = null;
+    Auth.licencia = null;
+    if (typeof resetTenantCache === 'function') resetTenantCache();
   },
 
   can(pageId) {
