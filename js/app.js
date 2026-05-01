@@ -10,18 +10,16 @@ const App = {
 
   /* ── INICIO ─────────────────────────────────────── */
   start() {
-    // Garantizar que Auth.user existe antes de renderizar
     if (!Auth.user) {
-      Auth.user = {
-        id: 'fallback', nombre: 'Usuario', email: '',
-        rol: 'admin', activo: true, avatar: '👤'
-      };
+      Auth.user = { id:'demo', nombre:'Usuario', email:'', rol:'admin', activo:true, avatar:'👤' };
     }
     if (!Auth.tenant) {
-      DB.getTenant().then(t => { Auth.tenant = t; App.renderSidebar(); });
+      DB.getTenant().then(t => { if(t){ Auth.tenant=t; App.renderSidebar(); } });
     }
-    document.getElementById('login-screen').style.display = 'none';
-    document.getElementById('app').classList.add('visible');
+    const ls = document.getElementById('login-screen');
+    if (ls) ls.style.display = 'none';
+    const ap = document.getElementById('app');
+    if (ap) ap.classList.add('visible');
     App.renderSidebar();
     App.navigate('dashboard');
     App.registerSW();
@@ -42,7 +40,7 @@ const App = {
 
     /* Navegación filtrada por rol */
     const nav   = document.getElementById('sidebar-nav');
-    const role  = Auth.user?.rol || 'admin';
+    const role  = Auth.user?.rol || 'admin'; if (!Auth.user) return;
     let html    = '<div class="nav-section-label">Módulos</div>';
 
     NAV.forEach(item => {
@@ -65,7 +63,7 @@ const App = {
     u.innerHTML = `
       <div class="user-avatar">${roleInfo.icon}</div>
       <div>
-        <div class="user-name">${Auth.user.nombre}</div>
+        <div class="user-name">${Auth.user?.nombre||'Usuario'}</div>
         <div class="user-role">${roleInfo.label}</div>
       </div>
       <button class="user-logout" onclick="logout()" title="Cerrar sesión">⏻</button>`;

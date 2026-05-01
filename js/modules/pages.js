@@ -1052,15 +1052,14 @@ Pages.guardarFactura = async function (accion) {
     const digitos      = document.getElementById('nf-digitos')?.value.trim() || '';
 
     comisionMonto = total * comPct;
-    montoNeto     = total - comisionMonto;
+    montoNeto     = total; // Ingreso completo — comisión va como egreso separado
     referencia    = autorizacion || referencia;
     notasPago     = [
       `Franquicia: ${franquicia.toUpperCase()}`,
       `POS: ${pos}`,
       cuotas > 1 ? `Cuotas: ${cuotas}` : 'Contado',
       digitos ? `Tarjeta: ****${digitos}` : '',
-      `Comisión: ${(comPct*100).toFixed(2)}% = Q${comisionMonto.toFixed(2)}`,
-      `Neto: Q${montoNeto.toFixed(2)}`
+      `Comisión POS: ${(comPct*100).toFixed(2)}% = Q${comisionMonto.toFixed(2)} (egreso separado)`
     ].filter(Boolean).join(' | ');
   }
 
@@ -1093,7 +1092,7 @@ Pages.guardarFactura = async function (accion) {
     await DB.insertIngreso({
       tipo:        'cobro_ot',
       concepto:    `Factura ${factura.num}${factura.descripcion ? ' — ' + factura.descripcion : ''}`,
-      monto:       parseFloat(montoNeto.toFixed(2)),
+      monto:       parseFloat(total.toFixed(2)), // Monto total, comisión va como egreso
       iva:         parseFloat(iva.toFixed(2)),
       fecha:       factura.fecha || new Date().toISOString().slice(0,10),
       ot_id:       otId,

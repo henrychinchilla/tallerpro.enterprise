@@ -29,6 +29,7 @@ Pages.rrhh = async function (tab = 'empleados') {
 
   const acciones = {
     empleados:      `<button class="btn btn-ghost" onclick="Pages.calcularNomina()">🧾 Nómina</button>
+                     <button class="btn btn-ghost" onclick="Pages.modalGestionUsuarios()">👥 Usuarios</button>
                      <button class="btn btn-amber" onclick="Pages.modalNuevoEmpleado()">＋ Empleado</button>`,
     viaticos:       `<button class="btn btn-ghost" onclick="Pages.imprimirViaticos()">🖨️ Imprimir</button>
                      <button class="btn btn-amber" onclick="Pages.modalNuevoViatico()">＋ Viático</button>`,
@@ -1232,6 +1233,10 @@ Pages.modalNuevoEmpleado = function () {
     <div class="form-row">
       <div class="form-group"><label class="form-label">Teléfono</label>
         <input class="form-input" id="ne-telefono" placeholder="5540-1234"></div>
+      <div class="form-group"><label class="form-label">Correo Electrónico</label>
+        <input class="form-input" id="ne-email" type="email" placeholder="empleado@empresa.gt"></div>
+    </div>
+    <div class="form-row">
       <div class="form-group"><label class="form-label">Estado Civil</label>
         <select class="form-select" id="ne-estado-civil">
           <option value="">Seleccionar...</option>
@@ -1385,6 +1390,7 @@ Pages.guardarEmpleado = async function () {
     cargo:                 document.getElementById('ne-cargo').value.trim()||null,
     nit:                   document.getElementById('ne-nit').value.trim()||null,
     telefono:              document.getElementById('ne-telefono')?.value.trim()||null,
+    email:                 document.getElementById('ne-email')?.value.trim()||null,
     direccion:             document.getElementById('ne-dir')?.value.trim()||null,
     estado_civil:          document.getElementById('ne-estado-civil')?.value||null,
     salario_base:          salario,
