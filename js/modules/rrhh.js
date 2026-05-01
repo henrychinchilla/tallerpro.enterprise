@@ -29,7 +29,6 @@ Pages.rrhh = async function (tab = 'empleados') {
 
   const acciones = {
     empleados:      `<button class="btn btn-ghost" onclick="Pages.calcularNomina()">🧾 Nómina</button>
-                     <button class="btn btn-ghost" onclick="Pages.modalGestionUsuarios()">👥 Usuarios</button>
                      <button class="btn btn-amber" onclick="Pages.modalNuevoEmpleado()">＋ Empleado</button>`,
     viaticos:       `<button class="btn btn-ghost" onclick="Pages.imprimirViaticos()">🖨️ Imprimir</button>
                      <button class="btn btn-amber" onclick="Pages.modalNuevoViatico()">＋ Viático</button>`,
@@ -1255,18 +1254,55 @@ Pages.modalNuevoEmpleado = function () {
 
     <!-- SALARIO -->
     <div style="font-weight:700;font-size:11px;color:var(--text3);letter-spacing:.08em;text-transform:uppercase;margin:14px 0 10px;border-top:1px solid var(--border);padding-top:12px">2. Salario y Prestaciones</div>
+
+    <!-- Salarios mínimos 2026 -->
+    <div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap">
+      <span style="font-size:11px;color:var(--text3);align-self:center">Salario Mínimo 2026:</span>
+      <button class="btn btn-ghost btn-sm" style="font-size:10px" onclick="document.getElementById('ne-salario').value='4002.28';Pages.calcularLiquido()">
+        🏙️ No Agrícola Q4,002.28
+      </button>
+      <button class="btn btn-ghost btn-sm" style="font-size:10px" onclick="document.getElementById('ne-salario').value='3791.20';Pages.calcularLiquido()">
+        🌿 Agrícola Q3,791.20
+      </button>
+      <button class="btn btn-ghost btn-sm" style="font-size:10px" onclick="document.getElementById('ne-salario').value='3409.73';Pages.calcularLiquido()">
+        🏭 Maquila Q3,409.73
+      </button>
+    </div>
+
     <div class="form-row">
       <div class="form-group"><label class="form-label">Salario Base (Q) *</label>
-        <input class="form-input" id="ne-salario" type="number" min="0" placeholder="3500.00" oninput="Pages.calcularLiquido()"></div>
+        <input class="form-input" id="ne-salario" type="number" min="0" placeholder="4002.28"
+               oninput="Pages.calcularLiquido()"></div>
       <div class="form-group"><label class="form-label">Bonificación Incentivo (Q)</label>
-        <input class="form-input" id="ne-bonif" type="number" value="250" oninput="Pages.calcularLiquido()"></div>
+        <input class="form-input" id="ne-bonif" type="number" value="250" oninput="Pages.calcularLiquido()">
+        <div style="font-size:10px;color:var(--text3);margin-top:2px">Mínimo legal Q250 · No aplica para ISR</div>
+      </div>
     </div>
+
     <div class="card" style="padding:12px;margin-bottom:4px">
-      <div class="grid-2" style="gap:8px">
+      <div style="font-size:10px;color:var(--text3);font-weight:700;letter-spacing:.06em;text-transform:uppercase;margin-bottom:8px">Cálculo de Nómina — Guatemala 2026</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
         <div><div class="text-muted" style="font-size:11px">IGSS Laboral (4.83%)</div><div class="mono-sm text-red" id="prev-igss">Q0.00</div></div>
-        <div><div class="text-muted" style="font-size:11px">Líquido a pagar</div><div class="mono-sm text-green" id="prev-liquido">Q0.00</div></div>
+        <div>
+          <div class="text-muted" style="font-size:11px">ISR Mensual (Decreto 10-2012)</div>
+          <div class="mono-sm text-red" id="prev-isr">Q0.00</div>
+          <div style="font-size:9px" id="prev-isr-nota" class="text-muted"></div>
+        </div>
+        <div><div class="text-muted" style="font-size:11px">Líquido a recibir</div><div class="mono-sm text-green" id="prev-liquido">Q0.00</div></div>
         <div><div class="text-muted" style="font-size:11px">IGSS Patronal (12.67%)</div><div class="mono-sm" id="prev-patron">Q0.00</div></div>
-        <div><div class="text-muted" style="font-size:11px">Costo total taller</div><div class="mono-sm text-amber" id="prev-total">Q0.00</div></div>
+        <div><div class="text-muted" style="font-size:11px">Costo total al taller</div><div class="mono-sm text-amber" id="prev-total">Q0.00</div></div>
+        <div>
+          <div class="text-muted" style="font-size:11px">Deducciones anuales</div>
+          <div class="mono-sm text-muted" style="font-size:10px">Q48,000 (Q36K+Q12K IVA)</div>
+        </div>
+      </div>
+      <div class="alert alert-cyan" style="margin-top:10px;margin-bottom:0;padding:8px 12px">
+        <div class="alert-icon" style="font-size:14px">📋</div>
+        <div class="alert-body" style="font-size:10px">
+          <b>Decreto 13-2026:</b> Trabajadores con salario mínimo quedan EXENTOS de ISR.
+          Tasas: hasta Q300,000/año = 5% · Sobre Q300,000 = Q15,000 + 7% sobre excedente.
+          Deducciones personales: Q48,000/año sin presentar facturas.
+        </div>
       </div>
     </div>
     <div class="form-group"><label class="form-label">
@@ -1370,12 +1406,73 @@ Pages._onDocChange = function (tipo, input) {
   UI.toast(`${tipo.replace(/_/g,' ')}: archivo cargado ✓`);
 };
 
+/* Salario mínimo 2026 Guatemala — Decreto 13-2026 */
+const SALARIO_MINIMO_2026 = {
+  no_agricola:        4002.28,
+  agricola:           3791.20,
+  exportacion_maquila:3409.73,
+  bonificacion:        250.00
+};
+
+/**
+ * Cálculo ISR Salarial Guatemala 2026
+ * - Salario mínimo: EXENTO (Decreto 13-2026)
+ * - Hasta Q300,000 anuales: 5% sobre renta imponible
+ * - Sobre Q300,000 anuales: Q15,000 + 7% sobre excedente
+ * - Deducciones: Q48,000 anuales (Q36,000 gastos + Q12,000 IVA facturas)
+ */
+function calcularISRLaboral2026(salarioMensual) {
+  const MINIMO = SALARIO_MINIMO_2026.no_agricola;
+
+  // Si gana el salario mínimo o menos → EXENTO (Decreto 13-2026)
+  if (salarioMensual <= MINIMO) return 0;
+
+  // Proyección anual (sin bonificación)
+  const anual = salarioMensual * 12;
+
+  // Deducciones legales anuales
+  const DEDUCCION_PERSONAL = 36000; // Gastos personales sin facturas
+  const DEDUCCION_IVA      = 12000; // IVA facturas servicios básicos
+  const deduccionTotal     = DEDUCCION_PERSONAL + DEDUCCION_IVA; // Q48,000
+
+  const rentaImponible = Math.max(anual - deduccionTotal, 0);
+
+  let isrAnual = 0;
+  if (rentaImponible <= 0) {
+    isrAnual = 0;
+  } else if (rentaImponible <= 300000) {
+    isrAnual = rentaImponible * 0.05;
+  } else {
+    isrAnual = 15000 + (rentaImponible - 300000) * 0.07;
+  }
+
+  return isrAnual / 12; // Retención mensual
+}
+
 Pages.calcularLiquido = function () {
   const sal   = parseFloat(document.getElementById('ne-salario')?.value||document.getElementById('ee-salario')?.value||0);
   const bonif = parseFloat(document.getElementById('ne-bonif')?.value||document.getElementById('ee-bonif')?.value||250);
-  const igssL = sal*0.0483, igssP = sal*0.1267, liq = sal+bonif-igssL;
-  const set=(id,val)=>{const el=document.getElementById(id);if(el)el.textContent=UI.q(val);};
-  set('prev-igss',igssL); set('prev-liquido',liq); set('prev-patron',igssP); set('prev-total',sal+bonif+igssP);
+  const igssL = sal * 0.0483;
+  const igssP = sal * 0.1267;
+  const isr   = calcularISRLaboral2026(sal);
+  const liq   = sal + bonif - igssL - isr;
+
+  const set = (id, val) => { const el = document.getElementById(id); if(el) el.textContent = UI.q(val); };
+  set('prev-igss',    igssL);
+  set('prev-isr',     isr);
+  set('prev-liquido', liq);
+  set('prev-patron',  igssP);
+  set('prev-total',   sal + bonif + igssP);
+
+  // Indicador de exención
+  const exEl = document.getElementById('prev-isr-nota');
+  if (exEl) {
+    const MINIMO = SALARIO_MINIMO_2026.no_agricola;
+    exEl.textContent = sal <= MINIMO
+      ? '✅ Exento — Decreto 13-2026 (Salario Mínimo)'
+      : '⚠️ Sujeto a retención ISR';
+    exEl.style.color = sal <= MINIMO ? 'var(--green)' : 'var(--amber)';
+  }
 };
 
 Pages.guardarEmpleado = async function () {
@@ -1503,10 +1600,12 @@ Pages.actualizarEmpleado = async function (id) {
 Pages.imprimirBoleta = function (id) {
   const emp = (Pages._empleadosData||[]).find(e=>e.id===id); if(!emp) return;
   const mes = new Date().toLocaleDateString('es-GT',{month:'long',year:'numeric'});
-  const igssLab  = ((emp.salario_base||0)*0.0483).toFixed(2);
-  const igssPatr = ((emp.salario_base||0)*0.1267).toFixed(2);
+  const sal      = emp.salario_base||0;
+  const igssLab  = (sal*0.0483).toFixed(2);
+  const igssPatr = (sal*0.1267).toFixed(2);
+  const isrMes   = calcularISRLaboral2026(sal).toFixed(2);
   const bonif    = emp.bonificacion||250;
-  const liquido  = ((emp.salario_base||0)+bonif-parseFloat(igssLab)).toFixed(2);
+  const liquido  = (sal+bonif-parseFloat(igssLab)-parseFloat(isrMes)).toFixed(2);
   const html = `<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><title>Boleta ${emp.nombre}</title>
   <style>body{font-family:Arial,sans-serif;font-size:12px;margin:24px}
   h1{font-size:14px} .header{display:flex;justify-content:space-between;border-bottom:2px solid #000;padding-bottom:8px;margin-bottom:16px}
@@ -1521,9 +1620,10 @@ Pages.imprimirBoleta = function (id) {
   <tr><td><b>NIT</b></td><td>${emp.nit||'—'}</td><td><b>Fecha Ingreso</b></td><td>${emp.fecha_ingreso||'—'}</td></tr></table>
   <table><thead><tr><th colspan="2">Ingresos</th></tr></thead>
   <tr><td>Salario Base</td><td>Q${(emp.salario_base||0).toFixed(2)}</td></tr>
-  <tr><td>Bonificación Incentivo (MINTRAB)</td><td>Q${bonif.toFixed(2)}</td></tr>
+  <tr><td>Bonificación Incentivo (MINTRAB — no aplica ISR)</td><td>Q${bonif.toFixed(2)}</td></tr>
   <thead><tr><th colspan="2">Descuentos</th></tr></thead>
   <tr><td>IGSS Laboral (4.83%)</td><td>-Q${igssLab}</td></tr>
+  <tr><td>ISR Retenido — ${parseFloat(isrMes)>0?'Decreto 10-2012':'EXENTO Decreto 13-2026'}</td><td>-Q${isrMes}</td></tr>
   <tr class="total"><td><b>LÍQUIDO A RECIBIR</b></td><td><b>Q${liquido}</b></td></tr>
   <thead><tr><th colspan="2">Aporte Patronal (cargo del taller)</th></tr></thead>
   <tr><td>IGSS Patronal (12.67%)</td><td>Q${igssPatr}</td></tr></table>

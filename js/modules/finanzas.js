@@ -1201,24 +1201,34 @@ Pages.registrarAbono = async function (cuentaId) {
 };
 
 Pages.guardarConfigFiscal = async function () {
-  const regimen = document.getElementById('cfg-regimen').value;
-  const ok = await DB.updateConfigFiscal({
-    num_patrono_igss:      document.getElementById('cfg-igss-num').value.trim(),
+  const g = id => document.getElementById(id);
+  const regimen = g('cfg-regimen')?.value || 'general';
+
+  const campos = {
+    num_patrono_igss:      g('cfg-igss-num')?.value?.trim() || '',
     regimen_iva:           regimen,
     tasa_iva:              regimen === 'repc' ? 0.05 : 0.12,
     tasa_isr:              regimen === 'rsu'  ? 0.25 : 0.05,
-    cuota_laboral:         parseFloat(document.getElementById('cfg-igss-lab').value) / 100,
-    cuota_patronal:        parseFloat(document.getElementById('cfg-igss-pat').value) / 100,
-    intecap:               parseFloat(document.getElementById('cfg-intecap').value) / 100,
-    aplica_irtra:          document.getElementById('cfg-irtra').checked,
-    pos_proveedor:         document.getElementById('cfg-pos-proveedor')?.value || 'visanet',
-    pos_cargo_mensual:     parseFloat(document.getElementById('cfg-pos-mensual')?.value || 0),
-    com_debito_visanet:    parseFloat(document.getElementById('cfg-com-debito-visa')?.value || 2.5),
-    com_credito_visanet:   parseFloat(document.getElementById('cfg-com-credito-visa')?.value || 3),
-    com_debito_credomatic: parseFloat(document.getElementById('cfg-com-debito-credo')?.value || 2.5),
-    com_credito_credomatic:parseFloat(document.getElementById('cfg-com-credito-credo')?.value || 3)
-  });
+    cuota_laboral:         parseFloat(g('cfg-igss-lab')?.value || 4.83) / 100,
+    cuota_patronal:        parseFloat(g('cfg-igss-pat')?.value || 12.67) / 100,
+    intecap:               parseFloat(g('cfg-intecap')?.value || 1) / 100,
+    aplica_irtra:          g('cfg-irtra')?.checked ?? true,
+    pos_proveedor:         g('cfg-pos-proveedor')?.value || 'visanet',
+    pos_cargo_mensual:     parseFloat(g('cfg-pos-mensual')?.value || 0),
+    com_debito_visanet:    parseFloat(g('cfg-com-debito-visa')?.value || 2.5),
+    com_credito_visanet:   parseFloat(g('cfg-com-credito-visa')?.value || 3),
+    com_debito_credomatic: parseFloat(g('cfg-com-debito-credo')?.value || 2.5),
+    com_credito_credomatic:parseFloat(g('cfg-com-credito-credo')?.value || 3)
+  };
 
-  if (ok) { UI.toast('Configuración fiscal y POS guardada ✓'); Pages.finanzas('fiscal'); }
-  else UI.toast('Error al guardar', 'error');
+  UI.toast('Guardando...', 'info');
+  const ok = await DB.updateConfigFiscal(campos);
+
+  if (ok) {
+    UI.toast('Configuración fiscal y POS guardada ✓');
+    Pages.finanzas('fiscal');
+  } else {
+    UI.toast('Error al guardar — verifica la conexión a Supabase', 'error');
+    console.error('guardarConfigFiscal failed', campos);
+  }
 };

@@ -652,13 +652,26 @@ window.addEventListener('load', () => {
 const USER_MGMT = {
 
   async getAll() {
-    const tid = await getTenantId();
-    const { data } = await getSupabase()
-      .from('usuarios')
-      .select('*')
-      .eq('tenant_id', tid)
-      .order('nombre');
-    return data || [];
+    try {
+      const tid = await getTenantId();
+      if (!tid) {
+        // Demo mode: return demo users list
+        return Object.values(DEMO_USERS).map((u,i) => ({
+          id: u.id, nombre: u.nombre, email: u.email,
+          rol: u.rol, activo: true, avatar: '👤',
+          telefono: null, ultimo_login: null
+        }));
+      }
+      const { data } = await getSupabase()
+        .from('usuarios')
+        .select('*')
+        .eq('tenant_id', tid)
+        .order('nombre');
+      return data || [];
+    } catch(e) {
+      console.warn('USER_MGMT.getAll error:', e);
+      return [];
+    }
   },
 
   async invitar(fields) {

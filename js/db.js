@@ -577,25 +577,28 @@ const DB = {
   },
 
   async updateConfigFiscal(fields) {
-    const id = await getTenantId();
-    // Check if config exists
-    const { data: existing } = await getSupabase()
-      .from('config_fiscal').select('id').eq('tenant_id', id).single();
-    
-    let error;
-    if (existing?.id) {
-      // Update existing record
-      ({ error } = await getSupabase()
-        .from('config_fiscal')
-        .update({ ...fields, updated_at: new Date().toISOString() })
-        .eq('tenant_id', id));
-    } else {
-      // Insert new record
-      ({ error } = await getSupabase()
-        .from('config_fiscal')
-        .insert({ ...fields, tenant_id: id }));
+    try {
+      const id = await getTenantId();
+      const { data: existing } = await getSupabase()
+        .from('config_fiscal').select('id').eq('tenant_id', id).maybeSingle();
+
+      let error;
+      if (existing?.id) {
+        ({ error } = await getSupabase()
+          .from('config_fiscal')
+          .update({ ...fields, updated_at: new Date().toISOString() })
+          .eq('tenant_id', id));
+      } else {
+        ({ error } = await getSupabase()
+          .from('config_fiscal')
+          .insert({ ...fields, tenant_id: id }));
+      }
+      if (error) console.error('updateConfigFiscal error:', error);
+      return !error;
+    } catch(e) {
+      console.error('updateConfigFiscal exception:', e);
+      return false;
     }
-    return !error;
   },
 
   /* ── INGRESOS ─────────────────────────────────────── */
