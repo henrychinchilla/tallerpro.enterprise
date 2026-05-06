@@ -182,11 +182,11 @@
 <!-- 3. UI helpers (toast, modal, badges) -->
 <script src="js/ui.js"></script>
 
-<!-- 5. Autenticación -->
-<script src="js/auth.js"></script>
-
-<!-- 6. Namespace de páginas (debe existir antes de los módulos) -->
+<!-- 5. Namespace de páginas -->
 <script>const Pages = {};</script>
+
+<!-- 6. Autenticación (después de Pages para que Pages.modalGestionUsuarios funcione) -->
+<script src="js/auth.js"></script>
 
 <!-- 7. Módulos de cada página -->
 <script src="js/modules/dashboard.js"></script>
