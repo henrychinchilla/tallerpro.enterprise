@@ -373,10 +373,38 @@ const DB = {
 
   async insertProveedor(fields) {
     const id = await getTenantId();
+    /* Only send fields that exist in the proveedores table */
+    const safe = {
+      tenant_id:      id,
+      nombre:         fields.nombre,
+      nit:            fields.nit         || null,
+      contacto:       fields.contacto    || null,
+      telefono:       fields.telefono    || null,
+      email:          fields.email       || null,
+      pais:           fields.pais        || 'Guatemala',
+      direccion:      fields.direccion   || null,
+      credito_dias:   fields.credito_dias   || 0,
+      limite_credito: fields.limite_credito || 0,
+      notas:          fields.notas       || null,
+      activo:         true
+    };
+    /* Add optional columns only if they might exist */
+    if (fields.codigo)    safe.codigo    = fields.codigo;
+    if (fields.categoria) safe.categoria = fields.categoria;
+
     const { data, error } = await getSupabase()
       .from('proveedores')
-      .insert({ ...fields, tenant_id: id })
+      .insert(safe)
       .select().single();
+
+    if (error && error.message.includes('column')) {
+      /* Column doesn't exist — retry without optional fields */
+      delete safe.codigo;
+      delete safe.categoria;
+      const { data: d2, error: e2 } = await getSupabase()
+        .from('proveedores').insert(safe).select().single();
+      return { data: d2, error: e2 };
+    }
     return { data, error };
   },
 

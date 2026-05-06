@@ -592,90 +592,78 @@ Pages.miVehiculo = async function () {
 
 Pages.config = async function () {
   const el = document.getElementById('page-content');
-  el.innerHTML = `<div class="page-header"><h1 class="page-title">Configuración</h1></div>
-    <div class="page-body"><div class="text-muted">Cargando...</div></div>`;
+  el.innerHTML = '<div class="page-header"><h1 class="page-title">Configuración</h1></div><div class="page-body"><div class="text-muted">Cargando...</div></div>';
 
-  const [empleados, t] = await Promise.all([
-    DB.getEmpleados(),
-    DB.getTenant()
-  ]);
-
-  const integraciones = [
-    { name: 'INFILE FEL',               icon: '🧾', status: 'Activo',          color: 'green' },
-    { name: 'WhatsApp Business (Twilio)',icon: '💬', status: 'No configurado',  color: 'amber' },
-    { name: 'SendGrid Email',            icon: '📧', status: 'Activo',          color: 'green' },
-    { name: 'CarMD Automotive API',      icon: '🚗', status: 'No configurado',  color: 'gray'  }
-  ];
+  const t = await DB.getTenant();
+  const logo = Auth.tenant?.logo_base64 || t?.logo_base64 || null;
 
   el.innerHTML = `
     <div class="page-header">
-      <div>
-        <h1 class="page-title">Configuración</h1>
-        <p class="page-subtitle">// Gestión del Taller</p>
-      </div>
+      <div><h1 class="page-title">⚙️ Configuración</h1>
+      <p class="page-subtitle">// ${Auth.tenant?.name || t?.name || 'TallerPro'}</p></div>
     </div>
     <div class="page-body">
       <div class="grid-2">
-        <!-- Info del taller -->
+
+        <!-- INFO DEL TALLER -->
         <div class="card card-amber">
-          <div class="card-sub mb-4">⚙️ Información del Taller</div>
-          ${Pages._agregarLogoAConfig()}
-          <div class="form-group"><label class="form-label">Nombre *</label><input class="form-input" id="cfg-nombre" value="${t?.name||''}"></div>
-          <div class="form-group"><label class="form-label">NIT</label><input class="form-input" id="cfg-nit" value="${t?.nit||''}"></div>
-          <div class="form-group"><label class="form-label">Teléfono</label><input class="form-input" id="cfg-tel" value="${t?.tel||''}"></div>
-          <div class="form-group"><label class="form-label">Email</label><input class="form-input" id="cfg-email" value="${t?.email||''}"></div>
-          <div class="form-group"><label class="form-label">Dirección</label><input class="form-input" id="cfg-addr" value="${t?.address||''}"></div>
+          <div class="card-sub mb-4">🏪 Información del Taller</div>
+
+          <!-- Logo -->
+          <div class="form-group">
+            <label class="form-label">Logo (PNG/JPG máx. 500KB)</label>
+            ${logo ? '<img src="' + logo + '" style="height:56px;object-fit:contain;border:1px solid var(--border);border-radius:6px;padding:6px;background:#fff;margin-bottom:8px;display:block">' : ''}
+            <input type="file" id="cfg-logo-file" accept="image/png,image/jpeg,image/webp"
+                   class="form-input" onchange="Pages._onLogoChange(this)">
+          </div>
+
+          <div class="form-group"><label class="form-label">Nombre *</label>
+            <input class="form-input" id="cfg-nombre" value="${t?.name||''}"></div>
+          <div class="form-group"><label class="form-label">NIT</label>
+            <input class="form-input" id="cfg-nit" value="${t?.nit||''}"></div>
+          <div class="form-group"><label class="form-label">Teléfono</label>
+            <input class="form-input" id="cfg-tel" value="${t?.tel||''}"></div>
+          <div class="form-group"><label class="form-label">Email</label>
+            <input class="form-input" id="cfg-email" value="${t?.email||''}"></div>
+          <div class="form-group"><label class="form-label">Dirección</label>
+            <input class="form-input" id="cfg-addr" value="${t?.address||''}"></div>
           <button class="btn btn-amber" onclick="Pages.guardarConfig()">Guardar Cambios</button>
         </div>
 
+        <!-- USUARIOS Y GESTIÓN -->
         <div>
-          <!-- Integraciones -->
-          <div class="card card-cyan mb-4">
-            <div class="card-sub mb-4">🔗 Integraciones</div>
-            ${integraciones.map(i => `
-            <div class="flex items-center gap-3" style="padding:10px 0;border-bottom:1px solid var(--border)">
-              <span>${i.icon}</span>
-              <span style="flex:1;font-size:13px">${i.name}</span>
-              <span class="badge badge-${i.color}">${i.status}</span>
-              <button class="btn btn-sm btn-ghost" onclick="UI.toast('Configurar: ${i.name}','info')">Config.</button>
-            </div>`).join('')}
-          </div>
-
-          <!-- Usuarios -->
-          <div class="card card-purple">
-            <div class="card-sub mb-4">👥 Usuarios del Sistema</div>
-            ${empleados.map(e => `
-            <div class="flex items-center gap-2" style="padding:8px 0;border-bottom:1px solid var(--border)">
-              <span>${e.avatar||'👤'}</span>
-              <div style="flex:1">
-                <div style="font-size:13px;font-weight:600">${e.nombre}</div>
-                <div class="mono-sm text-muted">${ROLES[e.rol]?.label||e.rol}</div>
-              </div>
-              <span class="badge badge-${ROLES[e.rol]?.color||'gray'}">${e.rol}</span>
-            </div>`).join('') || '<div class="text-muted" style="font-size:13px">Sin empleados registrados.</div>'}
-            <button class="btn btn-amber btn-sm mt-4"
-                    onclick="Pages.modalGestionUsuarios()">
+          <div class="card card-purple mb-4">
+            <div class="card-sub mb-3">👥 Usuarios del Sistema</div>
+            <p style="font-size:13px;color:var(--text2);margin-bottom:14px">
+              Gestiona accesos, roles e invitaciones al sistema.
+            </p>
+            <button class="btn btn-cyan" style="width:100%" onclick="Pages.modalGestionUsuarios()">
               👥 Gestionar Usuarios
             </button>
           </div>
-        </div>
-      </div>
 
-      <!-- Plan SaaS -->
-      <div class="card mt-5">
-        <div class="card-sub mb-4">📊 Plan & Suscripción SaaS</div>
-        <div class="kpi-grid" style="grid-template-columns:repeat(4,1fr)">
-          <div class="kpi-card"><div class="kpi-label">Plan Actual</div><div class="kpi-val amber" style="font-size:28px">${(t?.plan||'Pro').toUpperCase()}</div></div>
-          <div class="kpi-card"><div class="kpi-label">Usuarios</div><div class="kpi-val">${empleados.length}</div></div>
-          <div class="kpi-card"><div class="kpi-label">Base de Datos</div><div class="kpi-val" style="font-size:28px">Activa</div></div>
-          <div class="kpi-card"><div class="kpi-label">Estado</div><div class="kpi-val" style="font-size:22px;color:var(--green)">Online</div></div>
+          <div class="card card-cyan">
+            <div class="card-sub mb-3">🔗 Integraciones Activas</div>
+            <div style="display:flex;flex-direction:column;gap:8px">
+              <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border)">
+                <span style="font-size:13px">🧾 INFILE FEL</span>
+                <span class="badge badge-green">Activo</span>
+              </div>
+              <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border)">
+                <span style="font-size:13px">💬 WhatsApp / CallMeBot</span>
+                <button class="btn btn-sm btn-ghost" onclick="App.navigate('comunicaciones')">Configurar</button>
+              </div>
+              <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0">
+                <span style="font-size:13px">📧 Email / SMTP</span>
+                <button class="btn btn-sm btn-ghost" onclick="App.navigate('comunicaciones')">Configurar</button>
+              </div>
+            </div>
+          </div>
         </div>
-        <button class="btn btn-amber mt-4" onclick="UI.toast('Redirigiendo a portal de pagos...','info')">
-          ⬆ Actualizar Plan
-        </button>
       </div>
     </div>`;
 };
+
 
 Pages.guardarConfig = async function () {
   const fields = {

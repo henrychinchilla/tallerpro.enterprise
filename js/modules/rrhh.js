@@ -1258,10 +1258,25 @@ Pages.modalNuevoEmpleado = function () {
     <div class="form-row">
       <div class="form-group"><label class="form-label">Nombre Completo *</label>
         <input class="form-input" id="ne-nombre" placeholder="Nombre completo"></div>
-      <div class="form-group"><label class="form-label">Rol en el Sistema *</label>
-        <select class="form-select" id="ne-rol">
-          ${Object.entries(ROLES).map(([k,v])=>`<option value="${k}">${v.icon} ${v.label}</option>`).join('')}
+      <div class="form-group"><label class="form-label">Cargo / Puesto en el Taller *</label>
+        <select class="form-select" id="ne-cargo-tipo">
+          <option value="mecanico">🪛 Mecánico</option>
+          <option value="recepcionista">📋 Recepcionista</option>
+          <option value="gerente_tal">🔧 Gerente de Taller</option>
+          <option value="gerente_fin">💰 Gerente Financiero</option>
+          <option value="admin">👑 Administrador</option>
+          <option value="otro">📋 Otro (sin acceso al sistema)</option>
         </select></div>
+    </div>
+    <div class="form-group" id="ne-acceso-wrap">
+      <label class="form-label">
+        <input type="checkbox" id="ne-tiene-acceso" checked style="margin-right:8px"
+               onchange="Pages._toggleAccesoSistema(this)">
+        Este empleado tiene acceso al sistema (usuario)
+      </label>
+      <div id="ne-acceso-nota" style="font-size:11px;color:var(--text3);margin-top:4px">
+        Se le asignará el rol correspondiente a su cargo en el sistema
+      </div>
     </div>
     <div class="form-row">
       <div class="form-group"><label class="form-label">Cargo / Puesto</label>
@@ -1516,10 +1531,12 @@ Pages.calcularLiquido = function () {
 };
 
 Pages.guardarEmpleado = async function () {
-  const nombre  = document.getElementById('ne-nombre').value.trim();
-  const rol     = document.getElementById('ne-rol').value;
-  const salario = parseFloat(document.getElementById('ne-salario').value)||0;
-  if (!nombre||!rol)  { UI.toast('Nombre y rol son obligatorios','error'); return; }
+  const nombre      = document.getElementById('ne-nombre').value.trim();
+  const cargoTipo   = document.getElementById('ne-cargo-tipo')?.value || 'mecanico';
+  const tieneAcceso = document.getElementById('ne-tiene-acceso')?.checked ?? true;
+  const rol         = tieneAcceso ? (cargoTipo === 'otro' ? 'mecanico' : cargoTipo) : 'mecanico';
+  const salario     = parseFloat(document.getElementById('ne-salario').value)||0;
+  if (!nombre) { UI.toast('El nombre es obligatorio','error'); return; }
   if (salario<=0)     { UI.toast('El salario debe ser mayor a 0','error'); return; }
 
   const {data: emp, error} = await DB.insertEmpleado({
@@ -2320,4 +2337,14 @@ Pages._descargarPlantillaViaticos = function() {
   const a    = document.createElement('a');
   a.href=url; a.download='plantilla_viaticos.csv'; a.click();
   URL.revokeObjectURL(url);
+};
+
+Pages._toggleAccesoSistema = function(cb) {
+  const nota = document.getElementById('ne-acceso-nota');
+  if (nota) {
+    nota.textContent = cb.checked
+      ? 'Se le asignará el rol correspondiente a su cargo en el sistema'
+      : 'Solo será registrado como empleado sin acceso al sistema';
+    nota.style.color = cb.checked ? 'var(--text3)' : 'var(--amber)';
+  }
 };
