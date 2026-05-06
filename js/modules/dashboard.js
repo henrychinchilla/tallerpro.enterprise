@@ -41,9 +41,9 @@ Pages.dashboard = async function () {
       <!-- KPIs -->
       <div class="kpi-grid">
         <div class="kpi-card amber">
-          <div class="kpi-label">Ingresos del Mes</div>
+          <div class="kpi-label">Ingresos — ${new Date().toLocaleDateString('es-GT',{month:'long',year:'numeric'})}</div>
           <div class="kpi-val amber">${UI.q(ingresos)}</div>
-          <div class="kpi-trend">Facturas certificadas</div>
+          <div class="kpi-trend">${ingresos===0?'Sin ingresos registrados este mes':'Facturas + ingresos directos'}</div>
         </div>
         <div class="kpi-card cyan">
           <div class="kpi-label">OTs Activas</div>

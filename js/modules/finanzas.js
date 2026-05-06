@@ -17,7 +17,12 @@ Pages.finanzas = async function (tab = 'dashboard') {
     DB.getIngresos(),
     DB.getEgresos(),
     DB.getCuentasCobrar(),
-    DB.getConfigFiscal()
+    (async () => {
+      const key = 'tp_fiscal_' + (Auth.tenant?.id || 'demo');
+      const local = JSON.parse(localStorage.getItem(key) || 'null');
+      if (local) return local;
+      return await DB.getConfigFiscal();
+    })()
   ]);
 
   Pages._finIngresos = ingresos;
@@ -553,7 +558,8 @@ const FINANZAS = {
     const gastoPublicidad = egMes.filter(e=>e.categoria==='publicidad').reduce((s,e)=>s+e.monto,0);
     const gastoOtros      = egMes.filter(e=>['combustible','otros'].includes(e.categoria)).reduce((s,e)=>s+e.monto,0);
     const gastoImpuestos  = egMes.filter(e=>e.categoria==='impuestos').reduce((s,e)=>s+e.monto,0);
-    const totalGastosOp   = gastoNomina+gastoIGSS+gastoAlquiler+gastoServicios+gastoPublicidad+gastoOtros;
+    const gastoViaticos   = egMes.filter(e=>e.categoria==='viaticos').reduce((s,e)=>s+e.monto,0);
+    const totalGastosOp   = gastoNomina+gastoIGSS+gastoAlquiler+gastoServicios+gastoPublicidad+gastoOtros+gastoViaticos;
     const utilOperativa   = utilBruta - totalGastosOp;
     const isr             = FINANZAS.calcularISR(utilOperativa>0?utilOperativa:0, config);
     const utilNeta        = utilOperativa - isr - gastoImpuestos;
@@ -619,6 +625,7 @@ const FINANZAS = {
             ${fila('Alquiler del Local', gastoAlquiler, 1)}
             ${fila('Servicios (agua, luz, internet, tel.)', gastoServicios, 1)}
             ${fila('Publicidad y Mercadeo', gastoPublicidad, 1)}
+            ${fila('Viáticos', egMes.filter(e=>e.categoria==='viaticos').reduce((s,e)=>s+e.monto,0), 1)}
             ${fila('Combustible y Otros', gastoOtros, 1)}
             ${fila('TOTAL GASTOS OPERATIVOS', totalGastosOp, 0, true, 'var(--red)', true)}
             ${fila('UTILIDAD OPERATIVA', utilOperativa, 0, true, utilOperativa>=0?'var(--green)':'var(--red)', true)}
@@ -1204,11 +1211,11 @@ Pages.guardarConfigFiscal = async function () {
   const g = id => document.getElementById(id);
   const regimen = g('cfg-regimen')?.value || 'general';
 
-  const campos = {
-    num_patrono_igss:      g('cfg-igss-num')?.value?.trim() || '',
+  const config = {
     regimen_iva:           regimen,
     tasa_iva:              regimen === 'repc' ? 0.05 : 0.12,
     tasa_isr:              regimen === 'rsu'  ? 0.25 : 0.05,
+    num_patrono_igss:      g('cfg-igss-num')?.value?.trim() || '',
     cuota_laboral:         parseFloat(g('cfg-igss-lab')?.value || 4.83) / 100,
     cuota_patronal:        parseFloat(g('cfg-igss-pat')?.value || 12.67) / 100,
     intecap:               parseFloat(g('cfg-intecap')?.value || 1) / 100,
@@ -1221,14 +1228,30 @@ Pages.guardarConfigFiscal = async function () {
     com_credito_credomatic:parseFloat(g('cfg-com-credito-credo')?.value || 3)
   };
 
-  UI.toast('Guardando...', 'info');
-  const ok = await DB.updateConfigFiscal(campos);
+  /* 1. Guardar en localStorage SIEMPRE — funciona sin Supabase */
+  const key = 'tp_fiscal_' + (Auth.tenant?.id || 'demo');
+  localStorage.setItem(key, JSON.stringify(config));
 
-  if (ok) {
-    UI.toast('Configuración fiscal y POS guardada ✓');
-    Pages.finanzas('fiscal');
-  } else {
-    UI.toast('Error al guardar — verifica la conexión a Supabase', 'error');
-    console.error('guardarConfigFiscal failed', campos);
+  /* 2. Intentar Supabase en segundo plano — sin bloquear ni mostrar error */
+  const id = Auth.tenant?.id;
+  const esUUID = id && /^[0-9a-f-]{36}$/.test(id);
+  if (esUUID) {
+    getSupabase().from('config_fiscal').upsert({
+      tenant_id:        id,
+      regimen_iva:      config.regimen_iva,
+      tasa_iva:         config.tasa_iva,
+      tasa_isr:         config.tasa_isr,
+      num_patrono_igss: config.num_patrono_igss,
+      cuota_laboral:    config.cuota_laboral,
+      cuota_patronal:   config.cuota_patronal,
+      intecap:          config.intecap,
+      aplica_irtra:     config.aplica_irtra,
+      updated_at:       new Date().toISOString()
+    }, { onConflict: 'tenant_id' }).then(({error}) => {
+      if (error) console.warn('Supabase fiscal sync:', error.message);
+    });
   }
+
+  UI.toast('Configuración fiscal guardada ✓');
+  Pages.finanzas('fiscal');
 };

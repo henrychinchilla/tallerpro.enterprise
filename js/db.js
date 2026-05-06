@@ -330,22 +330,33 @@ const DB = {
   /* ── DASHBOARD KPIs ───────────────────────────────── */
   async getKPIs() {
     const id = await getTenantId();
+
+    /* Mes actual — solo mostrar datos del mes en curso */
+    const ahora   = new Date();
+    const mesIni  = new Date(ahora.getFullYear(), ahora.getMonth(), 1).toISOString().slice(0,10);
+    const mesFin  = new Date(ahora.getFullYear(), ahora.getMonth()+1, 0).toISOString().slice(0,10);
+
     const [
       { count: totalClientes },
       { count: otActivas },
-      { data: facturasCert },
+      { data: facturasMes },
+      { data: ingresosMes },
       { data: invData }
     ] = await Promise.all([
-      getSupabase().from('clientes').select('*',  { count: 'exact', head: true }).eq('tenant_id', id).eq('activo', true),
-      getSupabase().from('ordenes').select('*',   { count: 'exact', head: true }).eq('tenant_id', id).not('estado', 'in', '("entregado","cancelado")'),
-      getSupabase().from('facturas').select('total').eq('tenant_id', id).eq('estado', 'certificada'),
-      getSupabase().from('inventario').select('id, nombre, stock, min_stock').eq('tenant_id', id).eq('activo', true)
+      getSupabase().from('clientes').select('*', { count:'exact', head:true }).eq('tenant_id', id).eq('activo', true),
+      getSupabase().from('ordenes').select('*',  { count:'exact', head:true }).eq('tenant_id', id).not('estado','in','("entregado","cancelado")'),
+      getSupabase().from('facturas').select('total').eq('tenant_id', id).eq('estado','certificada').gte('fecha', mesIni).lte('fecha', mesFin),
+      getSupabase().from('ingresos').select('monto').eq('tenant_id', id).gte('fecha', mesIni).lte('fecha', mesFin),
+      getSupabase().from('inventario').select('id,nombre,stock,min_stock').eq('tenant_id', id).eq('activo', true)
     ]);
 
-    const ingresos  = (facturasCert || []).reduce((s, f) => s + (f.total || 0), 0);
-    const stockBajo = (invData || []).filter(i => i.stock <= i.min_stock);
+    /* Ingresos = facturas certificadas del mes + ingresos directos del mes */
+    const ingFact = (facturasMes || []).reduce((s,f) => s+(f.total||0), 0);
+    const ingDir  = (ingresosMes || []).reduce((s,i) => s+(i.monto||0), 0);
+    const ingresos  = ingFact + ingDir;
+    const stockBajo = (invData || []).filter(i => (i.stock||0) <= (i.min_stock||2));
 
-    return { totalClientes: totalClientes || 0, otActivas: otActivas || 0, ingresos, stockBajo };
+    return { totalClientes: totalClientes||0, otActivas: otActivas||0, ingresos, stockBajo, mesIni, mesFin };
   },
 
   /* ── PROVEEDORES ──────────────────────────────────── */
@@ -675,28 +686,55 @@ const DB = {
   },
 
   async updateConfigFiscal(fields) {
-    try {
-      const id = await getTenantId();
-      const { data: existing } = await getSupabase()
-        .from('config_fiscal').select('id').eq('tenant_id', id).maybeSingle();
+    /* Siempre guardar en localStorage primero (funciona en demo Y en prod) */
+    localStorage.setItem('tp_config_fiscal', JSON.stringify(fields));
 
-      let error;
-      if (existing?.id) {
-        ({ error } = await getSupabase()
-          .from('config_fiscal')
-          .update({ ...fields, updated_at: new Date().toISOString() })
-          .eq('tenant_id', id));
-      } else {
-        ({ error } = await getSupabase()
-          .from('config_fiscal')
-          .insert({ ...fields, tenant_id: id }));
+    /* Intentar guardar en Supabase solo si hay tenant real (UUID válido) */
+    const id = await getTenantId();
+    const isRealUUID = id && id.length === 36 && id.includes('-') && id !== 'demo-tenant-id';
+    if (!isRealUUID) return true; // En demo: localStorage es suficiente
+
+    const payload = {
+      tenant_id:        id,
+      regimen_iva:      fields.regimen_iva      || 'general',
+      tasa_iva:         fields.tasa_iva         ?? 0.12,
+      tasa_isr:         fields.tasa_isr         ?? 0.05,
+      num_patrono_igss: fields.num_patrono_igss || '',
+      cuota_laboral:    fields.cuota_laboral    ?? 0.0483,
+      cuota_patronal:   fields.cuota_patronal   ?? 0.1267,
+      intecap:          fields.intecap          ?? 0.01,
+      aplica_irtra:     fields.aplica_irtra     ?? true,
+      updated_at:       new Date().toISOString()
+    };
+
+    const { error } = await getSupabase()
+      .from('config_fiscal')
+      .upsert(payload, { onConflict: 'tenant_id' });
+
+    if (error) console.error('updateConfigFiscal Supabase:', error.message);
+    return !error;
+  },
+
+  /* getConfigFiscal — lee Supabase primero, localStorage como fallback */
+  async getConfigFiscal() {
+    const id = await getTenantId();
+    const isRealUUID = id && id.length === 36 && id !== 'demo-tenant-id';
+    if (isRealUUID) {
+      const { data } = await getSupabase()
+        .from('config_fiscal').select('*').eq('tenant_id', id).maybeSingle();
+      if (data) {
+        localStorage.setItem('tp_config_fiscal', JSON.stringify(data));
+        return data;
       }
-      if (error) console.error('updateConfigFiscal error:', error);
-      return !error;
-    } catch(e) {
-      console.error('updateConfigFiscal exception:', e);
-      return false;
     }
+    /* Fallback a localStorage */
+    try { return JSON.parse(localStorage.getItem('tp_config_fiscal') || '{}'); }
+    catch(e) { return {}; }
+  },
+
+  getPOSConfig() {
+    try { return JSON.parse(localStorage.getItem('tp_pos_config') || '{}'); }
+    catch(e) { return {}; }
   },
 
   /* ── INGRESOS ─────────────────────────────────────── */

@@ -31,6 +31,7 @@ Pages.rrhh = async function (tab = 'empleados') {
     empleados:      `<button class="btn btn-ghost" onclick="Pages.calcularNomina()">🧾 Nómina</button>
                      <button class="btn btn-amber" onclick="Pages.modalNuevoEmpleado()">＋ Empleado</button>`,
     viaticos:       `<button class="btn btn-ghost" onclick="Pages.imprimirViaticos()">🖨️ Imprimir</button>
+                     <button class="btn btn-ghost" onclick="Pages.modalImportarViaticos()">📥 Importar Excel</button>
                      <button class="btn btn-amber" onclick="Pages.modalNuevoViatico()">＋ Viático</button>`,
     entrenamientos: `<button class="btn btn-ghost" onclick="Pages.imprimirEntrenamientos()">🖨️ Imprimir</button>
                      <button class="btn btn-amber" onclick="Pages.modalNuevoEntrenamiento()">＋ Entrenamiento</button>`,
@@ -228,8 +229,12 @@ Pages.filterViaticos = function () {
 
 Pages.modalNuevoViatico = function () {
   const empleados = Pages._empleadosData||[];
-  const CATS = {alimentacion:'🍽️ Alimentación',transporte:'🚌 Transporte',hospedaje:'🏨 Hospedaje',
-    combustible:'⛽ Combustible',peajes:'🛣️ Peajes',parqueo:'🅿️ Parqueo',comunicacion:'📱 Comunicación',otros:'📋 Otros'};
+  const CATS = {
+    desayuno:'☕ Desayuno', almuerzo:'🍽️ Almuerzo', cena:'🌙 Cena',
+    transporte:'🚌 Transporte', hospedaje:'🏨 Hospedaje',
+    combustible:'⛽ Combustible', peajes:'🛣️ Peajes', parqueo:'🅿️ Parqueo',
+    comunicacion:'📱 Comunicación', otros:'📋 Otros'
+  };
 
   UI.openModal('Nuevo Viático', `
     <div class="form-row">
@@ -248,9 +253,12 @@ Pages.modalNuevoViatico = function () {
     </div>
     <div class="form-row">
       <div class="form-group"><label class="form-label">Categoría</label>
-        <select class="form-select" id="nv2-cat">
+        <select class="form-select" id="nv2-cat" onchange="Pages._onCatChange(this)">
           ${Object.entries(CATS).map(([k,v])=>`<option value="${k}">${v}</option>`).join('')}
+          <option value="__nuevo__">➕ Nueva categoría...</option>
         </select>
+        <input class="form-input hidden" id="nv2-cat-custom" placeholder="Nombre de nueva categoría"
+               style="margin-top:6px">
       </div>
       <div class="form-group"><label class="form-label">Monto (Q) *</label>
         <input class="form-input" id="nv2-monto" type="number" min="0" step="0.01" placeholder="0.00">
@@ -269,6 +277,17 @@ Pages.modalNuevoViatico = function () {
   );
 };
 
+Pages._onCatChange = function(sel) {
+  const custom = document.getElementById('nv2-cat-custom');
+  if (!custom) return;
+  if (sel.value === '__nuevo__') {
+    custom.classList.remove('hidden');
+    custom.focus();
+  } else {
+    custom.classList.add('hidden');
+  }
+};
+
 Pages.guardarViatico = async function () {
   const empId    = document.getElementById('nv2-emp').value;
   const concepto = document.getElementById('nv2-concepto').value.trim();
@@ -277,19 +296,40 @@ Pages.guardarViatico = async function () {
   if (!concepto) { UI.toast('El concepto es obligatorio','error'); return; }
   if (monto<=0)  { UI.toast('El monto debe ser mayor a 0','error'); return; }
 
-  const { error } = await DB.insertViatico({
+  /* Categoría personalizada */
+  let cat = document.getElementById('nv2-cat').value;
+  if (cat === '__nuevo__') {
+    cat = document.getElementById('nv2-cat-custom')?.value.trim() || 'otros';
+    if (!cat) { UI.toast('Escribe el nombre de la nueva categoría','error'); return; }
+  }
+
+  const fecha = document.getElementById('nv2-fecha').value;
+  const { data, error } = await DB.insertViatico({
     empleado_id:  empId,
     concepto,
-    categoria:    document.getElementById('nv2-cat').value,
+    categoria:    cat,
     monto,
-    fecha:        document.getElementById('nv2-fecha').value,
+    fecha,
     comprobante:  document.getElementById('nv2-comprobante').value.trim()||null,
     notas:        document.getElementById('nv2-notas').value.trim()||null,
     estado:       'pendiente'
   });
-  if (error) { UI.toast('Error: '+error.message,'error'); return; }
+
+  if (error) { UI.toast('Error al guardar: '+error.message,'error'); return; }
+
+  /* Registrar egreso automáticamente en Finanzas */
+  const emp = (Pages._empleadosData||[]).find(e=>e.id===empId);
+  await DB.insertEgreso({
+    categoria:   'viaticos',
+    concepto:    `Viático — ${emp?.nombre||'Empleado'}: ${concepto} (${cat})`,
+    monto,
+    fecha,
+    metodo_pago: 'efectivo',
+    notas:       `Comprobante: ${document.getElementById('nv2-comprobante').value.trim()||'—'}. Estado: pendiente de aprobación.`
+  });
+
   UI.closeModal();
-  UI.toast('Viático registrado ✓');
+  UI.toast('Viático registrado y egreso generado ✓');
   Pages.rrhh('viaticos');
 };
 
@@ -2087,4 +2127,197 @@ Pages._verEmpleadoCompleto = function (id) {
       <button class="btn btn-amber" onclick="Pages.imprimirBoleta('${emp.id}')">🖨️ Boleta</button>
     </div>`
   );
+};
+
+/* ══════════════════════════════════════════════════════
+   IMPORTACIÓN MASIVA DE VIÁTICOS — Excel/CSV
+══════════════════════════════════════════════════════ */
+Pages.modalImportarViaticos = function () {
+  const empleados = Pages._empleadosData||[];
+  UI.openModal('📥 Importar Viáticos desde Excel/CSV', `
+    <div class="alert alert-cyan mb-4">
+      <div class="alert-icon">💡</div>
+      <div>
+        <div class="alert-title">Formato del archivo</div>
+        <div class="alert-body" style="font-family:'DM Mono',monospace;font-size:10px">
+          empleado, fecha, concepto, categoria, monto, comprobante, notas
+        </div>
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">
+      <div style="border:2px dashed var(--border);border-radius:8px;padding:20px;text-align:center;cursor:pointer"
+           onclick="document.getElementById('viat-csv').click()">
+        <div style="font-size:28px;margin-bottom:8px">📄</div>
+        <div style="font-weight:600;font-size:13px">CSV</div>
+        <input type="file" id="viat-csv" accept=".csv,.txt" class="hidden"
+               onchange="Pages._procesarViaticosCSV(this)">
+      </div>
+      <div style="border:2px dashed var(--border);border-radius:8px;padding:20px;text-align:center;cursor:pointer"
+           onclick="document.getElementById('viat-xls').click()">
+        <div style="font-size:28px;margin-bottom:8px">📊</div>
+        <div style="font-weight:600;font-size:13px">Excel (.xlsx)</div>
+        <input type="file" id="viat-xls" accept=".xlsx,.xls" class="hidden"
+               onchange="Pages._procesarViaticosExcel(this)">
+      </div>
+    </div>
+    <div id="viat-preview" class="hidden">
+      <div style="font-weight:700;font-size:13px;margin-bottom:8px" id="viat-preview-title">Vista Previa</div>
+      <div class="table-wrap" style="max-height:240px;overflow-y:auto">
+        <table class="data-table">
+          <thead><tr><th>Empleado</th><th>Fecha</th><th>Concepto</th><th>Categoría</th><th>Monto</th></tr></thead>
+          <tbody id="viat-preview-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+    <div class="flex gap-2 mt-3">
+      <button class="btn btn-ghost btn-sm" onclick="Pages._descargarPlantillaViaticos()">📥 Descargar Plantilla</button>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="UI.closeModal()">Cancelar</button>
+      <button class="btn btn-amber" id="btn-import-viat" disabled onclick="Pages._guardarViaticosImportados()">
+        ⬆ Importar
+      </button>
+    </div>`, 'modal-lg');
+  Pages._viatImport = [];
+};
+
+Pages._parsearFilasViaticos = function(filas, empleados) {
+  return filas.map(f => {
+    /* Buscar empleado por nombre (parcial) */
+    const empMatch = empleados.find(e =>
+      e.nombre.toLowerCase().includes((f.empleado||'').toLowerCase()) ||
+      (f.empleado||'').toLowerCase().includes(e.nombre.toLowerCase().split(' ')[0].toLowerCase())
+    );
+    return {
+      empleado_id:  empMatch?.id || null,
+      empleado_nom: empMatch?.nombre || f.empleado || '—',
+      fecha:        f.fecha || new Date().toISOString().slice(0,10),
+      concepto:     f.concepto || 'Sin concepto',
+      categoria:    f.categoria || 'otros',
+      monto:        parseFloat(f.monto)||0,
+      comprobante:  f.comprobante || null,
+      notas:        f.notas || null,
+      estado:       'pendiente'
+    };
+  }).filter(f => f.monto > 0);
+};
+
+Pages._procesarViaticosCSV = async function(input) {
+  const file = input.files[0]; if (!file) return;
+  const text = await file.text();
+  const lines = text.split('\n').map(l=>l.trim()).filter(Boolean);
+  const header = lines[0].toLowerCase().split(',').map(h=>h.trim().replace(/"/g,''));
+  const gc = (row, names) => {
+    for (const n of names) {
+      const idx = header.findIndex(h=>h.includes(n));
+      if (idx>=0) return (row[idx]||'').replace(/"/g,'').trim();
+    }
+    return '';
+  };
+  const raw = lines.slice(1).map(line => {
+    const cols = line.split(',');
+    return {
+      empleado:    gc(cols,['empleado','nombre']),
+      fecha:       gc(cols,['fecha']),
+      concepto:    gc(cols,['concepto','descripcion']),
+      categoria:   gc(cols,['categoria','tipo']),
+      monto:       gc(cols,['monto','total','importe']),
+      comprobante: gc(cols,['comprobante','factura']),
+      notas:       gc(cols,['nota','notas'])
+    };
+  });
+  const empleados = Pages._empleadosData||[];
+  Pages._viatImport = Pages._parsearFilasViaticos(raw, empleados);
+  Pages._mostrarPreviewViaticos(Pages._viatImport);
+};
+
+Pages._procesarViaticosExcel = async function(input) {
+  const file = input.files[0]; if (!file) return;
+  const buf  = await file.arrayBuffer();
+  try {
+    const XLSX = window.XLSX;
+    if (!XLSX) { UI.toast('Usa CSV — Excel no cargado','warn'); return; }
+    const wb  = XLSX.read(buf,{type:'array'});
+    const ws  = wb.Sheets[wb.SheetNames[0]];
+    const data = XLSX.utils.sheet_to_json(ws,{defval:''});
+    const raw  = data.map(row=>({
+      empleado:    String(row.Empleado||row.empleado||''),
+      fecha:       String(row.Fecha||row.fecha||''),
+      concepto:    String(row.Concepto||row.concepto||''),
+      categoria:   String(row.Categoria||row.categoria||'otros'),
+      monto:       parseFloat(row.Monto||row.monto||0),
+      comprobante: String(row.Comprobante||row.comprobante||''),
+      notas:       String(row.Notas||row.notas||'')
+    }));
+    const empleados = Pages._empleadosData||[];
+    Pages._viatImport = Pages._parsearFilasViaticos(raw, empleados);
+    Pages._mostrarPreviewViaticos(Pages._viatImport);
+  } catch(e) { UI.toast('Error: '+e.message,'error'); }
+};
+
+Pages._mostrarPreviewViaticos = function(filas) {
+  const tbody   = document.getElementById('viat-preview-tbody');
+  const preview = document.getElementById('viat-preview');
+  if (!tbody||!preview) return;
+  preview.classList.remove('hidden');
+  document.getElementById('viat-preview-title').textContent = `${filas.length} viáticos encontrados`;
+  tbody.innerHTML = filas.map(f=>`<tr>
+    <td>${f.empleado_nom}</td>
+    <td class="mono-sm">${f.fecha}</td>
+    <td>${f.concepto}</td>
+    <td><span class="badge badge-gray" style="font-size:9px">${f.categoria}</span></td>
+    <td class="mono-sm text-amber">${UI.q(f.monto)}</td>
+  </tr>`).join('');
+  const btn = document.getElementById('btn-import-viat');
+  if (btn) btn.disabled = false;
+  UI.toast(`${filas.length} viáticos listos ✓`);
+};
+
+Pages._guardarViaticosImportados = async function() {
+  const filas = Pages._viatImport||[];
+  if (!filas.length) { UI.toast('Sin datos','error'); return; }
+  UI.toast('Importando...','info');
+  let ok=0, err=0, totalEgreso=0;
+  for (const f of filas) {
+    if (!f.empleado_id) { err++; continue; }
+    const { error } = await DB.insertViatico({
+      empleado_id: f.empleado_id, concepto: f.concepto,
+      categoria:   f.categoria,   monto:    f.monto,
+      fecha:       f.fecha,       comprobante: f.comprobante||null,
+      notas:       f.notas||null, estado:   'pendiente'
+    });
+    if (!error) {
+      ok++;
+      totalEgreso += f.monto;
+    } else { err++; }
+  }
+  /* Registrar total como egreso del mes */
+  if (totalEgreso > 0) {
+    const mesStr = new Date().toLocaleString('es-GT',{month:'long',year:'numeric'});
+    await DB.insertEgreso({
+      categoria:   'viaticos',
+      concepto:    `Viáticos importados — ${mesStr} (${ok} registros)`,
+      monto:       totalEgreso,
+      fecha:       new Date().toISOString().slice(0,10),
+      metodo_pago: 'varios',
+      notas:       'Importación masiva desde Excel/CSV'
+    });
+  }
+  UI.closeModal();
+  UI.toast(`✓ ${ok} viáticos importados${err?' · '+err+' errores':''}${totalEgreso>0?' · Egreso Q'+totalEgreso.toFixed(2)+' registrado':''}`);
+  Pages.rrhh('viaticos');
+};
+
+Pages._descargarPlantillaViaticos = function() {
+  const csv = [
+    'empleado,fecha,concepto,categoria,monto,comprobante,notas',
+    'Juan García,2025-05-01,Desayuno reunión cliente,desayuno,75.00,FEL-001,Reunión zona 10',
+    'María López,2025-05-02,Transporte aeropuerto,transporte,150.00,,',
+    'Juan García,2025-05-02,Almuerzo con proveedor,almuerzo,220.00,FEL-002,Proveedor Importadora GT'
+  ].join('\n');
+  const blob = new Blob([csv],{type:'text/csv;charset=utf-8;'});
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href=url; a.download='plantilla_viaticos.csv'; a.click();
+  URL.revokeObjectURL(url);
 };
