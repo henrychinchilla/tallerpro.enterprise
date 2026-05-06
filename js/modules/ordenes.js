@@ -221,6 +221,7 @@ Pages.verOT = async function (id) {
 
     <div class="modal-footer">
       <button class="btn btn-ghost" onclick="UI.closeModal()">Cerrar</button>
+      ${o.fotos_recepcion ? `<button class="btn btn-ghost" onclick="Pages._verFotosOT('${o.id}')">📸 Fotos</button>` : ''}
       <button class="btn btn-cyan" onclick="Pages.enviarWAOT('${o.id}')">💬 WhatsApp</button>
       <button class="btn btn-ghost" onclick="UI.closeModal();Pages.modalEditarOT('${o.id}')">✏️ Editar</button>
       <button class="btn btn-amber" onclick="UI.toast('Generando PDF...','info')">🖨️ Imprimir OT</button>
@@ -300,11 +301,55 @@ Pages.modalNuevaOT = async function () {
         <input class="form-input" id="not-total" type="number" min="0" placeholder="0.00">
       </div>
     </div>
+
+    <!-- FOTOS DE RECEPCIÓN -->
+    <div style="border-top:1px solid var(--border);padding-top:14px;margin-top:4px">
+      <label class="form-label">📸 Fotos de Recepción del Vehículo</label>
+      <div style="font-size:11px;color:var(--text3);margin-bottom:8px">
+        Toma o adjunta fotos del estado actual del vehículo al ingresar
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <label style="display:flex;flex-direction:column;align-items:center;justify-content:center;
+                      width:80px;height:80px;border:2px dashed var(--border);border-radius:8px;
+                      cursor:pointer;font-size:24px;color:var(--text3);transition:all .2s"
+               onmouseover="this.style.borderColor='var(--amber)'" onmouseout="this.style.borderColor='var(--border)'">
+          📷
+          <span style="font-size:9px;margin-top:4px">Agregar</span>
+          <input type="file" id="not-fotos" accept="image/*" multiple class="hidden"
+                 onchange="Pages._onOTFotosChange(this)">
+        </label>
+        <div id="not-fotos-preview" style="display:flex;gap:6px;flex-wrap:wrap"></div>
+      </div>
+    </div>
+
     <div class="modal-footer">
       <button class="btn btn-ghost" onclick="UI.closeModal()">Cancelar</button>
       <button class="btn btn-amber" onclick="Pages.guardarOT()">Crear OT</button>
     </div>`
   );
+};
+
+/* ── FOTOS OT ────────────────────────────────────── */
+Pages._otFotos = [];
+
+Pages._onOTFotosChange = function(input) {
+  const files = [...input.files];
+  const preview = document.getElementById('not-fotos-preview');
+  files.forEach(file => {
+    const reader = new FileReader();
+    reader.onload = e => {
+      Pages._otFotos.push(e.target.result);
+      if (preview) {
+        const img = document.createElement('div');
+        img.style.cssText = 'position:relative;width:80px;height:80px';
+        img.innerHTML = '<img src="' + e.target.result + '" style="width:80px;height:80px;object-fit:cover;border-radius:6px;border:1px solid var(--border)">' +
+          '<button onclick="Pages._otFotos.splice(' + (Pages._otFotos.length-1) + ',1);this.parentElement.remove()" ' +
+          'style="position:absolute;top:-6px;right:-6px;background:var(--red);color:#fff;border:none;border-radius:50%;width:18px;height:18px;font-size:10px;cursor:pointer;line-height:1">✕</button>';
+        preview.appendChild(img);
+      }
+    };
+    reader.readAsDataURL(file);
+  });
 };
 
 Pages.guardarOT = async function () {
@@ -316,17 +361,22 @@ Pages.guardarOT = async function () {
 
   const cid = sel.options[sel.selectedIndex]?.dataset.cliente || null;
 
+  /* Incluir fotos como JSON en campo notas o fotos_recepcion */
+  const fotosJson = Pages._otFotos.length ? JSON.stringify(Pages._otFotos) : null;
+
   const { data, error } = await DB.insertOrden({
-    vehiculo_id:    vid,
-    cliente_id:     cid,
-    mecanico_id:    document.getElementById('not-mec').value || null,
-    prioridad:      document.getElementById('not-prio').value,
-    descripcion:    desc,
-    estado:         'recibido',
-    fecha_estimada: document.getElementById('not-fecha').value || null,
-    total:          parseFloat(document.getElementById('not-total').value) || 0
+    vehiculo_id:      vid,
+    cliente_id:       cid,
+    mecanico_id:      document.getElementById('not-mec').value || null,
+    prioridad:        document.getElementById('not-prio').value,
+    descripcion:      desc,
+    estado:           'recibido',
+    fecha_estimada:   document.getElementById('not-fecha').value || null,
+    total:            parseFloat(document.getElementById('not-total').value) || 0,
+    fotos_recepcion:  fotosJson
   });
 
+  Pages._otFotos = []; // limpiar
   if (error) { UI.toast('Error: ' + error.message, 'error'); return; }
   UI.closeModal();
   UI.toast((data?.num || 'OT') + ' creada exitosamente ✓');
@@ -428,4 +478,53 @@ Pages.enviarWAOT = async function (otId) {
   const v = o.vehiculos, c = o.clientes;
   if (!c?.tel) { UI.toast('El cliente no tiene teléfono registrado', 'warn'); return; }
   await NOTIF.notificarOTLista(o, c, v);
+};
+
+/* ── VER FOTOS DE RECEPCIÓN ──────────────────────── */
+Pages._verFotosOT = async function(id) {
+  const o = await DB.getOrden(id); if (!o) return;
+  let fotos = [];
+  try { fotos = typeof o.fotos_recepcion === 'string' ? JSON.parse(o.fotos_recepcion) : (o.fotos_recepcion || []); }
+  catch(e) { fotos = []; }
+
+  if (!fotos.length) { UI.toast('Esta OT no tiene fotos de recepción','info'); return; }
+
+  UI.openModal('📸 Fotos de Recepción — ' + o.num, `
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px;padding:4px">
+      ${fotos.map((src,i) => `
+        <div style="position:relative">
+          <img src="${src}" style="width:100%;height:180px;object-fit:cover;border-radius:8px;border:1px solid var(--border);cursor:pointer"
+               onclick="Pages._verFotoFull('${src.slice(0,30)}...', ${i})" title="Click para ver completa">
+          <a href="${src}" download="OT-${o.num}-foto${i+1}.jpg"
+             style="position:absolute;bottom:6px;right:6px;background:rgba(0,0,0,0.6);color:#fff;
+                    padding:3px 8px;border-radius:4px;font-size:10px;text-decoration:none">💾 Guardar</a>
+        </div>`).join('')}
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="UI.closeModal()">Cerrar</button>
+      <button class="btn btn-amber" onclick="Pages._agregarFotosOT('${id}')">📷 Agregar más fotos</button>
+    </div>
+  `, 'modal-lg');
+};
+
+Pages._agregarFotosOT = function(id) {
+  const input = document.createElement('input');
+  input.type = 'file'; input.accept = 'image/*'; input.multiple = true;
+  input.onchange = async () => {
+    const files = [...input.files];
+    const o = await DB.getOrden(id);
+    let existentes = [];
+    try { existentes = typeof o.fotos_recepcion === 'string' ? JSON.parse(o.fotos_recepcion) : (o.fotos_recepcion||[]); }
+    catch(e) { existentes = []; }
+
+    for (const file of files) {
+      const b64 = await new Promise(res => { const r=new FileReader(); r.onload=e=>res(e.target.result); r.readAsDataURL(file); });
+      existentes.push(b64);
+    }
+    await getSupabase().from('ordenes').update({ fotos_recepcion: JSON.stringify(existentes) }).eq('id', id);
+    UI.closeModal();
+    UI.toast(files.length + ' foto(s) agregada(s) ✓');
+    Pages._verFotosOT(id);
+  };
+  input.click();
 };

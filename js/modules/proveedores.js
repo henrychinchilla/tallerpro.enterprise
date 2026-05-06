@@ -253,7 +253,12 @@ Pages.guardarProveedor = async function () {
     notas:         document.getElementById('np2-notas').value.trim() || null
   });
 
-  if (error) { UI.toast('Error: ' + error.message, 'error'); return; }
+  if (error) {
+    const msg = error.message || 'Error desconocido';
+    UI.toast('Error al guardar: ' + msg, 'error');
+    console.error('guardarProveedor:', error);
+    return;
+  }
   UI.closeModal();
   UI.toast('Proveedor guardado ✓');
   Pages.proveedores();

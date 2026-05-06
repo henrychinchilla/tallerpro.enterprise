@@ -373,38 +373,32 @@ const DB = {
 
   async insertProveedor(fields) {
     const id = await getTenantId();
-    /* Only send fields that exist in the proveedores table */
-    const safe = {
+    if (!id) {
+      console.error('insertProveedor: tenant_id es null. Auth.tenant:', typeof Auth !== 'undefined' ? Auth?.tenant : 'Auth no definido');
+      return { data: null, error: { message: 'Sesión sin taller activo. Recarga la página.' } };
+    }
+    const payload = {
       tenant_id:      id,
       nombre:         fields.nombre,
+      codigo:         fields.codigo      || null,
+      categoria:      fields.categoria   || null,
       nit:            fields.nit         || null,
       contacto:       fields.contacto    || null,
       telefono:       fields.telefono    || null,
       email:          fields.email       || null,
       pais:           fields.pais        || 'Guatemala',
       direccion:      fields.direccion   || null,
-      credito_dias:   fields.credito_dias   || 0,
-      limite_credito: fields.limite_credito || 0,
+      credito_dias:   parseInt(fields.credito_dias)    || 0,
+      limite_credito: parseFloat(fields.limite_credito) || 0,
       notas:          fields.notas       || null,
       activo:         true
     };
-    /* Add optional columns only if they might exist */
-    if (fields.codigo)    safe.codigo    = fields.codigo;
-    if (fields.categoria) safe.categoria = fields.categoria;
-
     const { data, error } = await getSupabase()
       .from('proveedores')
-      .insert(safe)
-      .select().single();
-
-    if (error && error.message.includes('column')) {
-      /* Column doesn't exist — retry without optional fields */
-      delete safe.codigo;
-      delete safe.categoria;
-      const { data: d2, error: e2 } = await getSupabase()
-        .from('proveedores').insert(safe).select().single();
-      return { data: d2, error: e2 };
-    }
+      .insert(payload)
+      .select()
+      .single();
+    if (error) console.error('insertProveedor error:', error.message, error.details, error.hint);
     return { data, error };
   },
 

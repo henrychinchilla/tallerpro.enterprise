@@ -15,8 +15,42 @@ Pages.calendario = async function () {
     DB.getCitas(), DB.getClientes(), DB.getVehiculos(), DB.getOrdenes()
   ]);
 
-  // Agregar OTs con fecha estimada como eventos
+  /* Agregar documentos de empleados vencidos/próximos como eventos */
   const hoy = new Date().toISOString().slice(0, 10);
+  const en7dias = new Date(Date.now()+7*86400000).toISOString().slice(0,10);
+  try {
+    const tid = await getTenantId();
+    if (tid) {
+      const { data: docs } = await getSupabase()
+        .from('empleado_documentos')
+        .select('*, empleados(nombre)')
+        .eq('tenant_id', tid)
+        .not('fecha_vencimiento', 'is', null)
+        .lte('fecha_vencimiento', en7dias);
+
+      if (docs) {
+        docs.forEach(d => {
+          const emp  = d.empleados;
+          const venc = d.fecha_vencimiento;
+          const tipo = d.tipo?.replace(/_/g,' ') || 'Documento';
+          const vencido = venc < hoy;
+          const evento = {
+            id:     'doc-' + d.id,
+            titulo: (vencido ? '⚠️ VENCIDO — ' : '📄 Vence pronto — ') + tipo + ' · ' + (emp?.nombre||''),
+            fecha:  venc,
+            tipo:   vencido ? 'vencido' : 'proximo',
+            color:  vencido ? '#ef4444' : '#f59e0b',
+            accion: "App.navigate('rrhh')"
+          };
+          if (!citas) citas = [];
+          citas.push({ id: evento.id, fecha: evento.fecha, descripcion: evento.titulo,
+                       estado: vencido ? 'cancelado' : 'confirmada', color: evento.color });
+        });
+      }
+    }
+  } catch(e) { /* tabla puede no existir */ }
+
+  // Agregar OTs con fecha estimada como eventos
   const otsConFecha = ordenes.filter(o =>
     o.fecha_estimada && o.estado !== 'entregado' && o.estado !== 'cancelado'
   );
@@ -594,8 +628,9 @@ Pages.config = async function () {
   const el = document.getElementById('page-content');
   el.innerHTML = '<div class="page-header"><h1 class="page-title">Configuración</h1></div><div class="page-body"><div class="text-muted">Cargando...</div></div>';
 
-  const t = await DB.getTenant();
-  const logo = Auth.tenant?.logo_base64 || t?.logo_base64 || null;
+  /* Usar Auth.tenant directamente — ya cargado en sesión */
+  const t    = Auth.tenant || {};
+  const logo = t.logo_base64 || null;
 
   el.innerHTML = `
     <div class="page-header">
