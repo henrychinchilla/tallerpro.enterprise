@@ -315,17 +315,21 @@ Pages.guardarViatico = async function () {
     estado:       'pendiente'
   });
 
-  if (error) { UI.toast('Error al guardar: '+error.message,'error'); return; }
+  if (error) {
+    console.error('insertViatico error:', error);
+    UI.toast('Error: '+error.message+' ('+error.code+')', 'error');
+    return;
+  }
 
-  /* Registrar egreso automáticamente en Finanzas */
+  /* Registrar egreso en Finanzas */
   const emp = (Pages._empleadosData||[]).find(e=>e.id===empId);
   await DB.insertEgreso({
-    categoria:   'viaticos',
+    categoria:   'otros',   /* 'viaticos' si el constraint ya fue actualizado */
     concepto:    `Viático — ${emp?.nombre||'Empleado'}: ${concepto} (${cat})`,
     monto,
     fecha,
     metodo_pago: 'efectivo',
-    notas:       `Comprobante: ${document.getElementById('nv2-comprobante').value.trim()||'—'}. Estado: pendiente de aprobación.`
+    notas:       `Categoría: ${cat}. Comprobante: ${document.getElementById('nv2-comprobante')?.value.trim()||'—'}`
   });
 
   UI.closeModal();
@@ -1766,8 +1770,11 @@ Pages.modalDocumentosEmpleado = async function (empleadoId) {
         <input type="file" id="d-${t.v}" accept=".pdf,.jpg,.jpeg,.png" class="hidden"
                onchange="Pages._subirDocumento('${empleadoId}','${t.v}',this)">
         <input type="date" id="df-${t.v}" class="form-input" style="width:130px;font-size:11px;padding:4px 6px"
-               value="${vence||''}" onchange="Pages._actualizarFechaDoc('${empleadoId}','${t.v}',this.value)">
-        <button class="btn btn-sm btn-cyan" onclick="document.getElementById('d-${t.v}').click()" style="margin-left:4px">
+               value="${vence||''}">
+        <button class="btn btn-sm btn-ghost" onclick="Pages._guardarFechaDoc('${empleadoId}','${t.v}')" style="margin-left:2px" title="Guardar fecha">
+          💾
+        </button>
+        <button class="btn btn-sm btn-cyan" onclick="document.getElementById('d-${t.v}').click()" style="margin-left:2px">
           📎 ${doc?.subido?'Reemplazar':'Subir'}
         </button>
       </div>
@@ -1822,6 +1829,21 @@ Pages._actualizarFechaDoc = async function (empleadoId, tipo, fecha) {
     fecha_vencimiento:fecha || null,
     subido:           false
   });
+};
+
+Pages._guardarFechaDoc = async function (empleadoId, tipo) {
+  const fecha = document.getElementById(`df-${tipo}`)?.value;
+  const { error } = await DB.upsertDocumento({
+    empleado_id:      empleadoId,
+    tipo,
+    nombre_archivo:   tipo,
+    fecha_vencimiento:fecha || null,
+    subido:           false
+  });
+  if (error) { UI.toast('Error: '+error.message, 'error'); return; }
+  UI.toast('Fecha límite guardada ✓');
+  /* Reload modal to refresh */
+  setTimeout(() => Pages.modalDocumentosEmpleado(empleadoId), 500);
 };
 
 Pages._verDocumento = function (titulo, preview, base64Full) {

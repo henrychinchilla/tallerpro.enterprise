@@ -918,7 +918,28 @@ const USER_MGMT = {
    MODAL GESTIÓN USUARIOS
 ══════════════════════════════════════════════════════ */
 Pages.modalGestionUsuarios = async function () {
-  const usuarios = await USER_MGMT.getAll();
+  /* Show loading immediately */
+  UI.openModal('👥 Gestión de Usuarios del Sistema', `
+    <div style="text-align:center;padding:40px;color:var(--text3)">
+      <div style="font-size:32px;margin-bottom:12px">⏳</div>Cargando usuarios...
+    </div>`, 'modal-lg');
+
+  let usuarios = [];
+  try {
+    usuarios = await USER_MGMT.getAll();
+  } catch(e) {
+    console.error('modalGestionUsuarios error:', e);
+    UI.openModal('👥 Gestión de Usuarios', `
+      <div class="alert alert-red"><div class="alert-icon">❌</div>
+      <div><div class="alert-title">Error cargando usuarios</div>
+      <div class="alert-body">${e.message}</div></div></div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" onclick="UI.closeModal()">Cerrar</button>
+        <button class="btn btn-amber" onclick="Pages.modalInvitarUsuario()">＋ Nuevo Usuario</button>
+      </div>`, 'modal-lg');
+    return;
+  }
+
   const ROLES_DISP = Object.entries(ROLES).filter(([k,v]) => !v.hidden || Auth.user?.rol==='superadmin');
 
   const filas = usuarios.map(u => {

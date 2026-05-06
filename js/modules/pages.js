@@ -1556,3 +1556,13 @@ Pages._aplicarNITOverride = function () {
   UI.closeModal();
   UI.toast('NIT actualizado: ' + nit + '. Ahora puedes facturar.','info');
 };
+
+
+Pages.cambiarEstadoFactura = async function(id, nuevoEstado) {
+  const { error } = await getSupabase().from('facturas').update({
+    estado: nuevoEstado, updated_at: new Date().toISOString()
+  }).eq('id', id);
+  if (error) { UI.toast('Error: '+error.message, 'error'); return; }
+  UI.toast('Estado actualizado: '+nuevoEstado+' ✓');
+  Pages.facturacion();
+};

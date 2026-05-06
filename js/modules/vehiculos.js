@@ -20,8 +20,9 @@ Pages.vehiculos = async function () {
     const c = v.clientes || clientes.find(x => x.id === v.cliente_id);
     const nombre = c?.nombre || '—';
     return `<tr onclick="Pages.verVehiculo('${v.id}')"
-                data-text="${v.placa} ${v.marca} ${v.modelo} ${nombre} ${v.color||''} ${v.motor||''}"
-                data-marca="${v.marca||''}">
+                data-text="${v.placa} ${v.marca} ${v.modelo} ${nombre} ${v.color||''} ${v.motor||''} ${v.combustible||''} ${v.vin||''}"
+                data-marca="${v.marca||''}"
+                data-comb="${v.combustible||''}">
       <td class="mono-sm text-amber">${v.placa}</td>
       <td><b>${v.marca} ${v.modelo}</b><br>
           <span class="mono-sm text-muted">${v.anio || '—'} · ${v.color || '—'}</span></td>
@@ -30,10 +31,11 @@ Pages.vehiculos = async function () {
       <td class="mono-sm text-muted">${v.motor || '—'}</td>
       <td class="mono-sm text-muted">${v.ultima_visita || '—'}</td>
       <td onclick="event.stopPropagation()">
-        <div style="display:flex;gap:4px">
-          <button class="btn btn-sm btn-amber" onclick="Pages.modalNuevaOT('${v.id}')">+ OT</button>
-          <button class="btn btn-sm btn-ghost" onclick="Pages.imprimirHistorialVehiculo('${v.id}')" title="Historial">🖨️</button>
-          <button class="btn btn-sm btn-danger" onclick="Pages.eliminarVehiculo('${v.id}','${v.placa}')" title="Eliminar">🗑</button>
+        <div style="display:flex;gap:3px;flex-wrap:wrap">
+          <button class="btn btn-sm btn-cyan"   onclick="Pages.modalEditarVehiculo('${v.id}')" title="Editar">Editar</button>
+          <button class="btn btn-sm btn-amber"  onclick="Pages.modalNuevaOT('${v.id}')"        title="Nueva OT">+ OT</button>
+          <button class="btn btn-sm btn-ghost"  onclick="Pages.imprimirHistorialVehiculo('${v.id}')" title="Historial">🖨</button>
+          <button class="btn btn-sm btn-danger" onclick="Pages.eliminarVehiculo('${v.id}','${v.placa}')" title="Eliminar">✕</button>
         </div>
       </td>
     </tr>`;
@@ -46,16 +48,21 @@ Pages.vehiculos = async function () {
         <p class="page-subtitle">// ${vehiculos.length} VEHÍCULOS REGISTRADOS</p>
       </div>
       <div class="page-actions">
+        <button class="btn btn-ghost" onclick="Pages.imprimirListaVehiculos()">🖨️ Imprimir</button>
         <button class="btn btn-amber" onclick="Pages.modalNuevoVehiculo()">＋ Nuevo Vehículo</button>
       </div>
     </div>
     <div class="page-body">
       <div class="search-bar">
-        <input class="search-input" placeholder="🔍 Buscar placa, marca, modelo, cliente..."
+        <input class="search-input" placeholder="🔍 Buscar placa, marca, modelo, cliente, motor..."
                id="search-vehiculos" oninput="Pages.filterVehiculos()">
         <select class="filter-select" id="filter-veh-marca" onchange="Pages.filterVehiculos()">
           <option value="">Todas las marcas</option>
           ${[...new Set(vehiculos.map(v=>v.marca).filter(Boolean))].sort().map(m=>`<option value="${m}">${m}</option>`).join('')}
+        </select>
+        <select class="filter-select" id="filter-veh-comb" onchange="Pages.filterVehiculos()">
+          <option value="">Todo combustible</option>
+          ${[...new Set(vehiculos.map(v=>v.combustible).filter(Boolean))].sort().map(c=>`<option value="${c}">${c}</option>`).join('')}
         </select>
       </div>
       <div class="table-wrap">
@@ -75,12 +82,14 @@ Pages.vehiculos = async function () {
 };
 
 Pages.filterVehiculos = function () {
-  const q     = (document.getElementById('search-vehiculos')?.value || '').toLowerCase();
-  const marca = document.getElementById('filter-veh-marca')?.value || '';
+  const q    = (document.getElementById('search-vehiculos')?.value || '').toLowerCase();
+  const marc = document.getElementById('filter-veh-marca')?.value || '';
+  const comb = document.getElementById('filter-veh-comb')?.value  || '';
   document.querySelectorAll('#vehiculos-tbody tr').forEach(r => {
-    const matchText  = !q || (r.dataset.text||'').toLowerCase().includes(q);
-    const matchMarca = !marca || r.dataset.marca === marca;
-    r.style.display  = matchText && matchMarca ? '' : 'none';
+    const match = (!q    || (r.dataset.text||'').toLowerCase().includes(q)) &&
+                  (!marc || r.dataset.marca === marc) &&
+                  (!comb || r.dataset.comb  === comb);
+    r.style.display = match ? '' : 'none';
   });
 };
 
@@ -390,6 +399,51 @@ Pages.imprimirHistorialVehiculo = async function (id) {
   <div style="margin-top:30px;text-align:center;font-size:10px;color:#999">
     Generado por TallerPro Enterprise · ${new Date().toLocaleDateString('es-GT')}
   </div>
+  </body></html>`;
+
+  const win = window.open('', '_blank');
+  win.document.write(html);
+  win.document.close();
+  setTimeout(() => win.print(), 400);
+};
+
+/* ── IMPRIMIR LISTA DE VEHÍCULOS ──────────────────── */
+Pages.imprimirListaVehiculos = async function () {
+  const vehiculos = Pages._vehiculosData || await DB.getVehiculos();
+  const clientes  = Pages._clientesData  || await DB.getClientes();
+
+  const html = `<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><title>Vehículos</title>
+  <style>
+    body{font-family:Arial,sans-serif;font-size:11px;margin:20px;color:#000}
+    table{width:100%;border-collapse:collapse;margin:10px 0}
+    th{background:#f3f4f6;padding:5px 8px;border:1px solid #ddd;text-align:left;font-size:10px}
+    td{padding:5px 8px;border:1px solid #ddd}
+    .header{border-bottom:2px solid #000;margin-bottom:12px;padding-bottom:6px;display:flex;justify-content:space-between}
+    @media print{body{margin:0}}
+  </style></head><body>
+  <div class="header">
+    <div><b>${Auth.tenant?.name} — Listado de Vehículos</b></div>
+    <div>${new Date().toLocaleDateString('es-GT')} · ${vehiculos.length} vehículos</div>
+  </div>
+  <table>
+    <thead><tr><th>Placa</th><th>Marca / Modelo</th><th>Año</th><th>Color</th><th>Motor</th><th>Combustible</th><th>Km</th><th>Cliente</th><th>VIN</th></tr></thead>
+    <tbody>
+      ${vehiculos.map(v => {
+        const c = clientes.find(x => x.id === v.cliente_id);
+        return `<tr>
+          <td><b>${v.placa}</b></td>
+          <td>${v.marca} ${v.modelo}</td>
+          <td>${v.anio||'—'}</td>
+          <td>${v.color||'—'}</td>
+          <td>${v.motor||'—'}</td>
+          <td>${v.combustible||'—'}</td>
+          <td>${(v.kilometraje||0).toLocaleString()}</td>
+          <td>${c?.nombre||'—'}</td>
+          <td style="font-size:9px">${v.vin||'—'}</td>
+        </tr>`;
+      }).join('')}
+    </tbody>
+  </table>
   </body></html>`;
 
   const win = window.open('', '_blank');
