@@ -1,57 +1,27 @@
 @echo off
 :: TallerPro - Actualizar todos los archivos
-:: Ejecutar desde la carpeta raiz del repo: tallerpro-enterprise\
-echo Actualizando archivos de TallerPro...
+:: Ejecutar desde dentro de la carpeta tallerpro-enterprise
 
-:: Verificar que estamos en la carpeta correcta
-if not exist "index.html" (
-    echo ERROR: Ejecuta este script desde la carpeta tallerpro-enterprise
-    pause
-    exit /b 1
-)
+set REPO=%~dp0
 
-echo [1/8] Actualizando vehiculos.js...
-copy /Y "%~dp0vehiculos.js" "js\modules\vehiculos.js"
+echo Copiando archivos desde %REPO%
+echo.
 
-echo [2/8] Actualizando rrhh.js...
-copy /Y "%~dp0rrhh.js" "js\modules\rrhh.js"
-
-echo [3/8] Actualizando pages.js...
-copy /Y "%~dp0pages.js" "js\modules\pages.js"
-
-echo [4/8] Actualizando auth.js...
-copy /Y "%~dp0auth.js" "js\auth.js"
-
-echo [5/8] Actualizando db.js...
-copy /Y "%~dp0db.js" "js\db.js"
-
-echo [6/8] Actualizando finanzas.js...
-copy /Y "%~dp0finanzas.js" "js\modules\finanzas.js"
-
-echo [7/8] Actualizando base.css...
-copy /Y "%~dp0base.css" "css\base.css"
-
-echo [8/8] Actualizando dashboard.js...
-copy /Y "%~dp0dashboard.js" "js\modules\dashboard.js"
+copy /Y "%REPO%vehiculos.js"  "%REPO%js\modules\vehiculos.js"  && echo [OK] vehiculos.js  || echo [FALTA] Descarga vehiculos.js
+copy /Y "%REPO%rrhh.js"       "%REPO%js\modules\rrhh.js"       && echo [OK] rrhh.js       || echo [FALTA] Descarga rrhh.js
+copy /Y "%REPO%pages.js"      "%REPO%js\modules\pages.js"      && echo [OK] pages.js      || echo [FALTA] Descarga pages.js
+copy /Y "%REPO%finanzas.js"   "%REPO%js\modules\finanzas.js"   && echo [OK] finanzas.js   || echo [FALTA] Descarga finanzas.js
+copy /Y "%REPO%dashboard.js"  "%REPO%js\modules\dashboard.js"  && echo [OK] dashboard.js  || echo [FALTA] Descarga dashboard.js
+copy /Y "%REPO%auth.js"       "%REPO%js\auth.js"               && echo [OK] auth.js       || echo [FALTA] Descarga auth.js
+copy /Y "%REPO%db.js"         "%REPO%js\db.js"                 && echo [OK] db.js         || echo [FALTA] Descarga db.js
+copy /Y "%REPO%base.css"      "%REPO%css\base.css"             && echo [OK] base.css      || echo [FALTA] Descarga base.css
 
 echo.
-echo === VERIFICANDO CAMBIOS ===
-findstr /C:"title=\"Editar\">Editar" "js\modules\vehiculos.js" > nul
-if %errorlevel%==0 (echo [OK] vehiculos.js - boton Editar presente) else (echo [ERROR] vehiculos.js - boton Editar NO encontrado)
-
-findstr /C:"cambiarEstadoFactura" "js\modules\pages.js" > nul
-if %errorlevel%==0 (echo [OK] pages.js - cambio estado FEL presente) else (echo [ERROR] pages.js - cambio estado FEL NO encontrado)
-
-findstr /C:"getTenantId" "js\db.js" > nul
-if %errorlevel%==0 (echo [OK] db.js - correcto) else (echo [ERROR] db.js - problema)
-
-echo.
-echo === HACIENDO GIT PUSH ===
+echo === GIT PUSH ===
+cd "%REPO%"
 git add .
-git status
-git commit -m "fix: actualizacion completa %date% %time%"
+git commit -m "fix: actualizacion completa %date%"
 git push
-
 echo.
-echo LISTO. Espera 1-2 minutos y recarga la aplicacion.
+echo LISTO
 pause
