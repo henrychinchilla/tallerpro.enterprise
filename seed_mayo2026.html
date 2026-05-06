@@ -1,0 +1,573 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TallerPro — Carga de Datos de Prueba Mayo 2026</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', sans-serif; background: #0A0E1A; color: #E2E8F0; padding: 20px; }
+  h1 { color: #F59E0B; font-size: 22px; margin-bottom: 4px; }
+  .sub { color: #94A3B8; font-size: 12px; margin-bottom: 20px; }
+  .card { background: #0F1623; border: 1px solid rgba(255,255,255,0.07); border-radius: 10px; padding: 20px; margin-bottom: 16px; }
+  .btn { padding: 12px 24px; border: none; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 700; font-family: inherit; }
+  .btn-amber { background: #F59E0B; color: #000; }
+  .btn-red   { background: #EF4444; color: #fff; }
+  .btn-ghost { background: rgba(255,255,255,0.07); color: #E2E8F0; border: 1px solid rgba(255,255,255,0.1); }
+  .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  .log { background: #060910; border: 1px solid rgba(255,255,255,0.05); border-radius: 8px; padding: 14px; height: 380px; overflow-y: auto; font-family: 'Consolas', monospace; font-size: 12px; line-height: 1.7; }
+  .log .ok   { color: #10B981; }
+  .log .err  { color: #EF4444; }
+  .log .info { color: #94A3B8; }
+  .log .head { color: #F59E0B; font-weight: bold; }
+  .progress { height: 6px; background: rgba(255,255,255,0.07); border-radius: 3px; overflow: hidden; margin: 12px 0; }
+  .progress-bar { height: 100%; background: #F59E0B; border-radius: 3px; transition: width .3s; width: 0%; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .stat { background: #161E2E; border-radius: 8px; padding: 12px 16px; }
+  .stat-val { font-size: 24px; font-weight: 700; color: #F59E0B; }
+  .stat-lbl { font-size: 11px; color: #94A3B8; margin-top: 2px; }
+  .input-group { margin-bottom: 12px; }
+  .input-group label { display: block; font-size: 12px; color: #94A3B8; margin-bottom: 4px; }
+  .input-group input { width: 100%; padding: 8px 12px; background: #161E2E; border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; color: #E2E8F0; font-size: 13px; }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 20px; font-size: 10px; font-weight: 700; }
+  .badge-ok  { background: rgba(16,185,129,0.15); color: #10B981; }
+  .badge-err { background: rgba(239,68,68,0.15); color: #EF4444; }
+  .badge-skip{ background: rgba(148,163,184,0.15); color: #94A3B8; }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  th { padding: 6px 10px; text-align: left; color: #94A3B8; border-bottom: 1px solid rgba(255,255,255,0.07); }
+  td { padding: 6px 10px; border-bottom: 1px solid rgba(255,255,255,0.04); }
+</style>
+</head>
+<body>
+
+<h1>🔧 TallerPro — Carga de Datos de Prueba</h1>
+<p class="sub">Mayo 2026 · Datos ficticios realistas para diagnóstico de todos los módulos</p>
+
+<div class="card">
+  <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:16px">
+    <div class="input-group" style="flex:1;min-width:200px">
+      <label>URL de Supabase</label>
+      <input id="sb-url" placeholder="https://xxxx.supabase.co" value="">
+    </div>
+    <div class="input-group" style="flex:1;min-width:200px">
+      <label>Anon Key</label>
+      <input id="sb-key" placeholder="eyJh..." type="password">
+    </div>
+    <div class="input-group" style="flex:1;min-width:180px">
+      <label>Tenant ID (UUID del taller)</label>
+      <input id="tenant-id" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx">
+    </div>
+  </div>
+
+  <div style="display:flex;gap:8px;flex-wrap:wrap">
+    <button class="btn btn-ghost" onclick="SEED.verificarConexion()">🔌 Verificar Conexión</button>
+    <button class="btn btn-ghost" onclick="SEED.obtenerTenantId()">🔍 Auto-detectar Tenant</button>
+    <button class="btn btn-amber" id="btn-seed" onclick="SEED.ejecutar()" disabled>▶ Cargar Todos los Datos</button>
+    <button class="btn btn-red"   onclick="SEED.limpiar()">🗑 Limpiar Datos de Prueba</button>
+  </div>
+</div>
+
+<div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:10px;margin-bottom:16px">
+  <div class="stat"><div class="stat-val" id="cnt-ok">0</div><div class="stat-lbl">Registros creados</div></div>
+  <div class="stat"><div class="stat-val" id="cnt-err" style="color:#EF4444">0</div><div class="stat-lbl">Errores</div></div>
+  <div class="stat"><div class="stat-val" id="cnt-mod">0</div><div class="stat-lbl">Módulos completados</div></div>
+  <div class="stat"><div class="stat-val" id="pct-done">0%</div><div class="stat-lbl">Progreso</div></div>
+</div>
+
+<div class="progress"><div class="progress-bar" id="progress-bar"></div></div>
+
+<div class="card">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+    <span style="font-size:13px;font-weight:700;color:#F59E0B">📋 Log de Ejecución</span>
+    <button class="btn btn-ghost" style="padding:4px 10px;font-size:11px" onclick="document.getElementById('log').innerHTML=''">Limpiar</button>
+  </div>
+  <div class="log" id="log"><span class="info">Listo para cargar datos. Configura la conexión y presiona ejecutar.</span></div>
+</div>
+
+<div class="card">
+  <div style="font-size:13px;font-weight:700;color:#F59E0B;margin-bottom:10px">📊 Resumen por Módulo</div>
+  <table>
+    <thead><tr><th>Módulo</th><th>Registros</th><th>Estado</th><th>Diagnóstico</th></tr></thead>
+    <tbody id="resumen-tabla"><tr><td colspan="4" style="color:#4A5568;text-align:center">Sin datos aún</td></tr></tbody>
+  </table>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════
+// SEED ENGINE
+// ═══════════════════════════════════════════════════════
+let sb = null;
+let TENANT_ID = null;
+let totalOk = 0, totalErr = 0, totalMod = 0;
+const MAYO = '2026-05';
+const resumen = {};
+
+const SEED = {
+
+  init() {
+    const url = document.getElementById('sb-url').value.trim();
+    const key = document.getElementById('sb-key').value.trim();
+    if (!url || !key) { log('err', '⚠️ Ingresa URL y Key de Supabase'); return false; }
+    sb = supabase.createClient(url, key);
+    return true;
+  },
+
+  async verificarConexion() {
+    if (!SEED.init()) return;
+    log('info', 'Verificando conexión...');
+    const { data, error } = await sb.from('tenants').select('id, name, slug').limit(5);
+    if (error) { log('err', '❌ Error: ' + error.message); return; }
+    log('ok', `✅ Conexión OK — ${data.length} taller(es) encontrado(s):`);
+    data.forEach(t => log('info', `   → ${t.name} (${t.slug}) — ${t.id}`));
+    document.getElementById('btn-seed').disabled = false;
+    if (data.length === 1) { document.getElementById('tenant-id').value = data[0].id; TENANT_ID = data[0].id; }
+  },
+
+  async obtenerTenantId() {
+    if (!SEED.init()) return;
+    const { data } = await sb.from('tenants').select('id,name,slug').order('created_at');
+    if (!data?.length) { log('err', 'Sin talleres'); return; }
+    log('ok', 'Talleres disponibles:');
+    data.forEach((t,i) => log('info', `[${i}] ${t.name} → ${t.id}`));
+    TENANT_ID = data[0].id;
+    document.getElementById('tenant-id').value = TENANT_ID;
+    document.getElementById('btn-seed').disabled = false;
+    log('ok', `✅ Usando: ${data[0].name}`);
+  },
+
+  async ejecutar() {
+    if (!SEED.init()) return;
+    TENANT_ID = document.getElementById('tenant-id').value.trim() || TENANT_ID;
+    if (!TENANT_ID) { log('err', 'Necesitas el Tenant ID'); return; }
+
+    totalOk = totalErr = totalMod = 0;
+    document.getElementById('btn-seed').disabled = true;
+
+    const pasos = [
+      { fn: SEED.clientes,      label: '👥 Clientes'      },
+      { fn: SEED.vehiculos,     label: '🚗 Vehículos'     },
+      { fn: SEED.empleados,     label: '👤 Empleados'     },
+      { fn: SEED.proveedores,   label: '🏪 Proveedores'   },
+      { fn: SEED.inventario,    label: '📦 Inventario'    },
+      { fn: SEED.ordenes,       label: '📋 Órdenes OT'    },
+      { fn: SEED.ingresos,      label: '💰 Ingresos'      },
+      { fn: SEED.egresos,       label: '📉 Egresos'       },
+      { fn: SEED.viaticos,      label: '🚗 Viáticos'      },
+      { fn: SEED.citas,         label: '📅 Citas'         },
+      { fn: SEED.facturas,      label: '🧾 Facturas'      },
+      { fn: SEED.configFiscal,  label: '⚙️ Config Fiscal'  },
+      { fn: SEED.nomina,        label: '💵 Nómina'        },
+    ];
+
+    for (let i = 0; i < pasos.length; i++) {
+      const p = pasos[i];
+      log('head', `\n${'═'.repeat(40)}\n${p.label}\n${'═'.repeat(40)}`);
+      try {
+        await p.fn();
+        totalMod++;
+      } catch(e) {
+        log('err', `❌ Error en ${p.label}: ` + e.message);
+        resumen[p.label] = { count: 0, status: 'error', diag: e.message };
+      }
+      const pct = Math.round(((i+1)/pasos.length)*100);
+      document.getElementById('progress-bar').style.width = pct + '%';
+      document.getElementById('pct-done').textContent = pct + '%';
+      document.getElementById('cnt-ok').textContent = totalOk;
+      document.getElementById('cnt-err').textContent = totalErr;
+      document.getElementById('cnt-mod').textContent = totalMod;
+      actualizarResumen();
+      await sleep(100);
+    }
+
+    log('head', '\n✅ CARGA COMPLETADA');
+    log('ok', `Total: ${totalOk} registros creados, ${totalErr} errores`);
+    document.getElementById('btn-seed').disabled = false;
+  },
+
+  /* ── CLIENTES ─────────────────────────────────────── */
+  async clientes() {
+    const data = [
+      { nombre:'Carlos Ramírez Gómez',    tipo:'individual', tel:'5501-1234', email:'carlos.ramirez@gmail.com',  nit:'1234567-8', notas:'Cliente frecuente' },
+      { nombre:'María López de García',   tipo:'individual', tel:'5502-2345', email:'maria.garcia@outlook.com',  nit:'2345678-9', notas:'Trae 2 vehículos' },
+      { nombre:'Roberto Juárez Castillo', tipo:'individual', tel:'5503-3456', email:'r.juarez@yahoo.com',        nit:'3456789-0'  },
+      { nombre:'Ana Patricia Fuentes',    tipo:'individual', tel:'5504-4567', email:'ana.fuentes@gmail.com',     nit:'4567890-1'  },
+      { nombre:'Miguel Ángel Pérez',      tipo:'individual', tel:'5505-5678', email:'m.perez@hotmail.com',       nit:'5678901-2'  },
+      { nombre:'Importadora GT S.A.',     tipo:'empresa',    tel:'2330-1234', email:'info@importadoragt.com',    nit:'6789012-3',  nombre_empresa:'Importadora GT S.A.', representante:'Lic. Fernando Solís' },
+      { nombre:'Transportes del Norte',   tipo:'empresa',    tel:'2440-5678', email:'operaciones@transnorte.gt', nit:'7890123-4',  nombre_empresa:'Transportes del Norte S.A.', representante:'Ing. Rosa Morales' },
+      { nombre:'Pedro González Lima',     tipo:'individual', tel:'5506-6789', email:'pedro.gonzalez@gmail.com',  nit:'8901234-5'  },
+      { nombre:'Luisa Hernández Vega',    tipo:'individual', tel:'5507-7890', email:'luisa.hv@gmail.com',        nit:'9012345-6'  },
+      { nombre:'José Antonio Marroquín', tipo:'individual', tel:'5508-8901', email:'jose.marroquin@gmail.com',  nit:'0123456-7'  },
+    ];
+    await insertBatch('clientes', data, 'Clientes');
+  },
+
+  /* ── VEHÍCULOS ───────────────────────────────────── */
+  async vehiculos() {
+    const { data: clientes } = await sb.from('clientes').select('id,nombre').eq('tenant_id', TENANT_ID);
+    if (!clientes?.length) { log('err', 'No hay clientes para asignar vehículos'); return; }
+
+    const autos = [
+      { placa:'P-123ABC', marca:'Toyota',    modelo:'Corolla',    anio:2018, color:'Blanco',  combustible:'Gasolina', kilometraje:85000,  vin:'JT2BF12K1T0123456', motor:'1.8L' },
+      { placa:'P-456DEF', marca:'Nissan',    modelo:'Versa',      anio:2020, color:'Gris',    combustible:'Gasolina', kilometraje:42000,  vin:'3N1BC11E0XL123456', motor:'1.6L' },
+      { placa:'P-789GHI', marca:'Toyota',    modelo:'Hilux',      anio:2019, color:'Azul',    combustible:'Diesel',   kilometraje:120000, vin:'AHTEX22G403123456', motor:'2.4L Diesel' },
+      { placa:'P-012JKL', marca:'Honda',     modelo:'CR-V',       anio:2021, color:'Negro',   combustible:'Gasolina', kilometraje:28000,  vin:'2HKRW2H84MH123456', motor:'1.5T' },
+      { placa:'P-345MNO', marca:'Hyundai',   modelo:'Tucson',     anio:2017, color:'Plata',   combustible:'Gasolina', kilometraje:95000,  vin:'KM8J33A43HU123456', motor:'2.0L' },
+      { placa:'P-678PQR', marca:'Mitsubishi',modelo:'Outlander',  anio:2020, color:'Rojo',    combustible:'Gasolina', kilometraje:55000,  vin:'JA4AZ3A30LZ123456', motor:'2.4L' },
+      { placa:'M-901STU', marca:'Isuzu',     modelo:'NHR',        anio:2016, color:'Blanco',  combustible:'Diesel',   kilometraje:180000, vin:'JALC4B16XE7123456', motor:'2.8L Diesel' },
+      { placa:'P-234VWX', marca:'Kia',       modelo:'Sportage',   anio:2022, color:'Verde',   combustible:'Gasolina', kilometraje:15000,  vin:'KNDPM3AC6N7123456', motor:'2.0L' },
+      { placa:'P-567YZA', marca:'Mazda',     modelo:'CX-5',       anio:2019, color:'Azul',    combustible:'Gasolina', kilometraje:68000,  vin:'JM3KFBDM3K0123456', motor:'2.5L' },
+      { placa:'P-890BCD', marca:'Volkswagen',modelo:'Jetta',      anio:2018, color:'Negro',   combustible:'Gasolina', kilometraje:78000,  vin:'3VW267AJXJM123456', motor:'1.4T' },
+    ];
+
+    for (let i = 0; i < autos.length; i++) {
+      const auto = { ...autos[i], tenant_id: TENANT_ID,
+                     cliente_id: clientes[i % clientes.length].id,
+                     fecha_ingreso: '2024-01-15' };
+      const { error } = await sb.from('vehiculos').insert(auto);
+      if (error) { log('err', `  ❌ ${auto.placa}: ${error.message}`); totalErr++; }
+      else        { log('ok',  `  ✅ ${auto.placa} — ${auto.marca} ${auto.modelo}`); totalOk++; }
+    }
+    resumen['🚗 Vehículos'] = { count: autos.length, status: totalErr ? 'parcial' : 'ok', diag: '' };
+  },
+
+  /* ── EMPLEADOS ───────────────────────────────────── */
+  async empleados() {
+    const data = [
+      { nombre:'Juan Carlos Orozco',  rol:'mecanico',     cargo:'Mecánico Senior',   salario_base:4500, bonificacion:250, igss:true,  avatar:'🪛', nit:'1111111-1', telefono:'5511-1111', banco:'Banco Industrial', tipo_cuenta:'monetaria', num_cuenta:'1234567890', nombre_cuenta:'Juan Carlos Orozco', fecha_ingreso:'2022-03-01' },
+      { nombre:'Pedro Alvarado Cruz', rol:'mecanico',     cargo:'Mecánico Junior',   salario_base:4002.28, bonificacion:250, igss:true, avatar:'🔧', nit:'2222222-2', telefono:'5522-2222', banco:'Bantrab', tipo_cuenta:'ahorro', num_cuenta:'2345678901', nombre_cuenta:'Pedro Alvarado Cruz', fecha_ingreso:'2023-06-15' },
+      { nombre:'Ana García Reyes',    rol:'recepcionista',cargo:'Recepcionista',      salario_base:4200, bonificacion:250, igss:true,  avatar:'📋', nit:'3333333-3', telefono:'5533-3333', banco:'G&T Continental', tipo_cuenta:'monetaria', num_cuenta:'3456789012', nombre_cuenta:'Ana García Reyes', fecha_ingreso:'2021-09-01' },
+      { nombre:'Roberto Méndez',      rol:'recepcionista',cargo:'Gerente de Taller',  salario_base:8000, bonificacion:250, igss:true,  avatar:'👨‍💼', nit:'4444444-4', telefono:'5544-4444', banco:'Banco Industrial', tipo_cuenta:'monetaria', num_cuenta:'4567890123', nombre_cuenta:'Roberto Méndez', fecha_ingreso:'2020-01-10' },
+      { nombre:'María López Solís',   rol:'mecanico',     cargo:'Gerente Financiero', salario_base:7500, bonificacion:250, igss:true,  avatar:'💰', nit:'5555555-5', telefono:'5555-5555', banco:'BAC Credomatic', tipo_cuenta:'monetaria', num_cuenta:'5678901234', nombre_cuenta:'María López Solís', fecha_ingreso:'2021-02-01' },
+    ];
+    await insertBatch('empleados', data, 'Empleados');
+  },
+
+  /* ── PROVEEDORES ─────────────────────────────────── */
+  async proveedores() {
+    const data = [
+      { nombre:'Importadora de Repuestos GT',  codigo:'PRV-001', nit:'1122334-5', contacto:'Fernando López',  telefono:'2220-1111', email:'ventas@importadoragt.com',   categoria:'Repuestos',    credito_dias:30, limite_credito:15000, pais:'Guatemala' },
+      { nombre:'Lubricantes y Filtros S.A.',   codigo:'PRV-002', nit:'2233445-6', contacto:'Rosa Hernández',  telefono:'2330-2222', email:'ventas@lubrifiltros.gt',      categoria:'Lubricantes',  credito_dias:15, limite_credito:8000,  pais:'Guatemala' },
+      { nombre:'Herramientas Industriales CR', codigo:'PRV-003', nit:'3344556-7', contacto:'Carlos Jiménez', telefono:'2440-3333', email:'info@herramientascr.com',      categoria:'Herramientas', credito_dias:45, limite_credito:25000, pais:'Costa Rica' },
+      { nombre:'AutoPartes Express',           codigo:'PRV-004', nit:'4455667-8', contacto:'Luis Godínez',   telefono:'2550-4444', email:'pedidos@autopartesexp.gt',    categoria:'Repuestos',    credito_dias:30, limite_credito:20000, pais:'Guatemala' },
+      { nombre:'Distribuidora Bosch GT',       codigo:'PRV-005', nit:'5566778-9', contacto:'Ana Martínez',  telefono:'2660-5555', email:'distribuidora@boschgt.com',    categoria:'Eléctrico',    credito_dias:30, limite_credito:12000, pais:'Guatemala' },
+    ];
+    for (const p of data) {
+      const payload = { ...p, tenant_id: TENANT_ID, activo: true };
+      const { error } = await sb.from('proveedores').insert(payload);
+      if (error) { log('err', `  ❌ ${p.nombre}: ${error.message}`); totalErr++; }
+      else        { log('ok',  `  ✅ ${p.nombre}`); totalOk++; }
+    }
+    resumen['🏪 Proveedores'] = { count: data.length, status: totalErr ? 'parcial' : 'ok', diag: '' };
+  },
+
+  /* ── INVENTARIO ──────────────────────────────────── */
+  async inventario() {
+    const data = [
+      { codigo:'REP-001', nombre:'Aceite Motor 5W-30 1L Castrol',        categoria:'Lubricantes',  marca:'Castrol',  stock:24, min_stock:10, max_stock:60, precio_costo:48, precio_venta:75, ubicacion:'Estante A-1', unidad_medida:'litro', estado_articulo:'nuevo' },
+      { codigo:'REP-002', nombre:'Filtro de Aceite Toyota Corolla',       categoria:'Filtros',      marca:'Mann',     stock:12, min_stock:5,  max_stock:30, precio_costo:28, precio_venta:55, ubicacion:'Estante A-2', unidad_medida:'pieza', num_parte_oem:'90915-YZZD4', compat_marca:'Toyota', compat_modelo:'Corolla' },
+      { codigo:'REP-003', nombre:'Pastillas de Freno Delanteras Nissan',  categoria:'Frenos',       marca:'Brembo',   stock:6,  min_stock:4,  max_stock:20, precio_costo:185,precio_venta:320,ubicacion:'Estante B-1', unidad_medida:'juego', compat_marca:'Nissan', compat_modelo:'Versa' },
+      { codigo:'REP-004', nombre:'Bujías NGK Iridium (set 4)',            categoria:'Ignición',     marca:'NGK',      stock:8,  min_stock:4,  max_stock:24, precio_costo:120,precio_venta:220,ubicacion:'Cajón C-3', unidad_medida:'kit', estado_articulo:'nuevo' },
+      { codigo:'REP-005', nombre:'Correa de Distribución Honda',          categoria:'Motor',        marca:'Gates',    stock:3,  min_stock:2,  max_stock:10, precio_costo:245,precio_venta:420,ubicacion:'Estante D-2', unidad_medida:'pieza', compat_marca:'Honda' },
+      { codigo:'REP-006', nombre:'Líquido de Frenos DOT4 500ml',         categoria:'Líquidos',     marca:'Bosch',    stock:18, min_stock:6,  max_stock:40, precio_costo:38, precio_venta:65, ubicacion:'Estante A-3', unidad_medida:'pieza' },
+      { codigo:'REP-007', nombre:'Amortiguador Trasero Hyundai Tucson',   categoria:'Suspensión',   marca:'Monroe',   stock:4,  min_stock:2,  max_stock:12, precio_costo:380,precio_venta:650,ubicacion:'Bodega B', unidad_medida:'pieza', compat_marca:'Hyundai', compat_modelo:'Tucson' },
+      { codigo:'REP-008', nombre:'Batería 12V 60Ah',                     categoria:'Eléctrico',    marca:'Volta',    stock:5,  min_stock:3,  max_stock:15, precio_costo:420,precio_venta:720,ubicacion:'Estante E-1', unidad_medida:'pieza' },
+      { codigo:'REP-009', nombre:'Filtro de Aire Kia Sportage',          categoria:'Filtros',      marca:'Mahle',    stock:2,  min_stock:3,  max_stock:15, precio_costo:45, precio_venta:85, ubicacion:'Estante A-4', unidad_medida:'pieza', compat_marca:'Kia', compat_modelo:'Sportage' },
+      { codigo:'REP-010', nombre:'Aceite de Transmisión ATF 1L',         categoria:'Lubricantes',  marca:'Castrol',  stock:15, min_stock:8,  max_stock:35, precio_costo:55, precio_venta:95, ubicacion:'Estante A-5', unidad_medida:'litro' },
+      { codigo:'REP-011', nombre:'Termostato Toyota Hilux',               categoria:'Motor',        marca:'Gates',    stock:3,  min_stock:2,  max_stock:10, precio_costo:95, precio_venta:165,ubicacion:'Cajón D-1', unidad_medida:'pieza', compat_marca:'Toyota', compat_modelo:'Hilux' },
+      { codigo:'REP-012', nombre:'Limpiaparabrisas 24" universal',        categoria:'Carrocería',   marca:'Bosch',    stock:0,  min_stock:4,  max_stock:20, precio_costo:35, precio_venta:60, ubicacion:'Estante F-1', unidad_medida:'pieza' },
+    ];
+    await insertBatch('inventario', data, 'Inventario');
+  },
+
+  /* ── ORDENES ─────────────────────────────────────── */
+  async ordenes() {
+    const { data: veh } = await sb.from('vehiculos').select('id,placa,marca,modelo,cliente_id').eq('tenant_id', TENANT_ID);
+    const { data: emp } = await sb.from('empleados').select('id,nombre,rol').eq('tenant_id', TENANT_ID).eq('rol','mecanico');
+    if (!veh?.length) { log('err', 'Sin vehículos para OTs'); return; }
+
+    const estados = ['recibido','diagnostico','en_proceso','listo','entregado'];
+    const trabajos = [
+      { desc:'Cambio de aceite y filtro completo. Revisión general de niveles.',           total:450,   estado:'entregado' },
+      { desc:'Reparación del sistema de frenos delanteros. Cambio de pastillas y discos.', total:1850,  estado:'listo'     },
+      { desc:'Diagnóstico falla en motor. Código OBD P0301 cilindro 1.',                   total:650,   estado:'diagnostico'},
+      { desc:'Cambio de distribución y bomba de agua. Mantenimiento de 60,000 km.',        total:3200,  estado:'listo'},
+      { desc:'Revisión sistema eléctrico. Falla en alternador.',                            total:1200,  estado:'diagnostico'},
+      { desc:'Alineación y balanceo 4 ruedas. Rotación de neumáticos.',                   total:380,   estado:'entregado' },
+      { desc:'Cambio de bujías y filtros. Mantenimiento preventivo 40,000 km.',            total:750,   estado:'recibido'  },
+      { desc:'Reparación de suspensión trasera. Cambio de amortiguadores.',                total:2100,  estado:'recibido'},
+      { desc:'Cambio de batería y revisión sistema de carga.',                             total:820,   estado:'listo'     },
+      { desc:'Servicio de transmisión automática. Cambio de aceite ATF.',                  total:1100,  estado:'entregado' },
+      { desc:'Diagnóstico y reparación sistema de aire acondicionado.',                    total:1650,  estado:'recibido'  },
+      { desc:'Cambio de llantas 4 unidades 205/55R16.',                                   total:2800,  estado:'entregado' },
+    ];
+
+    let n = 1;
+    for (let i = 0; i < trabajos.length; i++) {
+      const t = trabajos[i];
+      const v = veh[i % veh.length];
+      const m = emp?.[i % (emp?.length||1)];
+      const dia = String((i % 28) + 1).padStart(2,'0');
+      const payload = {
+        tenant_id:    TENANT_ID,
+        num:          `OT-2026-${String(n++).padStart(4,'0')}`,
+        vehiculo_id:  v.id,
+        cliente_id:   v.cliente_id,
+        mecanico_id:  m?.id || null,
+        descripcion:  t.desc,
+        estado:       t.estado,
+        prioridad:    ['baja','media','alta','media'][i % 4],
+        total:        t.total,
+        fecha_ingreso:`2026-05-${dia}`,
+        fecha_estimada:`2026-05-${String(Math.min(parseInt(dia)+3,31)).padStart(2,'0')}`,
+      };
+      // Delete existing same num first to allow re-seeding
+      await sb.from('ordenes').delete().eq('tenant_id', TENANT_ID).eq('num', payload.num);
+      const { error } = await sb.from('ordenes').insert(payload);
+      if (error) { log('err', `  ❌ OT-${i+1}: ${error.message}`); totalErr++; }
+      else        { log('ok',  `  ✅ ${payload.num} — ${t.estado} — Q${t.total}`); totalOk++; }
+    }
+    resumen['📋 Órdenes OT'] = { count: trabajos.length, status: totalErr ? 'parcial':'ok', diag:'' };
+  },
+
+  /* ── INGRESOS ────────────────────────────────────── */
+  async ingresos() {
+    const data = [
+      { tipo:'cobro_ot', concepto:'Cobro OT — Cambio aceite Toyota Corolla',      monto:450,  fecha:'2026-05-02', metodo_pago:'efectivo'     },
+      { tipo:'cobro_ot', concepto:'Cobro OT — Frenos Nissan Versa',              monto:1850, fecha:'2026-05-05', metodo_pago:'transferencia' },
+      { tipo:'cobro_ot', concepto:'Cobro OT — Alineación y balanceo Honda',      monto:380,  fecha:'2026-05-07', metodo_pago:'efectivo'      },
+      { tipo:'cobro_ot', concepto:'Cobro OT — Mantenimiento Mazda CX-5',         monto:750,  fecha:'2026-05-10', metodo_pago:'efectivo'      },
+      { tipo:'cobro_ot', concepto:'Cobro OT — Transmisión Hyundai Tucson',       monto:1100, fecha:'2026-05-12', metodo_pago:'cheque'        },
+      { tipo:'cobro_ot', concepto:'Cobro OT — Llantas Toyota Hilux',             monto:2800, fecha:'2026-05-15', metodo_pago:'transferencia' },
+      { tipo:'anticipo', concepto:'Anticipo 50% OT distribución Honda',          monto:1600, fecha:'2026-05-16', metodo_pago:'transferencia' },
+      { tipo:'cobro_ot', concepto:'Cobro OT — Batería y carga Volkswagen Jetta', monto:820,  fecha:'2026-05-18', metodo_pago:'efectivo'      },
+      { tipo:'cobro_ot', concepto:'Cobro OT — Aceite y bujías Kia Sportage',     monto:650,  fecha:'2026-05-20', metodo_pago:'efectivo'      },
+      { tipo:'otro',     concepto:'Venta directa repuestos — cliente externo',   monto:450,  fecha:'2026-05-22', metodo_pago:'efectivo'      },
+      { tipo:'cobro_ot', concepto:'Cobro OT — A/C Mitsubishi Outlander',         monto:1650, fecha:'2026-05-24', metodo_pago:'transferencia' },
+      { tipo:'cobro_ot', concepto:'Cobro OT — Suspensión Toyota Corolla',        monto:2100, fecha:'2026-05-28', metodo_pago:'efectivo'      },
+    ];
+    await insertBatch('ingresos', data, 'Ingresos');
+  },
+
+  /* ── EGRESOS ─────────────────────────────────────── */
+  async egresos() {
+    const data = [
+      { categoria:'compra_inventario', concepto:'Compra aceites y filtros — Lubricantes y Filtros S.A.',  monto:2850, fecha:'2026-05-02', metodo_pago:'transferencia', num_factura:'A-000123' },
+      { categoria:'nomina',            concepto:'Pago nómina Mayo 2026 — 5 empleados',                    monto:28202.28, fecha:'2026-05-05', metodo_pago:'transferencia' },
+      { categoria:'igss',              concepto:'Cuota IGSS Patronal Mayo 2026',                          monto:3573.16, fecha:'2026-05-10', metodo_pago:'transferencia' },
+      { categoria:'alquiler',          concepto:'Alquiler local taller Mayo 2026',                        monto:4500, fecha:'2026-05-01', metodo_pago:'cheque' },
+      { categoria:'servicios',         concepto:'Energía eléctrica EEGSA Mayo',                          monto:1250, fecha:'2026-05-08', metodo_pago:'efectivo'  },
+      { categoria:'servicios',         concepto:'Agua y drenajes Mayo',                                  monto:185,  fecha:'2026-05-08', metodo_pago:'efectivo'  },
+      { categoria:'servicios',         concepto:'Internet y teléfono Tigo Business',                     monto:450,  fecha:'2026-05-10', metodo_pago:'transferencia'},
+      { categoria:'compra_inventario', concepto:'Compra pastillas de freno y amortiguadores',            monto:3200, fecha:'2026-05-12', metodo_pago:'transferencia', num_factura:'B-000456' },
+      { categoria:'combustible',       concepto:'Combustible unidad de reparto Mayo',                    monto:650,  fecha:'2026-05-15', metodo_pago:'efectivo'  },
+      { categoria:'otros',             concepto:'Viáticos técnicos — visitas a domicilio Mayo',          monto:1200, fecha:'2026-05-20', metodo_pago:'efectivo'  },
+      { categoria:'otros',             concepto:'Facebook/Instagram Ads Mayo',                           monto:800,  fecha:'2026-05-01', metodo_pago:'efectivo'  },
+      { categoria:'otros',             concepto:'Papelería y consumibles de oficina',                   monto:320,  fecha:'2026-05-18', metodo_pago:'efectivo'  },
+      { categoria:'herramientas',      concepto:'Compra gato hidráulico 3T',                            monto:1850, fecha:'2026-05-14', metodo_pago:'transferencia'},
+      { categoria:'impuestos',         concepto:'Pago IVA Abril 2026 — SAT',                            monto:1876, fecha:'2026-05-06', metodo_pago:'transferencia'},
+    ];
+    await insertBatch('egresos', data, 'Egresos');
+  },
+
+  /* ── VIÁTICOS ────────────────────────────────────── */
+  async viaticos() {
+    const { data: emp } = await sb.from('empleados').select('id,nombre').eq('tenant_id', TENANT_ID);
+    if (!emp?.length) { log('err', 'Sin empleados para viáticos'); return; }
+
+    const data = [
+      { empleado_id: emp[0].id, concepto:'Desayuno reunión cliente zona 10',    categoria:'alimentacion',    monto:75,  fecha:'2026-05-06', comprobante:'FEL-2025-0001', estado:'pagado'   },
+      { empleado_id: emp[0].id, concepto:'Almuerzo con proveedor Importadora',  categoria:'alimentacion',    monto:180, fecha:'2026-05-08', comprobante:'FEL-2025-0002', estado:'pagado'   },
+      { empleado_id: emp[1].id, concepto:'Transporte diagnóstico a domicilio',  categoria:'transporte',  monto:120, fecha:'2026-05-08', comprobante:null,             estado:'aprobado' },
+      { empleado_id: emp[1].id, concepto:'Combustible visita taller externo',   categoria:'combustible', monto:200, fecha:'2026-05-12', comprobante:'FEL-2025-0003', estado:'pagado'   },
+      { empleado_id: emp[2].id, concepto:'Cena trabajo extra con cliente VIP',  categoria:'alimentacion',        monto:350, fecha:'2026-05-14', comprobante:'FEL-2025-0004', estado:'aprobado' },
+      { empleado_id: emp[0].id, concepto:'Parqueo zona 4 reunión SAT',          categoria:'parqueo',     monto:45,  fecha:'2026-05-15', comprobante:null,             estado:'pendiente'},
+      { empleado_id: emp[3]?.id||emp[0].id, concepto:'Hotel capacitación INTECAP', categoria:'hospedaje', monto:650, fecha:'2026-05-20', comprobante:'FEL-2025-0005', estado:'pagado' },
+      { empleado_id: emp[1].id, concepto:'Almuerzo visita cliente Quetzaltenango',categoria:'alimentacion',  monto:95,  fecha:'2026-05-22', comprobante:'FEL-2025-0006', estado:'pendiente'},
+      { empleado_id: emp[2].id, concepto:'Peaje ruta al atlántico',             categoria:'peajes',      monto:30,  fecha:'2026-05-24', comprobante:null,             estado:'aprobado' },
+      { empleado_id: emp[0].id, concepto:'Comunicación extra — datos móviles',  categoria:'comunicacion',monto:85,  fecha:'2026-05-25', comprobante:null,             estado:'pendiente'},
+    ];
+
+    let errLocal = 0;
+    for (const v of data) {
+      if (!v.empleado_id) continue;
+      const payload = { ...v, tenant_id: TENANT_ID };
+      const { error } = await sb.from('viaticos').insert(payload);
+      if (error) { log('err', `  ❌ Viático "${v.concepto}": ${error.message}`); totalErr++; errLocal++; }
+      else        { log('ok',  `  ✅ Viático Q${v.monto} — ${v.concepto} [${v.estado}]`); totalOk++; }
+    }
+    resumen['🚗 Viáticos'] = {
+      count: data.length - errLocal, status: errLocal > 0 ? 'error' : 'ok',
+      diag: errLocal > 0 ? `${errLocal} fallos — revisar tabla viaticos` : 'OK'
+    };
+  },
+
+  /* ── CITAS ───────────────────────────────────────── */
+  async citas() {
+    const { data: veh } = await sb.from('vehiculos').select('id,placa,marca,cliente_id').eq('tenant_id', TENANT_ID);
+    const { data: emp } = await sb.from('empleados').select('id,nombre').eq('tenant_id', TENANT_ID).eq('rol','mecanico');
+    if (!veh?.length || veh.length < 3) { log('err', 'Sin suficientes vehículos. Carga vehículos primero.'); return; }
+
+    const citas = [
+      { vehiculo_id:veh[0].id, cliente_id:veh[0].cliente_id, mecanico_id:emp?.[0]?.id, descripcion:'Revisión sistema de frenos', fecha_cita:'2026-05-28 09:00', duracion_estimada:120, estado:'confirmada' },
+      { vehiculo_id:veh[1].id, cliente_id:veh[1].cliente_id, mecanico_id:emp?.[1]?.id, descripcion:'Cambio de aceite y revisión general', fecha_cita:'2026-05-29 10:30', duracion_estimada:90, estado:'confirmada' },
+      { vehiculo_id:veh[2].id, cliente_id:veh[2].cliente_id, mecanico_id:emp?.[0]?.id, descripcion:'Diagnóstico ruido en suspensión', fecha_cita:'2026-05-30 08:00', duracion_estimada:60, estado:'pendiente' },
+      { vehiculo_id:veh[3].id, cliente_id:veh[3].cliente_id, descripcion:'Mantenimiento preventivo 30,000 km', fecha_cita:'2026-06-02 11:00', duracion_estimada:180, estado:'pendiente' },
+      { vehiculo_id:veh[4].id, cliente_id:veh[4].cliente_id, descripcion:'Cambio de neumáticos traseros', fecha_cita:'2026-06-03 14:00', duracion_estimada:60, estado:'confirmada' },
+    ];
+    await insertBatch('citas', citas, 'Citas');
+  },
+
+  /* ── FACTURAS ────────────────────────────────────── */
+  async facturas() {
+    const { data: clientes } = await sb.from('clientes').select('id,nombre,nit').eq('tenant_id', TENANT_ID);
+    if (!clientes?.length) { log('err', 'Sin clientes para facturas'); return; }
+
+    const facturas = [
+      { num:'F-2025-001', nit:'1234567-8', nombre_receptor:'Carlos Ramírez Gómez',   total:450,  iva:48.21, fecha:'2026-05-02', estado:'certificada' },
+      { num:'F-2025-002', nit:'2345678-9', nombre_receptor:'María López de García',  total:1850, iva:198.21,fecha:'2026-05-05', estado:'certificada' },
+      { num:'F-2025-003', nit:'3456789-0', nombre_receptor:'Roberto Juárez Castillo',total:380,  iva:40.71, fecha:'2026-05-07', estado:'certificada' },
+      { num:'F-2025-004', nit:'4567890-1', nombre_receptor:'Ana Patricia Fuentes',   total:750,  iva:80.36, fecha:'2026-05-10', estado:'certificada' },
+      { num:'F-2025-005', nit:'6789012-3', nombre_receptor:'Importadora GT S.A.',    total:1100, iva:117.86,fecha:'2026-05-12', estado:'certificada' },
+      { num:'F-2025-006', nit:'7890123-4', nombre_receptor:'Transportes del Norte',  total:2800, iva:300,   fecha:'2026-05-15', estado:'certificada' },
+      { num:'F-2025-007', nit:'5678901-2', nombre_receptor:'Miguel Ángel Pérez',     total:820,  iva:87.86, fecha:'2026-05-18', estado:'certificada' },
+      { num:'F-2025-008', nit:'8901234-5', nombre_receptor:'Pedro González Lima',    total:650,  iva:69.64, fecha:'2026-05-20', estado:'certificada' },
+      { num:'F-2025-009', nit:'9012345-6', nombre_receptor:'Luisa Hernández Vega',  total:1650, iva:176.79,fecha:'2026-05-24', estado:'certificada' },
+      { num:'F-2025-010', nit:'0123456-7', nombre_receptor:'José Antonio Marroquín',total:2100, iva:225,   fecha:'2026-05-28', estado:'pendiente'   },
+    ];
+
+    for (const f of facturas) {
+      const c = clientes.find(x => x.nit === f.nit) || clientes[0];
+      const payload = {
+        ...f,
+        tenant_id:    TENANT_ID,
+        cliente_id:   c.id,
+        subtotal:     parseFloat((f.total - f.iva).toFixed(2)),
+      };
+      const { error } = await sb.from('facturas').insert(payload);
+      if (error) { log('err', `  ❌ ${f.num}: ${error.message}`); totalErr++; }
+      else        { log('ok',  `  ✅ ${f.num} — Q${f.total} — ${f.estado}`); totalOk++; }
+    }
+    resumen['🧾 Facturas'] = { count: facturas.length, status: totalErr ? 'parcial':'ok', diag:'' };
+  },
+
+  /* ── CONFIG FISCAL ───────────────────────────────── */
+  async configFiscal() {
+    const key = 'tp_fiscal_' + TENANT_ID;
+    const config = {
+      regimen_iva: 'general', tasa_iva: 0.12, tasa_isr: 0.05,
+      num_patrono_igss: '1234567', cuota_laboral: 0.0483, cuota_patronal: 0.1267,
+      intecap: 0.01, aplica_irtra: true
+    };
+    localStorage.setItem(key, JSON.stringify(config));
+
+    const { error } = await sb.from('config_fiscal').upsert({
+      tenant_id: TENANT_ID, ...config, updated_at: new Date().toISOString()
+    }, { onConflict: 'tenant_id' });
+
+    if (error) { log('err', '  ❌ Config fiscal: ' + error.message); totalErr++; }
+    else        { log('ok',  '  ✅ Config fiscal — Régimen General IVA 12% ISR 5%'); totalOk++; }
+    resumen['⚙️ Config Fiscal'] = { count:1, status: error?'error':'ok', diag: error?.message||'' };
+  },
+
+  /* ── NÓMINA ──────────────────────────────────────── */
+  async nomina() {
+    const { data: emp } = await sb.from('empleados').select('id,nombre,salario_base,bonificacion,igss,banco,num_cuenta,nombre_cuenta').eq('tenant_id', TENANT_ID);
+    if (!emp?.length) { log('err', 'Sin empleados para nómina'); return; }
+
+    for (const e of emp) {
+      const sal   = e.salario_base || 0;
+      const bonif = e.bonificacion || 250;
+      const igssL = parseFloat((sal * 0.0483).toFixed(2));
+      const igssP = parseFloat((sal * 0.1267).toFixed(2));
+      const liq   = parseFloat((sal + bonif - igssL).toFixed(2));
+      const payload = {
+        tenant_id:    TENANT_ID,
+        empleado_id:  e.id,
+        periodo_mes:  5,
+        periodo_anio: 2026,
+        salario_base: sal,
+        bonificacion: bonif,
+        igss_laboral: igssL,
+        igss_patronal:igssP,
+        otros_ingresos: 0,
+        otros_descuentos: 0,
+        liquido_pagar: liq,
+        metodo_pago:  'transferencia',
+        banco:        e.banco || null,
+        pagado:       true,
+        fecha_pago:   '2026-05-30'
+      };
+      const { error } = await sb.from('pagos_nomina').insert(payload);
+      if (error) { log('err', `  ❌ Nómina ${e.nombre}: ${error.message}`); totalErr++; }
+      else        { log('ok',  `  ✅ Nómina ${e.nombre} — Q${liq}`); totalOk++; }
+    }
+    resumen['💵 Nómina'] = { count: emp.length, status: totalErr?'parcial':'ok', diag:'' };
+  },
+
+  /* ── LIMPIAR DATOS DE PRUEBA ─────────────────────── */
+  async limpiar() {
+    if (!SEED.init()) return;
+    TENANT_ID = document.getElementById('tenant-id').value.trim() || TENANT_ID;
+    if (!TENANT_ID) { log('err', 'Necesitas el Tenant ID'); return; }
+
+    if (!confirm('⚠️ ¿Eliminar TODOS los datos de prueba de este tenant? Esta acción no se puede deshacer.')) return;
+
+    const tablas = ['pagos_nomina','viaticos','citas','facturas','ingresos','egresos',
+                    'ordenes','vehiculos','empleados','inventario','proveedores','clientes'];
+    log('head', 'Limpiando datos...');
+    for (const t of tablas) {
+      const { error, count } = await sb.from(t).delete({ count:'exact' }).eq('tenant_id', TENANT_ID);
+      if (error) log('err', `  ❌ ${t}: ${error.message}`);
+      else       log('ok',  `  ✅ ${t}: limpiado`);
+    }
+    log('ok', 'Limpieza completada');
+    actualizarResumen();
+  }
+};
+
+/* ── HELPERS ──────────────────────────────────────── */
+async function insertBatch(tabla, data, label) {
+  let ok = 0, err = 0;
+  for (const item of data) {
+    const payload = { ...item, tenant_id: TENANT_ID };
+    const { error } = await sb.from(tabla).insert(payload);
+    if (error) { log('err', `  ❌ ${item.nombre||item.concepto||item.num||'item'}: ${error.message}`); totalErr++; err++; }
+    else        { log('ok',  `  ✅ ${item.nombre||item.concepto||item.num||'item'}`); totalOk++; ok++; }
+  }
+  resumen['📦' === label[0] ? label : label] = {
+    count: ok, status: err > 0 ? (ok > 0 ? 'parcial' : 'error') : 'ok',
+    diag: err > 0 ? `${err} fallos en ${tabla}` : ''
+  };
+}
+
+function log(tipo, msg) {
+  const el = document.getElementById('log');
+  const div = document.createElement('div');
+  div.className = tipo;
+  div.textContent = msg;
+  el.appendChild(div);
+  el.scrollTop = el.scrollHeight;
+  document.getElementById('cnt-ok').textContent  = totalOk;
+  document.getElementById('cnt-err').textContent = totalErr;
+}
+
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+function actualizarResumen() {
+  const tbody = document.getElementById('resumen-tabla');
+  const filas = Object.entries(resumen).map(([mod, info]) => {
+    const cls  = info.status === 'ok' ? 'badge-ok' : info.status === 'error' ? 'badge-err' : 'badge-skip';
+    const lbl  = info.status === 'ok' ? '✅ OK' : info.status === 'error' ? '❌ Error' : '⚠️ Parcial';
+    return `<tr>
+      <td>${mod}</td>
+      <td style="color:#F59E0B;font-weight:700">${info.count}</td>
+      <td><span class="badge ${cls}">${lbl}</span></td>
+      <td style="color:#94A3B8;font-size:11px">${info.diag||'Sin errores'}</td>
+    </tr>`;
+  }).join('');
+  tbody.innerHTML = filas || '<tr><td colspan="4" style="color:#4A5568;text-align:center">Sin datos aún</td></tr>';
+}
+</script>
+</body>
+</html>

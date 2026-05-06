@@ -117,11 +117,12 @@ const Auth = {
 
     const tenantId = tallerResult.tenantId;
 
-    /* 2. Crear usuario en Supabase Auth con tenant_id en metadata */
+    /* 2. Crear usuario en Supabase Auth */
     const { data: authData, error: authErr } = await sb.auth.signUp({
       email:    fields.email,
       password: fields.password,
       options:  {
+        emailRedirectTo: window.location.origin,
         data: {
           nombre:    fields.nombre_usuario,
           rol:       'admin',
@@ -129,7 +130,45 @@ const Auth = {
         }
       }
     });
-    if (authErr) return { ok: false, error: authErr.message };
+
+    if (authErr) {
+      /* Rate limit: crear perfil en BD sin confirmación y hacer login directo */
+      if (authErr.message.includes('rate limit') || authErr.message.includes('email')) {
+        console.warn('Email rate limit — creando perfil sin confirmación Supabase Auth');
+        /* Intentar login directo (si el usuario ya existe en Auth) */
+        const { data: loginData } = await sb.auth.signInWithPassword({
+          email: fields.email, password: fields.password
+        });
+        if (loginData?.user) {
+          authData = loginData;
+        } else {
+          /* Crear perfil sin cuenta Auth — usuario puede establecer contraseña después */
+          const fakeId = crypto.randomUUID();
+          await sb.from('usuarios').insert({
+            id: fakeId, tenant_id: tenantId,
+            nombre: fields.nombre_usuario, email: fields.email,
+            rol: 'admin', activo: true, avatar: '👑'
+          });
+          Auth.tenant   = await DB.getTenant(null, tenantId);
+          Auth.user     = { id: fakeId, nombre: fields.nombre_usuario, email: fields.email, rol: 'admin', activo: true, avatar: '👑', tenant_id: tenantId };
+          Auth.licencia = { valida: true, tipo: 'demo', dias_restantes: 30 };
+          return { ok: true, sinAuth: true };
+        }
+      } else {
+        return { ok: false, error: authErr.message };
+      }
+    }
+
+    /* Manejar usuario no confirmado — en Supabase, signUp con "Confirm email OFF"
+       devuelve session directamente. Con "Confirm email ON" session es null. */
+    let finalUser = authData?.user || authData?.session?.user;
+    if (!finalUser) {
+      /* Email de confirmación pendiente — igual crear perfil y notificar */
+      return { ok: false, error: 'confirm_email', email: fields.email };
+    }
+    const authDataFixed = { user: finalUser };
+    /* Reemplazar authData por authDataFixed en el resto del flujo */
+    Object.assign(authData || {}, { user: finalUser });
 
     /* 3. Crear perfil admin vinculado a ESTE taller */
     await sb.from('usuarios').upsert({
@@ -804,20 +843,34 @@ const USER_MGMT = {
       const tid = await getTenantId();
       if (!tid) {
         return Object.values(DEMO_USERS)
-          .filter(u => u.rol !== 'superadmin') // Ocultar superadmin
+          .filter(u => u.rol !== 'superadmin')
           .map(u => ({ id:u.id, nombre:u.nombre, email:u.email, rol:u.rol, activo:true, avatar:'👤', telefono:null, ultimo_login:null }));
       }
-      const { data } = await getSupabase()
+      const { data, error } = await getSupabase()
         .from('usuarios')
         .select('*')
         .eq('tenant_id', tid)
-        .neq('email', 'henry.chinchilla@gmail.com') // Henry SIEMPRE oculto
-        .neq('rol', 'superadmin')                    // Ningún superadmin visible
+        .neq('email', 'henry.chinchilla@gmail.com')
+        .neq('rol', 'superadmin')
         .order('nombre');
-      return data || [];
+
+      if (error) {
+        console.warn('usuarios query error:', error.message);
+        /* Fallback: return current user at minimum */
+        if (Auth.user) return [Auth.user];
+        return [];
+      }
+
+      /* If empty, include current logged-in user */
+      const list = data || [];
+      const currInList = list.find(u => u.id === Auth.user?.id);
+      if (!currInList && Auth.user && Auth.user.rol !== 'superadmin') {
+        list.unshift(Auth.user);
+      }
+      return list;
     } catch(e) {
       console.warn('USER_MGMT.getAll error:', e);
-      return [];
+      return Auth.user ? [Auth.user] : [];
     }
   },
 
@@ -970,13 +1023,38 @@ Pages.invitarUsuario = async function () {
   const email  = document.getElementById('inv-email')?.value.trim();
   const rol    = document.getElementById('inv-rol')?.value;
   const tel    = document.getElementById('inv-tel')?.value.trim();
-  const avatar = document.getElementById('inv-avatar')?.value.trim();
+  const avatar = document.getElementById('inv-avatar')?.value.trim() || '👤';
+  const pass   = document.getElementById('inv-pass')?.value;
+
   if (!nombre||!email||!rol) { UI.toast('Nombre, email y rol son obligatorios','error'); return; }
+  if (!pass || pass.length < 8) { UI.toast('La contraseña debe tener al menos 8 caracteres','error'); return; }
+
   UI.toast('Creando usuario...','info');
-  const r = await USER_MGMT.invitar({nombre,email,rol,telefono:tel,avatar});
-  if (!r.ok) { UI.toast('Error: '+r.error,'error'); return; }
+
+  /* 1. Crear en Supabase Auth */
+  const { data: authData, error: authErr } = await getSupabase().auth.signUp({
+    email, password: pass,
+    options: { data: { nombre, rol } }
+  });
+
+  const tid = await getTenantId();
+  const userId = authData?.user?.id || crypto.randomUUID();
+
+  /* 2. Crear perfil en public.usuarios */
+  const { error: dbErr } = await getSupabase().from('usuarios').upsert({
+    id: userId, tenant_id: tid, nombre, email, rol,
+    telefono: tel||null, avatar, activo: true
+  });
+
+  if (authErr && !authErr.message.includes('rate limit')) {
+    UI.toast('Error Auth: '+authErr.message,'error'); return;
+  }
+  if (dbErr) { UI.toast('Error perfil: '+dbErr.message,'error'); return; }
+
   UI.closeModal();
-  UI.toast(`${nombre} invitado ✓`);
+  UI.toast(authErr?.message?.includes('rate limit')
+    ? `Usuario ${nombre} creado en el sistema (sin email de confirmación por límite)`
+    : `Usuario ${nombre} creado ✓`);
   Pages.modalGestionUsuarios();
 };
 

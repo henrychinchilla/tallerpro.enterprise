@@ -343,14 +343,16 @@ const DB = {
       { data: ingresosMes },
       { data: invData }
     ] = await Promise.all([
-      getSupabase().from('clientes').select('*', { count:'exact', head:true }).eq('tenant_id', id).eq('activo', true),
+      getSupabase().from('clientes').select('*', { count:'exact', head:true }).eq('tenant_id', id),
       getSupabase().from('ordenes').select('*',  { count:'exact', head:true }).eq('tenant_id', id).not('estado','in','("entregado","cancelado")'),
-      getSupabase().from('facturas').select('total').eq('tenant_id', id).eq('estado','certificada').gte('fecha', mesIni).lte('fecha', mesFin),
+      /* Facturas: cualquier estado con fecha en el mes */
+      getSupabase().from('facturas').select('total').eq('tenant_id', id).gte('fecha', mesIni).lte('fecha', mesFin),
+      /* Ingresos directos del mes */
       getSupabase().from('ingresos').select('monto').eq('tenant_id', id).gte('fecha', mesIni).lte('fecha', mesFin),
-      getSupabase().from('inventario').select('id,nombre,stock,min_stock').eq('tenant_id', id).eq('activo', true)
+      getSupabase().from('inventario').select('id,nombre,stock,min_stock').eq('tenant_id', id)
     ]);
 
-    /* Ingresos = facturas certificadas del mes + ingresos directos del mes */
+    /* Ingresos = facturas del mes + ingresos directos del mes */
     const ingFact = (facturasMes || []).reduce((s,f) => s+(f.total||0), 0);
     const ingDir  = (ingresosMes || []).reduce((s,i) => s+(i.monto||0), 0);
     const ingresos  = ingFact + ingDir;
@@ -562,11 +564,30 @@ const DB = {
   },
   async upsertDocumento(fields) {
     const id = await getTenantId();
-    const { data, error } = await getSupabase()
+    const payload = { ...fields, tenant_id: id };
+
+    /* Try update first */
+    const { data: existing } = await getSupabase()
       .from('empleado_documentos')
-      .upsert({ ...fields, tenant_id: id }, { onConflict: 'empleado_id,tipo' })
-      .select().single();
-    return { data, error };
+      .select('id')
+      .eq('empleado_id', fields.empleado_id)
+      .eq('tipo', fields.tipo)
+      .maybeSingle();
+
+    if (existing?.id) {
+      const { data, error } = await getSupabase()
+        .from('empleado_documentos')
+        .update(payload)
+        .eq('id', existing.id)
+        .select().single();
+      return { data, error };
+    } else {
+      const { data, error } = await getSupabase()
+        .from('empleado_documentos')
+        .insert(payload)
+        .select().single();
+      return { data, error };
+    }
   },
   async deleteDocumento(docId) {
     const { error } = await getSupabase().from('empleado_documentos').delete().eq('id', docId);
