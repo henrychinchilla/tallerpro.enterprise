@@ -23,7 +23,7 @@ const Auth = {
     Auth.supaUser = data.user;
     await Auth._loadProfile(data.user.id, data.user.email, tenantSlug);
 
-    // Verificar licencia del tenant (excepto henry que es superadmin global)
+    /* Verificar licencia */
     if (email !== 'henry.chinchilla@gmail.com' && Auth.tenant?.id) {
       const lic = await DB.verificarLicencia(Auth.tenant.id);
       Auth.licencia = lic;
@@ -32,31 +32,47 @@ const Auth = {
       }
     }
 
-    return { ok: true };
+    /* Verificar si es primer login */
+    const debeCambiar = Auth.user?.debe_cambiar_password === true;
+    return { ok: true, debe_cambiar: debeCambiar };
   },
 
   /* ── CARGAR PERFIL ────────────────────────────────── */
   async _loadProfile(userId, email, tenantSlug = null) {
     try {
-      /* Buscar por tenant específico si viene slug */
-      let q = getSupabase()
+      /* Cargar perfil sin JOIN (FK fue removida) */
+      const { data, error } = await getSupabase()
         .from('usuarios')
-        .select('*, tenants(id,slug,name,nit,tel,email,address,logo_base64)')
-        .eq('id', userId);
-      if (tenantSlug) {
-        q = q.eq('tenants.slug', tenantSlug);
-      }
-      const { data, error } = await q.single();
+        .select('*')
+        .eq('id', userId)
+        .maybeSingle();
 
-      if (data && !error && data.tenants) {
-        Auth.user   = data;
-        Auth.tenant = data.tenants;
+      if (data && !error) {
+        Auth.user = data;
+
+        /* Cargar tenant por separado */
+        if (data.tenant_id) {
+          const { data: t } = await getSupabase()
+            .from('tenants').select('*').eq('id', data.tenant_id).maybeSingle();
+          Auth.tenant = t || null;
+        }
+
+        /* Actualizar ultimo_login */
         getSupabase().from('usuarios')
           .update({ ultimo_login: new Date().toISOString() })
           .eq('id', userId).then(() => {});
+
+        /* Si no tiene tenant, buscar por slug */
+        if (!Auth.tenant && tenantSlug) {
+          Auth.tenant = await DB.getTenant(tenantSlug);
+        }
+        if (!Auth.tenant) {
+          Auth.tenant = await DB.getTenant('automotriz-torres');
+        }
+
         return data;
       }
-    } catch(e) { /* perfil no existe aún */ }
+    } catch(e) { console.warn('_loadProfile error:', e.message); }
 
     /* Fallback: sin perfil en BD, construir desde email */
     const isHenry = (email||'').toLowerCase() === 'henry.chinchilla@gmail.com';
