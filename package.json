@@ -1,21 +1,50 @@
 {
   "name": "tallerpro-enterprise",
-  "version": "1.0.0",
-  "description": "- **Frontend**: HTML5 / CSS3 / Vanilla JS — PWA instalable en Android\r - **Backend**: Supabase (PostgreSQL + Auth + Storage + Edge Functions)\r - **PDF**: Puppeteer (Node.js) o WeasyPrint\r - **WhatsApp**: Twilio Business API\r - **Email**: SendGrid\r - **FEL**: INFILE / G4S / EDIAG (Guatemala SAT)\r - **Android**: PWA instalable vía Chrome \"Agregar a pantalla de inicio\"",
-  "main": "sw.js",
-  "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
-  },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/henrychinchilla/tallerpro.enterprise.git"
-  },
-  "keywords": [],
-  "author": "",
+  "version": "2.1.0",
+  "description": "Sistema de gestión integral para talleres mecánicos — Guatemala",
+  "main": "electron/main.js",
+  "author": "CM Telecomm GT",
   "license": "ISC",
-  "type": "commonjs",
-  "bugs": {
-    "url": "https://github.com/henrychinchilla/tallerpro.enterprise/issues"
+  "homepage": "https://app.cmtelecommgt.com",
+  "scripts": {
+    "start":    "electron .",
+    "build":    "electron-builder --win",
+    "build:mac":"electron-builder --mac",
+    "pack":     "electron-builder --dir"
   },
-  "homepage": "https://github.com/henrychinchilla/tallerpro.enterprise#readme"
+  "build": {
+    "appId":          "com.cmtelecommgt.tallerpro",
+    "productName":    "TallerPro Enterprise",
+    "copyright":      "© 2026 CM Telecomm GT",
+    "directories": {
+      "output": "dist"
+    },
+    "win": {
+      "icon":          "icons/icon-512.png",
+      "target": [
+        { "target": "nsis",     "arch": ["x64"] },
+        { "target": "portable", "arch": ["x64"] }
+      ]
+    },
+    "nsis": {
+      "oneClick":           false,
+      "allowToChangeInstallationDirectory": true,
+      "installerIcon":      "icons/icon-512.png",
+      "uninstallerIcon":    "icons/icon-512.png",
+      "installerHeaderIcon":"icons/icon-512.png",
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName":       "TallerPro Enterprise",
+      "license":            "LICENSE.txt"
+    },
+    "files": [
+      "electron/**/*",
+      "icons/**/*",
+      "package.json"
+    ]
+  },
+  "devDependencies": {
+    "electron":         "^29.0.0",
+    "electron-builder": "^24.0.0"
+  }
 }

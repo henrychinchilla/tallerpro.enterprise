@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>TallerPro — Sin conexión</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body {
+    background: #0A0E1A; color: #E2E8F0;
+    font-family: 'Segoe UI', sans-serif;
+    display: flex; align-items: center; justify-content: center;
+    height: 100vh; text-align: center;
+  }
+  .icon { font-size: 64px; margin-bottom: 20px; }
+  h1 { color: #F59E0B; font-size: 24px; margin-bottom: 8px; }
+  p  { color: #94A3B8; font-size: 14px; margin-bottom: 24px; }
+  button {
+    background: #F59E0B; color: #000; border: none;
+    padding: 12px 28px; border-radius: 8px;
+    font-size: 14px; font-weight: 700; cursor: pointer;
+  }
+  button:hover { background: #FBBF24; }
+</style>
+</head>
+<body>
+  <div>
+    <div class="icon">🔌</div>
+    <h1>Sin conexión a internet</h1>
+    <p>TallerPro necesita conexión para funcionar.<br>Verifica tu red y vuelve a intentarlo.</p>
+    <button onclick="location.reload()">🔄 Reintentar</button>
+  </div>
+</body>
+</html>
