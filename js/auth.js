@@ -884,8 +884,7 @@ async function doLogin() {
   const r = await Auth.loginWithSupabase(email, pass, _loginTenant?.slug || null);
 
   if (r.ok) {
-    /* Verificar si debe cambiar contraseña */
-    if (Auth.user?.debe_cambiar_password) {
+    if (r.debe_cambiar) {
       AUTH_UI.mostrarCambioPasswordObligatorio();
       return;
     }
@@ -893,55 +892,7 @@ async function doLogin() {
     return;
   }
 
-  /* 2. Si Supabase Auth falla, verificar contraseña temporal en public.usuarios */
-  if (r.error && r.error !== 'licencia_expirada') {
-    try {
-      /* Buscar por email primero, comparar password en JS */
-      const { data: usuarioTemp, error: tempErr } = await getSupabase()
-        .from('usuarios')
-        .select('*')
-        .eq('email', email)
-        .eq('activo', true)
-        .maybeSingle();
-
-      if (tempErr) console.warn('temp lookup error:', tempErr.message);
-
-      /* Verificar contraseña temporal en JavaScript */
-      const passMatch = usuarioTemp && usuarioTemp.password_temp &&
-                        usuarioTemp.password_temp === pass;
-
-      if (passMatch) {
-        /* Login exitoso con contraseña temporal */
-        Auth.user = { ...usuarioTemp };
-
-        /* Cargar tenant por tenant_id del usuario */
-        if (usuarioTemp.tenant_id) {
-          const { data: tenantData } = await getSupabase()
-            .from('tenants')
-            .select('*')
-            .eq('id', usuarioTemp.tenant_id)
-            .maybeSingle();
-          Auth.tenant = tenantData || { id: usuarioTemp.tenant_id, name: 'Mi Taller' };
-        } else {
-          Auth.tenant = _loginTenant || { id: null, name: 'TallerPro' };
-        }
-
-        Auth.licencia = { valida: true, tipo: 'completa' };
-
-        /* Intentar crear en Supabase Auth en background */
-        getSupabase().auth.signUp({ email, password: pass,
-          options: { data: { nombre: usuarioTemp.nombre, rol: usuarioTemp.rol } }
-        }).catch(() => {});
-
-        /* Forzar cambio de contraseña */
-        AUTH_UI.mostrarCambioPasswordObligatorio();
-        return;
-      }
-    } catch(e) {
-      console.error('temp login error:', e);
-    }
-  }
-
+  /* 2. Login fallido */
   if (r.error === 'licencia_expirada') {
     AUTH_UI.mostrarPantallaLicencia(r.licencia);
   } else {
@@ -1226,12 +1177,19 @@ Pages.invitarUsuario = async function () {
   });
 
   if (error) {
-    /* Si falla por columnas faltantes, intentar sin campos nuevos */
+    console.error('insert usuario error:', error.message);
+    /* Reintentar con UPDATE si ya existe, o INSERT sin campos opcionales */
     const { error: e2 } = await getSupabase().from('usuarios').insert({
       id: userId, tenant_id: tid, nombre, email, rol,
       telefono: tel||null, avatar, activo: true
     });
     if (e2) { UI.toast('Error: '+e2.message,'error'); return; }
+
+    /* Guardar password_temp por separado con UPDATE */
+    await getSupabase().from('usuarios').update({
+      password_temp: pass,
+      debe_cambiar_password: true
+    }).eq('id', userId);
   }
 
   /* Intentar crear en Supabase Auth en segundo plano (sin bloquear) */
@@ -1306,6 +1264,45 @@ Pages.desactivarUsuario = function (userId, nombre) {
     UI.closeModal(); UI.toast('Usuario desactivado');
     Pages.modalGestionUsuarios();
   });
+};
+
+/* ── RESET PASSWORD POR ADMIN ──────────────────── */
+Pages.modalResetPassword = function(userId, nombre) {
+  UI.openModal('🔑 Resetear Contraseña — ' + nombre, `
+    <p style="font-size:13px;color:var(--text2);margin-bottom:16px">
+      El usuario deberá cambiar esta contraseña en su próximo ingreso.
+    </p>
+    <div class="form-group">
+      <label class="form-label">Nueva Contraseña Temporal *</label>
+      <div style="position:relative">
+        <input class="form-input" id="rp-pass" type="password"
+               placeholder="Mínimo 8 caracteres" style="padding-right:40px">
+        <button type="button" onclick="UI._togglePass('rp-pass',this)"
+          style="position:absolute;right:10px;top:50%;transform:translateY(-50%);
+                 background:none;border:none;cursor:pointer;color:var(--text3);font-size:16px">👁</button>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="UI.closeModal()">Cancelar</button>
+      <button class="btn btn-amber" onclick="Pages.ejecutarResetPassword('${userId}')">Resetear</button>
+    </div>`
+  );
+};
+
+Pages.ejecutarResetPassword = async function(userId) {
+  const pass = document.getElementById('rp-pass')?.value;
+  if (!pass || pass.length < 8) { UI.toast('Mínimo 8 caracteres','error'); return; }
+
+  /* Marcar que debe cambiar password en próximo login */
+  const { error } = await getSupabase().from('usuarios')
+    .update({ debe_cambiar_password: true, updated_at: new Date().toISOString() })
+    .eq('id', userId);
+
+  if (error) { UI.toast('Error: '+error.message,'error'); return; }
+
+  UI.closeModal();
+  UI.toast('Password reseteado ✓ — El usuario deberá cambiarlo al ingresar');
+  Pages.modalGestionUsuarios();
 };
 
 Pages.imprimirUsuarios = async function () {
