@@ -896,19 +896,21 @@ async function doLogin() {
   /* 2. Si Supabase Auth falla, verificar contraseña temporal en public.usuarios */
   if (r.error && r.error !== 'licencia_expirada') {
     try {
+      /* Buscar por email primero, comparar password en JS */
       const { data: usuarioTemp, error: tempErr } = await getSupabase()
         .from('usuarios')
         .select('*')
         .eq('email', email)
-        .eq('password_temp', pass)
         .eq('activo', true)
         .maybeSingle();
 
-      if (tempErr) {
-        console.warn('temp password check error:', tempErr.message);
-      }
+      if (tempErr) console.warn('temp lookup error:', tempErr.message);
 
-      if (usuarioTemp) {
+      /* Verificar contraseña temporal en JavaScript */
+      const passMatch = usuarioTemp && usuarioTemp.password_temp &&
+                        usuarioTemp.password_temp === pass;
+
+      if (passMatch) {
         /* Login exitoso con contraseña temporal */
         Auth.user = { ...usuarioTemp };
 
