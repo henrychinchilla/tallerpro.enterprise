@@ -1,0 +1,21 @@
+{
+  "name": "tallerpro-enterprise",
+  "version": "1.0.0",
+  "description": "- **Frontend**: HTML5 / CSS3 / Vanilla JS — PWA instalable en Android\r - **Backend**: Supabase (PostgreSQL + Auth + Storage + Edge Functions)\r - **PDF**: Puppeteer (Node.js) o WeasyPrint\r - **WhatsApp**: Twilio Business API\r - **Email**: SendGrid\r - **FEL**: INFILE / G4S / EDIAG (Guatemala SAT)\r - **Android**: PWA instalable vía Chrome \"Agregar a pantalla de inicio\"",
+  "main": "sw.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/henrychinchilla/tallerpro.enterprise.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/henrychinchilla/tallerpro.enterprise/issues"
+  },
+  "homepage": "https://github.com/henrychinchilla/tallerpro.enterprise#readme"
+}
