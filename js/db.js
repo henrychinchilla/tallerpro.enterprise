@@ -63,13 +63,24 @@ const DB = {
   },
 
   /* ── TENANTS ──────────────────────────────────────── */
-  async getTenant() {
-    const { data } = await getSupabase()
-      .from('tenants')
-      .select('*')
-      .eq('slug', TENANT_SLUG)
-      .single();
-    return data;
+  async getTenant(slug = null, tenantId = null) {
+    try {
+      let q = getSupabase().from('tenants').select('*');
+      if (tenantId) {
+        q = q.eq('id', tenantId);
+      } else if (slug) {
+        q = q.eq('slug', slug);
+      } else if (typeof Auth !== 'undefined' && Auth?.tenant?.id) {
+        q = q.eq('id', Auth.tenant.id);
+      } else {
+        /* Fallback: primer tenant disponible */
+        q = q.limit(1);
+      }
+      const { data } = await q.maybeSingle();
+      return data || null;
+    } catch(e) {
+      return null;
+    }
   },
 
   async updateTenant(fields) {
