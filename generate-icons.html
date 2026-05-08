@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>TallerPro — Generador de Iconos PWA</title>
+<style>
+  body { font-family: sans-serif; background: #0A0E1A; color: #E2E8F0; padding: 20px; }
+  h2 { color: #F59E0B; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; margin: 20px 0; }
+  .icon-card { background: #161E2E; border-radius: 8px; padding: 12px; text-align: center; }
+  canvas { border-radius: 8px; margin-bottom: 6px; }
+  .size { font-size: 11px; color: #94A3B8; margin-bottom: 4px; }
+  a { color: #F59E0B; font-size: 12px; font-weight: 700; text-decoration: none; }
+  button { background: #F59E0B; color: #000; border: none; padding: 12px 24px; border-radius: 8px; cursor: pointer; font-weight: 700; font-size: 14px; margin: 8px 4px; }
+  .info { background: #161E2E; border: 1px solid rgba(245,158,11,0.3); border-radius: 8px; padding: 16px; margin: 16px 0; font-size: 13px; line-height: 1.8; }
+  code { background: #0A0E1A; padding: 2px 6px; border-radius: 4px; color: #06B6D4; }
+</style>
+</head>
+<body>
+
+<h2>🔧 TallerPro — Generador de Iconos PWA</h2>
+
+<div class="info">
+  <b>Instrucciones:</b><br>
+  1. Haz click en <b>"Generar y Descargar Todos"</b><br>
+  2. Se descargan 8 archivos PNG automáticamente<br>
+  3. Crea la carpeta <code>icons/</code> en tu repo<br>
+  4. Copia todos los PNG ahí<br>
+  5. Haz git push
+</div>
+
+<button onclick="generarTodos()">⬇ Generar y Descargar Todos</button>
+<button onclick="previsualizarTodos()">👁 Previsualizar</button>
+
+<div class="grid" id="grid"></div>
+
+<script>
+const SIZES = [72, 96, 128, 144, 152, 192, 384, 512];
+
+function dibujarIcono(canvas, size) {
+  const ctx = canvas.getContext('2d');
+  canvas.width = size;
+  canvas.height = size;
+
+  /* Fondo con gradiente */
+  const grad = ctx.createLinearGradient(0, 0, size, size);
+  grad.addColorStop(0, '#0F1623');
+  grad.addColorStop(1, '#161E2E');
+  ctx.fillStyle = grad;
+  ctx.beginPath();
+  ctx.roundRect(0, 0, size, size, size * 0.12);
+  ctx.fill();
+
+  /* Círculo ámbar */
+  const cx = size * 0.5;
+  const cy = size * 0.45;
+  const r  = size * 0.32;
+  const grd = ctx.createRadialGradient(cx, cy, 0, cx, cy, r);
+  grd.addColorStop(0, '#FBBF24');
+  grd.addColorStop(1, '#D97706');
+  ctx.fillStyle = grd;
+  ctx.beginPath();
+  ctx.arc(cx, cy, r, 0, Math.PI * 2);
+  ctx.fill();
+
+  /* Llave inglesa */
+  ctx.fillStyle = '#0A0E1A';
+  ctx.font = `bold ${size * 0.38}px serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('🔧', cx, cy);
+
+  /* Texto "TP" */
+  ctx.fillStyle = '#F59E0B';
+  ctx.font = `bold ${size * 0.12}px 'Segoe UI', sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'bottom';
+  ctx.letterSpacing = '2px';
+  ctx.fillText('TALLERPRO', size * 0.5, size * 0.93);
+}
+
+function previsualizarTodos() {
+  const grid = document.getElementById('grid');
+  grid.innerHTML = '';
+  SIZES.forEach(size => {
+    const card = document.createElement('div');
+    card.className = 'icon-card';
+    const canvas = document.createElement('canvas');
+    canvas.style.width  = Math.min(size, 128) + 'px';
+    canvas.style.height = Math.min(size, 128) + 'px';
+    dibujarIcono(canvas, size);
+    card.innerHTML = `<div class="size">${size}×${size}</div>`;
+    card.appendChild(canvas);
+    card.innerHTML += `<br><a href="#" onclick="descargar(${size})">Descargar</a>`;
+    grid.appendChild(card);
+  });
+}
+
+function descargar(size) {
+  const canvas = document.createElement('canvas');
+  dibujarIcono(canvas, size);
+  const a = document.createElement('a');
+  a.download = `icon-${size}.png`;
+  a.href = canvas.toDataURL('image/png');
+  a.click();
+}
+
+function generarTodos() {
+  previsualizarTodos();
+  SIZES.forEach((size, i) => {
+    setTimeout(() => descargar(size), i * 200);
+  });
+  setTimeout(() => {
+    alert('✅ 8 iconos descargados.\n\nAhora:\n1. Crea carpeta "icons/" en tu repo\n2. Copia todos los icon-XXX.png ahí\n3. git add icons/ && git push');
+  }, SIZES.length * 200 + 500);
+}
+</script>
+</body>
+</html>
