@@ -895,24 +895,48 @@ async function doLogin() {
 
   /* 2. Si Supabase Auth falla, verificar contraseña temporal en public.usuarios */
   if (r.error && r.error !== 'licencia_expirada') {
-    const { data: usuarioTemp } = await getSupabase()
-      .from('usuarios')
-      .select('*, tenants(id,slug,name,nit,logo_base64)')
-      .eq('email', email)
-      .eq('password_temp', pass)
-      .eq('activo', true)
-      .maybeSingle();
+    try {
+      const { data: usuarioTemp, error: tempErr } = await getSupabase()
+        .from('usuarios')
+        .select('*')
+        .eq('email', email)
+        .eq('password_temp', pass)
+        .eq('activo', true)
+        .maybeSingle();
 
-    if (usuarioTemp) {
-      /* Login exitoso con contraseña temporal */
-      Auth.user   = usuarioTemp;
-      Auth.tenant = usuarioTemp.tenants || _loginTenant || await DB.getTenant();
-      Auth.licencia = { valida: true, tipo: 'demo', dias_restantes: 30 };
-      /* Crear cuenta en Supabase Auth ahora */
-      getSupabase().auth.signUp({ email, password: pass }).then(() => {});
-      /* Forzar cambio de contraseña */
-      AUTH_UI.mostrarCambioPasswordObligatorio();
-      return;
+      if (tempErr) {
+        console.warn('temp password check error:', tempErr.message);
+      }
+
+      if (usuarioTemp) {
+        /* Login exitoso con contraseña temporal */
+        Auth.user = { ...usuarioTemp };
+
+        /* Cargar tenant por tenant_id del usuario */
+        if (usuarioTemp.tenant_id) {
+          const { data: tenantData } = await getSupabase()
+            .from('tenants')
+            .select('*')
+            .eq('id', usuarioTemp.tenant_id)
+            .maybeSingle();
+          Auth.tenant = tenantData || { id: usuarioTemp.tenant_id, name: 'Mi Taller' };
+        } else {
+          Auth.tenant = _loginTenant || { id: null, name: 'TallerPro' };
+        }
+
+        Auth.licencia = { valida: true, tipo: 'completa' };
+
+        /* Intentar crear en Supabase Auth en background */
+        getSupabase().auth.signUp({ email, password: pass,
+          options: { data: { nombre: usuarioTemp.nombre, rol: usuarioTemp.rol } }
+        }).catch(() => {});
+
+        /* Forzar cambio de contraseña */
+        AUTH_UI.mostrarCambioPasswordObligatorio();
+        return;
+      }
+    } catch(e) {
+      console.error('temp login error:', e);
     }
   }
 
