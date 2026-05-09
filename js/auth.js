@@ -896,23 +896,26 @@ async function doLogin() {
 
   UI.toast('Iniciando sesión...','info');
 
-  /* 1. Intentar login normal con Supabase Auth */
-  const r = await Auth.loginWithSupabase(email, pass, _loginTenant?.slug || null);
+  try {
+    const r = await Auth.loginWithSupabase(email, pass, _loginTenant?.slug || null);
 
-  if (r.ok) {
-    if (r.debe_cambiar) {
-      AUTH_UI.mostrarCambioPasswordObligatorio();
+    if (r.ok) {
+      if (r.debe_cambiar) {
+        AUTH_UI.mostrarCambioPasswordObligatorio();
+        return;
+      }
+      startApp();
       return;
     }
-    startApp();
-    return;
-  }
 
-  /* 2. Login fallido */
-  if (r.error === 'licencia_expirada') {
-    AUTH_UI.mostrarPantallaLicencia(r.licencia);
-  } else {
-    UI.toast('Correo o contraseña incorrectos', 'error');
+    if (r.error === 'licencia_expirada') {
+      AUTH_UI.mostrarPantallaLicencia(r.licencia);
+    } else {
+      UI.toast(r.error || 'Correo o contraseña incorrectos', 'error');
+    }
+  } catch(e) {
+    console.error('doLogin exception:', e);
+    UI.toast('Error: ' + e.message, 'error');
   }
 }
 
