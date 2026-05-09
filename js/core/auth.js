@@ -95,7 +95,7 @@ const Auth = {
       if (perfil.tenant_id) {
         const { data: t } = await getSB().from('tenants')
           .select('*').eq('id', perfil.tenant_id).maybeSingle();
-        Auth.tenant = t;
+        Auth.tenant = t; window._cachedTenantId = t?.id || null;
       }
       /* Actualizar último login */
       getSB().from('usuarios').update({ ultimo_login: new Date().toISOString() })
@@ -113,11 +113,11 @@ const Auth = {
       /* Buscar tenant */
       if (tenantSlug) {
         const { data: t } = await getSB().from('tenants').select('*').eq('slug', tenantSlug).maybeSingle();
-        Auth.tenant = t;
+        Auth.tenant = t; window._cachedTenantId = t?.id || null;
       }
       if (!Auth.tenant) {
         const { data: t } = await getSB().from('tenants').select('*').limit(1).maybeSingle();
-        Auth.tenant = t;
+        Auth.tenant = t; window._cachedTenantId = t?.id || null;
       }
     }
   },
