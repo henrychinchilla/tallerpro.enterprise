@@ -1,9 +1,7 @@
 {
-  "$schema": "node_modules/wrangler/config-schema.json",
   "name": "tallerpro-enterprise",
   "compatibility_date": "2026-05-09",
   "assets": {
-    "directory": ".",
-    "exclude": ["node_modules", "dist", "electron", ".git", "*.bat", "*.sql"]
+    "directory": "."
   }
 }
