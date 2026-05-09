@@ -313,12 +313,41 @@
 
 /* ─── RESPONSIVE ─────────────────────────────────────── */
 @media (max-width: 768px) {
-  .mobile-header    { display: flex; }
-  #sidebar          { transform: translateX(-100%); }
-  #sidebar.open     { transform: translateX(0); }
-  .sidebar-overlay.open { display: block; }
-  #main             { margin-left: 0; width: 100%; padding-top: 54px; }
-  .page-body        { padding: 16px 16px 48px; }
-  .page-header      { padding: 16px 16px 0; }
-  .grid-2, .grid-3, .grid-4 { grid-template-columns: 1fr; }
+  .mobile-header         { display: flex; }
+  #sidebar               { transform: translateX(-100%); transition: transform .25s ease; z-index: 200; }
+  #sidebar.open          { transform: translateX(0); box-shadow: 4px 0 20px rgba(0,0,0,0.5); }
+  .sidebar-overlay.open  { display: block; }
+  #main           { margin-left: 0 !important; width: 100% !important; padding-top: 54px; }
+  .page-body      { padding: 12px 12px 80px; }
+  .page-header    { padding: 12px 12px 0; flex-wrap: wrap; gap: 8px; }
+  .page-title     { font-size: 22px; }
+  .page-actions   { width: 100%; display: flex; flex-wrap: wrap; gap: 6px; }
+  .page-actions .btn { flex: 1; min-width: 120px; font-size: 11px; padding: 8px 10px; }
+  .grid-2, .grid-3, .grid-4, .kpi-grid { grid-template-columns: 1fr !important; }
+  .table-wrap     { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .data-table     { min-width: 600px; }
+  .data-table th,
+  .data-table td  { padding: 8px 10px; font-size: 12px; }
+  .card           { padding: 14px; }
+  .kpi-val        { font-size: 28px; }
+  .modal          { width: 96vw !important; max-width: 96vw !important; max-height: 90vh; overflow-y: auto; }
+  .modal-lg       { width: 96vw !important; }
+  .form-row       { grid-template-columns: 1fr !important; }
+  .modal-footer   { flex-wrap: wrap; gap: 8px; }
+  .modal-footer .btn { flex: 1; min-width: 100px; }
+  .kanban-board   { flex-direction: column; }
+  .kanban-col     { min-width: unset; width: 100%; }
+  .tabs           { overflow-x: auto; flex-wrap: nowrap; }
+  .tab-btn        { white-space: nowrap; padding: 8px 12px; font-size: 12px; }
+  .form-input, .form-select { font-size: 16px !important; }
+  .login-card     { padding: 24px 20px; }
+  .login-logo h1  { font-size: 36px; }
+  .btn-sm         { padding: 4px 8px; font-size: 10px; }
+  .hide-mobile    { display: none !important; }
+}
+
+@media (min-width: 769px) and (max-width: 1024px) {
+  #sidebar  { width: 200px; }
+  #main     { margin-left: 200px; width: calc(100% - 200px); }
+  .grid-3, .grid-4, .kpi-grid { grid-template-columns: repeat(2,1fr); }
 }
