@@ -2,35 +2,9 @@
   "name": "tallerpro-enterprise",
   "version": "3.0.0",
   "description": "TallerPro Enterprise — Sistema de gestión para talleres",
-  "main": "electron/main.js",
   "scripts": {
-    "build":     "echo 'Static site'",
-    "start":     "electron .",
-    "build:win": "electron-builder --win",
-    "build:mac": "electron-builder --mac"
+    "build": "echo 'Static site'"
   },
-  "build": {
-    "appId": "com.cmtelecommgt.tallerpro",
-    "productName": "TallerPro Enterprise",
-    "copyright": "© 2026 CM Telecomm GT",
-    "directories": { "output": "dist" },
-    "win": {
-      "icon": "icons/icon-512.png",
-      "target": [
-        { "target": "nsis",     "arch": ["x64"] },
-        { "target": "portable", "arch": ["x64"] }
-      ]
-    },
-    "nsis": {
-      "oneClick": false,
-      "allowToChangeInstallationDirectory": true,
-      "createDesktopShortcut": true,
-      "shortcutName": "TallerPro Enterprise"
-    },
-    "files": ["electron/**/*", "icons/**/*", "package.json"]
-  },
-  "devDependencies": {
-    "electron": "^29.0.0",
-    "electron-builder": "^24.0.0"
-  }
+  "author": "CM Telecomm GT",
+  "license": "ISC"
 }
