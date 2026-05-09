@@ -174,6 +174,15 @@ Modulos.inventario = {
     this.render();
   },
 
+  async eliminar(id, nombre) {
+    const ok = await UI.confirmar(`¿Eliminar artículo <b>${nombre}</b>? Esta acción no se puede deshacer.`, 'Eliminar');
+    if (!ok) return;
+    const { error } = await getSB().from('inventario').delete().eq('id', id);
+    if (error) { UI.toast('Error: '+error.message,'error'); return; }
+    UI.toast('Artículo eliminado ✓');
+    this.render();
+  },
+
   exportar() {
     const rows = [['Código','Nombre','Categoría','Stock','Mínimo','Costo','Venta']];
     this._data.forEach(i=>rows.push([i.codigo||'',i.nombre,i.categoria||'',i.stock,i.min_stock,i.precio_costo,i.precio_venta]));

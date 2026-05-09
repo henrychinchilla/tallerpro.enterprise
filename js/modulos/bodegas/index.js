@@ -58,6 +58,9 @@ Modulos.bodegas = {
                 <button class="btn btn-ghost btn-sm" onclick="Modulos.bodegas.modalBodega('${b.id}')">
                   ✏️ Editar Bodega
                 </button>
+                <button class="btn btn-danger btn-sm" onclick="Modulos.bodegas.eliminarBodega('${b.id}','${b.nombre}')">
+                  ✕ Eliminar
+                </button>
               </div>
             </div>`).join('')||'<div class="text-muted" style="padding:20px">Sin bodegas adicionales registradas.</div>'}
         </div>
@@ -348,6 +351,21 @@ Modulos.bodegas = {
 
     UI.cerrarModal();
     UI.toast(`✓ Trasladadas ${cant} ${origen.unidad} de "${origen.nombre}" desde ${desdeBodegaNombre}`);
+    this.render();
+  },
+
+  async eliminarBodega(id, nombre) {
+    const ok = await UI.confirmar(
+      `¿Eliminar bodega <b>${nombre}</b>?<br>Los artículos de su inventario se moverán al taller principal.`,
+      'Eliminar Bodega'
+    );
+    if (!ok) return;
+    /* Mover inventario al taller principal */
+    await getSB().from('inventario').update({ bodega_id: null }).eq('bodega_id', id);
+    /* Eliminar bodega */
+    const { error } = await getSB().from('bodegas').delete().eq('id', id);
+    if (error) { UI.toast('Error: '+error.message,'error'); return; }
+    UI.toast('Bodega eliminada ✓ — inventario movido al taller principal');
     this.render();
   },
 
