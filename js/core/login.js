@@ -244,3 +244,18 @@ function loginDemo() {
   if (passEl)  passEl.value  = 'demo123';
   doLogin();
 }
+
+
+window.addEventListener('load', async () => {
+  TEMAS.aplicar(localStorage.getItem('tp_tema') || 'dark');
+  try {
+    const { data: { session } } = await getSB().auth.getSession();
+    if (session?.user) {
+      await Auth._cargarPerfil(session.user.id, session.user.email);
+      Auth.supaUser = session.user;
+      if (Auth.tenant?.id) window._cachedTenantId = Auth.tenant.id;
+      App.iniciar(); return;
+    }
+  } catch(e) { console.warn('Session:', e.message); }
+  renderLogin('login');
+});
