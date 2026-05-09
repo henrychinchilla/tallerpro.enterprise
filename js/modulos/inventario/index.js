@@ -43,6 +43,7 @@ Modulos.inventario = {
                   <td><div style="display:flex;gap:4px">
                     <button class="btn btn-sm btn-cyan" onclick="Modulos.inventario.modalForm('${i.id}')">Editar</button>
                     <button class="btn btn-sm btn-ghost" onclick="Modulos.inventario.modalMovimiento('${i.id}','${i.nombre}',${i.stock})">±</button>
+                    <button class="btn btn-sm btn-danger" onclick="Modulos.inventario.eliminar('${i.id}','${i.nombre}')">✕</button>
                   </div></td>
                 </tr>`;
               }).join('')||'<tr><td colspan="8" style="text-align:center;padding:24px;color:var(--text3)">Sin artículos registrados</td></tr>'}
