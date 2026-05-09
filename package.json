@@ -1,61 +1,12 @@
 {
   "name": "tallerpro-enterprise",
   "version": "2.1.0",
-  "description": "Sistema de gesti\u00f3n integral para talleres mec\u00e1nicos \u2014 Guatemala",
-  "main": "electron/main.js",
-  "author": "CM Telecomm GT",
-  "license": "ISC",
-  "homepage": "https://app.cmtelecommgt.com",
+  "description": "TallerPro Enterprise - Sistema de gestión para talleres",
   "scripts": {
-    "start": "electron .",
+    "build": "echo 'Static site - no build needed'",
     "build:win": "electron-builder --win",
-    "build:mac": "electron-builder --mac",
-    "pack": "electron-builder --dir",
-    "build": "echo 'Static site - no build needed'"
+    "start": "electron ."
   },
-  "build": {
-    "appId": "com.cmtelecommgt.tallerpro",
-    "productName": "TallerPro Enterprise",
-    "copyright": "\u00a9 2026 CM Telecomm GT",
-    "directories": {
-      "output": "dist"
-    },
-    "win": {
-      "icon": "icons/icon-512.png",
-      "target": [
-        {
-          "target": "nsis",
-          "arch": [
-            "x64"
-          ]
-        },
-        {
-          "target": "portable",
-          "arch": [
-            "x64"
-          ]
-        }
-      ]
-    },
-    "nsis": {
-      "oneClick": false,
-      "allowToChangeInstallationDirectory": true,
-      "installerIcon": "icons/icon-512.png",
-      "uninstallerIcon": "icons/icon-512.png",
-      "installerHeaderIcon": "icons/icon-512.png",
-      "createDesktopShortcut": true,
-      "createStartMenuShortcut": true,
-      "shortcutName": "TallerPro Enterprise",
-      "license": "LICENSE.txt"
-    },
-    "files": [
-      "electron/**/*",
-      "icons/**/*",
-      "package.json"
-    ]
-  },
-  "devDependencies": {
-    "electron": "^29.0.0",
-    "electron-builder": "^24.0.0"
-  }
+  "author": "CM Telecomm GT",
+  "license": "ISC"
 }
