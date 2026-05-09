@@ -13,7 +13,7 @@ const APP = {
 
 /* ── SUPABASE ─────────────────────────────────────── */
 const SUPABASE_URL = 'https://oanguccrxleznozumpbi.supabase.co';
-const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9hbmd1Y2NyeGxlem5venVtcGJpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDYzODkwMDQsImV4cCI6MjA2MTk2NTAwNH0.Z2NyeGxlem5venVtcGJpYWRtaW4wMDAwMDAwMDAwMDA';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9hbmd1Y2NyeGxlem5venVtcGJpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzczODk4MzEsImV4cCI6MjA5Mjk2NTgzMX0.DcQS5AMHV3s4k-tvLlpb8ZWzkODPOSaiQjP1rLJVPAs';
 
 /* ── ROLES ────────────────────────────────────────── */
 const ROLES = {
