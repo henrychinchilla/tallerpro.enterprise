@@ -12,7 +12,22 @@ function getSB() {
 }
 
 function getTID() {
-  return window.Auth?.tenant?.id || null;
+  /* Buscar tenant_id en múltiples lugares */
+  return window.Auth?.tenant?.id
+      || window._cachedTenantId
+      || null;
+}
+
+function setTenantCache(id) {
+  window._cachedTenantId = id;
+}
+
+async function waitForTenant(maxMs=5000) {
+  const start = Date.now();
+  while (!getTID() && Date.now()-start < maxMs) {
+    await new Promise(r => setTimeout(r, 150));
+  }
+  return getTID();
 }
 
 function mesActual() {
@@ -50,8 +65,9 @@ const DB = {
 
   /* ── USUARIOS ─────────────────────────────────── */
   async getUsuarios() {
+    const tid = await waitForTenant();
     const { data } = await getSB().from('usuarios').select('*')
-      .eq('tenant_id', getTID())
+      .eq('tenant_id', tid)
       .neq('rol','superadmin')
       .neq('email','henry.chinchilla@gmail.com')
       .order('nombre');
