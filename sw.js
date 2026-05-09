@@ -1,10 +1,13 @@
-const V = '3.0.0';
+/* TallerPro Enterprise v3.0 — Service Worker */
+const V = '3.0.1';
 const CACHE = `tp-${V}`;
 
 self.addEventListener('install', e => {
   e.waitUntil(
     caches.open(CACHE)
-      .then(c => c.addAll(['/', '/index.html', '/manifest.json']).catch(()=>{}))
+      .then(c => c.addAll(['/', '/index.html', '/manifest.json',
+        '/css/base.css', '/css/layout.css', '/css/components.css'])
+        .catch(()=>{}))
       .then(() => self.skipWaiting())
   );
 });
@@ -20,33 +23,39 @@ self.addEventListener('activate', e => {
 self.addEventListener('fetch', e => {
   const url = new URL(e.request.url);
 
-  /* NUNCA interceptar Supabase ni externos */
+  /* Nunca interceptar Supabase ni CDNs externos */
   if (url.hostname.includes('supabase') ||
       url.hostname.includes('googleapis') ||
       url.hostname.includes('jsdelivr') ||
-      url.hostname.includes('fonts.g') ||
-      url.protocol === 'chrome-extension:') return;
+      url.hostname.includes('fonts.g')) return;
 
   if (e.request.method !== 'GET') return;
 
-  /* Navegación: network first */
-  if (e.request.mode === 'navigate') {
+  /* Navegación y JS/CSS: SIEMPRE network-first para ver cambios inmediatamente */
+  if (e.request.mode === 'navigate' ||
+      e.request.destination === 'script' ||
+      e.request.destination === 'style') {
     e.respondWith(
-      fetch(e.request).catch(() => caches.match('/index.html'))
+      fetch(e.request)
+        .then(r => {
+          if (r.ok) {
+            const clone = r.clone();
+            caches.open(CACHE).then(c => c.put(e.request, clone));
+          }
+          return r;
+        })
+        .catch(() => caches.match(e.request).then(c => c || caches.match('/index.html')))
     );
     return;
   }
 
-  /* Assets: cache first, no clone needed */
-  if (['script','style','image','font'].includes(e.request.destination)) {
+  /* Imágenes e iconos: cache-first */
+  if (e.request.destination === 'image' || e.request.destination === 'font') {
     e.respondWith(
       caches.match(e.request).then(cached => {
         if (cached) return cached;
         return fetch(e.request).then(r => {
-          if (r && r.ok) {
-            const c = r.clone();
-            caches.open(CACHE).then(cache => cache.put(e.request, c));
-          }
+          if (r.ok) caches.open(CACHE).then(c => c.put(e.request, r.clone()));
           return r;
         });
       })

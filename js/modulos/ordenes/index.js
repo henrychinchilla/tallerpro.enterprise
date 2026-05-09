@@ -66,6 +66,7 @@ Modulos.ordenes = {
                 <button class="btn btn-sm btn-cyan" onclick="Modulos.ordenes.verDetalle('${o.id}')">Ver</button>
                 <button class="btn btn-sm btn-ghost" onclick="Modulos.ordenes.compartirWA('${o.id}')">💬</button>
                 <button class="btn btn-sm btn-ghost" onclick="Modulos.ordenes.imprimirOT('${o.id}')">🖨</button>
+                <button class="btn btn-sm btn-danger" onclick="event.stopPropagation();Modulos.ordenes.eliminarOT('${o.id}')">✕</button>
                 ${o.estado==='listo'?`<button class="btn btn-sm btn-green" onclick="Modulos.ordenes.enviarFacturacion('${o.id}')">🧾 Facturar</button>`:''}
               </div>
             </td>
@@ -567,7 +568,8 @@ Modulos.ordenes = {
     if (!ok) return;
     await getSB().from('ot_items').delete().eq('orden_id', id);
     await getSB().from('ordenes').delete().eq('id', id);
-    UI.cerrarModal(); UI.toast('OT eliminada');
+    UI.cerrarModal();
+    UI.toast('OT eliminada');
     this.render();
   },
 
