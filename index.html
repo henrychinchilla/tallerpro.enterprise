@@ -58,9 +58,10 @@
 
 <!-- CORE SCRIPTS -->
 <script src="js/core/config.js"></script>
-<script>const Auth = { user:null, tenant:null, supaUser:null, licencia:null };</script>
-<script>function getSB(){ return window._sb || (window._sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY)); }</script>
-<script>function getTID(){ return window.Auth?.tenant?.id || null; }</script>
+<script>
+  function getSB(){ return window._sb || (window._sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY)); }
+  function getTID(){ return window.Auth?.tenant?.id || null; }
+</script>
 <script src="js/core/ui.js"></script>
 <script src="js/core/db.js"></script>
 <script src="js/core/auth.js"></script>
