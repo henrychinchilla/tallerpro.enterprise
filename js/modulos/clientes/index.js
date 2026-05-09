@@ -12,13 +12,18 @@ Modulos.clientes = {
         <div><h1 class="page-title">👥 Clientes</h1>
         <p class="page-subtitle">// ${this._data.length} registrados</p></div>
         <div class="page-actions">
-          <button class="btn btn-ghost" onclick="Modulos.clientes.imprimir()">🖨 Imprimir</button>
+          <select class="form-select" style="width:130px" onchange="Modulos.clientes.render(document.getElementById('cli-busca')?.value,this.value)">
+            <option value="">Todos los tipos</option>
+            <option value="individual">Individual</option>
+            <option value="empresa">Empresa</option>
+          </select>
+          <button class="btn btn-ghost" onclick="window.print()">🖨 Imprimir</button>
           <button class="btn btn-amber" onclick="Modulos.clientes.modalForm()">＋ Nuevo Cliente</button>
         </div>
       </div>
       <div class="page-body">
         <div class="search-bar" style="margin-bottom:16px">
-          <input class="form-input" id="cli-busca" placeholder="🔍 Buscar nombre, NIT, teléfono..."
+          <input class="form-input" id="cli-busca" placeholder="🔍 Buscar nombre, NIT, teléfono..." style="margin-bottom:12px"
                  value="${busca}" oninput="Modulos.clientes.render(this.value)">
         </div>
         <div class="table-wrap">
@@ -36,6 +41,7 @@ Modulos.clientes = {
                 <td onclick="event.stopPropagation()">
                   <div style="display:flex;gap:4px">
                     <button class="btn btn-sm btn-cyan" onclick="Modulos.clientes.modalForm('${c.id}')">Editar</button>
+                    <button class="btn btn-sm btn-ghost" onclick="Modulos.clientes.whatsapp('${c.tel}','${c.nombre}')" title="WhatsApp">💬</button>
                     <button class="btn btn-sm btn-ghost" onclick="Modulos.clientes.verVehiculos('${c.id}','${c.nombre}')">🚗</button>
                     <button class="btn btn-sm btn-danger" onclick="Modulos.clientes.eliminar('${c.id}','${c.nombre}')">✕</button>
                   </div>
@@ -135,5 +141,12 @@ Modulos.clientes = {
     setTimeout(() => Modulos.vehiculos?.render(clienteId), 300);
   },
 
-  imprimir() { window.print(); }
+  imprimir() { window.print(); },
+
+  whatsapp(tel, nombre) {
+    if (!tel) { UI.toast('Este cliente no tiene teléfono registrado','warn'); return; }
+    const num = tel.replace(/[^0-9]/g,'');
+    const msg = `Hola ${nombre}, le contactamos desde ${Auth.tenant?.name||'el taller'}.`;
+    window.open(`https://wa.me/502${num}?text=${encodeURIComponent(msg)}`, '_blank');
+  }
 };

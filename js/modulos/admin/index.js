@@ -1,7 +1,6 @@
 /* TallerPro v3.0 — admin/index.js */
 Modulos.admin = {
   _tab: 'overview',
-  _otps: {}, /* { adminId: { code, expires } } */
 
   async render() {
     const el = document.getElementById('page-content');
@@ -15,8 +14,7 @@ Modulos.admin = {
           <button class="tab-btn ${this._tab==='exportar'?'active':''}" onclick="Modulos.admin._tab='exportar';Modulos.admin._renderTab()">⬇️ Exportar</button>
           ${['admin','superadmin'].includes(Auth.user?.rol)?`
           <button class="tab-btn ${this._tab==='importar'?'active':''}" onclick="Modulos.admin._tab='importar';Modulos.admin._renderTab()">⬆️ Importar</button>
-          <button class="tab-btn ${this._tab==='peligro'?'active':''}" style="color:var(--red)" onclick="Modulos.admin._tab='peligro';Modulos.admin._renderTab()">⚠️ Zona de Peligro</button>
-          `:''}
+          <button class="tab-btn ${this._tab==='peligro'?'active':''}" style="color:var(--red)" onclick="Modulos.admin._tab='peligro';Modulos.admin._renderTab()">⚠️ Zona de Peligro</button>`:''}
         </div>
         <div id="admin-content"></div>
       </div>`;
@@ -27,7 +25,7 @@ Modulos.admin = {
     const el = document.getElementById('admin-content');
     if (!el) return;
 
-    if (this._tab === 'overview') {
+    if (this._tab==='overview') {
       const counts = await this._getCounts();
       el.innerHTML = `
         <div class="grid-2" style="margin-bottom:20px">
@@ -42,7 +40,7 @@ Modulos.admin = {
             <div style="margin-bottom:8px">
               ${Auth.licencia?.tipo==='completa'
                 ? '<span class="badge badge-green" style="font-size:13px">✓ Licencia Completa</span>'
-                : `<span class="badge badge-amber" style="font-size:13px">Demo · ${Auth.licencia?.dias_restantes||0} días restantes</span>`}
+                : `<span class="badge badge-amber" style="font-size:13px">Demo · ${Auth.licencia?.dias_restantes||0} días</span>`}
             </div>
             <button class="btn btn-amber btn-sm" onclick="App.activarLicencia()">🔑 Activar Licencia</button>
           </div>
@@ -60,146 +58,176 @@ Modulos.admin = {
         </div>`;
     }
 
-    else if (this._tab === 'exportar') {
+    else if (this._tab==='exportar') {
       const tablas = [
-        { id:'clientes',    label:'Clientes',         icon:'👥', roles:['admin','superadmin','gerente_tal','recepcionista'] },
-        { id:'vehiculos',   label:'Vehículos',         icon:'🚗', roles:['admin','superadmin','gerente_tal','recepcionista'] },
-        { id:'ordenes',     label:'Órdenes de Trabajo',icon:'📋', roles:['admin','superadmin','gerente_tal'] },
-        { id:'inventario',  label:'Inventario',        icon:'📦', roles:['admin','superadmin','gerente_tal'] },
-        { id:'proveedores', label:'Proveedores',       icon:'🏪', roles:['admin','superadmin','gerente_fin'] },
-        { id:'empleados',   label:'Empleados',         icon:'👤', roles:['admin','superadmin'] },
-        { id:'ingresos',    label:'Ingresos',          icon:'📈', roles:['admin','superadmin','gerente_fin'] },
-        { id:'egresos',     label:'Egresos',           icon:'📉', roles:['admin','superadmin','gerente_fin'] },
-        { id:'facturas',    label:'Facturas',          icon:'🧾', roles:['admin','superadmin','gerente_fin'] },
-        { id:'bancos',      label:'Bancos',            icon:'🏦', roles:['admin','superadmin','gerente_fin'] }
+        { id:'clientes',    label:'Clientes',          icon:'👥', roles:['admin','superadmin','gerente_tal','recepcionista'] },
+        { id:'vehiculos',   label:'Vehículos',          icon:'🚗', roles:['admin','superadmin','gerente_tal','recepcionista'] },
+        { id:'ordenes',     label:'Órdenes de Trabajo', icon:'📋', roles:['admin','superadmin','gerente_tal'] },
+        { id:'inventario',  label:'Inventario',         icon:'📦', roles:['admin','superadmin','gerente_tal'] },
+        { id:'proveedores', label:'Proveedores',        icon:'🏪', roles:['admin','superadmin','gerente_fin'] },
+        { id:'empleados',   label:'Empleados',          icon:'👤', roles:['admin','superadmin'] },
+        { id:'ingresos',    label:'Ingresos',           icon:'📈', roles:['admin','superadmin','gerente_fin'] },
+        { id:'egresos',     label:'Egresos',            icon:'📉', roles:['admin','superadmin','gerente_fin'] },
+        { id:'facturas',    label:'Facturas',           icon:'🧾', roles:['admin','superadmin','gerente_fin'] },
+        { id:'bancos',      label:'Bancos',             icon:'🏦', roles:['admin','superadmin','gerente_fin'] }
       ];
       const rol = Auth.user?.rol;
       const disponibles = tablas.filter(t=>t.roles.includes(rol));
 
       el.innerHTML = `
         <div class="alert alert-cyan" style="margin-bottom:16px">
-          <div class="alert-icon">ℹ️</div>
+          <div class="alert-icon">🔒</div>
           <div class="alert-body" style="font-size:12px">
-            Exporta los datos en formato CSV. Los archivos pueden abrirse con Excel o Google Sheets.
-            Solo puedes exportar las tablas habilitadas para tu rol.
+            Los archivos exportados están <b>encriptados con AES-256</b>. Solo pueden importarse en TallerPro.
+            También puedes exportar como CSV plano para usar en Excel.
           </div>
         </div>
         <div class="grid-3">
           ${disponibles.map(t=>`
-            <div class="card" style="text-align:center;cursor:pointer" onclick="Modulos.admin.exportarTabla('${t.id}','${t.label}')">
-              <div style="font-size:32px;margin-bottom:8px">${t.icon}</div>
-              <div style="font-weight:700;margin-bottom:4px">${t.label}</div>
-              <button class="btn btn-ghost btn-sm" style="width:100%;margin-top:8px">⬇ Exportar CSV</button>
-            </div>`).join('')}
-          <div class="card" style="text-align:center;cursor:pointer;border-color:var(--amber-border)"
-               onclick="Modulos.admin.exportarTodo()">
-            <div style="font-size:32px;margin-bottom:8px">📦</div>
-            <div style="font-weight:700;margin-bottom:4px">Todo (ZIP)</div>
-            <button class="btn btn-amber btn-sm" style="width:100%;margin-top:8px">⬇ Exportar Todo</button>
-          </div>
-        </div>`;
-    }
-
-    else if (this._tab === 'importar') {
-      el.innerHTML = `
-        <div class="alert alert-amber" style="margin-bottom:16px">
-          <div class="alert-icon">⚠️</div>
-          <div class="alert-body" style="font-size:12px">
-            Solo administradores y superadministradores pueden importar datos.
-            Los datos importados se <b>agregarán</b> a los existentes, no los reemplazarán.
-            La licencia activa se preserva automáticamente.
-          </div>
-        </div>
-        <div class="grid-2">
-          ${[
-            { id:'clientes',   label:'Clientes',   icon:'👥' },
-            { id:'vehiculos',  label:'Vehículos',  icon:'🚗' },
-            { id:'inventario', label:'Inventario', icon:'📦' },
-            { id:'empleados',  label:'Empleados',  icon:'👤' },
-            { id:'proveedores',label:'Proveedores',icon:'🏪' }
-          ].map(t=>`
             <div class="card">
-              <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
-                <span style="font-size:28px">${t.icon}</span>
-                <div>
-                  <div style="font-weight:700">${t.label}</div>
-                  <div style="font-size:11px;color:var(--text3)">CSV con encabezados</div>
-                </div>
+              <div style="text-align:center;margin-bottom:12px">
+                <div style="font-size:32px">${t.icon}</div>
+                <div style="font-weight:700;margin-top:4px">${t.label}</div>
               </div>
-              <label class="btn btn-ghost btn-sm" style="width:100%;cursor:pointer;text-align:center">
-                ⬆ Seleccionar CSV
-                <input type="file" accept=".csv" class="hidden"
-                       onchange="Modulos.admin.importarCSV(this,'${t.id}','${t.label}')">
-              </label>
+              <div style="display:flex;flex-direction:column;gap:6px">
+                <button class="btn btn-amber btn-sm" onclick="Modulos.admin.exportarEncriptado('${t.id}','${t.label}')">🔒 Exportar encriptado</button>
+                <button class="btn btn-ghost btn-sm" onclick="Modulos.admin.exportarCSV('${t.id}','${t.label}')">📄 Exportar CSV</button>
+              </div>
             </div>`).join('')}
+          <div class="card" style="border-color:var(--amber-border)">
+            <div style="text-align:center;margin-bottom:12px">
+              <div style="font-size:32px">📦</div>
+              <div style="font-weight:700;margin-top:4px">Backup Completo</div>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:6px">
+              <button class="btn btn-amber" onclick="Modulos.admin.exportarBackupCompleto()">🔒 Backup Encriptado</button>
+              <div style="font-size:10px;color:var(--text3);text-align:center">Incluye todos los datos + licencia</div>
+            </div>
+          </div>
         </div>`;
     }
 
-    else if (this._tab === 'peligro') {
+    else if (this._tab==='importar') {
+      /* Verificar si hay datos activos */
+      const { count } = await getSB().from('clientes').select('*',{count:'exact',head:true}).eq('tenant_id',getTID());
+      const tieneData = (count||0) > 0;
+      const esSuperAdmin = Auth.user?.rol === 'superadmin';
+
+      el.innerHTML = `
+        ${tieneData && !esSuperAdmin ? `
+        <div class="alert alert-red" style="margin-bottom:16px;border:2px solid var(--red)">
+          <div class="alert-icon">🚫</div>
+          <div class="alert-body">
+            <div style="font-weight:800;color:var(--red)">Importación bloqueada</div>
+            <div style="font-size:12px">Ya existen datos en la base de datos (${count} clientes registrados).
+            Solo el <b>Superusuario</b> puede forzar una importación cuando hay datos activos.
+            Para importar, primero borra la base de datos desde la Zona de Peligro.</div>
+          </div>
+        </div>` : ''}
+
+        ${tieneData && esSuperAdmin ? `
+        <div class="alert alert-amber" style="margin-bottom:16px">
+          <div class="alert-icon">⚡</div>
+          <div class="alert-body" style="font-size:12px">
+            <b>Superusuario:</b> Puedes forzar la importación aunque haya datos existentes.
+            Los datos importados se <b>agregarán</b> a los existentes.
+          </div>
+        </div>` : ''}
+
+        ${!tieneData ? `
+        <div class="alert alert-green" style="margin-bottom:16px">
+          <div class="alert-icon">✓</div>
+          <div class="alert-body" style="font-size:12px">
+            Base de datos vacía. Puedes importar datos libremente.
+            Solo se aceptan archivos <b>.tpro</b> (exportados desde TallerPro) o CSV por tabla.
+          </div>
+        </div>` : ''}
+
+        <div class="grid-2" style="${tieneData && !esSuperAdmin ? 'opacity:0.4;pointer-events:none' : ''}">
+          <div class="card card-cyan">
+            <div class="card-sub mb-3">🔒 Importar Backup Encriptado (.tpro)</div>
+            <p style="font-size:12px;color:var(--text2);margin-bottom:12px">
+              Restaura un backup completo generado por TallerPro. La licencia se restaura automáticamente.
+            </p>
+            <label class="btn btn-cyan" style="width:100%;cursor:pointer;text-align:center;display:block">
+              📂 Seleccionar archivo .tpro
+              <input type="file" accept=".tpro" class="hidden"
+                     onchange="Modulos.admin.importarBackup(this)">
+            </label>
+          </div>
+          <div class="card">
+            <div class="card-sub mb-3">📄 Importar CSV por tabla</div>
+            <div style="display:flex;flex-direction:column;gap:8px">
+              ${['clientes','vehiculos','inventario','empleados','proveedores'].map(t=>`
+                <label class="btn btn-ghost btn-sm" style="cursor:pointer;text-align:center">
+                  ⬆ ${t.charAt(0).toUpperCase()+t.slice(1)} CSV
+                  <input type="file" accept=".csv" class="hidden"
+                         onchange="Modulos.admin.importarCSV(this,'${t}','${t}')">
+                </label>`).join('')}
+            </div>
+          </div>
+        </div>`;
+    }
+
+    else if (this._tab==='peligro') {
       el.innerHTML = `
         <div class="alert alert-red" style="margin-bottom:20px;border:2px solid var(--red)">
           <div class="alert-icon" style="font-size:24px">☢️</div>
           <div class="alert-body">
-            <div style="font-weight:800;font-size:14px;color:var(--red);margin-bottom:4px">ZONA DE PELIGRO</div>
-            <div style="font-size:12px">Las acciones en esta sección son <b>irreversibles</b>. Se requiere confirmación de al menos 2 administradores.</div>
+            <div style="font-weight:800;font-size:14px;color:var(--red);margin-bottom:4px">ZONA DE PELIGRO — ACCIONES IRREVERSIBLES</div>
+            <div style="font-size:12px">Requiere confirmación de <b>2 administradores</b> con OTP + texto de confirmación.</div>
           </div>
         </div>
-
-        <div class="card" style="border:2px solid var(--red);margin-bottom:16px">
+        <div class="card" style="border:2px solid var(--red)">
           <div style="font-weight:800;font-size:15px;color:var(--red);margin-bottom:8px">🗑️ Borrar Base de Datos del Taller</div>
           <div style="font-size:13px;color:var(--text2);margin-bottom:16px">
-            Elimina <b>todos los datos</b> del taller actual: clientes, vehículos, órdenes, inventario, empleados, facturas, finanzas, bancos, bodegas, marketing, citas. <br><br>
-            <b>Se conserva:</b> Usuario henry.chinchilla@gmail.com, licencia activa, configuración del taller.
-            <b>Se elimina:</b> Todos los demás usuarios incluyendo el que ejecuta esta acción.
+            Elimina <b>todos los datos</b>: clientes, vehículos, órdenes, inventario, empleados, facturas, finanzas.<br>
+            <b style="color:var(--green)">Se conserva:</b> henry.chinchilla@gmail.com, demo@demo.com (durante período demo), licencia activa.<br>
+            <b style="color:var(--red)">Se elimina:</b> Todos los demás usuarios incluyendo el que ejecuta esta acción.
           </div>
 
-          <div style="border-top:1px solid var(--border);padding-top:16px">
-            <div style="font-weight:700;font-size:12px;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:12px">
-              Paso 1 — Generar OTP de autorización
+          <!-- PASO 1: GENERAR OTP -->
+          <div style="background:var(--surface2);border-radius:8px;padding:14px;margin-bottom:12px">
+            <div style="font-weight:700;font-size:12px;color:var(--text3);text-transform:uppercase;margin-bottom:8px">
+              Paso 1 — Cada administrador genera su OTP (válido 10 min)
             </div>
-            <div style="font-size:12px;color:var(--text2);margin-bottom:12px">
-              Cada administrador debe generar su propio OTP desde su cuenta. Se requieren mínimo 2 OTPs válidos.
-              Los OTPs expiran en <b>10 minutos</b>.
-            </div>
-            <button class="btn btn-ghost" onclick="Modulos.admin.generarMiOTP()">
-              🔐 Generar mi OTP de autorización
-            </button>
-            <div id="otp-display" style="margin-top:12px"></div>
+            <button class="btn btn-ghost" onclick="Modulos.admin.generarMiOTP()">🔐 Generar mi OTP</button>
+            <div id="otp-display" style="margin-top:10px"></div>
           </div>
 
-          <div style="border-top:1px solid var(--border);padding-top:16px;margin-top:16px">
-            <div style="font-weight:700;font-size:12px;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:12px">
-              Paso 2 — Ingresar OTPs de los 2 administradores
+          <!-- PASO 2: INGRESAR OTPs -->
+          <div style="background:var(--surface2);border-radius:8px;padding:14px;margin-bottom:12px">
+            <div style="font-weight:700;font-size:12px;color:var(--text3);text-transform:uppercase;margin-bottom:8px">
+              Paso 2 — OTPs de 2 administradores diferentes
             </div>
             <div class="form-row">
               <div class="form-group"><label class="form-label">OTP Admin 1</label>
-                <input class="form-input mono-sm" id="otp1" placeholder="000000" maxlength="6"></div>
+                <input class="form-input" id="otp1" placeholder="000000" maxlength="6"
+                       style="font-family:monospace;font-size:20px;letter-spacing:8px;text-align:center"></div>
               <div class="form-group"><label class="form-label">OTP Admin 2</label>
-                <input class="form-input mono-sm" id="otp2" placeholder="000000" maxlength="6"></div>
+                <input class="form-input" id="otp2" placeholder="000000" maxlength="6"
+                       style="font-family:monospace;font-size:20px;letter-spacing:8px;text-align:center"></div>
             </div>
           </div>
 
-          <div style="border-top:1px solid var(--border);padding-top:16px;margin-top:8px">
-            <div style="font-weight:700;font-size:12px;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:12px">
-              Paso 3 — Confirmación escrita
-            </div>
-            <div style="font-size:12px;color:var(--text2);margin-bottom:8px">
-              Escribe exactamente: <code style="background:var(--surface2);padding:2px 6px;border-radius:4px;color:var(--red)">acepto borrar base de datos</code>
+          <!-- PASO 3: TEXTO DE CONFIRMACIÓN -->
+          <div style="background:var(--surface2);border-radius:8px;padding:14px;margin-bottom:16px">
+            <div style="font-weight:700;font-size:12px;color:var(--text3);text-transform:uppercase;margin-bottom:8px">
+              Paso 3 — Escribe exactamente: <code style="color:var(--red)">acepto borrar base de datos</code>
             </div>
             <input class="form-input" id="confirm-text" placeholder="acepto borrar base de datos"
                    style="border-color:var(--red-border)">
           </div>
 
-          <div style="margin-top:16px">
-            <button class="btn btn-danger" style="width:100%;font-size:14px"
-                    onclick="Modulos.admin.ejecutarBorrado()">
-              ☢️ BORRAR BASE DE DATOS
-            </button>
-          </div>
+          <button class="btn btn-danger" style="width:100%;font-size:14px;padding:14px"
+                  onclick="Modulos.admin.ejecutarBorrado()">
+            ☢️ BORRAR BASE DE DATOS PERMANENTEMENTE
+          </button>
         </div>`;
     }
   },
 
+  /* ── UTILIDADES ─────────────────────────── */
   async _getCounts() {
     const tablas = [
       ['Clientes','👥','clientes'],['Vehículos','🚗','vehiculos'],
@@ -207,206 +235,234 @@ Modulos.admin = {
       ['Empleados','👤','empleados'],['Facturas','🧾','facturas'],
       ['Ingresos','📈','ingresos'],['Egresos','📉','egresos']
     ];
-    const results = await Promise.all(tablas.map(([l,i,t])=>
+    return Promise.all(tablas.map(([l,i,t])=>
       getSB().from(t).select('*',{count:'exact',head:true}).eq('tenant_id',getTID())
         .then(({count})=>[l,i,count||0])
     ));
-    return results;
   },
 
-  /* ── EXPORTAR ────────────────────────────────── */
-  async exportarTabla(tabla, label) {
+  /* ── ENCRIPTACIÓN AES-256-GCM ────────────── */
+  async _getKey(password='TallerPro-v3-2026') {
+    const enc     = new TextEncoder();
+    const keyMat  = await crypto.subtle.importKey('raw', enc.encode(password), 'PBKDF2', false, ['deriveKey']);
+    return crypto.subtle.deriveKey(
+      { name:'PBKDF2', salt:enc.encode('tallerpro-salt-2026'), iterations:100000, hash:'SHA-256' },
+      keyMat, { name:'AES-GCM', length:256 }, false, ['encrypt','decrypt']
+    );
+  },
+
+  async _encrypt(data) {
+    const key  = await this._getKey();
+    const iv   = crypto.getRandomValues(new Uint8Array(12));
+    const enc  = new TextEncoder();
+    const ct   = await crypto.subtle.encrypt({ name:'AES-GCM', iv }, key, enc.encode(JSON.stringify(data)));
+    const buf  = new Uint8Array(iv.byteLength + ct.byteLength);
+    buf.set(iv, 0); buf.set(new Uint8Array(ct), iv.byteLength);
+    return btoa(String.fromCharCode(...buf));
+  },
+
+  async _decrypt(b64) {
+    const buf  = Uint8Array.from(atob(b64), c=>c.charCodeAt(0));
+    const iv   = buf.slice(0, 12);
+    const ct   = buf.slice(12);
+    const key  = await this._getKey();
+    const pt   = await crypto.subtle.decrypt({ name:'AES-GCM', iv }, key, ct);
+    return JSON.parse(new TextDecoder().decode(pt));
+  },
+
+  /* ── EXPORTAR ────────────────────────────── */
+  async exportarCSV(tabla, label) {
     UI.toast(`Exportando ${label}...`, 'info');
     const { data } = await getSB().from(tabla).select('*').eq('tenant_id', getTID());
-    if (!data?.length) { UI.toast('Sin datos para exportar','warn'); return; }
-    const cols = Object.keys(data[0]).filter(k=>!['tenant_id'].includes(k));
+    if (!data?.length) { UI.toast('Sin datos','warn'); return; }
+    const cols = Object.keys(data[0]).filter(k=>k!=='tenant_id');
     const csv  = [cols.join(','), ...data.map(r=>cols.map(c=>{
-      const v = r[c];
-      if (v===null||v===undefined) return '';
-      if (typeof v==='object') return '"'+JSON.stringify(v).replace(/"/g,'""')+'"';
-      return '"'+String(v).replace(/"/g,'""')+'"';
+      const v = r[c]; if (!v&&v!==0) return '';
+      return '"'+String(typeof v==='object'?JSON.stringify(v):v).replace(/"/g,'""')+'"';
     }).join(','))].join('\n');
-    this._downloadCSV(csv, `${tabla}-${new Date().toISOString().slice(0,10)}.csv`);
+    const a = document.createElement('a');
+    a.href = 'data:text/csv;charset=utf-8,\uFEFF'+encodeURIComponent(csv);
+    a.download = `${tabla}-${new Date().toISOString().slice(0,10)}.csv`;
+    a.click();
     UI.toast(`${label} exportado ✓`);
   },
 
-  async exportarTodo() {
-    UI.toast('Preparando exportación completa...','info');
-    const tablas = ['clientes','vehiculos','ordenes','inventario','empleados',
-                    'proveedores','ingresos','egresos','facturas','bancos',
-                    'bodegas','combos','promociones','citas'];
-    let zip_content = '';
+  async exportarEncriptado(tabla, label) {
+    UI.toast(`Encriptando ${label}...`, 'info');
+    const { data } = await getSB().from(tabla).select('*').eq('tenant_id', getTID());
+    if (!data?.length) { UI.toast('Sin datos','warn'); return; }
+    try {
+      const encrypted = await this._encrypt({ tabla, data, exportado: new Date().toISOString(), taller: Auth.tenant?.name });
+      const a = document.createElement('a');
+      a.href = 'data:application/octet-stream;base64,'+encrypted;
+      a.download = `${tabla}-${new Date().toISOString().slice(0,10)}.tpro`;
+      a.click();
+      UI.toast(`${label} exportado y encriptado ✓`);
+    } catch(e) { UI.toast('Error al encriptar: '+e.message,'error'); }
+  },
+
+  async exportarBackupCompleto() {
+    UI.toast('Generando backup completo...', 'info', 8000);
+    const tablas = ['clientes','vehiculos','ordenes','ot_items','inventario','proveedores',
+                    'empleados','ingresos','egresos','facturas','bancos','banco_movimientos',
+                    'bodegas','combos','promociones','citas','pagos_nomina','viaticos'];
+    const backup = { version:'3.0', fecha: new Date().toISOString(), taller: Auth.tenant, licencia: Auth.licencia };
+
     for (const tabla of tablas) {
       const { data } = await getSB().from(tabla).select('*').eq('tenant_id', getTID());
-      if (!data?.length) continue;
-      const cols = Object.keys(data[0]).filter(k=>k!=='tenant_id');
-      const csv  = [cols.join(','), ...data.map(r=>cols.map(c=>{
-        const v = r[c];
-        if (!v&&v!==0) return '';
-        return '"'+String(typeof v==='object'?JSON.stringify(v):v).replace(/"/g,'""')+'"';
-      }).join(','))].join('\n');
-      this._downloadCSV(csv, `${tabla}-${new Date().toISOString().slice(0,10)}.csv`);
-      await new Promise(r=>setTimeout(r,300));
+      backup[tabla] = data || [];
     }
-    UI.toast('Exportación completa ✓ — revisa tus descargas');
+
+    try {
+      const encrypted = await this._encrypt(backup);
+      const a = document.createElement('a');
+      a.href = 'data:application/octet-stream;base64,'+encrypted;
+      a.download = `backup-${Auth.tenant?.name?.replace(/\s/g,'-')}-${new Date().toISOString().slice(0,10)}.tpro`;
+      a.click();
+      UI.toast('Backup completo generado ✓');
+    } catch(e) { UI.toast('Error: '+e.message,'error'); }
   },
 
-  _downloadCSV(csv, filename) {
-    const a = document.createElement('a');
-    a.href = 'data:text/csv;charset=utf-8,\uFEFF'+encodeURIComponent(csv);
-    a.download = filename;
-    a.click();
+  /* ── IMPORTAR ────────────────────────────── */
+  async importarBackup(input) {
+    const file = input.files?.[0];
+    if (!file) return;
+    UI.toast('Desencriptando backup...', 'info');
+    try {
+      const text    = await file.text();
+      const backup  = await this._decrypt(text);
+
+      if (!backup.version) { UI.toast('Archivo inválido o corrupto','error'); return; }
+
+      const ok = await UI.confirmar(
+        `¿Importar backup de <b>${backup.taller?.name||'—'}</b>?<br>
+         Fecha: ${UI.fecha(backup.fecha)}<br>
+         Se importarán los datos de ${Object.keys(backup).filter(k=>Array.isArray(backup[k])).length} tablas.`,
+        'Importar Backup'
+      );
+      if (!ok) return;
+
+      const tid = getTID();
+      const tablas = Object.keys(backup).filter(k=>Array.isArray(backup[k])&&backup[k].length>0);
+
+      for (const tabla of tablas) {
+        const rows = backup[tabla].map(r=>({ ...r, tenant_id:tid, id:undefined }));
+        await getSB().from(tabla).insert(rows).then(({error})=>{
+          if (error) console.warn(`Import ${tabla}:`, error.message);
+        });
+      }
+
+      /* Restaurar licencia si era completa */
+      if (backup.licencia?.tipo==='completa') {
+        await getSB().from('licencias').upsert({
+          tenant_id: tid, tipo:'completa', activa:true,
+          codigo: backup.licencia.codigo
+        }, { onConflict:'tenant_id' });
+      }
+
+      UI.toast('Backup restaurado exitosamente ✓');
+      this._renderTab();
+    } catch(e) { UI.toast('Error al importar: '+e.message,'error'); }
   },
 
-  /* ── IMPORTAR ────────────────────────────────── */
   async importarCSV(input, tabla, label) {
     const file = input.files?.[0];
     if (!file) return;
-    UI.toast(`Leyendo ${label}...`, 'info');
     const text = await file.text();
     const lines = text.split('\n').filter(l=>l.trim());
-    if (lines.length < 2) { UI.toast('Archivo vacío o sin datos','error'); return; }
+    if (lines.length < 2) { UI.toast('Archivo vacío','error'); return; }
     const headers = lines[0].split(',').map(h=>h.replace(/"/g,'').trim());
-    const rows = lines.slice(1).map(line => {
+    const rows = lines.slice(1).map(line=>{
       const vals = line.match(/(".*?"|[^,]+)(?=,|$)/g)||[];
-      const obj = { tenant_id: getTID() };
-      headers.forEach((h,i)=>{ obj[h] = (vals[i]||'').replace(/^"|"$/g,'').trim()||null; });
+      const obj = { tenant_id:getTID() };
+      headers.forEach((h,i)=>{ obj[h]=(vals[i]||'').replace(/^"|"$/g,'').trim()||null; });
       delete obj.id;
       return obj;
     });
-
-    const ok = await UI.confirmar(
-      `¿Importar <b>${rows.length} registros</b> en ${label}?<br>Se agregarán a los datos existentes.`,
-      'Importar'
-    );
+    const ok = await UI.confirmar(`¿Importar <b>${rows.length} registros</b> en ${label}?`,'Importar');
     if (!ok) return;
-
     const { error } = await getSB().from(tabla).insert(rows);
     if (error) { UI.toast('Error: '+error.message,'error'); return; }
-    UI.toast(`${rows.length} registros importados en ${label} ✓`);
+    UI.toast(`${rows.length} registros importados ✓`);
   },
 
-  /* ── OTP SYSTEM ──────────────────────────────── */
+  /* ── OTP Y BORRADO ───────────────────────── */
   generarMiOTP() {
     const userId = Auth.user?.id;
     const nombre = Auth.user?.nombre;
-    const code   = String(Math.floor(100000 + Math.random() * 900000));
-    const expires = Date.now() + 10*60*1000; /* 10 minutos */
-
-    /* Guardar en sessionStorage para que otros admin lo puedan ingresar manualmente */
-    const otpData = JSON.stringify({ userId, nombre, code, expires });
-    sessionStorage.setItem('tp_otp_'+userId, otpData);
-
-    /* También guardar en memoria global */
+    const code   = String(Math.floor(100000+Math.random()*900000));
+    const expires = Date.now()+10*60*1000;
     if (!window._adminOTPs) window._adminOTPs = {};
     window._adminOTPs[userId] = { code, expires, nombre };
 
     const el = document.getElementById('otp-display');
     if (el) {
       el.innerHTML = `
-        <div class="card card-amber" style="text-align:center;padding:20px">
-          <div style="font-size:11px;color:var(--text3);margin-bottom:8px">TU OTP — Válido por 10 minutos</div>
-          <div style="font-family:'DM Mono',monospace;font-size:36px;font-weight:700;color:var(--amber);letter-spacing:8px">${code}</div>
-          <div style="font-size:11px;color:var(--text3);margin-top:8px">
-            Comparte este código con los otros administradores que deben autorizar.
-          </div>
-          <div id="otp-timer" style="font-size:12px;color:var(--text3);margin-top:8px"></div>
+        <div class="card card-amber" style="text-align:center;padding:16px">
+          <div style="font-size:11px;color:var(--text3);margin-bottom:6px">${nombre} — válido 10 min</div>
+          <div style="font-family:'DM Mono',monospace;font-size:40px;font-weight:700;color:var(--amber);letter-spacing:10px">${code}</div>
+          <div style="font-size:11px;color:var(--text3);margin-top:6px">Comparte con el otro administrador</div>
+          <div id="otp-countdown" style="font-size:12px;color:var(--text3);margin-top:4px"></div>
         </div>`;
-
-      /* Countdown timer */
-      const timer = setInterval(() => {
-        const remaining = Math.max(0, Math.floor((expires - Date.now()) / 1000));
-        const timerEl = document.getElementById('otp-timer');
-        if (timerEl) {
-          const mins = Math.floor(remaining/60);
-          const secs = remaining % 60;
-          timerEl.textContent = `Expira en: ${mins}:${String(secs).padStart(2,'0')}`;
-          if (remaining === 0) {
-            clearInterval(timer);
-            timerEl.textContent = '⚠️ OTP expirado — genera uno nuevo';
-            timerEl.style.color = 'var(--red)';
-          }
-        } else { clearInterval(timer); }
-      }, 1000);
+      const end = Date.now()+600000;
+      const t = setInterval(()=>{
+        const r = Math.max(0,Math.floor((end-Date.now())/1000));
+        const cd = document.getElementById('otp-countdown');
+        if (cd) cd.textContent = `Expira en: ${Math.floor(r/60)}:${String(r%60).padStart(2,'0')}`;
+        else clearInterval(t);
+        if (!r) { clearInterval(t); if(cd) cd.style.color='var(--red)'; }
+      },1000);
     }
   },
 
   _validarOTP(code) {
     if (!window._adminOTPs) return false;
-    const now = Date.now();
-    return Object.values(window._adminOTPs).some(otp =>
-      otp.code === code && otp.expires > now
-    );
+    return Object.values(window._adminOTPs).some(o=>o.code===code&&o.expires>Date.now());
   },
 
-  /* ── BORRADO TOTAL ───────────────────────────── */
   async ejecutarBorrado() {
-    const otp1   = document.getElementById('otp1')?.value.trim();
-    const otp2   = document.getElementById('otp2')?.value.trim();
-    const texto  = document.getElementById('confirm-text')?.value.trim().toLowerCase();
+    const otp1  = document.getElementById('otp1')?.value.trim();
+    const otp2  = document.getElementById('otp2')?.value.trim();
+    const texto = document.getElementById('confirm-text')?.value.trim().toLowerCase();
 
-    /* Validaciones */
-    if (!otp1 || !otp2) { UI.toast('Ingresa los dos OTPs','error'); return; }
-    if (otp1 === otp2)  { UI.toast('Los OTPs deben ser de dos administradores diferentes','error'); return; }
-    if (texto !== 'acepto borrar base de datos') { UI.toast('El texto de confirmación no es correcto','error'); return; }
+    if (!otp1||!otp2) { UI.toast('Ingresa los dos OTPs','error'); return; }
+    if (otp1===otp2)  { UI.toast('Los OTPs deben ser de dos administradores diferentes','error'); return; }
+    if (texto!=='acepto borrar base de datos') { UI.toast('El texto de confirmación no es correcto','error'); return; }
     if (!this._validarOTP(otp1)) { UI.toast('OTP 1 inválido o expirado','error'); return; }
     if (!this._validarOTP(otp2)) { UI.toast('OTP 2 inválido o expirado','error'); return; }
 
-    /* Confirmación final */
     const ok = await UI.confirmar(
-      `<div style="color:var(--red);font-size:16px;font-weight:800;margin-bottom:12px">⚠️ ÚLTIMA CONFIRMACIÓN</div>
-       Esto borrará <b>TODOS</b> los datos del taller <b>${Auth.tenant?.name}</b>.<br><br>
-       Esta acción es <b>IRREVERSIBLE</b>. ¿Confirmas?`,
-      '☢️ SÍ, BORRAR TODO'
+      `<div style="color:var(--red);font-size:16px;font-weight:800;margin-bottom:12px">☢️ ÚLTIMA CONFIRMACIÓN</div>
+       Esto borrará <b>TODOS</b> los datos de <b>${Auth.tenant?.name}</b>.<br>
+       Esta acción es <b>IRREVERSIBLE</b>.`, '☢️ SÍ, BORRAR TODO'
     );
     if (!ok) return;
 
-    UI.toast('Ejecutando borrado...', 'warn', 10000);
-
+    UI.toast('Ejecutando borrado seguro...', 'warn', 15000);
     const tid = getTID();
-
-    /* Guardar licencia antes de borrar */
     const licencia = await DB.getLicencia();
 
-    /* Tablas a borrar */
-    const tablas = ['banco_movimientos','bancos','citas','combos','egresos',
+    const tablas = ['banco_movimientos','ot_items','bancos','citas','combos','egresos',
       'empleado_documentos','empleados','facturas','ingresos','inventario_movimientos',
-      'inventario','ordenes','pagos_nomina','promociones','proveedores',
-      'vehiculos','viaticos','bodegas'];
+      'inventario','ordenes','pagos_nomina','promociones','proveedores','vehiculos',
+      'viaticos','bodegas','clientes'];
 
-    for (const tabla of tablas) {
-      await getSB().from(tabla).delete().eq('tenant_id', tid);
+    for (const t of tablas) {
+      await getSB().from(t).delete().eq('tenant_id',tid);
     }
 
-    /* Borrar usuarios excepto henry y demo */
     await getSB().from('usuarios').delete()
-      .eq('tenant_id', tid)
-      .not('email', 'in', '("henry.chinchilla@gmail.com","demo@demo.com")');
+      .eq('tenant_id',tid)
+      .not('email','in','("henry.chinchilla@gmail.com","demo@demo.com")');
 
-    /* Borrar en auth.users también excepto henry y demo */
-    const { data: usersToDelete } = await getSB()
-      .from('usuarios').select('id,email')
-      .eq('tenant_id', tid)
-      .not('email', 'in', '("henry.chinchilla@gmail.com","demo@demo.com")');
-
-    /* Borrar clientes al final */
-    await getSB().from('clientes').delete().eq('tenant_id', tid);
-
-    /* Restaurar licencia si existía */
-    if (licencia?.tipo === 'completa') {
+    if (licencia?.tipo==='completa') {
       await getSB().from('licencias').upsert({
-        tenant_id: tid, tipo:'completa', activa:true,
-        codigo: licencia.codigo, activada_por: licencia.activada_por
-      }, { onConflict:'tenant_id' });
+        tenant_id:tid, tipo:'completa', activa:true, codigo:licencia.codigo
+      },{ onConflict:'tenant_id' });
     }
 
-    /* Limpiar OTPs usados */
     window._adminOTPs = {};
-
-    UI.toast('Base de datos borrada ✓ — Sesión cerrada', 'warn', 5000);
-    setTimeout(async () => {
-      await Auth.logout();
-      location.reload();
-    }, 3000);
+    UI.toast('Base de datos borrada ✓ — Cerrando sesión...','warn',4000);
+    setTimeout(async()=>{ await Auth.logout(); location.reload(); },3000);
   }
 };

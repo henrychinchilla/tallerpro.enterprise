@@ -13,12 +13,18 @@ Modulos.inventario = {
         <div><h1 class="page-title">📦 Inventario</h1>
         <p class="page-subtitle">// ${this._data.length} artículos${bajoStock.length>0?` · <span class="text-red">⚠️ ${bajoStock.length} bajo mínimo</span>`:''}</p></div>
         <div class="page-actions">
-          <button class="btn btn-ghost" onclick="Modulos.inventario.exportar()">⬇ Exportar</button>
+          <select class="form-select" style="width:130px" onchange="Modulos.inventario.render(document.getElementById('inv-busca')?.value,this.value)">
+            <option value="">Todas</option>
+            <option value="bajo">Stock Bajo</option>
+            <option value="ok">Stock OK</option>
+          </select>
+          <button class="btn btn-ghost" onclick="Modulos.inventario.exportar()">⬇ CSV</button>
+          <button class="btn btn-ghost" onclick="window.print()">🖨 Imprimir</button>
           <button class="btn btn-amber" onclick="Modulos.inventario.modalForm()">＋ Nuevo Artículo</button>
         </div>
       </div>
       <div class="page-body">
-        <input class="form-input" style="margin-bottom:16px" placeholder="🔍 Buscar nombre o código..."
+        <input class="form-input" id="inv-busca" style="margin-bottom:16px" placeholder="🔍 Buscar nombre o código..."
                value="${busca}" oninput="Modulos.inventario.render(this.value)">
         <div class="table-wrap">
           <table class="data-table">
