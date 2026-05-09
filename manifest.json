@@ -1,16 +1,14 @@
 {
   "name": "TallerPro Enterprise",
   "short_name": "TallerPro",
-  "description": "Sistema de gestión integral para talleres mecánicos — Guatemala",
+  "description": "Sistema de gestión para talleres mecánicos — Guatemala",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
-  "display_override": ["window-controls-overlay", "standalone", "minimal-ui"],
   "background_color": "#0A0E1A",
   "theme_color": "#F59E0B",
   "orientation": "any",
   "lang": "es-GT",
-  "categories": ["business", "productivity", "utilities"],
   "icons": [
     { "src": "icons/icon-72.png",  "sizes": "72x72",   "type": "image/png", "purpose": "any" },
     { "src": "icons/icon-96.png",  "sizes": "96x96",   "type": "image/png", "purpose": "any" },
@@ -22,30 +20,7 @@
     { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
   ],
   "shortcuts": [
-    {
-      "name": "Nueva OT",
-      "description": "Crear nueva orden de trabajo",
-      "url": "/?modulo=ordenes",
-      "icons": [{ "src": "icons/icon-96.png", "sizes": "96x96" }]
-    },
-    {
-      "name": "Dashboard",
-      "description": "Ver resumen del día",
-      "url": "/?modulo=dashboard",
-      "icons": [{ "src": "icons/icon-96.png", "sizes": "96x96" }]
-    },
-    {
-      "name": "Clientes",
-      "url": "/?modulo=clientes",
-      "icons": [{ "src": "icons/icon-96.png", "sizes": "96x96" }]
-    }
-  ],
-  "prefer_related_applications": false,
-  "related_applications": [
-    {
-      "platform": "play",
-      "url": "https://play.google.com/store/apps/details?id=com.cmtelecommgt.tallerpro",
-      "id": "com.cmtelecommgt.tallerpro"
-    }
+    { "name": "Nueva OT",  "url": "/?mod=ordenes",   "icons": [{ "src": "icons/icon-96.png", "sizes": "96x96" }] },
+    { "name": "Dashboard", "url": "/?mod=dashboard", "icons": [{ "src": "icons/icon-96.png", "sizes": "96x96" }] }
   ]
 }

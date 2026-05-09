@@ -1,84 +1,28 @@
-/* TallerPro Enterprise — Service Worker v2.1.1 */
-const APP_VERSION   = '2.1.1';
-const CACHE_STATIC  = `tallerpro-static-v${APP_VERSION}`;
-
-const STATIC_ASSETS = [
-  '/', '/index.html', '/manifest.json',
+const V = '3.0.0';
+const CACHE = `tp-${V}`;
+const STATIC = ['/', '/index.html', '/manifest.json',
   '/css/base.css', '/css/layout.css', '/css/components.css',
-  '/js/config.js', '/js/db.js', '/js/auth.js', '/js/ui.js',
-  '/js/app.js', '/js/version.js', '/js/fel.js', '/js/notifications.js',
-  '/js/modules/dashboard.js', '/js/modules/clientes.js',
-  '/js/modules/vehiculos.js', '/js/modules/ordenes.js',
-  '/js/modules/inventario.js', '/js/modules/proveedores.js',
-  '/js/modules/finanzas.js', '/js/modules/rrhh.js',
-  '/js/modules/pages.js', '/js/modules/database.js'
-];
+  '/js/core/config.js', '/js/core/db.js', '/js/core/ui.js',
+  '/js/core/auth.js', '/js/core/app.js', '/js/core/login.js',
+  '/icons/icon-192.png', '/icons/icon-512.png'];
 
-self.addEventListener('install', event => {
-  event.waitUntil(
-    caches.open(CACHE_STATIC)
-      .then(c => c.addAll(STATIC_ASSETS).catch(e => console.warn('[SW]', e)))
-      .then(() => self.skipWaiting())
-  );
+self.addEventListener('install', e => {
+  e.waitUntil(caches.open(CACHE).then(c => c.addAll(STATIC).catch(()=>{})).then(() => self.skipWaiting()));
 });
-
-self.addEventListener('activate', event => {
-  event.waitUntil(
-    caches.keys()
-      .then(keys => Promise.all(
-        keys.filter(k => k !== CACHE_STATIC).map(k => caches.delete(k))
-      ))
-      .then(() => self.clients.claim())
-  );
+self.addEventListener('activate', e => {
+  e.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k)))).then(()=>self.clients.claim()));
 });
-
-self.addEventListener('fetch', event => {
-  const url = new URL(event.request.url);
-
-  /* NUNCA interceptar Supabase ni APIs externas */
-  if (url.hostname.includes('supabase') ||
-      url.hostname.includes('jsdelivr') ||
-      url.hostname.includes('cdnjs') ||
-      url.protocol === 'chrome-extension:') {
+self.addEventListener('fetch', e => {
+  const u = new URL(e.request.url);
+  if (u.hostname.includes('supabase')||u.hostname.includes('googleapis')||u.hostname.includes('jsdelivr')) return;
+  if (e.request.method!=='GET') return;
+  if (e.request.mode==='navigate') {
+    e.respondWith(fetch(e.request).then(r=>{caches.open(CACHE).then(c=>c.put(e.request,r.clone()));return r;}).catch(()=>caches.match('/index.html')));
     return;
   }
-
-  /* Solo cachear GET */
-  if (event.request.method !== 'GET') return;
-
-  /* Navegación — Network first, fallback a cache */
-  if (event.request.mode === 'navigate') {
-    event.respondWith(
-      fetch(event.request)
-        .then(response => {
-          if (response.ok) {
-            const clone = response.clone();
-            caches.open(CACHE_STATIC).then(c => c.put(event.request, clone));
-          }
-          return response;
-        })
-        .catch(() => caches.match('/index.html'))
-    );
-    return;
-  }
-
-  /* JS / CSS / Imágenes — Cache first */
-  if (['script', 'style', 'image', 'font'].includes(event.request.destination)) {
-    event.respondWith(
-      caches.match(event.request).then(cached => {
-        if (cached) return cached;
-        return fetch(event.request).then(response => {
-          if (response.ok) {
-            const clone = response.clone();
-            caches.open(CACHE_STATIC).then(c => c.put(event.request, clone));
-          }
-          return response;
-        });
-      })
-    );
-  }
+  e.respondWith(caches.match(e.request).then(cached=>{
+    const net=fetch(e.request).then(r=>{if(r.ok)caches.open(CACHE).then(c=>c.put(e.request,r.clone()));return r;});
+    return cached||net;
+  }));
 });
-
-self.addEventListener('message', event => {
-  if (event.data === 'SKIP_WAITING') self.skipWaiting();
-});
+self.addEventListener('message', e => { if(e.data==='SKIP_WAITING') self.skipWaiting(); });

@@ -1,0 +1,498 @@
+/* ═══════════════════════════════════════════════════════
+   TallerPro Enterprise v3.0
+   js/core/db.js — Capa de datos Supabase
+═══════════════════════════════════════════════════════ */
+
+let _sb = null;
+
+function getSB() {
+  if (_sb) return _sb;
+  _sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+  return _sb;
+}
+
+function getTID() {
+  return window.Auth?.tenant?.id || null;
+}
+
+function mesActual() {
+  const now = new Date();
+  const ini = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0,10);
+  const fin = new Date(now.getFullYear(), now.getMonth()+1, 0).toISOString().slice(0,10);
+  return { ini, fin };
+}
+
+const DB = {
+
+  /* ── TENANTS ──────────────────────────────────── */
+  async getTenant(slug=null, id=null) {
+    try {
+      let q = getSB().from('tenants').select('*');
+      if (id)   q = q.eq('id', id);
+      else if (slug) q = q.eq('slug', slug);
+      else if (getTID()) q = q.eq('id', getTID());
+      else q = q.limit(1);
+      const { data } = await q.maybeSingle();
+      return data;
+    } catch(e) { return null; }
+  },
+
+  async updateTenant(fields) {
+    const { error } = await getSB().from('tenants').update(fields).eq('id', getTID());
+    return !error;
+  },
+
+  async buscarTalleres(q) {
+    const { data } = await getSB().from('tenants')
+      .select('id,slug,name,nit').or(`name.ilike.%${q}%,nit.ilike.%${q}%`).limit(8);
+    return data || [];
+  },
+
+  /* ── USUARIOS ─────────────────────────────────── */
+  async getUsuarios() {
+    const { data } = await getSB().from('usuarios').select('*')
+      .eq('tenant_id', getTID())
+      .neq('rol','superadmin')
+      .neq('email','henry.chinchilla@gmail.com')
+      .order('nombre');
+    return data || [];
+  },
+
+  async upsertUsuario(fields) {
+    const { error } = await getSB().from('usuarios')
+      .upsert({ ...fields, tenant_id: getTID() }, { onConflict:'id' });
+    if (error) console.error('upsertUsuario:', error.message);
+    return !error;
+  },
+
+  async getConfigFiscal() {
+    const key = 'tp_fiscal_' + (getTID()||'demo');
+    const local = JSON.parse(localStorage.getItem(key)||'null');
+    if (local) return local;
+    const { data } = await getSB().from('config_fiscal')
+      .select('*').eq('tenant_id', getTID()).maybeSingle();
+    if (data) localStorage.setItem(key, JSON.stringify(data));
+    return data || {};
+  },
+
+  async saveConfigFiscal(fields) {
+    const key = 'tp_fiscal_' + (getTID()||'demo');
+    localStorage.setItem(key, JSON.stringify(fields));
+    const tid = getTID();
+    if (!tid || tid==='demo') return true;
+    const { error } = await getSB().from('config_fiscal')
+      .upsert({ ...fields, tenant_id: tid }, { onConflict:'tenant_id' });
+    return !error;
+  },
+
+  /* ── CLIENTES ─────────────────────────────────── */
+  async getClientes(busca=null) {
+    let q = getSB().from('clientes').select('*').eq('tenant_id', getTID()).order('nombre');
+    if (busca) q = q.or(`nombre.ilike.%${busca}%,nit.ilike.%${busca}%,tel.ilike.%${busca}%`);
+    const { data } = await q;
+    return data || [];
+  },
+
+  async upsertCliente(fields) {
+    const payload = { ...fields, tenant_id: getTID() };
+    if (fields.id) {
+      const { error } = await getSB().from('clientes').update(payload).eq('id', fields.id);
+      return { error };
+    }
+    const { data, error } = await getSB().from('clientes').insert(payload).select().single();
+    return { data, error };
+  },
+
+  async deleteCliente(id) {
+    const { error } = await getSB().from('clientes').delete().eq('id', id);
+    return !error;
+  },
+
+  /* ── VEHÍCULOS ────────────────────────────────── */
+  async getVehiculos(clienteId=null) {
+    let q = getSB().from('vehiculos')
+      .select('*, clientes(nombre,tel)').eq('tenant_id', getTID()).order('created_at',{ascending:false});
+    if (clienteId) q = q.eq('cliente_id', clienteId);
+    const { data } = await q;
+    return data || [];
+  },
+
+  async upsertVehiculo(fields) {
+    const payload = { ...fields, tenant_id: getTID() };
+    if (fields.id) {
+      const { error } = await getSB().from('vehiculos').update(payload).eq('id', fields.id);
+      return { error };
+    }
+    const { data, error } = await getSB().from('vehiculos').insert(payload).select().single();
+    return { data, error };
+  },
+
+  async deleteVehiculo(id) {
+    const { error } = await getSB().from('vehiculos').delete().eq('id', id);
+    return !error;
+  },
+
+  /* ── ÓRDENES DE TRABAJO ───────────────────────── */
+  async getOrdenes(filtros={}) {
+    let q = getSB().from('ordenes')
+      .select('*, vehiculos(placa,marca,modelo,anio,color), clientes(nombre,tel), empleados(nombre)')
+      .eq('tenant_id', getTID()).order('created_at',{ascending:false});
+    if (filtros.estado)     q = q.eq('estado', filtros.estado);
+    if (filtros.mecanico)   q = q.eq('mecanico_id', filtros.mecanico);
+    if (filtros.cliente)    q = q.eq('cliente_id', filtros.cliente);
+    if (filtros.vehiculo)   q = q.eq('vehiculo_id', filtros.vehiculo);
+    if (filtros.fecha_ini)  q = q.gte('fecha_ingreso', filtros.fecha_ini);
+    if (filtros.fecha_fin)  q = q.lte('fecha_ingreso', filtros.fecha_fin);
+    const { data } = await q;
+    return data || [];
+  },
+
+  async getOrden(id) {
+    const { data } = await getSB().from('ordenes')
+      .select('*, vehiculos(*), clientes(*), empleados(nombre), ot_servicios(*)')
+      .eq('id', id).maybeSingle();
+    return data;
+  },
+
+  async upsertOrden(fields) {
+    const payload = { ...fields, tenant_id: getTID() };
+    if (fields.id) {
+      const { error } = await getSB().from('ordenes').update(payload).eq('id', fields.id);
+      return { error };
+    }
+    /* Generar número OT */
+    const { count } = await getSB().from('ordenes').select('*',{count:'exact',head:true}).eq('tenant_id',getTID());
+    payload.num = `OT-${new Date().getFullYear()}-${String((count||0)+1).padStart(4,'0')}`;
+    const { data, error } = await getSB().from('ordenes').insert(payload).select().single();
+    return { data, error };
+  },
+
+  async updateEstadoOT(id, estado) {
+    const { error } = await getSB().from('ordenes').update({ estado, updated_at: new Date().toISOString() }).eq('id', id);
+    return !error;
+  },
+
+  /* ── INVENTARIO ───────────────────────────────── */
+  async getInventario(busca=null, bodega=null) {
+    let q = getSB().from('inventario').select('*').eq('tenant_id', getTID()).order('nombre');
+    if (busca) q = q.or(`nombre.ilike.%${busca}%,codigo.ilike.%${busca}%`);
+    if (bodega) q = q.eq('bodega_id', bodega);
+    const { data } = await q;
+    return data || [];
+  },
+
+  async upsertInventario(fields) {
+    const payload = { ...fields, tenant_id: getTID() };
+    const { data, error } = await getSB().from('inventario')
+      .upsert(payload, { onConflict:'tenant_id,codigo' }).select().single();
+    return { data, error };
+  },
+
+  async movimientoInventario(fields) {
+    const { error } = await getSB().from('inventario_movimientos').insert({ ...fields, tenant_id: getTID() });
+    return !error;
+  },
+
+  /* ── PROVEEDORES ──────────────────────────────── */
+  async getProveedores() {
+    const { data } = await getSB().from('proveedores').select('*')
+      .eq('tenant_id', getTID()).order('nombre');
+    return data || [];
+  },
+
+  async upsertProveedor(fields) {
+    const payload = { ...fields, tenant_id: getTID() };
+    if (fields.id) {
+      const { error } = await getSB().from('proveedores').update(payload).eq('id', fields.id);
+      return { error };
+    }
+    const { data, error } = await getSB().from('proveedores').insert(payload).select().single();
+    return { data, error };
+  },
+
+  /* ── BANCOS ───────────────────────────────────── */
+  async getBancos() {
+    const { data } = await getSB().from('bancos').select('*')
+      .eq('tenant_id', getTID()).order('nombre');
+    return data || [];
+  },
+
+  async upsertBanco(fields) {
+    const payload = { ...fields, tenant_id: getTID() };
+    if (fields.id) {
+      const { error } = await getSB().from('bancos').update(payload).eq('id', fields.id);
+      return { error };
+    }
+    const { data, error } = await getSB().from('bancos').insert(payload).select().single();
+    return { data, error };
+  },
+
+  async getMovimientosBanco(bancoId, filtros={}) {
+    let q = getSB().from('banco_movimientos').select('*')
+      .eq('tenant_id', getTID()).eq('banco_id', bancoId)
+      .order('fecha', {ascending: false});
+    if (filtros.ini) q = q.gte('fecha', filtros.ini);
+    if (filtros.fin) q = q.lte('fecha', filtros.fin);
+    const { data } = await q;
+    return data || [];
+  },
+
+  async upsertMovimientoBanco(fields) {
+    const payload = { ...fields, tenant_id: getTID() };
+    if (fields.id) {
+      const { error } = await getSB().from('banco_movimientos').update(payload).eq('id', fields.id);
+      return { error };
+    }
+    const { data, error } = await getSB().from('banco_movimientos').insert(payload).select().single();
+    return { data, error };
+  },
+
+  /* ── FINANZAS ─────────────────────────────────── */
+  async getIngresos(ini=null, fin=null) {
+    const m = mesActual();
+    let q = getSB().from('ingresos').select('*').eq('tenant_id', getTID())
+      .gte('fecha', ini||m.ini).lte('fecha', fin||m.fin).order('fecha',{ascending:false});
+    const { data } = await q;
+    return data || [];
+  },
+
+  async upsertIngreso(fields) {
+    const payload = { ...fields, tenant_id: getTID() };
+    if (fields.id) {
+      const { error } = await getSB().from('ingresos').update(payload).eq('id', fields.id);
+      return { error };
+    }
+    const { data, error } = await getSB().from('ingresos').insert(payload).select().single();
+    return { data, error };
+  },
+
+  async getEgresos(ini=null, fin=null) {
+    const m = mesActual();
+    let q = getSB().from('egresos').select('*').eq('tenant_id', getTID())
+      .gte('fecha', ini||m.ini).lte('fecha', fin||m.fin).order('fecha',{ascending:false});
+    const { data } = await q;
+    return data || [];
+  },
+
+  async upsertEgreso(fields) {
+    const payload = { ...fields, tenant_id: getTID() };
+    if (fields.id) {
+      const { error } = await getSB().from('egresos').update(payload).eq('id', fields.id);
+      return { error };
+    }
+    const { data, error } = await getSB().from('egresos').insert(payload).select().single();
+    return { data, error };
+  },
+
+  async deleteRegistro(tabla, id) {
+    const { error } = await getSB().from(tabla).delete().eq('id', id).eq('tenant_id', getTID());
+    return !error;
+  },
+
+  /* ── FACTURAS FEL ─────────────────────────────── */
+  async getFacturas(ini=null, fin=null) {
+    const m = mesActual();
+    let q = getSB().from('facturas').select('*,clientes(nombre,nit)')
+      .eq('tenant_id', getTID())
+      .gte('fecha', ini||m.ini).lte('fecha', fin||m.fin)
+      .order('fecha',{ascending:false});
+    const { data } = await q;
+    return data || [];
+  },
+
+  async upsertFactura(fields) {
+    const payload = { ...fields, tenant_id: getTID() };
+    if (fields.id) {
+      const { error } = await getSB().from('facturas').update(payload).eq('id', fields.id);
+      return { error };
+    }
+    const { data, error } = await getSB().from('facturas').insert(payload).select().single();
+    return { data, error };
+  },
+
+  /* ── EMPLEADOS ────────────────────────────────── */
+  async getEmpleados() {
+    const { data } = await getSB().from('empleados').select('*')
+      .eq('tenant_id', getTID()).order('nombre');
+    return data || [];
+  },
+
+  async upsertEmpleado(fields) {
+    const payload = { ...fields, tenant_id: getTID() };
+    if (fields.id) {
+      const { error } = await getSB().from('empleados').update(payload).eq('id', fields.id);
+      return { error };
+    }
+    const { data, error } = await getSB().from('empleados').insert(payload).select().single();
+    return { data, error };
+  },
+
+  async getViaticos(empleadoId=null, ini=null, fin=null) {
+    const m = mesActual();
+    let q = getSB().from('viaticos').select('*,empleados(nombre)')
+      .eq('tenant_id', getTID())
+      .gte('fecha', ini||m.ini).lte('fecha', fin||m.fin)
+      .order('fecha',{ascending:false});
+    if (empleadoId) q = q.eq('empleado_id', empleadoId);
+    const { data } = await q;
+    return data || [];
+  },
+
+  async upsertViatico(fields) {
+    const payload = { ...fields, tenant_id: getTID() };
+    if (fields.id) {
+      const { error } = await getSB().from('viaticos').update(payload).eq('id', fields.id);
+      return { error };
+    }
+    const { data, error } = await getSB().from('viaticos').insert(payload).select().single();
+    return { data, error };
+  },
+
+  async getPagosNomina(mes, anio) {
+    const { data } = await getSB().from('pagos_nomina').select('*,empleados(nombre,cargo)')
+      .eq('tenant_id', getTID()).eq('periodo_mes', mes).eq('periodo_anio', anio);
+    return data || [];
+  },
+
+  async upsertPagoNomina(fields) {
+    const payload = { ...fields, tenant_id: getTID() };
+    const { data, error } = await getSB().from('pagos_nomina')
+      .upsert(payload, { onConflict:'empleado_id,periodo_mes,periodo_anio' }).select().single();
+    return { data, error };
+  },
+
+  async getDocumentosEmpleado(empleadoId) {
+    const { data } = await getSB().from('empleado_documentos').select('*')
+      .eq('empleado_id', empleadoId).order('tipo');
+    return data || [];
+  },
+
+  async upsertDocumento(fields) {
+    const { data: existing } = await getSB().from('empleado_documentos')
+      .select('id').eq('empleado_id', fields.empleado_id).eq('tipo', fields.tipo).maybeSingle();
+    if (existing?.id) {
+      const { error } = await getSB().from('empleado_documentos').update(fields).eq('id', existing.id);
+      return { error };
+    }
+    const { data, error } = await getSB().from('empleado_documentos').insert(fields).select().single();
+    return { data, error };
+  },
+
+  /* ── BODEGAS ──────────────────────────────────── */
+  async getBodegas() {
+    const { data } = await getSB().from('bodegas').select('*')
+      .eq('tenant_id', getTID()).order('nombre');
+    return data || [];
+  },
+
+  async upsertBodega(fields) {
+    const payload = { ...fields, tenant_id: getTID() };
+    if (fields.id) {
+      const { error } = await getSB().from('bodegas').update(payload).eq('id', fields.id);
+      return { error };
+    }
+    const { data, error } = await getSB().from('bodegas').insert(payload).select().single();
+    return { data, error };
+  },
+
+  /* ── MARKETING ────────────────────────────────── */
+  async getCombos() {
+    const { data } = await getSB().from('combos').select('*')
+      .eq('tenant_id', getTID()).order('nombre');
+    return data || [];
+  },
+
+  async upsertCombo(fields) {
+    const payload = { ...fields, tenant_id: getTID() };
+    if (fields.id) {
+      const { error } = await getSB().from('combos').update(payload).eq('id', fields.id);
+      return { error };
+    }
+    const { data, error } = await getSB().from('combos').insert(payload).select().single();
+    return { data, error };
+  },
+
+  async getPromociones() {
+    const { data } = await getSB().from('promociones').select('*')
+      .eq('tenant_id', getTID()).order('fecha_inicio',{ascending:false});
+    return data || [];
+  },
+
+  async upsertPromocion(fields) {
+    const payload = { ...fields, tenant_id: getTID() };
+    if (fields.id) {
+      const { error } = await getSB().from('promociones').update(payload).eq('id', fields.id);
+      return { error };
+    }
+    const { data, error } = await getSB().from('promociones').insert(payload).select().single();
+    return { data, error };
+  },
+
+  /* ── CITAS ────────────────────────────────────── */
+  async getCitas(ini=null, fin=null) {
+    let q = getSB().from('citas')
+      .select('*, clientes(nombre,tel), vehiculos(placa,marca,modelo), empleados(nombre)')
+      .eq('tenant_id', getTID()).order('fecha_cita');
+    if (ini) q = q.gte('fecha_cita', ini);
+    if (fin) q = q.lte('fecha_cita', fin);
+    const { data } = await q;
+    return data || [];
+  },
+
+  async upsertCita(fields) {
+    const payload = { ...fields, tenant_id: getTID() };
+    if (fields.id) {
+      const { error } = await getSB().from('citas').update(payload).eq('id', fields.id);
+      return { error };
+    }
+    const { data, error } = await getSB().from('citas').insert(payload).select().single();
+    return { data, error };
+  },
+
+  /* ── LICENCIAS ────────────────────────────────── */
+  async getLicencia() {
+    const { data } = await getSB().from('licencias')
+      .select('*').eq('tenant_id', getTID()).maybeSingle();
+    return data;
+  },
+
+  async activarLicencia(codigo, email) {
+    const { data: existente } = await getSB().from('licencias')
+      .select('tenant_id').eq('codigo', codigo).maybeSingle();
+    if (existente) return { ok:false, error:'Código ya utilizado' };
+    const { error } = await getSB().from('licencias').update({
+      tipo:'completa', codigo, activa:true, activada_por:email,
+      fecha_vencimiento:null, updated_at:new Date().toISOString()
+    }).eq('tenant_id', getTID());
+    return { ok:!error, error:error?.message };
+  },
+
+  /* ── KPIs DASHBOARD ───────────────────────────── */
+  async getKPIs() {
+    const { ini, fin } = mesActual();
+    const tid = getTID();
+    const [
+      { count: clientes },
+      { count: otsActivas },
+      { data: facturas },
+      { data: ingresos },
+      { data: invBajo }
+    ] = await Promise.all([
+      getSB().from('clientes').select('*',{count:'exact',head:true}).eq('tenant_id',tid),
+      getSB().from('ordenes').select('*',{count:'exact',head:true}).eq('tenant_id',tid).not('estado','in','("entregado","cancelado")'),
+      getSB().from('facturas').select('total').eq('tenant_id',tid).gte('fecha',ini).lte('fecha',fin),
+      getSB().from('ingresos').select('monto').eq('tenant_id',tid).gte('fecha',ini).lte('fecha',fin),
+      getSB().from('inventario').select('id,nombre,stock,min_stock').eq('tenant_id',tid).filter('stock','lte','min_stock')
+    ]);
+    const ingFact = (facturas||[]).reduce((s,f)=>s+(f.total||0),0);
+    const ingDir  = (ingresos||[]).reduce((s,i)=>s+(i.monto||0),0);
+    return {
+      clientes:   clientes||0,
+      otsActivas: otsActivas||0,
+      ingresos:   ingFact+ingDir,
+      invBajo:    invBajo||[],
+      mesIni:     ini,
+      mesFin:     fin
+    };
+  }
+};

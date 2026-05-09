@@ -2,218 +2,106 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="theme-color" content="#F59E0B">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="TallerPro">
-  <link rel="manifest" href="manifest.json">
   <title>TallerPro Enterprise</title>
-
-  <!-- ── FUENTES ─────────────────────────────────────── -->
-  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Mono:wght@300;400;500&family=Manrope:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-
-  <!-- ── ESTILOS ─────────────────────────────────────── -->
+  <link rel="manifest" href="/manifest.json">
   <link rel="stylesheet" href="css/base.css">
   <link rel="stylesheet" href="css/layout.css">
   <link rel="stylesheet" href="css/components.css">
-
-  <!-- ── LIBRERÍAS EXTERNAS ──────────────────────────── -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Manrope:wght@400;600;700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js" defer></script>
-  <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
-
-  <style>
-    /* Login dinámico */
-    .login-title { font-family:'Bebas Neue',sans-serif; font-size:32px; letter-spacing:.06em; color:var(--amber); margin:4px 0; text-align:center; }
-    .login-sub   { font-size:12px; color:var(--text3); text-align:center; margin-bottom:20px; }
-    .login-form  { display:flex; flex-direction:column; gap:12px; }
-    .btn-quick   { padding:6px 12px; font-size:11px; font-family:'Manrope',sans-serif; font-weight:600;
-                   background:var(--surface2); border:1px solid var(--border); border-radius:6px;
-                   color:var(--text2); cursor:pointer; transition:all .2s; }
-    .btn-quick:hover { border-color:var(--amber); color:var(--amber); }
-  </style>
-
-  <style id="theme-vars">
-    :root, [data-theme="dark"] {
-      --bg:#0A0E1A; --surface:#0F1623; --surface2:#161E2E; --surface3:#1C2640;
-      --border:rgba(255,255,255,0.07); --amber:#F59E0B; --amber-dim:rgba(245,158,11,0.1);
-      --amber-border:rgba(245,158,11,0.25); --cyan:#06B6D4; --green:#10B981;
-      --red:#EF4444; --red-dim:rgba(239,68,68,0.1); --red-border:rgba(239,68,68,0.25);
-      --purple:#8B5CF6; --purple-dim:rgba(139,92,246,0.1); --purple-border:rgba(139,92,246,0.25);
-      --cyan-border:rgba(6,182,212,0.25); --green-border:rgba(16,185,129,0.25);
-      --text:#E2E8F0; --text2:#94A3B8; --text3:#4A5568;
-    }
-    [data-theme="light"] {
-      --bg:#F0F4F8; --surface:#FFFFFF; --surface2:#F8FAFC; --surface3:#EEF2F7;
-      --border:rgba(0,0,0,0.08); --amber:#B45309; --amber-dim:rgba(180,83,9,0.06);
-      --amber-border:rgba(180,83,9,0.2); --cyan:#0369A1; --green:#047857;
-      --red:#B91C1C; --red-dim:rgba(185,28,28,0.06); --red-border:rgba(185,28,28,0.2);
-      --purple:#6D28D9; --purple-dim:rgba(109,40,217,0.06); --purple-border:rgba(109,40,217,0.2);
-      --cyan-border:rgba(3,105,161,0.2); --green-border:rgba(4,120,87,0.2);
-      --text:#1E293B; --text2:#475569; --text3:#94A3B8;
-    }
-    [data-theme="midnight"] {
-      --bg:#050810; --surface:#0A0F1E; --surface2:#0F1628; --surface3:#141E35;
-      --border:rgba(99,102,241,0.12); --amber:#818CF8; --amber-dim:rgba(129,140,248,0.1);
-      --amber-border:rgba(129,140,248,0.25); --cyan:#67E8F9; --green:#6EE7B7;
-      --red:#F87171; --red-dim:rgba(248,113,113,0.1); --red-border:rgba(248,113,113,0.25);
-      --purple:#A78BFA; --purple-dim:rgba(167,139,250,0.1); --purple-border:rgba(167,139,250,0.25);
-      --cyan-border:rgba(103,232,249,0.25); --green-border:rgba(110,231,183,0.25);
-      --text:#E0E7FF; --text2:#A5B4FC; --text3:#4338CA;
-    }
-    [data-theme="blue"] {
-      --bg:#020B18; --surface:#061929; --surface2:#0C2540; --surface3:#112E50;
-      --border:rgba(56,189,248,0.1); --amber:#38BDF8; --amber-dim:rgba(56,189,248,0.08);
-      --amber-border:rgba(56,189,248,0.2); --cyan:#7DD3FC; --green:#4ADE80;
-      --red:#F87171; --red-dim:rgba(248,113,113,0.1); --red-border:rgba(248,113,113,0.2);
-      --purple:#C084FC; --purple-dim:rgba(192,132,252,0.1); --purple-border:rgba(192,132,252,0.2);
-      --cyan-border:rgba(125,211,252,0.2); --green-border:rgba(74,222,128,0.2);
-      --text:#BAE6FD; --text2:#7DD3FC; --text3:#0369A1;
-    }
-    [data-theme="green"] {
-      --bg:#030F07; --surface:#051A0C; --surface2:#082515; --surface3:#0C311D;
-      --border:rgba(34,197,94,0.1); --amber:#4ADE80; --amber-dim:rgba(74,222,128,0.08);
-      --amber-border:rgba(74,222,128,0.2); --cyan:#34D399; --green:#22C55E;
-      --red:#F87171; --red-dim:rgba(248,113,113,0.1); --red-border:rgba(248,113,113,0.2);
-      --purple:#A78BFA; --purple-dim:rgba(167,139,250,0.1); --purple-border:rgba(167,139,250,0.2);
-      --cyan-border:rgba(52,211,153,0.2); --green-border:rgba(34,197,94,0.2);
-      --text:#DCFCE7; --text2:#86EFAC; --text3:#166534;
-    }
-    [data-theme="purple"] {
-      --bg:#0C0514; --surface:#130920; --surface2:#1A0E2E; --surface3:#22143C;
-      --border:rgba(168,85,247,0.12); --amber:#D946EF; --amber-dim:rgba(217,70,239,0.1);
-      --amber-border:rgba(217,70,239,0.25); --cyan:#A78BFA; --green:#34D399;
-      --red:#F87171; --red-dim:rgba(248,113,113,0.1); --red-border:rgba(248,113,113,0.25);
-      --purple:#E879F9; --purple-dim:rgba(232,121,249,0.1); --purple-border:rgba(232,121,249,0.25);
-      --cyan-border:rgba(167,139,250,0.25); --green-border:rgba(52,211,153,0.25);
-      --text:#F5D0FE; --text2:#D8B4FE; --text3:#7E22CE;
-    }
-    [data-theme="red"] {
-      --bg:#0F0505; --surface:#1A0808; --surface2:#240C0C; --surface3:#2E1010;
-      --border:rgba(239,68,68,0.1); --amber:#F87171; --amber-dim:rgba(248,113,113,0.08);
-      --amber-border:rgba(248,113,113,0.2); --cyan:#FDA4AF; --green:#4ADE80;
-      --red:#EF4444; --red-dim:rgba(239,68,68,0.1); --red-border:rgba(239,68,68,0.25);
-      --purple:#C084FC; --purple-dim:rgba(192,132,252,0.1); --purple-border:rgba(192,132,252,0.2);
-      --cyan-border:rgba(253,164,175,0.2); --green-border:rgba(74,222,128,0.2);
-      --text:#FFE4E6; --text2:#FCA5A5; --text3:#991B1B;
-    }
-    [data-theme="slate"] {
-      --bg:#0F1117; --surface:#161B27; --surface2:#1C2333; --surface3:#222B40;
-      --border:rgba(148,163,184,0.1); --amber:#94A3B8; --amber-dim:rgba(148,163,184,0.08);
-      --amber-border:rgba(148,163,184,0.2); --cyan:#CBD5E1; --green:#4ADE80;
-      --red:#F87171; --red-dim:rgba(248,113,113,0.1); --red-border:rgba(248,113,113,0.2);
-      --purple:#A78BFA; --purple-dim:rgba(167,139,250,0.1); --purple-border:rgba(167,139,250,0.2);
-      --cyan-border:rgba(203,213,225,0.2); --green-border:rgba(74,222,128,0.2);
-      --text:#CBD5E1; --text2:#94A3B8; --text3:#475569;
-    }
-  </style>
 </head>
 <body>
 
-<!-- ══════════════════════════════════════════════════════
-     LOGIN — Renderizado dinámicamente por auth.js
-════════════════════════════════════════════════════════ -->
-<div id="login-screen" style="display:flex;align-items:center;justify-content:center;min-height:100vh;background:var(--bg);position:fixed;inset:0;z-index:100;overflow-y:auto;padding:20px">
-  <div class="login-box" style="width:100%;max-width:440px;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:36px 32px;box-shadow:0 20px 60px rgba(0,0,0,0.4)">
-    <div style="text-align:center;color:var(--text3);font-size:13px">Cargando...</div>
-  </div>
+<!-- LOGIN SCREEN -->
+<div id="login-screen" class="login-screen">
+  <div id="login-content"></div>
 </div>
 
-<!-- ══════════════════════════════════════════════════════
-     MOBILE HEADER
-════════════════════════════════════════════════════════ -->
-<header class="mobile-header">
-  <button class="mobile-menu-btn" onclick="toggleSidebar()">☰</button>
-  <span style="font-family:'Bebas Neue',sans-serif;font-size:20px;color:var(--amber)">TallerPro</span>
-  <span id="mobile-page-label" class="mobile-page-label"></span>
-</header>
-<div class="sidebar-overlay" id="sidebar-overlay" onclick="toggleSidebar()"></div>
+<!-- APP -->
+<div id="app" class="app-layout">
 
-<!-- ══════════════════════════════════════════════════════
-     APP SHELL
-════════════════════════════════════════════════════════ -->
-<div id="app">
+  <!-- Mobile Header -->
+  <header class="mobile-header">
+    <button class="mobile-menu-btn" onclick="App.toggleSidebar()">☰</button>
+    <span class="mobile-page-label">TALLERPRO</span>
+  </header>
 
-  <!-- SIDEBAR -->
-  <nav id="sidebar">
-    <div class="sidebar-brand">
-      <div class="sidebar-brand-name">TallerPro</div>
-      <div class="sidebar-brand-sub">Enterprise v2.0</div>
-    </div>
-    <div class="sidebar-tenant" id="sidebar-tenant-info">
-      <div class="sidebar-tenant-name">—</div>
-      <div class="sidebar-tenant-plan">—</div>
-    </div>
-    <div class="sidebar-nav" id="sidebar-nav"></div>
-    <div class="sidebar-user" id="sidebar-user" onclick="THEME.renderPicker()" style="cursor:pointer" title="Cambiar tema"></div>
-  </nav>
+  <!-- Sidebar Overlay -->
+  <div class="sidebar-overlay" id="sidebar-overlay" onclick="App.toggleSidebar()"></div>
 
-  <!-- MAIN -->
-  <main id="main">
-    <div id="page-content"></div>
+  <!-- Sidebar -->
+  <aside id="sidebar" class="sidebar"></aside>
+
+  <!-- Main Content -->
+  <main id="main" class="main-content">
+    <div id="page-content" class="page-content"></div>
   </main>
 
 </div>
 
-<!-- ══════════════════════════════════════════════════════
-     MODAL GLOBAL
-════════════════════════════════════════════════════════ -->
-<div class="modal-overlay" id="modal-overlay" onclick="UI.closeModal(event)">
-  <div class="modal" id="modal-box" onclick="event.stopPropagation()">
+<!-- Modal -->
+<div id="modal-overlay" class="modal-overlay">
+  <div id="modal-box" class="modal">
     <div class="modal-header">
-      <span class="modal-title" id="modal-title">—</span>
-      <button class="modal-close" onclick="UI.closeModal()">✕</button>
+      <h3 class="modal-title" id="modal-titulo"></h3>
+      <button class="modal-close" onclick="UI.cerrarModal()">✕</button>
     </div>
-    <div class="modal-body" id="modal-body"></div>
+    <div id="modal-body" class="modal-body"></div>
   </div>
 </div>
 
-<!-- ══════════════════════════════════════════════════════
-     JAVASCRIPT — orden de carga importa
-════════════════════════════════════════════════════════ -->
+<!-- CORE SCRIPTS -->
+<script src="js/core/config.js"></script>
+<script>const Auth = { user:null, tenant:null, supaUser:null, licencia:null };</script>
+<script>function getSB(){ return window._sb || (window._sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY)); }</script>
+<script>function getTID(){ return window.Auth?.tenant?.id || null; }</script>
+<script src="js/core/ui.js"></script>
+<script src="js/core/db.js"></script>
+<script src="js/core/auth.js"></script>
+<script src="js/core/app.js"></script>
+<script src="js/core/login.js"></script>
 
-<!-- 1. Constantes globales -->
-<script src="js/config.js"></script>
+<!-- MÓDULOS -->
+<script src="js/modulos/dashboard/index.js"></script>
+<script src="js/modulos/clientes/index.js"></script>
+<script src="js/modulos/vehiculos/index.js"></script>
+<script src="js/modulos/ordenes/index.js"></script>
+<script src="js/modulos/inventario/index.js"></script>
+<script src="js/modulos/proveedores/index.js"></script>
+<script src="js/modulos/bancos/index.js"></script>
+<script src="js/modulos/finanzas/index.js"></script>
+<script src="js/modulos/facturacion/index.js"></script>
+<script src="js/modulos/rrhh/index.js"></script>
+<script src="js/modulos/bodegas/index.js"></script>
+<script src="js/modulos/marketing/index.js"></script>
+<script src="js/modulos/calendario/index.js"></script>
+<script src="js/modulos/comunicaciones/index.js"></script>
+<script src="js/modulos/configuracion/index.js"></script>
+<script src="js/modulos/usuarios/index.js"></script>
+<script src="js/modulos/admin/index.js"></script>
 
-<!-- 2. Capa de datos -->
-<script src="js/db.js"></script>
-
-<!-- 3. UI helpers (toast, modal, badges) -->
-<script src="js/ui.js"></script>
-
-<!-- 5. Namespace de páginas -->
-<script>const Pages = {};</script>
-
-<!-- 6. Autenticación (después de Pages para que Pages.modalGestionUsuarios funcione) -->
-<script src="js/auth.js"></script>
-
-<!-- 7. Módulos de cada página -->
-<script src="js/modules/dashboard.js"></script>
-<script src="js/modules/clientes.js"></script>
-<script src="js/modules/vehiculos.js"></script>
-<script src="js/modules/ordenes.js"></script>
-<script src="js/modules/inventario.js"></script>
-<script src="js/modules/proveedores.js"></script>
-<script src="js/modules/rrhh.js"></script>
-<script src="js/modules/finanzas.js"></script>
-<script src="js/notifications.js"></script>
-<script src="js/modules/database.js"></script>
-<script src="js/modules/pages.js"></script><!-- calendario, facturación, rrhh, mi-ot, mi-vehículo, config -->
-
-<!-- 8. Módulo FEL -->
-<script src="js/fel.js"></script>
-
-<!-- 9. Shell principal (router, sidebar) -->
-<script src="js/version.js"></script>
-<script src="js/app.js"></script>
-
-<!-- 9. Arranque -->
 <script>
-  // App arranca desde auth.js → startApp()
-  // Renderizar pantalla de login dinámica
-  document.addEventListener('DOMContentLoaded', () => {
-    if (typeof renderLoginScreen === 'function') renderLoginScreen();
+  /* Iniciar aplicación */
+  window.addEventListener('load', () => {
+    TEMAS.aplicar(localStorage.getItem('tp_tema') || 'dark');
+    renderLogin('login');
+  });
+
+  /* Service Worker */
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('/sw.js').catch(() => {});
+  }
+
+  /* Keyboard shortcuts */
+  document.addEventListener('keydown', e => {
+    if (e.ctrlKey && e.shiftKey && e.key === 'T') { e.preventDefault(); TEMAS.picker(); }
+    if (e.key === 'Escape') UI.cerrarModal();
   });
 </script>
 
