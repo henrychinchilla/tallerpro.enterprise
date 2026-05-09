@@ -43,6 +43,10 @@ const Auth = {
 
   /* ── CREAR USUARIO ────────────────────────────── */
   async crearUsuario(fields) {
+    /* Guardar sesión actual del admin */
+    const { data: sessionData } = await getSB().auth.getSession();
+    const adminSession = sessionData?.session;
+
     /* Crear en Supabase Auth */
     const { data: authData, error: authErr } = await getSB().auth.signUp({
       email: fields.email,
@@ -53,7 +57,7 @@ const Auth = {
 
     const userId = authData.user.id;
 
-    /* Crear perfil */
+    /* Crear perfil en public.usuarios */
     const { error: dbErr } = await getSB().from('usuarios').upsert({
       id:                    userId,
       tenant_id:             getTID(),
@@ -67,6 +71,15 @@ const Auth = {
     }, { onConflict:'id' });
 
     if (dbErr) console.warn('crearUsuario perfil:', dbErr.message);
+
+    /* Restaurar sesión del admin */
+    if (adminSession?.refresh_token) {
+      await getSB().auth.setSession({
+        access_token:  adminSession.access_token,
+        refresh_token: adminSession.refresh_token
+      });
+    }
+
     return { ok:true };
   },
 
