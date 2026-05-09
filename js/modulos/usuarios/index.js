@@ -51,6 +51,7 @@ Modulos.usuarios = {
                     <div style="display:flex;gap:4px">
                       <button class="btn btn-sm btn-cyan" onclick="Modulos.usuarios.modalEditar('${u.id}')">✏️ Editar</button>
                       <button class="btn btn-sm btn-ghost" onclick="Modulos.usuarios.modalReset('${u.id}','${u.nombre}')">🔑</button>
+                  <button class="btn btn-sm btn-danger" onclick="Modulos.usuarios.eliminar('${u.id}','${u.nombre}')">✕</button>
                     </div>
                   </td>
                 </tr>`;
@@ -286,6 +287,14 @@ Modulos.usuarios = {
         <button class="btn btn-ghost" onclick="UI.cerrarModal()">Cancelar</button>
         <button class="btn btn-amber" onclick="Modulos.usuarios.ejecutarReset('${id}')">Resetear Contraseña</button>
       </div>`);
+  },
+
+  async eliminar(id, nombre) {
+    const ok = await UI.confirmar(`¿Eliminar usuario <b>${nombre}</b>? Esta acción desactiva su acceso al sistema.`, 'Eliminar');
+    if (!ok) return;
+    const ok2 = await DB.upsertUsuario({ id, activo: false, updated_at: new Date().toISOString() });
+    if (ok2) { UI.toast('Usuario desactivado ✓'); this.render(); }
+    else UI.toast('Error al eliminar','error');
   },
 
   async ejecutarReset(id) {
