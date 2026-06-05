@@ -406,21 +406,16 @@ ALTER TABLE public.combos                ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.promociones           ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.citas                 ENABLE ROW LEVEL SECURITY;
 
--- Políticas de acceso abierto (la app maneja seguridad por rol)
-DO $$ DECLARE t text;
-BEGIN
-  FOREACH t IN ARRAY ARRAY['tenants','licencias','config_fiscal','usuarios',
-    'clientes','vehiculos','empleados','ordenes','inventario','inventario_movimientos',
-    'proveedores','bancos','banco_movimientos','ingresos','egresos','facturas',
-    'pagos_nomina','viaticos','empleado_documentos','bodegas','combos','promociones','citas']
-  LOOP
-    EXECUTE format('DROP POLICY IF EXISTS "public_access" ON public.%I', t);
-    EXECUTE format('CREATE POLICY "public_access" ON public.%I FOR ALL TO anon, authenticated USING (true) WITH CHECK (true)', t);
-  END LOOP;
-END $$;
+-- ── POLÍTICAS DE ACCESO ────────────────────────────────
+-- ⚠️ Las políticas de aislamiento por tenant viven en
+--    db/migrations/001_rls_tenant_isolation.sql
+-- Tras crear la estructura con este archivo, EJECUTA esa migración.
+-- (Sin ella, RLS está activado pero sin políticas → acceso denegado.)
+--
+-- NO uses políticas abiertas tipo `USING (true)`: exponen todos los
+-- datos de todos los talleres a cualquiera con la anon key.
 
--- Grants
-GRANT ALL ON ALL TABLES IN SCHEMA public TO anon;
+-- Grants base (RLS hace el filtrado real por fila)
 GRANT ALL ON ALL TABLES IN SCHEMA public TO authenticated;
 
 SELECT 'TallerPro v3.0 Schema instalado ✓' AS resultado;

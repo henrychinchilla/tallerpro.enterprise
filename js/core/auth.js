@@ -42,45 +42,28 @@ const Auth = {
   },
 
   /* ── CREAR USUARIO ────────────────────────────── */
+  /* Usa la Edge Function 'crear-usuario' (service role): valida el rol
+     del admin y crea el auth user + perfil sin tocar la sesión actual.
+     Reemplaza el viejo hack signUp()+restaurar sesión. */
   async crearUsuario(fields) {
-    /* Guardar sesión actual del admin */
-    const { data: sessionData } = await getSB().auth.getSession();
-    const adminSession = sessionData?.session;
-
-    /* Crear en Supabase Auth */
-    const { data: authData, error: authErr } = await getSB().auth.signUp({
-      email: fields.email,
-      password: fields.password,
-      options: { data: { nombre: fields.nombre, rol: fields.rol } }
+    const { data, error } = await getSB().functions.invoke('crear-usuario', {
+      body: {
+        email:    fields.email,
+        password: fields.password,
+        nombre:   fields.nombre,
+        rol:      fields.rol,
+        telefono: fields.telefono || null,
+        avatar:   fields.avatar || '👤'
+      }
     });
-    if (authErr) return { ok:false, error:authErr.message };
 
-    const userId = authData.user.id;
-
-    /* Crear perfil en public.usuarios */
-    const { error: dbErr } = await getSB().from('usuarios').upsert({
-      id:                    userId,
-      tenant_id:             getTID(),
-      nombre:                fields.nombre,
-      email:                 fields.email,
-      rol:                   fields.rol,
-      telefono:              fields.telefono || null,
-      avatar:                fields.avatar || '👤',
-      activo:                true,
-      debe_cambiar_password: true
-    }, { onConflict:'id' });
-
-    if (dbErr) console.warn('crearUsuario perfil:', dbErr.message);
-
-    /* Restaurar sesión del admin */
-    if (adminSession?.refresh_token) {
-      await getSB().auth.setSession({
-        access_token:  adminSession.access_token,
-        refresh_token: adminSession.refresh_token
-      });
+    if (error) {
+      let msg = error.message;
+      try { const j = await error.context.json(); if (j?.error) msg = j.error; } catch (_) {}
+      return { ok:false, error: msg };
     }
-
-    return { ok:true };
+    if (data?.error) return { ok:false, error: data.error };
+    return { ok:true, id: data?.id };
   },
 
   /* ── CARGAR PERFIL ────────────────────────────── */
@@ -137,46 +120,35 @@ const Auth = {
   },
 
   /* ── REGISTRAR NUEVO TALLER ───────────────────── */
+  /* 1) signUp crea la cuenta (auto-inicia sesión si la confirmación de
+        email está desactivada). 2) El RPC 'registrar_taller'
+        (SECURITY DEFINER) crea tenant + licencia + config + usuario admin
+        de forma atómica y los vincula al auth.uid(). */
   async registrarTaller(fields) {
-    /* Crear tenant primero */
-    const slug = fields.nombre_taller.toLowerCase()
-      .replace(/[^a-z0-9]/g,'-').replace(/-+/g,'-').slice(0,40)
-      + '-' + Date.now().toString(36);
+    const sb = getSB();
 
-    const { data: tenant, error: tErr } = await getSB().from('tenants').insert({
-      slug, name: fields.nombre_taller, nit: fields.nit||null, email: fields.email
-    }).select().single();
-    if (tErr) return { ok:false, error:'Error creando taller: '+tErr.message };
-
-    /* Crear licencia demo */
-    await getSB().from('licencias').insert({
-      tenant_id: tenant.id, tipo:'demo',
-      fecha_inicio: new Date().toISOString().slice(0,10),
-      fecha_vencimiento: new Date(Date.now()+30*86400000).toISOString().slice(0,10)
-    });
-
-    /* Crear config fiscal */
-    await getSB().from('config_fiscal').insert({
-      tenant_id: tenant.id, regimen_iva:'general', tasa_iva:0.12, tasa_isr:0.05
-    });
-
-    /* Crear usuario admin */
-    const { data: authData, error: authErr } = await getSB().auth.signUp({
+    const { data: authData, error: authErr } = await sb.auth.signUp({
       email: fields.email, password: fields.password,
-      options: { data: { nombre:fields.nombre, rol:'admin', tenant_id:tenant.id } }
+      options: { data: { nombre: fields.nombre, rol: 'admin' } }
     });
-    if (authErr) return { ok:false, error:authErr.message };
+    if (authErr) return { ok:false, error: authErr.message };
+    if (!authData.session) {
+      return { ok:false, error:'Revisa tu correo para confirmar la cuenta y luego inicia sesión.' };
+    }
 
-    await getSB().from('usuarios').upsert({
-      id: authData.user.id, tenant_id: tenant.id,
-      nombre: fields.nombre, email: fields.email,
-      rol:'admin', activo:true, avatar:'👑'
+    const { data: tenant, error: rpcErr } = await sb.rpc('registrar_taller', {
+      p_nombre_taller: fields.nombre_taller,
+      p_nit:           fields.nit || null,
+      p_email:         fields.email,
+      p_nombre:        fields.nombre
     });
+    if (rpcErr) return { ok:false, error:'Error creando taller: '+rpcErr.message };
 
     Auth.supaUser = authData.user;
     Auth.tenant   = tenant;
     Auth.user     = { id:authData.user.id, nombre:fields.nombre, email:fields.email, rol:'admin', activo:true, avatar:'👑', tenant_id:tenant.id };
     Auth.licencia = { tipo:'demo', dias_restantes:30 };
+    window._cachedTenantId = tenant.id;
 
     return { ok:true };
   }
