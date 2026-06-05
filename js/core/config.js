@@ -15,6 +15,14 @@ const APP = {
 const SUPABASE_URL = 'https://oanguccrxleznozumpbi.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9hbmd1Y2NyeGxlem5venVtcGJpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzczODk4MzEsImV4cCI6MjA5Mjk2NTgzMX0.DcQS5AMHV3s4k-tvLlpb8ZWzkODPOSaiQjP1rLJVPAs';
 
+/* ── INTEGRACIONES (flags por defecto) ────────────── */
+/* Se sobreescriben con la fila de config_integraciones del tenant.
+   Las claves reales (Meta, Anthropic) viven en Supabase secrets, no aquí. */
+const FEATURES = {
+  whatsapp: false,   // requiere Edge Function whatsapp-send + secrets de Meta
+  ia:       false    // requiere Edge Function ai-assistant + ANTHROPIC_API_KEY
+};
+
 /* ── ROLES ────────────────────────────────────────── */
 const ROLES = {
   superadmin:   { label:'Super Admin',        icon:'⚡', color:'red',    oculto:true  },
