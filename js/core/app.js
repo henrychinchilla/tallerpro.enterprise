@@ -47,6 +47,15 @@ const App = {
     const sidebar = document.getElementById('sidebar');
     if (!sidebar) return;
 
+    /* Botón del asistente IA (oculto para el rol cliente) */
+    const iaBtn = rol === 'cliente' ? '' : `
+      <div class="sidebar-ia">
+        <button class="btn-ia" onclick="IA.abrirChat()">
+          <span class="btn-ia-icon">🤖</span>
+          <span>Asistente IA</span>
+        </button>
+      </div>`;
+
     sidebar.innerHTML = `
       <div class="sidebar-brand">
         <div class="sidebar-brand-name">TALLERPRO</div>
@@ -56,6 +65,7 @@ const App = {
         <div class="sidebar-tenant-name">${Auth.tenant?.name || 'TallerPro'}</div>
       </div>
       <nav class="sidebar-nav"><ul>${nav}</ul></nav>
+      ${iaBtn}
       <div class="sidebar-user" id="sidebar-user" onclick="TEMAS.picker()" title="Cambiar tema">
         <span class="sidebar-user-avatar">${Auth.user?.avatar || '👤'}</span>
         <div class="sidebar-user-info">

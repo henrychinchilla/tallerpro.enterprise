@@ -133,6 +133,24 @@
 }
 .nav-group-label:first-child { padding-top: 4px; }
 
+/* Botón del asistente IA */
+.sidebar-ia { padding: 8px 12px; }
+.btn-ia {
+  width: 100%;
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--amber-border);
+  background: var(--amber-dim);
+  color: var(--amber);
+  border-radius: 10px;
+  font-family: 'Manrope', sans-serif;
+  font-size: 13px; font-weight: 700;
+  cursor: pointer;
+  transition: all .15s;
+}
+.btn-ia:hover { background: var(--amber); color: #000; }
+.btn-ia-icon { font-size: 16px; }
+
 .sidebar-user {
   padding: 12px 16px;
   border-top: 1px solid var(--border);
