@@ -3,7 +3,7 @@
 // Asistente de IA de TallerPro — proxy seguro a la API de Claude.
 //
 // La ANTHROPIC_API_KEY vive SOLO en el servidor (secret de Supabase),
-// nunca en el navegador.
+// nunca en el navegador. Usa fetch directo a la API (sin dependencias).
 //
 // Modos:
 //   diagnostico → sugiere fallas/repuestos a partir de síntomas
@@ -20,7 +20,6 @@
 // ═══════════════════════════════════════════════════════
 
 import { createClient } from "jsr:@supabase/supabase-js@2";
-import Anthropic from "npm:@anthropic-ai/sdk@0.69.0";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -33,12 +32,12 @@ const json = (body: unknown, status = 200) =>
     headers: { ...cors, "Content-Type": "application/json" },
   });
 
-const MODELO  = Deno.env.get("AI_MODEL")  ?? "claude-opus-4-8";
-const EFFORT  = (Deno.env.get("AI_EFFORT") ?? "medium") as "low" | "medium" | "high" | "max";
+const MODELO = Deno.env.get("AI_MODEL") ?? "claude-opus-4-8";
+const EFFORT = Deno.env.get("AI_EFFORT") ?? "medium";
 
 const BASE_GT = `Eres el asistente de IA de TallerPro, un sistema de gestión para talleres
 mecánicos en Guatemala. Respondes en español guatemalteco, claro y conciso.
-La moneda es el Quetzal (Q). Hoy es la fecha que se indique en el contexto.`;
+La moneda es el Quetzal (Q).`;
 
 const PROMPTS: Record<string, string> = {
   diagnostico: `${BASE_GT}
@@ -96,7 +95,7 @@ Deno.serve(async (req) => {
   if (req.method !== "POST") return json({ error: "Método no permitido" }, 405);
 
   const apiKey = Deno.env.get("ANTHROPIC_API_KEY");
-  if (!apiKey) return json({ error: "IA no configurada (falta ANTHROPIC_API_KEY)" }, 503);
+  if (!apiKey) return json({ error: "El Asistente IA aún no está configurado (falta la API key de Claude)." }, 503);
 
   const url = Deno.env.get("SUPABASE_URL")!;
   const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -129,7 +128,7 @@ Deno.serve(async (req) => {
   // ── Construir el contenido del usuario ──
   let userContent = "";
   if (modo === "chat" || modo === "insights") {
-    if (!tenantId) return json({ error: "Sin tenant asociado" }, 400);
+    if (!tenantId) return json({ error: "Sin taller asociado a tu usuario" }, 400);
     const snap = await snapshotTenant(admin, tenantId);
     userContent = `Fecha de hoy: ${new Date().toISOString().slice(0, 10)}\n` +
       `Snapshot del taller (JSON):\n${JSON.stringify(snap, null, 2)}\n\n` +
@@ -138,24 +137,41 @@ Deno.serve(async (req) => {
     userContent = `Contexto (JSON): ${JSON.stringify(contexto)}\n\nSolicitud: ${mensaje}`;
   }
 
-  // ── Llamar a Claude ──
-  const anthropic = new Anthropic({ apiKey });
+  // ── Llamar a Claude (fetch directo) ──
   try {
-    const resp = await anthropic.messages.create({
-      model: MODELO,
-      max_tokens: 4096,
-      thinking: { type: "adaptive" },
-      output_config: { effort: EFFORT },
-      system: PROMPTS[modo],
-      messages: [{ role: "user", content: userContent }],
+    const r = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        model: MODELO,
+        max_tokens: 4096,
+        thinking: { type: "adaptive" },
+        output_config: { effort: EFFORT },
+        system: PROMPTS[modo],
+        messages: [{ role: "user", content: userContent }],
+      }),
     });
-    const texto = resp.content
+
+    const data = await r.json();
+    if (!r.ok) {
+      const m = data?.error?.message ?? `HTTP ${r.status}`;
+      const friendly = r.status === 429 ? "IA ocupada, intenta en unos segundos"
+        : r.status === 401 ? "La API key de Claude no es válida"
+        : m;
+      return json({ error: friendly }, r.status);
+    }
+
+    const texto = (data.content ?? [])
       .filter((b: any) => b.type === "text")
       .map((b: any) => b.text)
       .join("\n")
       .trim();
 
-    // Log opcional del intercambio (no bloquea la respuesta)
+    // Log opcional (no bloquea si la tabla no existe aún)
     if (tenantId) {
       admin.from("ai_conversaciones").insert({
         tenant_id: tenantId, usuario_id: userData.user.id,
@@ -165,10 +181,6 @@ Deno.serve(async (req) => {
 
     return json({ ok: true, texto });
   } catch (e: any) {
-    const status = e?.status ?? 500;
-    const msg = status === 429 ? "IA ocupada, intenta en unos segundos"
-      : status === 401 ? "API key de IA inválida"
-      : (e?.message ?? "Error de IA");
-    return json({ error: msg }, status >= 400 && status < 600 ? status : 500);
+    return json({ error: e?.message ?? "Error al contactar la IA" }, 500);
   }
 });

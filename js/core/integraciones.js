@@ -12,7 +12,15 @@ async function _invocar(fn, body) {
   const { data, error } = await getSB().functions.invoke(fn, { body });
   if (error) {
     let msg = error.message;
-    try { const j = await error.context.json(); if (j?.error) msg = j.error; } catch (_) {}
+    let status = error?.context?.status;
+    try { const j = await error.context.json(); if (j?.error) { msg = j.error; } } catch (_) {}
+    const low = (error.message || '').toLowerCase();
+    /* Función aún no desplegada en el servidor */
+    if (status === 404 || error.name === 'FunctionsFetchError' ||
+        low.includes('failed to send') || low.includes('failed to fetch')) {
+      msg = 'Esta función todavía no está activada en el servidor. ' +
+            'Falta desplegarla (ver INTEGRACIONES.md).';
+    }
     return { ok: false, error: msg };
   }
   if (data?.error) return { ok: false, error: data.error };
