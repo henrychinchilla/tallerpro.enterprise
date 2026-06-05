@@ -123,15 +123,18 @@
 /* Encabezado de grupo del sidebar */
 .nav-group-label {
   list-style: none;
-  padding: 14px 16px 5px;
+  margin: 8px 12px 4px;
+  padding: 10px 4px 4px;
   font-size: 10px;
   font-weight: 800;
-  letter-spacing: .08em;
+  letter-spacing: .1em;
   text-transform: uppercase;
-  color: var(--text3);
+  color: var(--amber);
+  opacity: .85;
+  border-top: 1px solid var(--border);
   user-select: none;
 }
-.nav-group-label:first-child { padding-top: 4px; }
+.nav-group-label:first-child { margin-top: 2px; border-top: none; }
 
 /* Botón del asistente IA */
 .sidebar-ia { padding: 8px 12px; }
