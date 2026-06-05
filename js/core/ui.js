@@ -78,6 +78,23 @@ const UI = {
     if (!el) return;
     el.innerHTML = `<div class="empty-state">
       <div class="empty-state-sm">⏳</div>${msg}</div>`;
+  },
+
+  /* ── ERROR ────────────────────────────────────── */
+  /* Muestra un toast de error y lo registra en consola con contexto.
+     Útil para que los fallos de la capa de datos no pasen en silencio. */
+  error(msg, err=null, contexto='') {
+    if (err) console.error(`[${contexto||'error'}]`, err);
+    UI.toast(msg || 'Ocurrió un error', 'error');
+  },
+
+  /* ── ESTADO VACÍO ─────────────────────────────── */
+  vacio(icono='📭', titulo='Sin datos', subtitulo='') {
+    return `<div class="empty-state empty-state-lg">
+      <div class="empty-state-icon">${icono}</div>
+      <div style="font-weight:700;margin-bottom:4px">${titulo}</div>
+      ${subtitulo ? `<div class="text-muted" style="font-size:12px">${subtitulo}</div>` : ''}
+    </div>`;
   }
 };
 
@@ -89,4 +106,19 @@ document.addEventListener('DOMContentLoaded', () => {
       if (e.target === overlay) UI.cerrarModal();
     });
   }
+});
+
+/* ── BOUNDARY GLOBAL DE ERRORES ─────────────────────
+   Evita que los fallos pasen en silencio: cualquier promesa
+   rechazada sin manejar muestra un aviso discreto y queda en consola. */
+window.addEventListener('unhandledrejection', e => {
+  const msg = e.reason?.message || String(e.reason || '');
+  console.error('[unhandledrejection]', e.reason);
+  /* Ignorar ruido conocido (extensiones, abortos de fetch) */
+  if (/abort|cancell?ed|extension/i.test(msg)) return;
+  if (window.UI) UI.toast('Algo falló. Revisa tu conexión e inténtalo de nuevo', 'error');
+});
+
+window.addEventListener('error', e => {
+  if (e.error) console.error('[window.error]', e.error);
 });

@@ -9,11 +9,26 @@ const Auth = {
   supaUser: null,
   licencia: null,
 
+  /* ── TRADUCIR ERRORES SUPABASE ────────────────── */
+  _traducirError(msg='') {
+    const m = msg.toLowerCase();
+    if (m.includes('invalid login credentials')) return 'Correo o contraseña incorrectos';
+    if (m.includes('email not confirmed'))       return 'Debes confirmar tu correo antes de entrar';
+    if (m.includes('user already registered') ||
+        m.includes('already been registered'))   return 'Ese correo ya está registrado';
+    if (m.includes('password should be at least')) return 'La contraseña es muy corta (mínimo 8 caracteres)';
+    if (m.includes('rate limit') ||
+        m.includes('too many requests'))         return 'Demasiados intentos. Espera un momento e inténtalo de nuevo';
+    if (m.includes('network') || m.includes('fetch')) return 'Sin conexión. Revisa tu internet';
+    if (m.includes('for security purposes'))     return 'Por seguridad, espera unos segundos antes de reintentar';
+    return msg || 'Ocurrió un error inesperado';
+  },
+
   /* ── LOGIN ────────────────────────────────────── */
   async login(email, password, tenantSlug=null) {
     const sb = getSB();
     const { data, error } = await sb.auth.signInWithPassword({ email, password });
-    if (error) return { ok:false, error:error.message };
+    if (error) return { ok:false, error: Auth._traducirError(error.message) };
 
     Auth.supaUser = data.user;
     await Auth._cargarPerfil(data.user.id, email, tenantSlug);
@@ -105,10 +120,24 @@ const Auth = {
     }
   },
 
+  /* ── RECUPERAR PASSWORD ───────────────────────── */
+  /* Envía un correo con enlace de recuperación. Al volver, la app
+     detecta el evento PASSWORD_RECOVERY y muestra el form de nueva clave.
+     NOTA: el dominio (window.location.origin) debe estar en
+     Supabase → Authentication → URL Configuration → Redirect URLs. */
+  async recuperarPassword(email) {
+    if (!email) return { ok:false, error:'Ingresa tu correo' };
+    const { error } = await getSB().auth.resetPasswordForEmail(email, {
+      redirectTo: window.location.origin
+    });
+    if (error) return { ok:false, error: Auth._traducirError(error.message) };
+    return { ok:true };
+  },
+
   /* ── CAMBIAR PASSWORD ─────────────────────────── */
   async cambiarPassword(nuevaPass) {
     const { error } = await getSB().auth.updateUser({ password: nuevaPass });
-    if (error) return { ok:false, error:error.message };
+    if (error) return { ok:false, error: Auth._traducirError(error.message) };
     if (Auth.user?.id) {
       await getSB().from('usuarios').update({
         debe_cambiar_password: false,
@@ -131,7 +160,7 @@ const Auth = {
       email: fields.email, password: fields.password,
       options: { data: { nombre: fields.nombre, rol: 'admin' } }
     });
-    if (authErr) return { ok:false, error: authErr.message };
+    if (authErr) return { ok:false, error: Auth._traducirError(authErr.message) };
     if (!authData.session) {
       return { ok:false, error:'Revisa tu correo para confirmar la cuenta y luego inicia sesión.' };
     }

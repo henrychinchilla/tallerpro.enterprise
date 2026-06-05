@@ -118,18 +118,45 @@ function renderLogin(vista='login') {
       <div class="login-card">
         <div class="login-logo">
           <h1 style="font-size:28px">🔑 Recuperar acceso</h1>
-          <p>Contacta al administrador del sistema</p>
+          <p>Te enviaremos un enlace a tu correo</p>
         </div>
-        <div class="alert alert-cyan">
-          <div class="alert-icon">ℹ️</div>
-          <div class="alert-body" style="font-size:12px">
-            El administrador puede resetear tu contraseña desde Gestión de Usuarios en Configuración.
-            Si eres el administrador, contacta a soporte en
-            <a href="mailto:soporte@tallerpro.gt" style="color:var(--cyan)">soporte@tallerpro.gt</a>
+        <div class="form-group">
+          <label class="form-label">Correo Electrónico</label>
+          <input class="form-input" id="rc-email" type="email" placeholder="usuario@empresa.gt"
+                 onkeydown="if(event.key==='Enter')loginRecuperarPass()">
+        </div>
+        <button class="btn btn-amber" style="width:100%" onclick="loginRecuperarPass()">
+          Enviar enlace de recuperación →
+        </button>
+        <button class="btn btn-ghost" style="width:100%;margin-top:8px" onclick="renderLogin('login')">
+          ← Volver al login
+        </button>
+      </div>`,
+
+    reset: `
+      <div class="login-card">
+        <div class="login-logo">
+          <div style="font-size:40px;margin-bottom:8px">🔐</div>
+          <h1 style="font-size:24px;color:var(--amber)">Nueva contraseña</h1>
+          <p>Crea tu nueva contraseña de acceso</p>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Nueva Contraseña *</label>
+          <div style="position:relative">
+            <input class="form-input" id="rs-pass1" type="password" placeholder="Mínimo 8 caracteres"
+                   style="padding-right:44px">
+            <button type="button" onclick="UI.togglePass('rs-pass1',this)"
+              style="position:absolute;right:12px;top:50%;transform:translateY(-50%);
+                     background:none;border:none;cursor:pointer;font-size:16px;color:var(--text3)">👁</button>
           </div>
         </div>
-        <button class="btn btn-ghost" style="width:100%;margin-top:16px" onclick="renderLogin('login')">
-          ← Volver al login
+        <div class="form-group">
+          <label class="form-label">Confirmar Contraseña *</label>
+          <input class="form-input" id="rs-pass2" type="password" placeholder="Repetir contraseña"
+                 onkeydown="if(event.key==='Enter')loginResetPass()">
+        </div>
+        <button class="btn btn-amber" style="width:100%" onclick="loginResetPass()">
+          Guardar contraseña →
         </button>
       </div>`,
 
@@ -226,6 +253,30 @@ async function loginRegistrarTaller() {
   setTimeout(() => App.iniciar(), 800);
 }
 
+async function loginRecuperarPass() {
+  const email = document.getElementById('rc-email')?.value.trim();
+  if (!email) { UI.toast('Ingresa tu correo','error'); return; }
+  UI.toast('Enviando enlace...','info');
+  const r = await Auth.recuperarPassword(email);
+  if (!r.ok) { UI.toast(r.error,'error'); return; }
+  /* Mensaje neutro: no revelar si el correo existe o no */
+  UI.toast('Si el correo existe, recibirás un enlace de recuperación ✓');
+  setTimeout(() => renderLogin('login'), 2500);
+}
+
+async function loginResetPass() {
+  const p1 = document.getElementById('rs-pass1')?.value;
+  const p2 = document.getElementById('rs-pass2')?.value;
+  if (!p1 || p1.length < 8) { UI.toast('Mínimo 8 caracteres','error'); return; }
+  if (p1 !== p2) { UI.toast('Las contraseñas no coinciden','error'); return; }
+  const r = await Auth.cambiarPassword(p1);
+  if (!r.ok) { UI.toast(r.error,'error'); return; }
+  /* Limpiar el hash del enlace de recuperación de la URL */
+  history.replaceState(null, '', window.location.pathname);
+  UI.toast('¡Contraseña actualizada! 🎉');
+  setTimeout(() => App.iniciar(), 800);
+}
+
 async function loginCambiarPass() {
   const p1 = document.getElementById('cp-pass1')?.value;
   const p2 = document.getElementById('cp-pass2')?.value;
@@ -246,8 +297,22 @@ function loginDemo() {
 }
 
 
+/* Enlace de recuperación: Supabase emite el evento PASSWORD_RECOVERY
+   cuando el usuario regresa desde el correo. Mostramos el form de
+   nueva contraseña en vez de iniciar la app. */
+getSB().auth.onAuthStateChange((event) => {
+  if (event === 'PASSWORD_RECOVERY') renderLogin('reset');
+});
+
 window.addEventListener('load', async () => {
   TEMAS.aplicar(localStorage.getItem('tp_tema') || 'dark');
+
+  /* Si venimos de un enlace de recuperación, ir directo al reset */
+  if (window.location.hash.includes('type=recovery')) {
+    renderLogin('reset');
+    return;
+  }
+
   try {
     const { data: { session } } = await getSB().auth.getSession();
     if (session?.user) {
