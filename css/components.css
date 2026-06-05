@@ -218,6 +218,18 @@
   .grid-2, .grid-3, .grid-4 { grid-template-columns: 1fr; }
 }
 
+/* ── DASHBOARD: GRID DE GRÁFICAS ─────────────────── */
+.dash-charts {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 16px;
+  margin-top: 16px;
+  align-items: start;
+}
+@media (max-width: 900px) {
+  .dash-charts { grid-template-columns: 1fr; }
+}
+
 /* ── PRINT ───────────────────────────────────────── */
 @media print {
   #sidebar, .mobile-header, .page-actions, .btn { display: none !important; }

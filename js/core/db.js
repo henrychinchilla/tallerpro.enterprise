@@ -510,5 +510,51 @@ const DB = {
       mesIni:     ini,
       mesFin:     fin
     };
+  },
+
+  /* ── DATOS PARA GRÁFICAS DEL DASHBOARD ─────────── */
+  async getDashboardData() {
+    const tid = getTID();
+    const hoy = new Date();
+    /* Inicio del rango: primer día del mes hace 5 meses (6 meses en total) */
+    const desde = new Date(hoy.getFullYear(), hoy.getMonth() - 5, 1);
+    const desdeStr = desde.toISOString().slice(0, 10);
+
+    const [
+      { data: ingresos },
+      { data: egresos },
+      { data: facturas },
+      { data: ordenes }
+    ] = await Promise.all([
+      getSB().from('ingresos').select('monto,fecha').eq('tenant_id', tid).gte('fecha', desdeStr),
+      getSB().from('egresos').select('monto,fecha').eq('tenant_id', tid).gte('fecha', desdeStr),
+      getSB().from('facturas').select('total,fecha').eq('tenant_id', tid).gte('fecha', desdeStr),
+      getSB().from('ordenes').select('estado').eq('tenant_id', tid)
+    ]);
+
+    /* Buckets de los últimos 6 meses */
+    const meses = [];
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date(hoy.getFullYear(), hoy.getMonth() - i, 1);
+      meses.push({
+        key:   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`,
+        label: d.toLocaleDateString('es-GT', { month: 'short' }),
+        ingresos: 0, egresos: 0
+      });
+    }
+    const idx = k => meses.find(m => m.key === k);
+    const bucket = (arr, campo, tipo) => (arr || []).forEach(r => {
+      const m = idx((r.fecha || '').slice(0, 7));
+      if (m) m[tipo] += Number(r[campo] || 0);
+    });
+    bucket(ingresos, 'monto', 'ingresos');
+    bucket(facturas, 'total', 'ingresos');
+    bucket(egresos,  'monto', 'egresos');
+
+    /* Conteo de órdenes por estado */
+    const porEstado = {};
+    (ordenes || []).forEach(o => { porEstado[o.estado] = (porEstado[o.estado] || 0) + 1; });
+
+    return { meses, porEstado };
   }
 };
