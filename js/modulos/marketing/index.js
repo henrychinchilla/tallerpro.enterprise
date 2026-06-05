@@ -14,7 +14,7 @@ Modulos.marketing = {
           <button class="tab-btn ${this._tab==='promos'?'active':''}" onclick="Modulos.marketing._tab='promos';Modulos.marketing._renderTab()">🏷️ Promociones</button>
           <button class="tab-btn ${this._tab==='flyers'?'active':''}" onclick="Modulos.marketing._tab='flyers';Modulos.marketing._renderTab()">📄 Generador de Flyers</button>
         </div>
-        <div id="mkt-content"><div style="padding:40px;text-align:center;color:var(--text3)">⏳ Cargando...</div></div>
+        <div id="mkt-content"><div class="empty-state">⏳ Cargando...</div></div>
       </div>`;
     await this._renderTab();
   },

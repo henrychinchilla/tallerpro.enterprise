@@ -1,10 +1,28 @@
 {
   "name": "tallerpro-enterprise",
   "version": "3.0.0",
-  "description": "TallerPro Enterprise — Sistema de gestión para talleres",
+  "description": "TallerPro Enterprise — Sistema de gestión para talleres mecánicos (Guatemala). PWA multi-taller con Supabase, desplegable en Cloudflare y empaquetable con Electron.",
+  "private": true,
+  "type": "commonjs",
   "scripts": {
-    "build": "echo 'Static site'"
+    "dev": "npx --yes serve@latest -l 8080 .",
+    "preview": "npx --yes wrangler dev",
+    "deploy": "npx --yes wrangler deploy",
+    "electron": "npx --yes electron electron/main.js",
+    "build": "echo \"Sitio estático — no requiere build\""
   },
+  "keywords": [
+    "taller",
+    "automotriz",
+    "erp",
+    "pwa",
+    "supabase",
+    "guatemala",
+    "cloudflare"
+  ],
   "author": "CM Telecomm GT",
-  "license": "ISC"
+  "license": "ISC",
+  "engines": {
+    "node": ">=18"
+  }
 }

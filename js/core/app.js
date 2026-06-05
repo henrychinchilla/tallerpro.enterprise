@@ -84,8 +84,8 @@ const App = {
       modulo.render();
     } else {
       const el = document.getElementById('page-content');
-      if (el) el.innerHTML = `<div style="padding:40px;text-align:center;color:var(--text3)">
-        <div style="font-size:40px;margin-bottom:12px">🔧</div>
+      if (el) el.innerHTML = `<div class="empty-state">
+        <div class="empty-state-icon">🔧</div>
         <div>Módulo <b>${pagina}</b> cargando...</div>
       </div>`;
     }

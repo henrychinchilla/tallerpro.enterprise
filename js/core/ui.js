@@ -7,19 +7,9 @@ const UI = {
 
   /* ── TOAST ────────────────────────────────────── */
   toast(msg, tipo='success', duracion=3000) {
-    const colores = {
-      success: '#10B981', error: '#EF4444',
-      warn: '#F59E0B', info: '#06B6D4'
-    };
+    const tipos = ['success', 'error', 'warn', 'info'];
     const t = document.createElement('div');
-    t.style.cssText = `
-      position:fixed;bottom:24px;right:24px;z-index:9999;
-      background:${colores[tipo]||colores.success};color:#000;
-      padding:12px 20px;border-radius:10px;font-weight:600;
-      font-size:13px;font-family:'Manrope',sans-serif;
-      box-shadow:0 4px 20px rgba(0,0,0,0.3);
-      animation:slideIn .25s ease;max-width:340px;
-    `;
+    t.className = `toast toast-${tipos.includes(tipo) ? tipo : 'success'}`;
     t.textContent = msg;
     document.body.appendChild(t);
     setTimeout(() => t.remove(), duracion);
@@ -86,8 +76,8 @@ const UI = {
   /* ── LOADER ───────────────────────────────────── */
   loading(el, msg='Cargando...') {
     if (!el) return;
-    el.innerHTML = `<div style="padding:40px;text-align:center;color:var(--text3)">
-      <div style="font-size:28px;margin-bottom:12px">⏳</div>${msg}</div>`;
+    el.innerHTML = `<div class="empty-state">
+      <div class="empty-state-sm">⏳</div>${msg}</div>`;
   }
 };
 

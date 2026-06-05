@@ -25,7 +25,7 @@ Modulos.finanzas = {
           <button class="tab-btn ${this._tab==='balance'?'active':''}" onclick="Modulos.finanzas._tab='balance';Modulos.finanzas._renderTab()">📋 Estado de Resultados</button>
           <button class="tab-btn ${this._tab==='fiscal'?'active':''}" onclick="Modulos.finanzas._tab='fiscal';Modulos.finanzas._renderTab()">🏛️ Fiscal SAT</button>
         </div>
-        <div id="fin-content"><div style="padding:40px;text-align:center;color:var(--text3)">⏳ Cargando...</div></div>
+        <div id="fin-content"><div class="empty-state">⏳ Cargando...</div></div>
       </div>`;
     await this._renderTab();
   },
