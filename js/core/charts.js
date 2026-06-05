@@ -44,8 +44,12 @@ const Charts = {
       return area + line + dots;
     }).join('');
 
+    /* Etiquetas X espaciadas si hay muchos puntos */
+    const step = Math.max(1, Math.ceil(n / 8));
     const xl = labels.map((l, i) =>
-      `<text x="${x(i).toFixed(1)}" y="${H - 9}" text-anchor="middle" style="fill:var(--text3)" font-size="10">${l}</text>`).join('');
+      (n <= 12 || i % step === 0 || i === n - 1)
+        ? `<text x="${x(i).toFixed(1)}" y="${H - 9}" text-anchor="middle" style="fill:var(--text3)" font-size="10">${l}</text>`
+        : '').join('');
 
     const legend = series.map(s =>
       `<span style="display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--text2);font-weight:600">
@@ -89,5 +93,24 @@ const Charts = {
       </svg>
       <div style="flex:1;min-width:150px">${legend}</div>
     </div>`;
+  },
+
+  /* ── BARRAS HORIZONTALES (rankings) ────────────────
+     opts = { data:[{label, valor}], colorVar } */
+  barrasH({ data, colorVar = 'amber' }) {
+    if (!data.length) return '';
+    const max = Math.max(1, ...data.map(d => d.valor));
+    const W = 600, pL = 4, pR = 4, rowH = 36, barMax = W - pL - pR;
+    const H = data.length * rowH + 4;
+    const rows = data.map((d, i) => {
+      const y = i * rowH + 4;
+      const w = Math.max(3, (d.valor / max) * barMax);
+      return `
+        <text x="${pL}" y="${y + 12}" style="fill:var(--text2)" font-size="12" font-weight="600">${d.label}</text>
+        <text x="${W - pR}" y="${y + 12}" text-anchor="end" style="fill:var(--text)" font-size="12" font-weight="700">${Charts._qCorto(d.valor)}</text>
+        <rect x="${pL}" y="${y + 18}" width="${barMax}" height="9" rx="4.5" style="fill:var(--surface3)"/>
+        <rect x="${pL}" y="${y + 18}" width="${w.toFixed(1)}" height="9" rx="4.5" style="fill:var(--${colorVar})"/>`;
+    }).join('');
+    return `<svg viewBox="0 0 ${W} ${H}" width="100%" preserveAspectRatio="xMidYMid meet" style="display:block">${rows}</svg>`;
   }
 };

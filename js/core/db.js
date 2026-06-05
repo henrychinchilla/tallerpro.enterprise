@@ -526,9 +526,9 @@ const DB = {
       { data: facturas },
       { data: ordenes }
     ] = await Promise.all([
-      getSB().from('ingresos').select('monto,fecha').eq('tenant_id', tid).gte('fecha', desdeStr),
+      getSB().from('ingresos').select('monto,fecha,clientes(nombre)').eq('tenant_id', tid).gte('fecha', desdeStr),
       getSB().from('egresos').select('monto,fecha').eq('tenant_id', tid).gte('fecha', desdeStr),
-      getSB().from('facturas').select('total,fecha').eq('tenant_id', tid).gte('fecha', desdeStr),
+      getSB().from('facturas').select('total,fecha,clientes(nombre)').eq('tenant_id', tid).gte('fecha', desdeStr),
       getSB().from('ordenes').select('estado').eq('tenant_id', tid)
     ]);
 
@@ -555,6 +555,30 @@ const DB = {
     const porEstado = {};
     (ordenes || []).forEach(o => { porEstado[o.estado] = (porEstado[o.estado] || 0) + 1; });
 
-    return { meses, porEstado };
+    /* Ingresos por día del mes actual */
+    const diasMes = new Date(hoy.getFullYear(), hoy.getMonth() + 1, 0).getDate();
+    const ingresosDiarios = Array.from({ length: diasMes }, (_, i) => ({ dia: i + 1, monto: 0 }));
+    const addDia = (arr, campo) => (arr || []).forEach(r => {
+      const d = new Date((r.fecha || '') + 'T12:00:00');
+      if (!isNaN(d) && d.getFullYear() === hoy.getFullYear() && d.getMonth() === hoy.getMonth())
+        ingresosDiarios[d.getDate() - 1].monto += Number(r[campo] || 0);
+    });
+    addDia(ingresos, 'monto');
+    addDia(facturas, 'total');
+
+    /* Top clientes por facturación (6 meses) */
+    const porCliente = {};
+    const addCli = (arr, campo) => (arr || []).forEach(r => {
+      const nom = r.clientes?.nombre;
+      if (nom) porCliente[nom] = (porCliente[nom] || 0) + Number(r[campo] || 0);
+    });
+    addCli(ingresos, 'monto');
+    addCli(facturas, 'total');
+    const topClientes = Object.entries(porCliente)
+      .map(([nombre, total]) => ({ nombre, total }))
+      .sort((a, b) => b.total - a.total)
+      .slice(0, 5);
+
+    return { meses, porEstado, ingresosDiarios, topClientes };
   }
 };

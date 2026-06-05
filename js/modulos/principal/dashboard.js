@@ -28,6 +28,21 @@ Modulos.dashboard = {
       ? Charts.dona({ data: estadosData })
       : UI.vacio('📋', 'Sin órdenes', 'Crea tu primera orden de trabajo');
 
+    /* Ingresos por día (mes actual) */
+    const totalDiario = dd.ingresosDiarios.reduce((s, d) => s + d.monto, 0);
+    const diario = totalDiario > 0
+      ? Charts.areaLineas({
+          labels: dd.ingresosDiarios.map(d => d.dia),
+          series: [{ nombre: 'Ingresos', colorVar: 'cyan', area: true, valores: dd.ingresosDiarios.map(d => d.monto) }],
+          alto: 200
+        })
+      : UI.vacio('📅', 'Sin ingresos este mes', 'Aún no hay movimientos registrados');
+
+    /* Top clientes (6 meses) */
+    const topCli = dd.topClientes.length
+      ? Charts.barrasH({ data: dd.topClientes.map(c => ({ label: c.nombre, valor: c.total })), colorVar: 'amber' })
+      : UI.vacio('🏆', 'Sin facturación', 'Top de clientes aparecerá aquí');
+
     el.innerHTML = `
       <div class="page-header">
         <h1 class="page-title">📊 Dashboard</h1>
@@ -66,6 +81,17 @@ Modulos.dashboard = {
           <div class="card">
             <div class="card-sub mb-4">🧩 Órdenes por estado</div>
             ${dona}
+          </div>
+        </div>
+
+        <div class="dash-charts">
+          <div class="card">
+            <div class="card-sub mb-4">📅 Ingresos por día · este mes</div>
+            ${diario}
+          </div>
+          <div class="card">
+            <div class="card-sub mb-4">🏆 Top clientes · últimos 6 meses</div>
+            ${topCli}
           </div>
         </div>
 
