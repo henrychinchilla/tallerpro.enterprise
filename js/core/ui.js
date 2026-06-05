@@ -27,6 +27,21 @@ const UI = {
     document.getElementById('modal-overlay').classList.remove('open');
   },
 
+  /* Cierre "suave": si hay un formulario en el modal, NO cierra al hacer
+     click afuera ni con Escape — evita perder lo escrito. Para cerrar de
+     verdad se usan los botones Cancelar / ✕ (que llaman a cerrarModal). */
+  intentarCerrarModal() {
+    const body = document.getElementById('modal-body');
+    const tieneForm = body && body.querySelector('input, textarea, select');
+    if (tieneForm) {
+      const box = document.getElementById('modal-box');
+      if (box) { box.classList.remove('modal-shake'); void box.offsetWidth; box.classList.add('modal-shake'); }
+      UI.toast('Guarda o cancela los cambios primero', 'warn');
+      return;
+    }
+    UI.cerrarModal();
+  },
+
   /* ── CONFIRMAR ────────────────────────────────── */
   async confirmar(msg, accion) {
     return new Promise(resolve => {
@@ -103,7 +118,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const overlay = document.getElementById('modal-overlay');
   if (overlay) {
     overlay.addEventListener('click', e => {
-      if (e.target === overlay) UI.cerrarModal();
+      if (e.target === overlay) UI.intentarCerrarModal();
     });
   }
 });

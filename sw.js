@@ -8,7 +8,7 @@
    Para forzar actualización: subir CACHE_VERSION.
 ═══════════════════════════════════════════════════════ */
 
-const CACHE_VERSION = 'v3.0.1-20260605';
+const CACHE_VERSION = 'v3.1.0-20260605';
 const CACHE_NAME = `tallerpro-${CACHE_VERSION}`;
 
 /* App shell — se precachea en install para que funcione offline */
@@ -26,23 +26,23 @@ const PRECACHE = [
   '/js/core/app.js',
   '/js/core/integraciones.js',
   '/js/core/login.js',
-  '/js/modulos/dashboard/index.js',
-  '/js/modulos/clientes/index.js',
-  '/js/modulos/vehiculos/index.js',
-  '/js/modulos/ordenes/index.js',
-  '/js/modulos/inventario/index.js',
-  '/js/modulos/proveedores/index.js',
-  '/js/modulos/bancos/index.js',
-  '/js/modulos/finanzas/index.js',
-  '/js/modulos/facturacion/index.js',
-  '/js/modulos/rrhh/index.js',
-  '/js/modulos/bodegas/index.js',
-  '/js/modulos/marketing/index.js',
-  '/js/modulos/calendario/index.js',
-  '/js/modulos/comunicaciones/index.js',
-  '/js/modulos/configuracion/index.js',
-  '/js/modulos/usuarios/index.js',
-  '/js/modulos/admin/index.js',
+  '/js/modulos/principal/dashboard.js',
+  '/js/modulos/operacion/clientes.js',
+  '/js/modulos/operacion/vehiculos.js',
+  '/js/modulos/operacion/ordenes.js',
+  '/js/modulos/operacion/inventario.js',
+  '/js/modulos/operacion/bodegas.js',
+  '/js/modulos/operacion/proveedores.js',
+  '/js/modulos/finanzas/facturacion.js',
+  '/js/modulos/finanzas/bancos.js',
+  '/js/modulos/finanzas/finanzas.js',
+  '/js/modulos/rrhh/rrhh.js',
+  '/js/modulos/marketing/marketing.js',
+  '/js/modulos/herramientas/calendario.js',
+  '/js/modulos/herramientas/comunicaciones.js',
+  '/js/modulos/admin/configuracion.js',
+  '/js/modulos/admin/usuarios.js',
+  '/js/modulos/admin/admin.js',
   '/icons/icon-192.png',
   '/icons/icon-512.png'
 ];

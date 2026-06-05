@@ -69,24 +69,31 @@
 <script src="js/core/integraciones.js"></script>
 <script src="js/core/login.js"></script>
 
-<!-- MÓDULOS -->
-<script src="js/modulos/dashboard/index.js"></script>
-<script src="js/modulos/clientes/index.js"></script>
-<script src="js/modulos/vehiculos/index.js"></script>
-<script src="js/modulos/ordenes/index.js"></script>
-<script src="js/modulos/inventario/index.js"></script>
-<script src="js/modulos/proveedores/index.js"></script>
-<script src="js/modulos/bancos/index.js"></script>
-<script src="js/modulos/finanzas/index.js"></script>
-<script src="js/modulos/facturacion/index.js"></script>
-<script src="js/modulos/rrhh/index.js"></script>
-<script src="js/modulos/bodegas/index.js"></script>
-<script src="js/modulos/marketing/index.js"></script>
-<script src="js/modulos/calendario/index.js"></script>
-<script src="js/modulos/comunicaciones/index.js"></script>
-<script src="js/modulos/configuracion/index.js"></script>
-<script src="js/modulos/usuarios/index.js"></script>
-<script src="js/modulos/admin/index.js"></script>
+<!-- MÓDULOS (organizados por dominio) -->
+<!-- Principal -->
+<script src="js/modulos/principal/dashboard.js"></script>
+<!-- Operación -->
+<script src="js/modulos/operacion/clientes.js"></script>
+<script src="js/modulos/operacion/vehiculos.js"></script>
+<script src="js/modulos/operacion/ordenes.js"></script>
+<script src="js/modulos/operacion/inventario.js"></script>
+<script src="js/modulos/operacion/bodegas.js"></script>
+<script src="js/modulos/operacion/proveedores.js"></script>
+<!-- Finanzas -->
+<script src="js/modulos/finanzas/facturacion.js"></script>
+<script src="js/modulos/finanzas/bancos.js"></script>
+<script src="js/modulos/finanzas/finanzas.js"></script>
+<!-- RRHH -->
+<script src="js/modulos/rrhh/rrhh.js"></script>
+<!-- Marketing -->
+<script src="js/modulos/marketing/marketing.js"></script>
+<!-- Herramientas -->
+<script src="js/modulos/herramientas/calendario.js"></script>
+<script src="js/modulos/herramientas/comunicaciones.js"></script>
+<!-- Administración -->
+<script src="js/modulos/admin/configuracion.js"></script>
+<script src="js/modulos/admin/usuarios.js"></script>
+<script src="js/modulos/admin/admin.js"></script>
 
 <script>
   /* Iniciar aplicación — login.js maneja la sesión */
@@ -99,7 +106,7 @@
   /* Keyboard shortcuts */
   document.addEventListener('keydown', e => {
     if (e.ctrlKey && e.shiftKey && e.key === 'T') { e.preventDefault(); TEMAS.picker(); }
-    if (e.key === 'Escape') UI.cerrarModal();
+    if (e.key === 'Escape') UI.intentarCerrarModal();
   });
 </script>
 

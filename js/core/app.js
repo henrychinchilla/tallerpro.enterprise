@@ -20,20 +20,29 @@ const App = {
 
   /* ── SIDEBAR ──────────────────────────────────── */
   renderSidebar() {
-    const rol     = Auth.user?.rol || 'recepcionista';
-    const modulos = MODULOS.filter(m => {
+    const rol = Auth.user?.rol || 'recepcionista';
+    const puedeVer = m => {
       if (!Auth.user) return false;
       if (m.id === 'mi_ot') return rol === 'cliente';
       if (rol === 'superadmin' || rol === 'admin') return m.id !== 'mi_ot';
       return tieneAcceso(m.id);
-    });
+    };
 
-    const nav = modulos.map(m => `
+    const itemHtml = m => `
       <li class="nav-item ${App.paginaActual === m.id ? 'active' : ''}"
           onclick="App.navegarA('${m.id}')">
         <span class="nav-icon">${m.icon}</span>
         <span class="nav-label">${m.label}</span>
-      </li>`).join('');
+      </li>`;
+
+    /* Render por grupos, en el orden definido en GRUPOS */
+    const nav = GRUPOS.map(g => {
+      const items = MODULOS.filter(m => m.grupo === g.id && puedeVer(m));
+      if (!items.length) return '';
+      const header = g.label
+        ? `<li class="nav-group-label">${g.label}</li>` : '';
+      return header + items.map(itemHtml).join('');
+    }).join('');
 
     const sidebar = document.getElementById('sidebar');
     if (!sidebar) return;

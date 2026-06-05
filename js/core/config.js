@@ -56,6 +56,19 @@ const MODULOS = [
   { id:'mi_ot',          icon:'🔍', label:'Mis Órdenes',       grupo:'cliente'    }
 ];
 
+/* ── GRUPOS DEL SIDEBAR (orden y encabezados) ─────── */
+/* El orden aquí define el orden del menú. label vacío = sin encabezado. */
+const GRUPOS = [
+  { id:'principal',    label:''               },
+  { id:'operacion',    label:'Operación'      },
+  { id:'finanzas',     label:'Finanzas'       },
+  { id:'rrhh',         label:'RRHH & Nómina'  },
+  { id:'marketing',    label:'Marketing'      },
+  { id:'herramientas', label:'Herramientas'   },
+  { id:'admin',        label:'Administración' },
+  { id:'cliente',      label:''               }
+];
+
 /* ── PERMISOS POR ROL ─────────────────────────────── */
 const PERMISOS = {
   superadmin:   { dashboard:true,  clientes:true,  vehiculos:true,  ordenes:true,  inventario:true,  bodegas:true,  proveedores:true,  facturacion:true,  bancos:true,  finanzas:true,  rrhh:true,  marketing:true,  calendario:true,  comunicaciones:true,  configuracion:true,  usuarios:true,  admin:true,  mi_ot:false },

@@ -111,6 +111,12 @@ body {
   from { transform: scale(0.95); opacity: 0; }
   to   { transform: scale(1);    opacity: 1; }
 }
+@keyframes shake {
+  0%,100% { transform: translateX(0); }
+  20%,60% { transform: translateX(-7px); }
+  40%,80% { transform: translateX(7px); }
+}
+.modal-shake { animation: shake .35s ease; }
 
 /* ── UTILIDADES ──────────────────────────────────── */
 .hidden { display: none !important; }
