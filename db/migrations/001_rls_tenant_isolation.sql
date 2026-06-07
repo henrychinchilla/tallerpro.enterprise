@@ -1,88 +1,85 @@
--- ═══════════════════════════════════════════════════════
+-- ═══════════════════════════════════════════════════════════════
 -- TallerPro Enterprise — Migración 001
--- Aislamiento multi-tenant real con RLS
+-- Aislamiento multi-tenant REAL con RLS (cobertura TOTAL)
+--
+-- APLICADA EN PRODUCCIÓN: 2026-06-07
+--   (Supabase migration `20260607191106_rls_tenant_isolation_full_coverage`)
 --
 -- PROBLEMA QUE RESUELVE:
---   El schema original deja políticas "public_access" USING(true),
---   por lo que cualquiera con la anon key (pública) puede leer/escribir
---   TODOS los datos de TODOS los talleres. Esta migración reemplaza
---   esas políticas por aislamiento estricto por tenant.
+--   El schema original dejaba políticas abiertas (public_access /
+--   allow_all_* / anon_all con USING(true)), por lo que cualquiera con
+--   la anon key (pública) podía leer/escribir TODOS los datos de TODOS
+--   los talleres. Esta migración BORRA todas esas políticas y aplica
+--   aislamiento estricto por tenant en TODA tabla con tenant_id.
+--
+-- ⚠️ Es DINÁMICA a propósito: la base de producción tiene ~40 tablas
+--   (más de las que listaba schema_v3.sql) y varias tenían políticas
+--   abiertas con nombres distintos. El enfoque por catálogo garantiza
+--   que ninguna tabla quede expuesta por un nombre de política olvidado.
 --
 -- EJECUTAR EN: Supabase → SQL Editor → New Query → RUN
 -- REQUISITO: confirmación de email DESACTIVADA (Auth → Providers → Email)
 --            para que el auto-registro funcione (signUp inicia sesión).
 -- Idempotente: se puede correr varias veces sin daño.
--- ═══════════════════════════════════════════════════════
+-- ═══════════════════════════════════════════════════════════════
 
-begin;
-
--- ── 1. FUNCIONES HELPER ────────────────────────────────
--- SECURITY DEFINER → corren con privilegios del dueño y NO disparan
--- RLS, evitando recursión al consultar public.usuarios.
-
+-- ── 1. HELPERS (SECURITY DEFINER → no disparan RLS, sin recursión) ──
 create or replace function public.current_tenant_id()
-returns uuid
-language sql
-stable
-security definer
-set search_path = public
-as $$
+returns uuid language sql stable security definer set search_path = public as $fn$
   select tenant_id from public.usuarios where id = auth.uid()
-$$;
+$fn$;
 
 create or replace function public.is_superadmin()
-returns boolean
-language sql
-stable
-security definer
-set search_path = public
-as $$
-  select coalesce(
-           (select rol = 'superadmin' from public.usuarios where id = auth.uid()),
-           false
-         )
+returns boolean language sql stable security definer set search_path = public as $fn$
+  select coalesce((select rol = 'superadmin' from public.usuarios where id = auth.uid()), false)
          or coalesce(auth.jwt() ->> 'email', '') = 'henry.chinchilla@gmail.com'
-$$;
+$fn$;
 
--- ── 2. POLÍTICAS POR TENANT (tablas estándar con tenant_id) ──
+-- ── 2. BORRAR TODAS LAS POLÍTICAS EXISTENTES EN public ──────────
 do $$
-declare
-  t text;
-  tablas text[] := array[
-    'licencias','config_fiscal','clientes','vehiculos','empleados',
-    'ordenes','inventario','inventario_movimientos','proveedores',
-    'bancos','banco_movimientos','ingresos','egresos','facturas',
-    'pagos_nomina','viaticos','bodegas','combos','promociones','citas'
-  ];
+declare r record;
 begin
-  foreach t in array tablas loop
-    execute format('alter table public.%I enable row level security', t);
-    execute format('drop policy if exists "public_access"    on public.%I', t);
-    execute format('drop policy if exists "tenant_isolation" on public.%I', t);
+  for r in select tablename, policyname from pg_policies where schemaname = 'public'
+  loop
+    execute format('drop policy if exists %I on public.%I', r.policyname, r.tablename);
+  end loop;
+end $$;
+
+-- ── 3. POLÍTICA tenant_isolation EN TODA TABLA CON tenant_id ─────
+--   (excepto usuarios, que tiene política propia abajo)
+do $$
+declare r record;
+begin
+  for r in
+    select c.relname
+    from pg_class c
+    join pg_namespace n on n.oid = c.relnamespace and n.nspname = 'public'
+    where c.relkind = 'r'
+      and c.relname <> 'usuarios'
+      and exists (
+        select 1 from pg_attribute a
+        where a.attrelid = c.oid and a.attname = 'tenant_id' and not a.attisdropped
+      )
+  loop
+    execute format('alter table public.%I enable row level security', r.relname);
     execute format($f$
       create policy "tenant_isolation" on public.%I
         for all to authenticated
         using      (tenant_id = public.current_tenant_id() or public.is_superadmin())
         with check (tenant_id = public.current_tenant_id() or public.is_superadmin())
-    $f$, t);
+    $f$, r.relname);
   end loop;
 end $$;
 
--- ── 3. CASO ESPECIAL: tenants (se identifica por su propio id) ──
+-- ── 4. ESPECIAL: tenants (se identifica por su propio id) ───────
 alter table public.tenants enable row level security;
-drop policy if exists "public_access" on public.tenants;
-drop policy if exists "tenant_self"   on public.tenants;
 create policy "tenant_self" on public.tenants
   for all to authenticated
   using      (id = public.current_tenant_id() or public.is_superadmin())
   with check (id = public.current_tenant_id() or public.is_superadmin());
 
--- ── 4. CASO ESPECIAL: usuarios ─────────────────────────
---   USING:   ver el propio perfil, compañeros del mismo tenant, o superadmin
---   CHECK:   no permitir asignarse un tenant ajeno (escritura solo dentro del tenant)
+-- ── 5. ESPECIAL: usuarios (perfil propio + compañeros del tenant) ─
 alter table public.usuarios enable row level security;
-drop policy if exists "public_access"  on public.usuarios;
-drop policy if exists "usuarios_tenant" on public.usuarios;
 create policy "usuarios_tenant" on public.usuarios
   for all to authenticated
   using      (id = auth.uid()
@@ -91,41 +88,26 @@ create policy "usuarios_tenant" on public.usuarios
   with check (tenant_id = public.current_tenant_id()
               or public.is_superadmin());
 
--- ── 5. CASO ESPECIAL: empleado_documentos (sin tenant_id) ──
---   Se aísla a través de la tabla empleados.
-alter table public.empleado_documentos enable row level security;
-drop policy if exists "public_access"  on public.empleado_documentos;
-drop policy if exists "empdoc_tenant"  on public.empleado_documentos;
-create policy "empdoc_tenant" on public.empleado_documentos
+-- ── 6. ESPECIAL: entradas_detalle (sin tenant_id → vía entrada) ──
+alter table public.entradas_detalle enable row level security;
+create policy "entradas_detalle_tenant" on public.entradas_detalle
   for all to authenticated
   using (
     public.is_superadmin()
-    or empleado_id in (
-      select id from public.empleados where tenant_id = public.current_tenant_id()
-    )
+    or entrada_id in (select id from public.entradas_inventario
+                      where tenant_id = public.current_tenant_id())
   )
   with check (
     public.is_superadmin()
-    or empleado_id in (
-      select id from public.empleados where tenant_id = public.current_tenant_id()
-    )
+    or entrada_id in (select id from public.entradas_inventario
+                      where tenant_id = public.current_tenant_id())
   );
 
--- ── 6. AUTO-REGISTRO DE TALLERES (RPC) ─────────────────
---   El cliente hace auth.signUp() y luego llama a este RPC.
---   SECURITY DEFINER crea tenant + licencia + config + usuario admin
---   de forma atómica y los vincula al auth.uid() recién creado.
+-- ── 7. AUTO-REGISTRO DE TALLERES (RPC SECURITY DEFINER) ─────────
 create or replace function public.registrar_taller(
-  p_nombre_taller text,
-  p_nit           text,
-  p_email         text,
-  p_nombre        text
+  p_nombre_taller text, p_nit text, p_email text, p_nombre text
 )
-returns public.tenants
-language plpgsql
-security definer
-set search_path = public
-as $$
+returns public.tenants language plpgsql security definer set search_path = public as $fn$
 declare
   v_uid    uuid := auth.uid();
   v_slug   text;
@@ -134,8 +116,6 @@ begin
   if v_uid is null then
     raise exception 'No autenticado: inicia sesión antes de registrar el taller';
   end if;
-
-  -- Un usuario que ya pertenece a un taller no puede crear otro
   if exists (select 1 from public.usuarios where id = v_uid) then
     raise exception 'Este usuario ya pertenece a un taller';
   end if;
@@ -157,23 +137,26 @@ begin
   values (v_uid, v_tenant.id, p_nombre, p_email, 'admin', true, '👑');
 
   return v_tenant;
-end $$;
+end $fn$;
 
--- ── 7. PERMISOS DE EJECUCIÓN ───────────────────────────
-grant execute on function public.current_tenant_id()                       to authenticated;
-grant execute on function public.is_superadmin()                           to authenticated;
-grant execute on function public.registrar_taller(text,text,text,text)     to authenticated;
+-- ── 8. PERMISOS ─────────────────────────────────────────────────
+grant execute on function public.current_tenant_id()                   to authenticated;
+grant execute on function public.is_superadmin()                       to authenticated;
+grant execute on function public.registrar_taller(text,text,text,text) to authenticated;
 
--- anon ya no necesita acceso a las tablas (login y registro pasan por
--- el esquema auth y por el RPC). RLS lo bloquearía igualmente al no
--- tener políticas, pero lo revocamos de forma explícita (defensa en profundidad).
+-- anon no necesita acceso a tablas (login/registro van por auth + RPC)
 revoke all on all tables in schema public from anon;
 
-commit;
-
--- ═══════════════════════════════════════════════════════
--- VERIFICACIÓN POST-MIGRACIÓN (correr aparte, debe dar 0 filas):
---   set role anon;
---   select * from public.clientes limit 1;   -- debe fallar / 0 filas
---   reset role;
--- ═══════════════════════════════════════════════════════
+-- ═══════════════════════════════════════════════════════════════
+-- VERIFICACIÓN (correr aparte; debe dar las tres veces lo esperado):
+--   -- A) anon no lee nada:
+--   select has_table_privilege('anon','public.clientes','select');  -- false
+--
+--   -- B) aislamiento cruzado (usuario de otro tenant ve 0):
+--   begin;
+--     select set_config('request.jwt.claims',
+--       '{"sub":"<uuid-usuario>","role":"authenticated","email":"x"}', true);
+--     set local role authenticated;
+--     select count(*) from public.clientes;   -- solo su tenant
+--   rollback;
+-- ═══════════════════════════════════════════════════════════════

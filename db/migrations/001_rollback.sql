@@ -1,41 +1,42 @@
--- ═══════════════════════════════════════════════════════
+-- ═══════════════════════════════════════════════════════════════
 -- ROLLBACK de la Migración 001 (RLS por tenant)
--- Restaura el estado original (acceso abierto). ⚠️ Solo para
--- emergencia: vuelve a dejar los datos sin aislamiento.
+-- Restaura el estado original (ACCESO ABIERTO). ⚠️ SOLO emergencia:
+-- vuelve a dejar TODOS los datos sin aislamiento entre talleres.
 -- EJECUTAR EN: Supabase → SQL Editor → New Query → RUN
--- ═══════════════════════════════════════════════════════
+-- ═══════════════════════════════════════════════════════════════
 
 begin;
 
--- Reponer políticas abiertas en todas las tablas
+-- Reabrir TODA tabla de public: borrar políticas estrictas y reponer
+-- una política abierta (dinámico, cubre las ~40 tablas reales).
 do $$
-declare
-  t text;
-  tablas text[] := array[
-    'tenants','licencias','config_fiscal','usuarios','clientes','vehiculos',
-    'empleados','ordenes','inventario','inventario_movimientos','proveedores',
-    'bancos','banco_movimientos','ingresos','egresos','facturas','pagos_nomina',
-    'viaticos','empleado_documentos','bodegas','combos','promociones','citas'
-  ];
+declare r record;
 begin
-  foreach t in array tablas loop
-    execute format('drop policy if exists "tenant_isolation" on public.%I', t);
-    execute format('drop policy if exists "tenant_self"      on public.%I', t);
-    execute format('drop policy if exists "usuarios_tenant"  on public.%I', t);
-    execute format('drop policy if exists "empdoc_tenant"    on public.%I', t);
-    execute format('drop policy if exists "public_access"    on public.%I', t);
+  -- 1) borrar todas las políticas actuales
+  for r in select tablename, policyname from pg_policies where schemaname='public'
+  loop
+    execute format('drop policy if exists %I on public.%I', r.policyname, r.tablename);
+  end loop;
+  -- 2) reponer public_access abierta en cada tabla
+  for r in
+    select c.relname
+    from pg_class c
+    join pg_namespace n on n.oid = c.relnamespace and n.nspname = 'public'
+    where c.relkind = 'r'
+  loop
+    execute format('alter table public.%I enable row level security', r.relname);
     execute format($f$
       create policy "public_access" on public.%I
         for all to anon, authenticated
         using (true) with check (true)
-    $f$, t);
+    $f$, r.relname);
   end loop;
 end $$;
 
 -- Restaurar grants a anon
 grant all on all tables in schema public to anon;
 
--- Eliminar funciones añadidas
+-- Eliminar funciones añadidas por 001
 drop function if exists public.registrar_taller(text,text,text,text);
 drop function if exists public.current_tenant_id();
 drop function if exists public.is_superadmin();

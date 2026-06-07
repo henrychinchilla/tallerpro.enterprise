@@ -1,5 +1,18 @@
 # Base de datos — Seguridad y migraciones
 
+## ✅ Estado (2026-06-07)
+
+- **Migración 001 (RLS por tenant) — APLICADA** en producción
+  (`20260607191106_rls_tenant_isolation_full_coverage`). Versión integral
+  y dinámica: cubre las ~40 tablas reales, no solo las 23 de `schema_v3.sql`.
+- **Migración 003 (hardening de funciones definer) — APLICADA**
+  (`20260607191426_harden_security_definer_functions`).
+- **Edge Function `crear-usuario` — DESPLEGADA** (v1, `verify_jwt=true`).
+- Verificado: `anon` no lee ninguna tabla; un usuario de un tenant no ve
+  datos de otro; el superadmin ve todo; alta de equipo y registro funcionan.
+- ⏳ **Único paso manual pendiente:** desactivar *"Confirm email"* en
+  Authentication → Providers → Email (necesario para el auto-registro).
+
 ## ⚠️ Por qué existe la migración 001
 
 El `schema_v3.sql` original activaba RLS pero con políticas **abiertas**
@@ -26,9 +39,9 @@ Supabase → **Authentication → Providers → Email** → desactiva
 *"Confirm email"*. El auto-registro hace `signUp()` y necesita que la
 sesión quede activa de inmediato para llamar al RPC.
 
-### 2. Desplegar la Edge Function `crear-usuario`
-La creación de usuarios del equipo ahora pasa por una función con
-service role (el admin nunca pierde su sesión).
+### 2. Desplegar la Edge Function `crear-usuario`  ✅ HECHO
+La creación de usuarios del equipo pasa por una función con service role
+(el admin nunca pierde su sesión). Ya está desplegada. Para redeploy:
 
 ```bash
 npx supabase login
@@ -38,10 +51,10 @@ npx supabase functions deploy crear-usuario
 > `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` y `SUPABASE_ANON_KEY` ya
 > vienen inyectadas por Supabase en el entorno de la función.
 
-### 3. Aplicar la migración SQL
-Supabase → **SQL Editor → New Query** → pega el contenido de
-`db/migrations/001_rls_tenant_isolation.sql` → **RUN**.
-Es idempotente (se puede correr varias veces).
+### 3. Aplicar las migraciones SQL  ✅ HECHO
+Aplicadas `001_rls_tenant_isolation.sql` y `003_harden_definer_functions.sql`.
+Para reaplicar (idempotentes): Supabase → **SQL Editor → New Query** → pega
+el contenido → **RUN**.
 
 ### 4. Publicar el frontend
 `auth.js` ya está adaptado (registro vía RPC, usuarios vía Edge Function).
