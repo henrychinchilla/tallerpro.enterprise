@@ -1,8 +1,34 @@
-# Integraciones — WhatsApp e IA
+# Integraciones — Email, WhatsApp e IA
 
-Ambas integraciones están **listas en código pero apagadas** hasta que
-configures sus credenciales. Sin credenciales, las Edge Functions
-responden `503` y la app sigue funcionando normal.
+Las Edge Functions ya están **DESPLEGADAS** (`email-send`, `whatsapp-send`,
+`ai-assistant`, `crear-usuario`). Solo falta cargar sus **secrets** para
+activarlas; sin secrets responden `503` y la app sigue funcionando normal.
+
+> **Dónde cargar los secrets:** Supabase Dashboard → tu proyecto *tallerpro*
+> → **Project Settings → Edge Functions → Secrets** (o *Functions → Secrets*).
+> Agrega cada variable con su valor. No requiere re-desplegar: las funciones
+> leen los secrets en cada ejecución.
+
+| Integración | Secrets requeridos |
+|---|---|
+| **Email (Resend)** | `RESEND_API_KEY`, `EMAIL_FROM` |
+| **WhatsApp (Meta)** | `WHATSAPP_TOKEN`, `WHATSAPP_PHONE_ID` |
+| **IA (Claude)** | `ANTHROPIC_API_KEY` |
+
+---
+
+## 0) Email — Resend
+
+1. En https://resend.com → **API Keys → Create** → copia `re_...` → secret `RESEND_API_KEY`.
+2. **Domains → Add Domain** → agrega los registros DNS (SPF/DKIM) que te muestra
+   en tu proveedor de dominio → **Verify**.
+3. Secret `EMAIL_FROM` con el formato `Mi Taller <noreply@tudominio.com>`
+   (el dominio debe estar verificado; mientras tanto puedes probar con
+   `onboarding@resend.dev`).
+4. Probar (logueado, consola del navegador):
+   ```js
+   await Email.enviar('tucorreo@gmail.com', 'Prueba', { text: 'Hola desde TallerPro' })
+   ```
 
 Arquitectura: el navegador nunca toca las claves. Llama a una Edge
 Function de Supabase, y la función (con sus secrets) habla con Meta o con
