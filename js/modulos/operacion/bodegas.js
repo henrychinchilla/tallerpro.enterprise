@@ -14,6 +14,8 @@ Modulos.bodegas = {
         <div><h1 class="page-title">🏭 Bodegas</h1>
         <p class="page-subtitle">// ${this._bodegas.length} bodegas/sucursales</p></div>
         <div class="page-actions">
+          <button class="btn btn-ghost" onclick="Modulos.bodegas.exportar()">⬇ CSV</button>
+          <button class="btn btn-ghost" onclick="Modulos.bodegas.importar()">⬆ Importar</button>
           <button class="btn btn-ghost" onclick="window.print()">🖨️ Imprimir</button>
           <button class="btn btn-amber" onclick="Modulos.bodegas.modalBodega()">＋ Nueva Bodega</button>
         </div>
@@ -77,6 +79,7 @@ Modulos.bodegas = {
 
     const totalItems = items?.length || 0;
     const bajoStock  = items?.filter(i=>i.stock<=i.min_stock).length || 0;
+    const verCosto   = puedeVerCosto();
 
     el.innerHTML = `
       <div class="page-header">
@@ -98,7 +101,7 @@ Modulos.bodegas = {
           <table class="data-table" id="bod-inv-table">
             <thead><tr>
               <th>Código</th><th>Artículo</th><th>Categoría</th>
-              <th>Stock</th><th>Mínimo</th><th>Costo</th><th>Venta</th><th>Acciones</th>
+              <th>Stock</th><th>Mínimo</th>${verCosto?'<th>Costo</th>':''}<th>Venta</th><th>Acciones</th>
             </tr></thead>
             <tbody id="bod-inv-tbody">
               ${(items||[]).map(i=>{
@@ -109,14 +112,14 @@ Modulos.bodegas = {
                   <td><span class="badge badge-gray">${i.categoria||'General'}</span></td>
                   <td class="mono-sm ${bajo?'text-red':'text-green'}"><b>${i.stock}</b> ${i.unidad}</td>
                   <td class="mono-sm text-muted">${i.min_stock}</td>
-                  <td class="mono-sm">${UI.q(i.precio_costo)}</td>
+                  ${verCosto?`<td class="mono-sm">${UI.q(i.precio_costo)}</td>`:''}
                   <td class="mono-sm text-amber">${UI.q(i.precio_venta)}</td>
                   <td><div style="display:flex;gap:4px">
                     <button class="btn btn-sm btn-ghost" onclick="Modulos.bodegas.modalMovimiento('${i.id}','${i.nombre}',${i.stock})">± Stock</button>
                     <button class="btn btn-sm btn-ghost" onclick="Modulos.bodegas.modalTraslado('${bodegaId||''}','${nombre}','${i.id}','${i.nombre}')">🔄</button>
                   </div></td>
                 </tr>`;
-              }).join('')||'<tr><td colspan="8" style="text-align:center;padding:24px;color:var(--text3)">Sin artículos en esta bodega</td></tr>'}
+              }).join('')||`<tr><td colspan="${verCosto?8:7}" style="text-align:center;padding:24px;color:var(--text3)">Sin artículos en esta bodega</td></tr>`}
             </tbody>
           </table>
         </div>
@@ -160,8 +163,8 @@ Modulos.bodegas = {
           <input class="form-input" id="bi-min" type="number" value="5" min="0"></div>
       </div>
       <div class="form-row">
-        <div class="form-group"><label class="form-label">Precio Costo (Q)</label>
-          <input class="form-input" id="bi-costo" type="number" value="0" min="0" step="0.01"></div>
+        ${puedeVerCosto()?`<div class="form-group"><label class="form-label">Precio Costo (Q)</label>
+          <input class="form-input" id="bi-costo" type="number" value="0" min="0" step="0.01"></div>`:''}
         <div class="form-group"><label class="form-label">Precio Venta (Q)</label>
           <input class="form-input" id="bi-venta" type="number" value="0" min="0" step="0.01"></div>
       </div>
@@ -174,7 +177,7 @@ Modulos.bodegas = {
   async guardarItem(bodegaId) {
     const nombre = document.getElementById('bi-nombre')?.value.trim();
     if (!nombre) { UI.toast('El nombre es obligatorio','error'); return; }
-    const { error } = await getSB().from('inventario').insert({
+    const payload = {
       tenant_id:    getTID(),
       bodega_id:    bodegaId || null,
       codigo:       document.getElementById('bi-codigo')?.value.trim()||null,
@@ -183,9 +186,12 @@ Modulos.bodegas = {
       unidad:       document.getElementById('bi-unidad')?.value,
       stock:        parseFloat(document.getElementById('bi-stock')?.value)||0,
       min_stock:    parseFloat(document.getElementById('bi-min')?.value)||5,
-      precio_costo: parseFloat(document.getElementById('bi-costo')?.value)||0,
       precio_venta: parseFloat(document.getElementById('bi-venta')?.value)||0
-    });
+    };
+    /* El costo solo se guarda si el usuario puede verlo */
+    const _biCosto = document.getElementById('bi-costo');
+    if (_biCosto) payload.precio_costo = parseFloat(_biCosto.value)||0;
+    const { error } = await getSB().from('inventario').insert(payload);
     if (error) { UI.toast('Error: '+error.message,'error'); return; }
     UI.cerrarModal(); UI.toast('Artículo agregado ✓');
     this.verInventario(bodegaId||null, bodegaId?'Bodega':'Taller Principal');
@@ -408,5 +414,42 @@ Modulos.bodegas = {
     if (error) { UI.toast('Error: '+error.message,'error'); return; }
     UI.cerrarModal(); UI.toast(id?'Bodega actualizada ✓':'Bodega creada ✓');
     this.render();
+  },
+
+  /* ── EXPORTAR BODEGAS (CSV) ────────────────────────── */
+  exportar() {
+    const rows = [['Nombre','Dirección','Responsable','Activa']];
+    this._bodegas.forEach(b => rows.push([
+      b.nombre, b.direccion||'', b.responsable||'', b.activa===false?'No':'Sí'
+    ]));
+    Modulos._descargarCSV(rows, `bodegas-${new Date().toISOString().slice(0,10)}.csv`);
+  },
+
+  /* ── IMPORTAR BODEGAS (CSV) ────────────────────────── */
+  importar() {
+    Modulos._importarCSV(async (filas) => {
+      const norm = s => (s||'').toString().trim().toLowerCase();
+      const head = filas.shift().map(norm);
+      const col = (...n) => head.findIndex(h => n.includes(h));
+      const iNom=col('nombre','bodega','sucursal'), iDir=col('dirección','direccion'),
+            iResp=col('responsable','encargado'), iAct=col('activa','activo','estado');
+      if (iNom < 0) { UI.toast('El CSV debe tener la columna "Nombre"','error'); return; }
+
+      let ok=0, err=0;
+      for (const f of filas) {
+        if (!norm(f[iNom])) continue;
+        const actRaw = iAct>=0 ? norm(f[iAct]) : 'sí';
+        const fields = {
+          nombre:      (f[iNom]||'').trim(),
+          direccion:   iDir>=0 ? (f[iDir]||'').trim()||null : null,
+          responsable: iResp>=0 ? (f[iResp]||'').trim()||null : null,
+          activa:      !['no','false','0','inactiva','inactivo'].includes(actRaw)
+        };
+        const { error } = await DB.upsertBodega(fields);
+        error ? err++ : ok++;
+      }
+      UI.toast(`Importación: ${ok} bodegas${err?`, ${err} con error`:''} ✓`);
+      this.render();
+    });
   }
 };

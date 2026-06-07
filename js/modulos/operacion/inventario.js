@@ -7,6 +7,7 @@ Modulos.inventario = {
     UI.loading(el);
     [this._data, this._bodegas] = await Promise.all([DB.getInventario(busca||null), DB.getBodegas()]);
     const bajoStock = this._data.filter(i=>i.stock<=i.min_stock);
+    const verCosto = puedeVerCosto();
 
     el.innerHTML = `
       <div class="page-header">
@@ -19,6 +20,7 @@ Modulos.inventario = {
             <option value="ok">Stock OK</option>
           </select>
           <button class="btn btn-ghost" onclick="Modulos.inventario.exportar()">⬇ CSV</button>
+          <button class="btn btn-ghost" onclick="Modulos.inventario.importar()">⬆ Importar</button>
           <button class="btn btn-ghost" onclick="window.print()">🖨 Imprimir</button>
           <button class="btn btn-amber" onclick="Modulos.inventario.modalForm()">＋ Nuevo Artículo</button>
         </div>
@@ -28,7 +30,7 @@ Modulos.inventario = {
                value="${busca}" oninput="Modulos.inventario.render(this.value)">
         <div class="table-wrap">
           <table class="data-table">
-            <thead><tr><th>Código</th><th>Artículo</th><th>Categoría</th><th>Stock</th><th>Mín.</th><th>Costo</th><th>Venta</th><th>Acciones</th></tr></thead>
+            <thead><tr><th>Código</th><th>Artículo</th><th>Categoría</th><th>Stock</th><th>Mín.</th>${verCosto?'<th>Costo</th>':''}<th>Venta</th><th>Acciones</th></tr></thead>
             <tbody>
               ${this._data.map(i=>{
                 const bajo = i.stock <= i.min_stock;
@@ -38,7 +40,7 @@ Modulos.inventario = {
                   <td><span class="badge badge-gray">${i.categoria||'General'}</span></td>
                   <td class="mono-sm ${bajo?'text-red':'text-green'}"><b>${i.stock}</b> ${i.unidad}</td>
                   <td class="mono-sm text-muted">${i.min_stock}</td>
-                  <td class="mono-sm">${UI.q(i.precio_costo)}</td>
+                  ${verCosto?`<td class="mono-sm">${UI.q(i.precio_costo)}</td>`:''}
                   <td class="mono-sm text-amber">${UI.q(i.precio_venta)}</td>
                   <td><div style="display:flex;gap:4px">
                     <button class="btn btn-sm btn-cyan" onclick="Modulos.inventario.modalForm('${i.id}')">Editar</button>
@@ -46,7 +48,7 @@ Modulos.inventario = {
                     <button class="btn btn-sm btn-danger" onclick="Modulos.inventario.eliminar('${i.id}','${i.nombre}')">✕</button>
                   </div></td>
                 </tr>`;
-              }).join('')||'<tr><td colspan="8" style="text-align:center;padding:24px;color:var(--text3)">Sin artículos registrados</td></tr>'}
+              }).join('')||`<tr><td colspan="${verCosto?8:7}" style="text-align:center;padding:24px;color:var(--text3)">Sin artículos registrados</td></tr>`}
             </tbody>
           </table>
         </div>
@@ -90,8 +92,8 @@ Modulos.inventario = {
           <input class="form-input" id="inv-min" type="number" value="${item.min_stock||5}" min="0"></div>
       </div>
       <div class="form-row">
-        <div class="form-group"><label class="form-label">Precio Costo (Q)</label>
-          <input class="form-input" id="inv-costo" type="number" value="${item.precio_costo||0}" min="0" step="0.01"></div>
+        ${puedeVerCosto()?`<div class="form-group"><label class="form-label">Precio Costo (Q)</label>
+          <input class="form-input" id="inv-costo" type="number" value="${item.precio_costo||0}" min="0" step="0.01"></div>`:''}
         <div class="form-group"><label class="form-label">Precio Venta (Q)</label>
           <input class="form-input" id="inv-venta" type="number" value="${item.precio_venta||0}" min="0" step="0.01"></div>
       </div>
@@ -117,10 +119,12 @@ Modulos.inventario = {
       bodega_id:    document.getElementById('inv-bodega')?.value||null,
       stock:        parseFloat(document.getElementById('inv-stock')?.value)||0,
       min_stock:    parseFloat(document.getElementById('inv-min')?.value)||5,
-      precio_costo: parseFloat(document.getElementById('inv-costo')?.value)||0,
       precio_venta: parseFloat(document.getElementById('inv-venta')?.value)||0,
       descripcion:  document.getElementById('inv-desc')?.value||null
     };
+    /* El costo solo se toca si el usuario puede verlo (si no, se preserva) */
+    const costoEl = document.getElementById('inv-costo');
+    if (costoEl) fields.precio_costo = parseFloat(costoEl.value)||0;
     if (id) fields.id = id;
     const {error} = await DB.upsertInventario(fields);
     if (error) { UI.toast('Error: '+error.message,'error'); return; }
@@ -185,12 +189,56 @@ Modulos.inventario = {
   },
 
   exportar() {
-    const rows = [['Código','Nombre','Categoría','Stock','Mínimo','Costo','Venta']];
-    this._data.forEach(i=>rows.push([i.codigo||'',i.nombre,i.categoria||'',i.stock,i.min_stock,i.precio_costo,i.precio_venta]));
-    const csv = rows.map(r=>r.join(',')).join('\n');
-    const a = document.createElement('a');
-    a.href = 'data:text/csv;charset=utf-8,'+encodeURIComponent(csv);
-    a.download = `inventario-${new Date().toISOString().slice(0,10)}.csv`;
-    a.click();
+    const verCosto = puedeVerCosto();
+    const head = ['Código','Nombre','Categoría','Marca','Unidad','Stock','Mínimo'];
+    if (verCosto) head.push('Costo');
+    head.push('Venta','Descripción');
+    const rows = [head];
+    this._data.forEach(i=>{
+      const r = [i.codigo||'',i.nombre,i.categoria||'',i.marca||'',i.unidad||'unidad',i.stock,i.min_stock];
+      if (verCosto) r.push(i.precio_costo);
+      r.push(i.precio_venta, i.descripcion||'');
+      rows.push(r);
+    });
+    Modulos._descargarCSV(rows, `inventario-${new Date().toISOString().slice(0,10)}.csv`);
+  },
+
+  /* ── IMPORTAR INVENTARIO (CSV) ─────────────────────── */
+  importar() {
+    Modulos._importarCSV(async (filas) => {
+      /* Mapea encabezados flexibles (acepta export propio o plantilla simple) */
+      const norm = s => (s||'').toString().trim().toLowerCase();
+      const head = filas.shift().map(norm);
+      const col = (...names) => head.findIndex(h => names.includes(h));
+      const iCod=col('código','codigo','sku'), iNom=col('nombre','artículo','articulo'),
+            iCat=col('categoría','categoria'), iMar=col('marca'), iUni=col('unidad'),
+            iStk=col('stock','existencia'), iMin=col('mínimo','minimo','min'),
+            iCos=col('costo','precio costo','precio_costo'), iVen=col('venta','precio venta','precio_venta'),
+            iDes=col('descripción','descripcion');
+      if (iNom < 0) { UI.toast('El CSV debe tener al menos la columna "Nombre"','error'); return; }
+      const verCosto = puedeVerCosto();
+
+      let ok=0, err=0;
+      for (const f of filas) {
+        if (!f.length || !norm(f[iNom])) continue;
+        const fields = {
+          codigo:     iCod>=0 ? (f[iCod]||'').trim()||null : null,
+          nombre:     (f[iNom]||'').trim(),
+          categoria:  iCat>=0 ? (f[iCat]||'').trim()||'General' : 'General',
+          marca:      iMar>=0 ? (f[iMar]||'').trim()||null : null,
+          unidad:     iUni>=0 ? (f[iUni]||'').trim()||'unidad' : 'unidad',
+          stock:      iStk>=0 ? parseFloat(f[iStk])||0 : 0,
+          min_stock:  iMin>=0 ? parseFloat(f[iMin])||5 : 5,
+          precio_venta: iVen>=0 ? parseFloat(f[iVen])||0 : 0,
+          descripcion:  iDes>=0 ? (f[iDes]||'').trim()||null : null
+        };
+        /* Solo quien ve el costo puede importarlo */
+        if (verCosto && iCos>=0) fields.precio_costo = parseFloat(f[iCos])||0;
+        const { error } = await DB.upsertInventario(fields);
+        error ? err++ : ok++;
+      }
+      UI.toast(`Importación: ${ok} creados${err?`, ${err} con error`:''} ✓`);
+      this.render();
+    });
   }
 };

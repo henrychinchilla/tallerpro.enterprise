@@ -233,3 +233,68 @@ const TEMAS = {
 
 /* Namespace de módulos */
 window.Modulos = {};
+
+/* ── Utilidades CSV compartidas (export / import) ──────────────── */
+
+/* Escapa un valor para CSV (comillas, comas, saltos de línea) */
+Modulos._csvCell = function (v) {
+  const s = (v === null || v === undefined) ? '' : String(v);
+  return /[",\n\r]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+};
+
+/* Descarga una matriz [[fila],[fila]] como archivo CSV (con BOM para Excel) */
+Modulos._descargarCSV = function (rows, filename) {
+  const csv = rows.map(r => r.map(Modulos._csvCell).join(',')).join('\r\n');
+  const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+};
+
+/* Parser CSV tolerante (comillas, comas y saltos dentro de celdas) */
+Modulos._parseCSV = function (text) {
+  text = text.replace(/^﻿/, '');           // quitar BOM
+  const rows = []; let row = [], cell = '', q = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (q) {
+      if (c === '"' && text[i + 1] === '"') { cell += '"'; i++; }
+      else if (c === '"') q = false;
+      else cell += c;
+    } else if (c === '"') q = true;
+    else if (c === ',') { row.push(cell); cell = ''; }
+    else if (c === '\n' || c === '\r') {
+      if (c === '\r' && text[i + 1] === '\n') i++;
+      row.push(cell); cell = '';
+      if (row.some(x => x !== '')) rows.push(row);
+      row = [];
+    } else cell += c;
+  }
+  if (cell !== '' || row.length) { row.push(cell); if (row.some(x => x !== '')) rows.push(row); }
+  return rows;
+};
+
+/* Abre un selector de archivo .csv y entrega las filas parseadas al callback */
+Modulos._importarCSV = function (onRows) {
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = '.csv,text/csv';
+  input.onchange = () => {
+    const file = input.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const filas = Modulos._parseCSV(String(reader.result));
+        if (filas.length < 2) { UI.toast('El CSV no tiene datos', 'error'); return; }
+        onRows(filas);
+      } catch (e) {
+        UI.toast('No se pudo leer el CSV: ' + e.message, 'error');
+      }
+    };
+    reader.readAsText(file, 'utf-8');
+  };
+  input.click();
+};

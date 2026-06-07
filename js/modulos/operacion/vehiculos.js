@@ -3,6 +3,28 @@ Modulos.vehiculos = {
   _data: [],
   _clientes: [],
 
+  /* Catálogos sugeridos (editables: el usuario puede escribir uno nuevo) */
+  _tipos: ['Liviano', 'SUV', 'Pesado', 'Motocicleta'],
+  _marcasPorTipo: {
+    'Liviano': ['Toyota','Honda','Nissan','Hyundai','Kia','Mazda','Chevrolet','Volkswagen','Mitsubishi','Suzuki','Ford','Renault','Peugeot','Geely','BYD','Changan'],
+    'SUV': ['Toyota','Honda','Hyundai','Kia','Mazda','Nissan','Mitsubishi','Suzuki','Chevrolet','Ford','Jeep','Subaru','Land Rover','BMW','Mercedes-Benz','Volkswagen','BYD'],
+    'Pesado': ['Hino','Isuzu','Freightliner','International','Volvo','Mercedes-Benz','Scania','Mack','Kenworth','Foton','JAC','Dongfeng','UD Trucks','Iveco'],
+    'Motocicleta': ['Honda','Yamaha','Suzuki','Bajaj','TVS','Italika','Kawasaki','Hero','Genesis','Freedom','Serpento','Daytona','Susuki','Vento']
+  },
+  _colores: ['Blanco','Negro','Gris','Plateado','Rojo','Azul','Azul marino','Celeste','Verde','Beige','Café','Dorado','Amarillo','Naranja','Vino','Turquesa'],
+
+  _opcionesMarca(tipo) {
+    return (this._marcasPorTipo[tipo] || this._marcasPorTipo['Liviano'])
+      .map(m => `<option value="${m}">`).join('');
+  },
+
+  /* Al cambiar el tipo, repuebla las marcas sugeridas sin borrar lo escrito */
+  _onTipoChange() {
+    const tipo = document.getElementById('veh-tipo')?.value;
+    const dl = document.getElementById('marcas-list');
+    if (dl) dl.innerHTML = this._opcionesMarca(tipo);
+  },
+
   async render(clienteId=null) {
     const el = document.getElementById('page-content');
     UI.loading(el);
@@ -27,7 +49,7 @@ Modulos.vehiculos = {
             <tbody>
               ${this._data.map(v=>`<tr>
                 <td class="mono-sm"><b>${v.placa}</b></td>
-                <td>${v.marca} ${v.modelo}<br><small style="color:var(--text3)">${v.anio||''} · ${v.color||''}</small></td>
+                <td>${v.marca} ${v.modelo}<br><small style="color:var(--text3)">${[v.tipo,v.anio,v.color].filter(Boolean).join(' · ')}</small></td>
                 <td>${v.clientes?.nombre||'—'}</td>
                 <td class="mono-sm">${(v.kilometraje||0).toLocaleString()} km</td>
                 <td>${v.motor||'—'}</td>
@@ -60,31 +82,37 @@ Modulos.vehiculos = {
           </select></div>
       </div>
       <div class="form-row">
+        <div class="form-group"><label class="form-label">Tipo *</label>
+          <select class="form-select" id="veh-tipo" onchange="Modulos.vehiculos._onTipoChange()">
+            ${this._tipos.map(t=>`<option ${(v.tipo||'Liviano')===t?'selected':''}>${t}</option>`).join('')}
+          </select></div>
         <div class="form-group"><label class="form-label">Marca *</label>
-          <input class="form-input" id="veh-marca" value="${v.marca||''}" placeholder="Toyota"></div>
+          <input class="form-input" id="veh-marca" list="marcas-list" autocomplete="off" value="${v.marca||''}" placeholder="Escribe o elige...">
+          <datalist id="marcas-list">${this._opcionesMarca(v.tipo||'Liviano')}</datalist></div>
+      </div>
+      <div class="form-row">
         <div class="form-group"><label class="form-label">Modelo *</label>
           <input class="form-input" id="veh-modelo" value="${v.modelo||''}" placeholder="Corolla"></div>
-      </div>
-      <div class="form-row">
         <div class="form-group"><label class="form-label">Año</label>
           <input class="form-input" id="veh-anio" type="number" value="${v.anio||''}" placeholder="2020"></div>
-        <div class="form-group"><label class="form-label">Color</label>
-          <input class="form-input" id="veh-color" value="${v.color||''}"></div>
       </div>
       <div class="form-row">
+        <div class="form-group"><label class="form-label">Color</label>
+          <input class="form-input" id="veh-color" list="colores-list" autocomplete="off" value="${v.color||''}" placeholder="Escribe o elige...">
+          <datalist id="colores-list">${this._colores.map(c=>`<option value="${c}">`).join('')}</datalist></div>
         <div class="form-group"><label class="form-label">Combustible</label>
           <select class="form-select" id="veh-comb">
             ${['Gasolina','Diesel','Híbrido','Eléctrico','GLP'].map(c=>`<option ${v.combustible===c?'selected':''}>${c}</option>`).join('')}
           </select></div>
-        <div class="form-group"><label class="form-label">Kilometraje</label>
-          <input class="form-input" id="veh-km" type="number" value="${v.kilometraje||''}"></div>
       </div>
       <div class="form-row">
+        <div class="form-group"><label class="form-label">Kilometraje</label>
+          <input class="form-input" id="veh-km" type="number" value="${v.kilometraje||''}"></div>
         <div class="form-group"><label class="form-label">Motor</label>
           <input class="form-input" id="veh-motor" value="${v.motor||''}" placeholder="1.8L"></div>
-        <div class="form-group"><label class="form-label">VIN / Chasis</label>
-          <input class="form-input" id="veh-vin" value="${v.vin||''}"></div>
       </div>
+      <div class="form-group"><label class="form-label">VIN / Chasis</label>
+        <input class="form-input" id="veh-vin" value="${v.vin||''}"></div>
       <div class="form-group"><label class="form-label">Notas</label>
         <textarea class="form-input" id="veh-notas" rows="2">${v.notas||''}</textarea></div>
       <div class="modal-footer">
@@ -104,6 +132,7 @@ Modulos.vehiculos = {
 
     const fields = {
       placa, cliente_id:cliente, marca, modelo,
+      tipo:        document.getElementById('veh-tipo')?.value||null,
       anio:        parseInt(document.getElementById('veh-anio')?.value)||null,
       color:       document.getElementById('veh-color')?.value||null,
       combustible: document.getElementById('veh-comb')?.value||null,

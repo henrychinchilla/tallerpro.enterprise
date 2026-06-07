@@ -96,6 +96,13 @@ function tieneAcceso(modulo) {
   return getPermisos()[modulo] === true;
 }
 
+/* ¿Puede ver el PRECIO DE COMPRA (costo)? — secreto del negocio.
+   Solo dueño/administración y gerencia financiera. */
+function puedeVerCosto() {
+  const rol = window.Auth?.user?.rol;
+  return rol === 'superadmin' || rol === 'admin' || rol === 'gerente_fin';
+}
+
 /* ── ESTADOS OT ───────────────────────────────────── */
 const ESTADOS_OT = {
   recibido:    { label:'Recibido',     color:'gray',   pct:10  },
