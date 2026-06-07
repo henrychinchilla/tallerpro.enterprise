@@ -107,6 +107,11 @@ Modulos.usuarios = {
         <div class="form-group"><label class="form-label">Teléfono</label>
           <input class="form-input" id="nu-tel" placeholder="5540-1234"></div>
       </div>
+      <div class="form-group"><label class="form-label">Reporta a (jefe)</label>
+        <select class="form-select" id="nu-jefe">
+          <option value="">— Sin jefe (CEO / Dueño / Gerente General) —</option>
+          ${this._data.map(u=>`<option value="${u.id}">${u.avatar||'👤'} ${u.nombre} — ${ROLES[u.rol]?.label||u.rol}</option>`).join('')}
+        </select></div>
       <div class="form-row">
         <div class="form-group"><label class="form-label">Contraseña Temporal *</label>
           <div style="position:relative">
@@ -152,11 +157,14 @@ Modulos.usuarios = {
     const tel    = document.getElementById('nu-tel')?.value.trim();
     const pass   = document.getElementById('nu-pass')?.value;
     const avatar = document.getElementById('nu-avatar')?.value||'👤';
+    const jefe = document.getElementById('nu-jefe')?.value || null;
     if (!nombre||!email||!rol||!pass) { UI.toast('Completa todos los campos obligatorios','error'); return; }
     if (pass.length<8) { UI.toast('Contraseña mínimo 8 caracteres','error'); return; }
     UI.toast('Creando usuario...','info');
     const r = await Auth.crearUsuario({ nombre, email, rol, telefono:tel, avatar, password:pass });
     if (!r.ok) { UI.toast('Error: '+r.error,'error'); return; }
+    /* Asignar jefe (cadena de mando) tras crear el usuario */
+    if (jefe && r.id) await DB.upsertUsuario({ id:r.id, reporta_a:jefe });
     UI.cerrarModal();
     UI.toast(`✓ Usuario ${nombre} creado — recibirá la contraseña temporal por el medio que indiques`);
     this.render();
@@ -190,6 +198,11 @@ Modulos.usuarios = {
         <div class="form-group"><label class="form-label">Avatar (emoji)</label>
           <input class="form-input" id="eu-avatar" value="${u.avatar||'👤'}" maxlength="2"></div>
       </div>
+      <div class="form-group"><label class="form-label">Reporta a (jefe)</label>
+        <select class="form-select" id="eu-jefe">
+          <option value="">— Sin jefe (CEO / Dueño / Gerente General) —</option>
+          ${this._data.filter(x=>x.id!==u.id).map(x=>`<option value="${x.id}" ${u.reporta_a===x.id?'selected':''}>${x.avatar||'👤'} ${x.nombre} — ${ROLES[x.rol]?.label||x.rol}</option>`).join('')}
+        </select></div>
       <div class="form-group">
         <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
           <input type="checkbox" id="eu-activo" ${u.activo?'checked':''}>
@@ -251,11 +264,13 @@ Modulos.usuarios = {
       if (val !== (base[cb.dataset.mod] || false)) custom[cb.dataset.mod] = val;
     });
 
+    const jefe = document.getElementById('eu-jefe')?.value || null;
     const ok = await DB.upsertUsuario({
       id, nombre, rol,
       telefono:        document.getElementById('eu-tel')?.value || null,
       avatar:          document.getElementById('eu-avatar')?.value || '👤',
       activo:          document.getElementById('eu-activo')?.checked,
+      reporta_a:       jefe !== id ? jefe : null,
       permisos_custom: Object.keys(custom).length ? custom : null,
       updated_at:      new Date().toISOString()
     });

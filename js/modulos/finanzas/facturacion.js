@@ -72,10 +72,11 @@ Modulos.facturacion = {
             ${this._clientes.map(c=>`<option value="${c.id}" ${f.cliente_id===c.id?'selected':''}>${c.nombre} — ${c.nit||'CF'}</option>`).join('')}
           </select></div>
         <div class="form-group"><label class="form-label">Orden de Trabajo</label>
-          <select class="form-select" id="fel-ot">
+          <select class="form-select" id="fel-ot" onchange="Modulos.facturacion._importarDeOT(this.value)">
             <option value="">Sin OT</option>
             ${this._ordenes.filter(o=>o.estado!=='cancelado').map(o=>`<option value="${o.id}" ${f.orden_id===o.id?'selected':''}>${o.num} — ${UI.q(o.total)}</option>`).join('')}
-          </select></div>
+          </select>
+          <div style="font-size:11px;color:var(--text3);margin-top:4px">Al elegir una OT se importan cliente, montos e ítems a cobrar.</div></div>
       </div>
       <div class="form-row">
         <div class="form-group"><label class="form-label">Serie FEL</label>
@@ -126,6 +127,44 @@ Modulos.facturacion = {
     if (error) { UI.toast('Error: '+error.message,'error'); return; }
     UI.cerrarModal(); UI.toast(id?'Factura actualizada ✓':'Factura emitida ✓');
     this.render();
+  },
+
+  /* Importa de una OT todo lo cobrable: cliente, montos (IVA incluido en la
+     OT → se desglosa) y el detalle de ítems hacia las notas. */
+  async _importarDeOT(otId) {
+    if (!otId) return;
+    const iva = Auth.tenant?.tasa_iva || 0.12;
+    const orden = this._ordenes.find(o => o.id === otId);
+
+    /* Cliente desde la OT */
+    if (orden?.cliente_id) {
+      const cliSel = document.getElementById('fel-cli');
+      if (cliSel) cliSel.value = orden.cliente_id;
+    }
+
+    /* Ítems a cobrar */
+    const { data: items } = await getSB().from('ot_items').select('*')
+      .eq('orden_id', otId).order('orden_pos');
+    const itemsList = items || [];
+    const totalConIva = itemsList.reduce((s,i)=>s+(i.total||0), 0) || orden?.total || 0;
+    if (totalConIva <= 0) { UI.toast('La OT no tiene monto a cobrar','info'); return; }
+
+    const sub      = Math.round(totalConIva/(1+iva)*100)/100;
+    const ivaMonto = Math.round((totalConIva - sub)*100)/100;
+
+    const subEl = document.getElementById('fel-sub');
+    const ivaEl = document.getElementById('fel-iva');
+    const totEl = document.getElementById('fel-total');
+    if (subEl) subEl.value = sub.toFixed(2);
+    if (ivaEl) ivaEl.value = ivaMonto.toFixed(2);
+    if (totEl) totEl.value = totalConIva.toFixed(2);
+
+    /* Detalle de ítems en notas (lo que se debe cobrar) */
+    const desc = itemsList.map(i=>`${i.descripcion} (${i.cantidad} x ${UI.q(i.precio_unit)})`).join(' | ');
+    const notasEl = document.getElementById('fel-notas');
+    if (notasEl && desc) notasEl.value = desc.slice(0,500);
+
+    UI.toast(`Importado de ${orden?.num||'OT'}: ${itemsList.length} ítem(s) · ${UI.q(totalConIva)} ✓`);
   },
 
   imprimir(id) {

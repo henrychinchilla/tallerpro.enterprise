@@ -10,6 +10,7 @@ Modulos.rrhh = {
         <div class="tabs">
           <button class="tab-btn ${this._tab==='empleados'?'active':''}" onclick="Modulos.rrhh._tab='empleados';Modulos.rrhh._renderTab()">👤 Empleados</button>
           <button class="tab-btn ${this._tab==='nomina'?'active':''}" onclick="Modulos.rrhh._tab='nomina';Modulos.rrhh._renderTab()">💵 Nómina</button>
+          <button class="tab-btn ${this._tab==='organigrama'?'active':''}" onclick="Modulos.rrhh._tab='organigrama';Modulos.rrhh._renderTab()">🏢 Organigrama</button>
           <button class="tab-btn ${this._tab==='viaticos'?'active':''}" onclick="Modulos.rrhh._tab='viaticos';Modulos.rrhh._renderTab()">🚗 Viáticos</button>
           <button class="tab-btn ${this._tab==='documentos'?'active':''}" onclick="Modulos.rrhh._tab='documentos';Modulos.rrhh._renderTab()">📄 Documentos</button>
         </div>
@@ -86,6 +87,32 @@ Modulos.rrhh = {
         </div>`;
     }
 
+    else if (this._tab==='organigrama') {
+      const ids = new Set(this._empleados.map(e=>e.id));
+      const byParent = {};
+      this._empleados.forEach(e=>{
+        const p = (e.reporta_a && ids.has(e.reporta_a)) ? e.reporta_a : 'root';
+        (byParent[p] = byParent[p] || []).push(e);
+      });
+      const raices = byParent['root'] || [];
+      const visited = new Set();
+      let arbol = raices.map(r=>this._renderNodoOrg(r, byParent, 0, visited)).join('');
+      /* Cualquier nodo no alcanzado (ciclo) se muestra como raíz extra */
+      const sueltos = this._empleados.filter(e=>!visited.has(e.id));
+      arbol += sueltos.map(r=>this._renderNodoOrg(r, byParent, 0, visited)).join('');
+
+      el.innerHTML = `
+        <div class="alert alert-cyan" style="margin-bottom:16px">
+          <div class="alert-icon">🏢</div>
+          <div class="alert-body" style="font-size:12px">
+            Cadena de mando del taller. Asigna el jefe de cada empleado desde
+            <b>Empleados → Editar → Reporta a</b>. La cúpula (CEO/Dueño/Gerente General) aparece arriba sin jefe.
+          </div>
+        </div>
+        ${this._empleados.length ? `<div>${arbol}</div>`
+          : '<div class="text-muted" style="padding:20px">Sin empleados registrados.</div>'}`;
+    }
+
     else if (this._tab==='viaticos') {
       const viaticos = await DB.getViaticos();
       el.innerHTML = `
@@ -125,6 +152,26 @@ Modulos.rrhh = {
             </div>`).join('')||'<div class="text-muted">Sin empleados registrados</div>'}
         </div>`;
     }
+  },
+
+  /* Render recursivo de un nodo del organigrama (con guarda anti-ciclos) */
+  _renderNodoOrg(e, byParent, nivel, visited) {
+    if (visited.has(e.id)) return '';
+    visited.add(e.id);
+    const hijos = byParent[e.id] || [];
+    const dim = e.activo ? '' : 'opacity:.55;';
+    return `
+      <div style="margin-left:${nivel*24}px;${dim}">
+        <div style="display:flex;align-items:center;gap:10px;padding:9px 12px;background:var(--surface2);
+             border-radius:8px;border-left:3px solid ${nivel===0?'var(--amber)':'var(--cyan)'};margin-bottom:6px">
+          <span style="font-size:20px">${e.avatar||'👤'}</span>
+          <div>
+            <div style="font-weight:700;font-size:13px">${e.nombre}${nivel===0?' <span class="badge badge-amber" style="font-size:9px">cúpula</span>':''}</div>
+            <div style="font-size:11px;color:var(--text3)">${e.cargo||ROLES[e.rol]?.label||'—'}${hijos.length?` · ${hijos.length} a cargo`:''}</div>
+          </div>
+        </div>
+        ${hijos.map(h=>this._renderNodoOrg(h, byParent, nivel+1, visited)).join('')}
+      </div>`;
   },
 
   async calcularNomina(mes, anio) {
@@ -209,6 +256,12 @@ Modulos.rrhh = {
             ${['mecanico','recepcionista','gerente_tal','gerente_fin','admin'].map(r=>`<option value="${r}" ${e.rol===r?'selected':''}>${ROLES[r]?.label||r}</option>`).join('')}
           </select></div>
       </div>
+      <div class="form-group"><label class="form-label">Reporta a (jefe directo)</label>
+        <select class="form-select" id="emp-jefe">
+          <option value="">— Sin jefe (CEO / Dueño / Gerente General) —</option>
+          ${this._empleados.filter(x=>x.id!==e.id).map(x=>`<option value="${x.id}" ${e.reporta_a===x.id?'selected':''}>${x.nombre}${x.cargo?` — ${x.cargo}`:''}</option>`).join('')}
+        </select>
+        <div style="font-size:11px;color:var(--text3);margin-top:4px">Define la cadena de mando. Solo la cúpula (CEO/Dueño/Gerente General) queda sin jefe.</div></div>
 
       <!-- SALARIO CON REFERENCIA MINSALARIO 2026 -->
       <div class="card card-amber" style="margin-bottom:12px">
@@ -317,6 +370,8 @@ Modulos.rrhh = {
       emergencia_tel:        document.getElementById('emp-emerg-tel')?.value||null,
       fecha_ingreso:         document.getElementById('emp-ingreso')?.value||null,
       rol:                   document.getElementById('emp-rol')?.value||'mecanico',
+      reporta_a:             (document.getElementById('emp-jefe')?.value && document.getElementById('emp-jefe').value!==id)
+                               ? document.getElementById('emp-jefe').value : null,
       salario_base:          parseFloat(document.getElementById('emp-salario')?.value)||GT.salario_minimo_no_agricola,
       bonificacion:          parseFloat(document.getElementById('emp-bono')?.value)||GT.bonificacion_incentivo,
       banco:                 document.getElementById('emp-banco')?.value||null,
