@@ -60,6 +60,32 @@ const WhatsApp = {
   }
 };
 
+/* ── EMAIL (Resend) ────────────────────────────────── */
+const Email = {
+  /* Envía un correo. Acepta html y/o text. */
+  async enviar(to, subject, { html = null, text = null, referencia_id = null } = {}) {
+    if (!to) return { ok: false, error: 'Sin destinatario' };
+    if (!subject) return { ok: false, error: 'Sin asunto' };
+    return _invocar('email-send', { to, subject, html, text, referencia_id });
+  },
+
+  /* Conveniencia: avisar al cliente que su OT cambió de estado */
+  async notificarEstadoOT(orden, cliente) {
+    const email = cliente?.email;
+    if (!email) return { ok: false, error: 'El cliente no tiene email' };
+    const estado = (ESTADOS_OT[orden.estado]?.label) || orden.estado;
+    const taller = Auth.tenant?.name || 'tu taller';
+    const html =
+      `<div style="font-family:Arial,sans-serif;max-width:520px">` +
+      `<h2 style="color:#d97706">🔧 ${taller}</h2>` +
+      `<p>Hola${cliente.nombre ? ' ' + cliente.nombre : ''},</p>` +
+      `<p>Tu orden <b>${orden.num || ''}</b> cambió a estado: <b>${estado}</b>.</p>` +
+      (orden.saldo ? `<p>Saldo pendiente: <b>${UI.q(orden.saldo)}</b>.</p>` : '') +
+      `<p>¡Gracias por tu preferencia!</p></div>`;
+    return Email.enviar(email, `${taller} — Orden ${orden.num || ''}: ${estado}`, { html, referencia_id: orden.id });
+  }
+};
+
 /* ── IA (Claude) ───────────────────────────────────── */
 const IA = {
   async _pedir(modo, mensaje, contexto = {}) {

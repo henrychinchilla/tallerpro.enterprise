@@ -68,5 +68,7 @@ begin
 end $$;
 
 grant all on public.mensajes, public.ai_conversaciones, public.config_integraciones to authenticated;
+-- defensa en profundidad: anon nunca toca estas tablas
+revoke all on public.mensajes, public.ai_conversaciones, public.config_integraciones from anon;
 
 commit;
