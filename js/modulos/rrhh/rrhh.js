@@ -778,24 +778,109 @@ Modulos.rrhh = {
     UI.cerrarModal(); UI.toast('Criterios actualizados ✓'); this._renderTab();
   },
 
+  _tiposDoc: ['DPI','Pasaporte','Contrato de Trabajo','IGSS','IRTRA','Antecedentes Penales','Antecedentes Policiales','Tarjeta de Salud','Tarjeta de Pulmones','Título Académico','Licencia de Conducir','Otro'],
+  _docFile: null,
+
+  /* Clasifica el estado de vencimiento de un documento */
+  _estadoDoc(doc) {
+    if (!doc) return { color:'gray', txt:'Sin registrar' };
+    if (!doc.fecha_vencimiento) return { color:'green', txt:'Vigente' };
+    const dias = Math.ceil((new Date(doc.fecha_vencimiento) - new Date()) / 86400000);
+    if (dias < 0)  return { color:'red',   txt:`Vencido hace ${Math.abs(dias)} d` };
+    if (dias <= 30) return { color:'amber', txt:`Vence en ${dias} d` };
+    return { color:'green', txt:`Vence ${UI.fecha(doc.fecha_vencimiento)}` };
+  },
+
   async verDocumentos(empId, nombre) {
     const docs = await DB.getDocumentosEmpleado(empId);
-    const TIPOS = ['DPI','Pasaporte','Contrato de Trabajo','IGSS','IRTRA','Antecedentes Penales','Antecedentes Policiales','Título Académico','Carné de Conducir','Otro'];
-    UI.modal(`📄 Documentos — ${nombre}`, `
-      <div style="display:flex;flex-direction:column;gap:8px">
-        ${TIPOS.map(tipo=>{
-          const doc = docs.find(d=>d.tipo===tipo);
-          return `<div style="display:flex;align-items:center;justify-content:space-between;padding:10px;background:var(--surface2);border-radius:8px">
-            <div>
-              <div style="font-weight:700;font-size:13px">${tipo}</div>
-              ${doc?`<div style="font-size:11px;color:var(--text3)">No: ${doc.numero||'—'} · Emitido: ${UI.fecha(doc.fecha_emision)} · Vence: ${doc.fecha_vencimiento?UI.fecha(doc.fecha_vencimiento):'Sin vencimiento'}</div>`:'<div style="font-size:11px;color:var(--text3)">Sin registrar</div>'}
-            </div>
-            <span class="badge badge-${doc?'green':'gray'}">${doc?'✓ OK':'Pendiente'}</span>
-          </div>`;
-        }).join('')}
+    const filas = this._tiposDoc.map(tipo=>{
+      const doc = docs.find(d=>d.tipo===tipo);
+      const st = this._estadoDoc(doc);
+      return `<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px;background:var(--surface2);border-radius:8px">
+        <div style="min-width:0">
+          <div style="font-weight:700;font-size:13px">${tipo} ${doc?.subido?'📎':''}</div>
+          <div style="font-size:11px;color:var(--text3)">${doc ? (doc.notas || (doc.fecha_vencimiento?`Vence: ${UI.fecha(doc.fecha_vencimiento)}`:'Sin fecha de vencimiento')) : 'No registrado'}</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
+          <span class="badge badge-${st.color}">${st.txt}</span>
+          <button class="btn btn-sm btn-cyan" onclick="Modulos.rrhh.modalDocumento('${empId}','${tipo}','${doc?.id||''}')">${doc?'✏️':'＋'}</button>
+          ${doc?Modulos.btnAccion('eliminar', `Modulos.eliminarRegistro('empleado_documentos','${doc.id}','el documento ${tipo}',()=>Modulos.rrhh.verDocumentos('${empId}','${(nombre||'').replace(/'/g,"\\'")}'))`):''}
+        </div>
+      </div>`;
+    }).join('');
+
+    UI.modal(`📄 Expediente — ${nombre}`, `
+      <div class="alert alert-cyan" style="margin-bottom:12px">
+        <div class="alert-icon">📅</div>
+        <div class="alert-body" style="font-size:11px">Define la <b>fecha de vencimiento</b> de cada documento. Los próximos a vencer aparecen en el <b>Calendario</b> para darles seguimiento.</div>
       </div>
+      <div style="display:flex;flex-direction:column;gap:8px">${filas}</div>
       <div class="modal-footer">
         <button class="btn btn-ghost" onclick="UI.cerrarModal()">Cerrar</button>
-      </div>`,'500px');
+      </div>`,'560px');
+  },
+
+  modalDocumento(empId, tipo, docId='') {
+    UI.modal(`📄 ${tipo}`, `
+      <div class="form-group"><label class="form-label">Tipo de documento</label>
+        <input class="form-input" id="doc-tipo" value="${tipo}" ${tipo!=='Otro'?'readonly':''} placeholder="Nombre del documento"></div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Fecha de vencimiento</label>
+          <input class="form-input" id="doc-vence" type="date"></div>
+        <div class="form-group"><label class="form-label">¿Documento entregado?</label>
+          <label style="display:flex;align-items:center;gap:8px;height:40px;padding:0 4px;cursor:pointer">
+            <input type="checkbox" id="doc-subido"><span style="font-size:13px">Sí, en el expediente</span>
+          </label></div>
+      </div>
+      <div class="form-group"><label class="form-label">Adjuntar archivo (opcional)</label>
+        <input class="form-input" type="file" id="doc-file" accept="image/*,application/pdf" onchange="Modulos.rrhh._onDocFile(this)">
+        <div id="doc-file-info" style="font-size:11px;color:var(--text3);margin-top:4px"></div></div>
+      <div class="form-group"><label class="form-label">Notas</label>
+        <textarea class="form-input" id="doc-notas" rows="2" placeholder="No. de documento, observaciones..."></textarea></div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" onclick="UI.cerrarModal()">Cancelar</button>
+        <button class="btn btn-amber" onclick="Modulos.rrhh.guardarDocumento('${empId}','${docId}')">Guardar</button>
+      </div>`);
+    this._docFile = null;
+    /* Precargar datos si el documento existe */
+    if (docId) DB.getDocumentosEmpleado(empId).then(docs=>{
+      const d = docs.find(x=>x.id===docId); if (!d) return;
+      const set=(id,v)=>{const el=document.getElementById(id); if(el)el.value=v;};
+      set('doc-vence', d.fecha_vencimiento||'');
+      set('doc-notas', d.notas||'');
+      const sub=document.getElementById('doc-subido'); if(sub) sub.checked=!!d.subido;
+      if (d.nombre_archivo){ const i=document.getElementById('doc-file-info'); if(i)i.textContent='Archivo actual: '+d.nombre_archivo; }
+    });
+  },
+
+  _onDocFile(input) {
+    const f = input.files?.[0];
+    const info = document.getElementById('doc-file-info');
+    if (!f) { this._docFile = null; return; }
+    if (f.size > 2*1024*1024) { UI.toast('El archivo supera 2MB','error'); input.value=''; return; }
+    const reader = new FileReader();
+    reader.onload = e => { this._docFile = { nombre:f.name, base64:e.target.result }; if(info) info.textContent='✓ '+f.name; };
+    reader.readAsDataURL(f);
+  },
+
+  async guardarDocumento(empId, docId='') {
+    const tipo = document.getElementById('doc-tipo')?.value.trim();
+    if (!tipo) { UI.toast('Indica el tipo de documento','error'); return; }
+    const fields = {
+      empleado_id:       empId,
+      tipo,
+      fecha_vencimiento: document.getElementById('doc-vence')?.value || null,
+      notas:             document.getElementById('doc-notas')?.value || null,
+      subido:            document.getElementById('doc-subido')?.checked || false
+    };
+    if (docId) fields.id = docId;
+    if (this._docFile) { fields.nombre_archivo = this._docFile.nombre; fields.base64 = this._docFile.base64; fields.subido = true; }
+    const { error } = await DB.upsertDocumento(fields);
+    if (error) { UI.toast('Error: '+error.message,'error'); return; }
+    this._docFile = null;
+    UI.cerrarModal(); UI.toast('Documento guardado ✓');
+    /* Reabrir el expediente del empleado */
+    const emp = this._empleados.find(e=>e.id===empId);
+    this.verDocumentos(empId, emp?.nombre||'');
   }
 };

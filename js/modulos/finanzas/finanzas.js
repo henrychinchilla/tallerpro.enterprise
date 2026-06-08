@@ -23,6 +23,7 @@ Modulos.finanzas = {
           <button class="tab-btn ${this._tab==='ingresos'?'active':''}" onclick="Modulos.finanzas._tab='ingresos';Modulos.finanzas._renderTab()">📈 Ingresos</button>
           <button class="tab-btn ${this._tab==='egresos'?'active':''}" onclick="Modulos.finanzas._tab='egresos';Modulos.finanzas._renderTab()">📉 Egresos</button>
           <button class="tab-btn ${this._tab==='viaticos'?'active':''}" onclick="Modulos.finanzas._tab='viaticos';Modulos.finanzas._renderTab()">🚗 Viáticos</button>
+          <button class="tab-btn ${this._tab==='recurrentes'?'active':''}" onclick="Modulos.finanzas._tab='recurrentes';Modulos.finanzas._renderTab()">🔁 Recurrentes</button>
           <button class="tab-btn ${this._tab==='balance'?'active':''}" onclick="Modulos.finanzas._tab='balance';Modulos.finanzas._renderTab()">📋 Estado de Resultados</button>
           <button class="tab-btn ${this._tab==='fiscal'?'active':''}" onclick="Modulos.finanzas._tab='fiscal';Modulos.finanzas._renderTab()">🏛️ Fiscal SAT</button>
         </div>
@@ -169,6 +170,57 @@ Modulos.finanzas = {
         <div class="alert alert-cyan" style="margin-top:12px">
           <div class="alert-icon">ℹ️</div>
           <div class="alert-body" style="font-size:12px">Al <b>aprobar</b> un viático se registra automáticamente como egreso en la categoría <b>Viáticos</b>.</div>
+        </div>`;
+    }
+
+    else if (this._tab==='recurrentes') {
+      const recs = await DB.getEgresosRecurrentes();
+      const now = new Date();
+      const mesActualKey = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-01`;
+      const nombreMes = now.toLocaleDateString('es-GT',{month:'long',year:'numeric'});
+      const activos = recs.filter(r=>r.activo);
+      const totalMensual = activos.filter(r=>r.frecuencia==='mensual').reduce((s,r)=>s+(r.monto||0),0);
+      const pendientes = activos.filter(r => (r.ultima_generacion||'') < mesActualKey);
+      const FREQ = { mensual:'Mensual', bimestral:'Bimestral', trimestral:'Trimestral', anual:'Anual' };
+      el.innerHTML = `
+        <div class="kpi-grid" style="margin-bottom:16px">
+          <div class="kpi-card"><div class="kpi-label">Gastos Recurrentes</div><div class="kpi-val cyan">${activos.length}</div><div class="kpi-trend">activos</div></div>
+          <div class="kpi-card"><div class="kpi-label">Total Mensual</div><div class="kpi-val red">${UI.q(totalMensual)}</div><div class="kpi-trend">compromiso fijo/mes</div></div>
+          <div class="kpi-card"><div class="kpi-label">Pendientes de ${nombreMes}</div><div class="kpi-val amber">${pendientes.length}</div><div class="kpi-trend">por generar</div></div>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;gap:8px;flex-wrap:wrap">
+          <div style="font-size:12px;color:var(--text3)">Renta, energía, teléfono, internet, nómina... se cargan como egreso cada período.</div>
+          <div style="display:flex;gap:8px">
+            ${pendientes.length?`<button class="btn btn-green" onclick="Modulos.finanzas.generarRecurrentesPendientes()">⚡ Generar pendientes del mes (${pendientes.length})</button>`:''}
+            <button class="btn btn-amber" onclick="Modulos.finanzas.modalRecurrente()">＋ Nuevo Recurrente</button>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead><tr><th>Concepto</th><th>Categoría</th><th>Frecuencia</th><th>Día</th><th>Monto</th><th>Estado mes</th><th>Acciones</th></tr></thead>
+            <tbody>
+              ${recs.map(r=>{
+                const generadoEsteMes = (r.ultima_generacion||'') >= mesActualKey;
+                return `<tr style="${r.activo?'':'opacity:.5'}">
+                  <td style="font-weight:700">${r.concepto}</td>
+                  <td><span class="badge badge-gray">${r.categoria||'—'}</span></td>
+                  <td>${FREQ[r.frecuencia]||r.frecuencia}</td>
+                  <td class="mono-sm" style="text-align:center">${r.dia_mes||1}</td>
+                  <td class="mono-sm text-red">${UI.q(r.monto)}</td>
+                  <td>${r.activo?`<span class="badge badge-${generadoEsteMes?'green':'amber'}">${generadoEsteMes?'Generado':'Pendiente'}</span>`:'<span class="badge badge-gray">Inactivo</span>'}</td>
+                  <td><div style="display:flex;gap:4px">
+                    ${(r.activo && !generadoEsteMes)?`<button class="btn btn-sm btn-green" onclick="Modulos.finanzas.generarRecurrente('${r.id}')" title="Generar egreso de este mes">⚡ Generar</button>`:''}
+                    ${Modulos.btnAccion('editar', `Modulos.finanzas.modalRecurrente('${r.id}')`)}
+                    ${Modulos.btnAccion('eliminar', `Modulos.eliminarRegistro('egresos_recurrentes','${r.id}','${(r.concepto||'').replace(/'/g,"\\'")}',()=>Modulos.finanzas._renderTab())`)}
+                  </div></td>
+                </tr>`;
+              }).join('')||'<tr><td colspan="7" style="text-align:center;padding:24px;color:var(--text3)">Sin gastos recurrentes. Crea el primero con “＋ Nuevo Recurrente”.</td></tr>'}
+            </tbody>
+          </table>
+        </div>
+        <div class="alert alert-cyan" style="margin-top:12px">
+          <div class="alert-icon">ℹ️</div>
+          <div class="alert-body" style="font-size:12px">Al <b>generar</b>, el gasto se registra como egreso del período (categoría correspondiente) y no se duplica si ya fue generado.</div>
         </div>`;
     }
 
@@ -493,6 +545,100 @@ Modulos.finanzas = {
       referencia: v.referencia || `VIA-${id.slice(0,8)}`
     });
     UI.toast('Viático aprobado y cargado a egresos ✓');
+    this._renderTab();
+  },
+
+  /* ── EGRESOS RECURRENTES ──────────────────────── */
+  async modalRecurrente(id=null) {
+    const recs = await DB.getEgresosRecurrentes();
+    const r = id ? recs.find(x=>x.id===id)||{} : {};
+    const esEdicion = !!id;
+    UI.modal(`${esEdicion?'✏️ Editar':'＋ Nuevo'} Gasto Recurrente`, `
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Concepto *</label>
+          <input class="form-input" id="rec-concepto" value="${r.concepto||''}" placeholder="Renta del local / Energía eléctrica"></div>
+        <div class="form-group"><label class="form-label">Categoría</label>
+          <select class="form-select" id="rec-cat">
+            ${['Renta','Servicios','Combustible','Nómina','Impuestos','Internet/Teléfono','Mantenimiento','Otro'].map(c=>`<option ${r.categoria===c?'selected':''}>${c}</option>`).join('')}
+          </select></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Monto (Q) *</label>
+          <input class="form-input" id="rec-monto" type="number" min="0" step="0.01" value="${r.monto||''}"></div>
+        <div class="form-group"><label class="form-label">Frecuencia</label>
+          <select class="form-select" id="rec-freq">
+            ${[['mensual','Mensual'],['bimestral','Bimestral'],['trimestral','Trimestral'],['anual','Anual']].map(([v,l])=>`<option value="${v}" ${(r.frecuencia||'mensual')===v?'selected':''}>${l}</option>`).join('')}
+          </select></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Día de pago/vencimiento</label>
+          <input class="form-input" id="rec-dia" type="number" min="1" max="31" value="${r.dia_mes||1}"></div>
+        <div class="form-group"><label class="form-label">Método de pago</label>
+          <select class="form-select" id="rec-metodo">
+            ${['Transferencia','Efectivo','Cheque','Tarjeta','Débito automático'].map(m=>`<option ${r.metodo_pago===m?'selected':''}>${m}</option>`).join('')}
+          </select></div>
+      </div>
+      <div class="form-group"><label class="form-label">Proveedor / Acreedor</label>
+        <input class="form-input" id="rec-prov" value="${r.proveedor||''}" placeholder="Empresa Eléctrica / Arrendante"></div>
+      <div class="form-group"><label class="form-label">Notas</label>
+        <textarea class="form-input" id="rec-notas" rows="2">${r.notas||''}</textarea></div>
+      ${esEdicion?`<div class="form-group">
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+          <input type="checkbox" id="rec-activo" ${r.activo!==false?'checked':''}>
+          <span class="form-label" style="margin:0">Activo (se genera cada período)</span>
+        </label></div>`:''}
+      <div class="modal-footer">
+        <button class="btn btn-ghost" onclick="UI.cerrarModal()">Cancelar</button>
+        <button class="btn btn-amber" onclick="Modulos.finanzas.guardarRecurrente('${id||''}')">${esEdicion?'Guardar Cambios':'Crear'}</button>
+      </div>`);
+  },
+
+  async guardarRecurrente(id='') {
+    const concepto = document.getElementById('rec-concepto')?.value.trim();
+    const monto = parseFloat(document.getElementById('rec-monto')?.value)||0;
+    if (!concepto||monto<=0) { UI.toast('Concepto y monto son obligatorios','error'); return; }
+    const fields = {
+      concepto, monto,
+      categoria:   document.getElementById('rec-cat')?.value,
+      frecuencia:  document.getElementById('rec-freq')?.value||'mensual',
+      dia_mes:     parseInt(document.getElementById('rec-dia')?.value)||1,
+      metodo_pago: document.getElementById('rec-metodo')?.value||null,
+      proveedor:   document.getElementById('rec-prov')?.value||null,
+      notas:       document.getElementById('rec-notas')?.value||null,
+      activo:      id ? (document.getElementById('rec-activo')?.checked ?? true) : true
+    };
+    if (id) fields.id = id;
+    const { error } = await DB.upsertEgresoRecurrente(fields);
+    if (error) { UI.toast('Error: '+error.message,'error'); return; }
+    UI.cerrarModal(); UI.toast(id?'Recurrente actualizado ✓':'Recurrente creado ✓');
+    this._tab='recurrentes'; this._renderTab();
+  },
+
+  async generarRecurrente(id) {
+    const recs = await DB.getEgresosRecurrentes();
+    const r = recs.find(x=>x.id===id);
+    if (!r) return;
+    const now = new Date();
+    const res = await DB.generarEgresoRecurrente(r, now.getMonth()+1, now.getFullYear());
+    if (!res.ok) { UI.toast('Error: '+res.error,'error'); return; }
+    UI.toast(res.yaExistia ? 'Ya estaba generado este mes' : `Egreso de "${r.concepto}" generado ✓`);
+    this._renderTab();
+  },
+
+  async generarRecurrentesPendientes() {
+    const recs = await DB.getEgresosRecurrentes();
+    const now = new Date();
+    const mesKey = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-01`;
+    const pend = recs.filter(r => r.activo && (r.ultima_generacion||'') < mesKey);
+    if (!pend.length) { UI.toast('No hay recurrentes pendientes','info'); return; }
+    const ok = await UI.confirmar(`¿Generar <b>${pend.length}</b> egreso(s) recurrente(s) de este mes?`, 'Generar');
+    if (!ok) return;
+    let n = 0;
+    for (const r of pend) {
+      const res = await DB.generarEgresoRecurrente(r, now.getMonth()+1, now.getFullYear());
+      if (res.ok && !res.yaExistia) n++;
+    }
+    UI.toast(`${n} egreso(s) recurrente(s) generado(s) ✓`);
     this._renderTab();
   }
 };

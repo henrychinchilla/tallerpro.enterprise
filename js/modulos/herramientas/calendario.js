@@ -8,8 +8,10 @@ Modulos.calendario = {
     const hoy = new Date();
     const ini = new Date(hoy.getFullYear(), hoy.getMonth(), 1).toISOString();
     const fin = new Date(hoy.getFullYear(), hoy.getMonth()+2, 0).toISOString();
-    [this._citas, this._clientes, this._vehiculos, this._empleados] = await Promise.all([
-      DB.getCitas(ini.slice(0,10), fin.slice(0,10)), DB.getClientes(), DB.getVehiculos(), DB.getEmpleados()
+    let vencDocs = [], recurrentes = [];
+    [this._citas, this._clientes, this._vehiculos, this._empleados, vencDocs, recurrentes] = await Promise.all([
+      DB.getCitas(ini.slice(0,10), fin.slice(0,10)), DB.getClientes(), DB.getVehiculos(), DB.getEmpleados(),
+      DB.getVencimientosDocumentos(60).catch(()=>[]), DB.getEgresosRecurrentes().catch(()=>[])
     ]);
 
     const hoyStr = hoy.toISOString().slice(0,10);
@@ -31,10 +33,11 @@ Modulos.calendario = {
               <div class="card-sub mb-3">📅 Hoy — ${hoy.toLocaleDateString('es-GT',{weekday:'long',day:'numeric',month:'long'})}</div>
               ${citasHoy.length ? citasHoy.map(c=>this._renderCitaCard(c)).join('') : '<div class="text-muted">Sin citas para hoy</div>'}
             </div>
-            <div class="card">
+            <div class="card" style="margin-bottom:16px">
               <div class="card-sub mb-3">⏭️ Próximas Citas</div>
               ${citasProx.length ? citasProx.map(c=>this._renderCitaCard(c)).join('') : '<div class="text-muted">Sin citas próximas</div>'}
             </div>
+            ${this._renderSeguimiento(vencDocs, recurrentes, hoyStr)}
           </div>
           <div class="card">
             <div class="card-sub mb-3">📋 Todas las Citas del Mes</div>
@@ -44,6 +47,33 @@ Modulos.calendario = {
           </div>
         </div>
       </div>`;
+  },
+
+  /* Panel de seguimiento: documentos por vencer + recurrentes pendientes */
+  _renderSeguimiento(vencDocs, recurrentes, hoyStr) {
+    const mesKey = hoyStr.slice(0,7)+'-01';
+    const recPend = (recurrentes||[]).filter(r => r.activo && (r.ultima_generacion||'') < mesKey);
+    if (!vencDocs.length && !recPend.length) return '';
+    const docItem = d => {
+      const dias = Math.ceil((new Date(d.fecha_vencimiento) - new Date()) / 86400000);
+      const color = dias < 0 ? 'red' : dias <= 30 ? 'amber' : 'cyan';
+      const txt = dias < 0 ? `vencido hace ${Math.abs(dias)} d` : `en ${dias} d`;
+      return `<div style="display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid var(--border);font-size:12px">
+        <div><b>${d.tipo}</b> · <span class="text-muted">${d.empleados?.nombre||''}</span></div>
+        <span class="badge badge-${color}">${UI.fecha(d.fecha_vencimiento)} · ${txt}</span>
+      </div>`;
+    };
+    return `<div class="card">
+      <div class="card-sub mb-3">🔔 Seguimiento</div>
+      ${vencDocs.length?`<div style="font-size:11px;color:var(--text3);font-weight:700;text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px">📄 Documentos por vencer</div>
+        ${vencDocs.slice(0,8).map(docItem).join('')}`:''}
+      ${recPend.length?`<div style="font-size:11px;color:var(--text3);font-weight:700;text-transform:uppercase;letter-spacing:.06em;margin:10px 0 4px">🔁 Gastos recurrentes pendientes</div>
+        ${recPend.map(r=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid var(--border);font-size:12px">
+          <div><b>${r.concepto}</b> <span class="text-muted">· día ${r.dia_mes||1}</span></div>
+          <span class="text-red mono-sm">${UI.q(r.monto)}</span>
+        </div>`).join('')}
+        <div style="margin-top:8px"><button class="btn btn-ghost btn-sm" onclick="Modulos.finanzas._tab='recurrentes';App.navegarA('finanzas')">Ir a Recurrentes →</button></div>`:''}
+    </div>`;
   },
 
   _renderCitaCard(c, conFecha=false) {

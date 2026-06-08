@@ -325,6 +325,62 @@ const DB = {
     return { data, error };
   },
 
+  /* ── EGRESOS RECURRENTES (gastos programados) ─── */
+  async getEgresosRecurrentes() {
+    const { data } = await getSB().from('egresos_recurrentes').select('*')
+      .eq('tenant_id', getTID()).order('dia_mes');
+    return data || [];
+  },
+
+  async upsertEgresoRecurrente(fields) {
+    const payload = { ...fields, tenant_id: getTID(), updated_at: new Date().toISOString() };
+    if (fields.id) {
+      const { error } = await getSB().from('egresos_recurrentes').update(payload).eq('id', fields.id);
+      return { error };
+    }
+    const { data, error } = await getSB().from('egresos_recurrentes').insert(payload).select().single();
+    return { data, error };
+  },
+
+  /* Genera el egreso de un recurrente para un período (mes/anio) si no existe.
+     Devuelve {ok, yaExistia}. Marca ultima_generacion. */
+  async generarEgresoRecurrente(rec, mes, anio) {
+    const periodo = `${anio}-${String(mes).padStart(2,'0')}`;
+    const referencia = `REC-${rec.id.slice(0,8)}-${periodo}`;
+    /* ¿Ya se generó este período? */
+    const { data: existe } = await getSB().from('egresos')
+      .select('id').eq('tenant_id', getTID()).eq('referencia', referencia).limit(1);
+    if (existe?.length) return { ok:true, yaExistia:true };
+    const dia = Math.min(Math.max(1, rec.dia_mes||1), new Date(anio, mes, 0).getDate());
+    const fecha = `${periodo}-${String(dia).padStart(2,'0')}`;
+    const { error } = await getSB().from('egresos').insert({
+      tenant_id: getTID(),
+      concepto:  rec.concepto, categoria: rec.categoria || 'Servicios',
+      monto:     rec.monto || 0, fecha,
+      metodo_pago: rec.metodo_pago || null, proveedor: rec.proveedor || null,
+      referencia, notas: `Gasto recurrente${rec.notas?` — ${rec.notas}`:''}`
+    });
+    if (error) return { ok:false, error: error.message };
+    await getSB().from('egresos_recurrentes')
+      .update({ ultima_generacion: `${periodo}-01`, updated_at: new Date().toISOString() })
+      .eq('id', rec.id);
+    return { ok:true, yaExistia:false };
+  },
+
+  /* Documentos de empleados próximos a vencer (o vencidos) para seguimiento */
+  async getVencimientosDocumentos(diasAdelante = 60) {
+    const hoy = new Date();
+    const limite = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate() + diasAdelante)
+      .toISOString().slice(0,10);
+    const { data } = await getSB().from('empleado_documentos')
+      .select('*, empleados(nombre)')
+      .eq('tenant_id', getTID())
+      .not('fecha_vencimiento','is', null)
+      .lte('fecha_vencimiento', limite)
+      .order('fecha_vencimiento');
+    return data || [];
+  },
+
   async deleteRegistro(tabla, id) {
     const { error } = await getSB().from(tabla).delete().eq('id', id).eq('tenant_id', getTID());
     return !error;
@@ -496,13 +552,20 @@ const DB = {
   },
 
   async upsertDocumento(fields) {
-    const { data: existing } = await getSB().from('empleado_documentos')
-      .select('id').eq('empleado_id', fields.empleado_id).eq('tipo', fields.tipo).maybeSingle();
-    if (existing?.id) {
-      const { error } = await getSB().from('empleado_documentos').update(fields).eq('id', existing.id);
+    const payload = { ...fields, tenant_id: getTID() };
+    if (fields.id) {
+      const { error } = await getSB().from('empleado_documentos').update(payload).eq('id', fields.id);
       return { error };
     }
-    const { data, error } = await getSB().from('empleado_documentos').insert(fields).select().single();
+    /* Buscar por empleado+tipo para no duplicar */
+    const { data: existing } = await getSB().from('empleado_documentos')
+      .select('id').eq('tenant_id', getTID())
+      .eq('empleado_id', fields.empleado_id).eq('tipo', fields.tipo).maybeSingle();
+    if (existing?.id) {
+      const { error } = await getSB().from('empleado_documentos').update(payload).eq('id', existing.id);
+      return { error };
+    }
+    const { data, error } = await getSB().from('empleado_documentos').insert(payload).select().single();
     return { data, error };
   },
 
