@@ -156,10 +156,15 @@ Deno.serve(async (req) => {
   const admin = createClient(url, serviceKey);
   const { data: perfil } = await admin.from("usuarios")
     .select("tenant_id, rol").eq("id", userData.user.id).maybeSingle();
-  const tenantId = (perfil as any)?.tenant_id;
+  let tenantId = (perfil as any)?.tenant_id;
   const rol = (perfil as any)?.rol;
   const elevado = userData.user.email === "henry.chinchilla@gmail.com" ||
     ["superadmin", "admin", "gerente_fin", "gerente_tal"].includes(rol);
+
+  if (!tenantId && elevado) {
+    const { data: t } = await admin.from("tenants").select("id").limit(1).maybeSingle();
+    tenantId = t?.id;
+  }
 
   // ── Payload ──
   let body: any;
