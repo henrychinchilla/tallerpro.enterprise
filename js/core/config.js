@@ -43,6 +43,7 @@ const MODULOS = [
   { id:'inventario',     icon:'📦', label:'Inventario',        grupo:'operacion'  },
   { id:'bodegas',        icon:'🏭', label:'Bodegas',           grupo:'operacion'  },
   { id:'proveedores',    icon:'🏪', label:'Proveedores',       grupo:'operacion'  },
+  { id:'activos',        icon:'🛠️', label:'Herramientas y Activos', grupo:'operacion' },
   { id:'facturacion',    icon:'🧾', label:'Facturación FEL',   grupo:'finanzas'   },
   { id:'bancos',         icon:'🏦', label:'Bancos',            grupo:'finanzas'   },
   { id:'finanzas',       icon:'💰', label:'Finanzas',          grupo:'finanzas'   },
@@ -78,13 +79,13 @@ const GRUPOS = [
 
 /* ── PERMISOS POR ROL ─────────────────────────────── */
 const PERMISOS = {
-  superadmin:   { dashboard:true,  clientes:true,  vehiculos:true,  ordenes:true,  inventario:true,  bodegas:true,  proveedores:true,  facturacion:true,  bancos:true,  finanzas:true,  rrhh:true,  marketing:true,  calendario:true,  comunicaciones:true,  configuracion:true,  usuarios:true,  admin:true,  mi_ot:false },
-  admin:        { dashboard:true,  clientes:true,  vehiculos:true,  ordenes:true,  inventario:true,  bodegas:true,  proveedores:true,  facturacion:true,  bancos:true,  finanzas:true,  rrhh:true,  marketing:true,  calendario:true,  comunicaciones:true,  configuracion:true,  usuarios:true,  admin:true,  mi_ot:false },
-  gerente_tal:  { dashboard:true,  clientes:true,  vehiculos:true,  ordenes:true,  inventario:true,  bodegas:true,  proveedores:true,  facturacion:false, bancos:false, finanzas:false, rrhh:true,  marketing:true,  calendario:true,  comunicaciones:true,  configuracion:false, usuarios:false, admin:false, mi_ot:false },
-  gerente_fin:  { dashboard:true,  clientes:false, vehiculos:false, ordenes:false, inventario:false, bodegas:false, proveedores:true,  facturacion:true,  bancos:true,  finanzas:true,  rrhh:true,  marketing:false, calendario:false, comunicaciones:true,  configuracion:false, usuarios:false, admin:false, mi_ot:false },
-  recepcionista:{ dashboard:true,  clientes:true,  vehiculos:true,  ordenes:true,  inventario:false, bodegas:false, proveedores:false, facturacion:true,  bancos:false, finanzas:false, rrhh:false, marketing:false, calendario:true,  comunicaciones:false, configuracion:false, usuarios:false, admin:false, mi_ot:false },
-  mecanico:     { dashboard:true,  clientes:false, vehiculos:true,  ordenes:true,  inventario:true,  bodegas:true,  proveedores:false, facturacion:false, bancos:false, finanzas:false, rrhh:false, marketing:false, calendario:true,  comunicaciones:false, configuracion:false, usuarios:false, admin:false, mi_ot:false },
-  cliente:      { dashboard:false, clientes:false, vehiculos:false, ordenes:false, inventario:false, bodegas:false, proveedores:false, facturacion:false, bancos:false, finanzas:false, rrhh:false, marketing:false, calendario:false, comunicaciones:false, configuracion:false, usuarios:false, admin:false, mi_ot:true  }
+  superadmin:   { dashboard:true,  clientes:true,  vehiculos:true,  ordenes:true,  inventario:true,  bodegas:true,  proveedores:true,  activos:true,  facturacion:true,  bancos:true,  finanzas:true,  rrhh:true,  marketing:true,  calendario:true,  comunicaciones:true,  configuracion:true,  usuarios:true,  admin:true,  mi_ot:false },
+  admin:        { dashboard:true,  clientes:true,  vehiculos:true,  ordenes:true,  inventario:true,  bodegas:true,  proveedores:true,  activos:true,  facturacion:true,  bancos:true,  finanzas:true,  rrhh:true,  marketing:true,  calendario:true,  comunicaciones:true,  configuracion:true,  usuarios:true,  admin:true,  mi_ot:false },
+  gerente_tal:  { dashboard:true,  clientes:true,  vehiculos:true,  ordenes:true,  inventario:true,  bodegas:true,  proveedores:true,  activos:true,  facturacion:false, bancos:false, finanzas:false, rrhh:true,  marketing:true,  calendario:true,  comunicaciones:true,  configuracion:false, usuarios:false, admin:false, mi_ot:false },
+  gerente_fin:  { dashboard:true,  clientes:false, vehiculos:false, ordenes:false, inventario:false, bodegas:false, proveedores:true,  activos:true,  facturacion:true,  bancos:true,  finanzas:true,  rrhh:true,  marketing:false, calendario:false, comunicaciones:true,  configuracion:false, usuarios:false, admin:false, mi_ot:false },
+  recepcionista:{ dashboard:true,  clientes:true,  vehiculos:true,  ordenes:true,  inventario:false, bodegas:false, proveedores:false, activos:false, facturacion:true,  bancos:false, finanzas:false, rrhh:false, marketing:false, calendario:true,  comunicaciones:false, configuracion:false, usuarios:false, admin:false, mi_ot:false },
+  mecanico:     { dashboard:true,  clientes:false, vehiculos:true,  ordenes:true,  inventario:true,  bodegas:true,  proveedores:false, activos:false, facturacion:false, bancos:false, finanzas:false, rrhh:false, marketing:false, calendario:true,  comunicaciones:false, configuracion:false, usuarios:false, admin:false, mi_ot:false },
+  cliente:      { dashboard:false, clientes:false, vehiculos:false, ordenes:false, inventario:false, bodegas:false, proveedores:false, activos:false, facturacion:false, bancos:false, finanzas:false, rrhh:false, marketing:false, calendario:false, comunicaciones:false, configuracion:false, usuarios:false, admin:false, mi_ot:true  }
 };
 
 /* ── FUNCIONES DE PERMISOS ────────────────────────── */
@@ -191,6 +192,62 @@ function calcularHoraHombre(salarioBase, cfg = PRODUCTIVIDAD_DEFAULTS) {
     horaHombre: horas>0 ? costoMensual/horas : 0
   };
 }
+
+/* ── DEPRECIACIÓN DE ACTIVOS (línea recta) ─────────── */
+function _mesIdx(fechaStr) {
+  if (!fechaStr) return null;
+  const [y, m] = String(fechaStr).slice(0,10).split('-').map(Number);
+  return y*12 + (m-1);
+}
+
+/* Depreciación mensual de un activo (línea recta) */
+function depMensual(a) {
+  const base = Math.max(0, (Number(a.costo)||0) - (Number(a.valor_residual)||0));
+  const meses = Number(a.vida_util_meses)||0;
+  if (meses<=0 || a.metodo==='no_deprecia') return 0;
+  return base/meses;
+}
+
+/* Gasto por depreciación de un activo dentro de un rango [ini,fin] (inclusive) */
+function depEnRango(a, ini, fin) {
+  if (!a.fecha_adquisicion) return 0;
+  const dm = depMensual(a);
+  if (dm<=0) return 0;
+  const adq = _mesIdx(a.fecha_adquisicion);
+  let endIdx = adq + (Number(a.vida_util_meses)||0) - 1;
+  if ((a.estado==='baja'||a.estado==='vendido') && a.fecha_baja)
+    endIdx = Math.min(endIdx, _mesIdx(a.fecha_baja));
+  const from = Math.max(adq, _mesIdx(ini));
+  const to   = Math.min(endIdx, _mesIdx(fin));
+  return Math.max(0, to - from + 1) * dm;
+}
+
+/* Depreciación acumulada y valor en libros a una fecha */
+function valorEnLibros(a, hasta) {
+  const costo = Number(a.costo)||0;
+  const dm = depMensual(a);
+  if (dm<=0 || !a.fecha_adquisicion) return { acumulada:0, libros:costo };
+  const adq = _mesIdx(a.fecha_adquisicion);
+  let endIdx = adq + (Number(a.vida_util_meses)||0) - 1;
+  if ((a.estado==='baja'||a.estado==='vendido') && a.fecha_baja)
+    endIdx = Math.min(endIdx, _mesIdx(a.fecha_baja));
+  const hastaIdx = _mesIdx(hasta || new Date().toISOString().slice(0,10));
+  const meses = Math.max(0, Math.min(endIdx, hastaIdx) - adq + 1);
+  const acumulada = Math.min(meses*dm, costo - (Number(a.valor_residual)||0));
+  return { acumulada, libros: Math.max(Number(a.valor_residual)||0, costo - acumulada) };
+}
+
+/* Vida útil sugerida (meses) por categoría — tasas máx. ISR Guatemala */
+const VIDA_UTIL_CATEGORIA = {
+  'Herramienta':              48,   // 25% anual
+  'Maquinaria':               60,   // 20%
+  'Equipo':                   60,   // 20%
+  'Mobiliario y Equipo':      60,   // 20%
+  'Equipo de Cómputo':        36,   // 33.33%
+  'Vehículo':                 60,   // 20%
+  'Edificación':             240,   // 5%
+  'Otro':                     60
+};
 
 /* Calcular ISR mensual según Decreto 13-2026 */
 function calcularISR(salarioMensual) {

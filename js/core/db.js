@@ -569,6 +569,23 @@ const DB = {
     return { data, error };
   },
 
+  /* ── ACTIVOS (herramientas, maquinaria, depreciación) ── */
+  async getActivos() {
+    const { data } = await getSB().from('activos').select('*')
+      .eq('tenant_id', getTID()).order('created_at', { ascending:false });
+    return data || [];
+  },
+
+  async upsertActivo(fields) {
+    const payload = { ...fields, tenant_id: getTID(), updated_at: new Date().toISOString() };
+    if (fields.id) {
+      const { error } = await getSB().from('activos').update(payload).eq('id', fields.id);
+      return { error };
+    }
+    const { data, error } = await getSB().from('activos').insert(payload).select().single();
+    return { data, error };
+  },
+
   /* ── BODEGAS ──────────────────────────────────── */
   async getBodegas() {
     const { data } = await getSB().from('bodegas').select('*')

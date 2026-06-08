@@ -235,8 +235,12 @@ Modulos.finanzas = {
       const ventas  = agrupar(ingresos,'categoria');
       const costo   = egresos.filter(e=>['Compras','Repuestos'].includes(e.categoria)).reduce((s,e)=>s+(e.monto||0),0);
       const gastoOp = egresos.filter(e=>!['Compras','Repuestos'].includes(e.categoria)).reduce((s,e)=>s+(e.monto||0),0);
+      /* Depreciación del período (activos) — gasto no monetario */
+      const activosFin   = await DB.getActivos();
+      const depreciacion = activosFin.reduce((s,a)=>s+depEnRango(a, this._ini, this._fin),0);
       const utilBruta = totalIng - costo;
-      const utilOp    = utilBruta - gastoOp;
+      const utilOp    = utilBruta - gastoOp - depreciacion;
+      const utilNeta  = utilOp;
 
       el.innerHTML = `
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
@@ -284,6 +288,9 @@ Modulos.finanzas = {
               <span class="text-muted">${k}</span><span class="text-red">(${UI.q(v)})</span>
             </div>`).join(''):
             '<div style="padding:5px 12px;font-size:13px;color:var(--text3)">Sin gastos operativos</div>'}
+          ${depreciacion>0?`<div style="display:flex;justify-content:space-between;padding:5px 12px;font-size:13px">
+              <span class="text-muted">Depreciación de activos</span><span class="text-red">(${UI.q(depreciacion)})</span>
+            </div>`:''}
           <div style="display:flex;justify-content:space-between;padding:8px 12px;font-weight:800;font-size:14px;border-top:2px solid var(--border)">
             <span>Utilidad Operativa</span><span class="${utilOp>=0?'text-green':'text-red'}">${UI.q(utilOp)}</span>
           </div>
@@ -291,7 +298,7 @@ Modulos.finanzas = {
           <!-- UTILIDAD NETA -->
           <div style="display:flex;justify-content:space-between;padding:16px 12px;font-weight:800;font-size:18px;border-top:3px solid var(--amber);margin-top:8px;background:var(--amber-dim);border-radius:0 0 8px 8px">
             <span>UTILIDAD NETA</span>
-            <span class="${utilidad>=0?'text-amber':'text-red'}">${UI.q(utilidad)}</span>
+            <span class="${utilNeta>=0?'text-amber':'text-red'}">${UI.q(utilNeta)}</span>
           </div>
         </div>`;
     }
@@ -323,7 +330,11 @@ Modulos.finanzas = {
         { id:'utilidades',   label:'Régimen Sobre las Utilidades',   desc:'ISR 25% sobre utilidades · Declaración trimestral',    color:'purple' }
       ];
 
-      const calc = _calcImpuesto(regimen, totalIng, utilidad);
+      /* La depreciación reduce la utilidad imponible (régimen sobre utilidades) */
+      const activosFis  = await DB.getActivos();
+      const depFiscal   = activosFis.reduce((s,a)=>s+depEnRango(a, this._ini, this._fin),0);
+      const utilFiscal  = utilidad - depFiscal;
+      const calc = _calcImpuesto(regimen, totalIng, utilFiscal);
 
       el.innerHTML = `
         <div class="grid-2" style="margin-bottom:20px">
@@ -352,8 +363,11 @@ Modulos.finanzas = {
           <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);font-size:13px">
             <span>Egresos del período</span><span class="text-red">(${UI.q(totalEgr)})</span>
           </div>
+          ${depFiscal>0?`<div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);font-size:13px">
+            <span>Depreciación de activos</span><span class="text-red">(${UI.q(depFiscal)})</span>
+          </div>`:''}
           <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);font-size:13px">
-            <span>Utilidad</span><span class="${utilidad>=0?'text-green':'text-red'}">${UI.q(utilidad)}</span>
+            <span>Utilidad imponible</span><span class="${utilFiscal>=0?'text-green':'text-red'}">${UI.q(utilFiscal)}</span>
           </div>
           <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);font-size:13px">
             <span>IVA estimado</span><span class="text-red">${UI.q(calc.iva)}</span>
@@ -365,7 +379,7 @@ Modulos.finanzas = {
             <span>Total Impuestos Estimados</span><span class="text-red">${UI.q(calc.total)}</span>
           </div>
           <div style="display:flex;justify-content:space-between;padding:12px;font-weight:800;font-size:18px;background:var(--amber-dim);border-radius:8px;margin-top:8px">
-            <span>Utilidad después de impuestos</span><span class="${(utilidad-calc.total)>=0?'text-amber':'text-red'}">${UI.q(utilidad-calc.total)}</span>
+            <span>Utilidad después de impuestos</span><span class="${(utilFiscal-calc.total)>=0?'text-amber':'text-red'}">${UI.q(utilFiscal-calc.total)}</span>
           </div>
 
           <div class="alert alert-cyan" style="margin-top:16px">
