@@ -2,12 +2,14 @@
    Herramientas, maquinaria y equipo con depreciación (línea recta).
    Alimenta el estado de resultados y el cálculo trimestral de impuestos. */
 Modulos.activos = {
-  _data: [], _tab: 'activos', _anio: null, _trim: null,
+  _data: [], _proveedores: [], _tab: 'activos', _anio: null, _trim: null,
 
   async render() {
     const el = document.getElementById('page-content');
     UI.loading(el);
-    this._data = await DB.getActivos();
+    [this._data, this._proveedores] = await Promise.all([
+      DB.getActivos(), DB.getProveedores().catch(()=>[])
+    ]);
     const now = new Date();
     if (!this._anio) this._anio = now.getFullYear();
     if (!this._trim) this._trim = Math.floor(now.getMonth()/3)+1;
@@ -158,7 +160,11 @@ Modulos.activos = {
       </div>
       <div class="form-row">
         <div class="form-group"><label class="form-label">Proveedor</label>
-          <input class="form-input" id="act-prov" value="${a.proveedor||''}"></div>
+          <input class="form-input" id="act-prov" list="act-prov-list" autocomplete="off" value="${a.proveedor||''}" placeholder="Elige o escribe...">
+          <datalist id="act-prov-list">
+            ${this._proveedores.map(p=>`<option value="${(p.nombre||'').replace(/"/g,'&quot;')}">`).join('')}
+          </datalist>
+          <div style="font-size:11px;color:var(--text3);margin-top:4px">Selecciona un proveedor registrado o escribe uno nuevo.</div></div>
         <div class="form-group"><label class="form-label">No. Factura</label>
           <input class="form-input" id="act-factura" value="${a.num_factura||''}"></div>
       </div>

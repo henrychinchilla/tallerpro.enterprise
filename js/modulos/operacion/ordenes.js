@@ -106,6 +106,7 @@ Modulos.ordenes = {
     const { data: items } = await getSB().from('ot_items').select('*')
       .eq('orden_id', id).order('orden_pos');
     const itemsList = items || [];
+    const trabajos = await DB.getTrabajosExternos(id);
 
     const est = ESTADOS_OT[o.estado] || { label:o.estado, color:'gray', pct:50 };
     let fotos = [];
@@ -185,6 +186,8 @@ Modulos.ordenes = {
           </div>
         </div>`:''}
       </div>
+
+      ${this._renderTrabajosExternos(trabajos, id)}
 
       <!-- FOTOS -->
       ${fotos.length?`<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px">
@@ -340,6 +343,222 @@ Modulos.ordenes = {
     this.render();
   },
 
+  /* ── TRABAJOS EXTERNOS (torno, subcontratos) ───────── */
+  _renderTrabajosExternos(trabajos, ordenId) {
+    const estInfo = {
+      pendiente:   ['amber','⏳ Pendiente autorización'],
+      autorizado:  ['green','✓ Autorizado'],
+      rechazado:   ['red','✗ Rechazado por el cliente'],
+      en_proceso:  ['cyan','🔧 En proceso'],
+      completado:  ['green','✓ Completado'],
+    };
+    return `
+      <div style="border-top:1px solid var(--border);padding-top:14px;margin-bottom:8px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+          <div style="font-weight:800;font-size:12px;color:var(--cyan);text-transform:uppercase;letter-spacing:.08em">
+            🛠️ Trabajos externos / subcontratos
+          </div>
+          <button class="btn btn-cyan btn-sm" onclick="Modulos.ordenes.modalTrabajoExterno('${ordenId}')">＋ Agregar</button>
+        </div>
+        ${trabajos.length ? trabajos.map(t=>{
+          const [col,lbl] = estInfo[t.estado] || ['gray',t.estado];
+          const base = (Number(t.costo_servicio)||0)+(Number(t.costo_envio)||0);
+          return `<div style="padding:10px;border:1px solid var(--border);border-radius:8px;margin-bottom:8px;font-size:12px">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
+              <div style="flex:1">
+                <div style="font-weight:700">${t.descripcion}${t.proveedor?` <span class="text-muted">· ${t.proveedor}</span>`:''}</div>
+                <div style="color:var(--text3);margin-top:2px">
+                  Costo: ${UI.q(base)} ${t.comision_monto>0?`· Comisión: ${UI.q(t.comision_monto)} (${t.comision_pct||0}%)`:''} · <b class="text-amber">Total cliente: ${UI.q(t.total_cliente)}</b>
+                </div>
+                ${t.respuesta?`<div style="color:var(--text3);margin-top:2px">🗣️ ${t.respuesta}${t.respondido_at?` · ${UI.fecha(t.respondido_at.slice(0,10))}`:''}</div>`:''}
+                ${t.notificado_at?`<div style="color:var(--text3);font-size:11px">📤 Notificado ${UI.fechaHora(t.notificado_at)}</div>`:''}
+                ${t.cargado_ot?'<div style="color:var(--green);font-size:11px">🧾 Cargado a la OT</div>':''}
+              </div>
+              <span class="badge badge-${col}">${lbl}</span>
+            </div>
+            <div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:8px">
+              ${t.estado==='pendiente' && t.requiere_autorizacion ? `<button class="btn btn-sm btn-ghost" onclick="Modulos.ordenes.notificarTrabajoExterno('${ordenId}','${t.id}')" title="Notificar al cliente">📤 Notificar</button>`:''}
+              ${(t.estado==='pendiente') ? `
+                <button class="btn btn-sm btn-green" onclick="Modulos.ordenes.responderTrabajoExterno('${ordenId}','${t.id}',true)">✓ Cliente autorizó</button>
+                <button class="btn btn-sm btn-danger" onclick="Modulos.ordenes.responderTrabajoExterno('${ordenId}','${t.id}',false)">✗ Cliente rechazó</button>`:''}
+              ${(['autorizado','en_proceso','completado'].includes(t.estado) && !t.cargado_ot) ? `<button class="btn btn-sm btn-amber" onclick="Modulos.ordenes.cargarTrabajoAOT('${ordenId}','${t.id}')" title="Agregar el costo a la OT/factura">🧾 Cargar a OT</button>`:''}
+              ${t.estado!=='rechazado' ? `<button class="btn btn-sm btn-ghost" onclick="Modulos.ordenes.envioDeTrabajo('${ordenId}','${t.id}')" title="Registrar envío al proveedor">🚚 Envío</button>`:''}
+              <button class="btn btn-sm btn-ghost" onclick="Modulos.ordenes.modalTrabajoExterno('${ordenId}','${t.id}')" title="Editar">✏️</button>
+              <button class="btn btn-sm btn-danger" onclick="Modulos.eliminarRegistro('trabajos_externos','${t.id}','${(t.descripcion||'').replace(/'/g,"\\'")}',()=>Modulos.ordenes.verDetalle('${ordenId}'))" title="Eliminar">🗑️</button>
+            </div>
+          </div>`;
+        }).join('') : '<div style="padding:10px;text-align:center;color:var(--text3);font-size:12px">Sin trabajos externos. Úsalo para enviar piezas al torno, subcontratar trabajos, etc.</div>'}
+      </div>`;
+  },
+
+  modalTrabajoExterno(ordenId, id='') {
+    const cargar = async () => {
+      const te = id ? (await DB.getTrabajosExternos(ordenId)).find(x=>x.id===id) || {} : {};
+      const calc = `Modulos.ordenes._calcTE()`;
+      UI.modal(`${id?'✏️ Editar':'＋'} Trabajo externo`, `
+        <div class="form-group"><label class="form-label">Descripción *</label>
+          <input class="form-input" id="te-desc" value="${(te.descripcion||'').replace(/"/g,'&quot;')}" placeholder="Enviar discos de freno al torno"></div>
+        <div class="form-group"><label class="form-label">Proveedor / taller externo</label>
+          <input class="form-input" id="te-prov" value="${(te.proveedor||'').replace(/"/g,'&quot;')}" placeholder="Torno El Progreso"></div>
+        <div class="form-row">
+          <div class="form-group"><label class="form-label">Costo del servicio (Q)</label>
+            <input class="form-input" id="te-cs" type="number" min="0" step="0.01" value="${te.costo_servicio||0}" oninput="${calc}"></div>
+          <div class="form-group"><label class="form-label">Costo de envío (Q)</label>
+            <input class="form-input" id="te-ce" type="number" min="0" step="0.01" value="${te.costo_envio||0}" oninput="${calc}"></div>
+        </div>
+        <div class="form-row">
+          <div class="form-group"><label class="form-label">Comisión del taller (%)</label>
+            <input class="form-input" id="te-pct" type="number" min="0" step="0.5" value="${te.comision_pct!=null?te.comision_pct:10}" oninput="${calc}"></div>
+          <div class="form-group"><label class="form-label">Canal de notificación</label>
+            <select class="form-select" id="te-canal">
+              ${['whatsapp','email','ambos','ninguno'].map(c=>`<option value="${c}" ${te.canal===c?'selected':''}>${c==='whatsapp'?'WhatsApp':c==='email'?'Correo':c==='ambos'?'WhatsApp + Correo':'No notificar'}</option>`).join('')}
+            </select></div>
+        </div>
+        <label style="display:flex;align-items:center;gap:8px;padding:10px;background:var(--amber-dim);border-radius:8px;cursor:pointer;border:1px solid var(--amber-border)">
+          <input type="checkbox" id="te-req" ${te.requiere_autorizacion!==false?'checked':''} style="accent-color:var(--amber)">
+          <span style="font-size:12px"><b>Requiere autorización del cliente</b> antes de ejecutar</span>
+        </label>
+        <div id="te-calc" class="card" style="background:var(--surface2);font-size:12px;margin-top:12px"></div>
+        <div class="modal-footer">
+          <button class="btn btn-ghost" onclick="UI.cerrarModal()">Cancelar</button>
+          <button class="btn btn-cyan" onclick="Modulos.ordenes.guardarTrabajoExterno('${ordenId}','${id}')">${id?'Guardar':'Agregar'}</button>
+        </div>`, '560px');
+      this._calcTE();
+    };
+    cargar();
+  },
+
+  _calcTE() {
+    const n = id => parseFloat(document.getElementById(id)?.value)||0;
+    const base = n('te-cs')+n('te-ce');
+    const pct = n('te-pct');
+    const comision = Math.round(base*pct/100*100)/100;
+    const total = base+comision;
+    const el = document.getElementById('te-calc');
+    if (el) el.innerHTML = `<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;text-align:center">
+      <div><div style="color:var(--text2);font-weight:700">${UI.q(base)}</div><div style="font-size:10px;color:var(--text3)">Costo externo</div></div>
+      <div><div style="color:var(--cyan);font-weight:700">${UI.q(comision)}</div><div style="font-size:10px;color:var(--text3)">Comisión</div></div>
+      <div><div style="color:var(--amber);font-weight:800">${UI.q(total)}</div><div style="font-size:10px;color:var(--text3)">Total al cliente</div></div>
+    </div>`;
+  },
+
+  async guardarTrabajoExterno(ordenId, id='') {
+    const desc = document.getElementById('te-desc')?.value.trim();
+    if (!desc) { UI.toast('La descripción es obligatoria','error'); return; }
+    const cs = parseFloat(document.getElementById('te-cs')?.value)||0;
+    const ce = parseFloat(document.getElementById('te-ce')?.value)||0;
+    const pct = parseFloat(document.getElementById('te-pct')?.value)||0;
+    const base = cs+ce;
+    const comision = Math.round(base*pct/100*100)/100;
+    const requiere = document.getElementById('te-req')?.checked ?? true;
+    const fields = {
+      orden_id: ordenId, descripcion: desc,
+      proveedor: document.getElementById('te-prov')?.value.trim()||null,
+      costo_servicio: cs, costo_envio: ce, comision_pct: pct,
+      comision_monto: comision, total_cliente: base+comision,
+      requiere_autorizacion: requiere,
+      canal: document.getElementById('te-canal')?.value||'whatsapp'
+    };
+    if (id) fields.id = id; else fields.estado = requiere ? 'pendiente' : 'autorizado';
+    const { error } = await DB.upsertTrabajoExterno(fields);
+    if (error) { UI.toast('Error: '+error.message,'error'); return; }
+    UI.cerrarModal();
+    UI.toast(id?'Trabajo externo actualizado ✓':'Trabajo externo agregado ✓');
+    this.verDetalle(ordenId);
+  },
+
+  /* Notifica al cliente para pedir su visto bueno (WhatsApp y/o correo) */
+  async notificarTrabajoExterno(ordenId, teId) {
+    const [o, lista] = await Promise.all([DB.getOrden(ordenId), DB.getTrabajosExternos(ordenId)]);
+    const te = lista.find(x=>x.id===teId);
+    if (!te || !o) return;
+    const cli = o.clientes || {};
+    const taller = Auth.tenant?.name || 'el taller';
+    const canal = te.canal || 'whatsapp';
+    const texto =
+      `🔧 *${taller}*\nHola ${cli.nombre||''}, en su vehículo ${o.vehiculos?.placa||''} (${o.num||''}) `+
+      `detectamos un trabajo adicional:\n\n*${te.descripcion}*${te.proveedor?` — ${te.proveedor}`:''}\n`+
+      `Costo total con gestión: *${UI.q(te.total_cliente)}*\n\n¿Autoriza que lo realicemos? Responda *SÍ* o *NO*. ¡Gracias!`;
+    let hizo = false;
+    if ((canal==='email'||canal==='ambos') && cli.email) {
+      const html = `<div style="font-family:Arial,sans-serif;max-width:520px">`+
+        `<h2 style="color:#0891b2">🔧 ${taller}</h2>`+
+        `<p>Hola ${cli.nombre||''}, en su vehículo <b>${o.vehiculos?.placa||''}</b> (${o.num||''}) detectamos un trabajo adicional:</p>`+
+        `<p style="font-size:15px"><b>${te.descripcion}</b>${te.proveedor?` — ${te.proveedor}`:''}</p>`+
+        `<p>Costo total con gestión: <b>${UI.q(te.total_cliente)}</b></p>`+
+        `<p>¿Autoriza que lo realicemos? Por favor responda a este correo con <b>SÍ</b> o <b>NO</b>.</p></div>`;
+      Email.enviar(cli.email, `${taller} — Autorización de trabajo (${o.num||''})`, { html, referencia_id:o.id });
+      hizo = true;
+    }
+    if (canal==='whatsapp'||canal==='ambos') {
+      const tel = (cli.tel||'').replace(/[^0-9]/g,'');
+      window.open(`https://wa.me/${tel?'502'+tel:''}?text=${encodeURIComponent(texto)}`,'_blank');
+      hizo = true;
+    }
+    if (!hizo) { UI.toast('El cliente no tiene el medio de contacto seleccionado','error'); return; }
+    await DB.upsertTrabajoExterno({ id:teId, notificado_at:new Date().toISOString() });
+    UI.toast('Cliente notificado ✓ — registra su respuesta cuando conteste');
+    this.verDetalle(ordenId);
+  },
+
+  /* Registra la respuesta del cliente (autoriza / rechaza) */
+  async responderTrabajoExterno(ordenId, teId, autoriza) {
+    const fields = {
+      id: teId,
+      estado: autoriza ? 'autorizado' : 'rechazado',
+      respuesta: autoriza ? 'El cliente autorizó el trabajo' : 'El cliente rechazó el trabajo (no se ejecuta)',
+      respondido_at: new Date().toISOString()
+    };
+    const { error } = await DB.upsertTrabajoExterno(fields);
+    if (error) { UI.toast('Error: '+error.message,'error'); return; }
+    UI.toast(autoriza ? 'Autorización registrada ✓' : 'Rechazo documentado ✓ — sin nuevas acciones');
+    this.verDetalle(ordenId);
+  },
+
+  /* Abre el registro de envío al proveedor pre-llenado desde el trabajo externo */
+  async envioDeTrabajo(ordenId, teId) {
+    const te = (await DB.getTrabajosExternos(ordenId)).find(x=>x.id===teId);
+    if (!te || !Modulos.envios) { UI.toast('Módulo de envíos no disponible','error'); return; }
+    Modulos.envios.modalForm('', {
+      tipo: 'proveedor',
+      descripcion: `Envío a proveedor: ${te.descripcion}`,
+      destinatario: te.proveedor || '',
+      orden_id: ordenId,
+      trabajo_externo_id: teId
+    });
+  },
+
+  /* Vuelca el costo (servicio + envío + comisión) a la OT como ítems → factura */
+  async cargarTrabajoAOT(ordenId, teId) {
+    const te = (await DB.getTrabajosExternos(ordenId)).find(x=>x.id===teId);
+    if (!te) return;
+    if (te.estado==='rechazado') { UI.toast('Este trabajo fue rechazado por el cliente','error'); return; }
+    if (te.cargado_ot) { UI.toast('Ya fue cargado a la OT','info'); return; }
+    const base = (Number(te.costo_servicio)||0)+(Number(te.costo_envio)||0);
+    const rows = [{
+      tenant_id: getTID(), orden_id: ordenId, tipo: 'servicio',
+      descripcion: `Trabajo externo: ${te.descripcion}${te.proveedor?` (${te.proveedor})`:''}`,
+      cantidad: 1, precio_unit: base, total: base,
+      ejecutado: false, es_extra: true, autorizado: te.estado!=='pendiente'
+    }];
+    if ((Number(te.comision_monto)||0) > 0) {
+      rows.push({
+        tenant_id: getTID(), orden_id: ordenId, tipo: 'otro',
+        descripcion: `Comisión por gestión (${te.descripcion})`,
+        cantidad: 1, precio_unit: te.comision_monto, total: te.comision_monto,
+        ejecutado: false, es_extra: true, autorizado: te.estado!=='pendiente'
+      });
+    }
+    const { error } = await getSB().from('ot_items').insert(rows);
+    if (error) { UI.toast('Error: '+error.message,'error'); return; }
+    const { data: allItems } = await getSB().from('ot_items').select('total').eq('orden_id', ordenId);
+    const total = (allItems||[]).reduce((s,i)=>s+(i.total||0),0);
+    await getSB().from('ordenes').update({ total, updated_at:new Date().toISOString() }).eq('id', ordenId);
+    await DB.upsertTrabajoExterno({ id:teId, cargado_ot:true, estado: te.estado==='autorizado'?'completado':te.estado });
+    UI.toast('Trabajo externo cargado a la OT ✓');
+    this.verDetalle(ordenId);
+  },
+
   /* ── FACTURACIÓN ──────────────────────────── */
   async enviarFacturacion(id) {
     const o = await DB.getOrden(id);
@@ -352,7 +571,7 @@ Modulos.ordenes = {
 
     /* Evitar doble facturación (y doble descuento de inventario) */
     const yaFact = await DB.facturaDeOrden(id);
-    if (yaFact) { UI.toast(`Esta OT ya fue facturada (${yaFact.serie||'A'}-${yaFact.num_fel||'—'})`,'error'); return; }
+    if (yaFact) { UI.toast(`Esta OT ya fue facturada (${yaFact.num||'—'})`,'error'); return; }
 
     /* Cargar ítems */
     const { data: items } = await getSB().from('ot_items').select('*').eq('orden_id', id);
@@ -377,24 +596,26 @@ Modulos.ordenes = {
     const subtotal = Math.round(total/1.12*100)/100;
     const iva      = Math.round((total-subtotal)*100)/100;
 
-    /* Crear factura */
-    const { data: factura, error } = await getSB().from('facturas').insert({
-      tenant_id:  getTID(),
+    /* Crear factura (num/nit los completa DB.upsertFactura) */
+    const cli = o.clientes || {};
+    const { data: factura, error } = await DB.upsertFactura({
       cliente_id: o.cliente_id,
-      orden_id:   id,
-      serie:      'A',
+      ot_id:      id,
+      nit:        cli.nit?.trim() || 'CF',
+      nombre_receptor: cli.nombre || 'Consumidor Final',
+      tipo_cliente: (cli.nit && cli.nit.toUpperCase()!=='CF') ? 'NIT' : 'CF',
       subtotal,
       iva,
       total,
       estado:     'pendiente',
       fecha:      new Date().toISOString().slice(0,10),
-      notas:      descripcionFEL.slice(0,500)
-    }).select().single();
+      descripcion: descripcionFEL.slice(0,500)
+    });
 
-    if (error) { UI.toast('Error al crear factura: '+error.message,'error'); return; }
+    if (error || !factura) { UI.toast('Error al crear factura: '+(error?.message||'desconocido'),'error'); return; }
 
     /* Desglose de la factura + descuento de inventario de los repuestos */
-    const nro = `Factura ${factura.serie||'A'}-${factura.num_fel||factura.id.slice(0,8)}`;
+    const nro = `Factura ${factura.num||factura.id.slice(0,8)}`;
     await DB.insertFacturaItems(factura.id, itemsList.map(i=>({
       descripcion: i.descripcion, cantidad: i.cantidad,
       precio_unit: i.precio_unit, total: i.total, inventario_id: i.inventario_id || null
@@ -580,7 +801,7 @@ Modulos.ordenes = {
       <div class="form-group"><label class="form-label">Mecánico asignado</label>
         <select class="form-select" id="ot-mec">
           <option value="">Sin asignar</option>
-          ${this._mecanicos.filter(e=>['mecanico','gerente_tal'].includes(e.rol)).map(e=>`<option value="${e.id}" ${o.mecanico_id===e.id?'selected':''}>${e.nombre}</option>`).join('')}
+          ${this._mecanicos.filter(e=>e.activo!==false).map(e=>`<option value="${e.id}" ${o.mecanico_id===e.id?'selected':''}>${e.nombre}${e.cargo?` — ${e.cargo}`:''}</option>`).join('')}
         </select></div>
       <div class="form-group"><label class="form-label">Descripción del Trabajo *</label>
         <textarea class="form-input" id="ot-desc" rows="3" placeholder="Descripción general del trabajo a realizar...">${o.descripcion||''}</textarea></div>
@@ -656,10 +877,31 @@ Modulos.ordenes = {
       fotos_recepcion:this._fotos.length?JSON.stringify(this._fotos):null
     };
     if (id) fields.id = id;
-    const { error } = await DB.upsertOrden(fields);
+    const res = await DB.upsertOrden(fields);
     this._fotos = [];
-    if (error) { UI.toast('Error: '+error.message,'error'); return; }
-    UI.cerrarModal(); UI.toast(id?'OT actualizada ✓':'OT creada ✓');
+    if (res.error) { UI.toast('Error: '+res.error.message,'error'); return; }
+
+    const ordenId = id || res.data?.id;
+    const num = id ? (this._data.find(o=>o.id===id)?.num) : res.data?.num;
+    const veh = this._vehiculos.find(v=>v.id===vehId);
+
+    /* OT nueva: agregar el ítem de Mano de Obra por defecto */
+    if (!id && ordenId) {
+      await getSB().from('ot_items').insert({
+        tenant_id: getTID(), orden_id: ordenId, tipo: 'mano_obra',
+        descripcion: 'Mano de obra', cantidad: 1, precio_unit: 0, total: 0,
+        ejecutado: false, es_extra: false, autorizado: true, orden_pos: 0
+      });
+    }
+
+    /* Fecha de entrega → cita en el calendario (seguimiento) */
+    await DB.syncCitaEntrega({
+      id: ordenId, num, cliente_id: cliId, vehiculo_id: vehId,
+      mecanico_id: fields.mecanico_id, fecha_estimada: fields.fecha_estimada, placa: veh?.placa
+    }).catch(()=>{});
+
+    UI.cerrarModal();
+    UI.toast(id?'OT actualizada ✓':'OT creada ✓ — se agregó Mano de obra y la fecha al calendario');
     this.render();
   },
 

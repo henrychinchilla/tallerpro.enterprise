@@ -49,7 +49,7 @@ Modulos.proveedores = {
           </div>
           <div style="font-size:12px;color:var(--text2);display:flex;flex-direction:column;gap:4px">
             ${p.nit?`<span>NIT: ${p.nit}</span>`:''}
-            ${p.tel?`<span>📞 ${p.tel}</span>`:''}
+            ${p.telefono?`<span>📞 ${p.telefono}</span>`:''}
             ${p.email?`<span>✉️ ${p.email}</span>`:''}
             ${p.contacto?`<span>👤 ${p.contacto}</span>`:''}
           </div>
@@ -70,7 +70,7 @@ Modulos.proveedores = {
           <td><span class="badge badge-gray">${p.categoria||'General'}</span></td>
           <td class="mono-sm">${p.nit||'—'}</td>
           <td>${p.contacto||'—'}</td>
-          <td class="mono-sm">${p.tel||'—'}</td>
+          <td class="mono-sm">${p.telefono||'—'}</td>
           <td style="font-size:12px">${p.email||'—'}</td>
           <td><span class="badge badge-${p.activo?'green':'red'}">${p.activo?'Activo':'Inactivo'}</span></td>
           <td><div style="display:flex;gap:4px">
@@ -91,7 +91,11 @@ Modulos.proveedores = {
         <div class="form-group"><label class="form-label">Nombre / Razón Social *</label>
           <input class="form-input" id="prov-nombre" value="${p.nombre||''}" placeholder="Distribuidora García"></div>
         <div class="form-group"><label class="form-label">NIT</label>
-          <input class="form-input" id="prov-nit" value="${p.nit||''}" placeholder="1234567-8"></div>
+          <div style="display:flex;gap:6px">
+            <input class="form-input" id="prov-nit" value="${p.nit||''}" placeholder="1234567-8" style="flex:1">
+            <button type="button" class="btn btn-ghost" onclick="Modulos.verificarNIT('prov-nit','prov-nit-status','prov-nombre')" title="Verificar NIT con la SAT">🔎</button>
+          </div>
+          <div id="prov-nit-status" style="margin-top:4px;min-height:14px"></div></div>
       </div>
       <div class="form-row">
         <div class="form-group"><label class="form-label">Categoría</label>
@@ -103,7 +107,7 @@ Modulos.proveedores = {
       </div>
       <div class="form-row">
         <div class="form-group"><label class="form-label">Teléfono</label>
-          <input class="form-input" id="prov-tel" value="${p.tel||''}" placeholder="5501-1234"></div>
+          <input class="form-input" id="prov-tel" value="${p.telefono||''}" placeholder="5501-1234"></div>
         <div class="form-group"><label class="form-label">Email</label>
           <input class="form-input" id="prov-email" type="email" value="${p.email||''}"></div>
       </div>
@@ -128,20 +132,31 @@ Modulos.proveedores = {
   async guardar(id='') {
     const nombre = document.getElementById('prov-nombre')?.value.trim();
     if (!nombre) { UI.toast('El nombre es obligatorio','error'); return; }
+    /* Evitar duplicados por nombre (también hay índice único en BD) */
+    if (!id) {
+      const dup = this._data.find(p => (p.nombre||'').trim().toLowerCase() === nombre.toLowerCase());
+      if (dup) { UI.toast('Ya existe un proveedor con ese nombre','error'); return; }
+    }
     const fields = {
       nombre,
       nit:       document.getElementById('prov-nit')?.value.trim()||null,
       categoria: document.getElementById('prov-cat')?.value,
       contacto:  document.getElementById('prov-contacto')?.value||null,
-      tel:       document.getElementById('prov-tel')?.value||null,
+      telefono:  document.getElementById('prov-tel')?.value||null,
       email:     document.getElementById('prov-email')?.value||null,
       direccion: document.getElementById('prov-dir')?.value||null,
       notas:     document.getElementById('prov-notas')?.value||null,
       activo:    id ? (document.getElementById('prov-activo')?.checked ?? true) : true
     };
     if (id) fields.id = id;
+    if (fields.nit && !NIT.validarLocal(fields.nit).valido) {
+      UI.toast('Aviso: el dígito verificador del NIT no parece válido','warn');
+    }
     const {error} = await DB.upsertProveedor(fields);
-    if (error) { UI.toast('Error: '+error.message,'error'); return; }
+    if (error) {
+      const msg = error.code==='23505' ? 'Ya existe un proveedor con ese nombre' : ('Error: '+error.message);
+      UI.toast(msg,'error'); return;
+    }
     UI.cerrarModal(); UI.toast(id?'Proveedor actualizado ✓':'Proveedor creado ✓');
     this.render();
   }

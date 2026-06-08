@@ -122,6 +122,19 @@ const Auth = {
     return { ok:true, id: authData.user.id };
   },
 
+  /* ── RESETEAR PASSWORD DE OTRO USUARIO (admin) ── */
+  /* Usa la Edge Function 'reset-password' (service role): cambia la
+     contraseña del usuario objetivo y marca que debe cambiarla. */
+  async resetPassword(userId, password) {
+    const { data, error } = await getSB().functions.invoke('reset-password', {
+      body: { user_id: userId, password }
+    });
+    if (!error && !data?.error) return { ok: true };
+    let msg = error?.message || data?.error;
+    if (error) { try { const j = await error.context.json(); if (j?.error) msg = j.error; } catch (_) {} }
+    return { ok: false, error: msg || 'No se pudo resetear la contraseña' };
+  },
+
   /* ── CARGAR PERFIL ────────────────────────────── */
   async _cargarPerfil(userId, email, tenantSlug=null) {
     /* Buscar perfil en public.usuarios */

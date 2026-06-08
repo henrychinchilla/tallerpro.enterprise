@@ -315,9 +315,10 @@ Modulos.usuarios = {
   async ejecutarReset(id) {
     const pass = document.getElementById('rp-pass')?.value;
     if (!pass||pass.length<8) { UI.toast('Mínimo 8 caracteres','error'); return; }
-    const ok = await DB.upsertUsuario({ id, debe_cambiar_password:true, updated_at:new Date().toISOString() });
-    if (!ok) { UI.toast('Error','error'); return; }
+    UI.toast('Reseteando contraseña...','info');
+    const r = await Auth.resetPassword(id, pass);
+    if (!r.ok) { UI.toast('Error: '+r.error,'error'); return; }
     UI.cerrarModal();
-    UI.toast('Password reseteado ✓ — el usuario debe cambiarlo al ingresar');
+    UI.toast('Contraseña reseteada ✓ — el usuario debe cambiarla al ingresar');
   }
 };

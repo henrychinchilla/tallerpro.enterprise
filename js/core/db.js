@@ -188,6 +188,42 @@ const DB = {
     return !error;
   },
 
+  /* ── TRABAJOS EXTERNOS (subcontratados: torno, etc.) ── */
+  async getTrabajosExternos(ordenId) {
+    const { data } = await getSB().from('trabajos_externos').select('*')
+      .eq('tenant_id', getTID()).eq('orden_id', ordenId).order('created_at');
+    return data || [];
+  },
+
+  async upsertTrabajoExterno(fields) {
+    const payload = { ...fields, tenant_id: getTID(), updated_at: new Date().toISOString() };
+    if (fields.id) {
+      const { error } = await getSB().from('trabajos_externos').update(payload).eq('id', fields.id);
+      return { error };
+    }
+    const { data, error } = await getSB().from('trabajos_externos').insert(payload).select().single();
+    return { data, error };
+  },
+
+  /* ── ENVÍOS / FLETES (logística) ───────────────── */
+  async getEnvios({ archivado = false } = {}) {
+    const { data } = await getSB().from('envios').select('*')
+      .eq('tenant_id', getTID()).eq('archivado', archivado)
+      .order('fecha_envio', { ascending: false, nullsFirst: false })
+      .order('created_at', { ascending: false });
+    return data || [];
+  },
+
+  async upsertEnvio(fields) {
+    const payload = { ...fields, tenant_id: getTID(), updated_at: new Date().toISOString() };
+    if (fields.id) {
+      const { error } = await getSB().from('envios').update(payload).eq('id', fields.id);
+      return { error };
+    }
+    const { data, error } = await getSB().from('envios').insert(payload).select().single();
+    return { data, error };
+  },
+
   /* ── INVENTARIO ───────────────────────────────── */
   async getInventario(busca=null, bodega=null) {
     let q = getSB().from('inventario').select('*').eq('tenant_id', getTID()).order('nombre');
@@ -199,6 +235,8 @@ const DB = {
 
   async upsertInventario(fields) {
     const payload = { ...fields, tenant_id: getTID() };
+    /* codigo es obligatorio y es la clave de conflicto; generarlo si falta */
+    if (!payload.codigo) payload.codigo = 'ART-' + Date.now().toString(36).toUpperCase();
     const { data, error } = await getSB().from('inventario')
       .upsert(payload, { onConflict:'tenant_id,codigo' }).select().single();
     return { data, error };
@@ -216,7 +254,7 @@ const DB = {
   /* Historial de movimientos de inventario (salidas, entradas, traslados, ajustes) */
   async getMovimientosInventario({ inventarioId = null, tipo = null, limite = 300 } = {}) {
     let q = getSB().from('inventario_movimientos')
-      .select('*, inventario(nombre,codigo,unidad)')
+      .select('*, inventario(nombre,codigo,unidad_medida)')
       .eq('tenant_id', getTID()).order('created_at', { ascending: false }).limit(limite);
     if (inventarioId) q = q.eq('inventario_id', inventarioId);
     if (tipo) q = q.eq('tipo', tipo);
@@ -403,6 +441,14 @@ const DB = {
       const { error } = await getSB().from('facturas').update(payload).eq('id', fields.id);
       return { error };
     }
+    /* Generar número correlativo (la columna num es obligatoria) */
+    if (!payload.num) {
+      const { count } = await getSB().from('facturas')
+        .select('*',{count:'exact',head:true}).eq('tenant_id',getTID());
+      payload.num = `FEL-${new Date().getFullYear()}-${String((count||0)+1).padStart(6,'0')}`;
+    }
+    /* El NIT del receptor es obligatorio; CF por defecto */
+    if (!payload.nit) payload.nit = 'CF';
     const { data, error } = await getSB().from('facturas').insert(payload).select().single();
     return { data, error };
   },
@@ -411,7 +457,7 @@ const DB = {
   async facturaDeOrden(ordenId) {
     if (!ordenId) return null;
     const { data } = await getSB().from('facturas')
-      .select('id,serie,num_fel,orden_id').eq('tenant_id', getTID()).eq('orden_id', ordenId).limit(1);
+      .select('id,num,fel_serie,fel_numero,ot_id').eq('tenant_id', getTID()).eq('ot_id', ordenId).limit(1);
     return data?.[0] || null;
   },
 
@@ -689,12 +735,44 @@ const DB = {
 
   async upsertCita(fields) {
     const payload = { ...fields, tenant_id: getTID() };
+    /* Las columnas fecha y hora son NOT NULL; derivarlas de fecha_cita */
+    if (payload.fecha_cita) {
+      if (!payload.fecha) payload.fecha = String(payload.fecha_cita).slice(0,10);
+      if (!payload.hora)  payload.hora  = (String(payload.fecha_cita).slice(11,19) || '09:00:00');
+    }
     if (fields.id) {
       const { error } = await getSB().from('citas').update(payload).eq('id', fields.id);
       return { error };
     }
     const { data, error } = await getSB().from('citas').insert(payload).select().single();
     return { data, error };
+  },
+
+  /* Sincroniza la cita de "entrega" de una OT en el calendario.
+     - Si la OT tiene fecha estimada, crea/actualiza la cita.
+     - Si se quitó la fecha, elimina la cita de entrega previa. */
+  async syncCitaEntrega(orden) {
+    if (!orden?.id) return;
+    const { data: existentes } = await getSB().from('citas')
+      .select('id').eq('tenant_id', getTID()).eq('ot_id', orden.id).eq('tipo','entrega_ot').limit(1);
+    const existing = existentes?.[0];
+    if (!orden.fecha_estimada) {
+      if (existing) await getSB().from('citas').delete().eq('id', existing.id);
+      return;
+    }
+    const payload = {
+      titulo:      `🚗 Entrega ${orden.num||'OT'}${orden.placa?` · ${orden.placa}`:''}`,
+      tipo:        'entrega_ot',
+      ot_id:       orden.id,
+      cliente_id:  orden.cliente_id || null,
+      vehiculo_id: orden.vehiculo_id || null,
+      empleado_id: orden.mecanico_id || null,
+      fecha_cita:  `${orden.fecha_estimada}T09:00:00`,
+      duracion_min: 60,
+      estado:      'pendiente'
+    };
+    if (existing) payload.id = existing.id;
+    return this.upsertCita(payload);
   },
 
   /* ── LICENCIAS ────────────────────────────────── */

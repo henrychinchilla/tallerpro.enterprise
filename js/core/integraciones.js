@@ -86,6 +86,32 @@ const Email = {
   }
 };
 
+/* ── NIT (verificación SAT / certificador FEL) ──────── */
+const NIT = {
+  limpiar(n) { return (n || '').toString().replace(/[\s-]/g, '').toUpperCase(); },
+  esCF(n) { const x = NIT.limpiar(n); return !x || x === 'CF' || x === 'C/F'; },
+
+  /* Valida el dígito verificador localmente (algoritmo SAT, módulo 11) */
+  validarLocal(nit) {
+    if (NIT.esCF(nit)) return { valido: true, cf: true };
+    const n = NIT.limpiar(nit);
+    if (!/^[0-9]+K?$/.test(n)) return { valido: false, cf: false };
+    const verif = n.slice(-1), numero = n.slice(0, -1);
+    if (!/^\d+$/.test(numero) || !numero.length) return { valido: false, cf: false };
+    let suma = 0; const L = numero.length;
+    for (let i = 0; i < L; i++) suma += Number(numero[i]) * (L - i + 1);
+    const comp = (11 - (suma % 11)) % 11;
+    const calc = comp === 10 ? 'K' : String(comp);
+    return { valido: calc === verif, cf: false };
+  },
+
+  /* Consulta en línea (Edge Function nit-sat: dígito + nombre vía FEL) */
+  async consultar(nit) {
+    if (NIT.esCF(nit)) return { ok: true, cf: true, valido: true, nit: 'CF' };
+    return _invocar('nit-sat', { nit: NIT.limpiar(nit) });
+  }
+};
+
 /* ── IA (Claude) ───────────────────────────────────── */
 const IA = {
   async _pedir(modo, mensaje, contexto = {}) {

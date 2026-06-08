@@ -8,15 +8,24 @@ Modulos.calendario = {
     const hoy = new Date();
     const ini = new Date(hoy.getFullYear(), hoy.getMonth(), 1).toISOString();
     const fin = new Date(hoy.getFullYear(), hoy.getMonth()+2, 0).toISOString();
-    let vencDocs = [], recurrentes = [];
-    [this._citas, this._clientes, this._vehiculos, this._empleados, vencDocs, recurrentes] = await Promise.all([
+    let vencDocs = [], recurrentes = [], envios = [];
+    [this._citas, this._clientes, this._vehiculos, this._empleados, vencDocs, recurrentes, envios] = await Promise.all([
       DB.getCitas(ini.slice(0,10), fin.slice(0,10)), DB.getClientes(), DB.getVehiculos(), DB.getEmpleados(),
-      DB.getVencimientosDocumentos(60).catch(()=>[]), DB.getEgresosRecurrentes().catch(()=>[])
+      DB.getVencimientosDocumentos(60).catch(()=>[]), DB.getEgresosRecurrentes().catch(()=>[]),
+      DB.getEnvios({archivado:false}).catch(()=>[])
     ]);
 
     const hoyStr = hoy.toISOString().slice(0,10);
-    const citasHoy = this._citas.filter(c=>c.fecha_cita?.slice(0,10)===hoyStr);
-    const citasProx = this._citas.filter(c=>c.fecha_cita?.slice(0,10)>hoyStr).slice(0,5);
+    /* Pagos recurrentes como eventos del calendario (mes actual y siguiente) */
+    const pagos = this._pagosEventos(recurrentes, hoy);
+    const enviosEv = (envios||[])
+      .filter(e=>e.fecha_entrega_estimada && e.estado!=='cerrado')
+      .map(e=>({ _envio:true, id:e.id, titulo:e.descripcion, tipo:e.tipo, fecha_cita:`${e.fecha_entrega_estimada}T10:00:00` }));
+    const eventos = [...this._citas, ...pagos, ...enviosEv]
+      .sort((a,b)=>(a.fecha_cita||'').localeCompare(b.fecha_cita||''));
+    const citasHoy = eventos.filter(c=>c.fecha_cita?.slice(0,10)===hoyStr);
+    const citasProx = eventos.filter(c=>c.fecha_cita?.slice(0,10)>hoyStr).slice(0,6);
+    this._eventosMes = eventos;
 
     el.innerHTML = `
       <div class="page-header">
@@ -42,7 +51,7 @@ Modulos.calendario = {
           <div class="card">
             <div class="card-sub mb-3">📋 Todas las Citas del Mes</div>
             <div style="max-height:500px;overflow-y:auto">
-              ${this._citas.map(c=>this._renderCitaCard(c,true)).join('')||'<div class="text-muted">Sin citas este mes</div>'}
+              ${(this._eventosMes||this._citas).map(c=>this._renderCitaCard(c,true)).join('')||'<div class="text-muted">Sin citas este mes</div>'}
             </div>
           </div>
         </div>
@@ -76,9 +85,49 @@ Modulos.calendario = {
     </div>`;
   },
 
+  /* Convierte los gastos recurrentes activos en eventos del calendario
+     (su fecha del mes actual y del siguiente, según dia_mes). */
+  _pagosEventos(recurrentes, hoy) {
+    const out = [];
+    (recurrentes||[]).filter(r=>r.activo).forEach(r=>{
+      [0,1].forEach(m=>{
+        const base = new Date(hoy.getFullYear(), hoy.getMonth()+m, 1);
+        const y = base.getFullYear(), mo = base.getMonth();
+        const dia = Math.min(Math.max(1, r.dia_mes||1), new Date(y, mo+1, 0).getDate());
+        const fechaStr = `${y}-${String(mo+1).padStart(2,'0')}-${String(dia).padStart(2,'0')}`;
+        out.push({ _pago:true, id:r.id, titulo:r.concepto, monto:r.monto, fecha_cita:`${fechaStr}T08:00:00` });
+      });
+    });
+    return out;
+  },
+
   _renderCitaCard(c, conFecha=false) {
     const hora = c.fecha_cita ? new Date(c.fecha_cita).toLocaleTimeString('es-GT',{hour:'2-digit',minute:'2-digit'}) : '';
     const fecha = c.fecha_cita ? new Date(c.fecha_cita).toLocaleDateString('es-GT',{day:'numeric',month:'short'}) : '';
+    /* Evento de envío / flete (entrega estimada) */
+    if (c._envio) {
+      return `<div style="padding:10px;border-left:3px solid var(--cyan);margin-bottom:8px;background:var(--surface2);border-radius:0 8px 8px 0;cursor:pointer"
+           onclick="App.navegarA('envios')">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <div style="font-weight:700;font-size:13px">🚚 ${c.titulo}</div>
+          <div style="font-size:11px;color:var(--cyan)">${conFecha?fecha+' ':''}${hora}</div>
+        </div>
+        <div style="font-size:11px;color:var(--text3);margin-top:2px">Entrega estimada de envío</div>
+      </div>`;
+    }
+    /* Evento de pago recurrente (no es una cita real) */
+    if (c._pago) {
+      return `<div style="padding:10px;border-left:3px solid var(--red);margin-bottom:8px;background:var(--surface2);border-radius:0 8px 8px 0;cursor:pointer"
+           onclick="Modulos.finanzas&&(Modulos.finanzas._tab='recurrentes');App.navegarA('finanzas')">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <div style="font-weight:700;font-size:13px">💸 ${c.titulo}</div>
+          <div style="font-size:11px;color:var(--red)">${conFecha?fecha+' ':''}</div>
+        </div>
+        <div style="font-size:11px;color:var(--text3);margin-top:2px;display:flex;justify-content:space-between">
+          <span>Pago programado</span><span class="text-red mono-sm">${UI.q(c.monto)}</span>
+        </div>
+      </div>`;
+    }
     return `<div style="padding:10px;border-left:3px solid var(--${c.estado==='completada'?'green':c.estado==='cancelada'?'red':'amber'});margin-bottom:8px;background:var(--surface2);border-radius:0 8px 8px 0;cursor:pointer" onclick="Modulos.calendario.modalCita('${c.id}')">
       <div style="display:flex;justify-content:space-between;align-items:center">
         <div style="font-weight:700;font-size:13px">${c.titulo}</div>
@@ -127,7 +176,7 @@ Modulos.calendario = {
           </select></div>
         ${esEdicion?`<div class="form-group"><label class="form-label">Estado</label>
           <select class="form-select" id="cit-estado">
-            ${['pendiente','confirmada','en_proceso','completada','cancelada'].map(s=>`<option value="${s}" ${c.estado===s?'selected':''}>${s}</option>`).join('')}
+            ${['pendiente','confirmada','completada','cancelada'].map(s=>`<option value="${s}" ${c.estado===s?'selected':''}>${s}</option>`).join('')}
           </select></div>`:''}
       </div>
       <div class="form-group"><label class="form-label">Notas</label>

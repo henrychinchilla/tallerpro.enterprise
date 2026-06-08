@@ -76,7 +76,11 @@ Modulos.clientes = {
         <div class="form-group"><label class="form-label">Nombre Completo *</label>
           <input class="form-input" id="cli-nombre" value="${c.nombre||''}"></div>
         <div class="form-group"><label class="form-label">NIT</label>
-          <input class="form-input" id="cli-nit" value="${c.nit||''}" placeholder="CF"></div>
+          <div style="display:flex;gap:6px">
+            <input class="form-input" id="cli-nit" value="${c.nit||''}" placeholder="CF" style="flex:1">
+            <button type="button" class="btn btn-ghost" onclick="Modulos.verificarNIT('cli-nit','cli-nit-status','cli-nombre')" title="Verificar NIT con la SAT">🔎</button>
+          </div>
+          <div id="cli-nit-status" style="margin-top:4px;min-height:14px"></div></div>
       </div>
       <div class="form-row">
         <div class="form-group"><label class="form-label">Teléfono *</label>
@@ -121,8 +125,39 @@ Modulos.clientes = {
     };
     if (id) fields.id = id;
 
+    /* Aviso (no bloquea) si el NIT tiene dígito verificador inválido */
+    if (fields.nit && !NIT.validarLocal(fields.nit).valido) {
+      UI.toast('Aviso: el dígito verificador del NIT no parece válido','warn');
+    }
+
+    const tracking = !id && document.getElementById('cli-tracking')?.checked;
+
     const { error } = await DB.upsertCliente(fields);
     if (error) { UI.toast('Error: '+error.message,'error'); return; }
+
+    /* Acceso de seguimiento: usuario = email, contraseña = su teléfono */
+    if (tracking) {
+      const passDigits = (fields.tel||'').replace(/\D/g,'');
+      if (!fields.email) {
+        UI.toast('Para el acceso de seguimiento el cliente necesita un email','warn');
+      } else if (passDigits.length < 6) {
+        UI.toast('El teléfono necesita al menos 6 dígitos para usarse como contraseña','warn');
+      } else {
+        UI.toast('Creando acceso de seguimiento...','info');
+        const r = await Auth.crearUsuario({
+          nombre: fields.nombre, email: fields.email, rol: 'cliente',
+          telefono: fields.tel, avatar: '🚗', password: passDigits
+        });
+        if (r.ok) {
+          /* La contraseña ES su teléfono: no forzar cambio en el primer ingreso */
+          if (r.id) await DB.upsertUsuario({ id: r.id, debe_cambiar_password: false });
+          UI.toast(`Acceso creado ✓ — usuario: ${fields.email} · contraseña: su teléfono`);
+        } else {
+          UI.toast('Cliente guardado; el acceso no se pudo crear: '+r.error,'warn');
+        }
+      }
+    }
+
     UI.cerrarModal();
     UI.toast(id?'Cliente actualizado ✓':'Cliente creado ✓');
     this.render();

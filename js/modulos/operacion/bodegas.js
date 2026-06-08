@@ -72,10 +72,10 @@ Modulos.bodegas = {
   async verInventario(bodegaId, nombre) {
     const el = document.getElementById('page-content');
     UI.loading(el);
-    const { data: items } = await getSB().from('inventario').select('*')
-      .eq('tenant_id', getTID())
-      .eq(bodegaId ? 'bodega_id' : 'bodega_id', bodegaId || null)
-      .order('nombre');
+    this._bodegaActiva = bodegaId || null;
+    let qInv = getSB().from('inventario').select('*').eq('tenant_id', getTID());
+    qInv = bodegaId ? qInv.eq('bodega_id', bodegaId) : qInv.is('bodega_id', null);
+    const { data: items } = await qInv.order('nombre');
 
     const totalItems = items?.length || 0;
     const bajoStock  = items?.filter(i=>i.stock<=i.min_stock).length || 0;
@@ -110,7 +110,7 @@ Modulos.bodegas = {
                   <td class="mono-sm">${i.codigo||'—'}</td>
                   <td><b>${i.nombre}</b></td>
                   <td><span class="badge badge-gray">${i.categoria||'General'}</span></td>
-                  <td class="mono-sm ${bajo?'text-red':'text-green'}"><b>${i.stock}</b> ${i.unidad}</td>
+                  <td class="mono-sm ${bajo?'text-red':'text-green'}"><b>${i.stock}</b> ${i.unidad_medida||''}</td>
                   <td class="mono-sm text-muted">${i.min_stock}</td>
                   ${verCosto?`<td class="mono-sm">${UI.q(i.precio_costo)}</td>`:''}
                   <td class="mono-sm text-amber">${UI.q(i.precio_venta)}</td>
@@ -177,21 +177,20 @@ Modulos.bodegas = {
   async guardarItem(bodegaId) {
     const nombre = document.getElementById('bi-nombre')?.value.trim();
     if (!nombre) { UI.toast('El nombre es obligatorio','error'); return; }
-    const payload = {
-      tenant_id:    getTID(),
-      bodega_id:    bodegaId || null,
-      codigo:       document.getElementById('bi-codigo')?.value.trim()||null,
+    const fields = {
+      bodega_id:     bodegaId || null,
+      codigo:        document.getElementById('bi-codigo')?.value.trim()||null,
       nombre,
-      categoria:    document.getElementById('bi-cat')?.value,
-      unidad:       document.getElementById('bi-unidad')?.value,
-      stock:        parseFloat(document.getElementById('bi-stock')?.value)||0,
-      min_stock:    parseFloat(document.getElementById('bi-min')?.value)||5,
-      precio_venta: parseFloat(document.getElementById('bi-venta')?.value)||0
+      categoria:     document.getElementById('bi-cat')?.value,
+      unidad_medida: document.getElementById('bi-unidad')?.value,
+      stock:         parseFloat(document.getElementById('bi-stock')?.value)||0,
+      min_stock:     parseFloat(document.getElementById('bi-min')?.value)||5,
+      precio_venta:  parseFloat(document.getElementById('bi-venta')?.value)||0
     };
     /* El costo solo se guarda si el usuario puede verlo */
     const _biCosto = document.getElementById('bi-costo');
-    if (_biCosto) payload.precio_costo = parseFloat(_biCosto.value)||0;
-    const { error } = await getSB().from('inventario').insert(payload);
+    if (_biCosto) fields.precio_costo = parseFloat(_biCosto.value)||0;
+    const { error } = await DB.upsertInventario(fields);
     if (error) { UI.toast('Error: '+error.message,'error'); return; }
     UI.cerrarModal(); UI.toast('Artículo agregado ✓');
     this.verInventario(bodegaId||null, bodegaId?'Bodega':'Taller Principal');
@@ -228,16 +227,21 @@ Modulos.bodegas = {
     const nuevoStock = tipo==='salida' ? stockActual-cant : stockActual+cant;
     if (nuevoStock<0) { UI.toast('Stock insuficiente','error'); return; }
     await getSB().from('inventario').update({ stock:nuevoStock, updated_at:new Date().toISOString() }).eq('id',invId);
+    /* Registrar el movimiento en la trazabilidad compartida con Inventario */
+    await DB.movimientoInventario({
+      inventario_id: invId, tipo, cantidad: cant,
+      notas: document.getElementById('mov-notas')?.value || null,
+      fecha: new Date().toISOString().slice(0,10)
+    });
     UI.cerrarModal(); UI.toast('Movimiento registrado ✓');
-    this.render();
+    this.verInventario(this._bodegaActiva || null, this._bodegaActiva ? (this._bodegas.find(b=>b.id===this._bodegaActiva)?.nombre||'Bodega') : 'Taller Principal');
   },
 
   async modalTraslado(desdeBodegaId, desdeBodegaNombre, invId=null, invNombre=null) {
     /* Cargar artículos de la bodega origen */
-    const { data: itemsOrigen } = await getSB().from('inventario').select('*')
-      .eq('tenant_id', getTID())
-      .eq(desdeBodegaId ? 'bodega_id' : 'bodega_id', desdeBodegaId || null)
-      .order('nombre');
+    let qOrigen = getSB().from('inventario').select('*').eq('tenant_id', getTID());
+    qOrigen = desdeBodegaId ? qOrigen.eq('bodega_id', desdeBodegaId) : qOrigen.is('bodega_id', null);
+    const { data: itemsOrigen } = await qOrigen.order('nombre');
 
     /* Cargar bodegas destino */
     const bodegas = await DB.getBodegas();
@@ -250,7 +254,7 @@ Modulos.bodegas = {
       <div class="form-group"><label class="form-label">Artículo a trasladar *</label>
         <select class="form-select" id="trs-item" onchange="Modulos.bodegas._updateMaxStock(this)">
           <option value="">Seleccionar artículo...</option>
-          ${(itemsOrigen||[]).map(i=>`<option value="${i.id}" data-stock="${i.stock}">${i.nombre} (Stock: ${i.stock} ${i.unidad})</option>`).join('')}
+          ${(itemsOrigen||[]).map(i=>`<option value="${i.id}" data-stock="${i.stock}">${i.nombre} (Stock: ${i.stock} ${i.unidad_medida||''})</option>`).join('')}
         </select></div>
       <div class="form-row">
         <div class="form-group"><label class="form-label">Cantidad a trasladar *</label>
@@ -265,6 +269,43 @@ Modulos.bodegas = {
       </div>
       <div class="form-group"><label class="form-label">Motivo del traslado</label>
         <input class="form-input" id="trs-motivo" placeholder="Reposición, redistribución, etc."></div>
+
+      <div style="border-top:1px solid var(--border);margin-top:6px;padding-top:10px">
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px">
+          <input type="checkbox" id="trs-flete-on" onchange="Modulos.bodegas._toggleFlete()"> 🚚 Registrar flete / envío de este traslado
+        </label>
+        <div id="trs-flete-box" style="display:none;margin-top:10px">
+          <div class="form-row">
+            <div class="form-group"><label class="form-label">¿Cómo se envía?</label>
+              <select class="form-select" id="trs-flete-tipo" onchange="Modulos.bodegas._toggleFlete()">
+                <option value="interno">🏠 Nosotros mismos</option>
+                <option value="externo">🚚 Transporte externo</option>
+              </select></div>
+            <div class="form-group"><label class="form-label">Entrega estimada</label>
+              <input class="form-input" id="trs-festimada" type="date"></div>
+          </div>
+          <div id="trs-flete-interno">
+            <div class="form-row">
+              <div class="form-group"><label class="form-label">Medio</label>
+                <select class="form-select" id="trs-medio">${['moto','vehiculo','camion','cabezal','otro'].map(m=>`<option value="${m}">${m}</option>`).join('')}</select></div>
+              <div class="form-group"><label class="form-label">Responsable</label>
+                <input class="form-input" id="trs-resp"></div>
+            </div>
+            <div class="form-row">
+              <div class="form-group"><label class="form-label">Viáticos (Q)</label><input class="form-input" id="trs-viaticos" type="number" min="0" step="0.01" value="0"></div>
+              <div class="form-group"><label class="form-label">Combustible (Q)</label><input class="form-input" id="trs-combustible" type="number" min="0" step="0.01" value="0"></div>
+            </div>
+          </div>
+          <div id="trs-flete-externo" style="display:none">
+            <div class="form-row">
+              <div class="form-group"><label class="form-label">Empresa de transporte</label><input class="form-input" id="trs-empresa" placeholder="Cargo Expreso..."></div>
+              <div class="form-group"><label class="form-label">Costo del flete (Q)</label><input class="form-input" id="trs-fcosto" type="number" min="0" step="0.01" value="0"></div>
+            </div>
+            <div class="form-group"><label class="form-label">No. de envío / guía</label><input class="form-input" id="trs-fnum"></div>
+          </div>
+        </div>
+      </div>
+
       <div class="alert alert-amber" style="margin-top:8px">
         <div class="alert-icon">ℹ️</div>
         <div class="alert-body" style="font-size:11px">
@@ -284,6 +325,15 @@ Modulos.bodegas = {
       const sel = document.getElementById('trs-item');
       if (sel) { sel.value = invId; Modulos.bodegas._updateMaxStock(sel); }
     }
+  },
+
+  _toggleFlete() {
+    const on = document.getElementById('trs-flete-on')?.checked;
+    const box = document.getElementById('trs-flete-box'); if (box) box.style.display = on ? 'block' : 'none';
+    const tipo = document.getElementById('trs-flete-tipo')?.value;
+    const i = document.getElementById('trs-flete-interno'), e = document.getElementById('trs-flete-externo');
+    if (i) i.style.display = tipo === 'externo' ? 'none' : 'block';
+    if (e) e.style.display = tipo === 'externo' ? 'block' : 'none';
   },
 
   _updateMaxStock(sel) {
@@ -332,16 +382,16 @@ Modulos.bodegas = {
     } else {
       /* Crear nuevo registro en destino */
       await getSB().from('inventario').insert({
-        tenant_id:    getTID(),
-        bodega_id:    destId || null,
-        codigo:       origen.codigo,
-        nombre:       origen.nombre,
-        categoria:    origen.categoria,
-        unidad:       origen.unidad,
-        stock:        cant,
-        min_stock:    origen.min_stock,
-        precio_costo: origen.precio_costo,
-        precio_venta: origen.precio_venta
+        tenant_id:     getTID(),
+        bodega_id:     destId || null,
+        codigo:        `${origen.codigo||'ART'}-B${(destId||'P').slice(0,4)}`,
+        nombre:        origen.nombre,
+        categoria:     origen.categoria,
+        unidad_medida: origen.unidad_medida,
+        stock:         cant,
+        min_stock:     origen.min_stock,
+        precio_costo:  origen.precio_costo,
+        precio_venta:  origen.precio_venta
       });
     }
 
@@ -355,8 +405,33 @@ Modulos.bodegas = {
       fecha:         new Date().toISOString().slice(0,10)
     });
 
+    /* Registrar flete / envío del traslado si se solicitó */
+    if (document.getElementById('trs-flete-on')?.checked) {
+      const tipoF = document.getElementById('trs-flete-tipo')?.value || 'interno';
+      const nm = elId => parseFloat(document.getElementById(elId)?.value) || 0;
+      const via = tipoF==='interno' ? nm('trs-viaticos') : 0;
+      const comb = tipoF==='interno' ? nm('trs-combustible') : 0;
+      const flete = tipoF==='interno' ? 0 : nm('trs-fcosto');
+      const destNombre = destId ? (this._bodegas.find(b=>b.id===destId)?.nombre || 'Bodega') : 'Taller Principal';
+      await DB.upsertEnvio({
+        tipo: tipoF,
+        descripcion: `Traslado: ${origen.nombre} (${cant}) → ${destNombre}`,
+        destinatario: destNombre,
+        bodega_origen_id: desdeBodegaId || null,
+        bodega_destino_id: destId || null,
+        medio: tipoF==='interno' ? (document.getElementById('trs-medio')?.value || null) : null,
+        responsable: tipoF==='interno' ? (document.getElementById('trs-resp')?.value || null) : null,
+        empresa_transporte: tipoF==='externo' ? (document.getElementById('trs-empresa')?.value || null) : null,
+        numero_envio: tipoF==='externo' ? (document.getElementById('trs-fnum')?.value || null) : null,
+        costo_flete: flete, viaticos: via, combustible: comb, costo_total: flete+via+comb,
+        fecha_envio: new Date().toISOString().slice(0,10),
+        fecha_entrega_estimada: document.getElementById('trs-festimada')?.value || null,
+        estado: 'programado'
+      }).catch(()=>{});
+    }
+
     UI.cerrarModal();
-    UI.toast(`✓ Trasladadas ${cant} ${origen.unidad} de "${origen.nombre}" desde ${desdeBodegaNombre}`);
+    UI.toast(`✓ Trasladadas ${cant} ${origen.unidad_medida||''} de "${origen.nombre}" desde ${desdeBodegaNombre}`);
     this.render();
   },
 

@@ -14,6 +14,7 @@ activarlas; sin secrets responden `503` y la app sigue funcionando normal.
 | **Email (Resend)** | `RESEND_API_KEY`, `EMAIL_FROM` |
 | **WhatsApp (Meta)** | `WHATSAPP_TOKEN`, `WHATSAPP_PHONE_ID` |
 | **IA (Claude)** | `ANTHROPIC_API_KEY` |
+| **NIT — verificación (FEL)** | `NIT_LOOKUP_URL` (+ `NIT_LOOKUP_USUARIO`/`NIT_LOOKUP_LLAVE` o `NIT_LOOKUP_TOKEN`) |
 
 ---
 
@@ -29,6 +30,30 @@ activarlas; sin secrets responden `503` y la app sigue funcionando normal.
    ```js
    await Email.enviar('tucorreo@gmail.com', 'Prueba', { text: 'Hola desde TallerPro' })
    ```
+
+## 0.1) Verificación de NIT — `nit-sat`
+
+La Edge Function **`nit-sat`** ya está **DESPLEGADA**. Siempre valida el
+**dígito verificador** del NIT localmente (algoritmo SAT, sin internet).
+Para traer además el **nombre del contribuyente** en línea, conéctala a tu
+**certificador FEL** (INFILE u otro) con estos secrets:
+
+| Secret | Descripción |
+|---|---|
+| `NIT_LOOKUP_URL` | Endpoint de consulta de NIT del certificador. Puede incluir `{nit}` como marcador; si no, se agrega `?nit=...`. |
+| `NIT_LOOKUP_METHOD` | `GET` (por defecto) o `POST`. |
+| `NIT_LOOKUP_USUARIO` / `NIT_LOOKUP_LLAVE` | Cabeceras estilo INFILE (`usuario`, `llave`). |
+| `NIT_LOOKUP_TOKEN` | Alternativa: `Authorization: Bearer <token>`. |
+
+Sin estos secrets, el botón **🔎 Verificar NIT** (en Clientes, Proveedores y
+Facturación) solo valida el dígito. Con ellos, autocompleta el nombre.
+
+Probar (logueado, consola):
+```js
+await NIT.consultar('1234567-8')
+```
+
+---
 
 Arquitectura: el navegador nunca toca las claves. Llama a una Edge
 Function de Supabase, y la función (con sus secrets) habla con Meta o con
