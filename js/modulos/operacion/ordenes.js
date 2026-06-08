@@ -194,6 +194,7 @@ Modulos.ordenes = {
       <div class="modal-footer">
         <button class="btn btn-ghost" onclick="UI.cerrarModal()">Cerrar</button>
         <button class="btn btn-ghost" onclick="Modulos.ordenes.compartirWA('${id}')">💬 WhatsApp</button>
+        <button class="btn btn-ghost" onclick="Modulos.ordenes.avisarEmail('${id}')">📧 Avisar por email</button>
         <button class="btn btn-ghost" onclick="Modulos.ordenes.imprimirOT('${id}')">🖨 Imprimir</button>
         <button class="btn btn-cyan" onclick="UI.cerrarModal();Modulos.ordenes.modalForm('${id}')">✏️ Editar</button>
         ${o.estado==='listo'?`<button class="btn btn-green" onclick="Modulos.ordenes.enviarFacturacion('${id}')">🧾 Enviar a Facturación</button>`:''}
@@ -382,6 +383,17 @@ Modulos.ordenes = {
     } else {
       window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank');
     }
+  },
+
+  /* ── AVISAR POR EMAIL (Edge Function email-send) ──── */
+  async avisarEmail(id) {
+    const o = this._data.find(x=>x.id===id) || await DB.getOrden(id);
+    if (!o) return;
+    if (!o.clientes?.email) { UI.toast('El cliente no tiene email registrado','error'); return; }
+    UI.toast('Enviando aviso por email...','info');
+    const r = await Email.notificarEstadoOT(o, o.clientes);
+    if (r.ok) UI.toast(`Aviso enviado a ${o.clientes.email} ✓`);
+    else UI.toast('No se pudo enviar: '+r.error,'error');
   },
 
   /* ── IMPRIMIR ─────────────────────────────── */

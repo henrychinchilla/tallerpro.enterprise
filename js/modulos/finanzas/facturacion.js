@@ -49,6 +49,7 @@ Modulos.facturacion = {
                 <td><span class="badge badge-${f.estado==='emitida'?'green':f.estado==='anulada'?'red':'amber'}">${f.estado}</span></td>
                 <td><div style="display:flex;gap:4px">
                   <button class="btn btn-sm btn-cyan" onclick="Modulos.facturacion.modalFactura('${f.id}')">Ver</button>
+                  <button class="btn btn-sm btn-ghost" onclick="Modulos.facturacion.enviarEmail('${f.id}')" title="Enviar por email">📧</button>
                   <button class="btn btn-sm btn-ghost" onclick="Modulos.facturacion.imprimir('${f.id}')">🖨</button>
                 </div></td>
               </tr>`).join('')||'<tr><td colspan="9" style="text-align:center;padding:24px;color:var(--text3)">Sin facturas en este período</td></tr>'}
@@ -165,6 +166,36 @@ Modulos.facturacion = {
     if (notasEl && desc) notasEl.value = desc.slice(0,500);
 
     UI.toast(`Importado de ${orden?.num||'OT'}: ${itemsList.length} ítem(s) · ${UI.q(totalConIva)} ✓`);
+  },
+
+  /* Envía la factura al email del cliente (Edge Function email-send) */
+  async enviarEmail(id) {
+    const f = this._data.find(x=>x.id===id);
+    if (!f) return;
+    const email = f.clientes?.email;
+    if (!email) { UI.toast('El cliente no tiene email registrado','error'); return; }
+    const taller = Auth.tenant?.name || 'TallerPro';
+    const nro = `${f.serie||'A'}-${f.num_fel||'—'}`;
+    const html =
+      `<div style="font-family:Arial,sans-serif;max-width:560px;margin:auto">` +
+      `<h2 style="color:#d97706">🧾 ${taller}</h2>` +
+      `<p>Estimado(a) <b>${f.clientes?.nombre||'cliente'}</b>, adjuntamos el detalle de su factura:</p>` +
+      `<table style="width:100%;border-collapse:collapse;font-size:14px">` +
+      `<tr><td style="padding:6px 0;color:#666">Factura</td><td style="text-align:right"><b>${nro}</b></td></tr>` +
+      `<tr><td style="padding:6px 0;color:#666">Fecha</td><td style="text-align:right">${UI.fecha(f.fecha)}</td></tr>` +
+      `<tr><td style="padding:6px 0;color:#666">NIT</td><td style="text-align:right">${f.clientes?.nit||'CF'}</td></tr>` +
+      `<tr><td style="padding:6px 0;color:#666">Subtotal</td><td style="text-align:right">${UI.q(f.subtotal)}</td></tr>` +
+      `<tr><td style="padding:6px 0;color:#666">IVA</td><td style="text-align:right">${UI.q(f.iva)}</td></tr>` +
+      `<tr><td style="padding:10px 0;border-top:2px solid #d97706;font-weight:800">TOTAL</td>` +
+      `<td style="text-align:right;padding:10px 0;border-top:2px solid #d97706;font-weight:800;color:#d97706">${UI.q(f.total)}</td></tr>` +
+      `</table>` +
+      (f.notas?`<p style="font-size:12px;color:#666;margin-top:12px">${f.notas}</p>`:'') +
+      `<p style="margin-top:16px">¡Gracias por su preferencia! 🔧</p></div>`;
+
+    UI.toast('Enviando factura por email...','info');
+    const r = await Email.enviar(email, `${taller} — Factura ${nro}`, { html, referencia_id: f.id });
+    if (r.ok) UI.toast(`Factura enviada a ${email} ✓`);
+    else UI.toast('No se pudo enviar: '+r.error,'error');
   },
 
   imprimir(id) {

@@ -151,7 +151,7 @@ const DB = {
   /* ── ÓRDENES DE TRABAJO ───────────────────────── */
   async getOrdenes(filtros={}) {
     let q = getSB().from('ordenes')
-      .select('*, vehiculos(placa,marca,modelo,anio,color), clientes(nombre,tel), empleados(nombre)')
+      .select('*, vehiculos(placa,marca,modelo,anio,color), clientes(nombre,tel,email), empleados(nombre)')
       .eq('tenant_id', getTID()).order('created_at',{ascending:false});
     if (filtros.estado)     q = q.eq('estado', filtros.estado);
     if (filtros.mecanico)   q = q.eq('mecanico_id', filtros.mecanico);
@@ -308,7 +308,7 @@ const DB = {
   /* ── FACTURAS FEL ─────────────────────────────── */
   async getFacturas(ini=null, fin=null) {
     const m = mesActual();
-    let q = getSB().from('facturas').select('*,clientes(nombre,nit)')
+    let q = getSB().from('facturas').select('*,clientes(nombre,nit,email)')
       .eq('tenant_id', getTID())
       .gte('fecha', ini||m.ini).lte('fecha', fin||m.fin)
       .order('fecha',{ascending:false});
