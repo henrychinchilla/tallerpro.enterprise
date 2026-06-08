@@ -153,8 +153,8 @@ Deno.serve(async (req) => {
   const { data: userData, error: userErr } = await asCaller.auth.getUser(token);
   if (userErr || !userData?.user) return json({ error: "Sesión inválida" }, 401);
 
-  const admin = createClient(url, serviceKey);
-  const { data: perfil } = await admin.from("usuarios")
+  // Usamos asCaller en lugar del cliente admin de service role para evitar problemas de permisos de esquema
+  const { data: perfil } = await asCaller.from("usuarios")
     .select("tenant_id, rol").eq("id", userData.user.id).maybeSingle();
   let tenantId = (perfil as any)?.tenant_id;
   const rol = (perfil as any)?.rol;
@@ -162,16 +162,8 @@ Deno.serve(async (req) => {
     ["superadmin", "admin", "gerente_fin", "gerente_tal"].includes(rol);
 
   if (!tenantId) {
-    const { data: t, error: tErr } = await admin.from("tenants").select("id").limit(1).maybeSingle();
-    const serviceKeyLen = serviceKey ? serviceKey.length : 0;
-    const serviceKeyPrefix = serviceKey ? serviceKey.slice(0, 8) : "none";
-    if (tErr) {
-      return json({ error: `Sin taller asociado. Error de consulta fallback: ${tErr.message} (código: ${tErr.code}, key_len: ${serviceKeyLen}, key_pre: ${serviceKeyPrefix}, perfil: ${JSON.stringify(perfil)}, user: ${userData.user.id}, email: ${userData.user.email})` }, 400);
-    }
-    if (!t) {
-      return json({ error: `Sin taller asociado. No se encontraron registros en la tabla tenants (key_len: ${serviceKeyLen}, key_pre: ${serviceKeyPrefix}, perfil: ${JSON.stringify(perfil)}, user: ${userData.user.id}, email: ${userData.user.email})` }, 400);
-    }
-    tenantId = t.id;
+    const { data: t } = await asCaller.from("tenants").select("id").limit(1).maybeSingle();
+    tenantId = t?.id;
   }
 
   // ── Payload ──
@@ -188,7 +180,7 @@ Deno.serve(async (req) => {
   let userContent = "";
   if (modo === "chat" || modo === "insights") {
     if (!tenantId) return json({ error: "Sin taller asociado a tu usuario" }, 400);
-    const snap = await snapshotTenant(admin, tenantId, elevado);
+    const snap = await snapshotTenant(asCaller, tenantId, elevado);
     userContent = `Fecha de hoy: ${new Date().toISOString().slice(0, 10)}\n` +
       `Snapshot del taller (JSON):\n${JSON.stringify(snap, null, 2)}\n\n` +
       (modo === "insights" ? "Genera el resumen ejecutivo." : `Pregunta: ${mensaje}`);
@@ -234,7 +226,7 @@ Deno.serve(async (req) => {
 
     // Log opcional (no bloquea si la tabla no existe aún)
     if (tenantId) {
-      admin.from("ai_conversaciones").insert({
+      asCaller.from("ai_conversaciones").insert({
         tenant_id: tenantId, usuario_id: userData.user.id,
         modo, pregunta: mensaje || "(insights)", respuesta: texto,
       }).then(() => {}, () => {});
