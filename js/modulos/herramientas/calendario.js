@@ -103,6 +103,7 @@ Modulos.calendario = {
       <div class="form-group"><label class="form-label">Notas</label>
         <textarea class="form-input" id="cit-notas" rows="2">${c.notas||''}</textarea></div>
       <div class="modal-footer">
+        ${esEdicion?`<button class="btn btn-sm btn-danger" title="Eliminar" onclick="Modulos.eliminarRegistro('citas','${id}','${(c.titulo||'esta cita').replace(/'/g,"\\'")}',()=>{UI.cerrarModal();Modulos.calendario.render()})">🗑️ Eliminar</button>`:''}
         <button class="btn btn-ghost" onclick="UI.cerrarModal()">Cancelar</button>
         <button class="btn btn-amber" onclick="Modulos.calendario.guardarCita('${id||''}')">
           ${esEdicion?'Guardar Cambios':'Crear Cita'}

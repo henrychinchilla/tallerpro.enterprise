@@ -35,6 +35,10 @@ Modulos.proveedores = {
                 ${p.email?`<span>✉️ ${p.email}</span>`:''}
                 ${p.contacto?`<span>👤 ${p.contacto}</span>`:''}
               </div>
+              <div style="display:flex;gap:4px;margin-top:10px">
+                ${Modulos.btnAccion('editar', `Modulos.proveedores.modalForm('${p.id}')`)}
+                ${Modulos.btnAccion('eliminar', `Modulos.eliminarRegistro('proveedores','${p.id}','${(p.nombre||'').replace(/'/g,"\\'")}',()=>Modulos.proveedores.render())`)}
+              </div>
             </div>`).join('')||'<div style="color:var(--text3);padding:24px">Sin proveedores registrados</div>'}
         </div>
       </div>`;

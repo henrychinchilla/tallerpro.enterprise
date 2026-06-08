@@ -47,7 +47,10 @@ Modulos.marketing = {
                   ${c.precio_regular>0?Math.round((1-c.precio_combo/c.precio_regular)*100)+'% OFF':''}
                 </div>
               </div>
-              <button class="btn btn-sm btn-ghost" style="width:100%;margin-top:10px" onclick="Modulos.marketing.modalCombo('${c.id}')">Editar</button>
+              <div style="display:flex;gap:4px;margin-top:10px">
+                ${Modulos.btnAccion('editar', `Modulos.marketing.modalCombo('${c.id}')`)}
+                ${Modulos.btnAccion('eliminar', `Modulos.eliminarRegistro('combos','${c.id}','${(c.nombre||'').replace(/'/g,"\\'")}',()=>Modulos.marketing._renderTab())`)}
+              </div>
             </div>`).join('')||'<div class="text-muted">Sin combos creados</div>'}
         </div>`;
     }
@@ -71,7 +74,10 @@ Modulos.marketing = {
                   <td>${UI.fecha(p.fecha_inicio)}</td>
                   <td>${UI.fecha(p.fecha_fin)||'Sin límite'}</td>
                   <td><span class="badge badge-${vigente?'green':'gray'}">${vigente?'Vigente':'Inactiva'}</span></td>
-                  <td><button class="btn btn-sm btn-cyan" onclick="Modulos.marketing.modalPromo('${p.id}')">Editar</button></td>
+                  <td><div style="display:flex;gap:4px">
+                    ${Modulos.btnAccion('editar', `Modulos.marketing.modalPromo('${p.id}')`)}
+                    ${Modulos.btnAccion('eliminar', `Modulos.eliminarRegistro('promociones','${p.id}','${(p.nombre||'').replace(/'/g,"\\'")}',()=>Modulos.marketing._renderTab())`)}
+                  </div></td>
                 </tr>`;
               }).join('')||'<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--text3)">Sin promociones</td></tr>'}
             </tbody>

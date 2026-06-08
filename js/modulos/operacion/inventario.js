@@ -43,9 +43,9 @@ Modulos.inventario = {
                   ${verCosto?`<td class="mono-sm">${UI.q(i.precio_costo)}</td>`:''}
                   <td class="mono-sm text-amber">${UI.q(i.precio_venta)}</td>
                   <td><div style="display:flex;gap:4px">
-                    <button class="btn btn-sm btn-cyan" onclick="Modulos.inventario.modalForm('${i.id}')">Editar</button>
-                    <button class="btn btn-sm btn-ghost" onclick="Modulos.inventario.modalMovimiento('${i.id}','${i.nombre}',${i.stock})">±</button>
-                    <button class="btn btn-sm btn-danger" onclick="Modulos.inventario.eliminar('${i.id}','${i.nombre}')">✕</button>
+                    <button class="btn btn-sm btn-cyan" onclick="Modulos.inventario.modalForm('${i.id}')" title="Editar">✏️ Editar</button>
+                    <button class="btn btn-sm btn-ghost" onclick="Modulos.inventario.modalMovimiento('${i.id}','${i.nombre}',${i.stock})" title="Movimiento de stock">±</button>
+                    <button class="btn btn-sm btn-danger" onclick="Modulos.inventario.eliminar('${i.id}','${i.nombre}')" title="Eliminar">🗑️</button>
                   </div></td>
                 </tr>`;
               }).join('')||`<tr><td colspan="${verCosto?8:7}" style="text-align:center;padding:24px;color:var(--text3)">Sin artículos registrados</td></tr>`}

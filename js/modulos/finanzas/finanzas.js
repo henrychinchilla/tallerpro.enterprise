@@ -100,8 +100,8 @@ Modulos.finanzas = {
             <td class="mono-sm">${i.referencia||'—'}</td>
             <td class="mono-sm text-green"><b>${UI.q(i.monto)}</b></td>
             <td><div style="display:flex;gap:4px">
-              <button class="btn btn-sm btn-cyan" onclick="Modulos.finanzas.modalIngreso('${i.id}')">Editar</button>
-              <button class="btn btn-sm btn-danger" onclick="Modulos.finanzas.eliminar('ingresos','${i.id}')">✕</button>
+              <button class="btn btn-sm btn-cyan" onclick="Modulos.finanzas.modalIngreso('${i.id}')" title="Editar">✏️ Editar</button>
+              <button class="btn btn-sm btn-danger" onclick="Modulos.finanzas.eliminar('ingresos','${i.id}')" title="Eliminar">🗑️</button>
             </div></td>
           </tr>`).join('')||'<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--text3)">Sin ingresos</td></tr>'}</tbody>
         </table></div>`;
@@ -121,8 +121,8 @@ Modulos.finanzas = {
             <td class="mono-sm">${e.referencia||'—'}</td>
             <td class="mono-sm text-red"><b>${UI.q(e.monto)}</b></td>
             <td><div style="display:flex;gap:4px">
-              <button class="btn btn-sm btn-cyan" onclick="Modulos.finanzas.modalEgreso('${e.id}')">Editar</button>
-              <button class="btn btn-sm btn-danger" onclick="Modulos.finanzas.eliminar('egresos','${e.id}')">✕</button>
+              <button class="btn btn-sm btn-cyan" onclick="Modulos.finanzas.modalEgreso('${e.id}')" title="Editar">✏️ Editar</button>
+              <button class="btn btn-sm btn-danger" onclick="Modulos.finanzas.eliminar('egresos','${e.id}')" title="Eliminar">🗑️</button>
             </div></td>
           </tr>`).join('')||'<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--text3)">Sin egresos</td></tr>'}</tbody>
         </table></div>`;

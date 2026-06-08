@@ -51,7 +51,7 @@ Modulos.usuarios = {
                     <div style="display:flex;gap:4px">
                       <button class="btn btn-sm btn-cyan" onclick="Modulos.usuarios.modalEditar('${u.id}')">✏️ Editar</button>
                       <button class="btn btn-sm btn-ghost" onclick="Modulos.usuarios.modalReset('${u.id}','${u.nombre}')">🔑</button>
-                  <button class="btn btn-sm btn-danger" onclick="Modulos.usuarios.eliminar('${u.id}','${u.nombre}')">✕</button>
+                  <button class="btn btn-sm btn-danger" onclick="Modulos.usuarios.eliminar('${u.id}','${u.nombre}')" title="Eliminar">🗑️</button>
                     </div>
                   </td>
                 </tr>`;

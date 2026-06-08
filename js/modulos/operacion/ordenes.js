@@ -63,10 +63,10 @@ Modulos.ordenes = {
             <td class="mono-sm text-amber">${UI.q(o.total)}</td>
             <td onclick="event.stopPropagation()">
               <div style="display:flex;gap:4px">
-                <button class="btn btn-sm btn-cyan" onclick="Modulos.ordenes.verDetalle('${o.id}')">Ver</button>
-                <button class="btn btn-sm btn-ghost" onclick="Modulos.ordenes.compartirWA('${o.id}')">💬</button>
-                <button class="btn btn-sm btn-ghost" onclick="Modulos.ordenes.imprimirOT('${o.id}')">🖨</button>
-                <button class="btn btn-sm btn-danger" onclick="event.stopPropagation();Modulos.ordenes.eliminarOT('${o.id}')">✕</button>
+                <button class="btn btn-sm btn-cyan" onclick="Modulos.ordenes.verDetalle('${o.id}')" title="Ver">👁 Ver</button>
+                <button class="btn btn-sm btn-ghost" onclick="Modulos.ordenes.compartirWA('${o.id}')" title="WhatsApp">💬</button>
+                <button class="btn btn-sm btn-ghost" onclick="Modulos.ordenes.imprimirOT('${o.id}')" title="Imprimir">🖨️</button>
+                <button class="btn btn-sm btn-danger" onclick="event.stopPropagation();Modulos.ordenes.eliminarOT('${o.id}')" title="Eliminar">🗑️</button>
                 ${o.estado==='listo'?`<button class="btn btn-sm btn-green" onclick="Modulos.ordenes.enviarFacturacion('${o.id}')">🧾 Facturar</button>`:''}
               </div>
             </td>
@@ -168,7 +168,7 @@ Modulos.ordenes = {
                   Cliente autoriza
                 </label>`:''}
               </div>
-              <button class="btn btn-sm btn-danger" onclick="Modulos.ordenes.eliminarItem('${item.id}','${id}')" style="flex-shrink:0">✕</button>
+              <button class="btn btn-sm btn-danger" onclick="Modulos.ordenes.eliminarItem('${item.id}','${id}')" style="flex-shrink:0" title="Eliminar ítem">🗑️</button>
             </div>`).join('') : '<div style="padding:16px;text-align:center;color:var(--text3);font-size:13px">Sin ítems — Agrega trabajos, repuestos o mano de obra</div>'}
         </div>
 

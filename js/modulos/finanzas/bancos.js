@@ -29,7 +29,10 @@ Modulos.bancos = {
               <div style="font-size:11px;color:var(--text3);margin-bottom:8px">No. ${b.numero||'—'}</div>
               <div style="font-family:'Bebas Neue',sans-serif;font-size:24px;color:var(--cyan)">${b.moneda||'GTQ'}</div>
               <div style="font-size:11px;color:var(--text3);margin-top:8px">Click para ver movimientos →</div>
-              <button class="btn btn-sm btn-ghost" style="margin-top:8px;width:100%" onclick="event.stopPropagation();Modulos.bancos.modalBanco('${b.id}')">✏️ Editar</button>
+              <div style="display:flex;gap:4px;margin-top:8px">
+                ${Modulos.btnAccion('editar', `Modulos.bancos.modalBanco('${b.id}')`)}
+                ${Modulos.btnAccion('eliminar', `Modulos.eliminarRegistro('bancos','${b.id}','${(b.nombre||'').replace(/'/g,"\\'")}',()=>Modulos.bancos.render())`)}
+              </div>
             </div>`).join('')||'<div class="text-muted">Sin cuentas bancarias registradas</div>'}
         </div>
         ${this._bancoActivo ? this._renderMovimientos() : ''}
@@ -76,7 +79,10 @@ Modulos.bancos = {
                   ${m.tipo==='entrada'||m.tipo==='deposito'?'+':'-'}${UI.q(m.monto)}
                 </td>
                 <td><span class="badge badge-${m.conciliado?'green':'gray'}">${m.conciliado?'✓':'Pendiente'}</span></td>
-                <td><button class="btn btn-sm btn-cyan" onclick="Modulos.bancos.modalMovimiento('${bancoId}','${m.id}')">Editar</button></td>
+                <td><div style="display:flex;gap:4px">
+                  ${Modulos.btnAccion('editar', `Modulos.bancos.modalMovimiento('${bancoId}','${m.id}')`)}
+                  ${Modulos.btnAccion('eliminar', `Modulos.eliminarRegistro('banco_movimientos','${m.id}','este movimiento',()=>Modulos.bancos.verMovimientos('${bancoId}'))`)}
+                </div></td>
               </tr>`).join('')||'<tr><td colspan="7" style="text-align:center;padding:24px;color:var(--text3)">Sin movimientos registrados</td></tr>'}
             </tbody>
           </table>

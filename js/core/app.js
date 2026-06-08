@@ -276,6 +276,34 @@ Modulos._parseCSV = function (text) {
   return rows;
 };
 
+/* ── Botones de acción ESTANDARIZADOS (Ver/Editar/Imprimir/Eliminar) ──
+   Misma iconografía, color y orden en todos los módulos.
+   Uso: ${Modulos.btnAccion('editar', `Modulos.x.modalForm('${id}')`)} */
+Modulos.btnAccion = function (tipo, onclick, opts = {}) {
+  const stop = opts.stop !== false;   // por defecto frena la propagación (filas clickeables)
+  const map = {
+    ver:      ['btn-cyan',   '👁 Ver',    'Ver'],
+    editar:   ['btn-cyan',   '✏️ Editar', 'Editar'],
+    imprimir: ['btn-ghost',  '🖨️',        'Imprimir'],
+    eliminar: ['btn-danger', '🗑️',        'Eliminar'],
+  };
+  const [cls, label, title] = map[tipo] || ['btn-ghost', tipo, tipo];
+  const handler = stop ? `event.stopPropagation();${onclick}` : onclick;
+  return `<button class="btn btn-sm ${cls}" title="${opts.titulo || title}" onclick="${handler}">${opts.label || label}</button>`;
+};
+
+/* Eliminar genérico con confirmación (tenant-scoped vía RLS). cb refresca la vista. */
+Modulos.eliminarRegistro = async function (tabla, id, nombre, cb) {
+  const ok = await UI.confirmar(
+    `¿Eliminar <b>${nombre || 'este registro'}</b>? Esta acción no se puede deshacer.`,
+    'Eliminar'
+  );
+  if (!ok) return;
+  const exito = await DB.deleteRegistro(tabla, id);
+  if (exito) { UI.toast('Eliminado ✓'); if (cb) cb(); }
+  else UI.toast('No se pudo eliminar (puede tener registros relacionados)', 'error');
+};
+
 /* Abre un selector de archivo .csv y entrega las filas parseadas al callback */
 Modulos._importarCSV = function (onRows) {
   const input = document.createElement('input');

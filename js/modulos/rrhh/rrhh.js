@@ -44,7 +44,10 @@ Modulos.rrhh = {
                 <td>${UI.fecha(e.fecha_ingreso)}</td>
                 <td class="mono-sm text-amber">${UI.q(e.salario_base)}</td>
                 <td><span class="badge badge-${e.activo?'green':'red'}">${e.activo?'Activo':'Inactivo'}</span></td>
-                <td><button class="btn btn-sm btn-cyan" onclick="Modulos.rrhh.modalEmpleado('${e.id}')">Editar</button></td>
+                <td><div style="display:flex;gap:4px">
+                  ${Modulos.btnAccion('editar', `Modulos.rrhh.modalEmpleado('${e.id}')`)}
+                  ${Modulos.btnAccion('eliminar', `Modulos.rrhh.eliminarEmpleado('${e.id}','${(e.nombre||'').replace(/'/g,"\\'")}')`)}
+                </div></td>
               </tr>`).join('')||'<tr><td colspan="8" style="text-align:center;padding:24px;color:var(--text3)">Sin empleados</td></tr>'}
             </tbody>
           </table>
@@ -350,6 +353,23 @@ Modulos.rrhh = {
   _calcularPreviaNomina(salario) {
     const el = document.getElementById('emp-nomina-preview');
     if (el) el.innerHTML = this._calcularPreview(salario);
+  },
+
+  async eliminarEmpleado(id, nombre) {
+    /* Si tiene historial (nómina/viáticos) el borrado fallará por FK;
+       en ese caso se ofrece desactivarlo en su lugar. */
+    const ok = await UI.confirmar(`¿Eliminar al empleado <b>${nombre||''}</b>? Esta acción no se puede deshacer.`, 'Eliminar');
+    if (!ok) return;
+    const exito = await DB.deleteRegistro('empleados', id);
+    if (exito) { UI.toast('Empleado eliminado ✓'); this._renderTab(); return; }
+    const desactivar = await UI.confirmar(
+      'No se pudo eliminar porque tiene registros relacionados (nómina, viáticos o documentos).<br>¿Deseas <b>desactivarlo</b> en su lugar?',
+      'Desactivar'
+    );
+    if (!desactivar) return;
+    const { error } = await DB.upsertEmpleado({ id, activo: false });
+    if (error) { UI.toast('Error: '+error.message,'error'); return; }
+    UI.toast('Empleado desactivado ✓'); this._renderTab();
   },
 
   async guardarEmpleado(id='') {

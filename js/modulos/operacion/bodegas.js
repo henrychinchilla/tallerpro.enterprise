@@ -60,8 +60,8 @@ Modulos.bodegas = {
                 <button class="btn btn-ghost btn-sm" onclick="Modulos.bodegas.modalBodega('${b.id}')">
                   ✏️ Editar Bodega
                 </button>
-                <button class="btn btn-danger btn-sm" onclick="Modulos.bodegas.eliminarBodega('${b.id}','${b.nombre}')">
-                  ✕ Eliminar
+                <button class="btn btn-danger btn-sm" onclick="Modulos.bodegas.eliminarBodega('${b.id}','${b.nombre}')" title="Eliminar">
+                  🗑️ Eliminar
                 </button>
               </div>
             </div>`).join('')||'<div class="text-muted" style="padding:20px">Sin bodegas adicionales registradas.</div>'}
