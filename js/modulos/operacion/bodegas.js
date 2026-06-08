@@ -72,10 +72,10 @@ Modulos.bodegas = {
   async verInventario(bodegaId, nombre) {
     const el = document.getElementById('page-content');
     UI.loading(el);
-    const { data: items } = await getSB().from('inventario').select('*')
-      .eq('tenant_id', getTID())
-      .eq(bodegaId ? 'bodega_id' : 'bodega_id', bodegaId || null)
-      .order('nombre');
+    this._bodegaActiva = bodegaId || null;
+    let qInv = getSB().from('inventario').select('*').eq('tenant_id', getTID());
+    qInv = bodegaId ? qInv.eq('bodega_id', bodegaId) : qInv.is('bodega_id', null);
+    const { data: items } = await qInv.order('nombre');
 
     const totalItems = items?.length || 0;
     const bajoStock  = items?.filter(i=>i.stock<=i.min_stock).length || 0;
@@ -110,7 +110,7 @@ Modulos.bodegas = {
                   <td class="mono-sm">${i.codigo||'—'}</td>
                   <td><b>${i.nombre}</b></td>
                   <td><span class="badge badge-gray">${i.categoria||'General'}</span></td>
-                  <td class="mono-sm ${bajo?'text-red':'text-green'}"><b>${i.stock}</b> ${i.unidad}</td>
+                  <td class="mono-sm ${bajo?'text-red':'text-green'}"><b>${i.stock}</b> ${i.unidad_medida||''}</td>
                   <td class="mono-sm text-muted">${i.min_stock}</td>
                   ${verCosto?`<td class="mono-sm">${UI.q(i.precio_costo)}</td>`:''}
                   <td class="mono-sm text-amber">${UI.q(i.precio_venta)}</td>
@@ -177,21 +177,20 @@ Modulos.bodegas = {
   async guardarItem(bodegaId) {
     const nombre = document.getElementById('bi-nombre')?.value.trim();
     if (!nombre) { UI.toast('El nombre es obligatorio','error'); return; }
-    const payload = {
-      tenant_id:    getTID(),
-      bodega_id:    bodegaId || null,
-      codigo:       document.getElementById('bi-codigo')?.value.trim()||null,
+    const fields = {
+      bodega_id:     bodegaId || null,
+      codigo:        document.getElementById('bi-codigo')?.value.trim()||null,
       nombre,
-      categoria:    document.getElementById('bi-cat')?.value,
-      unidad:       document.getElementById('bi-unidad')?.value,
-      stock:        parseFloat(document.getElementById('bi-stock')?.value)||0,
-      min_stock:    parseFloat(document.getElementById('bi-min')?.value)||5,
-      precio_venta: parseFloat(document.getElementById('bi-venta')?.value)||0
+      categoria:     document.getElementById('bi-cat')?.value,
+      unidad_medida: document.getElementById('bi-unidad')?.value,
+      stock:         parseFloat(document.getElementById('bi-stock')?.value)||0,
+      min_stock:     parseFloat(document.getElementById('bi-min')?.value)||5,
+      precio_venta:  parseFloat(document.getElementById('bi-venta')?.value)||0
     };
     /* El costo solo se guarda si el usuario puede verlo */
     const _biCosto = document.getElementById('bi-costo');
-    if (_biCosto) payload.precio_costo = parseFloat(_biCosto.value)||0;
-    const { error } = await getSB().from('inventario').insert(payload);
+    if (_biCosto) fields.precio_costo = parseFloat(_biCosto.value)||0;
+    const { error } = await DB.upsertInventario(fields);
     if (error) { UI.toast('Error: '+error.message,'error'); return; }
     UI.cerrarModal(); UI.toast('Artículo agregado ✓');
     this.verInventario(bodegaId||null, bodegaId?'Bodega':'Taller Principal');
@@ -228,16 +227,21 @@ Modulos.bodegas = {
     const nuevoStock = tipo==='salida' ? stockActual-cant : stockActual+cant;
     if (nuevoStock<0) { UI.toast('Stock insuficiente','error'); return; }
     await getSB().from('inventario').update({ stock:nuevoStock, updated_at:new Date().toISOString() }).eq('id',invId);
+    /* Registrar el movimiento en la trazabilidad compartida con Inventario */
+    await DB.movimientoInventario({
+      inventario_id: invId, tipo, cantidad: cant,
+      notas: document.getElementById('mov-notas')?.value || null,
+      fecha: new Date().toISOString().slice(0,10)
+    });
     UI.cerrarModal(); UI.toast('Movimiento registrado ✓');
-    this.render();
+    this.verInventario(this._bodegaActiva || null, this._bodegaActiva ? (this._bodegas.find(b=>b.id===this._bodegaActiva)?.nombre||'Bodega') : 'Taller Principal');
   },
 
   async modalTraslado(desdeBodegaId, desdeBodegaNombre, invId=null, invNombre=null) {
     /* Cargar artículos de la bodega origen */
-    const { data: itemsOrigen } = await getSB().from('inventario').select('*')
-      .eq('tenant_id', getTID())
-      .eq(desdeBodegaId ? 'bodega_id' : 'bodega_id', desdeBodegaId || null)
-      .order('nombre');
+    let qOrigen = getSB().from('inventario').select('*').eq('tenant_id', getTID());
+    qOrigen = desdeBodegaId ? qOrigen.eq('bodega_id', desdeBodegaId) : qOrigen.is('bodega_id', null);
+    const { data: itemsOrigen } = await qOrigen.order('nombre');
 
     /* Cargar bodegas destino */
     const bodegas = await DB.getBodegas();
@@ -250,7 +254,7 @@ Modulos.bodegas = {
       <div class="form-group"><label class="form-label">Artículo a trasladar *</label>
         <select class="form-select" id="trs-item" onchange="Modulos.bodegas._updateMaxStock(this)">
           <option value="">Seleccionar artículo...</option>
-          ${(itemsOrigen||[]).map(i=>`<option value="${i.id}" data-stock="${i.stock}">${i.nombre} (Stock: ${i.stock} ${i.unidad})</option>`).join('')}
+          ${(itemsOrigen||[]).map(i=>`<option value="${i.id}" data-stock="${i.stock}">${i.nombre} (Stock: ${i.stock} ${i.unidad_medida||''})</option>`).join('')}
         </select></div>
       <div class="form-row">
         <div class="form-group"><label class="form-label">Cantidad a trasladar *</label>
@@ -332,16 +336,16 @@ Modulos.bodegas = {
     } else {
       /* Crear nuevo registro en destino */
       await getSB().from('inventario').insert({
-        tenant_id:    getTID(),
-        bodega_id:    destId || null,
-        codigo:       origen.codigo,
-        nombre:       origen.nombre,
-        categoria:    origen.categoria,
-        unidad:       origen.unidad,
-        stock:        cant,
-        min_stock:    origen.min_stock,
-        precio_costo: origen.precio_costo,
-        precio_venta: origen.precio_venta
+        tenant_id:     getTID(),
+        bodega_id:     destId || null,
+        codigo:        `${origen.codigo||'ART'}-B${(destId||'P').slice(0,4)}`,
+        nombre:        origen.nombre,
+        categoria:     origen.categoria,
+        unidad_medida: origen.unidad_medida,
+        stock:         cant,
+        min_stock:     origen.min_stock,
+        precio_costo:  origen.precio_costo,
+        precio_venta:  origen.precio_venta
       });
     }
 
@@ -356,7 +360,7 @@ Modulos.bodegas = {
     });
 
     UI.cerrarModal();
-    UI.toast(`✓ Trasladadas ${cant} ${origen.unidad} de "${origen.nombre}" desde ${desdeBodegaNombre}`);
+    UI.toast(`✓ Trasladadas ${cant} ${origen.unidad_medida||''} de "${origen.nombre}" desde ${desdeBodegaNombre}`);
     this.render();
   },
 
