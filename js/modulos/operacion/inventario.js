@@ -126,6 +126,49 @@ Modulos.inventario = {
         <div class="form-group"><label class="form-label">Precio Venta (Q)</label>
           <input class="form-input" id="inv-venta" type="number" value="${item.precio_venta||0}" min="0" step="0.01"></div>
       </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">No. de parte OEM</label>
+          <input class="form-input" id="inv-oem" value="${item.num_parte_oem||''}" placeholder="OEM / referencia fabricante"></div>
+        <div class="form-group"><label class="form-label">Estado del artículo</label>
+          <select class="form-select" id="inv-estado">
+            ${['nuevo','usado','remanufacturado'].map(s=>`<option ${item.estado_articulo===s?'selected':''}>${s}</option>`).join('')}
+          </select></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Stock máximo</label>
+          <input class="form-input" id="inv-max" type="number" min="0" value="${item.max_stock||''}" placeholder="Opcional"></div>
+        <div class="form-group"><label class="form-label">Peso (kg)</label>
+          <input class="form-input" id="inv-peso" type="number" min="0" step="0.001" value="${item.peso_kg||''}"></div>
+      </div>
+      <div class="form-group"><label class="form-label">Ubicación en bodega</label>
+        <input class="form-input" id="inv-ubic" value="${item.ubicacion||''}" placeholder="Estante A, Fila 3"></div>
+      <div class="form-group">
+        <label class="form-label">Dimensiones (cm)</label>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">
+          <input class="form-input" id="inv-ancho" type="number" min="0" step="0.1" value="${item.ancho_cm||''}" placeholder="Ancho">
+          <input class="form-input" id="inv-alto"  type="number" min="0" step="0.1" value="${item.alto_cm||''}"  placeholder="Alto">
+          <input class="form-input" id="inv-largo" type="number" min="0" step="0.1" value="${item.largo_cm||''}" placeholder="Largo">
+        </div>
+      </div>
+
+      <div style="border-top:1px solid var(--border);padding-top:10px;margin-top:4px">
+        <div style="font-size:11px;color:var(--text3);font-weight:700;text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">🚗 Compatibilidad con vehículos</div>
+        <div class="form-row">
+          <div class="form-group"><label class="form-label">Marca compatible</label>
+            <input class="form-input" id="inv-cmarca" value="${item.compat_marca||''}" placeholder="Toyota, Honda..."></div>
+          <div class="form-group"><label class="form-label">Modelo compatible</label>
+            <input class="form-input" id="inv-cmodelo" value="${item.compat_modelo||''}" placeholder="Corolla, Civic..."></div>
+        </div>
+        <div class="form-row">
+          <div class="form-group"><label class="form-label">Año desde</label>
+            <input class="form-input" id="inv-canioini" type="number" value="${item.compat_anio_ini||''}" placeholder="2010"></div>
+          <div class="form-group"><label class="form-label">Año hasta</label>
+            <input class="form-input" id="inv-caniofin" type="number" value="${item.compat_anio_fin||''}" placeholder="2018"></div>
+        </div>
+        <div class="form-group"><label class="form-label">Motor compatible</label>
+          <input class="form-input" id="inv-cmotor" value="${item.compat_motor||''}" placeholder="1.8L, 2.0 Turbo..."></div>
+      </div>
+
       <div class="form-group"><label class="form-label">Descripción</label>
         <textarea class="form-input" id="inv-desc" rows="2">${item.descripcion||''}</textarea></div>
       <div class="modal-footer">
@@ -152,7 +195,20 @@ Modulos.inventario = {
       min_stock:     parseFloat(document.getElementById('inv-min')?.value)||5,
       precio_venta:  parseFloat(document.getElementById('inv-venta')?.value)||0,
       descripcion:   document.getElementById('inv-desc')?.value||null,
-      imagen_url:    this._img || null
+      imagen_url:    this._img || null,
+      num_parte_oem: document.getElementById('inv-oem')?.value.trim()||null,
+      estado_articulo: document.getElementById('inv-estado')?.value||'nuevo',
+      max_stock:     parseFloat(document.getElementById('inv-max')?.value)||null,
+      peso_kg:       parseFloat(document.getElementById('inv-peso')?.value)||null,
+      ubicacion:     document.getElementById('inv-ubic')?.value.trim()||null,
+      ancho_cm:      parseFloat(document.getElementById('inv-ancho')?.value)||null,
+      alto_cm:       parseFloat(document.getElementById('inv-alto')?.value)||null,
+      largo_cm:      parseFloat(document.getElementById('inv-largo')?.value)||null,
+      compat_marca:  document.getElementById('inv-cmarca')?.value.trim()||null,
+      compat_modelo: document.getElementById('inv-cmodelo')?.value.trim()||null,
+      compat_anio_ini: parseInt(document.getElementById('inv-canioini')?.value)||null,
+      compat_anio_fin: parseInt(document.getElementById('inv-caniofin')?.value)||null,
+      compat_motor:  document.getElementById('inv-cmotor')?.value.trim()||null
     };
     /* El costo solo se toca si el usuario puede verlo (si no, se preserva) */
     const costoEl = document.getElementById('inv-costo');

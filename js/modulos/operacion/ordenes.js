@@ -801,7 +801,7 @@ Modulos.ordenes = {
       <div class="form-group"><label class="form-label">Mecánico asignado</label>
         <select class="form-select" id="ot-mec">
           <option value="">Sin asignar</option>
-          ${this._mecanicos.filter(e=>['mecanico','gerente_tal'].includes(e.rol)).map(e=>`<option value="${e.id}" ${o.mecanico_id===e.id?'selected':''}>${e.nombre}</option>`).join('')}
+          ${this._mecanicos.filter(e=>e.activo!==false).map(e=>`<option value="${e.id}" ${o.mecanico_id===e.id?'selected':''}>${e.nombre}${e.cargo?` — ${e.cargo}`:''}</option>`).join('')}
         </select></div>
       <div class="form-group"><label class="form-label">Descripción del Trabajo *</label>
         <textarea class="form-input" id="ot-desc" rows="3" placeholder="Descripción general del trabajo a realizar...">${o.descripcion||''}</textarea></div>
