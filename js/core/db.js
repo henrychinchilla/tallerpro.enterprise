@@ -337,10 +337,35 @@ const DB = {
     const rows = items.map(i => ({
       factura_id: facturaId, tenant_id: getTID(),
       descripcion: i.descripcion || '', cantidad: i.cantidad || 1,
-      precio_unit: i.precio_unit || 0, total: i.total || 0
+      precio_unit: i.precio_unit || 0, total: i.total || 0,
+      inventario_id: i.inventario_id || null
     }));
     const { error } = await getSB().from('factura_items').insert(rows);
     return error;
+  },
+
+  /* Descuenta del inventario los repuestos vendidos en una factura y
+     registra el movimiento de salida. Solo afecta líneas con inventario_id. */
+  async descontarInventarioVenta(items, referencia) {
+    const fecha = new Date().toISOString().slice(0, 10);
+    let afectados = 0;
+    for (const it of (items || [])) {
+      const cant = Number(it.cantidad) || 0;
+      if (!it.inventario_id || cant <= 0) continue;
+      const { data: inv } = await getSB().from('inventario')
+        .select('stock').eq('id', it.inventario_id).eq('tenant_id', getTID()).maybeSingle();
+      if (!inv) continue;
+      const nuevo = Math.max(0, Number(inv.stock) - cant);
+      await getSB().from('inventario')
+        .update({ stock: nuevo, updated_at: new Date().toISOString() })
+        .eq('id', it.inventario_id);
+      await this.movimientoInventario({
+        inventario_id: it.inventario_id, tipo: 'salida', cantidad: cant,
+        referencia, notas: 'Venta en factura', fecha
+      });
+      afectados++;
+    }
+    return afectados;
   },
 
   /* ── EMPLEADOS ────────────────────────────────── */

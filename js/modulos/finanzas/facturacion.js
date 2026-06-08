@@ -145,12 +145,18 @@ Modulos.facturacion = {
     if (id) fields.id = id;
     const res = await DB.upsertFactura(fields);
     if (res.error) { UI.toast('Error: '+res.error.message,'error'); return; }
-    /* Persistir el desglose en una factura nueva creada desde una OT */
+    /* Persistir el desglose en una factura nueva creada desde una OT
+       y descontar del inventario los repuestos vendidos. */
+    let descontados = 0;
     if (!id && res.data?.id && this._itemsImportados.length) {
       await DB.insertFacturaItems(res.data.id, this._itemsImportados);
+      const nro = `${fields.serie||'A'}-${res.data.num_fel||res.data.id.slice(0,8)}`;
+      descontados = await DB.descontarInventarioVenta(this._itemsImportados, `Factura ${nro}`);
     }
     this._itemsImportados = [];
-    UI.cerrarModal(); UI.toast(id?'Factura actualizada ✓':'Factura emitida ✓');
+    UI.cerrarModal();
+    UI.toast(id ? 'Factura actualizada ✓'
+                : `Factura emitida ✓${descontados ? ` · ${descontados} repuesto(s) descontado(s) de inventario` : ''}`);
     this.render();
   },
 
@@ -177,7 +183,8 @@ Modulos.facturacion = {
     /* Guardar el desglose (una línea por ítem) para persistirlo al emitir */
     this._itemsImportados = itemsList.map(i=>({
       descripcion: i.descripcion, cantidad: i.cantidad,
-      precio_unit: i.precio_unit, total: i.total
+      precio_unit: i.precio_unit, total: i.total,
+      inventario_id: i.inventario_id || null
     }));
     const box = document.getElementById('fel-items-box');
     if (box) box.innerHTML = this._renderItemsBox(this._itemsImportados);

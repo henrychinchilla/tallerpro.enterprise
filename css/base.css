@@ -17,14 +17,14 @@
 }
 [data-theme="light"] {
   --bg:#E7ECF3; --surface:#FFFFFF; --surface2:#F2F5F9; --surface3:#E3E9F1;
-  --border:rgba(15,23,42,0.16);
+  --border:rgba(15,23,42,0.20);
   --amber:#B45309; --amber-dim:rgba(180,83,9,0.13); --amber-border:rgba(180,83,9,0.38);
   --cyan:#0369A1; --cyan-dim:rgba(3,105,161,0.12); --cyan-border:rgba(3,105,161,0.38);
   --green:#047857; --green-dim:rgba(4,120,87,0.13); --green-border:rgba(4,120,87,0.38);
   --red:#B91C1C; --red-dim:rgba(185,28,28,0.12); --red-border:rgba(185,28,28,0.38);
   --purple:#6D28D9; --purple-dim:rgba(109,40,217,0.12); --purple-border:rgba(109,40,217,0.38);
-  --gray:#475569; --gray-dim:rgba(71,85,105,0.12);
-  --text:#0F172A; --text2:#334155; --text3:#5A6678;
+  --gray:#3F4B5C; --gray-dim:rgba(63,75,92,0.14);
+  --text:#0B1220; --text2:#293548; --text3:#4B586B;
 }
 /* En claro, los acentos son oscuros → texto blanco en botones sólidos para máximo contraste */
 [data-theme="light"] .btn-amber,

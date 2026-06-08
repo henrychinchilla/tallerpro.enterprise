@@ -202,11 +202,12 @@ Modulos.ordenes = {
   },
 
   /* ── ITEMS ────────────────────────────────── */
-  modalAddItem(ordenId) {
+  async modalAddItem(ordenId) {
+    this._inventario = await DB.getInventario();
     UI.modal('＋ Agregar Ítem a OT', `
       <div class="form-row">
         <div class="form-group"><label class="form-label">Tipo *</label>
-          <select class="form-select" id="item-tipo">
+          <select class="form-select" id="item-tipo" onchange="Modulos.ordenes._onTipoItem()">
             <option value="servicio">🔧 Servicio</option>
             <option value="repuesto">📦 Repuesto</option>
             <option value="mano_obra">👷 Mano de Obra</option>
@@ -218,6 +219,13 @@ Modulos.ordenes = {
             <input type="checkbox" id="item-extra" style="accent-color:var(--amber)">
             <span style="font-size:13px">Trabajo extra no presupuestado</span>
           </label></div>
+      </div>
+      <div class="form-group" id="item-inv-row" style="display:none">
+        <label class="form-label">Artículo de inventario (descuenta stock al facturar)</label>
+        <select class="form-select" id="item-inv" onchange="Modulos.ordenes._onPickInventario()">
+          <option value="">— Repuesto libre (no afecta inventario) —</option>
+          ${this._inventario.map(a=>`<option value="${a.id}" data-precio="${a.precio_venta||0}" data-nombre="${(a.nombre||'').replace(/"/g,'&quot;')}">${a.nombre} — stock: ${a.stock} ${a.unidad||''}</option>`).join('')}
+        </select>
       </div>
       <div class="form-group"><label class="form-label">Descripción *</label>
         <input class="form-input" id="item-desc" placeholder="Cambio de filtro de aceite, revisión de frenos..."></div>
@@ -248,6 +256,30 @@ Modulos.ordenes = {
     });
   },
 
+  /* Muestra el selector de inventario solo cuando el ítem es un repuesto */
+  _onTipoItem() {
+    const tipo = document.getElementById('item-tipo')?.value;
+    const row = document.getElementById('item-inv-row');
+    if (row) row.style.display = tipo === 'repuesto' ? 'block' : 'none';
+  },
+
+  /* Al elegir un artículo de inventario, autocompleta descripción y precio */
+  _onPickInventario() {
+    const sel = document.getElementById('item-inv');
+    const opt = sel?.options[sel.selectedIndex];
+    if (!opt || !sel.value) return;
+    const desc   = document.getElementById('item-desc');
+    const precio = document.getElementById('item-precio');
+    const cant   = document.getElementById('item-cant');
+    const total  = document.getElementById('item-total');
+    if (desc && !desc.value.trim()) desc.value = opt.dataset.nombre || '';
+    if (precio) {
+      precio.value = opt.dataset.precio || '0';
+      const c = parseFloat(cant?.value) || 1;
+      if (total) total.value = (c * (parseFloat(precio.value) || 0)).toFixed(2);
+    }
+  },
+
   async guardarItem(ordenId) {
     const desc  = document.getElementById('item-desc')?.value.trim();
     const total = parseFloat(document.getElementById('item-total')?.value)||0;
@@ -257,6 +289,8 @@ Modulos.ordenes = {
     const precio  = parseFloat(document.getElementById('item-precio')?.value)||0;
     const esExtra = document.getElementById('item-extra')?.checked||false;
 
+    const esRepuesto = document.getElementById('item-tipo')?.value === 'repuesto';
+    const invId = esRepuesto ? (document.getElementById('item-inv')?.value || null) : null;
     const { error } = await getSB().from('ot_items').insert({
       tenant_id:   getTID(),
       orden_id:    ordenId,
@@ -265,6 +299,7 @@ Modulos.ordenes = {
       cantidad:    cant,
       precio_unit: precio,
       total:       total||cant*precio,
+      inventario_id: invId,
       ejecutado:   false,
       es_extra:    esExtra,
       autorizado:  esExtra ? (document.getElementById('item-autorizado')?.checked||false) : true
@@ -354,11 +389,19 @@ Modulos.ordenes = {
 
     if (error) { UI.toast('Error al crear factura: '+error.message,'error'); return; }
 
+    /* Desglose de la factura + descuento de inventario de los repuestos */
+    const nro = `Factura ${factura.serie||'A'}-${factura.num_fel||factura.id.slice(0,8)}`;
+    await DB.insertFacturaItems(factura.id, itemsList.map(i=>({
+      descripcion: i.descripcion, cantidad: i.cantidad,
+      precio_unit: i.precio_unit, total: i.total, inventario_id: i.inventario_id || null
+    })));
+    const descontados = await DB.descontarInventarioVenta(itemsList, nro);
+
     /* Cambiar estado OT a entregado */
     await DB.updateEstadoOT(id, 'entregado');
 
     UI.cerrarModal();
-    UI.toast('OT enviada a Facturación ✓ — Factura creada');
+    UI.toast(`OT enviada a Facturación ✓ — Factura creada${descontados?` · ${descontados} repuesto(s) descontado(s)`:''}`);
     App.navegarA('facturacion');
   },
 
