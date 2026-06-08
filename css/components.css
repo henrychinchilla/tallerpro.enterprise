@@ -230,6 +230,99 @@
   .dash-charts { grid-template-columns: 1fr; }
 }
 
+/* ── ORGANIGRAMA (ORGANIZATION CHART) ────────────── */
+.org-tree {
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 16px;
+  background: var(--surface);
+  border-radius: 12px;
+  border: 1px solid var(--border);
+}
+.org-group {
+  display: flex;
+  flex-direction: column;
+}
+.org-item {
+  position: relative;
+  padding-left: 36px;
+}
+/* Línea vertical para conectar con hermanos inferiores */
+.org-item::before {
+  content: "";
+  position: absolute;
+  left: 14px;
+  top: -8px;
+  bottom: 0;
+  width: 2px;
+  background: var(--border);
+}
+/* Detener la línea vertical en el último hijo */
+.org-item:last-child::before {
+  height: 28px;
+  bottom: auto;
+}
+/* Conector horizontal para cada nodo */
+.org-item::after {
+  content: "";
+  position: absolute;
+  left: 14px;
+  top: 20px;
+  width: 22px;
+  height: 2px;
+  background: var(--border);
+}
+/* El nodo raíz no lleva conectores ni sangrado */
+.org-item.org-root {
+  padding-left: 0;
+}
+.org-item.org-root::before,
+.org-item.org-root::after {
+  display: none;
+}
+.org-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  transition: all 0.2s ease;
+  z-index: 2;
+  position: relative;
+  max-width: 450px;
+  margin-bottom: 8px;
+}
+.org-card:hover {
+  background: var(--surface3);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.08);
+}
+.org-card-avatar {
+  font-size: 20px;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--surface3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border);
+}
+.org-card-info {
+  flex: 1;
+}
+.org-card-name {
+  font-weight: 700;
+  font-size: 13px;
+  color: var(--text);
+}
+.org-card-cargo {
+  font-size: 11px;
+  color: var(--text3);
+}
+
 /* ── PRINT ───────────────────────────────────────── */
 @media print {
   #sidebar, .mobile-header, .page-actions, .btn { display: none !important; }

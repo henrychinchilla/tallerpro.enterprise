@@ -112,7 +112,7 @@ Modulos.rrhh = {
             <b>Empleados → Editar → Reporta a</b>. La cúpula (CEO/Dueño/Gerente General) aparece arriba sin jefe.
           </div>
         </div>
-        ${this._empleados.length ? `<div>${arbol}</div>`
+        ${this._empleados.length ? `<div class="org-tree"><div class="org-group">${arbol}</div></div>`
           : '<div class="text-muted" style="padding:20px">Sin empleados registrados.</div>'}`;
     }
 
@@ -163,17 +163,29 @@ Modulos.rrhh = {
     visited.add(e.id);
     const hijos = byParent[e.id] || [];
     const dim = e.activo ? '' : 'opacity:.55;';
+    const esRaiz = nivel === 0;
+    
+    // HTML de los hijos recursivos
+    const hijosHtml = hijos.length 
+      ? `<div class="org-group">${hijos.map(h => this._renderNodoOrg(h, byParent, nivel + 1, visited)).join('')}</div>` 
+      : '';
+
     return `
-      <div style="margin-left:${nivel*24}px;${dim}">
-        <div style="display:flex;align-items:center;gap:10px;padding:9px 12px;background:var(--surface2);
-             border-radius:8px;border-left:3px solid ${nivel===0?'var(--amber)':'var(--cyan)'};margin-bottom:6px">
-          <span style="font-size:20px">${e.avatar||'👤'}</span>
-          <div>
-            <div style="font-weight:700;font-size:13px">${e.nombre}${nivel===0?' <span class="badge badge-amber" style="font-size:9px">cúpula</span>':''}</div>
-            <div style="font-size:11px;color:var(--text3)">${e.cargo||ROLES[e.rol]?.label||'—'}${hijos.length?` · ${hijos.length} a cargo`:''}</div>
+      <div class="org-item ${esRaiz ? 'org-root' : ''}" style="${dim}">
+        <div class="org-card" style="border-left: 4px solid ${esRaiz ? 'var(--amber)' : 'var(--cyan)'}">
+          <div class="org-card-avatar">${e.avatar || '👤'}</div>
+          <div class="org-card-info">
+            <div class="org-card-name">
+              ${e.nombre}
+              ${esRaiz ? ' <span class="badge badge-amber" style="font-size:9px;padding:1px 6px">cúpula</span>' : ''}
+            </div>
+            <div class="org-card-cargo">
+              ${e.cargo || ROLES[e.rol]?.label || '—'}
+              ${hijos.length ? ` · <span class="text-amber" style="font-weight:700">${hijos.length} a cargo</span>` : ''}
+            </div>
           </div>
         </div>
-        ${hijos.map(h=>this._renderNodoOrg(h, byParent, nivel+1, visited)).join('')}
+        ${hijosHtml}
       </div>`;
   },
 
