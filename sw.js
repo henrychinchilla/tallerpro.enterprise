@@ -8,7 +8,7 @@
    Para forzar actualización: subir CACHE_VERSION.
 ═══════════════════════════════════════════════════════ */
 
-const CACHE_VERSION = 'v3.8.0-20260608';
+const CACHE_VERSION = 'v3.9.0-20260608b';
 const CACHE_NAME = `tallerpro-${CACHE_VERSION}`;
 
 /* App shell — se precachea en install para que funcione offline */
@@ -34,6 +34,10 @@ const PRECACHE = [
   '/js/modulos/operacion/inventario.js',
   '/js/modulos/operacion/bodegas.js',
   '/js/modulos/operacion/proveedores.js',
+  '/js/modulos/operacion/activos.js',
+  '/js/modulos/operacion/envios.js',
+  '/js/modulos/operacion/mi_ot.js',
+  '/js/modulos/finanzas/presupuesto.js',
   '/js/modulos/finanzas/facturacion.js',
   '/js/modulos/finanzas/bancos.js',
   '/js/modulos/finanzas/finanzas.js',
@@ -102,19 +106,19 @@ self.addEventListener('fetch', event => {
     return;
   }
 
-  /* 3. Assets propios (css/js/img): stale-while-revalidate */
+  /* 3. Assets propios (css/js/img): NETWORK-FIRST.
+        Siempre intenta la red para servir el código más reciente tras un
+        deploy; si no hay conexión, cae al caché (offline). Esto evita el
+        problema de "desplegué pero veo lo viejo" sin desregistrar el SW. */
   if (esEstaticoPropio(url)) {
     event.respondWith(
-      caches.match(req).then(cacheado => {
-        const red = fetch(req).then(res => {
-          if (res && res.status === 200) {
-            const copia = res.clone();
-            caches.open(CACHE_NAME).then(c => c.put(req, copia)).catch(() => {});
-          }
-          return res;
-        }).catch(() => cacheado);
-        return cacheado || red;
-      })
+      fetch(req).then(res => {
+        if (res && res.status === 200) {
+          const copia = res.clone();
+          caches.open(CACHE_NAME).then(c => c.put(req, copia)).catch(() => {});
+        }
+        return res;
+      }).catch(() => caches.match(req))
     );
     return;
   }
