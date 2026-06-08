@@ -70,6 +70,12 @@ const App = {
         </button>
       </div>`;
 
+    /* Acceso al POS (pantalla aparte) para roles de venta/gestión */
+    const posBtn = ['superadmin','admin','gerente_tal','gerente_fin','recepcionista'].includes(rol) ? `
+      <div style="padding:0 12px 10px">
+        <a class="btn btn-ghost btn-sm" style="width:100%;text-align:center;display:block" href="/pos.html">🛒 Punto de Venta</a>
+      </div>` : '';
+
     sidebar.innerHTML = `
       <div class="sidebar-brand">
         <div class="sidebar-brand-name">TALLERPRO</div>
@@ -79,6 +85,7 @@ const App = {
         <div class="sidebar-tenant-name">${Auth.tenant?.name || 'TallerPro'}</div>
       </div>
       <nav class="sidebar-nav"><ul>${nav}</ul></nav>
+      ${posBtn}
       ${iaBtn}
       <div class="sidebar-user" id="sidebar-user" onclick="TEMAS.picker()" title="Cambiar tema">
         <span class="sidebar-user-avatar">${Auth.user?.avatar || '👤'}</span>

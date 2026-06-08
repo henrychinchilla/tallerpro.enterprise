@@ -622,6 +622,12 @@ Modulos.ordenes = {
     })));
     const descontados = await DB.descontarInventarioVenta(itemsList, nro);
 
+    /* Fidelización: acumula Q1 = 1 punto si el cliente está inscrito */
+    if (cli?.programa_puntos) {
+      const pts = Math.floor(Number(total) || 0);
+      if (pts > 0) await DB.registrarPuntos(o.cliente_id, pts, { tipo:'gana', motivo:'OT facturada', referencia:factura.num, factura_id:factura.id });
+    }
+
     /* Cambiar estado OT a entregado */
     await DB.updateEstadoOT(id, 'entregado');
 

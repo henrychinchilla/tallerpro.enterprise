@@ -92,6 +92,13 @@ Modulos.clientes = {
         <input class="form-input" id="cli-dir" value="${c.direccion||''}"></div>
       <div class="form-group"><label class="form-label">Notas</label>
         <textarea class="form-input" id="cli-notas" rows="2">${c.notas||''}</textarea></div>
+      <div class="form-group">
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+          <input type="checkbox" id="cli-puntos" ${c.programa_puntos?'checked':''}>
+          <span class="form-label" style="margin:0">⭐ Inscrito en programa de puntos${esEdicion&&c.programa_puntos?` — saldo: <b>${c.puntos_saldo||0}</b> pts`:''}</span>
+        </label>
+        <div style="font-size:11px;color:var(--text3);margin-top:2px">Acumula Q1 = 1 punto en cada compra; canje 10 puntos = Q1.</div>
+      </div>
       ${!esEdicion?`
       <div class="card" style="background:var(--amber-dim);border-color:var(--amber-border);margin-top:4px">
         <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px">
@@ -121,7 +128,8 @@ Modulos.clientes = {
       direccion:      document.getElementById('cli-dir')?.value.trim()||null,
       notas:          document.getElementById('cli-notas')?.value.trim()||null,
       nombre_empresa: tipo==='empresa'?document.getElementById('cli-empresa')?.value.trim():null,
-      representante:  tipo==='empresa'?document.getElementById('cli-representante')?.value.trim():null
+      representante:  tipo==='empresa'?document.getElementById('cli-representante')?.value.trim():null,
+      programa_puntos: document.getElementById('cli-puntos')?.checked || false
     };
     if (id) fields.id = id;
 

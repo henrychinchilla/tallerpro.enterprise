@@ -205,6 +205,28 @@ const DB = {
     return { data, error };
   },
 
+  /* ── FIDELIZACIÓN / PUNTOS ─────────────────────── */
+  /* Registra un movimiento de puntos y actualiza el saldo del cliente.
+     puntos: positivo = gana, negativo = canje. Devuelve el nuevo saldo. */
+  async registrarPuntos(clienteId, puntos, { tipo='gana', motivo=null, referencia=null, factura_id=null } = {}) {
+    if (!clienteId || !puntos) return null;
+    await getSB().from('puntos_movimientos').insert({
+      tenant_id: getTID(), cliente_id: clienteId, tipo, puntos,
+      motivo, referencia, factura_id, fecha: new Date().toISOString().slice(0,10)
+    });
+    const { data: c } = await getSB().from('clientes').select('puntos_saldo').eq('id', clienteId).maybeSingle();
+    const nuevo = Math.max(0, (Number(c?.puntos_saldo)||0) + Number(puntos));
+    await getSB().from('clientes').update({ puntos_saldo: nuevo, updated_at: new Date().toISOString() }).eq('id', clienteId);
+    return nuevo;
+  },
+
+  async getPuntosMovimientos(clienteId, limite=100) {
+    const { data } = await getSB().from('puntos_movimientos').select('*')
+      .eq('tenant_id', getTID()).eq('cliente_id', clienteId)
+      .order('created_at', { ascending:false }).limit(limite);
+    return data || [];
+  },
+
   /* ── ENVÍOS / FLETES (logística) ───────────────── */
   async getEnvios({ archivado = false } = {}) {
     const { data } = await getSB().from('envios').select('*')

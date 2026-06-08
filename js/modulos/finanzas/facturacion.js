@@ -172,6 +172,11 @@ Modulos.facturacion = {
       const nro = res.data.num || res.data.id.slice(0,8);
       descontados = await DB.descontarInventarioVenta(this._itemsImportados, `Factura ${nro}`);
     }
+    /* Fidelización: acumula Q1 = 1 punto si el cliente está inscrito (solo al emitir) */
+    if (!id && res.data?.id && cli?.programa_puntos) {
+      const pts = Math.floor(Number(res.data.total ?? fields.total) || 0);
+      if (pts > 0) await DB.registrarPuntos(cli.id, pts, { tipo:'gana', motivo:'Factura', referencia:res.data.num, factura_id:res.data.id });
+    }
     this._itemsImportados = [];
     UI.cerrarModal();
     UI.toast(id ? 'Factura actualizada ✓'

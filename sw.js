@@ -8,7 +8,7 @@
    Para forzar actualización: subir CACHE_VERSION.
 ═══════════════════════════════════════════════════════ */
 
-const CACHE_VERSION = 'v3.9.0-20260608b';
+const CACHE_VERSION = 'v3.9.1-20260608c';
 const CACHE_NAME = `tallerpro-${CACHE_VERSION}`;
 
 /* App shell — se precachea en install para que funcione offline */
@@ -92,16 +92,17 @@ self.addEventListener('fetch', event => {
   /* 1. Supabase: nunca cachear (datos, auth, tokens) */
   if (esSupabase(url)) return;                 // deja pasar a la red por defecto
 
-  /* 2. Navegación (HTML): network-first con fallback al shell */
+  /* 2. Navegación (HTML): network-first, cacheando cada página por su URL
+        (no machacar el shell con /pos.html u otras páginas) */
   if (req.mode === 'navigate') {
     event.respondWith(
       fetch(req)
         .then(res => {
           const copia = res.clone();
-          caches.open(CACHE_NAME).then(c => c.put('/index.html', copia)).catch(() => {});
+          caches.open(CACHE_NAME).then(c => c.put(req, copia)).catch(() => {});
           return res;
         })
-        .catch(() => caches.match('/index.html').then(r => r || caches.match('/')))
+        .catch(() => caches.match(req).then(r => r || caches.match('/index.html')).then(r => r || caches.match('/')))
     );
     return;
   }
