@@ -13,6 +13,8 @@ Modulos.marketing = {
           <button class="tab-btn ${this._tab==='combos'?'active':''}" onclick="Modulos.marketing._tab='combos';Modulos.marketing._renderTab()">🎁 Combos</button>
           <button class="tab-btn ${this._tab==='promos'?'active':''}" onclick="Modulos.marketing._tab='promos';Modulos.marketing._renderTab()">🏷️ Promociones</button>
           <button class="tab-btn ${this._tab==='flyers'?'active':''}" onclick="Modulos.marketing._tab='flyers';Modulos.marketing._renderTab()">📄 Generador de Flyers</button>
+          <button class="tab-btn ${this._tab==='fidelizacion'?'active':''}" onclick="Modulos.marketing._tab='fidelizacion';Modulos.marketing._renderTab()">⭐ Fidelización</button>
+          <button class="tab-btn ${this._tab==='feedback'?'active':''}" onclick="Modulos.marketing._tab='feedback';Modulos.marketing._renderTab()">💬 Feedback / QR</button>
         </div>
         <div id="mkt-content"><div class="empty-state">⏳ Cargando...</div></div>
       </div>`;
@@ -109,6 +111,138 @@ Modulos.marketing = {
         </div>
         <div id="flyer-preview" style="margin-top:20px"></div>`;
     }
+
+    else if (this._tab==='fidelizacion') {
+      const clientes = await DB.getClientes();
+      const inscritos = clientes.filter(c=>c.programa_puntos).sort((a,b)=>(b.puntos_saldo||0)-(a.puntos_saldo||0));
+      const totalPts = inscritos.reduce((s,c)=>s+(Number(c.puntos_saldo)||0),0);
+      el.innerHTML = `
+        <div class="alert alert-cyan" style="margin-bottom:16px"><div class="alert-icon">⭐</div>
+          <div class="alert-body" style="font-size:12px">Política: <b>Q1 = 1 punto</b> en cada compra · <b>10 puntos = Q1</b> en el canje · <b>+50 puntos</b> por responder la encuesta. Inscribe clientes desde su ficha en <b>Clientes</b>.</div></div>
+        <div class="kpi-grid" style="margin-bottom:16px">
+          <div class="kpi-card"><div class="kpi-label">Clientes inscritos</div><div class="kpi-val cyan">${inscritos.length}</div></div>
+          <div class="kpi-card"><div class="kpi-label">Puntos en circulación</div><div class="kpi-val amber">${totalPts.toLocaleString()}</div><div class="kpi-trend">≈ ${UI.q(totalPts/10)} en canjes</div></div>
+        </div>
+        <div class="table-wrap"><table class="data-table">
+          <thead><tr><th>Cliente</th><th>Teléfono</th><th>Saldo</th><th>Equivale a</th><th>Movimientos</th></tr></thead>
+          <tbody>${inscritos.map(c=>`<tr>
+            <td><b>${c.nombre}</b></td><td class="mono-sm">${c.tel||'—'}</td>
+            <td class="mono-sm text-amber"><b>${(c.puntos_saldo||0).toLocaleString()}</b> pts</td>
+            <td class="mono-sm text-green">${UI.q((c.puntos_saldo||0)/10)}</td>
+            <td><button class="btn btn-sm btn-ghost" onclick="Modulos.marketing.verPuntos('${c.id}','${(c.nombre||'').replace(/'/g,"\\'")}')">📜 Ver</button></td>
+          </tr>`).join('')||'<tr><td colspan="5" style="text-align:center;padding:24px;color:var(--text3)">Aún no hay clientes inscritos. Actívalo en la ficha del cliente.</td></tr>'}</tbody>
+        </table></div>`;
+    }
+
+    else if (this._tab==='feedback') {
+      const fb = await DB.getFeedback();
+      const tid = Auth.tenant?.id || '';
+      const url = `${location.origin}/feedback.html?t=${encodeURIComponent(tid)}`;
+      const ratings = [];
+      fb.forEach(f=>{ if(f.rating_servicio) ratings.push(f.rating_servicio); if(f.rating_productos) ratings.push(f.rating_productos); });
+      const prom = ratings.length ? Math.round(ratings.reduce((a,b)=>a+b,0)/ratings.length*10)/10 : 0;
+      el.innerHTML = `
+        <div class="grid-2" style="margin-bottom:16px">
+          <div class="card" style="text-align:center">
+            <div class="card-sub mb-3">📱 QR de feedback</div>
+            <div id="qrbox" style="display:flex;justify-content:center;align-items:center;min-height:170px;background:#fff;border-radius:10px;padding:10px">Generando QR...</div>
+            <div style="font-size:11px;color:var(--text3);word-break:break-all;margin-top:8px">${url}</div>
+            <div style="display:flex;gap:6px;justify-content:center;margin-top:10px">
+              <button class="btn btn-ghost btn-sm" onclick="Modulos.marketing.imprimirQR()">🖨️ Imprimir</button>
+              <button class="btn btn-ghost btn-sm" onclick="Modulos.marketing.modalEncuestaEmail()">✉️ Enviar por correo</button>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-sub mb-3">📊 Resumen</div>
+            <div class="kpi-card" style="margin-bottom:10px"><div class="kpi-label">Respuestas</div><div class="kpi-val cyan">${fb.length}</div></div>
+            <div class="kpi-card"><div class="kpi-label">Calificación promedio</div><div class="kpi-val amber">${prom||'—'} / 5</div></div>
+          </div>
+        </div>
+        <div class="card-sub mb-3">💬 Respuestas recientes</div>
+        <div class="table-wrap"><table class="data-table">
+          <thead><tr><th>Fecha</th><th>Cliente</th><th>Servicio</th><th>Productos</th><th>Comentario</th><th>Pts</th></tr></thead>
+          <tbody>${fb.map(f=>`<tr>
+            <td class="mono-sm">${UI.fecha(f.created_at?.slice(0,10))}</td>
+            <td>${f.clientes?.nombre||f.nombre||'Anónimo'}${f.telefono?`<br><small class="text-muted">${f.telefono}</small>`:''}</td>
+            <td>${'⭐'.repeat(f.rating_servicio||0)||'—'}</td>
+            <td>${'⭐'.repeat(f.rating_productos||0)||'—'}</td>
+            <td style="font-size:12px;max-width:240px">${f.comentario||'—'}</td>
+            <td class="mono-sm text-amber">${f.puntos_otorgados||0}</td>
+          </tr>`).join('')||'<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--text3)">Sin respuestas todavía. Comparte el QR con tus clientes.</td></tr>'}</tbody>
+        </table></div>`;
+      this._renderQR(url);
+    }
+  },
+
+  /* ── Fidelización ───────────────────────────────── */
+  async verPuntos(clienteId, nombre) {
+    const movs = await DB.getPuntosMovimientos(clienteId);
+    UI.modal(`📜 Puntos — ${nombre}`, `
+      <div class="table-wrap" style="max-height:360px;overflow-y:auto"><table class="data-table">
+        <thead><tr><th>Fecha</th><th>Movimiento</th><th>Puntos</th></tr></thead>
+        <tbody>${movs.map(m=>`<tr><td class="mono-sm">${UI.fecha(m.fecha)}</td><td>${m.motivo||m.tipo}${m.referencia?` <small class="text-muted">(${m.referencia})</small>`:''}</td><td class="mono-sm ${m.puntos>=0?'text-green':'text-red'}">${m.puntos>=0?'+':''}${m.puntos}</td></tr>`).join('')||'<tr><td colspan="3" style="text-align:center;color:var(--text3);padding:16px">Sin movimientos</td></tr>'}</tbody>
+      </table></div>
+      <div class="modal-footer"><button class="btn btn-ghost" onclick="UI.cerrarModal()">Cerrar</button></div>`);
+  },
+
+  /* ── Feedback / QR ──────────────────────────────── */
+  _ensureQR() {
+    if (window.qrcode) return Promise.resolve();
+    return new Promise((res, rej) => {
+      const s = document.createElement('script');
+      s.src = 'https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js';
+      s.onload = res; s.onerror = () => rej(new Error('qr')); document.head.appendChild(s);
+    });
+  },
+  async _renderQR(url) {
+    const box = document.getElementById('qrbox'); if (!box) return;
+    try {
+      await this._ensureQR();
+      const qr = qrcode(0, 'M'); qr.addData(url); qr.make();
+      box.innerHTML = qr.createImgTag(6, 8);
+      const img = box.querySelector('img'); if (img) img.style.maxWidth = '190px';
+      this._qrUrl = url;
+    } catch(e) { box.textContent = 'No se pudo generar el QR'; }
+  },
+  imprimirQR() {
+    if (!window.qrcode || !this._qrUrl) { UI.toast('Espera a que cargue el QR','warn'); return; }
+    const qr = qrcode(0, 'M'); qr.addData(this._qrUrl); qr.make();
+    const img = qr.createImgTag(10, 12);
+    const taller = Auth.tenant?.name || 'TallerPro';
+    const win = window.open('', '_blank');
+    win.document.write(`<html><head><title>QR Feedback</title></head>
+      <body style="text-align:center;font-family:Arial;padding:36px">
+      <h2>${taller}</h2><h3>📱 Escanea y déjanos tu opinión</h3>
+      <p style="color:#d97706;font-weight:700">¡Gana 50 puntos de fidelización!</p>
+      ${img}
+      <p style="font-size:11px;color:#666;margin-top:10px">${this._qrUrl}</p>
+      <script>window.print()<\/script></body></html>`);
+    win.document.close();
+  },
+  modalEncuestaEmail() {
+    UI.modal('✉️ Enviar encuesta por correo', `
+      <div class="form-group"><label class="form-label">Correo del cliente</label>
+        <input class="form-input" id="enc-mail" type="email" placeholder="cliente@correo.com"></div>
+      <div style="font-size:11px;color:var(--text3)">Se enviará un enlace a la encuesta. Si el cliente está registrado, ganará 50 puntos al responder.</div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" onclick="UI.cerrarModal()">Cancelar</button>
+        <button class="btn btn-amber" onclick="Modulos.marketing.enviarEncuesta()">Enviar</button>
+      </div>`);
+  },
+  async enviarEncuesta() {
+    const email = document.getElementById('enc-mail')?.value.trim();
+    if (!email) { UI.toast('Ingresa un correo','error'); return; }
+    const tid = Auth.tenant?.id || '';
+    const url = `${location.origin}/feedback.html?t=${encodeURIComponent(tid)}&o=email`;
+    const taller = Auth.tenant?.name || 'TallerPro';
+    const html = `<div style="font-family:Arial,sans-serif;max-width:480px"><h2 style="color:#d97706">🔧 ${taller}</h2>`+
+      `<p>¡Tu opinión nos importa! Cuéntanos cómo te fue y <b>gana 50 puntos</b> de fidelización.</p>`+
+      `<p style="text-align:center;margin:18px 0"><a href="${url}" style="background:#d97706;color:#fff;padding:12px 22px;border-radius:8px;text-decoration:none;font-weight:700">Responder encuesta</a></p>`+
+      `<p style="font-size:11px;color:#666">${url}</p></div>`;
+    UI.toast('Enviando...','info');
+    const r = await Email.enviar(email, `${taller} — Tu opinión nos importa`, { html });
+    if (r.ok) { UI.cerrarModal(); UI.toast(`Encuesta enviada a ${email} ✓`); }
+    else UI.toast('No se pudo enviar: '+r.error,'error');
   },
 
   generarFlyer() {

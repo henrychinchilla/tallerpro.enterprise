@@ -8,7 +8,7 @@
    Para forzar actualización: subir CACHE_VERSION.
 ═══════════════════════════════════════════════════════ */
 
-const CACHE_VERSION = 'v3.10.0-20260608d';
+const CACHE_VERSION = 'v3.11.0-20260608e';
 const CACHE_NAME = `tallerpro-${CACHE_VERSION}`;
 
 /* App shell — se precachea en install para que funcione offline */

@@ -812,6 +812,13 @@ const DB = {
     return { data, error };
   },
 
+  /* ── FEEDBACK / ENCUESTAS ─────────────────────── */
+  async getFeedback(limite=200) {
+    const { data } = await getSB().from('feedback').select('*, clientes(nombre)')
+      .eq('tenant_id', getTID()).order('created_at', { ascending:false }).limit(limite);
+    return data || [];
+  },
+
   /* ── CITAS ────────────────────────────────────── */
   async getCitas(ini=null, fin=null) {
     let q = getSB().from('citas')
