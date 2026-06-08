@@ -162,8 +162,14 @@ Deno.serve(async (req) => {
     ["superadmin", "admin", "gerente_fin", "gerente_tal"].includes(rol);
 
   if (!tenantId) {
-    const { data: t } = await admin.from("tenants").select("id").limit(1).maybeSingle();
-    tenantId = t?.id;
+    const { data: t, error: tErr } = await admin.from("tenants").select("id").limit(1).maybeSingle();
+    if (tErr) {
+      return json({ error: `Sin taller asociado. Error de consulta fallback: ${tErr.message} (código: ${tErr.code}, perfil: ${JSON.stringify(perfil)}, user: ${userData.user.id}, email: ${userData.user.email})` }, 400);
+    }
+    if (!t) {
+      return json({ error: `Sin taller asociado. No se encontraron registros en la tabla tenants (perfil: ${JSON.stringify(perfil)}, user: ${userData.user.id}, email: ${userData.user.email})` }, 400);
+    }
+    tenantId = t.id;
   }
 
   // ── Payload ──
