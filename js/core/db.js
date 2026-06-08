@@ -326,6 +326,23 @@ const DB = {
     return { data, error };
   },
 
+  async getFacturaItems(facturaId) {
+    const { data } = await getSB().from('factura_items').select('*')
+      .eq('factura_id', facturaId).order('created_at');
+    return data || [];
+  },
+
+  async insertFacturaItems(facturaId, items) {
+    if (!items?.length) return null;
+    const rows = items.map(i => ({
+      factura_id: facturaId, tenant_id: getTID(),
+      descripcion: i.descripcion || '', cantidad: i.cantidad || 1,
+      precio_unit: i.precio_unit || 0, total: i.total || 0
+    }));
+    const { error } = await getSB().from('factura_items').insert(rows);
+    return error;
+  },
+
   /* ── EMPLEADOS ────────────────────────────────── */
   async getEmpleados() {
     const { data } = await getSB().from('empleados').select('*')

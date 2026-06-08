@@ -2,6 +2,7 @@
 Modulos.facturacion = {
   _data: [], _clientes: [], _ordenes: [],
   _ini: null, _fin: null,
+  _itemsImportados: [],   // líneas de detalle traídas de una OT (para guardar al emitir)
 
   async render() {
     const el = document.getElementById('page-content');
@@ -59,10 +60,12 @@ Modulos.facturacion = {
       </div>`;
   },
 
-  modalFactura(id=null) {
+  async modalFactura(id=null) {
     const f = id ? this._data.find(x=>x.id===id) : {};
     const esEdicion = !!id;
     const iva = Auth.tenant?.tasa_iva || 0.12;
+    if (!id) this._itemsImportados = [];   // factura nueva: limpiar desglose previo
+    const itemsExistentes = id ? await DB.getFacturaItems(id) : [];
 
     UI.modal(`${esEdicion?'🧾 Ver':'＋ Nueva'} Factura`, `
       ${esEdicion?'<div class="alert alert-amber" style="margin-bottom:12px"><div class="alert-icon">⚠️</div><div class="alert-body" style="font-size:11px">Los cambios reemplazarán la información actual de la factura.</div></div>':''}
@@ -79,6 +82,7 @@ Modulos.facturacion = {
           </select>
           <div style="font-size:11px;color:var(--text3);margin-top:4px">Al elegir una OT se importan cliente, montos e ítems a cobrar.</div></div>
       </div>
+      <div id="fel-items-box">${this._renderItemsBox(itemsExistentes)}</div>
       <div class="form-row">
         <div class="form-group"><label class="form-label">Serie FEL</label>
           <input class="form-input" id="fel-serie" value="${f.serie||'A'}" maxlength="10"></div>
@@ -109,6 +113,21 @@ Modulos.facturacion = {
       </div>`,'580px');
   },
 
+  /* Tabla de desglose (una línea por ítem cobrado) */
+  _renderItemsBox(items) {
+    if (!items || !items.length) return '';
+    return `<div class="form-group"><label class="form-label">Detalle a cobrar (desglose)</label>
+      <div class="table-wrap"><table class="data-table" style="font-size:12px">
+        <thead><tr><th>Descripción</th><th style="text-align:right">Cant.</th><th style="text-align:right">P. Unit</th><th style="text-align:right">Total</th></tr></thead>
+        <tbody>${items.map(i=>`<tr>
+          <td>${i.descripcion||'—'}</td>
+          <td style="text-align:right" class="mono-sm">${i.cantidad}</td>
+          <td style="text-align:right" class="mono-sm">${UI.q(i.precio_unit)}</td>
+          <td style="text-align:right" class="mono-sm text-amber">${UI.q(i.total)}</td>
+        </tr>`).join('')}</tbody>
+      </table></div></div>`;
+  },
+
   async guardar(id='') {
     const sub = parseFloat(document.getElementById('fel-sub')?.value)||0;
     if (sub<=0) { UI.toast('El subtotal es obligatorio','error'); return; }
@@ -124,8 +143,13 @@ Modulos.facturacion = {
       notas:      document.getElementById('fel-notas')?.value||null
     };
     if (id) fields.id = id;
-    const {error} = await DB.upsertFactura(fields);
-    if (error) { UI.toast('Error: '+error.message,'error'); return; }
+    const res = await DB.upsertFactura(fields);
+    if (res.error) { UI.toast('Error: '+res.error.message,'error'); return; }
+    /* Persistir el desglose en una factura nueva creada desde una OT */
+    if (!id && res.data?.id && this._itemsImportados.length) {
+      await DB.insertFacturaItems(res.data.id, this._itemsImportados);
+    }
+    this._itemsImportados = [];
     UI.cerrarModal(); UI.toast(id?'Factura actualizada ✓':'Factura emitida ✓');
     this.render();
   },
@@ -149,6 +173,14 @@ Modulos.facturacion = {
     const itemsList = items || [];
     const totalConIva = itemsList.reduce((s,i)=>s+(i.total||0), 0) || orden?.total || 0;
     if (totalConIva <= 0) { UI.toast('La OT no tiene monto a cobrar','info'); return; }
+
+    /* Guardar el desglose (una línea por ítem) para persistirlo al emitir */
+    this._itemsImportados = itemsList.map(i=>({
+      descripcion: i.descripcion, cantidad: i.cantidad,
+      precio_unit: i.precio_unit, total: i.total
+    }));
+    const box = document.getElementById('fel-items-box');
+    if (box) box.innerHTML = this._renderItemsBox(this._itemsImportados);
 
     const sub      = Math.round(totalConIva/(1+iva)*100)/100;
     const ivaMonto = Math.round((totalConIva - sub)*100)/100;
@@ -198,17 +230,25 @@ Modulos.facturacion = {
     else UI.toast('No se pudo enviar: '+r.error,'error');
   },
 
-  imprimir(id) {
+  async imprimir(id) {
     const f = this._data.find(x=>x.id===id);
     if (!f) return;
+    const items = await DB.getFacturaItems(id);
+    const itemsHtml = items.length
+      ? `<hr><table style="width:100%;border-collapse:collapse;font-size:11px">
+           <tr style="border-bottom:1px solid #000"><th style="text-align:left">Descripción</th><th style="text-align:right">Cant</th><th style="text-align:right">P.U.</th><th style="text-align:right">Total</th></tr>
+           ${items.map(i=>`<tr><td>${i.descripcion||'—'}</td><td style="text-align:right">${i.cantidad}</td><td style="text-align:right">${Number(i.precio_unit).toFixed(2)}</td><td style="text-align:right">${Number(i.total).toFixed(2)}</td></tr>`).join('')}
+         </table>`
+      : '';
     const win = window.open('','_blank');
     win.document.write(`<html><head><title>Factura ${f.serie}-${f.num_fel}</title>
-      <style>body{font-family:monospace;padding:20px;max-width:400px}h2{text-align:center}.total{font-size:20px;font-weight:bold}</style></head>
+      <style>body{font-family:monospace;padding:20px;max-width:400px}h2{text-align:center}.total{font-size:20px;font-weight:bold}table{margin:8px 0}th,td{padding:2px 0}</style></head>
       <body><h2>${Auth.tenant?.name||'TallerPro'}</h2>
       <p>NIT: ${Auth.tenant?.nit||'—'} | ${Auth.tenant?.tel||''}</p>
       <hr><p><b>Factura:</b> ${f.serie||'A'}-${f.num_fel||'—'}</p>
       <p><b>Fecha:</b> ${UI.fecha(f.fecha)}</p>
       <p><b>Cliente:</b> ${f.clientes?.nombre||'CF'} | NIT: ${f.clientes?.nit||'CF'}</p>
+      ${itemsHtml}
       <hr><p>Subtotal: Q${f.subtotal?.toFixed(2)}</p>
       <p>IVA (12%): Q${f.iva?.toFixed(2)}</p>
       <p class="total">TOTAL: Q${f.total?.toFixed(2)}</p>

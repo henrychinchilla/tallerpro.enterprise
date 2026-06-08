@@ -9,9 +9,10 @@ Modulos.vehiculos = {
     'Liviano': ['Toyota','Honda','Nissan','Hyundai','Kia','Mazda','Chevrolet','Volkswagen','Mitsubishi','Suzuki','Ford','Renault','Peugeot','Geely','BYD','Changan'],
     'SUV': ['Toyota','Honda','Hyundai','Kia','Mazda','Nissan','Mitsubishi','Suzuki','Chevrolet','Ford','Jeep','Subaru','Land Rover','BMW','Mercedes-Benz','Volkswagen','BYD'],
     'Pesado': ['Hino','Isuzu','Freightliner','International','Volvo','Mercedes-Benz','Scania','Mack','Kenworth','Foton','JAC','Dongfeng','UD Trucks','Iveco'],
-    'Motocicleta': ['Honda','Yamaha','Suzuki','Bajaj','TVS','Italika','Kawasaki','Hero','Genesis','Freedom','Serpento','Daytona','Susuki','Vento']
+    'Motocicleta': ['Honda','Yamaha','Suzuki','Kawasaki','BMW','Ducati','Aprilia','KTM','Triumph','Harley-Davidson','Husqvarna','Royal Enfield','Benelli','CFMoto','Vespa','Bajaj','TVS','Italika','Hero','Genesis','Freedom','Serpento','Daytona','Vento','Zontes','Voge']
   },
-  _colores: ['Blanco','Negro','Gris','Plateado','Rojo','Azul','Azul marino','Celeste','Verde','Beige','Café','Dorado','Amarillo','Naranja','Vino','Turquesa'],
+  _colores: ['Blanco','Negro','Gris','Plateado','Rojo','Azul','Azul marino','Celeste','Verde','Beige','Café','Dorado','Amarillo','Naranja','Vino','Turquesa',
+             'Blanco/Negro','Negro/Rojo','Negro/Gris','Azul/Blanco','Rojo/Negro','Naranja/Negro'],
 
   _opcionesMarca(tipo) {
     return (this._marcasPorTipo[tipo] || this._marcasPorTipo['Liviano'])
@@ -88,7 +89,8 @@ Modulos.vehiculos = {
           </select></div>
         <div class="form-group"><label class="form-label">Marca *</label>
           <input class="form-input" id="veh-marca" list="marcas-list" autocomplete="off" value="${v.marca||''}" placeholder="Escribe o elige...">
-          <datalist id="marcas-list">${this._opcionesMarca(v.tipo||'Liviano')}</datalist></div>
+          <datalist id="marcas-list">${this._opcionesMarca(v.tipo||'Liviano')}</datalist>
+          <div style="font-size:11px;color:var(--text3);margin-top:4px">Si no está en la lista, escríbela.</div></div>
       </div>
       <div class="form-row">
         <div class="form-group"><label class="form-label">Modelo *</label>
@@ -99,7 +101,8 @@ Modulos.vehiculos = {
       <div class="form-row">
         <div class="form-group"><label class="form-label">Color</label>
           <input class="form-input" id="veh-color" list="colores-list" autocomplete="off" value="${v.color||''}" placeholder="Escribe o elige...">
-          <datalist id="colores-list">${this._colores.map(c=>`<option value="${c}">`).join('')}</datalist></div>
+          <datalist id="colores-list">${this._colores.map(c=>`<option value="${c}">`).join('')}</datalist>
+          <div style="font-size:11px;color:var(--text3);margin-top:4px">Escribe uno nuevo o un dual (ej. Negro/Rojo).</div></div>
         <div class="form-group"><label class="form-label">Combustible</label>
           <select class="form-select" id="veh-comb">
             ${['Gasolina','Diesel','Híbrido','Eléctrico','GLP'].map(c=>`<option ${v.combustible===c?'selected':''}>${c}</option>`).join('')}
