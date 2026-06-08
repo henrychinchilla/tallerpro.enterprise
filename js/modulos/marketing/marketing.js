@@ -141,6 +141,13 @@ Modulos.marketing = {
       const ratings = [];
       fb.forEach(f=>{ if(f.rating_servicio) ratings.push(f.rating_servicio); if(f.rating_productos) ratings.push(f.rating_productos); });
       const prom = ratings.length ? Math.round(ratings.reduce((a,b)=>a+b,0)/ratings.length*10)/10 : 0;
+      const avg = a => a.length ? Math.round(a.reduce((x,y)=>x+y,0)/a.length*10)/10 : 0;
+      const promServ = avg(fb.map(f=>f.rating_servicio).filter(Boolean));
+      const promProd = avg(fb.map(f=>f.rating_productos).filter(Boolean));
+      const satis = ratings.length ? Math.round(ratings.filter(r=>r>=4).length/ratings.length*100) : 0;
+      const aMejorar = fb.filter(f=>(f.rating_servicio&&f.rating_servicio<=2)||(f.rating_productos&&f.rating_productos<=2)).length;
+      const mesAct = new Date().toISOString().slice(0,7);
+      const esteMes = fb.filter(f=>(f.created_at||'').slice(0,7)===mesAct).length;
       el.innerHTML = `
         <div class="grid-2" style="margin-bottom:16px">
           <div class="card" style="text-align:center">
@@ -153,9 +160,14 @@ Modulos.marketing = {
             </div>
           </div>
           <div class="card">
-            <div class="card-sub mb-3">📊 Resumen</div>
-            <div class="kpi-card" style="margin-bottom:10px"><div class="kpi-label">Respuestas</div><div class="kpi-val cyan">${fb.length}</div></div>
-            <div class="kpi-card"><div class="kpi-label">Calificación promedio</div><div class="kpi-val amber">${prom||'—'} / 5</div></div>
+            <div class="card-sub mb-3">📊 KPIs de mejora</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+              <div class="kpi-card"><div class="kpi-label">Respuestas</div><div class="kpi-val cyan">${fb.length}</div><div class="kpi-trend">${esteMes} este mes</div></div>
+              <div class="kpi-card"><div class="kpi-label">Satisfacción</div><div class="kpi-val ${satis>=80?'green':satis>=60?'amber':'red'}">${satis}%</div><div class="kpi-trend">califican 4–5★</div></div>
+              <div class="kpi-card"><div class="kpi-label">Prom. servicio</div><div class="kpi-val amber">${promServ||'—'}/5</div></div>
+              <div class="kpi-card"><div class="kpi-label">Prom. productos</div><div class="kpi-val amber">${promProd||'—'}/5</div></div>
+            </div>
+            ${aMejorar>0?`<div class="alert alert-red" style="margin-top:10px"><div class="alert-icon">⚠️</div><div class="alert-body" style="font-size:12px"><b>${aMejorar}</b> respuesta(s) con calificación baja (≤2★) — revisa los comentarios para tu estrategia de mejora.</div></div>`:''}
           </div>
         </div>
         <div class="card-sub mb-3">💬 Respuestas recientes</div>

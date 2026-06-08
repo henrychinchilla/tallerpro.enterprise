@@ -131,6 +131,8 @@ Modulos.ordenes = {
         </div>
       </div>
 
+      ${o.es_garantia?`<div class="alert alert-amber" style="margin-bottom:12px"><div class="alert-icon">🛡️</div><div class="alert-body" style="font-size:12px">OT de <b>garantía</b>${o.garantia_responsable?` · Responsable: <b>${o.garantia_responsable==='taller'?'Taller — se declara como costo, no se factura':'Cliente — facturable'}</b>`:''}.</div></div>`:''}
+
       <!-- PROGRESO -->
       <div style="background:var(--surface2);border-radius:8px;height:8px;margin-bottom:16px;overflow:hidden">
         <div style="height:100%;width:${est.pct}%;background:var(--${est.color});border-radius:8px;transition:width .5s"></div>
@@ -209,7 +211,10 @@ Modulos.ordenes = {
         <button class="btn btn-ghost" onclick="Modulos.ordenes.avisarEmail('${id}')">📧 Avisar por email</button>
         <button class="btn btn-ghost" onclick="Modulos.ordenes.imprimirOT('${id}')">🖨 Imprimir</button>
         <button class="btn btn-cyan" onclick="UI.cerrarModal();Modulos.ordenes.modalForm('${id}')">✏️ Editar</button>
-        ${o.estado==='listo'?`<button class="btn btn-green" onclick="Modulos.ordenes.enviarFacturacion('${id}')">🧾 Enviar a Facturación</button>`:''}
+        ${!o.es_garantia?`<button class="btn btn-ghost" onclick="Modulos.ordenes.modalGarantia('${id}')">🛡️ Garantía</button>`:''}
+        ${o.es_garantia && o.garantia_responsable==='taller'
+          ? (o.estado!=='entregado' ? `<button class="btn btn-amber" onclick="Modulos.ordenes.cerrarGarantiaCosto('${id}')">🛡️ Cerrar como costo del taller</button>` : '')
+          : (o.estado==='listo' ? `<button class="btn btn-green" onclick="Modulos.ordenes.enviarFacturacion('${id}')">🧾 Enviar a Facturación</button>` : '')}
       </div>`,'720px');
     Docs.render('orden', id, 'ot-docs');
   },
@@ -584,6 +589,77 @@ Modulos.ordenes = {
     await DB.upsertTrabajoExterno({ id:teId, cargado_ot:true, estado: te.estado==='autorizado'?'completado':te.estado });
     UI.toast('Trabajo externo cargado a la OT ✓');
     this.verDetalle(ordenId);
+  },
+
+  /* ── GARANTÍA ─────────────────────────────── */
+  /* El cliente regresa el vehículo inconforme → nueva OT de garantía
+     ligada a la original. Si es responsabilidad del taller, la mano de
+     obra y repuestos se declaran como COSTO (no se facturan); si no,
+     o si hay costos adicionales, se factura normalmente. */
+  modalGarantia(otOrigenId) {
+    UI.modal('🛡️ Registrar garantía', `
+      <div class="alert alert-amber" style="margin-bottom:12px"><div class="alert-icon">ℹ️</div>
+        <div class="alert-body" style="font-size:11px">Se creará una nueva OT de <b>garantía</b> para este vehículo, ligada a la OT original, para registrar la revisión por inconformidad.</div></div>
+      <div class="form-group"><label class="form-label">¿De quién es la responsabilidad? *</label>
+        <select class="form-select" id="gar-resp">
+          <option value="taller">Del taller (nuestra responsabilidad → se declara como costo, NO se factura)</option>
+          <option value="cliente">Del cliente / no cubierta por garantía (se factura)</option>
+        </select></div>
+      <div class="form-group"><label class="form-label">Motivo / inconformidad</label>
+        <textarea class="form-input" id="gar-motivo" rows="2" placeholder="Ej: ruido persiste tras cambio de balatas"></textarea></div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" onclick="UI.cerrarModal()">Cancelar</button>
+        <button class="btn btn-amber" onclick="Modulos.ordenes.registrarGarantia('${otOrigenId}')">Crear OT de garantía</button>
+      </div>`);
+  },
+
+  async registrarGarantia(otOrigenId) {
+    const o = await DB.getOrden(otOrigenId);
+    if (!o) return;
+    const resp = document.getElementById('gar-resp')?.value || 'taller';
+    const motivo = document.getElementById('gar-motivo')?.value.trim() || 'revisión por inconformidad';
+    const res = await DB.upsertOrden({
+      vehiculo_id: o.vehiculo_id, cliente_id: o.cliente_id, mecanico_id: o.mecanico_id || null,
+      descripcion: `Garantía de ${o.num}: ${motivo}`,
+      estado: 'garantia', prioridad: 'alta',
+      es_garantia: true, ot_origen_id: otOrigenId, garantia_responsable: resp, total: 0
+    });
+    if (res.error || !res.data) { UI.toast('Error: '+(res.error?.message||''),'error'); return; }
+    await getSB().from('ot_items').insert({
+      tenant_id: getTID(), orden_id: res.data.id, tipo: 'mano_obra',
+      descripcion: 'Mano de obra (garantía)', cantidad: 1, precio_unit: 0, total: 0,
+      ejecutado: false, es_extra: false, autorizado: true, orden_pos: 0
+    });
+    UI.cerrarModal();
+    UI.toast(`OT de garantía ${res.data.num} creada ✓`);
+    this.verDetalle(res.data.id);
+  },
+
+  /* Cierra la garantía como costo del taller: descuenta inventario,
+     registra el gasto (no factura) y marca la OT entregada. */
+  async cerrarGarantiaCosto(id) {
+    const o = await DB.getOrden(id);
+    if (!o) return;
+    const { data: items } = await getSB().from('ot_items').select('*').eq('orden_id', id);
+    const itemsList = items || [];
+    const total = itemsList.reduce((s,i)=>s+(i.total||0),0) || Number(o.total) || 0;
+    const ok = await UI.confirmar(
+      `Cerrar la garantía <b>${o.num}</b> como <b>costo del taller</b> por <b>${UI.q(total)}</b>.<br>Se descontará el inventario usado y se registrará el gasto (no se factura al cliente). ¿Continuar?`,
+      'Cerrar garantía'
+    );
+    if (!ok) return;
+    const descontados = await DB.descontarInventarioVenta(itemsList, `Garantía ${o.num}`);
+    if (total > 0) {
+      await DB.upsertEgreso({
+        concepto: `Garantía ${o.num} — costo del taller`, categoria: 'Garantías',
+        monto: total, fecha: new Date().toISOString().slice(0,10), referencia: `GAR-${o.num}`,
+        notas: o.descripcion || null
+      });
+    }
+    await DB.updateEstadoOT(id, 'entregado');
+    UI.cerrarModal();
+    UI.toast(`Garantía cerrada como costo ✓${descontados?` · ${descontados} repuesto(s) descontado(s)`:''}`);
+    this.render();
   },
 
   /* ── FACTURACIÓN ──────────────────────────── */
