@@ -205,8 +205,33 @@ const DB = {
   },
 
   async movimientoInventario(fields) {
-    const { error } = await getSB().from('inventario_movimientos').insert({ ...fields, tenant_id: getTID() });
+    const { error } = await getSB().from('inventario_movimientos').insert({
+      ...fields, tenant_id: getTID(),
+      usuario_id:     window.Auth?.user?.id || null,
+      usuario_nombre: window.Auth?.user?.nombre || window.Auth?.user?.email || null
+    });
     return !error;
+  },
+
+  /* Historial de movimientos de inventario (salidas, entradas, traslados, ajustes) */
+  async getMovimientosInventario({ inventarioId = null, tipo = null, limite = 300 } = {}) {
+    let q = getSB().from('inventario_movimientos')
+      .select('*, inventario(nombre,codigo,unidad)')
+      .eq('tenant_id', getTID()).order('created_at', { ascending: false }).limit(limite);
+    if (inventarioId) q = q.eq('inventario_id', inventarioId);
+    if (tipo) q = q.eq('tipo', tipo);
+    const { data } = await q;
+    return data || [];
+  },
+
+  /* Bitácora de auditoría global */
+  async getActividad({ accion = null, entidad = null, limite = 300 } = {}) {
+    let q = getSB().from('actividad_log').select('*')
+      .eq('tenant_id', getTID()).order('created_at', { ascending: false }).limit(limite);
+    if (accion)  q = q.eq('accion', accion);
+    if (entidad) q = q.eq('entidad', entidad);
+    const { data } = await q;
+    return data || [];
   },
 
   /* ── PROVEEDORES ──────────────────────────────── */
@@ -324,6 +349,14 @@ const DB = {
     }
     const { data, error } = await getSB().from('facturas').insert(payload).select().single();
     return { data, error };
+  },
+
+  /* Devuelve la factura existente de una OT (para evitar doble facturación) */
+  async facturaDeOrden(ordenId) {
+    if (!ordenId) return null;
+    const { data } = await getSB().from('facturas')
+      .select('id,serie,num_fel,orden_id').eq('tenant_id', getTID()).eq('orden_id', ordenId).limit(1);
+    return data?.[0] || null;
   },
 
   async getFacturaItems(facturaId) {

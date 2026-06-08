@@ -350,6 +350,10 @@ Modulos.ordenes = {
       return;
     }
 
+    /* Evitar doble facturación (y doble descuento de inventario) */
+    const yaFact = await DB.facturaDeOrden(id);
+    if (yaFact) { UI.toast(`Esta OT ya fue facturada (${yaFact.serie||'A'}-${yaFact.num_fel||'—'})`,'error'); return; }
+
     /* Cargar ítems */
     const { data: items } = await getSB().from('ot_items').select('*').eq('orden_id', id);
     const itemsList = items || [];

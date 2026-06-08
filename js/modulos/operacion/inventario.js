@@ -21,6 +21,7 @@ Modulos.inventario = {
           </select>
           <button class="btn btn-ghost" onclick="Modulos.inventario.exportar()">⬇ CSV</button>
           <button class="btn btn-ghost" onclick="Modulos.inventario.importar()">⬆ Importar</button>
+          <button class="btn btn-ghost" onclick="Modulos.inventario.historial()">📜 Movimientos</button>
           <button class="btn btn-ghost" onclick="window.print()">🖨 Imprimir</button>
           <button class="btn btn-amber" onclick="Modulos.inventario.modalForm()">＋ Nuevo Artículo</button>
         </div>
@@ -201,6 +202,43 @@ Modulos.inventario = {
       rows.push(r);
     });
     Modulos._descargarCSV(rows, `inventario-${new Date().toISOString().slice(0,10)}.csv`);
+  },
+
+  /* ── HISTORIAL DE MOVIMIENTOS (trazabilidad / auditoría) ─── */
+  async historial() {
+    const el = document.getElementById('page-content');
+    UI.loading(el);
+    const movs = await DB.getMovimientosInventario({ limite: 400 });
+    const badge = {
+      entrada:['green','📥 Entrada'], salida:['red','📤 Salida'], traslado:['cyan','🔄 Traslado'],
+      ajuste:['amber','🔧 Ajuste'], devolucion:['purple','↩️ Devolución']
+    };
+    el.innerHTML = `
+      <div class="page-header">
+        <div><h1 class="page-title">📜 Movimientos de Inventario</h1>
+        <p class="page-subtitle">// ${movs.length} movimientos · trazabilidad de entradas, salidas y traslados</p></div>
+        <div class="page-actions">
+          <button class="btn btn-ghost" onclick="Modulos.inventario.render()">← Inventario</button>
+          <button class="btn btn-ghost" onclick="window.print()">🖨️ Imprimir</button>
+        </div>
+      </div>
+      <div class="page-body"><div class="table-wrap"><table class="data-table">
+        <thead><tr><th>Fecha y hora</th><th>Artículo</th><th>Tipo</th><th>Cantidad</th><th>Referencia</th><th>Usuario</th></tr></thead>
+        <tbody>
+          ${movs.map(m=>{
+            const t = badge[m.tipo] || ['gray', m.tipo||'—'];
+            const signo = m.tipo==='salida' ? '-' : (m.tipo==='entrada'||m.tipo==='devolucion') ? '+' : '';
+            return `<tr>
+              <td class="mono-sm">${new Date(m.created_at).toLocaleString('es-GT')}</td>
+              <td><b>${m.inventario?.nombre||'—'}</b>${m.inventario?.codigo?`<br><small class="text-muted">${m.inventario.codigo}</small>`:''}</td>
+              <td><span class="badge badge-${t[0]}">${t[1]}</span></td>
+              <td class="mono-sm">${signo}${m.cantidad} ${m.inventario?.unidad||''}</td>
+              <td class="mono-sm">${m.referencia||'—'}${m.notas?`<br><small class="text-muted">${m.notas}</small>`:''}</td>
+              <td>${m.usuario_nombre||'—'}</td>
+            </tr>`;
+          }).join('')||'<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--text3)">Sin movimientos registrados</td></tr>'}
+        </tbody>
+      </table></div></div>`;
   },
 
   /* ── IMPORTAR INVENTARIO (CSV) ─────────────────────── */

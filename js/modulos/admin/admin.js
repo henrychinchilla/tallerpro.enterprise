@@ -12,6 +12,8 @@ Modulos.admin = {
         <div class="tabs">
           <button class="tab-btn ${this._tab==='overview'?'active':''}" onclick="Modulos.admin._tab='overview';Modulos.admin._renderTab()">📊 Estado</button>
           <button class="tab-btn ${this._tab==='exportar'?'active':''}" onclick="Modulos.admin._tab='exportar';Modulos.admin._renderTab()">⬇️ Exportar</button>
+          ${['admin','superadmin','gerente_fin','gerente_tal'].includes(Auth.user?.rol)?`
+          <button class="tab-btn ${this._tab==='auditoria'?'active':''}" onclick="Modulos.admin._tab='auditoria';Modulos.admin._renderTab()">📜 Auditoría</button>`:''}
           ${['admin','superadmin'].includes(Auth.user?.rol)?`
           <button class="tab-btn ${this._tab==='importar'?'active':''}" onclick="Modulos.admin._tab='importar';Modulos.admin._renderTab()">⬆️ Importar</button>
           <button class="tab-btn ${this._tab==='peligro'?'active':''}" style="color:var(--red)" onclick="Modulos.admin._tab='peligro';Modulos.admin._renderTab()">⚠️ Zona de Peligro</button>`:''}
@@ -56,6 +58,24 @@ Modulos.admin = {
               </div>`).join('')}
           </div>
         </div>`;
+    }
+
+    else if (this._tab==='auditoria') {
+      el.innerHTML = `
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:8px">
+          <div class="alert alert-cyan" style="margin:0;flex:1;min-width:260px">
+            <div class="alert-icon">📜</div>
+            <div class="alert-body" style="font-size:12px">Registro automático de todas las acciones (crear, modificar, eliminar) en la app. Solo lectura — a prueba de manipulación.</div>
+          </div>
+          <select class="form-select" id="aud-filtro" style="width:170px" onchange="Modulos.admin._renderAuditoria()">
+            <option value="">Todas las acciones</option>
+            <option value="insert">➕ Creaciones</option>
+            <option value="update">✏️ Modificaciones</option>
+            <option value="delete">🗑️ Eliminaciones</option>
+          </select>
+        </div>
+        <div id="aud-tabla"><div class="text-muted" style="padding:20px">⏳ Cargando...</div></div>`;
+      await this._renderAuditoria();
     }
 
     else if (this._tab==='exportar') {
@@ -225,6 +245,41 @@ Modulos.admin = {
           </button>
         </div>`;
     }
+  },
+
+  /* ── AUDITORÍA ──────────────────────────── */
+  _ENTIDADES: {
+    clientes:'Cliente', vehiculos:'Vehículo', ordenes:'Orden de Trabajo', ot_items:'Ítem de OT',
+    inventario:'Inventario', inventario_movimientos:'Movimiento de inventario', bodegas:'Bodega',
+    proveedores:'Proveedor', facturas:'Factura', factura_items:'Línea de factura', empleados:'Empleado',
+    usuarios:'Usuario', bancos:'Cuenta bancaria', banco_movimientos:'Movimiento bancario',
+    ingresos:'Ingreso', egresos:'Egreso', combos:'Combo', promociones:'Promoción', citas:'Cita',
+    pagos_nomina:'Pago de nómina', viaticos:'Viático', licencias:'Licencia', config_fiscal:'Config. fiscal',
+    config_integraciones:'Integraciones', empleado_documentos:'Documento de empleado', tenants:'Taller'
+  },
+
+  async _renderAuditoria() {
+    const cont = document.getElementById('aud-tabla');
+    if (!cont) return;
+    const filtro = document.getElementById('aud-filtro')?.value || null;
+    const logs = await DB.getActividad({ accion: filtro, limite: 300 });
+    const acc = { insert:['➕','Creó','green'], update:['✏️','Modificó','cyan'], delete:['🗑️','Eliminó','red'] };
+    cont.innerHTML = `
+      <div class="table-wrap"><table class="data-table">
+        <thead><tr><th>Fecha y hora</th><th>Usuario</th><th>Acción</th><th>Registro</th></tr></thead>
+        <tbody>
+          ${logs.map(l=>{
+            const a = acc[l.accion] || ['•', l.accion, 'gray'];
+            return `<tr>
+              <td class="mono-sm">${new Date(l.created_at).toLocaleString('es-GT')}</td>
+              <td>${l.usuario_nombre||'—'}</td>
+              <td><span class="badge badge-${a[2]}">${a[0]} ${a[1]}</span></td>
+              <td>${this._ENTIDADES[l.entidad]||l.entidad||'—'} <small class="text-muted">${l.entidad_id?('#'+String(l.entidad_id).slice(0,8)):''}</small></td>
+            </tr>`;
+          }).join('')||'<tr><td colspan="4" style="text-align:center;padding:24px;color:var(--text3)">Sin actividad registrada</td></tr>'}
+        </tbody>
+      </table></div>
+      <div style="font-size:11px;color:var(--text3);margin-top:8px">Mostrando hasta 300 eventos recientes.</div>`;
   },
 
   /* ── UTILIDADES ─────────────────────────── */

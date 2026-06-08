@@ -142,6 +142,11 @@ Modulos.facturacion = {
       estado:     document.getElementById('fel-estado')?.value||'emitida',
       notas:      document.getElementById('fel-notas')?.value||null
     };
+    /* Evitar doble facturación de una misma OT (doble descuento de inventario) */
+    if (!id && fields.orden_id) {
+      const yaFact = await DB.facturaDeOrden(fields.orden_id);
+      if (yaFact) { UI.toast(`Esa OT ya tiene factura (${yaFact.serie||'A'}-${yaFact.num_fel||'—'})`,'error'); return; }
+    }
     if (id) fields.id = id;
     const res = await DB.upsertFactura(fields);
     if (res.error) { UI.toast('Error: '+res.error.message,'error'); return; }
