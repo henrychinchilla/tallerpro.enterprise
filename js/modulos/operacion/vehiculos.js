@@ -323,8 +323,60 @@ Modulos.vehiculos = {
 
       <div class="modal-footer">
         <button class="btn btn-ghost" onclick="UI.cerrarModal()">Cerrar</button>
-        <button class="btn btn-amber" onclick="UI.cerrarModal();Modulos.ordenes?.modalForm(null,'${id}')">＋ Crear OT de servicio</button>
+        <button class="btn btn-ghost" onclick="UI.cerrarModal();Modulos.ordenes?.modalForm(null,'${id}')">＋ OT en blanco</button>
+        <button class="btn btn-amber" onclick="Modulos.vehiculos.generarOTSugerida('${id}')">🧰 Generar OT sugerida</button>
       </div>`, '720px');
+  },
+
+  /* Crea automáticamente una OT con los servicios preventivos DEBIDOS según
+     el kilometraje (cada uno como ítem independiente) + Mano de obra. */
+  async generarOTSugerida(id) {
+    const v = this._data.find(x=>x.id===id);
+    if (!v) return;
+    const tipo = this._mantenimiento[v.tipo] ? v.tipo : 'Liviano';
+    const plan = this._mantenimiento[tipo];
+    const km = Number(v.kilometraje)||0;
+    if (!km) { UI.toast('Registra el kilometraje del vehículo para sugerir servicios','warn'); return; }
+
+    /* Servicios próximos/vencidos según el km actual (mismo criterio que el plan) */
+    const due = plan.filter(p=>{
+      const proximo = (Math.floor(km/p.km)+1)*p.km;
+      return (proximo - km) <= Math.max(500, p.km*0.1);
+    });
+    if (!due.length) { UI.toast('No hay servicios próximos según el kilometraje actual','info'); return; }
+
+    const ok = await UI.confirmar(
+      `Se creará una OT para <b>${v.marca} ${v.modelo} (${v.placa})</b> con <b>${due.length} servicio(s)</b> sugeridos a ${km.toLocaleString()} km:<br><br>`+
+      due.map(d=>`${d.ico} ${d.item}`).join('<br>')+
+      `<br><br>más el ítem <b>Mano de obra</b>. Los precios quedan en Q0 para que los completes.`,
+      'Crear OT sugerida'
+    );
+    if (!ok) return;
+
+    const res = await DB.upsertOrden({
+      vehiculo_id: v.id, cliente_id: v.cliente_id,
+      descripcion: `Mantenimiento preventivo sugerido (${km.toLocaleString()} km) — ${tipo}`,
+      estado: 'recibido', prioridad: 'media', km_ingreso: km, total: 0
+    });
+    if (res.error || !res.data) { UI.toast('Error al crear OT: '+(res.error?.message||''),'error'); return; }
+    const ordenId = res.data.id;
+
+    const items = due.map((d,i)=>({
+      tenant_id: getTID(), orden_id: ordenId, tipo: 'servicio',
+      descripcion: d.item, cantidad: 1, precio_unit: 0, total: 0,
+      ejecutado: false, es_extra: false, autorizado: true, orden_pos: i
+    }));
+    items.push({
+      tenant_id: getTID(), orden_id: ordenId, tipo: 'mano_obra',
+      descripcion: 'Mano de obra', cantidad: 1, precio_unit: 0, total: 0,
+      ejecutado: false, es_extra: false, autorizado: true, orden_pos: items.length
+    });
+    await getSB().from('ot_items').insert(items);
+
+    UI.cerrarModal();
+    UI.toast(`OT ${res.data.num} creada con ${due.length} servicio(s) + mano de obra ✓`);
+    App.navegarA('ordenes');
+    setTimeout(()=>Modulos.ordenes?.verDetalle(ordenId), 400);
   },
 
   /* Consulta a la IA (Beto) recomendaciones del fabricante para este vehículo */
