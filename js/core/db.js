@@ -569,6 +569,46 @@ const DB = {
     return { data, error };
   },
 
+  /* ── PRESUPUESTO / BUDGET ─────────────────────── */
+  async getPresupuesto(anio) {
+    const { data } = await getSB().from('presupuesto').select('*')
+      .eq('tenant_id', getTID()).eq('anio', anio).order('created_at');
+    return data || [];
+  },
+
+  async upsertPresupuesto(fields) {
+    const payload = { ...fields, tenant_id: getTID(), updated_at: new Date().toISOString() };
+    if (fields.id) {
+      const { error } = await getSB().from('presupuesto').update(payload).eq('id', fields.id);
+      return { error };
+    }
+    const { data, error } = await getSB().from('presupuesto').insert(payload).select().single();
+    return { data, error };
+  },
+
+  /* Reemplaza las líneas de presupuesto de un año (borra y reinserta) */
+  async guardarPresupuesto(anio, lineas) {
+    await getSB().from('presupuesto').delete().eq('tenant_id', getTID()).eq('anio', anio);
+    if (!lineas.length) return { error:null };
+    const rows = lineas.map(l => ({ ...l, anio, tenant_id: getTID() }));
+    const { error } = await getSB().from('presupuesto').insert(rows);
+    return { error };
+  },
+
+  /* Consumo de insumos/repuestos usados en OTs en un rango (por ot_items) */
+  async getConsumoInsumos(ini, fin) {
+    const { data } = await getSB().from('ot_items')
+      .select('total,cantidad,tipo,inventario_id,created_at')
+      .eq('tenant_id', getTID())
+      .gte('created_at', ini).lte('created_at', fin+'T23:59:59');
+    const items = (data||[]).filter(i => i.inventario_id || i.tipo==='repuesto');
+    return {
+      monto:    items.reduce((s,i)=>s+(Number(i.total)||0),0),
+      lineas:   items.length,
+      unidades: items.reduce((s,i)=>s+(Number(i.cantidad)||0),0)
+    };
+  },
+
   /* ── ACTIVOS (herramientas, maquinaria, depreciación) ── */
   async getActivos() {
     const { data } = await getSB().from('activos').select('*')
