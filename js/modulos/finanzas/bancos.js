@@ -54,6 +54,7 @@ Modulos.bancos = {
                 <div>
                   <div class="bank-card-bank">${b.banco||'Banco'} · ${b.tipo||'cuenta'}</div>
                   <div class="bank-card-name">${b.nombre}</div>
+                  ${(b.predeterminada_ingresos||b.predeterminada_egresos)?`<div style="margin-top:4px;display:flex;gap:4px;flex-wrap:wrap">${b.predeterminada_ingresos?'<span class="badge badge-green" style="font-size:9px">📥 Ingresos</span>':''}${b.predeterminada_egresos?'<span class="badge badge-amber" style="font-size:9px">📤 Egresos</span>':''}</div>`:''}
                 </div>
                 <div class="bank-card-chip"></div>
               </div>
@@ -168,6 +169,17 @@ Modulos.bancos = {
           <span class="form-label" style="margin:0">Cuenta activa</span>
         </label>
       </div>`:''}
+      <div style="border-top:1px solid var(--border);padding-top:10px;margin-top:4px">
+        <div style="font-size:11px;color:var(--text3);margin-bottom:6px">Las facturas/ventas entran a la cuenta de <b>ingresos</b>; los costos/planilla salen de la de <b>egresos</b>. Si solo hay una cuenta, se usa por defecto.</div>
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;margin-bottom:6px">
+          <input type="checkbox" id="ban-def-ing" ${b.predeterminada_ingresos?'checked':''}>
+          <span>📥 Cuenta predeterminada para INGRESOS</span>
+        </label>
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px">
+          <input type="checkbox" id="ban-def-egr" ${b.predeterminada_egresos?'checked':''}>
+          <span>📤 Cuenta predeterminada para EGRESOS</span>
+        </label>
+      </div>
       <div class="modal-footer">
         <button class="btn btn-ghost" onclick="UI.cerrarModal()">Cancelar</button>
         <button class="btn btn-amber" onclick="Modulos.bancos.guardarBanco('${id||''}')">
@@ -186,11 +198,21 @@ Modulos.bancos = {
       numero:        document.getElementById('ban-num')?.value||null,
       moneda:        document.getElementById('ban-moneda')?.value,
       saldo_inicial: parseFloat(document.getElementById('ban-saldo')?.value)||0,
-      activa:        id ? (document.getElementById('ban-activa')?.checked ?? true) : true
+      activa:        id ? (document.getElementById('ban-activa')?.checked ?? true) : true,
+      predeterminada_ingresos: document.getElementById('ban-def-ing')?.checked || false,
+      predeterminada_egresos:  document.getElementById('ban-def-egr')?.checked || false
     };
     if (id) fields.id = id;
-    const {error} = await DB.upsertBanco(fields);
-    if (error) { UI.toast('Error: '+error.message,'error'); return; }
+    const res = await DB.upsertBanco(fields);
+    if (res.error) { UI.toast('Error: '+res.error.message,'error'); return; }
+    /* Mantener una única cuenta predeterminada por tipo */
+    const savedId = id || res.data?.id;
+    if (savedId) {
+      if (fields.predeterminada_ingresos)
+        await getSB().from('bancos').update({predeterminada_ingresos:false}).eq('tenant_id',getTID()).neq('id',savedId);
+      if (fields.predeterminada_egresos)
+        await getSB().from('bancos').update({predeterminada_egresos:false}).eq('tenant_id',getTID()).neq('id',savedId);
+    }
     UI.cerrarModal(); UI.toast(id?'Cuenta actualizada ✓':'Cuenta creada ✓');
     this.render();
   },

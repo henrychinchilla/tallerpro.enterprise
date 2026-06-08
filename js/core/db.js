@@ -348,6 +348,34 @@ const DB = {
     return { data, error };
   },
 
+  /* Cuenta bancaria predeterminada para 'ingresos' o 'egresos'.
+     Marca la cuenta con bandera; si no hay bandera pero existe UNA sola
+     cuenta activa, esa es la predeterminada; con varias y sin elegir → null. */
+  async _cuentaDefault(tipo) {
+    const { data } = await getSB().from('bancos')
+      .select('id,activa,predeterminada_ingresos,predeterminada_egresos').eq('tenant_id', getTID());
+    const activas = (data||[]).filter(b => b.activa !== false);
+    if (!activas.length) return null;
+    const flagged = activas.find(b => tipo==='ingresos' ? b.predeterminada_ingresos : b.predeterminada_egresos);
+    if (flagged) return flagged.id;
+    return activas.length === 1 ? activas[0].id : null;
+  },
+
+  /* Registra automáticamente el movimiento bancario de un ingreso/egreso.
+     No bloquea la operación si aún no hay cuenta resoluble (varias sin elegir). */
+  async _registrarBancoAuto(tipoMov, { monto, concepto, referencia, fecha }) {
+    const m = Number(monto) || 0;
+    if (m <= 0) return;
+    const bancoId = await this._cuentaDefault(tipoMov === 'entrada' ? 'ingresos' : 'egresos');
+    if (!bancoId) return;
+    await getSB().from('banco_movimientos').insert({
+      tenant_id: getTID(), banco_id: bancoId, tipo: tipoMov,
+      concepto: (concepto || (tipoMov==='entrada'?'Ingreso':'Egreso')).slice(0,200),
+      monto: m, referencia: referencia || null,
+      fecha: fecha || new Date().toISOString().slice(0,10), conciliado: false
+    });
+  },
+
   /* ── FINANZAS ─────────────────────────────────── */
   async getIngresos(ini=null, fin=null) {
     const m = mesActual();
@@ -364,6 +392,9 @@ const DB = {
       return { error };
     }
     const { data, error } = await getSB().from('ingresos').insert(payload).select().single();
+    if (data) await this._registrarBancoAuto('entrada', {
+      monto: data.monto, concepto: data.concepto||'Ingreso', referencia: data.referencia, fecha: data.fecha
+    });
     return { data, error };
   },
 
@@ -382,6 +413,9 @@ const DB = {
       return { error };
     }
     const { data, error } = await getSB().from('egresos').insert(payload).select().single();
+    if (data) await this._registrarBancoAuto('salida', {
+      monto: data.monto, concepto: data.concepto||'Egreso', referencia: data.referencia, fecha: data.fecha
+    });
     return { data, error };
   },
 
@@ -421,6 +455,7 @@ const DB = {
       referencia, notas: `Gasto recurrente${rec.notas?` — ${rec.notas}`:''}`
     });
     if (error) return { ok:false, error: error.message };
+    await this._registrarBancoAuto('salida', { monto: rec.monto||0, concepto: rec.concepto, referencia, fecha });
     await getSB().from('egresos_recurrentes')
       .update({ ultima_generacion: `${periodo}-01`, updated_at: new Date().toISOString() })
       .eq('id', rec.id);
@@ -472,6 +507,9 @@ const DB = {
     /* El NIT del receptor es obligatorio; CF por defecto */
     if (!payload.nit) payload.nit = 'CF';
     const { data, error } = await getSB().from('facturas').insert(payload).select().single();
+    if (data) await this._registrarBancoAuto('entrada', {
+      monto: data.total, concepto: `Factura ${data.num||''}`.trim(), referencia: data.num, fecha: data.fecha
+    });
     return { data, error };
   },
 
