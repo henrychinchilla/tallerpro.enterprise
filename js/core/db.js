@@ -199,6 +199,8 @@ const DB = {
 
   async upsertInventario(fields) {
     const payload = { ...fields, tenant_id: getTID() };
+    /* codigo es obligatorio y es la clave de conflicto; generarlo si falta */
+    if (!payload.codigo) payload.codigo = 'ART-' + Date.now().toString(36).toUpperCase();
     const { data, error } = await getSB().from('inventario')
       .upsert(payload, { onConflict:'tenant_id,codigo' }).select().single();
     return { data, error };
@@ -216,7 +218,7 @@ const DB = {
   /* Historial de movimientos de inventario (salidas, entradas, traslados, ajustes) */
   async getMovimientosInventario({ inventarioId = null, tipo = null, limite = 300 } = {}) {
     let q = getSB().from('inventario_movimientos')
-      .select('*, inventario(nombre,codigo,unidad)')
+      .select('*, inventario(nombre,codigo,unidad_medida)')
       .eq('tenant_id', getTID()).order('created_at', { ascending: false }).limit(limite);
     if (inventarioId) q = q.eq('inventario_id', inventarioId);
     if (tipo) q = q.eq('tipo', tipo);
@@ -403,6 +405,14 @@ const DB = {
       const { error } = await getSB().from('facturas').update(payload).eq('id', fields.id);
       return { error };
     }
+    /* Generar número correlativo (la columna num es obligatoria) */
+    if (!payload.num) {
+      const { count } = await getSB().from('facturas')
+        .select('*',{count:'exact',head:true}).eq('tenant_id',getTID());
+      payload.num = `FEL-${new Date().getFullYear()}-${String((count||0)+1).padStart(6,'0')}`;
+    }
+    /* El NIT del receptor es obligatorio; CF por defecto */
+    if (!payload.nit) payload.nit = 'CF';
     const { data, error } = await getSB().from('facturas').insert(payload).select().single();
     return { data, error };
   },
@@ -411,7 +421,7 @@ const DB = {
   async facturaDeOrden(ordenId) {
     if (!ordenId) return null;
     const { data } = await getSB().from('facturas')
-      .select('id,serie,num_fel,orden_id').eq('tenant_id', getTID()).eq('orden_id', ordenId).limit(1);
+      .select('id,num,fel_serie,fel_numero,ot_id').eq('tenant_id', getTID()).eq('ot_id', ordenId).limit(1);
     return data?.[0] || null;
   },
 

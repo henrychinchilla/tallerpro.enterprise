@@ -40,15 +40,15 @@ Modulos.facturacion = {
             <thead><tr><th>Serie/No.</th><th>Cliente</th><th>NIT</th><th>Fecha</th><th>Subtotal</th><th>IVA</th><th>Total</th><th>Método</th><th>Estado</th><th>Acciones</th></tr></thead>
             <tbody>
               ${this._data.map(f=>`<tr>
-                <td class="mono-sm"><b>${f.serie||'A'}-${f.num_fel||'—'}</b></td>
-                <td>${f.clientes?.nombre||'CF'}</td>
-                <td class="mono-sm">${f.clientes?.nit||'CF'}</td>
+                <td class="mono-sm"><b>${f.fel_serie?`${f.fel_serie}-${f.fel_numero||''}`:(f.num||'—')}</b></td>
+                <td>${f.nombre_receptor||f.clientes?.nombre||'CF'}</td>
+                <td class="mono-sm">${f.nit||f.clientes?.nit||'CF'}</td>
                 <td>${UI.fecha(f.fecha)}</td>
                 <td class="mono-sm">${UI.q(f.subtotal)}</td>
                 <td class="mono-sm">${UI.q(f.iva)}</td>
                 <td class="mono-sm text-amber"><b>${UI.q(f.total)}</b></td>
                 <td><span class="badge badge-gray">${f.metodo_pago||'Efectivo'}</span></td>
-                <td><span class="badge badge-${f.estado==='emitida'?'green':f.estado==='anulada'?'red':'amber'}">${f.estado}</span></td>
+                <td><span class="badge badge-${f.estado==='certificada'?'green':f.estado==='anulada'?'red':f.estado==='borrador'?'gray':'amber'}">${f.estado}</span></td>
                 <td><div style="display:flex;gap:4px">
                   <button class="btn btn-sm btn-cyan" onclick="Modulos.facturacion.modalFactura('${f.id}')">Ver</button>
                   <button class="btn btn-sm btn-ghost" onclick="Modulos.facturacion.enviarEmail('${f.id}')" title="Enviar por email">📧</button>
@@ -85,8 +85,8 @@ Modulos.facturacion = {
       </div>
       <div id="fel-items-box">${this._renderItemsBox(itemsExistentes)}</div>
       <div class="form-row">
-        <div class="form-group"><label class="form-label">Serie FEL</label>
-          <input class="form-input" id="fel-serie" value="${f.serie||'A'}" maxlength="10"></div>
+        <div class="form-group"><label class="form-label">Serie FEL (opcional)</label>
+          <input class="form-input" id="fel-serie" value="${f.fel_serie||''}" maxlength="10" placeholder="Serie autorizada FEL"></div>
         <div class="form-group"><label class="form-label">Fecha *</label>
           <input class="form-input" id="fel-fecha" type="date" value="${f.fecha||new Date().toISOString().slice(0,10)}"></div>
       </div>
@@ -106,7 +106,7 @@ Modulos.facturacion = {
         </select></div>
       ${esEdicion?`<div class="form-group"><label class="form-label">Estado</label>
         <select class="form-select" id="fel-estado">
-          ${['emitida','pendiente','anulada'].map(s=>`<option ${f.estado===s?'selected':''}>${s}</option>`).join('')}
+          ${['borrador','pendiente','certificada','anulada'].map(s=>`<option ${f.estado===s?'selected':''}>${s}</option>`).join('')}
         </select></div>`:''}
       <div class="form-group"><label class="form-label">Notas</label>
         <textarea class="form-input" id="fel-notas" rows="2">${f.notas||''}</textarea></div>
@@ -138,20 +138,25 @@ Modulos.facturacion = {
     if (sub<=0) { UI.toast('El subtotal es obligatorio','error'); return; }
     const iva   = parseFloat(document.getElementById('fel-iva')?.value)||0;
     const total = parseFloat(document.getElementById('fel-total')?.value)||0;
+    const cliId = document.getElementById('fel-cli')?.value||null;
+    const cli   = cliId ? this._clientes.find(c=>c.id===cliId) : null;
     const fields = {
-      cliente_id: document.getElementById('fel-cli')?.value||null,
-      orden_id:   document.getElementById('fel-ot')?.value||null,
-      serie:      document.getElementById('fel-serie')?.value||'A',
+      cliente_id: cliId,
+      ot_id:      document.getElementById('fel-ot')?.value||null,
+      nit:        cli?.nit?.trim() || 'CF',
+      nombre_receptor: cli?.nombre || 'Consumidor Final',
+      tipo_cliente: (cli?.nit && cli.nit.toUpperCase()!=='CF') ? 'NIT' : 'CF',
+      fel_serie:  document.getElementById('fel-serie')?.value?.trim()||null,
       fecha:      document.getElementById('fel-fecha')?.value,
       metodo_pago: document.getElementById('fel-metodo')?.value||'Efectivo',
       subtotal:   sub, iva, total,
-      estado:     document.getElementById('fel-estado')?.value||'emitida',
-      notas:      document.getElementById('fel-notas')?.value||null
+      estado:     document.getElementById('fel-estado')?.value||'pendiente',
+      descripcion: document.getElementById('fel-notas')?.value||null
     };
     /* Evitar doble facturación de una misma OT (doble descuento de inventario) */
-    if (!id && fields.orden_id) {
-      const yaFact = await DB.facturaDeOrden(fields.orden_id);
-      if (yaFact) { UI.toast(`Esa OT ya tiene factura (${yaFact.serie||'A'}-${yaFact.num_fel||'—'})`,'error'); return; }
+    if (!id && fields.ot_id) {
+      const yaFact = await DB.facturaDeOrden(fields.ot_id);
+      if (yaFact) { UI.toast(`Esa OT ya tiene factura (${yaFact.num||'—'})`,'error'); return; }
     }
     if (id) fields.id = id;
     const res = await DB.upsertFactura(fields);
@@ -161,7 +166,7 @@ Modulos.facturacion = {
     let descontados = 0;
     if (!id && res.data?.id && this._itemsImportados.length) {
       await DB.insertFacturaItems(res.data.id, this._itemsImportados);
-      const nro = `${fields.serie||'A'}-${res.data.num_fel||res.data.id.slice(0,8)}`;
+      const nro = res.data.num || res.data.id.slice(0,8);
       descontados = await DB.descontarInventarioVenta(this._itemsImportados, `Factura ${nro}`);
     }
     this._itemsImportados = [];
@@ -225,15 +230,15 @@ Modulos.facturacion = {
     const email = f.clientes?.email;
     if (!email) { UI.toast('El cliente no tiene email registrado','error'); return; }
     const taller = Auth.tenant?.name || 'TallerPro';
-    const nro = `${f.serie||'A'}-${f.num_fel||'—'}`;
+    const nro = f.fel_serie ? `${f.fel_serie}-${f.fel_numero||''}` : (f.num||'—');
     const html =
       `<div style="font-family:Arial,sans-serif;max-width:560px;margin:auto">` +
       `<h2 style="color:#d97706">🧾 ${taller}</h2>` +
-      `<p>Estimado(a) <b>${f.clientes?.nombre||'cliente'}</b>, adjuntamos el detalle de su factura:</p>` +
+      `<p>Estimado(a) <b>${f.nombre_receptor||f.clientes?.nombre||'cliente'}</b>, adjuntamos el detalle de su factura:</p>` +
       `<table style="width:100%;border-collapse:collapse;font-size:14px">` +
       `<tr><td style="padding:6px 0;color:#666">Factura</td><td style="text-align:right"><b>${nro}</b></td></tr>` +
       `<tr><td style="padding:6px 0;color:#666">Fecha</td><td style="text-align:right">${UI.fecha(f.fecha)}</td></tr>` +
-      `<tr><td style="padding:6px 0;color:#666">NIT</td><td style="text-align:right">${f.clientes?.nit||'CF'}</td></tr>` +
+      `<tr><td style="padding:6px 0;color:#666">NIT</td><td style="text-align:right">${f.nit||f.clientes?.nit||'CF'}</td></tr>` +
       `<tr><td style="padding:6px 0;color:#666">Subtotal</td><td style="text-align:right">${UI.q(f.subtotal)}</td></tr>` +
       `<tr><td style="padding:6px 0;color:#666">IVA</td><td style="text-align:right">${UI.q(f.iva)}</td></tr>` +
       `<tr><td style="padding:10px 0;border-top:2px solid #d97706;font-weight:800">TOTAL</td>` +
@@ -259,13 +264,14 @@ Modulos.facturacion = {
          </table>`
       : '';
     const win = window.open('','_blank');
-    win.document.write(`<html><head><title>Factura ${f.serie}-${f.num_fel}</title>
+    const nroDoc = f.fel_serie ? `${f.fel_serie}-${f.fel_numero||''}` : (f.num||'—');
+    win.document.write(`<html><head><title>Factura ${nroDoc}</title>
       <style>body{font-family:monospace;padding:20px;max-width:400px}h2{text-align:center}.total{font-size:20px;font-weight:bold}table{margin:8px 0}th,td{padding:2px 0}</style></head>
       <body><h2>${Auth.tenant?.name||'TallerPro'}</h2>
       <p>NIT: ${Auth.tenant?.nit||'—'} | ${Auth.tenant?.tel||''}</p>
-      <hr><p><b>Factura:</b> ${f.serie||'A'}-${f.num_fel||'—'}</p>
+      <hr><p><b>Factura:</b> ${nroDoc}</p>
       <p><b>Fecha:</b> ${UI.fecha(f.fecha)}</p>
-      <p><b>Cliente:</b> ${f.clientes?.nombre||'CF'} | NIT: ${f.clientes?.nit||'CF'}</p>
+      <p><b>Cliente:</b> ${f.nombre_receptor||f.clientes?.nombre||'CF'} | NIT: ${f.nit||f.clientes?.nit||'CF'}</p>
       ${itemsHtml}
       <hr><p>Subtotal: Q${f.subtotal?.toFixed(2)}</p>
       <p>IVA (12%): Q${f.iva?.toFixed(2)}</p>

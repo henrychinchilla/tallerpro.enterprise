@@ -352,7 +352,7 @@ Modulos.ordenes = {
 
     /* Evitar doble facturación (y doble descuento de inventario) */
     const yaFact = await DB.facturaDeOrden(id);
-    if (yaFact) { UI.toast(`Esta OT ya fue facturada (${yaFact.serie||'A'}-${yaFact.num_fel||'—'})`,'error'); return; }
+    if (yaFact) { UI.toast(`Esta OT ya fue facturada (${yaFact.num||'—'})`,'error'); return; }
 
     /* Cargar ítems */
     const { data: items } = await getSB().from('ot_items').select('*').eq('orden_id', id);
@@ -377,24 +377,26 @@ Modulos.ordenes = {
     const subtotal = Math.round(total/1.12*100)/100;
     const iva      = Math.round((total-subtotal)*100)/100;
 
-    /* Crear factura */
-    const { data: factura, error } = await getSB().from('facturas').insert({
-      tenant_id:  getTID(),
+    /* Crear factura (num/nit los completa DB.upsertFactura) */
+    const cli = o.clientes || {};
+    const { data: factura, error } = await DB.upsertFactura({
       cliente_id: o.cliente_id,
-      orden_id:   id,
-      serie:      'A',
+      ot_id:      id,
+      nit:        cli.nit?.trim() || 'CF',
+      nombre_receptor: cli.nombre || 'Consumidor Final',
+      tipo_cliente: (cli.nit && cli.nit.toUpperCase()!=='CF') ? 'NIT' : 'CF',
       subtotal,
       iva,
       total,
       estado:     'pendiente',
       fecha:      new Date().toISOString().slice(0,10),
-      notas:      descripcionFEL.slice(0,500)
-    }).select().single();
+      descripcion: descripcionFEL.slice(0,500)
+    });
 
-    if (error) { UI.toast('Error al crear factura: '+error.message,'error'); return; }
+    if (error || !factura) { UI.toast('Error al crear factura: '+(error?.message||'desconocido'),'error'); return; }
 
     /* Desglose de la factura + descuento de inventario de los repuestos */
-    const nro = `Factura ${factura.serie||'A'}-${factura.num_fel||factura.id.slice(0,8)}`;
+    const nro = `Factura ${factura.num||factura.id.slice(0,8)}`;
     await DB.insertFacturaItems(factura.id, itemsList.map(i=>({
       descripcion: i.descripcion, cantidad: i.cantidad,
       precio_unit: i.precio_unit, total: i.total, inventario_id: i.inventario_id || null

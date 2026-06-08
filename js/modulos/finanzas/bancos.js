@@ -152,7 +152,7 @@ Modulos.bancos = {
             ${['monetaria','ahorro','depositos','credito'].map(x=>`<option ${b.tipo===x?'selected':''}>${x}</option>`).join('')}
           </select></div>
         <div class="form-group"><label class="form-label">Número de Cuenta</label>
-          <input class="form-input" id="ban-num" value="${b.numero||''}" class="mono-sm"></div>
+          <input class="form-input mono-sm" id="ban-num" value="${b.numero||''}"></div>
       </div>
       <div class="form-row">
         <div class="form-group"><label class="form-label">Moneda</label>
@@ -162,6 +162,12 @@ Modulos.bancos = {
         <div class="form-group"><label class="form-label">Saldo Inicial (Q)</label>
           <input class="form-input" id="ban-saldo" type="number" value="${b.saldo_inicial||0}" step="0.01"></div>
       </div>
+      ${esEdicion?`<div class="form-group">
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+          <input type="checkbox" id="ban-activa" ${b.activa!==false?'checked':''}>
+          <span class="form-label" style="margin:0">Cuenta activa</span>
+        </label>
+      </div>`:''}
       <div class="modal-footer">
         <button class="btn btn-ghost" onclick="UI.cerrarModal()">Cancelar</button>
         <button class="btn btn-amber" onclick="Modulos.bancos.guardarBanco('${id||''}')">
@@ -180,7 +186,7 @@ Modulos.bancos = {
       numero:        document.getElementById('ban-num')?.value||null,
       moneda:        document.getElementById('ban-moneda')?.value,
       saldo_inicial: parseFloat(document.getElementById('ban-saldo')?.value)||0,
-      activa:        true
+      activa:        id ? (document.getElementById('ban-activa')?.checked ?? true) : true
     };
     if (id) fields.id = id;
     const {error} = await DB.upsertBanco(fields);
