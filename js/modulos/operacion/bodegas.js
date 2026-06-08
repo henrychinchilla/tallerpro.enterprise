@@ -245,27 +245,27 @@ Modulos.bodegas = {
 
     /* Cargar bodegas destino */
     const bodegas = await DB.getBodegas();
+    /* El destino nunca incluye la ubicación de origen (ni la misma bodega/taller) */
     const destinos = [
-      { id: '', nombre: `🏪 ${Auth.tenant?.name||'Taller Principal'}` },
+      ...(desdeBodegaId ? [{ id: '', nombre: `🏪 ${Auth.tenant?.name||'Taller Principal'}` }] : []),
       ...bodegas.filter(b=>b.id!==desdeBodegaId&&b.activa).map(b=>({ id:b.id, nombre:`🏭 ${b.nombre}` }))
     ];
 
     UI.modal(`🔄 Trasladar Stock — Desde: ${desdeBodegaNombre}`, `
-      <div class="form-group"><label class="form-label">Artículo a trasladar *</label>
-        <select class="form-select" id="trs-item" onchange="Modulos.bodegas._updateMaxStock(this)">
-          <option value="">Seleccionar artículo...</option>
-          ${(itemsOrigen||[]).map(i=>`<option value="${i.id}" data-stock="${i.stock}">${i.nombre} (Stock: ${i.stock} ${i.unidad_medida||''})</option>`).join('')}
+      <div class="form-group"><label class="form-label">Destino *</label>
+        <select class="form-select" id="trs-dest">
+          <option value="__none__">Seleccionar destino...</option>
+          ${destinos.map(d=>`<option value="${d.id}">${d.nombre}</option>`).join('')}
         </select></div>
-      <div class="form-row">
-        <div class="form-group"><label class="form-label">Cantidad a trasladar *</label>
-          <input class="form-input" id="trs-cant" type="number" min="1" step="1" placeholder="0">
-          <div id="trs-max" style="font-size:11px;color:var(--text3);margin-top:4px"></div>
+      <div class="form-group"><label class="form-label">Artículos a trasladar — indica la cantidad (1 o más)</label>
+        <div style="max-height:240px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;padding:8px 10px">
+          ${(itemsOrigen||[]).length ? (itemsOrigen||[]).map(i=>`
+            <div style="display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:1px solid var(--border)">
+              <div style="flex:1;font-size:12px"><b>${i.nombre}</b> <span class="text-muted">· disp: ${i.stock} ${i.unidad_medida||''}</span></div>
+              <input class="form-input" style="width:96px" type="number" min="0" max="${i.stock}" step="1"
+                     id="trsq-${i.id}" data-stock="${i.stock}" value="${invId===i.id?1:''}" placeholder="0">
+            </div>`).join('') : '<div class="text-muted" style="padding:8px">Esta ubicación no tiene artículos para trasladar.</div>'}
         </div>
-        <div class="form-group"><label class="form-label">Destino *</label>
-          <select class="form-select" id="trs-dest">
-            <option value="">Seleccionar destino...</option>
-            ${destinos.map(d=>`<option value="${d.id}">${d.nombre}</option>`).join('')}
-          </select></div>
       </div>
       <div class="form-group"><label class="form-label">Motivo del traslado</label>
         <input class="form-input" id="trs-motivo" placeholder="Reposición, redistribución, etc."></div>
@@ -318,13 +318,7 @@ Modulos.bodegas = {
         <button class="btn btn-cyan" onclick="Modulos.bodegas.ejecutarTraslado('${desdeBodegaId||''}','${desdeBodegaNombre}')">
           🔄 Ejecutar Traslado
         </button>
-      </div>`,'560px');
-
-    /* Pre-seleccionar artículo si viene de botón */
-    if (invId) {
-      const sel = document.getElementById('trs-item');
-      if (sel) { sel.value = invId; Modulos.bodegas._updateMaxStock(sel); }
-    }
+      </div>`,'600px');
   },
 
   _toggleFlete() {
@@ -336,86 +330,65 @@ Modulos.bodegas = {
     if (e) e.style.display = tipo === 'externo' ? 'block' : 'none';
   },
 
-  _updateMaxStock(sel) {
-    const stock = sel.options[sel.selectedIndex]?.dataset.stock || 0;
-    const el = document.getElementById('trs-max');
-    if (el) el.textContent = `Máximo disponible: ${stock}`;
-    const cantEl = document.getElementById('trs-cant');
-    if (cantEl) cantEl.max = stock;
-  },
-
   async ejecutarTraslado(desdeBodegaId, desdeBodegaNombre) {
-    const itemId  = document.getElementById('trs-item')?.value;
-    const cant    = parseFloat(document.getElementById('trs-cant')?.value)||0;
-    const destId  = document.getElementById('trs-dest')?.value;
-    const motivo  = document.getElementById('trs-motivo')?.value||'Traslado';
+    const destId = document.getElementById('trs-dest')?.value;
+    const motivo = document.getElementById('trs-motivo')?.value || 'Traslado';
 
-    if (!itemId)  { UI.toast('Selecciona un artículo','error'); return; }
-    if (cant<=0)  { UI.toast('Ingresa una cantidad válida','error'); return; }
-    if (destId === desdeBodegaId) { UI.toast('El origen y destino son iguales','error'); return; }
+    if (destId === '__none__' || destId == null) { UI.toast('Selecciona un destino','error'); return; }
+    if (destId === desdeBodegaId) { UI.toast('El origen y el destino no pueden ser la misma ubicación','error'); return; }
 
-    /* Obtener artículo origen */
-    const { data: origen } = await getSB().from('inventario').select('*').eq('id', itemId).maybeSingle();
-    if (!origen) { UI.toast('Artículo no encontrado','error'); return; }
-    if (cant > origen.stock) { UI.toast(`Stock insuficiente. Disponible: ${origen.stock}`,'error'); return; }
-
-    /* Descontar del origen */
-    await getSB().from('inventario').update({
-      stock: origen.stock - cant,
-      updated_at: new Date().toISOString()
-    }).eq('id', itemId);
-
-    /* Buscar artículo en destino */
-    let qDest = getSB().from('inventario').select('*,id,stock')
-      .eq('tenant_id', getTID())
-      .eq('nombre', origen.nombre);
-    if (destId) qDest = qDest.eq('bodega_id', destId);
-    else qDest = qDest.is('bodega_id', null);
-    const { data: destItem } = await qDest.maybeSingle();
-
-    if (destItem) {
-      /* Sumar al destino existente */
-      await getSB().from('inventario').update({
-        stock: destItem.stock + cant,
-        updated_at: new Date().toISOString()
-      }).eq('id', destItem.id);
-    } else {
-      /* Crear nuevo registro en destino */
-      await getSB().from('inventario').insert({
-        tenant_id:     getTID(),
-        bodega_id:     destId || null,
-        codigo:        `${origen.codigo||'ART'}-B${(destId||'P').slice(0,4)}`,
-        nombre:        origen.nombre,
-        categoria:     origen.categoria,
-        unidad_medida: origen.unidad_medida,
-        stock:         cant,
-        min_stock:     origen.min_stock,
-        precio_costo:  origen.precio_costo,
-        precio_venta:  origen.precio_venta
-      });
-    }
-
-    /* Registrar movimiento */
-    await DB.movimientoInventario({
-      inventario_id: itemId,
-      tipo:          'traslado',
-      cantidad:      cant,
-      referencia:    `Traslado a ${destId ? 'bodega' : 'taller principal'}`,
-      notas:         motivo,
-      fecha:         new Date().toISOString().slice(0,10)
+    /* Recolectar las líneas con cantidad > 0 (uno o varios artículos) */
+    const lineas = [];
+    document.querySelectorAll('[id^="trsq-"]').forEach(inp => {
+      const cant = parseFloat(inp.value) || 0;
+      if (cant > 0) lineas.push({ id: inp.id.replace('trsq-',''), cant, stock: parseFloat(inp.dataset.stock)||0 });
     });
+    if (!lineas.length) { UI.toast('Indica la cantidad de al menos un artículo','error'); return; }
+    if (lineas.some(l => l.cant > l.stock)) { UI.toast('Una cantidad supera el stock disponible','error'); return; }
 
-    /* Registrar flete / envío del traslado si se solicitó */
+    const fecha = new Date().toISOString().slice(0,10);
+    let trasladados = 0;
+    for (const l of lineas) {
+      const { data: origen } = await getSB().from('inventario').select('*').eq('id', l.id).maybeSingle();
+      if (!origen || l.cant > origen.stock) continue;
+
+      await getSB().from('inventario').update({ stock: origen.stock - l.cant, updated_at: new Date().toISOString() }).eq('id', l.id);
+
+      let qDest = getSB().from('inventario').select('id,stock').eq('tenant_id', getTID()).eq('nombre', origen.nombre);
+      qDest = destId ? qDest.eq('bodega_id', destId) : qDest.is('bodega_id', null);
+      const { data: destItem } = await qDest.maybeSingle();
+
+      if (destItem) {
+        await getSB().from('inventario').update({ stock: destItem.stock + l.cant, updated_at: new Date().toISOString() }).eq('id', destItem.id);
+      } else {
+        await getSB().from('inventario').insert({
+          tenant_id: getTID(), bodega_id: destId || null,
+          codigo: `${origen.codigo||'ART'}-B${(destId||'P').slice(0,4)}`,
+          nombre: origen.nombre, categoria: origen.categoria, unidad_medida: origen.unidad_medida,
+          stock: l.cant, min_stock: origen.min_stock, precio_costo: origen.precio_costo, precio_venta: origen.precio_venta
+        });
+      }
+
+      await DB.movimientoInventario({
+        inventario_id: l.id, tipo: 'traslado', cantidad: l.cant,
+        referencia: `Traslado a ${destId ? 'bodega' : 'taller principal'}`, notas: motivo, fecha
+      });
+      trasladados++;
+    }
+    if (!trasladados) { UI.toast('No se pudo trasladar','error'); return; }
+
+    const destNombre = destId ? (this._bodegas.find(b=>b.id===destId)?.nombre || 'Bodega') : `Taller Principal`;
+
+    /* Registrar flete / envío del traslado (uno para todo el traslado) */
     if (document.getElementById('trs-flete-on')?.checked) {
       const tipoF = document.getElementById('trs-flete-tipo')?.value || 'interno';
       const nm = elId => parseFloat(document.getElementById(elId)?.value) || 0;
       const via = tipoF==='interno' ? nm('trs-viaticos') : 0;
       const comb = tipoF==='interno' ? nm('trs-combustible') : 0;
       const flete = tipoF==='interno' ? 0 : nm('trs-fcosto');
-      const destNombre = destId ? (this._bodegas.find(b=>b.id===destId)?.nombre || 'Bodega') : 'Taller Principal';
       await DB.upsertEnvio({
         tipo: tipoF,
-        descripcion: `Traslado: ${origen.nombre} (${cant}) → ${destNombre}`,
+        descripcion: `Traslado: ${trasladados} artículo(s) → ${destNombre}`,
         destinatario: destNombre,
         bodega_origen_id: desdeBodegaId || null,
         bodega_destino_id: destId || null,
@@ -424,14 +397,13 @@ Modulos.bodegas = {
         empresa_transporte: tipoF==='externo' ? (document.getElementById('trs-empresa')?.value || null) : null,
         numero_envio: tipoF==='externo' ? (document.getElementById('trs-fnum')?.value || null) : null,
         costo_flete: flete, viaticos: via, combustible: comb, costo_total: flete+via+comb,
-        fecha_envio: new Date().toISOString().slice(0,10),
-        fecha_entrega_estimada: document.getElementById('trs-festimada')?.value || null,
+        fecha_envio: fecha, fecha_entrega_estimada: document.getElementById('trs-festimada')?.value || null,
         estado: 'programado'
       }).catch(()=>{});
     }
 
     UI.cerrarModal();
-    UI.toast(`✓ Trasladadas ${cant} ${origen.unidad_medida||''} de "${origen.nombre}" desde ${desdeBodegaNombre}`);
+    UI.toast(`✓ ${trasladados} artículo(s) trasladado(s) a ${destNombre}`);
     this.render();
   },
 

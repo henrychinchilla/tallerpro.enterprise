@@ -1,0 +1,20 @@
+# Archivos que NO deben publicarse como sitio estático (solo runtime: index.html, css/, js/, icons/, manifest.json, sw.js)
+.git/
+.gitignore
+.assetsignore
+.remember/
+.wrangler/
+.claude/
+.vscode/
+.idea/
+node_modules/
+supabase/
+db/
+electron/
+package.json
+package-lock.json
+pnpm-lock.yaml
+yarn.lock
+wrangler.jsonc
+schema_v3.sql
+*.md
