@@ -188,6 +188,23 @@ const DB = {
     return !error;
   },
 
+  /* ── TRABAJOS EXTERNOS (subcontratados: torno, etc.) ── */
+  async getTrabajosExternos(ordenId) {
+    const { data } = await getSB().from('trabajos_externos').select('*')
+      .eq('tenant_id', getTID()).eq('orden_id', ordenId).order('created_at');
+    return data || [];
+  },
+
+  async upsertTrabajoExterno(fields) {
+    const payload = { ...fields, tenant_id: getTID(), updated_at: new Date().toISOString() };
+    if (fields.id) {
+      const { error } = await getSB().from('trabajos_externos').update(payload).eq('id', fields.id);
+      return { error };
+    }
+    const { data, error } = await getSB().from('trabajos_externos').insert(payload).select().single();
+    return { data, error };
+  },
+
   /* ── INVENTARIO ───────────────────────────────── */
   async getInventario(busca=null, bodega=null) {
     let q = getSB().from('inventario').select('*').eq('tenant_id', getTID()).order('nombre');
