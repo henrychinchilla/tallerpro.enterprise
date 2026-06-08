@@ -343,6 +343,35 @@ Modulos.eliminarRegistro = async function (tabla, id, nombre, cb) {
   else UI.toast('No se pudo eliminar (puede tener registros relacionados)', 'error');
 };
 
+/* Verifica un NIT (dígito local + nombre en línea vía certificador FEL).
+   Pinta el resultado en statusId y, si trae nombre y el campo de nombre
+   está vacío, lo autocompleta. */
+Modulos.verificarNIT = async function (inputId, statusId, nombreInputId) {
+  const inp = document.getElementById(inputId);
+  const st  = document.getElementById(statusId);
+  if (!inp) return;
+  const nit = inp.value.trim();
+  if (!nit) { if (st) st.innerHTML = ''; return; }
+  if (st) st.innerHTML = '<span style="color:var(--text3);font-size:11px">⏳ Verificando...</span>';
+  const r = await NIT.consultar(nit);
+  if (!r || r.ok === false) {
+    if (st) st.innerHTML = `<span style="color:var(--red);font-size:11px">⚠️ ${(r && r.error) || 'No se pudo verificar'}</span>`;
+    return;
+  }
+  if (r.cf) { if (st) st.innerHTML = '<span style="color:var(--text3);font-size:11px">Consumidor Final</span>'; return; }
+  const partes = [ r.valido
+    ? '<span style="color:var(--green);font-size:11px">✓ NIT válido</span>'
+    : '<span style="color:var(--red);font-size:11px">✗ Dígito verificador inválido</span>' ];
+  if (r.nombre) {
+    partes.push(`<span style="color:var(--cyan);font-size:11px">· ${r.nombre}</span>`);
+    const nEl = nombreInputId ? document.getElementById(nombreInputId) : null;
+    if (nEl && !nEl.value.trim()) nEl.value = r.nombre;
+  } else if (r.mensaje) {
+    partes.push(`<span style="color:var(--text3);font-size:11px">· ${r.mensaje}</span>`);
+  }
+  if (st) st.innerHTML = partes.join(' ');
+};
+
 /* Abre un selector de archivo .csv y entrega las filas parseadas al callback */
 Modulos._importarCSV = function (onRows) {
   const input = document.createElement('input');

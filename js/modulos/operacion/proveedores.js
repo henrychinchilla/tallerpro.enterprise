@@ -91,7 +91,11 @@ Modulos.proveedores = {
         <div class="form-group"><label class="form-label">Nombre / Razón Social *</label>
           <input class="form-input" id="prov-nombre" value="${p.nombre||''}" placeholder="Distribuidora García"></div>
         <div class="form-group"><label class="form-label">NIT</label>
-          <input class="form-input" id="prov-nit" value="${p.nit||''}" placeholder="1234567-8"></div>
+          <div style="display:flex;gap:6px">
+            <input class="form-input" id="prov-nit" value="${p.nit||''}" placeholder="1234567-8" style="flex:1">
+            <button type="button" class="btn btn-ghost" onclick="Modulos.verificarNIT('prov-nit','prov-nit-status','prov-nombre')" title="Verificar NIT con la SAT">🔎</button>
+          </div>
+          <div id="prov-nit-status" style="margin-top:4px;min-height:14px"></div></div>
       </div>
       <div class="form-row">
         <div class="form-group"><label class="form-label">Categoría</label>
@@ -145,6 +149,9 @@ Modulos.proveedores = {
       activo:    id ? (document.getElementById('prov-activo')?.checked ?? true) : true
     };
     if (id) fields.id = id;
+    if (fields.nit && !NIT.validarLocal(fields.nit).valido) {
+      UI.toast('Aviso: el dígito verificador del NIT no parece válido','warn');
+    }
     const {error} = await DB.upsertProveedor(fields);
     if (error) {
       const msg = error.code==='23505' ? 'Ya existe un proveedor con ese nombre' : ('Error: '+error.message);

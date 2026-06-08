@@ -76,7 +76,11 @@ Modulos.clientes = {
         <div class="form-group"><label class="form-label">Nombre Completo *</label>
           <input class="form-input" id="cli-nombre" value="${c.nombre||''}"></div>
         <div class="form-group"><label class="form-label">NIT</label>
-          <input class="form-input" id="cli-nit" value="${c.nit||''}" placeholder="CF"></div>
+          <div style="display:flex;gap:6px">
+            <input class="form-input" id="cli-nit" value="${c.nit||''}" placeholder="CF" style="flex:1">
+            <button type="button" class="btn btn-ghost" onclick="Modulos.verificarNIT('cli-nit','cli-nit-status','cli-nombre')" title="Verificar NIT con la SAT">🔎</button>
+          </div>
+          <div id="cli-nit-status" style="margin-top:4px;min-height:14px"></div></div>
       </div>
       <div class="form-row">
         <div class="form-group"><label class="form-label">Teléfono *</label>
@@ -120,6 +124,11 @@ Modulos.clientes = {
       representante:  tipo==='empresa'?document.getElementById('cli-representante')?.value.trim():null
     };
     if (id) fields.id = id;
+
+    /* Aviso (no bloquea) si el NIT tiene dígito verificador inválido */
+    if (fields.nit && !NIT.validarLocal(fields.nit).valido) {
+      UI.toast('Aviso: el dígito verificador del NIT no parece válido','warn');
+    }
 
     const { error } = await DB.upsertCliente(fields);
     if (error) { UI.toast('Error: '+error.message,'error'); return; }

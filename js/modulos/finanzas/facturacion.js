@@ -140,6 +140,9 @@ Modulos.facturacion = {
     const total = parseFloat(document.getElementById('fel-total')?.value)||0;
     const cliId = document.getElementById('fel-cli')?.value||null;
     const cli   = cliId ? this._clientes.find(c=>c.id===cliId) : null;
+    if (cli?.nit && !NIT.validarLocal(cli.nit).valido) {
+      UI.toast('Aviso: el NIT del cliente tiene dígito verificador inválido','warn');
+    }
     const fields = {
       cliente_id: cliId,
       ot_id:      document.getElementById('fel-ot')?.value||null,
