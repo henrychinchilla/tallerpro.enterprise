@@ -48,10 +48,11 @@ const MODULOS = [
   { id:'finanzas',       icon:'💰', label:'Finanzas',          grupo:'finanzas'   },
   { id:'rrhh',           icon:'👤', label:'RRHH & Nómina',     grupo:'rrhh',
     subnav:[
-      { tab:'empleados',   icon:'👤', label:'Empleados'   },
-      { tab:'nomina',      icon:'💵', label:'Nómina'      },
-      { tab:'organigrama', icon:'🏢', label:'Organigrama' },
-      { tab:'documentos',  icon:'📄', label:'Documentos'  }
+      { tab:'empleados',     icon:'👤', label:'Empleados'     },
+      { tab:'nomina',        icon:'💵', label:'Nómina'        },
+      { tab:'productividad', icon:'📈', label:'Productividad'  },
+      { tab:'organigrama',   icon:'🏢', label:'Organigrama'   },
+      { tab:'documentos',    icon:'📄', label:'Documentos'    }
     ] },
   { id:'marketing',      icon:'🎯', label:'Marketing',         grupo:'marketing'  },
   { id:'calendario',     icon:'📅', label:'Calendario',        grupo:'herramientas'},
@@ -138,6 +139,58 @@ const GT = {
   iva_general:                0.12,
   iva_repc:                   0.05
 };
+
+/* ── PRODUCTIVIDAD / COSTEO (hora-hombre, KPIs, bono) ──
+   Valores por defecto; se sobreescriben con config_productividad del tenant.
+   Todos los cálculos son MENSUALES. */
+const PRODUCTIVIDAD_DEFAULTS = {
+  horas_mes: 240,                 // jornada base mensual (8h x 30)
+  cargas: {                       // cargas patronales sobre el salario base
+    igss_patronal: GT.igss_patronal,   // 12.67%
+    irtra:         GT.irtra,           // 1%
+    intecap:       GT.intecap          // 1%
+  },
+  provisiones: {                  // provisiones mensuales (fracción de 1 salario/año)
+    aguinaldo:     true,          // salario/12
+    bono14:        true,          // salario/12
+    vacaciones:    true,          // salario*0.5/12 (15 días/año)
+    indemnizacion: true           // (salario + bonificación)/12 — Art. 82 Código de Trabajo GT
+  },
+  incluir_bonificacion_en_indemnizacion: true,
+  bono_base:   'salario',         // base del bono mensual
+  bono_max_pct: 30,               // % máximo del salario como bono al 100% de score
+  kpis: [
+    { id:'ots_entregadas', label:'OTs entregadas',          peso:30, tipo:'auto',   meta:10    },
+    { id:'ingresos',       label:'Ingresos generados (Q)',  peso:25, tipo:'auto',   meta:20000 },
+    { id:'cumplimiento',   label:'Cumplimiento de tiempo',  peso:20, tipo:'auto'               },
+    { id:'calidad',        label:'Calidad (sin garantías)', peso:15, tipo:'auto'               },
+    { id:'actitud',        label:'Actitud y disciplina',    peso:10, tipo:'manual'             }
+  ]
+};
+
+/* Costo mensual cargado y hora-hombre de un empleado según la config */
+function calcularHoraHombre(salarioBase, cfg = PRODUCTIVIDAD_DEFAULTS) {
+  const s = Number(salarioBase) || 0;
+  const bonif = GT.bonificacion_incentivo;
+  const c = cfg.cargas || PRODUCTIVIDAD_DEFAULTS.cargas;
+  const p = cfg.provisiones || PRODUCTIVIDAD_DEFAULTS.provisiones;
+  const cargas = s * ((c.igss_patronal||0) + (c.irtra||0) + (c.intecap||0));
+  const aguinaldo = p.aguinaldo  ? s/12 : 0;
+  const bono14    = p.bono14     ? s/12 : 0;
+  const vacaciones= p.vacaciones ? s*0.5/12 : 0;
+  const baseIndem = s + (cfg.incluir_bonificacion_en_indemnizacion ? bonif : 0);
+  const indemniz  = p.indemnizacion ? baseIndem/12 : 0;
+  const costoMensual = s + bonif + cargas + aguinaldo + bono14 + vacaciones + indemniz;
+  const horas = Number(cfg.horas_mes) || 240;
+  return {
+    salario: s, bonificacion: bonif, cargas,
+    aguinaldo, bono14, vacaciones, indemnizacion: indemniz,
+    costoMensual,
+    factorCarga: s>0 ? (costoMensual - s)/s : 0,
+    horasMes: horas,
+    horaHombre: horas>0 ? costoMensual/horas : 0
+  };
+}
 
 /* Calcular ISR mensual según Decreto 13-2026 */
 function calcularISR(salarioMensual) {

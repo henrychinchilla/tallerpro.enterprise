@@ -1,6 +1,7 @@
 /* TallerPro v3.0 — rrhh/index.js */
 Modulos.rrhh = {
   _tab: 'empleados', _empleados: [],
+  _cfgProd: null, _prodMes: null, _prodAnio: null,
 
   async render() {
     const el = document.getElementById('page-content');
@@ -10,6 +11,7 @@ Modulos.rrhh = {
         <div class="tabs">
           <button class="tab-btn ${this._tab==='empleados'?'active':''}" onclick="App.navegarSub('rrhh','empleados')">👤 Empleados</button>
           <button class="tab-btn ${this._tab==='nomina'?'active':''}" onclick="App.navegarSub('rrhh','nomina')">💵 Nómina</button>
+          <button class="tab-btn ${this._tab==='productividad'?'active':''}" onclick="App.navegarSub('rrhh','productividad')">📈 Productividad</button>
           <button class="tab-btn ${this._tab==='organigrama'?'active':''}" onclick="App.navegarSub('rrhh','organigrama')">🏢 Organigrama</button>
           <button class="tab-btn ${this._tab==='documentos'?'active':''}" onclick="App.navegarSub('rrhh','documentos')">📄 Documentos</button>
         </div>
@@ -87,6 +89,10 @@ Modulos.rrhh = {
             </tbody>
           </table>
         </div>`;
+    }
+
+    else if (this._tab==='productividad') {
+      await this._renderProductividad(el);
     }
 
     else if (this._tab==='organigrama') {
@@ -445,6 +451,331 @@ Modulos.rrhh = {
     UI.toast(crearAcceso ? `Empleado creado con acceso al sistema ✓`
                          : (id?'Empleado actualizado ✓':'Empleado creado ✓'));
     this._renderTab();
+  },
+
+  /* ── PRODUCTIVIDAD: hora-hombre + KPIs + bono (mensual) ── */
+  _rangoMes() {
+    const now = new Date();
+    const mes  = this._prodMes  || (now.getMonth()+1);
+    const anio = this._prodAnio || now.getFullYear();
+    const ini = new Date(anio, mes-1, 1).toISOString().slice(0,10);
+    const fin = new Date(anio, mes, 0).toISOString().slice(0,10);
+    return { mes, anio, ini, fin };
+  },
+
+  /* Calcula los KPIs (auto + manual) y el score ponderado de un empleado */
+  _kpiScores(emp, ordenes, manual, cfg) {
+    const ots = ordenes.filter(o => o.mecanico_id === emp.id);
+    const entregadasArr = ots.filter(o => ['entregado','listo'].includes(o.estado));
+    const trabajadas = ots.length;
+    const entregadas = entregadasArr.length;
+    const ingresos   = entregadasArr.reduce((s,o)=>s+(Number(o.total)||0),0);
+    const garantias  = ots.filter(o => o.estado==='garantia').length;
+    const conFechas  = entregadasArr.filter(o => o.fecha_entrega && o.fecha_estimada);
+    const aTiempo    = conFechas.filter(o => o.fecha_entrega <= o.fecha_estimada).length;
+    const cumplimiento = conFechas.length ? Math.round(aTiempo/conFechas.length*100) : (entregadas ? 100 : 0);
+    const calidad      = trabajadas ? Math.max(0, Math.round(100 - garantias/trabajadas*100)) : 100;
+
+    const detail = (cfg.kpis||[]).map(k => {
+      let score = 0, valor = '—';
+      if (k.tipo === 'manual') {
+        score = Math.max(0, Math.min(100, Number(manual?.[k.id]) || 0));
+        valor = `${score}%`;
+      } else if (k.id === 'ots_entregadas') {
+        score = Math.min(100, Math.round(entregadas/(k.meta||10)*100));
+        valor = `${entregadas}/${trabajadas} (meta ${k.meta||10})`;
+      } else if (k.id === 'ingresos') {
+        score = Math.min(100, Math.round(ingresos/(k.meta||20000)*100));
+        valor = `${UI.q(ingresos)} (meta ${UI.q(k.meta||20000)})`;
+      } else if (k.id === 'cumplimiento') {
+        score = cumplimiento; valor = `${cumplimiento}% a tiempo`;
+      } else if (k.id === 'calidad') {
+        score = calidad; valor = `${garantias} garantía(s)`;
+      }
+      return { id:k.id, label:k.label, peso:Number(k.peso)||0, tipo:k.tipo, valor, score };
+    });
+    const pesoTotal = detail.reduce((s,d)=>s+d.peso,0) || 1;
+    const score = Math.round(detail.reduce((s,d)=>s+d.score*d.peso,0)/pesoTotal);
+    return { detail, score, raw:{ trabajadas, entregadas, ingresos, garantias, cumplimiento, calidad } };
+  },
+
+  _calcBono(salario, score, cfg) {
+    /* Base del bono: salario (Fase 1). Bono = salario × bono_max% × score% */
+    const pct = (Number(cfg.bono_max_pct)||0)/100;
+    return Math.round((Number(salario)||0) * pct * (score/100) * 100)/100;
+  },
+
+  async _renderProductividad(el) {
+    const { mes, anio, ini, fin } = this._rangoMes();
+    this._cfgProd = await DB.getConfigProductividad();
+    const [ordenes, registros] = await Promise.all([
+      DB.getOrdenesPeriodo(ini, fin),
+      DB.getKpiEmpleados(mes, anio)
+    ]);
+    const cfg = this._cfgProd;
+    const recByEmp = {}; registros.forEach(r => recByEmp[r.empleado_id] = r);
+    const activos = this._empleados.filter(e => e.activo);
+
+    const nombreMes = new Date(anio, mes-1, 1).toLocaleDateString('es-GT',{month:'long',year:'numeric'});
+    const meses = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+    const anios = [anio-1, anio, anio+1];
+
+    let totalBono = 0, totalCosto = 0;
+    const filas = activos.map(e => {
+      const rec = recByEmp[e.id];
+      const { score, raw } = this._kpiScores(e, ordenes, rec?.manual||{}, cfg);
+      const hh = calcularHoraHombre(e.salario_base, cfg);
+      const bono = this._calcBono(e.salario_base, score, cfg);
+      totalBono += rec?.aprobado ? (rec.bono||bono) : bono;
+      totalCosto += hh.costoMensual;
+      const col = score>=80?'green':score>=50?'amber':'red';
+      return `<tr>
+        <td><div style="font-weight:700">${e.nombre}</div><div style="font-size:11px;color:var(--text3)">${e.cargo||ROLES[e.rol]?.label||'—'}</div></td>
+        <td class="mono-sm">${UI.q(hh.horaHombre)}<div style="font-size:10px;color:var(--text3)">${UI.q(hh.costoMensual)}/mes</div></td>
+        <td style="text-align:center" class="mono-sm">${raw.entregadas}/${raw.trabajadas}</td>
+        <td class="mono-sm text-green">${UI.q(raw.ingresos)}</td>
+        <td style="min-width:120px">
+          <div style="display:flex;align-items:center;gap:8px">
+            <div style="flex:1;height:7px;background:var(--surface3);border-radius:4px;overflow:hidden">
+              <div style="height:100%;width:${score}%;background:var(--${col});border-radius:4px"></div>
+            </div>
+            <b style="color:var(--${col})">${score}%</b>
+          </div>
+        </td>
+        <td class="mono-sm text-amber"><b>${UI.q(rec?.aprobado?(rec.bono||bono):bono)}</b></td>
+        <td><span class="badge badge-${rec?.aprobado?'green':'gray'}">${rec?.aprobado?'Aprobado':'Borrador'}</span></td>
+        <td><div style="display:flex;gap:4px">
+          <button class="btn btn-sm btn-cyan" onclick="Modulos.rrhh.detalleEmpleado('${e.id}')" title="Ver / editar KPIs">👁 Ver</button>
+          ${rec?.aprobado?'':`<button class="btn btn-sm btn-green" onclick="Modulos.rrhh.aprobarBono('${e.id}')" title="Aprobar bono y cargar a egresos">✓ Bono</button>`}
+          ${rec?`<button class="btn btn-sm btn-danger" onclick="Modulos.rrhh.eliminarKpi('${rec.id}')" title="Eliminar registro del mes">🗑️</button>`:''}
+        </div></td>
+      </tr>`;
+    }).join('');
+
+    el.innerHTML = `
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:16px;flex-wrap:wrap">
+        <div style="display:flex;gap:8px;align-items:center">
+          <select class="form-select" style="width:auto" onchange="Modulos.rrhh._prodMes=parseInt(this.value);Modulos.rrhh._renderTab()">
+            ${meses.map((m,i)=>`<option value="${i+1}" ${mes===i+1?'selected':''}>${m}</option>`).join('')}
+          </select>
+          <select class="form-select" style="width:auto" onchange="Modulos.rrhh._prodAnio=parseInt(this.value);Modulos.rrhh._renderTab()">
+            ${anios.map(a=>`<option value="${a}" ${anio===a?'selected':''}>${a}</option>`).join('')}
+          </select>
+        </div>
+        <button class="btn btn-ghost" onclick="Modulos.rrhh.modalConfigProductividad()">⚙️ Configurar criterios</button>
+      </div>
+
+      <div class="kpi-grid" style="margin-bottom:16px">
+        <div class="kpi-card"><div class="kpi-label">Empleados</div><div class="kpi-val cyan">${activos.length}</div><div class="kpi-trend">activos</div></div>
+        <div class="kpi-card"><div class="kpi-label">Costo Mensual (cargado)</div><div class="kpi-val red">${UI.q(totalCosto)}</div><div class="kpi-trend">${nombreMes}</div></div>
+        <div class="kpi-card"><div class="kpi-label">Bonos del Mes</div><div class="kpi-val amber">${UI.q(totalBono)}</div><div class="kpi-trend">según desempeño</div></div>
+        <div class="kpi-card"><div class="kpi-label">Hora-Hombre prom.</div><div class="kpi-val green">${UI.q(activos.length?totalCosto/activos.length/(cfg.horas_mes||240):0)}</div><div class="kpi-trend">base ${cfg.horas_mes||240} h/mes</div></div>
+      </div>
+
+      <div class="table-wrap"><table class="data-table">
+        <thead><tr><th>Empleado</th><th>Hora-Hombre</th><th style="text-align:center">OTs</th><th>Ingresos</th><th>Score</th><th>Bono</th><th>Estado</th><th>Acciones</th></tr></thead>
+        <tbody>${filas||'<tr><td colspan="8" style="text-align:center;padding:24px;color:var(--text3)">Sin empleados activos</td></tr>'}</tbody>
+      </table></div>
+      <div class="alert alert-cyan" style="margin-top:12px">
+        <div class="alert-icon">ℹ️</div>
+        <div class="alert-body" style="font-size:12px">El <b>score</b> combina los KPIs según sus pesos. El <b>bono</b> = salario × ${cfg.bono_max_pct||30}% × score. Al <b>aprobar</b>, el bono se registra como egreso (categoría Bonos) del mes.</div>
+      </div>`;
+  },
+
+  async detalleEmpleado(empId) {
+    const e = this._empleados.find(x=>x.id===empId);
+    if (!e) return;
+    const { mes, anio, ini, fin } = this._rangoMes();
+    const cfg = this._cfgProd || await DB.getConfigProductividad();
+    const [ordenes, registros] = await Promise.all([
+      DB.getOrdenesPeriodo(ini, fin), DB.getKpiEmpleados(mes, anio)
+    ]);
+    const rec = registros.find(r=>r.empleado_id===empId);
+    const { detail, score } = this._kpiScores(e, ordenes, rec?.manual||{}, cfg);
+    const hh = calcularHoraHombre(e.salario_base, cfg);
+    const bono = this._calcBono(e.salario_base, score, cfg);
+    const nombreMes = new Date(anio, mes-1, 1).toLocaleDateString('es-GT',{month:'long',year:'numeric'});
+
+    UI.modal(`📈 ${e.nombre} — ${nombreMes}`, `
+      <!-- Costeo hora-hombre -->
+      <div class="card card-cyan" style="margin-bottom:14px">
+        <div style="font-weight:700;font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px">💰 Costo laboral (cargado)</div>
+        <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:6px;font-size:12px">
+          <span class="text-muted">Salario base</span><span style="text-align:right">${UI.q(hh.salario)}</span>
+          <span class="text-muted">Bonificación incentivo</span><span style="text-align:right">${UI.q(hh.bonificacion)}</span>
+          <span class="text-muted">Cargas (IGSS+IRTRA+INTECAP)</span><span style="text-align:right">${UI.q(hh.cargas)}</span>
+          <span class="text-muted">Aguinaldo + Bono14</span><span style="text-align:right">${UI.q(hh.aguinaldo+hh.bono14)}</span>
+          <span class="text-muted">Vacaciones + Indemnización</span><span style="text-align:right">${UI.q(hh.vacaciones+hh.indemnizacion)}</span>
+          <span style="font-weight:800;border-top:1px solid var(--border);padding-top:4px">Costo mensual</span><span style="text-align:right;font-weight:800;border-top:1px solid var(--border);padding-top:4px">${UI.q(hh.costoMensual)}</span>
+          <span style="font-weight:800;color:var(--cyan)">Hora-hombre (${hh.horasMes} h)</span><span style="text-align:right;font-weight:800;color:var(--cyan)">${UI.q(hh.horaHombre)}</span>
+        </div>
+        <div style="font-size:11px;color:var(--text3);margin-top:6px">Factor de carga: +${Math.round(hh.factorCarga*100)}% sobre el salario base.</div>
+      </div>
+
+      <!-- KPIs -->
+      <div style="font-weight:700;font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px">📊 KPIs del mes</div>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        ${detail.map(d=>`
+          <div style="background:var(--surface2);border-radius:8px;padding:10px">
+            <div style="display:flex;justify-content:space-between;align-items:center;font-size:13px">
+              <span style="font-weight:700">${d.label} <span style="font-size:11px;color:var(--text3)">· peso ${d.peso}%</span></span>
+              <span style="font-weight:800;color:var(--${d.score>=80?'green':d.score>=50?'amber':'red'})">${d.score}%</span>
+            </div>
+            <div style="font-size:11px;color:var(--text3);margin-top:2px">${d.valor}</div>
+            ${d.tipo==='manual'?`<input type="range" min="0" max="100" value="${d.score}" id="kpi-${d.id}" style="width:100%;margin-top:6px;accent-color:var(--amber)" oninput="this.nextElementSibling.textContent=this.value+'%'"><span style="font-size:11px;color:var(--amber)">${d.score}%</span>`:''}
+          </div>`).join('')}
+      </div>
+
+      <div style="display:flex;justify-content:space-between;align-items:center;background:var(--amber-dim);border-radius:8px;padding:12px;margin-top:14px">
+        <div><div style="font-size:11px;color:var(--text3)">Score ponderado</div><div style="font-size:22px;font-weight:800" id="det-score">${score}%</div></div>
+        <div style="text-align:right"><div style="font-size:11px;color:var(--text3)">Bono estimado</div><div style="font-size:22px;font-weight:800;color:var(--amber)" id="det-bono">${UI.q(bono)}</div></div>
+      </div>
+      ${rec?.aprobado?'<div class="alert alert-green" style="margin-top:10px"><div class="alert-icon">✅</div><div class="alert-body" style="font-size:11px">Bono ya aprobado y cargado a egresos.</div></div>':''}
+
+      <div class="modal-footer">
+        <button class="btn btn-ghost" onclick="UI.cerrarModal()">Cerrar</button>
+        <button class="btn btn-cyan" onclick="Modulos.rrhh.guardarKpiManual('${empId}')">💾 Guardar</button>
+        ${rec?.aprobado?'':`<button class="btn btn-amber" onclick="Modulos.rrhh.aprobarBono('${empId}')">✓ Aprobar bono</button>`}
+      </div>`, '560px');
+  },
+
+  /* Lee los KPIs manuales del modal de detalle */
+  _leerManual(cfg) {
+    const manual = {};
+    (cfg.kpis||[]).filter(k=>k.tipo==='manual').forEach(k=>{
+      const inp = document.getElementById('kpi-'+k.id);
+      if (inp) manual[k.id] = parseInt(inp.value)||0;
+    });
+    return manual;
+  },
+
+  async guardarKpiManual(empId) {
+    const e = this._empleados.find(x=>x.id===empId);
+    const { mes, anio, ini, fin } = this._rangoMes();
+    const cfg = this._cfgProd || await DB.getConfigProductividad();
+    const manual = this._leerManual(cfg);
+    const ordenes = await DB.getOrdenesPeriodo(ini, fin);
+    const { score } = this._kpiScores(e, ordenes, manual, cfg);
+    const bono = this._calcBono(e.salario_base, score, cfg);
+    const { error } = await DB.upsertKpiEmpleado({
+      empleado_id: empId, periodo_mes: mes, periodo_anio: anio, manual, score, bono
+    });
+    if (error) { UI.toast('Error: '+error.message,'error'); return; }
+    UI.cerrarModal(); UI.toast('KPIs guardados ✓'); this._renderTab();
+  },
+
+  async aprobarBono(empId) {
+    const e = this._empleados.find(x=>x.id===empId);
+    const { mes, anio, ini, fin } = this._rangoMes();
+    const cfg = this._cfgProd || await DB.getConfigProductividad();
+    const registros = await DB.getKpiEmpleados(mes, anio);
+    const rec = registros.find(r=>r.empleado_id===empId);
+    if (rec?.aprobado) { UI.toast('Este bono ya fue aprobado','info'); return; }
+    /* Tomar KPIs manuales del modal si está abierto, si no del registro */
+    const manual = document.getElementById('kpi-actitud') !== null
+      ? this._leerManual(cfg) : (rec?.manual || {});
+    const ordenes = await DB.getOrdenesPeriodo(ini, fin);
+    const { score } = this._kpiScores(e, ordenes, manual, cfg);
+    const bono = this._calcBono(e.salario_base, score, cfg);
+    const nombreMes = new Date(anio, mes-1, 1).toLocaleDateString('es-GT',{month:'long',year:'numeric'});
+
+    const ok = await UI.confirmar(`¿Aprobar bono de <b>${e.nombre}</b> por <b>${UI.q(bono)}</b> (score ${score}%) de ${nombreMes}?<br>Se registrará como egreso.`, 'Aprobar');
+    if (!ok) return;
+
+    const { error } = await DB.upsertKpiEmpleado({
+      empleado_id: empId, periodo_mes: mes, periodo_anio: anio, manual, score, bono, aprobado: true
+    });
+    if (error) { UI.toast('Error: '+error.message,'error'); return; }
+    if (bono > 0) {
+      await DB.upsertEgreso({
+        concepto:  `Bono productividad ${nombreMes} — ${e.nombre}`,
+        monto:     bono, categoria: 'Bonos',
+        fecha:     fin,
+        referencia:`BONO-${empId.slice(0,8)}-${mes}-${anio}`
+      });
+    }
+    UI.cerrarModal();
+    UI.toast(`Bono aprobado y cargado a egresos ✓`);
+    this._renderTab();
+  },
+
+  async eliminarKpi(id) {
+    const ok = await UI.confirmar('¿Eliminar el registro de KPI/bono de este empleado para el mes?<br>No revierte el egreso si ya fue aprobado.', 'Eliminar');
+    if (!ok) return;
+    const exito = await DB.deleteRegistro('kpi_empleado', id);
+    if (exito) { UI.toast('Registro eliminado ✓'); this._renderTab(); }
+    else UI.toast('No se pudo eliminar','error');
+  },
+
+  modalConfigProductividad() {
+    const cfg = this._cfgProd || PRODUCTIVIDAD_DEFAULTS;
+    const p = cfg.provisiones||{};
+    UI.modal('⚙️ Criterios de Productividad', `
+      <div style="font-weight:700;font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px">Hora-hombre</div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Horas laborales / mes</label>
+          <input class="form-input" id="cfg-horas" type="number" value="${cfg.horas_mes||240}" min="1"></div>
+        <div class="form-group"><label class="form-label">Bono máximo (% del salario)</label>
+          <input class="form-input" id="cfg-bonomax" type="number" value="${cfg.bono_max_pct||30}" min="0" step="1"></div>
+      </div>
+      <div style="font-size:12px;color:var(--text2);margin-bottom:10px">Provisiones incluidas en el costo:</div>
+      <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:6px;margin-bottom:6px">
+        ${[['aguinaldo','Aguinaldo'],['bono14','Bono 14'],['vacaciones','Vacaciones'],['indemnizacion','Indemnización (Art.82)']].map(([k,l])=>`
+          <label style="display:flex;align-items:center;gap:8px;background:var(--surface2);border-radius:8px;padding:8px;font-size:12px;cursor:pointer">
+            <input type="checkbox" id="cfg-prov-${k}" ${p[k]!==false?'checked':''}> ${l}
+          </label>`).join('')}
+      </div>
+      <label style="display:flex;align-items:center;gap:8px;font-size:12px;cursor:pointer;margin-bottom:14px">
+        <input type="checkbox" id="cfg-indbonif" ${cfg.incluir_bonificacion_en_indemnizacion!==false?'checked':''}>
+        Incluir bonificación en la base de indemnización (jurisprudencia GT)
+      </label>
+
+      <div style="font-weight:700;font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px;border-top:1px solid var(--border);padding-top:12px">Pesos de los KPIs (deben sumar 100%)</div>
+      <div id="cfg-kpis" style="display:flex;flex-direction:column;gap:6px">
+        ${(cfg.kpis||[]).map(k=>`
+          <div style="display:flex;align-items:center;gap:8px;background:var(--surface2);border-radius:8px;padding:8px">
+            <span style="flex:1;font-size:12px">${k.label} <span style="color:var(--text3)">(${k.tipo})</span></span>
+            ${k.meta!==undefined?`<input class="form-input" style="width:90px" type="number" id="cfg-meta-${k.id}" value="${k.meta}" title="Meta" placeholder="meta">`:''}
+            <input class="form-input" style="width:70px" type="number" id="cfg-peso-${k.id}" value="${k.peso}" min="0" max="100"> <span style="font-size:12px;color:var(--text3)">%</span>
+          </div>`).join('')}
+      </div>
+      <div id="cfg-pesos-aviso" style="font-size:11px;color:var(--text3);margin-top:6px"></div>
+
+      <div class="modal-footer">
+        <button class="btn btn-ghost" onclick="UI.cerrarModal()">Cancelar</button>
+        <button class="btn btn-amber" onclick="Modulos.rrhh.guardarConfigProductividad()">Guardar criterios</button>
+      </div>`, '560px');
+  },
+
+  async guardarConfigProductividad() {
+    const base = this._cfgProd || PRODUCTIVIDAD_DEFAULTS;
+    const kpis = (base.kpis||[]).map(k => ({
+      ...k,
+      peso: parseInt(document.getElementById('cfg-peso-'+k.id)?.value)||0,
+      ...(k.meta!==undefined ? { meta: parseFloat(document.getElementById('cfg-meta-'+k.id)?.value)||k.meta } : {})
+    }));
+    const sumaPesos = kpis.reduce((s,k)=>s+k.peso,0);
+    if (sumaPesos !== 100) {
+      const seguir = await UI.confirmar(`Los pesos suman <b>${sumaPesos}%</b> (lo ideal es 100%). El score se normaliza igual. ¿Guardar de todas formas?`, 'Guardar');
+      if (!seguir) return;
+    }
+    const settings = {
+      ...base,
+      horas_mes: parseInt(document.getElementById('cfg-horas')?.value)||240,
+      bono_max_pct: parseFloat(document.getElementById('cfg-bonomax')?.value)||0,
+      incluir_bonificacion_en_indemnizacion: document.getElementById('cfg-indbonif')?.checked,
+      provisiones: {
+        aguinaldo:     document.getElementById('cfg-prov-aguinaldo')?.checked,
+        bono14:        document.getElementById('cfg-prov-bono14')?.checked,
+        vacaciones:    document.getElementById('cfg-prov-vacaciones')?.checked,
+        indemnizacion: document.getElementById('cfg-prov-indemnizacion')?.checked
+      },
+      kpis
+    };
+    const ok = await DB.saveConfigProductividad(settings);
+    if (!ok) { UI.toast('Error al guardar la configuración','error'); return; }
+    this._cfgProd = { ...PRODUCTIVIDAD_DEFAULTS, ...settings };
+    UI.cerrarModal(); UI.toast('Criterios actualizados ✓'); this._renderTab();
   },
 
   async verDocumentos(empId, nombre) {

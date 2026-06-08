@@ -439,6 +439,43 @@ const DB = {
     return { data, error };
   },
 
+  /* ── PRODUCTIVIDAD / KPIs ─────────────────────── */
+  async getConfigProductividad() {
+    const { data } = await getSB().from('config_productividad')
+      .select('settings').eq('tenant_id', getTID()).maybeSingle();
+    /* Mezcla con los defaults para tolerar configs parciales */
+    return { ...PRODUCTIVIDAD_DEFAULTS, ...(data?.settings || {}) };
+  },
+
+  async saveConfigProductividad(settings) {
+    const { error } = await getSB().from('config_productividad')
+      .upsert({ tenant_id: getTID(), settings, updated_at: new Date().toISOString() }, { onConflict:'tenant_id' });
+    if (error) console.error('saveConfigProductividad:', error.message);
+    return !error;
+  },
+
+  async getKpiEmpleados(mes, anio) {
+    const { data } = await getSB().from('kpi_empleado').select('*')
+      .eq('tenant_id', getTID()).eq('periodo_mes', mes).eq('periodo_anio', anio);
+    return data || [];
+  },
+
+  async upsertKpiEmpleado(fields) {
+    const payload = { ...fields, tenant_id: getTID(), updated_at: new Date().toISOString() };
+    const { data, error } = await getSB().from('kpi_empleado')
+      .upsert(payload, { onConflict:'tenant_id,empleado_id,periodo_mes,periodo_anio' }).select().single();
+    return { data, error };
+  },
+
+  /* OTs del período para KPIs (livianas: solo campos necesarios) */
+  async getOrdenesPeriodo(ini, fin) {
+    const { data } = await getSB().from('ordenes')
+      .select('id,mecanico_id,estado,total,fecha_ingreso,fecha_estimada,fecha_entrega')
+      .eq('tenant_id', getTID())
+      .gte('fecha_ingreso', ini).lte('fecha_ingreso', fin);
+    return data || [];
+  },
+
   async getPagosNomina(mes, anio) {
     const { data } = await getSB().from('pagos_nomina').select('*,empleados(nombre,cargo)')
       .eq('tenant_id', getTID()).eq('periodo_mes', mes).eq('periodo_anio', anio);
