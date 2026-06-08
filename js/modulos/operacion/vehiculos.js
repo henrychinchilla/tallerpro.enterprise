@@ -216,8 +216,9 @@ Modulos.vehiculos = {
         <div class="form-group"><label class="form-label">Motor</label>
           <input class="form-input" id="veh-motor" value="${v.motor||''}" placeholder="1.8L"></div>
       </div>
-      <div class="form-group"><label class="form-label">VIN / Chasis</label>
-        <input class="form-input" id="veh-vin" value="${v.vin||''}"></div>
+      <div class="form-group"><label class="form-label">VIN / No. de Chasis</label>
+        <input class="form-input" id="veh-vin" value="${v.vin||''}" maxlength="17" placeholder="17 caracteres" style="text-transform:uppercase">
+        <div style="font-size:11px;color:var(--text3);margin-top:4px">El VIN correcto permite a Beto identificar el vehículo y verificar fallas / códigos DTC.</div></div>
       <div class="form-group"><label class="form-label">Notas</label>
         <textarea class="form-input" id="veh-notas" rows="2">${v.notas||''}</textarea></div>
       <div class="modal-footer">
@@ -243,7 +244,7 @@ Modulos.vehiculos = {
       combustible: document.getElementById('veh-comb')?.value||null,
       kilometraje: parseInt(document.getElementById('veh-km')?.value)||0,
       motor:       document.getElementById('veh-motor')?.value||null,
-      vin:         document.getElementById('veh-vin')?.value||null,
+      vin:         (document.getElementById('veh-vin')?.value||'').trim().toUpperCase()||null,
       notas:       document.getElementById('veh-notas')?.value||null
     };
     if (id) fields.id = id;
@@ -336,6 +337,7 @@ Modulos.vehiculos = {
     const pregunta =
       `Dame el plan de mantenimiento preventivo y recomendaciones específicas del fabricante para un ` +
       `${v.tipo||'vehículo'} ${v.marca||''} ${v.modelo||''} ${v.anio||''}`.trim() +
+      (v.vin?`, VIN ${v.vin}`:'') +
       (km?`, con ${km.toLocaleString()} km`:'') +
       (v.combustible?`, motor ${v.combustible}`:'') +
       `. Incluye: aceite recomendado y capacidad, intervalos por km, filtros, bujías, banda/cadena de distribución y puntos críticos típicos de este modelo. Responde conciso en español.`;

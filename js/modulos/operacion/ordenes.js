@@ -658,10 +658,31 @@ Modulos.ordenes = {
       fotos_recepcion:this._fotos.length?JSON.stringify(this._fotos):null
     };
     if (id) fields.id = id;
-    const { error } = await DB.upsertOrden(fields);
+    const res = await DB.upsertOrden(fields);
     this._fotos = [];
-    if (error) { UI.toast('Error: '+error.message,'error'); return; }
-    UI.cerrarModal(); UI.toast(id?'OT actualizada ✓':'OT creada ✓');
+    if (res.error) { UI.toast('Error: '+res.error.message,'error'); return; }
+
+    const ordenId = id || res.data?.id;
+    const num = id ? (this._data.find(o=>o.id===id)?.num) : res.data?.num;
+    const veh = this._vehiculos.find(v=>v.id===vehId);
+
+    /* OT nueva: agregar el ítem de Mano de Obra por defecto */
+    if (!id && ordenId) {
+      await getSB().from('ot_items').insert({
+        tenant_id: getTID(), orden_id: ordenId, tipo: 'mano_obra',
+        descripcion: 'Mano de obra', cantidad: 1, precio_unit: 0, total: 0,
+        ejecutado: false, es_extra: false, autorizado: true, orden_pos: 0
+      });
+    }
+
+    /* Fecha de entrega → cita en el calendario (seguimiento) */
+    await DB.syncCitaEntrega({
+      id: ordenId, num, cliente_id: cliId, vehiculo_id: vehId,
+      mecanico_id: fields.mecanico_id, fecha_estimada: fields.fecha_estimada, placa: veh?.placa
+    }).catch(()=>{});
+
+    UI.cerrarModal();
+    UI.toast(id?'OT actualizada ✓':'OT creada ✓ — se agregó Mano de obra y la fecha al calendario');
     this.render();
   },
 

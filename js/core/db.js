@@ -699,12 +699,44 @@ const DB = {
 
   async upsertCita(fields) {
     const payload = { ...fields, tenant_id: getTID() };
+    /* Las columnas fecha y hora son NOT NULL; derivarlas de fecha_cita */
+    if (payload.fecha_cita) {
+      if (!payload.fecha) payload.fecha = String(payload.fecha_cita).slice(0,10);
+      if (!payload.hora)  payload.hora  = (String(payload.fecha_cita).slice(11,19) || '09:00:00');
+    }
     if (fields.id) {
       const { error } = await getSB().from('citas').update(payload).eq('id', fields.id);
       return { error };
     }
     const { data, error } = await getSB().from('citas').insert(payload).select().single();
     return { data, error };
+  },
+
+  /* Sincroniza la cita de "entrega" de una OT en el calendario.
+     - Si la OT tiene fecha estimada, crea/actualiza la cita.
+     - Si se quitó la fecha, elimina la cita de entrega previa. */
+  async syncCitaEntrega(orden) {
+    if (!orden?.id) return;
+    const { data: existentes } = await getSB().from('citas')
+      .select('id').eq('tenant_id', getTID()).eq('ot_id', orden.id).eq('tipo','entrega_ot').limit(1);
+    const existing = existentes?.[0];
+    if (!orden.fecha_estimada) {
+      if (existing) await getSB().from('citas').delete().eq('id', existing.id);
+      return;
+    }
+    const payload = {
+      titulo:      `🚗 Entrega ${orden.num||'OT'}${orden.placa?` · ${orden.placa}`:''}`,
+      tipo:        'entrega_ot',
+      ot_id:       orden.id,
+      cliente_id:  orden.cliente_id || null,
+      vehiculo_id: orden.vehiculo_id || null,
+      empleado_id: orden.mecanico_id || null,
+      fecha_cita:  `${orden.fecha_estimada}T09:00:00`,
+      duracion_min: 60,
+      estado:      'pendiente'
+    };
+    if (existing) payload.id = existing.id;
+    return this.upsertCita(payload);
   },
 
   /* ── LICENCIAS ────────────────────────────────── */
