@@ -5,6 +5,7 @@
 
 const App = {
   paginaActual: 'dashboard',
+  _subActivo: null,   // sub-sección activa del módulo actual (para el submenú lateral)
 
   /* ── INICIAR APP ──────────────────────────────── */
   iniciar() {
@@ -28,12 +29,25 @@ const App = {
       return tieneAcceso(m.id);
     };
 
-    const itemHtml = m => `
-      <li class="nav-item ${App.paginaActual === m.id ? 'active' : ''}"
-          onclick="App.navegarA('${m.id}')">
-        <span class="nav-icon">${m.icon}</span>
-        <span class="nav-label">${m.label}</span>
-      </li>`;
+    const itemHtml = m => {
+      const activo = App.paginaActual === m.id;
+      /* Submenú interno (solo visible cuando el módulo está activo) */
+      const sub = (activo && m.subnav?.length) ? `
+        <ul class="nav-sub">
+          ${m.subnav.map(s => `
+            <li class="nav-subitem ${App._subActivo === s.tab ? 'active' : ''}"
+                onclick="event.stopPropagation();App.navegarSub('${m.id}','${s.tab}')">
+              <span class="nav-icon">${s.icon}</span>
+              <span class="nav-label">${s.label}</span>
+            </li>`).join('')}
+        </ul>` : '';
+      return `
+        <li class="nav-item ${activo ? 'active' : ''}"
+            onclick="App.navegarA('${m.id}')">
+          <span class="nav-icon">${m.icon}</span>
+          <span class="nav-label">${m.label}</span>
+        </li>${sub}`;
+    };
 
     /* Render por grupos, en el orden definido en GRUPOS */
     const nav = GRUPOS.map(g => {
@@ -95,10 +109,15 @@ const App = {
     }
 
     App.paginaActual = pagina;
+    /* Sincronizar la sub-sección activa con la pestaña interna del módulo */
+    const def = MODULOS.find(m => m.id === pagina);
+    const modulo = window.Modulos?.[pagina];
+    App._subActivo = (def?.subnav?.length)
+      ? (modulo?._tab || def.subnav[0].tab)
+      : null;
     App.renderSidebar();
 
     /* Cargar módulo */
-    const modulo = window.Modulos?.[pagina];
     if (modulo?.render) {
       modulo.render();
     } else {
@@ -107,6 +126,26 @@ const App = {
         <div class="empty-state-icon">🔧</div>
         <div>Módulo <b>${pagina}</b> cargando...</div>
       </div>`;
+    }
+  },
+
+  /* ── NAVEGACIÓN A SUB-SECCIÓN (submenú lateral) ── */
+  navegarSub(pagina, tab) {
+    const modulo = window.Modulos?.[pagina];
+    App._subActivo = tab;
+    if (App.paginaActual !== pagina) {
+      App.paginaActual = pagina;
+      if (modulo) modulo._tab = tab;
+      App.renderSidebar();
+      modulo?.render?.();
+      return;
+    }
+    /* Ya estamos en el módulo: solo cambiar de pestaña */
+    if (modulo) {
+      modulo._tab = tab;
+      App.renderSidebar();
+      if (modulo._renderTab) modulo._renderTab();
+      else modulo.render?.();
     }
   },
 

@@ -2,41 +2,84 @@
 Modulos.bancos = {
   _bancos: [], _bancoActivo: null,
 
+  /* Calcula el saldo actual de una cuenta a partir de sus movimientos */
+  async _saldoDe(banco) {
+    const movs = await DB.getMovimientosBanco(banco.id);
+    const ent = movs.filter(m=>m.tipo==='entrada'||m.tipo==='deposito').reduce((s,m)=>s+(m.monto||0),0);
+    const sal = movs.filter(m=>m.tipo==='salida'||m.tipo==='retiro').reduce((s,m)=>s+(m.monto||0),0);
+    return { saldo: (banco.saldo_inicial||0) + ent - sal, movs: movs.length };
+  },
+
   async render() {
     const el = document.getElementById('page-content');
     UI.loading(el);
     this._bancos = await DB.getBancos();
 
+    /* Saldos reales por cuenta (en paralelo) */
+    const saldos = await Promise.all(this._bancos.map(b=>this._saldoDe(b)));
+    this._bancos.forEach((b,i)=>{ b._saldo = saldos[i].saldo; b._movs = saldos[i].movs; });
+
+    /* Resumen por moneda */
+    const porMoneda = {};
+    this._bancos.filter(b=>b.activa!==false).forEach(b=>{
+      const m = b.moneda||'GTQ';
+      porMoneda[m] = (porMoneda[m]||0) + (b._saldo||0);
+    });
+    const activas = this._bancos.filter(b=>b.activa!==false).length;
+    const totalMovs = this._bancos.reduce((s,b)=>s+(b._movs||0),0);
+    const monedaCards = Object.entries(porMoneda).map(([m,v])=>
+      `<div class="kpi-card"><div class="kpi-label">Saldo Total ${m}</div><div class="kpi-val ${v>=0?'cyan':'red'}">${UI.q(v)}</div></div>`
+    ).join('') || `<div class="kpi-card"><div class="kpi-label">Saldo Total</div><div class="kpi-val cyan">${UI.q(0)}</div></div>`;
+
+    const varClase = m => m==='USD'?'v-usd':m==='EUR'?'v-eur':'';
+
     el.innerHTML = `
       <div class="page-header">
         <div><h1 class="page-title">🏦 Bancos</h1>
-        <p class="page-subtitle">// ${this._bancos.length} cuentas registradas</p></div>
+        <p class="page-subtitle">// ${this._bancos.length} cuentas · ${activas} activas</p></div>
         <div class="page-actions">
           <button class="btn btn-amber" onclick="Modulos.bancos.modalBanco()">＋ Nueva Cuenta</button>
         </div>
       </div>
       <div class="page-body">
-        <div class="grid-3" style="margin-bottom:24px">
-          ${this._bancos.map(b=>`
-            <div class="card card-cyan" style="cursor:pointer" onclick="Modulos.bancos.verMovimientos('${b.id}')">
-              <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px">
-                <div>
-                  <div style="font-weight:800;font-size:15px">${b.nombre}</div>
-                  <div style="font-size:11px;color:var(--text3)">${b.banco||''} · ${b.tipo||''}</div>
-                </div>
-                <span class="badge badge-${b.activa?'green':'gray'}">${b.activa?'Activa':'Inactiva'}</span>
-              </div>
-              <div style="font-size:11px;color:var(--text3);margin-bottom:8px">No. ${b.numero||'—'}</div>
-              <div style="font-family:'Bebas Neue',sans-serif;font-size:24px;color:var(--cyan)">${b.moneda||'GTQ'}</div>
-              <div style="font-size:11px;color:var(--text3);margin-top:8px">Click para ver movimientos →</div>
-              <div style="display:flex;gap:4px;margin-top:8px">
-                ${Modulos.btnAccion('editar', `Modulos.bancos.modalBanco('${b.id}')`)}
-                ${Modulos.btnAccion('eliminar', `Modulos.eliminarRegistro('bancos','${b.id}','${(b.nombre||'').replace(/'/g,"\\'")}',()=>Modulos.bancos.render())`)}
-              </div>
-            </div>`).join('')||'<div class="text-muted">Sin cuentas bancarias registradas</div>'}
+        <div class="kpi-grid" style="margin-bottom:20px">
+          ${monedaCards}
+          <div class="kpi-card"><div class="kpi-label">Cuentas Activas</div><div class="kpi-val amber">${activas}</div><div class="kpi-trend">de ${this._bancos.length} totales</div></div>
+          <div class="kpi-card"><div class="kpi-label">Movimientos</div><div class="kpi-val green">${totalMovs}</div><div class="kpi-trend">registrados</div></div>
         </div>
-        ${this._bancoActivo ? this._renderMovimientos() : ''}
+        <div class="bank-grid">
+          ${this._bancos.map(b=>`
+            <div class="bank-card ${varClase(b.moneda)} ${b.activa===false?'inactive':''}" onclick="Modulos.bancos.verMovimientos('${b.id}')">
+              <div class="bank-card-top">
+                <div>
+                  <div class="bank-card-bank">${b.banco||'Banco'} · ${b.tipo||'cuenta'}</div>
+                  <div class="bank-card-name">${b.nombre}</div>
+                </div>
+                <div class="bank-card-chip"></div>
+              </div>
+              <div class="bank-card-num">${this._fmtNum(b.numero)}</div>
+              <div>
+                <div class="bank-card-saldo-label">Saldo actual · ${b.moneda||'GTQ'}</div>
+                <div class="bank-card-saldo">${UI.q(b._saldo||0)}</div>
+              </div>
+              <div class="bank-card-foot">
+                <span style="font-size:10px;opacity:.8">${b._movs||0} movimiento(s) · ver →</span>
+                <div class="bank-card-actions" onclick="event.stopPropagation()">
+                  ${Modulos.btnAccion('editar', `Modulos.bancos.modalBanco('${b.id}')`)}
+                  ${Modulos.btnAccion('eliminar', `Modulos.eliminarRegistro('bancos','${b.id}','${(b.nombre||'').replace(/'/g,"\\'")}',()=>Modulos.bancos.render())`)}
+                </div>
+              </div>
+            </div>`).join('')||'<div class="text-muted" style="padding:24px">Sin cuentas bancarias registradas. Crea la primera con “＋ Nueva Cuenta”.</div>'}
+        </div>
       </div>`;
+  },
+
+  /* Enmascara el número de cuenta dejando los últimos 4 dígitos */
+  _fmtNum(num) {
+    if (!num) return '•••• •••• ••••';
+    const s = String(num).replace(/\s+/g,'');
+    const last = s.slice(-4).padStart(4,'•');
+    return `•••• •••• •••• ${last}`;
   },
 
   async verMovimientos(bancoId) {

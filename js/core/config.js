@@ -46,7 +46,13 @@ const MODULOS = [
   { id:'facturacion',    icon:'🧾', label:'Facturación FEL',   grupo:'finanzas'   },
   { id:'bancos',         icon:'🏦', label:'Bancos',            grupo:'finanzas'   },
   { id:'finanzas',       icon:'💰', label:'Finanzas',          grupo:'finanzas'   },
-  { id:'rrhh',           icon:'👤', label:'RRHH & Nómina',     grupo:'rrhh'       },
+  { id:'rrhh',           icon:'👤', label:'RRHH & Nómina',     grupo:'rrhh',
+    subnav:[
+      { tab:'empleados',   icon:'👤', label:'Empleados'   },
+      { tab:'nomina',      icon:'💵', label:'Nómina'      },
+      { tab:'organigrama', icon:'🏢', label:'Organigrama' },
+      { tab:'documentos',  icon:'📄', label:'Documentos'  }
+    ] },
   { id:'marketing',      icon:'🎯', label:'Marketing',         grupo:'marketing'  },
   { id:'calendario',     icon:'📅', label:'Calendario',        grupo:'herramientas'},
   { id:'comunicaciones', icon:'🔔', label:'Comunicaciones',    grupo:'herramientas'},

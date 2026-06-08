@@ -8,11 +8,10 @@ Modulos.rrhh = {
       <div class="page-header"><h1 class="page-title">👤 RRHH & Nómina</h1></div>
       <div class="page-body">
         <div class="tabs">
-          <button class="tab-btn ${this._tab==='empleados'?'active':''}" onclick="Modulos.rrhh._tab='empleados';Modulos.rrhh._renderTab()">👤 Empleados</button>
-          <button class="tab-btn ${this._tab==='nomina'?'active':''}" onclick="Modulos.rrhh._tab='nomina';Modulos.rrhh._renderTab()">💵 Nómina</button>
-          <button class="tab-btn ${this._tab==='organigrama'?'active':''}" onclick="Modulos.rrhh._tab='organigrama';Modulos.rrhh._renderTab()">🏢 Organigrama</button>
-          <button class="tab-btn ${this._tab==='viaticos'?'active':''}" onclick="Modulos.rrhh._tab='viaticos';Modulos.rrhh._renderTab()">🚗 Viáticos</button>
-          <button class="tab-btn ${this._tab==='documentos'?'active':''}" onclick="Modulos.rrhh._tab='documentos';Modulos.rrhh._renderTab()">📄 Documentos</button>
+          <button class="tab-btn ${this._tab==='empleados'?'active':''}" onclick="App.navegarSub('rrhh','empleados')">👤 Empleados</button>
+          <button class="tab-btn ${this._tab==='nomina'?'active':''}" onclick="App.navegarSub('rrhh','nomina')">💵 Nómina</button>
+          <button class="tab-btn ${this._tab==='organigrama'?'active':''}" onclick="App.navegarSub('rrhh','organigrama')">🏢 Organigrama</button>
+          <button class="tab-btn ${this._tab==='documentos'?'active':''}" onclick="App.navegarSub('rrhh','documentos')">📄 Documentos</button>
         </div>
         <div id="rrhh-content"></div>
       </div>`;
@@ -114,29 +113,6 @@ Modulos.rrhh = {
         </div>
         ${this._empleados.length ? `<div class="org-container"><div class="org-tree"><ul>${arbol}</ul></div></div>`
           : '<div class="text-muted" style="padding:20px">Sin empleados registrados.</div>'}`;
-    }
-
-    else if (this._tab==='viaticos') {
-      const viaticos = await DB.getViaticos();
-      el.innerHTML = `
-        <div style="display:flex;justify-content:flex-end;margin-bottom:16px">
-          <button class="btn btn-amber" onclick="Modulos.rrhh.modalViatico()">＋ Nuevo Viático</button>
-        </div>
-        <div class="table-wrap">
-          <table class="data-table">
-            <thead><tr><th>Fecha</th><th>Empleado</th><th>Concepto</th><th>Tipo</th><th>Monto</th><th>Estado</th></tr></thead>
-            <tbody>
-              ${viaticos.map(v=>`<tr>
-                <td>${UI.fecha(v.fecha)}</td>
-                <td>${v.empleados?.nombre||'—'}</td>
-                <td>${v.concepto}</td>
-                <td><span class="badge badge-gray">${v.tipo||'—'}</span></td>
-                <td class="mono-sm text-amber">${UI.q(v.monto)}</td>
-                <td><span class="badge badge-${v.aprobado?'green':'amber'}">${v.aprobado?'Aprobado':'Pendiente'}</span></td>
-              </tr>`).join('')||'<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--text3)">Sin viáticos</td></tr>'}
-            </tbody>
-          </table>
-        </div>`;
     }
 
     else if (this._tab==='documentos') {
@@ -260,10 +236,8 @@ Modulos.rrhh = {
       <div class="form-row">
         <div class="form-group"><label class="form-label">Fecha de Ingreso</label>
           <input class="form-input" id="emp-ingreso" type="date" value="${e.fecha_ingreso||''}"></div>
-        <div class="form-group"><label class="form-label">Rol en Sistema</label>
-          <select class="form-select" id="emp-rol">
-            ${['mecanico','recepcionista','gerente_tal','gerente_fin','admin'].map(r=>`<option value="${r}" ${e.rol===r?'selected':''}>${ROLES[r]?.label||r}</option>`).join('')}
-          </select></div>
+        <div class="form-group"><label class="form-label">Departamento / Área</label>
+          <input class="form-input" id="emp-departamento" value="${e.departamento||''}" placeholder="Taller, Administración..."></div>
       </div>
       <div class="form-group"><label class="form-label">Reporta a (jefe directo)</label>
         <select class="form-select" id="emp-jefe">
@@ -271,6 +245,36 @@ Modulos.rrhh = {
           ${this._empleados.filter(x=>x.id!==e.id).map(x=>`<option value="${x.id}" ${e.reporta_a===x.id?'selected':''}>${x.nombre}${x.cargo?` — ${x.cargo}`:''}</option>`).join('')}
         </select>
         <div style="font-size:11px;color:var(--text3);margin-top:4px">Define la cadena de mando. Solo la cúpula (CEO/Dueño/Gerente General) queda sin jefe.</div></div>
+
+      <!-- ACCESO AL SISTEMA (OPCIONAL) -->
+      <div style="border-top:1px solid var(--border);padding-top:12px;margin-top:8px;font-weight:700;font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px">Acceso al Sistema</div>
+      ${e.user_id ? `
+        <div class="alert alert-green" style="margin-bottom:4px">
+          <div class="alert-icon">✅</div>
+          <div class="alert-body" style="font-size:11px">Este empleado <b>ya tiene acceso</b> al sistema. Gestiona su rol y permisos desde <b>Administración → Usuarios</b>.</div>
+        </div>` : `
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-bottom:4px">
+          <input type="checkbox" id="emp-crear-usuario" onchange="Modulos.rrhh._toggleAcceso(this.checked)">
+          <span class="form-label" style="margin:0">Crear acceso al sistema (usuario y contraseña)</span>
+        </label>
+        <div style="font-size:11px;color:var(--text3);margin-bottom:8px">No todos los empleados necesitan acceso. Actívalo solo para quien usará TallerPro.</div>
+        <div id="emp-acceso-box" style="display:none">
+          <div class="form-row">
+            <div class="form-group"><label class="form-label">Rol en el Sistema *</label>
+              <select class="form-select" id="emp-rol">
+                ${['mecanico','recepcionista','gerente_tal','gerente_fin','admin'].map(r=>`<option value="${r}" ${e.rol===r?'selected':''}>${ROLES[r]?.icon||''} ${ROLES[r]?.label||r}</option>`).join('')}
+              </select></div>
+            <div class="form-group"><label class="form-label">Contraseña Temporal *</label>
+              <div style="position:relative">
+                <input class="form-input" id="emp-pass" type="password" placeholder="Mínimo 8 caracteres" style="padding-right:44px">
+                <button type="button" onclick="UI.togglePass('emp-pass',this)" style="position:absolute;right:12px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;font-size:16px;color:var(--text3)">👁</button>
+              </div></div>
+          </div>
+          <div class="alert alert-cyan" style="margin-bottom:4px">
+            <div class="alert-icon">🔑</div>
+            <div class="alert-body" style="font-size:11px">Iniciará sesión con el <b>email</b> indicado arriba y la contraseña temporal. Deberá cambiarla en su primer ingreso.</div>
+          </div>
+        </div>`}
 
       <!-- SALARIO CON REFERENCIA MINSALARIO 2026 -->
       <div class="card card-amber" style="margin-bottom:12px">
@@ -361,6 +365,12 @@ Modulos.rrhh = {
     if (el) el.innerHTML = this._calcularPreview(salario);
   },
 
+  /* Muestra/oculta los campos de acceso al sistema */
+  _toggleAcceso(activo) {
+    const box = document.getElementById('emp-acceso-box');
+    if (box) box.style.display = activo ? 'block' : 'none';
+  },
+
   async eliminarEmpleado(id, nombre) {
     /* Si tiene historial (nómina/viáticos) el borrado fallará por FK;
        en ese caso se ofrece desactivarlo en su lugar. */
@@ -381,21 +391,33 @@ Modulos.rrhh = {
   async guardarEmpleado(id='') {
     const nombre = document.getElementById('emp-nombre')?.value.trim();
     if (!nombre) { UI.toast('El nombre es obligatorio','error'); return; }
+    const prev = id ? this._empleados.find(x=>x.id===id) : null;
+    const email = document.getElementById('emp-email')?.value.trim()||null;
+
+    /* Acceso al sistema (opcional) */
+    const crearAcceso = document.getElementById('emp-crear-usuario')?.checked || false;
+    const accesoRol   = document.getElementById('emp-rol')?.value || 'mecanico';
+    const accesoPass  = document.getElementById('emp-pass')?.value || '';
+    if (crearAcceso) {
+      if (!email)               { UI.toast('Para crear acceso necesitas un email','error'); return; }
+      if (accesoPass.length<8)  { UI.toast('La contraseña temporal debe tener al menos 8 caracteres','error'); return; }
+    }
+
     const fields = {
       nombre,
       cargo:                 document.getElementById('emp-cargo')?.value||null,
       dpi:                   document.getElementById('emp-dpi')?.value||null,
-      igss:                  document.getElementById('emp-igss')?.value||null,
       tel:                   document.getElementById('emp-tel')?.value||null,
-      email:                 document.getElementById('emp-email')?.value||null,
+      email,
       fecha_nacimiento:      document.getElementById('emp-nacimiento')?.value||null,
       estado_civil:          document.getElementById('emp-estado-civil')?.value||null,
       direccion:             document.getElementById('emp-dir')?.value||null,
+      departamento:          document.getElementById('emp-departamento')?.value||null,
       emergencia_nombre:     document.getElementById('emp-emerg-nombre')?.value||null,
       emergencia_parentesco: document.getElementById('emp-emerg-parentesco')?.value||null,
       emergencia_tel:        document.getElementById('emp-emerg-tel')?.value||null,
       fecha_ingreso:         document.getElementById('emp-ingreso')?.value||null,
-      rol:                   document.getElementById('emp-rol')?.value||'mecanico',
+      rol:                   crearAcceso ? accesoRol : (prev?.rol || null),
       reporta_a:             (document.getElementById('emp-jefe')?.value && document.getElementById('emp-jefe').value!==id)
                                ? document.getElementById('emp-jefe').value : null,
       salario_base:          parseFloat(document.getElementById('emp-salario')?.value)||GT.salario_minimo_no_agricola,
@@ -408,57 +430,20 @@ Modulos.rrhh = {
       activo:                id ? (document.getElementById('emp-activo')?.checked ?? true) : true
     };
     if (id) fields.id = id;
+
+    /* Crear el acceso al sistema ANTES de guardar para vincular el user_id */
+    if (crearAcceso) {
+      UI.toast('Creando acceso al sistema...','info');
+      const r = await Auth.crearUsuario({ nombre, email, rol: accesoRol, telefono: fields.tel, password: accesoPass });
+      if (!r.ok) { UI.toast('No se pudo crear el acceso: '+r.error,'error'); return; }
+      if (r.id) fields.user_id = r.id;
+    }
+
     const {error} = await DB.upsertEmpleado(fields);
     if (error) { UI.toast('Error: '+error.message,'error'); return; }
-    UI.cerrarModal(); UI.toast(id?'Empleado actualizado ✓':'Empleado creado ✓');
-    this._renderTab();
-  },
-
-  modalViatico() {
-    UI.modal('＋ Nuevo Viático', `
-      <div class="form-row">
-        <div class="form-group"><label class="form-label">Empleado *</label>
-          <select class="form-select" id="via-emp">
-            <option value="">Seleccionar...</option>
-            ${this._empleados.filter(e=>e.activo).map(e=>`<option value="${e.id}">${e.nombre}</option>`).join('')}
-          </select></div>
-        <div class="form-group"><label class="form-label">Tipo</label>
-          <select class="form-select" id="via-tipo">
-            ${['alimentacion','transporte','hospedaje','combustible','otro'].map(t=>`<option>${t}</option>`).join('')}
-          </select></div>
-      </div>
-      <div class="form-row">
-        <div class="form-group"><label class="form-label">Concepto *</label>
-          <input class="form-input" id="via-concepto" placeholder="Almuerzo en visita a cliente"></div>
-        <div class="form-group"><label class="form-label">Monto (Q) *</label>
-          <input class="form-input" id="via-monto" type="number" min="0" step="0.01"></div>
-      </div>
-      <div class="form-row">
-        <div class="form-group"><label class="form-label">Fecha</label>
-          <input class="form-input" id="via-fecha" type="date" value="${new Date().toISOString().slice(0,10)}"></div>
-        <div class="form-group"><label class="form-label">Referencia / Factura</label>
-          <input class="form-input" id="via-ref"></div>
-      </div>
-      <div class="modal-footer">
-        <button class="btn btn-ghost" onclick="UI.cerrarModal()">Cancelar</button>
-        <button class="btn btn-amber" onclick="Modulos.rrhh.guardarViatico()">Registrar</button>
-      </div>`);
-  },
-
-  async guardarViatico() {
-    const empId = document.getElementById('via-emp')?.value;
-    const conc  = document.getElementById('via-concepto')?.value.trim();
-    const monto = parseFloat(document.getElementById('via-monto')?.value)||0;
-    if (!empId||!conc||monto<=0) { UI.toast('Completa todos los campos','error'); return; }
-    const {error} = await DB.upsertViatico({
-      empleado_id: empId, concepto: conc, monto,
-      tipo:        document.getElementById('via-tipo')?.value,
-      fecha:       document.getElementById('via-fecha')?.value,
-      referencia:  document.getElementById('via-ref')?.value||null,
-      aprobado:    false
-    });
-    if (error) { UI.toast('Error: '+error.message,'error'); return; }
-    UI.cerrarModal(); UI.toast('Viático registrado ✓');
+    UI.cerrarModal();
+    UI.toast(crearAcceso ? `Empleado creado con acceso al sistema ✓`
+                         : (id?'Empleado actualizado ✓':'Empleado creado ✓'));
     this._renderTab();
   },
 

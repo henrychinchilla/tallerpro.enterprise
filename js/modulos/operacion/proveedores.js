@@ -1,10 +1,19 @@
 /* TallerPro v3.0 — proveedores/index.js */
 Modulos.proveedores = {
   _data: [],
+  _busca: '',
+  _view: localStorage.getItem('tp_prov_view') || 'cards',   // 'cards' | 'lista'
+
+  _setView(v) {
+    this._view = v;
+    localStorage.setItem('tp_prov_view', v);
+    this.render(this._busca);
+  },
 
   async render(busca='') {
     const el = document.getElementById('page-content');
     UI.loading(el);
+    this._busca = busca;
     this._data = await DB.getProveedores();
     const filtrados = busca ? this._data.filter(p=>p.nombre.toLowerCase().includes(busca.toLowerCase())||p.nit?.includes(busca)) : this._data;
 
@@ -13,35 +22,64 @@ Modulos.proveedores = {
         <div><h1 class="page-title">🏪 Proveedores</h1>
         <p class="page-subtitle">// ${filtrados.length} registrados</p></div>
         <div class="page-actions">
+          <div class="view-toggle">
+            <button class="view-btn ${this._view==='cards'?'active':''}" title="Tarjetas" onclick="Modulos.proveedores._setView('cards')">▦</button>
+            <button class="view-btn ${this._view==='lista'?'active':''}" title="Lista" onclick="Modulos.proveedores._setView('lista')">☰</button>
+          </div>
           <button class="btn btn-amber" onclick="Modulos.proveedores.modalForm()">＋ Nuevo Proveedor</button>
         </div>
       </div>
       <div class="page-body">
         <input class="form-input" style="margin-bottom:16px" placeholder="🔍 Buscar nombre o NIT..."
                value="${busca}" oninput="Modulos.proveedores.render(this.value)">
-        <div class="grid-3" style="margin-bottom:16px">
-          ${filtrados.map(p=>`
-            <div class="card" style="cursor:pointer" onclick="Modulos.proveedores.modalForm('${p.id}')">
-              <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">
-                <div>
-                  <div style="font-weight:800;font-size:14px">${p.nombre}</div>
-                  <span class="badge badge-gray" style="margin-top:4px">${p.categoria||'General'}</span>
-                </div>
-                <span class="badge badge-${p.activo?'green':'red'}">${p.activo?'Activo':'Inactivo'}</span>
-              </div>
-              <div style="font-size:12px;color:var(--text2);display:flex;flex-direction:column;gap:4px">
-                ${p.nit?`<span>NIT: ${p.nit}</span>`:''}
-                ${p.tel?`<span>📞 ${p.tel}</span>`:''}
-                ${p.email?`<span>✉️ ${p.email}</span>`:''}
-                ${p.contacto?`<span>👤 ${p.contacto}</span>`:''}
-              </div>
-              <div style="display:flex;gap:4px;margin-top:10px">
-                ${Modulos.btnAccion('editar', `Modulos.proveedores.modalForm('${p.id}')`)}
-                ${Modulos.btnAccion('eliminar', `Modulos.eliminarRegistro('proveedores','${p.id}','${(p.nombre||'').replace(/'/g,"\\'")}',()=>Modulos.proveedores.render())`)}
-              </div>
-            </div>`).join('')||'<div style="color:var(--text3);padding:24px">Sin proveedores registrados</div>'}
-        </div>
+        ${this._view==='lista' ? this._renderLista(filtrados) : this._renderCards(filtrados)}
       </div>`;
+  },
+
+  _renderCards(filtrados) {
+    return `<div class="grid-3" style="margin-bottom:16px">
+      ${filtrados.map(p=>`
+        <div class="card" style="cursor:pointer" onclick="Modulos.proveedores.modalForm('${p.id}')">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">
+            <div>
+              <div style="font-weight:800;font-size:14px">${p.nombre}</div>
+              <span class="badge badge-gray" style="margin-top:4px">${p.categoria||'General'}</span>
+            </div>
+            <span class="badge badge-${p.activo?'green':'red'}">${p.activo?'Activo':'Inactivo'}</span>
+          </div>
+          <div style="font-size:12px;color:var(--text2);display:flex;flex-direction:column;gap:4px">
+            ${p.nit?`<span>NIT: ${p.nit}</span>`:''}
+            ${p.tel?`<span>📞 ${p.tel}</span>`:''}
+            ${p.email?`<span>✉️ ${p.email}</span>`:''}
+            ${p.contacto?`<span>👤 ${p.contacto}</span>`:''}
+          </div>
+          <div style="display:flex;gap:4px;margin-top:10px" onclick="event.stopPropagation()">
+            ${Modulos.btnAccion('editar', `Modulos.proveedores.modalForm('${p.id}')`)}
+            ${Modulos.btnAccion('eliminar', `Modulos.eliminarRegistro('proveedores','${p.id}','${(p.nombre||'').replace(/'/g,"\\'")}',()=>Modulos.proveedores.render(Modulos.proveedores._busca))`)}
+          </div>
+        </div>`).join('')||'<div style="color:var(--text3);padding:24px">Sin proveedores registrados</div>'}
+    </div>`;
+  },
+
+  _renderLista(filtrados) {
+    return `<div class="table-wrap"><table class="data-table">
+      <thead><tr><th>Proveedor</th><th>Categoría</th><th>NIT</th><th>Contacto</th><th>Teléfono</th><th>Email</th><th>Estado</th><th>Acciones</th></tr></thead>
+      <tbody>
+        ${filtrados.map(p=>`<tr>
+          <td style="font-weight:700">${p.nombre}</td>
+          <td><span class="badge badge-gray">${p.categoria||'General'}</span></td>
+          <td class="mono-sm">${p.nit||'—'}</td>
+          <td>${p.contacto||'—'}</td>
+          <td class="mono-sm">${p.tel||'—'}</td>
+          <td style="font-size:12px">${p.email||'—'}</td>
+          <td><span class="badge badge-${p.activo?'green':'red'}">${p.activo?'Activo':'Inactivo'}</span></td>
+          <td><div style="display:flex;gap:4px">
+            ${Modulos.btnAccion('editar', `Modulos.proveedores.modalForm('${p.id}')`)}
+            ${Modulos.btnAccion('eliminar', `Modulos.eliminarRegistro('proveedores','${p.id}','${(p.nombre||'').replace(/'/g,"\\'")}',()=>Modulos.proveedores.render(Modulos.proveedores._busca))`)}
+          </div></td>
+        </tr>`).join('')||'<tr><td colspan="8" style="text-align:center;padding:24px;color:var(--text3)">Sin proveedores registrados</td></tr>'}
+      </tbody>
+    </table></div>`;
   },
 
   async modalForm(id=null) {

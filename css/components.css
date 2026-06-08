@@ -242,77 +242,79 @@
   justify-content: center;
   -webkit-overflow-scrolling: touch;
 }
-.org-tree, .org-tree ul {
+/* Árbol: cada nivel es una fila de nodos centrada */
+.org-tree ul {
   display: flex;
   justify-content: center;
-  padding-top: 20px;
-  position: relative;
   list-style: none;
   margin: 0;
   padding: 0;
-  transition: all 0.2s;
+  position: relative;
+  padding-top: 24px;   /* espacio para el conector vertical entrante */
 }
-.org-tree {
-  padding-top: 0;
-}
+/* El UL raíz no recibe conector desde arriba */
+.org-tree > ul { padding-top: 0; }
+/* Los nodos de la cúpula (raíz) no llevan conectores hacia arriba */
+.org-tree > ul > li { padding-top: 0; }
+.org-tree > ul > li::before,
+.org-tree > ul > li::after { display: none; }
+
 .org-tree li {
   display: flex;
   flex-direction: column;
   align-items: center;
   position: relative;
-  padding: 20px 8px 0 8px;
-  transition: all 0.2s;
+  padding: 24px 12px 0 12px;   /* espacio superior para los conectores */
 }
-/* Conectores horizontales y verticales desde los lados */
-.org-tree li::before, .org-tree li::after {
+
+/* Conectores: dos mitades horizontales que parten del centro de cada nodo */
+.org-tree li::before,
+.org-tree li::after {
   content: '';
   position: absolute;
   top: 0;
-  right: 50%;
-  border-top: 2px solid var(--border);
   width: 50%;
-  height: 20px;
+  height: 24px;
+  border-top: 2px solid var(--org-line, var(--border));
 }
-.org-tree li::after {
-  right: auto;
-  left: 50%;
-  border-left: 2px solid var(--border);
-}
-/* Quitar bordes sobrantes en extremos */
-.org-tree li:first-child::before, .org-tree li:last-child::after {
-  border: 0 none;
-}
-/* Redondear esquinas en conectores de extremos */
+.org-tree li::before { right: 50%; }
+.org-tree li::after  { left: 50%; border-left: 2px solid var(--org-line, var(--border)); }
+
+/* Extremos: el primero no lleva mitad izquierda, el último no lleva mitad derecha */
+.org-tree li:first-child::before { border: 0 none; }
+.org-tree li:last-child::after   { border: 0 none; }
+/* Esquinas redondeadas en los extremos del travesaño */
 .org-tree li:last-child::before {
-  border-right: 2px solid var(--border);
+  border-right: 2px solid var(--org-line, var(--border));
   border-radius: 0 8px 0 0;
 }
-.org-tree li:first-child::after {
-  border-radius: 8px 0 0 0;
-}
-/* Caso especial: Elemento único (hijo único sin hermanos) */
-.org-tree li:only-child {
-  padding-top: 20px;
-}
-.org-tree li:only-child::before {
-  display: none;
-}
-.org-tree li:only-child::after {
-  border-left: 2px solid var(--border);
-  border-top: 0 none;
-  left: 50%;
-  right: auto;
-  display: block;
-}
-/* Conector vertical descendente hacia los hijos */
-.org-tree ul::before {
+.org-tree li:first-child::after { border-radius: 8px 0 0 0; }
+
+/* Conector vertical que baja desde un padre hacia la fila de hijos */
+.org-tree li > ul::before {
   content: '';
   position: absolute;
   top: 0;
   left: 50%;
-  border-left: 2px solid var(--border);
   width: 0;
-  height: 20px;
+  height: 24px;
+  border-left: 2px solid var(--org-line, var(--border));
+}
+
+/* Hijo único: solo una línea recta vertical, sin travesaño */
+.org-tree li:only-child::before,
+.org-tree li:only-child::after { display: none; }
+.org-tree li:only-child {
+  padding-top: 24px;
+}
+.org-tree li:only-child > .org-card::before {
+  content: '';
+  position: absolute;
+  top: -24px;
+  left: 50%;
+  width: 0;
+  height: 24px;
+  border-left: 2px solid var(--org-line, var(--border));
 }
 .org-card {
   display: flex;
@@ -373,6 +375,115 @@
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }
+
+/* ── ACCIONES RÁPIDAS (dashboard) ────────────────── */
+.quick-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+.quick-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  font-family: 'Manrope', sans-serif;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text2);
+  cursor: pointer;
+  transition: all .15s;
+}
+.quick-btn:hover {
+  border-color: var(--amber-border);
+  color: var(--amber);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(0,0,0,.08);
+}
+.quick-ico { font-size: 16px; }
+.kpi-card[style*="cursor:pointer"]:hover,
+.kpi-card[onclick]:hover { transform: translateY(-2px); box-shadow: 0 8px 20px rgba(0,0,0,.1); transition: all .15s; }
+
+/* ── TOGGLE DE VISTA (tarjetas / lista) ──────────── */
+.view-toggle {
+  display: inline-flex;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.view-btn {
+  background: none;
+  border: none;
+  color: var(--text3);
+  font-size: 16px;
+  line-height: 1;
+  padding: 8px 12px;
+  cursor: pointer;
+  transition: all .15s;
+}
+.view-btn:hover { color: var(--text); background: var(--surface3); }
+.view-btn.active { background: var(--amber); color: #000; }
+
+/* ── TARJETAS DE BANCOS ──────────────────────────── */
+.bank-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 16px;
+  margin-bottom: 24px;
+}
+.bank-card {
+  position: relative;
+  border-radius: 16px;
+  padding: 20px;
+  color: #fff;
+  cursor: pointer;
+  overflow: hidden;
+  border: 1px solid rgba(255,255,255,.12);
+  background: linear-gradient(135deg, #0f2a43 0%, #123a5e 55%, #0c6b7a 100%);
+  box-shadow: 0 10px 26px rgba(8, 26, 45, .28);
+  transition: transform .18s ease, box-shadow .18s ease;
+  min-height: 168px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+.bank-card:hover { transform: translateY(-3px); box-shadow: 0 16px 36px rgba(8,26,45,.36); }
+.bank-card.v-usd { background: linear-gradient(135deg, #14361f 0%, #166534 55%, #0f7a4a 100%); }
+.bank-card.v-eur { background: linear-gradient(135deg, #2a1947 0%, #4c1d95 55%, #6d28d9 100%); }
+.bank-card.inactive { filter: grayscale(.5) opacity(.8); }
+.bank-card::after {
+  content: '';
+  position: absolute;
+  right: -40px; top: -40px;
+  width: 150px; height: 150px;
+  background: radial-gradient(circle, rgba(255,255,255,.16), transparent 70%);
+  pointer-events: none;
+}
+.bank-card-top { display: flex; justify-content: space-between; align-items: flex-start; }
+.bank-card-bank { font-size: 12px; opacity: .85; font-weight: 600; letter-spacing: .03em; }
+.bank-card-name { font-size: 17px; font-weight: 800; margin-top: 2px; }
+.bank-card-chip {
+  width: 34px; height: 26px; border-radius: 6px;
+  background: linear-gradient(135deg, #e9c46a, #d4a017);
+  box-shadow: inset 0 1px 2px rgba(255,255,255,.5);
+}
+.bank-card-num {
+  font-family: 'DM Mono', monospace;
+  font-size: 14px;
+  letter-spacing: .14em;
+  opacity: .92;
+  margin: 8px 0;
+}
+.bank-card-saldo-label { font-size: 10px; opacity: .75; text-transform: uppercase; letter-spacing: .08em; }
+.bank-card-saldo { font-family: 'Bebas Neue', sans-serif; font-size: 30px; line-height: 1; letter-spacing: .02em; }
+.bank-card-foot { display: flex; justify-content: space-between; align-items: flex-end; margin-top: 6px; }
+.bank-card-actions { display: flex; gap: 4px; }
+.bank-card-actions .btn { backdrop-filter: blur(2px); }
 
 /* ── PRINT ───────────────────────────────────────── */
 @media print {

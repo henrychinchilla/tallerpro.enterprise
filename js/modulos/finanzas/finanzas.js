@@ -1,6 +1,6 @@
 /* TallerPro v3.0 — finanzas/index.js */
 Modulos.finanzas = {
-  _tab: 'dashboard', _ini: null, _fin: null,
+  _tab: 'dashboard', _ini: null, _fin: null, _empleados: [],
 
   async render() {
     const el = document.getElementById('page-content');
@@ -22,6 +22,7 @@ Modulos.finanzas = {
           <button class="tab-btn ${this._tab==='dashboard'?'active':''}" onclick="Modulos.finanzas._tab='dashboard';Modulos.finanzas._renderTab()">📊 Resumen</button>
           <button class="tab-btn ${this._tab==='ingresos'?'active':''}" onclick="Modulos.finanzas._tab='ingresos';Modulos.finanzas._renderTab()">📈 Ingresos</button>
           <button class="tab-btn ${this._tab==='egresos'?'active':''}" onclick="Modulos.finanzas._tab='egresos';Modulos.finanzas._renderTab()">📉 Egresos</button>
+          <button class="tab-btn ${this._tab==='viaticos'?'active':''}" onclick="Modulos.finanzas._tab='viaticos';Modulos.finanzas._renderTab()">🚗 Viáticos</button>
           <button class="tab-btn ${this._tab==='balance'?'active':''}" onclick="Modulos.finanzas._tab='balance';Modulos.finanzas._renderTab()">📋 Estado de Resultados</button>
           <button class="tab-btn ${this._tab==='fiscal'?'active':''}" onclick="Modulos.finanzas._tab='fiscal';Modulos.finanzas._renderTab()">🏛️ Fiscal SAT</button>
         </div>
@@ -126,6 +127,49 @@ Modulos.finanzas = {
             </div></td>
           </tr>`).join('')||'<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--text3)">Sin egresos</td></tr>'}</tbody>
         </table></div>`;
+    }
+
+    else if (this._tab==='viaticos') {
+      const [viaticos, empleados] = await Promise.all([
+        DB.getViaticos(null, this._ini, this._fin),
+        DB.getEmpleados()
+      ]);
+      this._empleados = empleados;
+      const totalVia = viaticos.reduce((s,v)=>s+(v.monto||0),0);
+      const aprobados = viaticos.filter(v=>v.aprobado).reduce((s,v)=>s+(v.monto||0),0);
+      const pend = totalVia - aprobados;
+      el.innerHTML = `
+        <div class="kpi-grid" style="margin-bottom:16px">
+          <div class="kpi-card"><div class="kpi-label">Total Viáticos</div><div class="kpi-val amber">${UI.q(totalVia)}</div><div class="kpi-trend">${viaticos.length} registros</div></div>
+          <div class="kpi-card"><div class="kpi-label">Aprobados</div><div class="kpi-val green">${UI.q(aprobados)}</div><div class="kpi-trend">Cargados a egresos</div></div>
+          <div class="kpi-card"><div class="kpi-label">Pendientes</div><div class="kpi-val red">${UI.q(pend)}</div><div class="kpi-trend">Por aprobar</div></div>
+        </div>
+        <div style="display:flex;justify-content:flex-end;margin-bottom:16px">
+          <button class="btn btn-amber" onclick="Modulos.finanzas.modalViatico()">＋ Nuevo Viático</button>
+        </div>
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead><tr><th>Fecha</th><th>Empleado</th><th>Concepto</th><th>Tipo</th><th>Monto</th><th>Estado</th><th>Acciones</th></tr></thead>
+            <tbody>
+              ${viaticos.map(v=>`<tr>
+                <td>${UI.fecha(v.fecha)}</td>
+                <td>${v.empleados?.nombre||'—'}</td>
+                <td>${v.concepto}</td>
+                <td><span class="badge badge-gray">${v.tipo||'—'}</span></td>
+                <td class="mono-sm text-amber">${UI.q(v.monto)}</td>
+                <td><span class="badge badge-${v.aprobado?'green':'amber'}">${v.aprobado?'Aprobado':'Pendiente'}</span></td>
+                <td><div style="display:flex;gap:4px">
+                  ${v.aprobado?'':`<button class="btn btn-sm btn-green" onclick="Modulos.finanzas.aprobarViatico('${v.id}')" title="Aprobar y cargar a egresos">✓ Aprobar</button>`}
+                  ${Modulos.btnAccion('eliminar', `Modulos.eliminarRegistro('viaticos','${v.id}','este viático',()=>Modulos.finanzas._renderTab())`)}
+                </div></td>
+              </tr>`).join('')||'<tr><td colspan="7" style="text-align:center;padding:24px;color:var(--text3)">Sin viáticos en este período</td></tr>'}
+            </tbody>
+          </table>
+        </div>
+        <div class="alert alert-cyan" style="margin-top:12px">
+          <div class="alert-icon">ℹ️</div>
+          <div class="alert-body" style="font-size:12px">Al <b>aprobar</b> un viático se registra automáticamente como egreso en la categoría <b>Viáticos</b>.</div>
+        </div>`;
     }
 
     else if (this._tab==='balance') {
@@ -381,5 +425,74 @@ Modulos.finanzas = {
     const r = await DB.deleteRegistro(tabla, id);
     if (r) { UI.toast('Eliminado ✓'); this._renderTab(); }
     else UI.toast('Error al eliminar','error');
+  },
+
+  /* ── VIÁTICOS ─────────────────────────────────── */
+  modalViatico() {
+    UI.modal('＋ Nuevo Viático', `
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Empleado *</label>
+          <select class="form-select" id="via-emp">
+            <option value="">Seleccionar...</option>
+            ${(this._empleados||[]).filter(e=>e.activo).map(e=>`<option value="${e.id}">${e.nombre}</option>`).join('')}
+          </select></div>
+        <div class="form-group"><label class="form-label">Tipo</label>
+          <select class="form-select" id="via-tipo">
+            ${['alimentacion','transporte','hospedaje','combustible','otro'].map(t=>`<option>${t}</option>`).join('')}
+          </select></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Concepto *</label>
+          <input class="form-input" id="via-concepto" placeholder="Almuerzo en visita a cliente"></div>
+        <div class="form-group"><label class="form-label">Monto (Q) *</label>
+          <input class="form-input" id="via-monto" type="number" min="0" step="0.01"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Fecha</label>
+          <input class="form-input" id="via-fecha" type="date" value="${new Date().toISOString().slice(0,10)}"></div>
+        <div class="form-group"><label class="form-label">Referencia / Factura</label>
+          <input class="form-input" id="via-ref"></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" onclick="UI.cerrarModal()">Cancelar</button>
+        <button class="btn btn-amber" onclick="Modulos.finanzas.guardarViatico()">Registrar</button>
+      </div>`);
+  },
+
+  async guardarViatico() {
+    const empId = document.getElementById('via-emp')?.value;
+    const conc  = document.getElementById('via-concepto')?.value.trim();
+    const monto = parseFloat(document.getElementById('via-monto')?.value)||0;
+    if (!empId||!conc||monto<=0) { UI.toast('Completa empleado, concepto y monto','error'); return; }
+    const {error} = await DB.upsertViatico({
+      empleado_id: empId, concepto: conc, monto,
+      tipo:        document.getElementById('via-tipo')?.value,
+      fecha:       document.getElementById('via-fecha')?.value,
+      referencia:  document.getElementById('via-ref')?.value||null,
+      aprobado:    false
+    });
+    if (error) { UI.toast('Error: '+error.message,'error'); return; }
+    UI.cerrarModal(); UI.toast('Viático registrado ✓');
+    this._tab='viaticos'; this._renderTab();
+  },
+
+  async aprobarViatico(id) {
+    const viaticos = await DB.getViaticos(null, this._ini, this._fin);
+    const v = viaticos.find(x=>x.id===id);
+    if (!v) return;
+    const ok = await UI.confirmar(`¿Aprobar el viático <b>${v.concepto}</b> por <b>${UI.q(v.monto)}</b>? Se registrará como egreso.`,'Aprobar');
+    if (!ok) return;
+    const { error } = await DB.upsertViatico({ id, aprobado: true });
+    if (error) { UI.toast('Error: '+error.message,'error'); return; }
+    /* Registrar el viático aprobado como egreso (categoría Viáticos) */
+    await DB.upsertEgreso({
+      concepto:   `Viático: ${v.concepto}${v.empleados?.nombre?` — ${v.empleados.nombre}`:''}`,
+      monto:      v.monto,
+      categoria:  'Viáticos',
+      fecha:      v.fecha || new Date().toISOString().slice(0,10),
+      referencia: v.referencia || `VIA-${id.slice(0,8)}`
+    });
+    UI.toast('Viático aprobado y cargado a egresos ✓');
+    this._renderTab();
   }
 };

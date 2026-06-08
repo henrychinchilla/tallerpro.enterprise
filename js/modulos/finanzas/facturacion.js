@@ -37,7 +37,7 @@ Modulos.facturacion = {
         </div>
         <div class="table-wrap">
           <table class="data-table">
-            <thead><tr><th>Serie/No.</th><th>Cliente</th><th>NIT</th><th>Fecha</th><th>Subtotal</th><th>IVA</th><th>Total</th><th>Estado</th><th>Acciones</th></tr></thead>
+            <thead><tr><th>Serie/No.</th><th>Cliente</th><th>NIT</th><th>Fecha</th><th>Subtotal</th><th>IVA</th><th>Total</th><th>Método</th><th>Estado</th><th>Acciones</th></tr></thead>
             <tbody>
               ${this._data.map(f=>`<tr>
                 <td class="mono-sm"><b>${f.serie||'A'}-${f.num_fel||'—'}</b></td>
@@ -47,13 +47,14 @@ Modulos.facturacion = {
                 <td class="mono-sm">${UI.q(f.subtotal)}</td>
                 <td class="mono-sm">${UI.q(f.iva)}</td>
                 <td class="mono-sm text-amber"><b>${UI.q(f.total)}</b></td>
+                <td><span class="badge badge-gray">${f.metodo_pago||'Efectivo'}</span></td>
                 <td><span class="badge badge-${f.estado==='emitida'?'green':f.estado==='anulada'?'red':'amber'}">${f.estado}</span></td>
                 <td><div style="display:flex;gap:4px">
                   <button class="btn btn-sm btn-cyan" onclick="Modulos.facturacion.modalFactura('${f.id}')">Ver</button>
                   <button class="btn btn-sm btn-ghost" onclick="Modulos.facturacion.enviarEmail('${f.id}')" title="Enviar por email">📧</button>
                   <button class="btn btn-sm btn-ghost" onclick="Modulos.facturacion.imprimir('${f.id}')">🖨</button>
                 </div></td>
-              </tr>`).join('')||'<tr><td colspan="9" style="text-align:center;padding:24px;color:var(--text3)">Sin facturas en este período</td></tr>'}
+              </tr>`).join('')||'<tr><td colspan="10" style="text-align:center;padding:24px;color:var(--text3)">Sin facturas en este período</td></tr>'}
             </tbody>
           </table>
         </div>
@@ -99,6 +100,10 @@ Modulos.facturacion = {
       <div class="form-group"><label class="form-label">Total (Q)</label>
         <input class="form-input" id="fel-total" type="number" value="${f.total||''}" step="0.01" readonly
                style="font-size:18px;font-weight:800;color:var(--amber)"></div>
+      <div class="form-group"><label class="form-label">Método de Pago</label>
+        <select class="form-select" id="fel-metodo">
+          ${['Efectivo','Tarjeta','Transferencia','Cheque','Depósito','Crédito'].map(m=>`<option ${(f.metodo_pago||'Efectivo')===m?'selected':''}>${m}</option>`).join('')}
+        </select></div>
       ${esEdicion?`<div class="form-group"><label class="form-label">Estado</label>
         <select class="form-select" id="fel-estado">
           ${['emitida','pendiente','anulada'].map(s=>`<option ${f.estado===s?'selected':''}>${s}</option>`).join('')}
@@ -138,6 +143,7 @@ Modulos.facturacion = {
       orden_id:   document.getElementById('fel-ot')?.value||null,
       serie:      document.getElementById('fel-serie')?.value||'A',
       fecha:      document.getElementById('fel-fecha')?.value,
+      metodo_pago: document.getElementById('fel-metodo')?.value||'Efectivo',
       subtotal:   sub, iva, total,
       estado:     document.getElementById('fel-estado')?.value||'emitida',
       notas:      document.getElementById('fel-notas')?.value||null
@@ -264,6 +270,7 @@ Modulos.facturacion = {
       <hr><p>Subtotal: Q${f.subtotal?.toFixed(2)}</p>
       <p>IVA (12%): Q${f.iva?.toFixed(2)}</p>
       <p class="total">TOTAL: Q${f.total?.toFixed(2)}</p>
+      <p><b>Método de pago:</b> ${f.metodo_pago||'Efectivo'}</p>
       <hr><p style="text-align:center;font-size:10px">Documento tributario electrónico FEL</p>
       <script>window.print();</script></body></html>`);
     win.document.close();
