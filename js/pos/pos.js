@@ -85,6 +85,55 @@ const POS = {
 
   async salir() { await Auth.logout(); this.renderLogin(); },
 
+  /* Al salir: preguntar si guardar la sesión o terminar el turno */
+  confirmarSalida() {
+    UI.modal('⏻ Salir del Punto de Venta', `
+      <p style="font-size:13px;color:var(--text2);margin-bottom:6px">¿Cómo deseas salir?</p>
+      <ul style="font-size:12px;color:var(--text3);margin:0 0 8px 18px">
+        <li><b>Guardar sesión:</b> sales del POS pero tu sesión queda activa para seguir vendiendo después.</li>
+        <li><b>Terminar turno:</b> se hace el <b>cierre de caja</b>, se envía el reporte de cierre y se cierra la sesión.</li>
+      </ul>
+      <div class="modal-footer" style="flex-wrap:wrap">
+        <button class="btn btn-ghost" onclick="UI.cerrarModal()">Cancelar</button>
+        <button class="btn btn-cyan" onclick="POS._guardarSesion()">💾 Guardar sesión</button>
+        <button class="btn btn-amber" onclick="POS._terminarTurno()">🧾 Cerrar caja y terminar</button>
+      </div>`);
+  },
+
+  _guardarSesion() { UI.cerrarModal(); location.href = '/'; },
+
+  async _terminarTurno() {
+    UI.cerrarModal();
+    UI.toast('Generando cierre de caja...','info');
+    const hoy = new Date().toISOString().slice(0,10);
+    const facturas = await DB.getFacturas(hoy, hoy);
+    const vivas = facturas.filter(f=>f.estado!=='anulada');
+    const total = vivas.reduce((s,f)=>s+(Number(f.total)||0),0);
+    const porMetodo = {};
+    vivas.forEach(f=>{ const m=f.metodo_pago||'Efectivo'; porMetodo[m]=(porMetodo[m]||0)+(Number(f.total)||0); });
+    const taller = Auth.tenant?.name || 'TallerPro';
+    const dest = Auth.tenant?.email || Auth.user?.email;
+    const html =
+      `<div style="font-family:Arial,sans-serif;max-width:480px">`+
+      `<h2 style="color:#d97706">🧾 Cierre de caja — ${taller}</h2>`+
+      `<p>Fecha: <b>${UI.fecha(hoy)}</b><br>Cajero: <b>${Auth.user?.nombre||Auth.user?.email||''}</b></p>`+
+      `<p>Ventas del día: <b>${vivas.length}</b></p>`+
+      `<table style="width:100%;border-collapse:collapse;font-size:14px">`+
+      Object.entries(porMetodo).map(([m,v])=>`<tr><td style="padding:4px 0;color:#666">${m}</td><td style="text-align:right">${UI.q(v)}</td></tr>`).join('')+
+      `<tr><td style="padding:8px 0;border-top:2px solid #d97706;font-weight:800">TOTAL</td><td style="text-align:right;border-top:2px solid #d97706;font-weight:800;color:#d97706">${UI.q(total)}</td></tr>`+
+      `</table></div>`;
+    let nota = '';
+    if (dest) {
+      const r = await Email.enviar(dest, `Cierre de caja ${taller} — ${UI.fecha(hoy)}`, { html });
+      nota = r.ok ? ` y enviado a ${dest}` : ` (no se pudo enviar el correo: ${r.error})`;
+    } else {
+      nota = ' (sin correo configurado para enviar el reporte)';
+    }
+    await Auth.logout();
+    this.renderLogin();
+    UI.toast(`Cierre de caja realizado: ${vivas.length} ventas · ${UI.q(total)}${nota} ✓`, 'success', 7000);
+  },
+
   /* ── PANTALLA PRINCIPAL ──────────────────────────── */
   async render() {
     const root = document.getElementById('pos-root');
@@ -110,7 +159,7 @@ const POS = {
             <button class="btn btn-ghost btn-sm" onclick="POS.corteDiario()">🧾 Corte diario</button>
             <button class="btn btn-ghost btn-sm" onclick="POS.reportes()">📊 Reportes</button>
             <span style="font-size:12px;color:var(--text3);align-self:center">${Auth.user?.avatar||'👤'} ${Auth.user?.nombre||Auth.user?.email||''}</span>
-            <button class="btn btn-ghost btn-sm" onclick="POS.salir()">⏻ Salir</button>
+            <button class="btn btn-ghost btn-sm" onclick="POS.confirmarSalida()">⏻ Salir</button>
           </div>
         </header>
         <div style="flex:1;display:grid;grid-template-columns:1fr 380px;gap:0;overflow:hidden">

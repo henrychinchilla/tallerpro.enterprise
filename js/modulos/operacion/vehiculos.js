@@ -4,12 +4,57 @@ Modulos.vehiculos = {
   _clientes: [],
 
   /* Catálogos sugeridos (editables: el usuario puede escribir uno nuevo) */
-  _tipos: ['Liviano', 'SUV', 'Pesado', 'Motocicleta'],
+  _tipos: ['Liviano', 'SUV', 'Pesado', 'Motocicleta', 'ATV', 'Motor de lancha', 'Motogenerador'],
   _marcasPorTipo: {
     'Liviano': ['Toyota','Honda','Nissan','Hyundai','Kia','Mazda','Chevrolet','Volkswagen','Mitsubishi','Suzuki','Ford','Renault','Peugeot','Geely','BYD','Changan'],
     'SUV': ['Toyota','Honda','Hyundai','Kia','Mazda','Nissan','Mitsubishi','Suzuki','Chevrolet','Ford','Jeep','Subaru','Land Rover','BMW','Mercedes-Benz','Volkswagen','BYD'],
     'Pesado': ['Hino','Isuzu','Freightliner','International','Volvo','Mercedes-Benz','Scania','Mack','Kenworth','Foton','JAC','Dongfeng','UD Trucks','Iveco'],
-    'Motocicleta': ['Honda','Yamaha','Suzuki','Kawasaki','BMW','Ducati','Aprilia','KTM','Triumph','Harley-Davidson','Husqvarna','Royal Enfield','Benelli','CFMoto','Vespa','Bajaj','TVS','Italika','Hero','Genesis','Freedom','Serpento','Daytona','Vento','Zontes','Voge']
+    'Motocicleta': ['Honda','Yamaha','Suzuki','Kawasaki','BMW','Ducati','Aprilia','KTM','Triumph','Harley-Davidson','Husqvarna','Royal Enfield','Benelli','CFMoto','Vespa','Bajaj','TVS','Italika','Hero','Genesis','Freedom','Serpento','Daytona','Vento','Zontes','Voge'],
+    'ATV': ['Honda','Yamaha','Suzuki','Kawasaki','Polaris','Can-Am','CFMoto','Kymco','Hisun','Linhai','TGB','Segway','Bombardier'],
+    'Motor de lancha': ['Yamaha','Mercury','Suzuki','Honda','Tohatsu','Evinrude','Johnson','Mariner','Parsun','Selva'],
+    'Motogenerador': ['Cummins','Caterpillar','Perkins','Kohler','Generac','Honda','Yamaha','Toyama','Firman','Hyundai','Pramac','FG Wilson','Power Value','Champion']
+  },
+
+  /* Unidad de control de mantenimiento por tipo (km o horas de uso) */
+  _unidadPorTipo: { 'Motor de lancha': 'h', 'Motogenerador': 'h' },
+
+  /* Modelos específicos por tipo+marca (evita mezclar con autos/motos) */
+  _modelosEspeciales: {
+    'ATV': {
+      'Honda': ['TRX250 Recon','TRX420 Rancher','TRX500 Foreman','TRX520 Rubicon','FourTrax 90','TRX700XX'],
+      'Yamaha': ['Grizzly 350','Grizzly 700','Kodiak 450','Kodiak 700','Raptor 700','YFZ450R','Wolverine'],
+      'Suzuki': ['KingQuad 400','KingQuad 500','KingQuad 750','QuadSport Z400'],
+      'Kawasaki': ['Brute Force 300','Brute Force 750','KFX90','KFX700'],
+      'Polaris': ['Sportsman 450','Sportsman 570','Sportsman 850','Scrambler 850','Outlaw 110'],
+      'Can-Am': ['Outlander 450','Outlander 650','Outlander 1000','Renegade 650','DS 250'],
+      'CFMoto': ['CForce 400','CForce 600','CForce 800','CForce 1000'],
+      'Kymco': ['MXU 270','MXU 550','MXU 700'],
+      'Hisun': ['Tactic 400','Forge 550','Strike 550','Sector 750'],
+      'TGB': ['Blade 550','Blade 1000','Target 500'],
+      'Segway': ['Snarler AT6','Fugleman UT10']
+    },
+    'Motor de lancha': {
+      'Yamaha': ['F15','F25','F40','F60','F90','F115','F150','F200','F250','Enduro E40','2T 40'],
+      'Mercury': ['15 FourStroke','40 FourStroke','60 FourStroke','90 FourStroke','115 Pro XS','150 FourStroke','200 Verado','250 Verado'],
+      'Suzuki': ['DF15','DF25','DF40','DF60','DF90','DF115','DF140','DF200','DF250'],
+      'Honda': ['BF15','BF25','BF40','BF60','BF90','BF115','BF150','BF200','BF250'],
+      'Tohatsu': ['MFS9.8','MFS15','MFS30','MFS40','MFS60','MFS90','MFS140'],
+      'Evinrude': ['E-TEC 25','E-TEC 60','E-TEC 90','E-TEC 150','E-TEC G2 200'],
+      'Parsun': ['F15','F40','T40','F60'],
+      'Selva': ['Murena 40','Dorado 60','Tuna 90']
+    },
+    'Motogenerador': {
+      'Cummins': ['C22 D5 (22 kVA Trifásico)','C33 D5 (33 kVA Trifásico)','C66 D5 (66 kVA Trifásico)','C110 D5 (110 kVA Trifásico)','C150 D5 (150 kVA Trifásico)','C220 D5 (220 kVA Trifásico)'],
+      'Caterpillar': ['DE13.5 (Trifásico)','DE22 (Trifásico)','DE33 (Trifásico)','DE65 (Trifásico)','DE110 (Trifásico)','DE150 (Trifásico)'],
+      'Perkins': ['1103 (Trifásico)','1104 (Trifásico)','1106 (Trifásico)','2206 (Trifásico)'],
+      'Kohler': ['20REOZK (Trifásico)','30REOZK (Trifásico)','60REOZK (Trifásico)','100REOZK (Trifásico)'],
+      'Generac': ['SD030 (Trifásico)','SD050 (Trifásico)','SD100 (Trifásico)','Guardian (Monofásico)'],
+      'Honda': ['EU22i (Monofásico)','EG2800 (Monofásico)','EG4000 (Monofásico)','EG6500 (Bifásico)','EM5000 (Monofásico)'],
+      'Yamaha': ['EF2000iS (Monofásico)','EF6300 (Bifásico)','EF12000 (Trifásico)'],
+      'Toyama': ['TG2800 (Monofásico)','TG4000 (Monofásico)','TG6500 (Bifásico)','TDG12000 (Trifásico)'],
+      'Firman': ['P03608 (Monofásico)','P08010 (Bifásico)'],
+      'Hyundai': ['DHY6000 (Bifásico)','DHY8000 (Trifásico)']
+    }
   },
   _colores: ['Blanco','Negro','Gris','Plateado','Rojo','Azul','Azul marino','Celeste','Verde','Beige','Café','Dorado','Amarillo','Naranja','Vino','Turquesa',
              'Blanco/Negro','Negro/Rojo','Negro/Gris','Azul/Blanco','Rojo/Negro','Naranja/Negro'],
@@ -97,6 +142,36 @@ Modulos.vehiculos = {
       { item:'Frenos (pastillas/zapatas)',           km:10000, ico:'🛑' },
       { item:'Líquido de frenos',                    km:20000, ico:'🧪' },
       { item:'Kit de arrastre (cadena/piñones)',     km:25000, ico:'⚙️' }
+    ],
+    'ATV': [
+      { item:'Cambio de aceite y filtro de motor',   km:1000,  ico:'🛢️' },
+      { item:'Filtro de aire',                       km:3000,  ico:'💨' },
+      { item:'Bujía',                                km:5000,  ico:'⚡' },
+      { item:'Frenos (revisión)',                    km:5000,  ico:'🛑' },
+      { item:'Aceite de diferencial / transmisión',  km:8000,  ico:'⚙️' },
+      { item:'Líquido de frenos',                    km:15000, ico:'🧪' },
+      { item:'Refrigerante',                         km:20000, ico:'🌡️' }
+    ],
+    /* Intervalos en HORAS de uso (no km) */
+    'Motor de lancha': [
+      { item:'Aceite y filtro de motor (4T)',        km:100, ico:'🛢️' },
+      { item:'Aceite del pie / cola (gearcase)',     km:100, ico:'⚙️' },
+      { item:'Filtro de combustible / separador',    km:100, ico:'⛽' },
+      { item:'Ánodos de zinc (anticorrosión)',       km:100, ico:'🛡️' },
+      { item:'Impulsor de bomba de agua (impeller)', km:200, ico:'💧' },
+      { item:'Bujías',                               km:300, ico:'⚡' },
+      { item:'Termostato',                           km:300, ico:'🌡️' },
+      { item:'Banda / correa de distribución',       km:500, ico:'🔗' }
+    ],
+    /* Intervalos en HORAS de uso (no km) */
+    'Motogenerador': [
+      { item:'Aceite y filtro de aceite',            km:100, ico:'🛢️' },
+      { item:'Revisión de batería y bornes',         km:250, ico:'🔋' },
+      { item:'Filtro de aire',                       km:250, ico:'💨' },
+      { item:'Bujías (gasolina)',                    km:300, ico:'⚡' },
+      { item:'Filtro de combustible',                km:500, ico:'⛽' },
+      { item:'Refrigerante / anticongelante',        km:500, ico:'🌡️' },
+      { item:'Ajuste de válvulas',                   km:500, ico:'🔧' }
     ]
   },
 
@@ -105,23 +180,27 @@ Modulos.vehiculos = {
       .map(m => `<option value="${m}">`).join('');
   },
 
-  _opcionesModelo(marca) {
-    const modelos = this._modelosPorMarca[marca] || [];
+  _opcionesModelo(marca, tipo) {
+    const esp = tipo && this._modelosEspeciales[tipo];
+    const modelos = (esp && esp[marca]) || this._modelosPorMarca[marca] || [];
     return modelos.map(m => `<option value="${m}">`).join('');
   },
 
-  /* Al cambiar el tipo, repuebla las marcas sugeridas sin borrar lo escrito */
+  /* Al cambiar el tipo, repuebla marcas y modelos sugeridos sin borrar lo escrito */
   _onTipoChange() {
     const tipo = document.getElementById('veh-tipo')?.value;
     const dl = document.getElementById('marcas-list');
     if (dl) dl.innerHTML = this._opcionesMarca(tipo);
+    const dlMod = document.getElementById('modelos-list');
+    if (dlMod) dlMod.innerHTML = this._opcionesModelo(document.getElementById('veh-marca')?.value, tipo);
   },
 
-  /* Al cambiar la marca, repuebla los modelos sugeridos */
+  /* Al cambiar la marca, repuebla los modelos sugeridos según el tipo */
   _onMarcaChange() {
     const marca = document.getElementById('veh-marca')?.value;
+    const tipo = document.getElementById('veh-tipo')?.value;
     const dl = document.getElementById('modelos-list');
-    if (dl) dl.innerHTML = this._opcionesModelo(marca);
+    if (dl) dl.innerHTML = this._opcionesModelo(marca, tipo);
   },
 
   async render(clienteId=null) {
@@ -195,7 +274,7 @@ Modulos.vehiculos = {
       <div class="form-row">
         <div class="form-group"><label class="form-label">Modelo *</label>
           <input class="form-input" id="veh-modelo" list="modelos-list" autocomplete="off" value="${v.modelo||''}" placeholder="Elige según la marca o escribe...">
-          <datalist id="modelos-list">${this._opcionesModelo(v.marca||'')}</datalist>
+          <datalist id="modelos-list">${this._opcionesModelo(v.marca||'', v.tipo||'Liviano')}</datalist>
           <div style="font-size:11px;color:var(--text3);margin-top:4px">Sugerencias según la marca. Puedes escribir uno nuevo.</div></div>
         <div class="form-group"><label class="form-label">Año</label>
           <input class="form-input" id="veh-anio" type="number" value="${v.anio||''}" placeholder="2020"></div>
@@ -211,8 +290,8 @@ Modulos.vehiculos = {
           </select></div>
       </div>
       <div class="form-row">
-        <div class="form-group"><label class="form-label">Kilometraje</label>
-          <input class="form-input" id="veh-km" type="number" value="${v.kilometraje||''}"></div>
+        <div class="form-group"><label class="form-label">Kilometraje / Horas de uso</label>
+          <input class="form-input" id="veh-km" type="number" value="${v.kilometraje||''}" placeholder="km (autos) u horas (motores/generadores)"></div>
         <div class="form-group"><label class="form-label">Motor</label>
           <input class="form-input" id="veh-motor" value="${v.motor||''}" placeholder="1.8L"></div>
       </div>
@@ -273,21 +352,23 @@ Modulos.vehiculos = {
     const tipo = this._mantenimiento[v.tipo] ? v.tipo : 'Liviano';
     const plan = this._mantenimiento[tipo];
     const km = Number(v.kilometraje)||0;
+    const u  = this._unidadPorTipo[tipo] || 'km';
 
     const filas = plan.map(p=>{
-      /* Próximo múltiplo del intervalo respecto al km actual */
+      /* Próximo múltiplo del intervalo respecto al uso actual */
       const ciclos   = Math.floor(km / p.km);
       const proximo  = (ciclos + 1) * p.km;
       const faltan   = proximo - km;
       const pct      = Math.max(0, Math.min(100, Math.round((km % p.km) / p.km * 100)));
-      /* Estado por proximidad */
-      const venc = faltan <= Math.max(500, p.km*0.1);
+      /* Estado por proximidad (margen según unidad: horas vs km) */
+      const margen = u==='h' ? Math.max(10, p.km*0.1) : Math.max(500, p.km*0.1);
+      const venc = faltan <= margen;
       const color = km===0 ? 'gray' : venc ? 'red' : faltan <= p.km*0.25 ? 'amber' : 'green';
-      const estado = km===0 ? 'Registra el km' : venc ? '¡Próximo ya!' : `Faltan ${faltan.toLocaleString()} km`;
+      const estado = km===0 ? `Registra ${u==='h'?'las horas':'el km'}` : venc ? '¡Próximo ya!' : `Faltan ${faltan.toLocaleString()} ${u}`;
       return `<tr>
         <td><span style="font-size:15px;margin-right:6px">${p.ico}</span>${p.item}</td>
-        <td class="mono-sm" style="text-align:center">cada ${p.km.toLocaleString()} km</td>
-        <td class="mono-sm" style="text-align:center">${proximo.toLocaleString()} km</td>
+        <td class="mono-sm" style="text-align:center">cada ${p.km.toLocaleString()} ${u}</td>
+        <td class="mono-sm" style="text-align:center">${proximo.toLocaleString()} ${u}</td>
         <td style="min-width:120px">
           <div style="display:flex;align-items:center;gap:8px">
             <div style="flex:1;height:6px;background:var(--surface3);border-radius:3px;overflow:hidden">
@@ -303,9 +384,9 @@ Modulos.vehiculos = {
       <div class="alert alert-cyan" style="margin-bottom:14px">
         <div class="alert-icon">📋</div>
         <div class="alert-body" style="font-size:12px">
-          Calendario preventivo recomendado por el fabricante para vehículos tipo <b>${tipo}</b>.
-          Kilometraje actual: <b>${km.toLocaleString()} km</b>.
-          ${km===0?'<br><span style="color:var(--amber)">Actualiza el kilometraje del vehículo para calcular los próximos servicios.</span>':''}
+          Calendario preventivo recomendado por el fabricante para <b>${tipo}</b>.
+          ${u==='h'?'Horas de uso':'Kilometraje'} actual: <b>${km.toLocaleString()} ${u}</b>.
+          ${km===0?`<br><span style="color:var(--amber)">Actualiza ${u==='h'?'las horas de uso':'el kilometraje'} para calcular los próximos servicios.</span>`:''}
         </div>
       </div>
       <div class="table-wrap"><table class="data-table" style="font-size:12.5px">
@@ -336,17 +417,19 @@ Modulos.vehiculos = {
     const tipo = this._mantenimiento[v.tipo] ? v.tipo : 'Liviano';
     const plan = this._mantenimiento[tipo];
     const km = Number(v.kilometraje)||0;
-    if (!km) { UI.toast('Registra el kilometraje del vehículo para sugerir servicios','warn'); return; }
+    const u  = this._unidadPorTipo[tipo] || 'km';
+    if (!km) { UI.toast(`Registra ${u==='h'?'las horas de uso':'el kilometraje'} para sugerir servicios`,'warn'); return; }
 
-    /* Servicios próximos/vencidos según el km actual (mismo criterio que el plan) */
+    /* Servicios próximos/vencidos según el uso actual (mismo criterio que el plan) */
     const due = plan.filter(p=>{
       const proximo = (Math.floor(km/p.km)+1)*p.km;
-      return (proximo - km) <= Math.max(500, p.km*0.1);
+      const margen = u==='h' ? Math.max(10, p.km*0.1) : Math.max(500, p.km*0.1);
+      return (proximo - km) <= margen;
     });
-    if (!due.length) { UI.toast('No hay servicios próximos según el kilometraje actual','info'); return; }
+    if (!due.length) { UI.toast('No hay servicios próximos según el uso actual','info'); return; }
 
     const ok = await UI.confirmar(
-      `Se creará una OT para <b>${v.marca} ${v.modelo} (${v.placa})</b> con <b>${due.length} servicio(s)</b> sugeridos a ${km.toLocaleString()} km:<br><br>`+
+      `Se creará una OT para <b>${v.marca} ${v.modelo} (${v.placa})</b> con <b>${due.length} servicio(s)</b> sugeridos a ${km.toLocaleString()} ${u}:<br><br>`+
       due.map(d=>`${d.ico} ${d.item}`).join('<br>')+
       `<br><br>más el ítem <b>Mano de obra</b>. Los precios quedan en Q0 para que los completes.`,
       'Crear OT sugerida'
@@ -355,8 +438,8 @@ Modulos.vehiculos = {
 
     const res = await DB.upsertOrden({
       vehiculo_id: v.id, cliente_id: v.cliente_id,
-      descripcion: `Mantenimiento preventivo sugerido (${km.toLocaleString()} km) — ${tipo}`,
-      estado: 'recibido', prioridad: 'media', km_ingreso: km, total: 0
+      descripcion: `Mantenimiento preventivo sugerido (${km.toLocaleString()} ${u}) — ${tipo}`,
+      estado: 'recibido', prioridad: 'media', km_ingreso: u==='km'?km:null, total: 0
     });
     if (res.error || !res.data) { UI.toast('Error al crear OT: '+(res.error?.message||''),'error'); return; }
     const ordenId = res.data.id;
