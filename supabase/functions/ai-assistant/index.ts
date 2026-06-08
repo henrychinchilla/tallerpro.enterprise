@@ -163,11 +163,13 @@ Deno.serve(async (req) => {
 
   if (!tenantId) {
     const { data: t, error: tErr } = await admin.from("tenants").select("id").limit(1).maybeSingle();
+    const serviceKeyLen = serviceKey ? serviceKey.length : 0;
+    const serviceKeyPrefix = serviceKey ? serviceKey.slice(0, 8) : "none";
     if (tErr) {
-      return json({ error: `Sin taller asociado. Error de consulta fallback: ${tErr.message} (código: ${tErr.code}, perfil: ${JSON.stringify(perfil)}, user: ${userData.user.id}, email: ${userData.user.email})` }, 400);
+      return json({ error: `Sin taller asociado. Error de consulta fallback: ${tErr.message} (código: ${tErr.code}, key_len: ${serviceKeyLen}, key_pre: ${serviceKeyPrefix}, perfil: ${JSON.stringify(perfil)}, user: ${userData.user.id}, email: ${userData.user.email})` }, 400);
     }
     if (!t) {
-      return json({ error: `Sin taller asociado. No se encontraron registros en la tabla tenants (perfil: ${JSON.stringify(perfil)}, user: ${userData.user.id}, email: ${userData.user.email})` }, 400);
+      return json({ error: `Sin taller asociado. No se encontraron registros en la tabla tenants (key_len: ${serviceKeyLen}, key_pre: ${serviceKeyPrefix}, perfil: ${JSON.stringify(perfil)}, user: ${userData.user.id}, email: ${userData.user.email})` }, 400);
     }
     tenantId = t.id;
   }
