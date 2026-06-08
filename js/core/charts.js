@@ -95,6 +95,44 @@ const Charts = {
     </div>`;
   },
 
+  /* ── GAUGE / ANILLO DE PORCENTAJE (tarjetas hero BI) ──
+     opts = { pct, colorVar, size?, grosor? } */
+  gauge({ pct, colorVar = 'cyan', size = 110, grosor = 12 }) {
+    pct = Math.max(0, Math.min(100, Math.round(Number(pct) || 0)));
+    const r = (size - grosor) / 2, cx = size / 2, cy = size / 2, C = 2 * Math.PI * r;
+    const dash = (pct / 100) * C;
+    return `<svg viewBox="0 0 ${size} ${size}" width="${size}" height="${size}" style="flex-shrink:0">
+      <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" style="stroke:var(--surface3)" stroke-width="${grosor}"/>
+      <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" style="stroke:var(--${colorVar})" stroke-width="${grosor}"
+        stroke-linecap="round" stroke-dasharray="${dash.toFixed(2)} ${(C - dash).toFixed(2)}"
+        transform="rotate(-90 ${cx} ${cy})"/>
+      <text x="${cx}" y="${cy + 1}" text-anchor="middle" dominant-baseline="middle"
+        style="fill:var(--text)" font-size="${(size * 0.24).toFixed(0)}" font-weight="800">${pct}%</text>
+    </svg>`;
+  },
+
+  /* ── BARRAS VERTICALES ─────────────────────────────
+     opts = { labels:[...], valores:[...], colorVar, alto?, money? } */
+  barrasV({ labels, valores, colorVar = 'cyan', alto = 210, money = false }) {
+    const W = 600, H = alto, pL = 44, pR = 10, pT = 12, pB = 26;
+    const plotW = W - pL - pR, plotH = H - pT - pB;
+    const max = Math.max(1, ...valores), n = valores.length || 1;
+    const gap = plotW / n, bw = gap * 0.6;
+    const grid = [0, .5, 1].map(t => {
+      const gy = pT + plotH * t, val = max * (1 - t);
+      return `<line x1="${pL}" y1="${gy}" x2="${W - pR}" y2="${gy}" style="stroke:var(--border)" stroke-width="1"/>
+        <text x="${pL - 6}" y="${gy + 3}" text-anchor="end" style="fill:var(--text3)" font-size="9">${money ? Charts._qCorto(val) : Math.round(val)}</text>`;
+    }).join('');
+    const bars = valores.map((v, i) => {
+      const x = pL + gap * i + (gap - bw) / 2, h = plotH * (v / max), y = pT + plotH - h;
+      return `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${bw.toFixed(1)}" height="${Math.max(0,h).toFixed(1)}" rx="3" style="fill:var(--${colorVar})"/>`;
+    }).join('');
+    const step = Math.max(1, Math.ceil(n / 14));
+    const xl = labels.map((l, i) => (i % step === 0 || i === n - 1)
+      ? `<text x="${(pL + gap * i + gap / 2).toFixed(1)}" y="${H - 8}" text-anchor="middle" style="fill:var(--text3)" font-size="9">${l}</text>` : '').join('');
+    return `<svg viewBox="0 0 ${W} ${H}" width="100%" preserveAspectRatio="xMidYMid meet" style="display:block">${grid}${bars}${xl}</svg>`;
+  },
+
   /* ── BARRAS HORIZONTALES (rankings) ────────────────
      opts = { data:[{label, valor}], colorVar } */
   barrasH({ data, colorVar = 'amber' }) {

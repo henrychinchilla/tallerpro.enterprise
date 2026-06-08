@@ -5,11 +5,12 @@ Modulos.dashboard = {
     UI.loading(el, 'Cargando dashboard...');
 
     const hoyStr = new Date().toISOString().slice(0, 10);
-    const [kpi, dd, citas, ordenes] = await Promise.all([
+    const [kpi, dd, citas, ordenes, fb] = await Promise.all([
       DB.getKPIs(),
       DB.getDashboardData(),
       DB.getCitas(hoyStr, hoyStr).catch(() => []),
-      DB.getOrdenes().catch(() => [])
+      DB.getOrdenes().catch(() => []),
+      DB.getFeedback().catch(() => [])
     ]);
     const ahora = new Date();
     const mes = ahora.toLocaleDateString('es-GT', { month: 'long', year: 'numeric' });
@@ -20,6 +21,25 @@ Modulos.dashboard = {
     /* Utilidad del mes actual (último bucket) */
     const actual = dd.meses[dd.meses.length - 1] || { ingresos: 0, egresos: 0 };
     const utilidad = actual.ingresos - actual.egresos;
+
+    /* Métricas BI para las tarjetas hero (anillos de %) */
+    const margen      = kpi.ingresos > 0 ? Math.round(utilidad / kpi.ingresos * 100) : 0;
+    const totalOT     = ordenes.length;
+    const entregadas  = ordenes.filter(o => o.estado === 'entregado').length;
+    const pctEntreg   = totalOT ? Math.round(entregadas / totalOT * 100) : 0;
+    const rts = [];
+    fb.forEach(f => { if (f.rating_servicio) rts.push(f.rating_servicio); if (f.rating_productos) rts.push(f.rating_productos); });
+    const satis = rts.length ? Math.round(rts.filter(r => r >= 4).length / rts.length * 100) : 0;
+
+    const hero = (label, valor, sub, pct, colorVar, destino) => `
+      <div class="card" style="display:flex;align-items:center;gap:16px${destino ? ';cursor:pointer' : ''}" ${destino ? `onclick="App.navegarA('${destino}')"` : ''}>
+        ${Charts.gauge({ pct, colorVar, size: 104, grosor: 13 })}
+        <div style="min-width:0">
+          <div class="kpi-label">${label}</div>
+          <div style="font-size:25px;font-weight:800;color:var(--${colorVar});line-height:1.1">${valor}</div>
+          <div class="kpi-trend">${sub}</div>
+        </div>
+      </div>`;
 
     /* Gráfica de tendencia (6 meses) */
     const trend = Charts.areaLineas({
@@ -41,10 +61,10 @@ Modulos.dashboard = {
     /* Ingresos por día (mes actual) */
     const totalDiario = dd.ingresosDiarios.reduce((s, d) => s + d.monto, 0);
     const diario = totalDiario > 0
-      ? Charts.areaLineas({
+      ? Charts.barrasV({
           labels: dd.ingresosDiarios.map(d => d.dia),
-          series: [{ nombre: 'Ingresos', colorVar: 'cyan', area: true, valores: dd.ingresosDiarios.map(d => d.monto) }],
-          alto: 200
+          valores: dd.ingresosDiarios.map(d => d.monto),
+          colorVar: 'cyan', alto: 200, money: true
         })
       : UI.vacio('📅', 'Sin ingresos este mes', 'Aún no hay movimientos registrados');
 
@@ -85,10 +105,17 @@ Modulos.dashboard = {
           ${tieneAcceso('calendario') ? `<button class="quick-btn" onclick="App.navegarA('calendario')"><span class="quick-ico">📅</span>Agenda</button>` : ''}
         </div>
 
+        <!-- HERO BI: tarjetas con anillo de % -->
+        <div class="grid-3" style="margin-bottom:16px">
+          ${hero('Facturación del mes', UI.q(kpi.ingresos), `Margen ${margen}%`, margen, 'green', 'finanzas')}
+          ${hero('Órdenes entregadas', `${entregadas}/${totalOT}`, 'del total de OTs', pctEntreg, 'cyan', 'ordenes')}
+          ${hero('Satisfacción', `${satis}%`, `${fb.length} encuesta(s)`, satis, 'purple', 'marketing')}
+        </div>
+
         <div class="kpi-grid">
-          ${kpiCard('amber', 'Ingresos del Mes', kpi.ingresos, 'Facturas + ingresos directos', 'finanzas', true)}
           ${kpiCard(utilidad >= 0 ? 'green' : 'red', 'Utilidad del Mes', utilidad, 'Ingresos − egresos', 'finanzas', true)}
           ${kpiCard('cyan', 'Órdenes Activas', kpi.otsActivas, 'En proceso actualmente', 'ordenes')}
+          ${kpiCard('amber', 'Clientes', kpi.clientes, 'Registrados', 'clientes')}
           ${kpiCard(kpi.invBajo.length > 0 ? 'red' : 'gray', 'Stock Bajo', kpi.invBajo.length, kpi.invBajo.length > 0 ? 'Artículos bajo mínimo' : 'Inventario OK', 'inventario')}
         </div>
 
