@@ -521,26 +521,67 @@ Modulos.ordenes = {
     win.document.close();
   },
 
+  /* Opciones del select de vehículos filtradas por cliente */
+  _opcionesVehiculo(clienteId, selVeh) {
+    if (!clienteId) return '<option value="">Primero elige un cliente...</option>';
+    const vehs = this._vehiculos.filter(v => v.cliente_id === clienteId);
+    if (!vehs.length) return '<option value="">Este cliente no tiene vehículos — regístralo en Vehículos</option>';
+    return '<option value="">Seleccionar vehículo...</option>' +
+      vehs.map(v=>`<option value="${v.id}" ${selVeh===v.id?'selected':''}>${v.placa} · ${v.marca} ${v.modelo} ${v.anio||''}</option>`).join('');
+  },
+
+  /* Tarjeta con los datos de contacto del cliente seleccionado */
+  _clienteInfoHtml(clienteId) {
+    const c = clienteId ? this._clientes.find(x=>x.id===clienteId) : null;
+    if (!c) return '';
+    return `<div class="card" style="background:var(--surface2);padding:10px 12px;margin-bottom:12px;font-size:12px">
+      <div style="display:flex;gap:16px;flex-wrap:wrap">
+        <span><b>👤 ${c.nombre}</b></span>
+        <span class="text-muted">📞 ${c.tel||'—'}</span>
+        <span class="text-muted">🆔 NIT: ${c.nit||'CF'}</span>
+        ${c.email?`<span class="text-muted">✉️ ${c.email}</span>`:''}
+      </div></div>`;
+  },
+
+  /* Al cambiar el cliente: filtra sus vehículos y muestra su info */
+  _onClienteChange() {
+    const cliId = document.getElementById('ot-cli')?.value || null;
+    const veh = document.getElementById('ot-veh');
+    if (veh) veh.innerHTML = this._opcionesVehiculo(cliId, null);
+    const info = document.getElementById('ot-cli-info');
+    if (info) info.innerHTML = this._clienteInfoHtml(cliId);
+  },
+
   /* ── MODAL FORM ───────────────────────────── */
-  async modalForm(id=null) {
-    const o = id ? (this._data.find(x=>x.id===id)||await DB.getOrden(id)) : {};
+  async modalForm(id=null, vehiculoId=null) {
+    let o = id ? (this._data.find(x=>x.id===id)||await DB.getOrden(id)) : {};
+    /* OT nueva desde un vehículo: preseleccionar su cliente y vehículo */
+    if (!id && vehiculoId) {
+      const v = this._vehiculos.find(x=>x.id===vehiculoId);
+      if (v) o = { vehiculo_id: v.id, cliente_id: v.cliente_id };
+    }
     const esEdicion = !!id;
     this._fotos = [];
 
     UI.modal(`${esEdicion?'✏️ Editar':'＋ Nueva'} Orden de Trabajo`, `
       ${esEdicion?'<div class="alert alert-amber" style="margin-bottom:12px"><div class="alert-icon">⚠️</div><div class="alert-body" style="font-size:11px">Los cambios reemplazarán la información actual de la orden.</div></div>':''}
       <div class="form-row">
-        <div class="form-group"><label class="form-label">Vehículo *</label>
-          <select class="form-select" id="ot-veh">
-            <option value="">Seleccionar...</option>
-            ${this._vehiculos.map(v=>`<option value="${v.id}" data-cliente="${v.cliente_id}" ${(o.vehiculo_id===v.id)?'selected':''}>${v.placa} · ${v.marca} ${v.modelo}</option>`).join('')}
+        <div class="form-group"><label class="form-label">Cliente *</label>
+          <select class="form-select" id="ot-cli" onchange="Modulos.ordenes._onClienteChange()">
+            <option value="">Seleccionar cliente...</option>
+            ${this._clientes.map(c=>`<option value="${c.id}" ${o.cliente_id===c.id?'selected':''}>${c.nombre}${c.nit?` — NIT ${c.nit}`:''}</option>`).join('')}
           </select></div>
-        <div class="form-group"><label class="form-label">Mecánico</label>
-          <select class="form-select" id="ot-mec">
-            <option value="">Sin asignar</option>
-            ${this._mecanicos.filter(e=>['mecanico','gerente_tal'].includes(e.rol)).map(e=>`<option value="${e.id}" ${o.mecanico_id===e.id?'selected':''}>${e.nombre}</option>`).join('')}
+        <div class="form-group"><label class="form-label">Vehículo del cliente *</label>
+          <select class="form-select" id="ot-veh">
+            ${this._opcionesVehiculo(o.cliente_id||null, o.vehiculo_id||null)}
           </select></div>
       </div>
+      <div id="ot-cli-info">${this._clienteInfoHtml(o.cliente_id)}</div>
+      <div class="form-group"><label class="form-label">Mecánico asignado</label>
+        <select class="form-select" id="ot-mec">
+          <option value="">Sin asignar</option>
+          ${this._mecanicos.filter(e=>['mecanico','gerente_tal'].includes(e.rol)).map(e=>`<option value="${e.id}" ${o.mecanico_id===e.id?'selected':''}>${e.nombre}</option>`).join('')}
+        </select></div>
       <div class="form-group"><label class="form-label">Descripción del Trabajo *</label>
         <textarea class="form-input" id="ot-desc" rows="3" placeholder="Descripción general del trabajo a realizar...">${o.descripcion||''}</textarea></div>
       <div class="form-row">
@@ -596,13 +637,13 @@ Modulos.ordenes = {
   },
 
   async guardar(id='') {
-    const vehSel = document.getElementById('ot-veh');
-    const vehId  = vehSel?.value;
+    const cliId  = document.getElementById('ot-cli')?.value || null;
+    const vehId  = document.getElementById('ot-veh')?.value || null;
     const desc   = document.getElementById('ot-desc')?.value.trim();
-    if (!vehId)  { UI.toast('Selecciona un vehículo','error'); return; }
+    if (!cliId)  { UI.toast('Selecciona un cliente','error'); return; }
+    if (!vehId)  { UI.toast('Selecciona el vehículo del cliente','error'); return; }
     if (!desc)   { UI.toast('La descripción es obligatoria','error'); return; }
 
-    const cliId = vehSel.options[vehSel.selectedIndex]?.dataset.cliente || null;
     const fields = {
       vehiculo_id:    vehId,
       cliente_id:     cliId,
