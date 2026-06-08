@@ -158,10 +158,10 @@ Deno.serve(async (req) => {
     .select("tenant_id, rol").eq("id", userData.user.id).maybeSingle();
   let tenantId = (perfil as any)?.tenant_id;
   const rol = (perfil as any)?.rol;
-  const elevado = userData.user.email === "henry.chinchilla@gmail.com" ||
+  const elevado = userData.user.email?.toLowerCase() === "henry.chinchilla@gmail.com" ||
     ["superadmin", "admin", "gerente_fin", "gerente_tal"].includes(rol);
 
-  if (!tenantId && elevado) {
+  if (!tenantId) {
     const { data: t } = await admin.from("tenants").select("id").limit(1).maybeSingle();
     tenantId = t?.id;
   }
