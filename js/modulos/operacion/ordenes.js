@@ -382,6 +382,7 @@ Modulos.ordenes = {
                 <button class="btn btn-sm btn-green" onclick="Modulos.ordenes.responderTrabajoExterno('${ordenId}','${t.id}',true)">✓ Cliente autorizó</button>
                 <button class="btn btn-sm btn-danger" onclick="Modulos.ordenes.responderTrabajoExterno('${ordenId}','${t.id}',false)">✗ Cliente rechazó</button>`:''}
               ${(['autorizado','en_proceso','completado'].includes(t.estado) && !t.cargado_ot) ? `<button class="btn btn-sm btn-amber" onclick="Modulos.ordenes.cargarTrabajoAOT('${ordenId}','${t.id}')" title="Agregar el costo a la OT/factura">🧾 Cargar a OT</button>`:''}
+              ${t.estado!=='rechazado' ? `<button class="btn btn-sm btn-ghost" onclick="Modulos.ordenes.envioDeTrabajo('${ordenId}','${t.id}')" title="Registrar envío al proveedor">🚚 Envío</button>`:''}
               <button class="btn btn-sm btn-ghost" onclick="Modulos.ordenes.modalTrabajoExterno('${ordenId}','${t.id}')" title="Editar">✏️</button>
               <button class="btn btn-sm btn-danger" onclick="Modulos.eliminarRegistro('trabajos_externos','${t.id}','${(t.descripcion||'').replace(/'/g,"\\'")}',()=>Modulos.ordenes.verDetalle('${ordenId}'))" title="Eliminar">🗑️</button>
             </div>
@@ -512,6 +513,19 @@ Modulos.ordenes = {
     if (error) { UI.toast('Error: '+error.message,'error'); return; }
     UI.toast(autoriza ? 'Autorización registrada ✓' : 'Rechazo documentado ✓ — sin nuevas acciones');
     this.verDetalle(ordenId);
+  },
+
+  /* Abre el registro de envío al proveedor pre-llenado desde el trabajo externo */
+  async envioDeTrabajo(ordenId, teId) {
+    const te = (await DB.getTrabajosExternos(ordenId)).find(x=>x.id===teId);
+    if (!te || !Modulos.envios) { UI.toast('Módulo de envíos no disponible','error'); return; }
+    Modulos.envios.modalForm('', {
+      tipo: 'proveedor',
+      descripcion: `Envío a proveedor: ${te.descripcion}`,
+      destinatario: te.proveedor || '',
+      orden_id: ordenId,
+      trabajo_externo_id: teId
+    });
   },
 
   /* Vuelca el costo (servicio + envío + comisión) a la OT como ítems → factura */

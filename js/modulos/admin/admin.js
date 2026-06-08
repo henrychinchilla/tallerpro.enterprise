@@ -259,7 +259,7 @@ Modulos.admin = {
     config_integraciones:'Integraciones', config_productividad:'Config. productividad',
     empleado_documentos:'Documento de empleado', kpi_empleado:'KPI de empleado',
     activos:'Activo / herramienta', presupuesto:'Presupuesto',
-    trabajos_externos:'Trabajo externo', tenants:'Taller'
+    trabajos_externos:'Trabajo externo', envios:'Envío / flete', tenants:'Taller'
   },
 
   async _renderAuditoria() {
@@ -362,7 +362,7 @@ Modulos.admin = {
 
   async exportarBackupCompleto() {
     UI.toast('Generando backup completo...', 'info', 8000);
-    const tablas = ['clientes','vehiculos','ordenes','ot_items','trabajos_externos','inventario',
+    const tablas = ['clientes','vehiculos','ordenes','ot_items','trabajos_externos','envios','inventario',
                     'inventario_movimientos','proveedores','activos','empleados','empleado_documentos',
                     'kpi_empleado','pagos_nomina','viaticos','ingresos','egresos','egresos_recurrentes',
                     'presupuesto','facturas','factura_items','bancos','banco_movimientos','bodegas',
@@ -506,7 +506,7 @@ Modulos.admin = {
     /* Orden de borrado respetando llaves foráneas (hijos antes que padres;
        pagos_nomina/viaticos/citas/facturas/ordenes son NO ACTION). */
     const tablas = [
-      'trabajos_externos','ot_items','factura_items','banco_movimientos','inventario_movimientos',
+      'envios','trabajos_externos','ot_items','factura_items','banco_movimientos','inventario_movimientos',
       'kpi_empleado','empleado_documentos','pagos_nomina','viaticos','citas',
       'facturas','ordenes','vehiculos','bancos','inventario','empleados',
       'activos','egresos_recurrentes','presupuesto','config_productividad',

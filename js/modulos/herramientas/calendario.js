@@ -8,16 +8,20 @@ Modulos.calendario = {
     const hoy = new Date();
     const ini = new Date(hoy.getFullYear(), hoy.getMonth(), 1).toISOString();
     const fin = new Date(hoy.getFullYear(), hoy.getMonth()+2, 0).toISOString();
-    let vencDocs = [], recurrentes = [];
-    [this._citas, this._clientes, this._vehiculos, this._empleados, vencDocs, recurrentes] = await Promise.all([
+    let vencDocs = [], recurrentes = [], envios = [];
+    [this._citas, this._clientes, this._vehiculos, this._empleados, vencDocs, recurrentes, envios] = await Promise.all([
       DB.getCitas(ini.slice(0,10), fin.slice(0,10)), DB.getClientes(), DB.getVehiculos(), DB.getEmpleados(),
-      DB.getVencimientosDocumentos(60).catch(()=>[]), DB.getEgresosRecurrentes().catch(()=>[])
+      DB.getVencimientosDocumentos(60).catch(()=>[]), DB.getEgresosRecurrentes().catch(()=>[]),
+      DB.getEnvios({archivado:false}).catch(()=>[])
     ]);
 
     const hoyStr = hoy.toISOString().slice(0,10);
     /* Pagos recurrentes como eventos del calendario (mes actual y siguiente) */
     const pagos = this._pagosEventos(recurrentes, hoy);
-    const eventos = [...this._citas, ...pagos]
+    const enviosEv = (envios||[])
+      .filter(e=>e.fecha_entrega_estimada && e.estado!=='cerrado')
+      .map(e=>({ _envio:true, id:e.id, titulo:e.descripcion, tipo:e.tipo, fecha_cita:`${e.fecha_entrega_estimada}T10:00:00` }));
+    const eventos = [...this._citas, ...pagos, ...enviosEv]
       .sort((a,b)=>(a.fecha_cita||'').localeCompare(b.fecha_cita||''));
     const citasHoy = eventos.filter(c=>c.fecha_cita?.slice(0,10)===hoyStr);
     const citasProx = eventos.filter(c=>c.fecha_cita?.slice(0,10)>hoyStr).slice(0,6);
@@ -100,6 +104,17 @@ Modulos.calendario = {
   _renderCitaCard(c, conFecha=false) {
     const hora = c.fecha_cita ? new Date(c.fecha_cita).toLocaleTimeString('es-GT',{hour:'2-digit',minute:'2-digit'}) : '';
     const fecha = c.fecha_cita ? new Date(c.fecha_cita).toLocaleDateString('es-GT',{day:'numeric',month:'short'}) : '';
+    /* Evento de envío / flete (entrega estimada) */
+    if (c._envio) {
+      return `<div style="padding:10px;border-left:3px solid var(--cyan);margin-bottom:8px;background:var(--surface2);border-radius:0 8px 8px 0;cursor:pointer"
+           onclick="App.navegarA('envios')">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <div style="font-weight:700;font-size:13px">🚚 ${c.titulo}</div>
+          <div style="font-size:11px;color:var(--cyan)">${conFecha?fecha+' ':''}${hora}</div>
+        </div>
+        <div style="font-size:11px;color:var(--text3);margin-top:2px">Entrega estimada de envío</div>
+      </div>`;
+    }
     /* Evento de pago recurrente (no es una cita real) */
     if (c._pago) {
       return `<div style="padding:10px;border-left:3px solid var(--red);margin-bottom:8px;background:var(--surface2);border-radius:0 8px 8px 0;cursor:pointer"

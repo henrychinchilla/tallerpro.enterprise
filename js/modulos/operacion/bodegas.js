@@ -269,6 +269,43 @@ Modulos.bodegas = {
       </div>
       <div class="form-group"><label class="form-label">Motivo del traslado</label>
         <input class="form-input" id="trs-motivo" placeholder="Reposición, redistribución, etc."></div>
+
+      <div style="border-top:1px solid var(--border);margin-top:6px;padding-top:10px">
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px">
+          <input type="checkbox" id="trs-flete-on" onchange="Modulos.bodegas._toggleFlete()"> 🚚 Registrar flete / envío de este traslado
+        </label>
+        <div id="trs-flete-box" style="display:none;margin-top:10px">
+          <div class="form-row">
+            <div class="form-group"><label class="form-label">¿Cómo se envía?</label>
+              <select class="form-select" id="trs-flete-tipo" onchange="Modulos.bodegas._toggleFlete()">
+                <option value="interno">🏠 Nosotros mismos</option>
+                <option value="externo">🚚 Transporte externo</option>
+              </select></div>
+            <div class="form-group"><label class="form-label">Entrega estimada</label>
+              <input class="form-input" id="trs-festimada" type="date"></div>
+          </div>
+          <div id="trs-flete-interno">
+            <div class="form-row">
+              <div class="form-group"><label class="form-label">Medio</label>
+                <select class="form-select" id="trs-medio">${['moto','vehiculo','camion','cabezal','otro'].map(m=>`<option value="${m}">${m}</option>`).join('')}</select></div>
+              <div class="form-group"><label class="form-label">Responsable</label>
+                <input class="form-input" id="trs-resp"></div>
+            </div>
+            <div class="form-row">
+              <div class="form-group"><label class="form-label">Viáticos (Q)</label><input class="form-input" id="trs-viaticos" type="number" min="0" step="0.01" value="0"></div>
+              <div class="form-group"><label class="form-label">Combustible (Q)</label><input class="form-input" id="trs-combustible" type="number" min="0" step="0.01" value="0"></div>
+            </div>
+          </div>
+          <div id="trs-flete-externo" style="display:none">
+            <div class="form-row">
+              <div class="form-group"><label class="form-label">Empresa de transporte</label><input class="form-input" id="trs-empresa" placeholder="Cargo Expreso..."></div>
+              <div class="form-group"><label class="form-label">Costo del flete (Q)</label><input class="form-input" id="trs-fcosto" type="number" min="0" step="0.01" value="0"></div>
+            </div>
+            <div class="form-group"><label class="form-label">No. de envío / guía</label><input class="form-input" id="trs-fnum"></div>
+          </div>
+        </div>
+      </div>
+
       <div class="alert alert-amber" style="margin-top:8px">
         <div class="alert-icon">ℹ️</div>
         <div class="alert-body" style="font-size:11px">
@@ -288,6 +325,15 @@ Modulos.bodegas = {
       const sel = document.getElementById('trs-item');
       if (sel) { sel.value = invId; Modulos.bodegas._updateMaxStock(sel); }
     }
+  },
+
+  _toggleFlete() {
+    const on = document.getElementById('trs-flete-on')?.checked;
+    const box = document.getElementById('trs-flete-box'); if (box) box.style.display = on ? 'block' : 'none';
+    const tipo = document.getElementById('trs-flete-tipo')?.value;
+    const i = document.getElementById('trs-flete-interno'), e = document.getElementById('trs-flete-externo');
+    if (i) i.style.display = tipo === 'externo' ? 'none' : 'block';
+    if (e) e.style.display = tipo === 'externo' ? 'block' : 'none';
   },
 
   _updateMaxStock(sel) {
@@ -358,6 +404,31 @@ Modulos.bodegas = {
       notas:         motivo,
       fecha:         new Date().toISOString().slice(0,10)
     });
+
+    /* Registrar flete / envío del traslado si se solicitó */
+    if (document.getElementById('trs-flete-on')?.checked) {
+      const tipoF = document.getElementById('trs-flete-tipo')?.value || 'interno';
+      const nm = elId => parseFloat(document.getElementById(elId)?.value) || 0;
+      const via = tipoF==='interno' ? nm('trs-viaticos') : 0;
+      const comb = tipoF==='interno' ? nm('trs-combustible') : 0;
+      const flete = tipoF==='interno' ? 0 : nm('trs-fcosto');
+      const destNombre = destId ? (this._bodegas.find(b=>b.id===destId)?.nombre || 'Bodega') : 'Taller Principal';
+      await DB.upsertEnvio({
+        tipo: tipoF,
+        descripcion: `Traslado: ${origen.nombre} (${cant}) → ${destNombre}`,
+        destinatario: destNombre,
+        bodega_origen_id: desdeBodegaId || null,
+        bodega_destino_id: destId || null,
+        medio: tipoF==='interno' ? (document.getElementById('trs-medio')?.value || null) : null,
+        responsable: tipoF==='interno' ? (document.getElementById('trs-resp')?.value || null) : null,
+        empresa_transporte: tipoF==='externo' ? (document.getElementById('trs-empresa')?.value || null) : null,
+        numero_envio: tipoF==='externo' ? (document.getElementById('trs-fnum')?.value || null) : null,
+        costo_flete: flete, viaticos: via, combustible: comb, costo_total: flete+via+comb,
+        fecha_envio: new Date().toISOString().slice(0,10),
+        fecha_entrega_estimada: document.getElementById('trs-festimada')?.value || null,
+        estado: 'programado'
+      }).catch(()=>{});
+    }
 
     UI.cerrarModal();
     UI.toast(`✓ Trasladadas ${cant} ${origen.unidad_medida||''} de "${origen.nombre}" desde ${desdeBodegaNombre}`);

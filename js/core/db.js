@@ -205,6 +205,25 @@ const DB = {
     return { data, error };
   },
 
+  /* ── ENVÍOS / FLETES (logística) ───────────────── */
+  async getEnvios({ archivado = false } = {}) {
+    const { data } = await getSB().from('envios').select('*')
+      .eq('tenant_id', getTID()).eq('archivado', archivado)
+      .order('fecha_envio', { ascending: false, nullsFirst: false })
+      .order('created_at', { ascending: false });
+    return data || [];
+  },
+
+  async upsertEnvio(fields) {
+    const payload = { ...fields, tenant_id: getTID(), updated_at: new Date().toISOString() };
+    if (fields.id) {
+      const { error } = await getSB().from('envios').update(payload).eq('id', fields.id);
+      return { error };
+    }
+    const { data, error } = await getSB().from('envios').insert(payload).select().single();
+    return { data, error };
+  },
+
   /* ── INVENTARIO ───────────────────────────────── */
   async getInventario(busca=null, bodega=null) {
     let q = getSB().from('inventario').select('*').eq('tenant_id', getTID()).order('nombre');
