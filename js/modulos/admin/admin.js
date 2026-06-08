@@ -253,9 +253,13 @@ Modulos.admin = {
     inventario:'Inventario', inventario_movimientos:'Movimiento de inventario', bodegas:'Bodega',
     proveedores:'Proveedor', facturas:'Factura', factura_items:'Línea de factura', empleados:'Empleado',
     usuarios:'Usuario', bancos:'Cuenta bancaria', banco_movimientos:'Movimiento bancario',
-    ingresos:'Ingreso', egresos:'Egreso', combos:'Combo', promociones:'Promoción', citas:'Cita',
+    ingresos:'Ingreso', egresos:'Egreso', egresos_recurrentes:'Gasto recurrente',
+    combos:'Combo', promociones:'Promoción', citas:'Cita',
     pagos_nomina:'Pago de nómina', viaticos:'Viático', licencias:'Licencia', config_fiscal:'Config. fiscal',
-    config_integraciones:'Integraciones', empleado_documentos:'Documento de empleado', tenants:'Taller'
+    config_integraciones:'Integraciones', config_productividad:'Config. productividad',
+    empleado_documentos:'Documento de empleado', kpi_empleado:'KPI de empleado',
+    activos:'Activo / herramienta', presupuesto:'Presupuesto',
+    trabajos_externos:'Trabajo externo', tenants:'Taller'
   },
 
   async _renderAuditoria() {
@@ -358,9 +362,11 @@ Modulos.admin = {
 
   async exportarBackupCompleto() {
     UI.toast('Generando backup completo...', 'info', 8000);
-    const tablas = ['clientes','vehiculos','ordenes','ot_items','inventario','proveedores',
-                    'empleados','ingresos','egresos','facturas','bancos','banco_movimientos',
-                    'bodegas','combos','promociones','citas','pagos_nomina','viaticos'];
+    const tablas = ['clientes','vehiculos','ordenes','ot_items','trabajos_externos','inventario',
+                    'inventario_movimientos','proveedores','activos','empleados','empleado_documentos',
+                    'kpi_empleado','pagos_nomina','viaticos','ingresos','egresos','egresos_recurrentes',
+                    'presupuesto','facturas','factura_items','bancos','banco_movimientos','bodegas',
+                    'combos','promociones','citas','config_fiscal','config_productividad'];
     const backup = { version:'3.0', fecha: new Date().toISOString(), taller: Auth.tenant, licencia: Auth.licencia };
 
     for (const tabla of tablas) {
@@ -497,13 +503,19 @@ Modulos.admin = {
     const tid = getTID();
     const licencia = await DB.getLicencia();
 
-    const tablas = ['banco_movimientos','ot_items','bancos','citas','combos','egresos',
-      'empleado_documentos','empleados','facturas','ingresos','inventario_movimientos',
-      'inventario','ordenes','pagos_nomina','promociones','proveedores','vehiculos',
-      'viaticos','bodegas','clientes'];
+    /* Orden de borrado respetando llaves foráneas (hijos antes que padres;
+       pagos_nomina/viaticos/citas/facturas/ordenes son NO ACTION). */
+    const tablas = [
+      'trabajos_externos','ot_items','factura_items','banco_movimientos','inventario_movimientos',
+      'kpi_empleado','empleado_documentos','pagos_nomina','viaticos','citas',
+      'facturas','ordenes','vehiculos','bancos','inventario','empleados',
+      'activos','egresos_recurrentes','presupuesto','config_productividad',
+      'combos','promociones','egresos','ingresos','proveedores','bodegas','clientes'
+    ];
 
     for (const t of tablas) {
-      await getSB().from(t).delete().eq('tenant_id',tid);
+      const { error } = await getSB().from(t).delete().eq('tenant_id',tid);
+      if (error) console.warn(`Borrado ${t}:`, error.message);
     }
 
     await getSB().from('usuarios').delete()
