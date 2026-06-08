@@ -16,15 +16,20 @@
   --text:#E2E8F0; --text2:#94A3B8; --text3:#4A5568;
 }
 [data-theme="light"] {
-  --bg:#F0F4F8; --surface:#FFFFFF; --surface2:#F8FAFC; --surface3:#EEF2F7;
-  --border:rgba(0,0,0,0.08);
-  --amber:#B45309; --amber-dim:rgba(180,83,9,0.06); --amber-border:rgba(180,83,9,0.2);
-  --cyan:#0369A1; --cyan-dim:rgba(3,105,161,0.06); --cyan-border:rgba(3,105,161,0.2);
-  --green:#047857; --green-dim:rgba(4,120,87,0.06); --green-border:rgba(4,120,87,0.2);
-  --red:#B91C1C; --red-dim:rgba(185,28,28,0.06); --red-border:rgba(185,28,28,0.2);
-  --purple:#6D28D9; --purple-dim:rgba(109,40,217,0.06); --purple-border:rgba(109,40,217,0.2);
-  --text:#1E293B; --text2:#475569; --text3:#94A3B8;
+  --bg:#E7ECF3; --surface:#FFFFFF; --surface2:#F2F5F9; --surface3:#E3E9F1;
+  --border:rgba(15,23,42,0.16);
+  --amber:#B45309; --amber-dim:rgba(180,83,9,0.13); --amber-border:rgba(180,83,9,0.38);
+  --cyan:#0369A1; --cyan-dim:rgba(3,105,161,0.12); --cyan-border:rgba(3,105,161,0.38);
+  --green:#047857; --green-dim:rgba(4,120,87,0.13); --green-border:rgba(4,120,87,0.38);
+  --red:#B91C1C; --red-dim:rgba(185,28,28,0.12); --red-border:rgba(185,28,28,0.38);
+  --purple:#6D28D9; --purple-dim:rgba(109,40,217,0.12); --purple-border:rgba(109,40,217,0.38);
+  --gray:#475569; --gray-dim:rgba(71,85,105,0.12);
+  --text:#0F172A; --text2:#334155; --text3:#5A6678;
 }
+/* En claro, los acentos son oscuros → texto blanco en botones sólidos para máximo contraste */
+[data-theme="light"] .btn-amber,
+[data-theme="light"] .btn-cyan:hover,
+[data-theme="light"] .btn-green:hover { color:#fff; }
 [data-theme="midnight"] {
   --bg:#050810; --surface:#0A0F1E; --surface2:#0F1628; --surface3:#141E35;
   --border:rgba(99,102,241,0.12);
