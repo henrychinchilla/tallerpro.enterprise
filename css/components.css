@@ -230,97 +230,141 @@
   .dash-charts { grid-template-columns: 1fr; }
 }
 
-/* ── ORGANIGRAMA (ORGANIZATION CHART) ────────────── */
-.org-tree {
-  max-width: 800px;
-  margin: 0 auto;
-  padding: 16px;
+/* ── ORGANIGRAMA HORIZONTAL TOP-DOWN ──────────────── */
+.org-container {
+  width: 100%;
+  overflow-x: auto;
+  padding: 40px 20px;
   background: var(--surface);
-  border-radius: 12px;
+  border-radius: 14px;
   border: 1px solid var(--border);
+  display: flex;
+  justify-content: center;
+  -webkit-overflow-scrolling: touch;
 }
-.org-group {
+.org-tree, .org-tree ul {
+  display: flex;
+  justify-content: center;
+  padding-top: 20px;
+  position: relative;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  transition: all 0.2s;
+}
+.org-tree {
+  padding-top: 0;
+}
+.org-tree li {
   display: flex;
   flex-direction: column;
-}
-.org-item {
+  align-items: center;
   position: relative;
-  padding-left: 36px;
+  padding: 20px 8px 0 8px;
+  transition: all 0.2s;
 }
-/* Línea vertical para conectar con hermanos inferiores */
-.org-item::before {
-  content: "";
+/* Conectores horizontales y verticales desde los lados */
+.org-tree li::before, .org-tree li::after {
+  content: '';
   position: absolute;
-  left: 14px;
-  top: -8px;
-  bottom: 0;
-  width: 2px;
-  background: var(--border);
+  top: 0;
+  right: 50%;
+  border-top: 2px solid var(--border);
+  width: 50%;
+  height: 20px;
 }
-/* Detener la línea vertical en el último hijo */
-.org-item:last-child::before {
-  height: 28px;
-  bottom: auto;
+.org-tree li::after {
+  right: auto;
+  left: 50%;
+  border-left: 2px solid var(--border);
 }
-/* Conector horizontal para cada nodo */
-.org-item::after {
-  content: "";
-  position: absolute;
-  left: 14px;
-  top: 20px;
-  width: 22px;
-  height: 2px;
-  background: var(--border);
-}
-/* El nodo raíz no lleva conectores ni sangrado */
-.org-item.org-root {
-  padding-left: 0;
-}
-.org-item.org-root::before,
-.org-item.org-root::after {
+/* Ocultar conectores de elementos únicos */
+.org-tree li:only-child::after, .org-tree li:only-child::before {
   display: none;
+}
+.org-tree li:only-child {
+  padding-top: 0;
+}
+/* Quitar bordes sobrantes en extremos */
+.org-tree li:first-child::before, .org-tree li:last-child::after {
+  border: 0 none;
+}
+/* Redondear esquinas en conectores de extremos */
+.org-tree li:last-child::before {
+  border-right: 2px solid var(--border);
+  border-radius: 0 8px 0 0;
+}
+.org-tree li:first-child::after {
+  border-radius: 8px 0 0 0;
+}
+/* Conector vertical descendente hacia los hijos */
+.org-tree ul::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 50%;
+  border-left: 2px solid var(--border);
+  width: 0;
+  height: 20px;
 }
 .org-card {
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 12px;
-  padding: 10px 16px;
+  text-align: center;
+  padding: 14px 18px;
   background: var(--surface2);
   border: 1px solid var(--border);
-  border-radius: 10px;
-  transition: all 0.2s ease;
-  z-index: 2;
+  border-radius: 12px;
+  min-width: 150px;
+  max-width: 190px;
   position: relative;
-  max-width: 450px;
-  margin-bottom: 8px;
+  z-index: 10;
+  transition: all 0.2s ease;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.02);
 }
 .org-card:hover {
   background: var(--surface3);
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.08);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.08);
+  border-color: var(--amber-border);
 }
 .org-card-avatar {
   font-size: 20px;
-  width: 36px;
-  height: 36px;
+  width: 38px;
+  height: 38px;
   border-radius: 50%;
   background: var(--surface3);
   display: flex;
   align-items: center;
   justify-content: center;
-  border: 1px solid var(--border);
-}
-.org-card-info {
-  flex: 1;
+  border: 2px solid var(--border);
+  margin-bottom: 8px;
+  box-shadow: inset 0 2px 4px rgba(0,0,0,0.02);
 }
 .org-card-name {
   font-weight: 700;
-  font-size: 13px;
+  font-size: 12px;
   color: var(--text);
+  line-height: 1.3;
 }
 .org-card-cargo {
   font-size: 11px;
   color: var(--text3);
+  margin-top: 2px;
+  line-height: 1.2;
+}
+.org-card-tag {
+  margin-top: 6px;
+  font-size: 9px;
+  padding: 1px 6px;
+  background: var(--amber-dim);
+  color: var(--amber);
+  border: 1px solid var(--amber-border);
+  border-radius: 20px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
 }
 
 /* ── PRINT ───────────────────────────────────────── */

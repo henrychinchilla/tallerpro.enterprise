@@ -112,7 +112,7 @@ Modulos.rrhh = {
             <b>Empleados → Editar → Reporta a</b>. La cúpula (CEO/Dueño/Gerente General) aparece arriba sin jefe.
           </div>
         </div>
-        ${this._empleados.length ? `<div class="org-tree"><div class="org-group">${arbol}</div></div>`
+        ${this._empleados.length ? `<div class="org-container"><div class="org-tree"><ul>${arbol}</ul></div></div>`
           : '<div class="text-muted" style="padding:20px">Sin empleados registrados.</div>'}`;
     }
 
@@ -165,28 +165,22 @@ Modulos.rrhh = {
     const dim = e.activo ? '' : 'opacity:.55;';
     const esRaiz = nivel === 0;
     
-    // HTML de los hijos recursivos
+    // HTML de los hijos recursivos (ul/li estructurados)
     const hijosHtml = hijos.length 
-      ? `<div class="org-group">${hijos.map(h => this._renderNodoOrg(h, byParent, nivel + 1, visited)).join('')}</div>` 
+      ? `<ul>${hijos.map(h => this._renderNodoOrg(h, byParent, nivel + 1, visited)).join('')}</ul>` 
       : '';
 
     return `
-      <div class="org-item ${esRaiz ? 'org-root' : ''}" style="${dim}">
-        <div class="org-card" style="border-left: 4px solid ${esRaiz ? 'var(--amber)' : 'var(--cyan)'}">
+      <li class="${esRaiz ? 'org-root' : ''}" style="${dim}">
+        <div class="org-card" style="border-top: 3px solid ${esRaiz ? 'var(--amber)' : 'var(--cyan)'}">
           <div class="org-card-avatar">${e.avatar || '👤'}</div>
-          <div class="org-card-info">
-            <div class="org-card-name">
-              ${e.nombre}
-              ${esRaiz ? ' <span class="badge badge-amber" style="font-size:9px;padding:1px 6px">cúpula</span>' : ''}
-            </div>
-            <div class="org-card-cargo">
-              ${e.cargo || ROLES[e.rol]?.label || '—'}
-              ${hijos.length ? ` · <span class="text-amber" style="font-weight:700">${hijos.length} a cargo</span>` : ''}
-            </div>
-          </div>
+          <div class="org-card-name">${e.nombre}</div>
+          <div class="org-card-cargo">${e.cargo || ROLES[e.rol]?.label || '—'}</div>
+          ${esRaiz ? '<div class="org-card-tag">Cúpula</div>' : ''}
+          ${hijos.length ? `<div style="font-size:10px;color:var(--text3);margin-top:4px;font-weight:700">${hijos.length} a cargo</div>` : ''}
         </div>
         ${hijosHtml}
-      </div>`;
+      </li>`;
   },
 
   async calcularNomina(mes, anio) {
