@@ -14,6 +14,7 @@ Modulos.bodegas = {
         <div><h1 class="page-title">🏭 Bodegas</h1>
         <p class="page-subtitle">// ${this._bodegas.length} bodegas/sucursales</p></div>
         <div class="page-actions">
+          <button class="btn btn-ghost" onclick="Modulos.traslados.render()">📋 Traslados</button>
           <button class="btn btn-ghost" onclick="Modulos.bodegas.exportar()">⬇ CSV</button>
           <button class="btn btn-ghost" onclick="Modulos.bodegas.importar()">⬆ Importar</button>
           <button class="btn btn-ghost" onclick="window.print()">🖨️ Imprimir</button>
@@ -54,8 +55,8 @@ Modulos.bodegas = {
                 <button class="btn btn-cyan btn-sm" onclick="Modulos.bodegas.verInventario('${b.id}','${b.nombre}')">
                   📦 Ver Inventario
                 </button>
-                <button class="btn btn-ghost btn-sm" onclick="Modulos.bodegas.modalTraslado('${b.id}','${b.nombre}')">
-                  🔄 Trasladar Stock
+                <button class="btn btn-ghost btn-sm" onclick="Modulos.traslados.nuevaSolicitud('${b.id}')">
+                  🔄 Solicitar Traslado
                 </button>
                 <button class="btn btn-ghost btn-sm" onclick="Modulos.bodegas.modalBodega('${b.id}')">
                   ✏️ Editar Bodega
@@ -89,7 +90,7 @@ Modulos.bodegas = {
         </div>
         <div class="page-actions">
           <button class="btn btn-ghost" onclick="Modulos.bodegas.render()">← Bodegas</button>
-          <button class="btn btn-ghost" onclick="Modulos.bodegas.modalTraslado('${bodegaId||''}','${nombre}')">🔄 Trasladar</button>
+          <button class="btn btn-ghost" onclick="Modulos.traslados.nuevaSolicitud('${bodegaId||''}')">🔄 Solicitar Traslado</button>
           <button class="btn btn-ghost" onclick="window.print()">🖨️ Imprimir</button>
           <button class="btn btn-amber" onclick="Modulos.bodegas.modalAgregarItem('${bodegaId||''}')">＋ Agregar Artículo</button>
         </div>
@@ -116,7 +117,7 @@ Modulos.bodegas = {
                   <td class="mono-sm text-amber">${UI.q(i.precio_venta)}</td>
                   <td><div style="display:flex;gap:4px">
                     <button class="btn btn-sm btn-ghost" onclick="Modulos.bodegas.modalMovimiento('${i.id}','${i.nombre}',${i.stock})">± Stock</button>
-                    <button class="btn btn-sm btn-ghost" onclick="Modulos.bodegas.modalTraslado('${bodegaId||''}','${nombre}','${i.id}','${i.nombre}')">🔄</button>
+                    <button class="btn btn-sm btn-ghost" onclick="Modulos.traslados.nuevaSolicitud('${bodegaId||''}')" title="Solicitar traslado">🔄</button>
                   </div></td>
                 </tr>`;
               }).join('')||`<tr><td colspan="${verCosto?8:7}" style="text-align:center;padding:24px;color:var(--text3)">Sin artículos en esta bodega</td></tr>`}

@@ -189,6 +189,15 @@ Modulos.ordenes = {
 
       ${this._renderTrabajosExternos(trabajos, id)}
 
+      <!-- DOCUMENTOS FIRMADOS -->
+      <div style="border-top:1px solid var(--border);padding-top:14px;margin-bottom:8px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+          <div style="font-weight:800;font-size:12px;color:var(--green);text-transform:uppercase;letter-spacing:.08em">📄 Documentos firmados</div>
+          <button class="btn btn-sm btn-green" onclick="Modulos.ordenes.firmarEntrega('${id}')">✍️ Firmar entrega</button>
+        </div>
+        <div id="ot-docs"></div>
+      </div>
+
       <!-- FOTOS -->
       ${fotos.length?`<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px">
         ${fotos.map(f=>`<img src="${f}" style="width:70px;height:70px;object-fit:cover;border-radius:6px;border:1px solid var(--border)">`).join('')}
@@ -202,6 +211,24 @@ Modulos.ordenes = {
         <button class="btn btn-cyan" onclick="UI.cerrarModal();Modulos.ordenes.modalForm('${id}')">✏️ Editar</button>
         ${o.estado==='listo'?`<button class="btn btn-green" onclick="Modulos.ordenes.enviarFacturacion('${id}')">🧾 Enviar a Facturación</button>`:''}
       </div>`,'720px');
+    Docs.render('orden', id, 'ot-docs');
+  },
+
+  /* Firma de entrega del vehículo (cliente + taller) → PDF en historial */
+  async firmarEntrega(id) {
+    const o = await DB.getOrden(id);
+    if (!o) return;
+    const { data: items } = await getSB().from('ot_items').select('*').eq('orden_id', id).order('orden_pos');
+    const doc = await Docs.firmarYGuardar({
+      entidad:'orden', entidadId:id, tipo:'entrega', titulo:`Entrega OT ${o.num||''}`,
+      firmantes:[ {key:'cliente',label:'Cliente', nombre:o.clientes?.nombre||''}, {key:'taller',label:'Por el taller', nombre:Auth.user?.nombre||''} ],
+      def:{ titulo:`Entrega de vehículo — OT ${o.num||''}`,
+        subtitulo:`${o.vehiculos?.placa||''} ${o.vehiculos?.marca||''} ${o.vehiculos?.modelo||''} ${o.vehiculos?.anio||''}`,
+        lineas:[{label:'Cliente',value:o.clientes?.nombre||'—'},{label:'NIT',value:o.clientes?.nit||'CF'},{label:'Total',value:UI.q(o.total)},{label:'Fecha',value:new Date().toLocaleString('es-GT')}],
+        tabla:{ head:['Trabajo','Cant','Total'], rows:(items||[]).map(i=>[i.descripcion, String(i.cantidad), UI.q(i.total)]) },
+        nota:'El cliente recibe conforme el vehículo y los trabajos detallados.' }
+    });
+    if (doc) this.verDetalle(id);
   },
 
   /* ── ITEMS ────────────────────────────────── */

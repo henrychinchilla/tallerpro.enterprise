@@ -749,6 +749,36 @@ const DB = {
     return { data, error };
   },
 
+  /* ── TRASLADOS (workflow con firmas) ───────────── */
+  async getTraslados() {
+    const { data } = await getSB().from('traslados').select('*')
+      .eq('tenant_id', getTID()).order('created_at', { ascending:false });
+    return data || [];
+  },
+  async getTrasladoItems(trasladoId) {
+    const { data } = await getSB().from('traslado_items').select('*').eq('traslado_id', trasladoId);
+    return data || [];
+  },
+  async upsertTraslado(fields) {
+    const payload = { ...fields, tenant_id: getTID(), updated_at: new Date().toISOString() };
+    if (fields.id) {
+      const { error } = await getSB().from('traslados').update(payload).eq('id', fields.id);
+      return { error };
+    }
+    const { count } = await getSB().from('traslados').select('*',{count:'exact',head:true}).eq('tenant_id',getTID());
+    payload.num = `TR-${new Date().getFullYear()}-${String((count||0)+1).padStart(4,'0')}`;
+    const { data, error } = await getSB().from('traslados').insert(payload).select().single();
+    return { data, error };
+  },
+  async insertTrasladoItems(trasladoId, items) {
+    if (!items?.length) return;
+    const rows = items.map(i => ({
+      tenant_id: getTID(), traslado_id: trasladoId, inventario_id: i.inventario_id||null,
+      nombre: i.nombre, cantidad: i.cantidad, unidad: i.unidad||null
+    }));
+    await getSB().from('traslado_items').insert(rows);
+  },
+
   /* ── MARKETING ────────────────────────────────── */
   async getCombos() {
     const { data } = await getSB().from('combos').select('*')
