@@ -278,13 +278,6 @@
   left: 50%;
   border-left: 2px solid var(--border);
 }
-/* Ocultar conectores de elementos únicos */
-.org-tree li:only-child::after, .org-tree li:only-child::before {
-  display: none;
-}
-.org-tree li:only-child {
-  padding-top: 0;
-}
 /* Quitar bordes sobrantes en extremos */
 .org-tree li:first-child::before, .org-tree li:last-child::after {
   border: 0 none;
@@ -296,6 +289,20 @@
 }
 .org-tree li:first-child::after {
   border-radius: 8px 0 0 0;
+}
+/* Caso especial: Elemento único (hijo único sin hermanos) */
+.org-tree li:only-child {
+  padding-top: 20px;
+}
+.org-tree li:only-child::before {
+  display: none;
+}
+.org-tree li:only-child::after {
+  border-left: 2px solid var(--border);
+  border-top: 0 none;
+  left: 50%;
+  right: auto;
+  display: block;
 }
 /* Conector vertical descendente hacia los hijos */
 .org-tree ul::before {
