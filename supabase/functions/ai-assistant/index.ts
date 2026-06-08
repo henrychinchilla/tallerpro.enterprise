@@ -1,22 +1,15 @@
 // ═══════════════════════════════════════════════════════
-// Edge Function: ai-assistant
-// Asistente de IA de TallerPro — proxy seguro a la API de Claude.
-//
-// La ANTHROPIC_API_KEY vive SOLO en el servidor (secret de Supabase),
-// nunca en el navegador. Usa fetch directo a la API (sin dependencias).
+// Edge Function: ai-assistant — "Beto", asistente mecánico de TallerPro.
+// Proxy seguro a la API de Claude. ANTHROPIC_API_KEY solo en el servidor.
+// 503 elegante si no está configurada.
 //
 // Modos:
-//   diagnostico → sugiere fallas/repuestos a partir de síntomas
+//   diagnostico → síntomas → fallas/repuestos probables
+//   tecnico     → códigos DTC/OBD-II, procedimientos, torques, manuales,
+//                 intervalos de mantenimiento (conocimiento general, sin datos del taller)
 //   redaccion   → redacta descripciones de OT, cotizaciones, mensajes
-//   chat        → responde preguntas en lenguaje natural sobre los datos
-//   insights    → resumen ejecutivo del negocio (ingresos, alertas, etc.)
-//
-// chat/insights se aterrizan en un snapshot del tenant del usuario
-// (consultado con service role, filtrado por su tenant_id).
-//
-// Deploy:  supabase functions deploy ai-assistant
-// Secrets: supabase secrets set ANTHROPIC_API_KEY=sk-ant-...
-// Opcionales: AI_MODEL (def. claude-opus-4-8), AI_EFFORT (def. medium)
+//   chat        → preguntas mixtas: datos del taller (snapshot) + conocimiento mecánico
+//   insights    → resumen ejecutivo del negocio
 // ═══════════════════════════════════════════════════════
 
 import { createClient } from "jsr:@supabase/supabase-js@2";
@@ -34,60 +27,110 @@ const json = (body: unknown, status = 200) =>
 
 const MODELO = Deno.env.get("AI_MODEL") ?? "claude-opus-4-8";
 const EFFORT = Deno.env.get("AI_EFFORT") ?? "medium";
+const NOMBRE = Deno.env.get("AI_NOMBRE") ?? "Beto";
 
-const BASE_GT = `Eres el asistente de IA de TallerPro, un sistema de gestión para talleres
-mecánicos en Guatemala. Respondes en español guatemalteco, claro y conciso.
-La moneda es el Quetzal (Q).`;
+const BASE_GT = `Eres ${NOMBRE}, el asistente mecánico de TallerPro, un sistema para talleres
+automotrices en Guatemala. Eres un hombre, mecánico experto, con trato amable y cercano.
+Hablas en español guatemalteco, claro y directo, de mecánico a mecánico. La moneda es el Quetzal (Q).`;
 
 const PROMPTS: Record<string, string> = {
   diagnostico: `${BASE_GT}
-Eres además un mecánico experto. A partir de los síntomas y datos del vehículo,
-sugiere las fallas más probables (ordenadas por probabilidad), los repuestos o
-revisiones que típicamente se necesitan, y una estimación de complejidad
-(baja/media/alta). Sé práctico. Advierte que es una sugerencia preliminar y que
-se debe confirmar con diagnóstico físico.`,
+A partir de los síntomas y datos del vehículo, sugiere las fallas más probables
+(ordenadas por probabilidad), los repuestos o revisiones que típicamente se necesitan,
+y una estimación de complejidad (baja/media/alta). Sé práctico. Advierte que es una
+sugerencia preliminar y que se debe confirmar con diagnóstico físico.`,
+  tecnico: `${BASE_GT}
+Responde consultas técnicas automotrices usando tu conocimiento de mecánica:
+- Códigos de falla DTC/OBD-II (ej. P0420, P0300): qué significan, causas probables,
+  pasos de diagnóstico y posibles soluciones.
+- Procedimientos de reparación y mantenimiento, herramientas, torques y capacidades.
+- Intervalos de mantenimiento preventivo por kilometraje/tiempo.
+Estructura la respuesta y sé práctico. Aclara cuando algo varía según marca/modelo/motor
+y recomienda confirmar con el manual del fabricante. Si no estás seguro de un dato exacto,
+dilo en lugar de inventarlo.`,
   redaccion: `${BASE_GT}
-Redacta el texto solicitado de forma profesional y breve. Si es un mensaje para
-un cliente, usa un tono amable y cercano. No inventes datos que no se te den.`,
+Redacta el texto solicitado de forma profesional y breve. Si es un mensaje para un cliente,
+usa un tono amable y cercano. No inventes datos que no se te den.`,
   chat: `${BASE_GT}
-Responde la pregunta del usuario usando ÚNICAMENTE el snapshot de datos del taller
-que se incluye. Si el dato no está en el snapshot, dilo claramente en vez de
-inventarlo. Cuando des cifras, formatéalas en Quetzales (Q).`,
+Tienes dos fuentes:
+1) Tu conocimiento técnico de mecánica (códigos DTC, diagnósticos, procedimientos,
+   torques, intervalos de mantenimiento, manuales) — úsalo libremente.
+2) El snapshot de datos del taller que se incluye — úsalo SOLO para preguntas sobre el
+   negocio (clientes, órdenes, ingresos, inventario, mantenimientos pendientes).
+Para datos del taller que NO estén en el snapshot, dilo claramente en vez de inventarlos.
+Cuando des cifras de dinero, formatéalas en Quetzales (Q).`,
   insights: `${BASE_GT}
-Genera un resumen ejecutivo del estado del taller a partir del snapshot: tendencia
-de ingresos, alertas (inventario bajo, OT atrasadas, saldos por cobrar) y 2-3
-recomendaciones accionables. Usa viñetas y sé breve.`,
+Genera un resumen ejecutivo del estado del taller a partir del snapshot: tendencia de
+ingresos, alertas (inventario bajo, OT atrasadas, saldos por cobrar, vehículos con
+mantenimiento pendiente) y 2-3 recomendaciones accionables. Usa viñetas y sé breve.`,
 };
 
-/* Snapshot compacto del tenant para aterrizar chat/insights */
-async function snapshotTenant(admin: ReturnType<typeof createClient>, tenantId: string) {
+/* Snapshot del tenant. `elevado` (admin/gerente/CEO) recibe TODA la info,
+   incluyendo finanzas; los demás roles solo lo operativo (sin dinero/costos). */
+async function snapshotTenant(admin: ReturnType<typeof createClient>, tenantId: string, elevado: boolean) {
   const hoy = new Date();
   const ini = new Date(hoy.getFullYear(), hoy.getMonth(), 1).toISOString().slice(0, 10);
   const fin = new Date(hoy.getFullYear(), hoy.getMonth() + 1, 0).toISOString().slice(0, 10);
+  const seisMeses = new Date(hoy.getFullYear(), hoy.getMonth() - 6, hoy.getDate()).toISOString().slice(0, 10);
   const f = (q: any) => q.then((r: any) => r.data ?? []);
-
-  const [clientes, ordenesAbiertas, ingresosMes, egresosMes, stockBajo, facturasMes] =
-    await Promise.all([
-      admin.from("clientes").select("*", { count: "exact", head: true }).eq("tenant_id", tenantId),
-      f(admin.from("ordenes").select("num,estado,total,saldo,created_at").eq("tenant_id", tenantId)
-        .not("estado", "in", '("entregado","cancelado")').limit(50)),
-      f(admin.from("ingresos").select("monto,fecha").eq("tenant_id", tenantId).gte("fecha", ini).lte("fecha", fin)),
-      f(admin.from("egresos").select("monto,fecha").eq("tenant_id", tenantId).gte("fecha", ini).lte("fecha", fin)),
-      f(admin.from("inventario").select("nombre,stock,min_stock").eq("tenant_id", tenantId).filter("stock", "lte", "min_stock").limit(30)),
-      f(admin.from("facturas").select("total,estado,fecha").eq("tenant_id", tenantId).gte("fecha", ini).lte("fecha", fin)),
-    ]);
-
   const sum = (arr: any[], k: string) => arr.reduce((a, r) => a + Number(r[k] || 0), 0);
-  return {
+
+  // ── Operativo (todos los roles) ──
+  const [clientes, ordenesAbiertas, stockBajo, vehMantenimiento] = await Promise.all([
+    admin.from("clientes").select("*", { count: "exact", head: true }).eq("tenant_id", tenantId),
+    f(admin.from("ordenes").select("num,estado,created_at").eq("tenant_id", tenantId)
+      .not("estado", "in", '("entregado","cancelado")').limit(80)),
+    f(admin.from("inventario").select("nombre,stock,min_stock").eq("tenant_id", tenantId).filter("stock", "lte", "min_stock").limit(40)),
+    f(admin.from("vehiculos").select("placa,marca,modelo,ultima_visita,kilometraje").eq("tenant_id", tenantId)
+      .or(`ultima_visita.is.null,ultima_visita.lt.${seisMeses}`).limit(40)),
+  ]);
+
+  const snap: Record<string, unknown> = {
+    rol_acceso: elevado ? "completo (admin/gerente)" : "operativo",
     periodo: { desde: ini, hasta: fin },
     total_clientes: (clientes as any).count ?? 0,
     ordenes_abiertas: ordenesAbiertas.length,
-    saldo_por_cobrar: sum(ordenesAbiertas, "saldo"),
+    ordenes_por_estado: ordenesAbiertas.reduce((m: any, o: any) => { m[o.estado] = (m[o.estado] || 0) + 1; return m; }, {}),
+    inventario_bajo: stockBajo.map((i: any) => ({ nombre: i.nombre, stock: i.stock, min: i.min_stock })),
+    vehiculos_mantenimiento_pendiente: vehMantenimiento.map((v: any) => ({
+      placa: v.placa, vehiculo: `${v.marca ?? ""} ${v.modelo ?? ""}`.trim(),
+      ultima_visita: v.ultima_visita ?? "sin registro", km: v.kilometraje ?? null,
+    })),
+  };
+
+  if (!elevado) return snap;
+
+  // ── Financiero / sensible (solo admin/gerente/CEO) ──
+  const [ordTotales, ingresosMes, egresosMes, facturasMes, inventarioVal, empleados, pagosMes, proveedores, cuentas] =
+    await Promise.all([
+      f(admin.from("ordenes").select("total,saldo,estado").eq("tenant_id", tenantId).not("estado", "in", '("cancelado")').limit(500)),
+      f(admin.from("ingresos").select("monto,fecha").eq("tenant_id", tenantId).gte("fecha", ini).lte("fecha", fin)),
+      f(admin.from("egresos").select("monto,categoria,fecha").eq("tenant_id", tenantId).gte("fecha", ini).lte("fecha", fin)),
+      f(admin.from("facturas").select("total,estado,fecha").eq("tenant_id", tenantId).gte("fecha", ini).lte("fecha", fin)),
+      f(admin.from("inventario").select("stock,precio_costo,precio_venta").eq("tenant_id", tenantId).limit(2000)),
+      admin.from("empleados").select("*", { count: "exact", head: true }).eq("tenant_id", tenantId).eq("activo", true),
+      f(admin.from("pagos_nomina").select("liquido,periodo_mes,periodo_anio").eq("tenant_id", tenantId).eq("periodo_mes", hoy.getMonth() + 1).eq("periodo_anio", hoy.getFullYear())),
+      admin.from("proveedores").select("*", { count: "exact", head: true }).eq("tenant_id", tenantId),
+      f(admin.from("bancos").select("nombre,banco,saldo_inicial,moneda").eq("tenant_id", tenantId)),
+    ]);
+
+  snap.finanzas = {
     ingresos_mes: sum(ingresosMes, "monto"),
     egresos_mes: sum(egresosMes, "monto"),
+    utilidad_mes: sum(ingresosMes, "monto") - sum(egresosMes, "monto"),
     facturado_mes: sum(facturasMes, "total"),
-    inventario_bajo: stockBajo.map((i: any) => ({ nombre: i.nombre, stock: i.stock, min: i.min_stock })),
+    saldo_por_cobrar: sum(ordTotales, "saldo"),
+    valor_total_ordenes_activas: sum(ordTotales, "total"),
+    nomina_mes: sum(pagosMes, "liquido"),
   };
+  snap.inventario_valor = {
+    items: inventarioVal.length,
+    valor_costo: sum(inventarioVal.map((i: any) => ({ v: Number(i.stock) * Number(i.precio_costo || 0) })), "v"),
+    valor_venta: sum(inventarioVal.map((i: any) => ({ v: Number(i.stock) * Number(i.precio_venta || 0) })), "v"),
+  };
+  snap.equipo = { empleados_activos: (empleados as any).count ?? 0, proveedores: (proveedores as any).count ?? 0 };
+  snap.cuentas_bancarias = cuentas.map((c: any) => ({ nombre: c.nombre, banco: c.banco, saldo_inicial: c.saldo_inicial, moneda: c.moneda }));
+  return snap;
 }
 
 Deno.serve(async (req) => {
@@ -95,7 +138,7 @@ Deno.serve(async (req) => {
   if (req.method !== "POST") return json({ error: "Método no permitido" }, 405);
 
   const apiKey = Deno.env.get("ANTHROPIC_API_KEY");
-  if (!apiKey) return json({ error: "El Asistente IA aún no está configurado (falta la API key de Claude)." }, 503);
+  if (!apiKey) return json({ error: `${NOMBRE} (Asistente IA) aún no está configurado (falta la API key de Claude).` }, 503);
 
   const url = Deno.env.get("SUPABASE_URL")!;
   const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -114,6 +157,9 @@ Deno.serve(async (req) => {
   const { data: perfil } = await admin.from("usuarios")
     .select("tenant_id, rol").eq("id", userData.user.id).maybeSingle();
   const tenantId = (perfil as any)?.tenant_id;
+  const rol = (perfil as any)?.rol;
+  const elevado = userData.user.email === "henry.chinchilla@gmail.com" ||
+    ["superadmin", "admin", "gerente_fin", "gerente_tal"].includes(rol);
 
   // ── Payload ──
   let body: any;
@@ -129,12 +175,14 @@ Deno.serve(async (req) => {
   let userContent = "";
   if (modo === "chat" || modo === "insights") {
     if (!tenantId) return json({ error: "Sin taller asociado a tu usuario" }, 400);
-    const snap = await snapshotTenant(admin, tenantId);
+    const snap = await snapshotTenant(admin, tenantId, elevado);
     userContent = `Fecha de hoy: ${new Date().toISOString().slice(0, 10)}\n` +
       `Snapshot del taller (JSON):\n${JSON.stringify(snap, null, 2)}\n\n` +
       (modo === "insights" ? "Genera el resumen ejecutivo." : `Pregunta: ${mensaje}`);
   } else {
-    userContent = `Contexto (JSON): ${JSON.stringify(contexto)}\n\nSolicitud: ${mensaje}`;
+    userContent = contexto && Object.keys(contexto).length
+      ? `Contexto (JSON): ${JSON.stringify(contexto)}\n\nSolicitud: ${mensaje}`
+      : mensaje;
   }
 
   // ── Llamar a Claude (fetch directo) ──
@@ -159,7 +207,7 @@ Deno.serve(async (req) => {
     const data = await r.json();
     if (!r.ok) {
       const m = data?.error?.message ?? `HTTP ${r.status}`;
-      const friendly = r.status === 429 ? "IA ocupada, intenta en unos segundos"
+      const friendly = r.status === 429 ? `${NOMBRE} está ocupado, intenta en unos segundos`
         : r.status === 401 ? "La API key de Claude no es válida"
         : m;
       return json({ error: friendly }, r.status);

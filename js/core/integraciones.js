@@ -93,6 +93,7 @@ const IA = {
   },
 
   preguntar(mensaje)            { return IA._pedir('chat', mensaje); },
+  tecnico(mensaje)              { return IA._pedir('tecnico', mensaje); },
   insights()                    { return IA._pedir('insights', ''); },
   redactar(que, contexto = {})  { return IA._pedir('redaccion', que, contexto); },
   diagnostico(vehiculo, sintomas) {
@@ -101,23 +102,26 @@ const IA = {
       { vehiculo });
   },
 
-  /* ── Chat flotante simple ──────────────────────── */
+  /* ── Chat flotante con Beto ────────────────────── */
   abrirChat() {
-    UI.modal('🤖 Asistente IA', `
+    UI.modal('🔧 Beto — Asistente Mecánico', `
       <div id="ia-historial" style="max-height:340px;overflow-y:auto;margin-bottom:12px;
            display:flex;flex-direction:column;gap:8px">
         <div class="text-muted" style="font-size:12px">
-          Pregúntame sobre tu taller: "¿cuánto facturé este mes?", "¿qué cliente debe más?",
-          "resumen del negocio"…
+          ¡Hola! Soy <b>Beto</b>. Puedo ayudarte con:<br>
+          🔧 <b>Mecánica:</b> "¿qué significa el código P0420?", "pasos para cambiar la banda de tiempo",
+          "mantenimiento de los 10,000 km"<br>
+          📊 <b>Tu taller:</b> "¿cuánto facturé este mes?", "¿qué vehículos tienen mantenimiento pendiente?"
         </div>
       </div>
       <div style="display:flex;gap:8px">
-        <input class="form-input" id="ia-input" placeholder="Escribe tu pregunta..."
+        <input class="form-input" id="ia-input" placeholder="Escribe tu pregunta o un código DTC..."
                onkeydown="if(event.key==='Enter')IA._enviarChat()">
         <button class="btn btn-amber" onclick="IA._enviarChat()">Enviar</button>
       </div>
-      <div style="margin-top:8px">
+      <div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap">
         <button class="btn btn-ghost btn-sm" onclick="IA._insightsChat()">📊 Resumen del negocio</button>
+        <button class="btn btn-ghost btn-sm" onclick="document.getElementById('ia-input').value='¿Qué significa el código de falla ';document.getElementById('ia-input').focus()">🔧 Consultar código DTC</button>
       </div>`, '560px');
   },
 

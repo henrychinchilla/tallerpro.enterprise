@@ -51,8 +51,8 @@ const App = {
     const iaBtn = rol === 'cliente' ? '' : `
       <div class="sidebar-ia">
         <button class="btn-ia" onclick="IA.abrirChat()">
-          <span class="btn-ia-icon">🤖</span>
-          <span>Asistente IA</span>
+          <span class="btn-ia-icon">🔧</span>
+          <span>Beto — Asistente</span>
         </button>
       </div>`;
 
