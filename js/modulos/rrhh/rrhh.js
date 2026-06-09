@@ -48,6 +48,7 @@ Modulos.rrhh = {
                 <td><span class="badge badge-${e.activo?'green':'red'}">${e.activo?'Activo':'Inactivo'}</span></td>
                 <td><div style="display:flex;gap:4px">
                   ${Modulos.btnAccion('editar', `Modulos.rrhh.modalEmpleado('${e.id}')`)}
+                  <button class="btn btn-sm btn-amber" title="Imprimir Carné de Identificación" onclick="event.stopPropagation();Modulos.rrhh.imprimirCarne('${e.id}')">🪪 Carné</button>
                   ${Modulos.btnAccion('eliminar', `Modulos.rrhh.eliminarEmpleado('${e.id}','${(e.nombre||'').replace(/'/g,"\\'")}')`)}
                 </div></td>
               </tr>`).join('')||'<tr><td colspan="8" style="text-align:center;padding:24px;color:var(--text3)">Sin empleados</td></tr>'}
@@ -318,6 +319,7 @@ Modulos.rrhh = {
 
   modalEmpleado(id=null) {
     const e = id ? this._empleados.find(x=>x.id===id) : {};
+    this._tempFoto = e.foto || '';
     const esEdicion = !!id;
     const salMinimo = GT.salario_minimo_no_agricola;
     const bono      = GT.bonificacion_incentivo;
@@ -325,20 +327,52 @@ Modulos.rrhh = {
     UI.modal(`${esEdicion?'✏️ Editar':'＋ Nuevo'} Empleado`, `
       ${esEdicion?'<div class="alert alert-amber" style="margin-bottom:12px"><div class="alert-icon">⚠️</div><div class="alert-body" style="font-size:11px">Los cambios reemplazarán la información actual del empleado.</div></div>':''}
 
-      <!-- DATOS PERSONALES -->
-      <div style="font-weight:700;font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px">Datos Personales</div>
-      <div class="form-row">
-        <div class="form-group"><label class="form-label">Nombre Completo *</label>
-          <input class="form-input" id="emp-nombre" value="${e.nombre||''}"></div>
-        <div class="form-group"><label class="form-label">Cargo / Puesto</label>
-          <input class="form-input" id="emp-cargo" value="${e.cargo||''}"></div>
+      <!-- FOTO Y DATOS PERSONALES -->
+      <div style="display:flex;gap:16px;margin-bottom:12px;align-items:flex-start">
+        <!-- Columna Foto -->
+        <div style="display:flex;flex-direction:column;align-items:center;gap:6px;width:120px;flex-shrink:0">
+          <div style="font-weight:700;font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.08em">Fotografía</div>
+          <div id="emp-photo-container" style="position:relative;width:100px;height:120px;border-radius:8px;border:1px solid var(--border);background:var(--surface2);display:flex;align-items:center;justify-content:center;overflow:hidden">
+            ${this._tempFoto ? `<img src="${this._tempFoto}" id="emp-img-preview" style="width:100%;height:100%;object-fit:cover">` : `<span id="emp-img-placeholder" style="font-size:48px;color:var(--text3)">👤</span>`}
+          </div>
+          <!-- Botones de la foto -->
+          <div style="display:flex;gap:4px;width:100%">
+            <button type="button" class="btn btn-sm btn-ghost" title="Subir archivo de foto" style="padding:4px;flex:1" onclick="document.getElementById('emp-file-input').click()">📁</button>
+            <button type="button" class="btn btn-sm btn-ghost" title="Tomar foto con cámara" style="padding:4px;flex:1" onclick="Modulos.rrhh.iniciarCamara()">📷</button>
+            <button type="button" class="btn btn-sm btn-ghost text-red" title="Eliminar foto" style="padding:4px;flex:1" onclick="Modulos.rrhh.eliminarFoto()">🗑️</button>
+          </div>
+          <input type="file" id="emp-file-input" accept="image/*" style="display:none" onchange="Modulos.rrhh.subirFotoEmpleado(this)">
+        </div>
+
+        <!-- Columna Campos -->
+        <div style="flex:1">
+          <div style="font-weight:700;font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px">Datos Personales</div>
+          <div class="form-row">
+            <div class="form-group"><label class="form-label">Nombre Completo *</label>
+              <input class="form-input" id="emp-nombre" value="${e.nombre||''}"></div>
+            <div class="form-group"><label class="form-label">Cargo / Puesto</label>
+              <input class="form-input" id="emp-cargo" value="${e.cargo||''}"></div>
+          </div>
+          <div class="form-row">
+            <div class="form-group"><label class="form-label">DPI *</label>
+              <input class="form-input" id="emp-dpi" value="${e.dpi||''}" placeholder="0000 00000 0000"></div>
+            <div class="form-group"><label class="form-label">No. IGSS</label>
+              <input class="form-input" id="emp-igss" value="${e.igss||''}"></div>
+          </div>
+        </div>
       </div>
-      <div class="form-row">
-        <div class="form-group"><label class="form-label">DPI *</label>
-          <input class="form-input" id="emp-dpi" value="${e.dpi||''}" placeholder="0000 00000 0000"></div>
-        <div class="form-group"><label class="form-label">No. IGSS</label>
-          <input class="form-input" id="emp-igss" value="${e.igss||''}"></div>
+
+      <!-- Cámara Box (oculto por defecto) -->
+      <div id="emp-camera-box" style="display:none;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:16px;text-align:center">
+        <div style="font-weight:700;font-size:12px;margin-bottom:8px">Capturar Foto</div>
+        <video id="emp-camera-video" autoplay playsinline style="width:100%;max-width:240px;height:180px;object-fit:cover;border-radius:6px;background:#000;margin:0 auto 8px;display:block"></video>
+        <canvas id="emp-camera-canvas" style="display:none"></canvas>
+        <div style="display:flex;justify-content:center;gap:8px">
+          <button type="button" class="btn btn-sm btn-ghost" onclick="Modulos.rrhh.detenerCamara()">Cancelar</button>
+          <button type="button" class="btn btn-sm btn-amber" onclick="Modulos.rrhh.capturarFotoCamara()">📸 Capturar</button>
+        </div>
       </div>
+
       <div class="form-row">
         <div class="form-group"><label class="form-label">Teléfono</label>
           <input class="form-input" id="emp-tel" value="${e.tel||''}" placeholder="5501-1234"></div>
@@ -476,7 +510,7 @@ Modulos.rrhh = {
       </div>`:''}
 
       <div class="modal-footer">
-        <button class="btn btn-ghost" onclick="UI.cerrarModal()">Cancelar</button>
+        <button class="btn btn-ghost" onclick="Modulos.rrhh.detenerCamara();UI.cerrarModal()">Cancelar</button>
         <button class="btn btn-amber" onclick="Modulos.rrhh.guardarEmpleado('${id||''}')">
           ${esEdicion?'Guardar Cambios':'Crear Empleado'}
         </button>
@@ -527,6 +561,7 @@ Modulos.rrhh = {
   },
 
   async guardarEmpleado(id='') {
+    this.detenerCamara();
     const nombre = document.getElementById('emp-nombre')?.value.trim();
     if (!nombre) { UI.toast('El nombre es obligatorio','error'); return; }
     const prev = id ? this._empleados.find(x=>x.id===id) : null;
@@ -543,6 +578,7 @@ Modulos.rrhh = {
 
     const fields = {
       nombre,
+      foto:                  this._tempFoto || null,
       cargo:                 document.getElementById('emp-cargo')?.value||null,
       dpi:                   document.getElementById('emp-dpi')?.value||null,
       tel:                   document.getElementById('emp-tel')?.value||null,
@@ -1175,6 +1211,471 @@ Modulos.rrhh = {
             </div>
           </div>
           <script>window.print();</script>
+        </body>
+      </html>
+    `);
+    win.document.close();
+  },
+
+  async iniciarCamara() {
+    const box = document.getElementById('emp-camera-box');
+    const video = document.getElementById('emp-camera-video');
+    if (!box || !video) return;
+
+    try {
+      box.style.display = 'block';
+      this._cameraStream = await navigator.mediaDevices.getUserMedia({
+        video: { width: 320, height: 240, facingMode: 'user' }
+      });
+      video.srcObject = this._cameraStream;
+    } catch (err) {
+      console.error(err);
+      UI.toast('No se pudo acceder a la cámara. Revisa los permisos.', 'error');
+      box.style.display = 'none';
+    }
+  },
+
+  detenerCamara() {
+    const box = document.getElementById('emp-camera-box');
+    if (box) box.style.display = 'none';
+
+    if (this._cameraStream) {
+      this._cameraStream.getTracks().forEach(track => track.stop());
+      this._cameraStream = null;
+    }
+    const video = document.getElementById('emp-camera-video');
+    if (video) video.srcObject = null;
+  },
+
+  capturarFotoCamara() {
+    const video = document.getElementById('emp-camera-video');
+    const canvas = document.getElementById('emp-camera-canvas');
+    if (!video || !canvas) return;
+
+    const ctx = canvas.getContext('2d');
+    canvas.width = 300;
+    canvas.height = 375; // Formato vertical 4:5
+
+    const videoWidth = video.videoWidth || 320;
+    const videoHeight = video.videoHeight || 240;
+    
+    // Recorte vertical centrado
+    const sw = videoHeight * 0.8;
+    const sh = videoHeight;
+    const sx = (videoWidth - sw) / 2;
+    const sy = 0;
+
+    ctx.drawImage(video, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
+
+    const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+    this._tempFoto = dataUrl;
+
+    const container = document.getElementById('emp-photo-container');
+    if (container) {
+      container.innerHTML = `<img src="${dataUrl}" id="emp-img-preview" style="width:100%;height:100%;object-fit:cover">`;
+    }
+
+    this.detenerCamara();
+    UI.toast('Fotografía capturada ✓');
+  },
+
+  subirFotoEmpleado(input) {
+    const file = input.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith('image/')) { UI.toast('El archivo debe ser una imagen', 'error'); return; }
+
+    const reader = new FileReader();
+    reader.onload = e => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        canvas.width = 300;
+        canvas.height = 375;
+        const ctx = canvas.getContext('2d');
+
+        const scale = Math.max(canvas.width / img.width, canvas.height / img.height);
+        const w = img.width * scale;
+        const h = img.height * scale;
+        const x = (canvas.width - w) / 2;
+        const y = (canvas.height - h) / 2;
+        ctx.drawImage(img, x, y, w, h);
+
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+        this._tempFoto = dataUrl;
+
+        const container = document.getElementById('emp-photo-container');
+        if (container) {
+          container.innerHTML = `<img src="${dataUrl}" id="emp-img-preview" style="width:100%;height:100%;object-fit:cover">`;
+        }
+        UI.toast('Imagen cargada ✓');
+      };
+      img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+  },
+
+  eliminarFoto() {
+    this._tempFoto = '';
+    const container = document.getElementById('emp-photo-container');
+    if (container) {
+      container.innerHTML = `<span id="emp-img-placeholder" style="font-size:48px;color:var(--text3)">👤</span>`;
+    }
+    UI.toast('Fotografía removida');
+  },
+
+  async imprimirCarne(id) {
+    const e = this._empleados.find(x => x.id === id);
+    if (!e) { UI.toast('Empleado no encontrado', 'error'); return; }
+
+    const tenantName = Auth.tenant?.name || 'TallerPro';
+    const fotoSrc = e.foto || '';
+
+    const win = window.open('', '_blank');
+    win.document.write(`
+      <html>
+        <head>
+          <title>Carné - ${e.nombre}</title>
+          <style>
+            @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700;800&display=swap');
+            @media print {
+              body { background: none; padding: 0; margin: 0; }
+              .no-print { display: none; }
+              .carnes-container { gap: 40px !important; }
+            }
+            body {
+              font-family: 'Outfit', 'Inter', sans-serif;
+              background: #f0f2f5;
+              display: flex;
+              flex-direction: column;
+              align-items: center;
+              padding: 40px 20px;
+              margin: 0;
+            }
+            .no-print-btn {
+              background: #f59e0b;
+              color: white;
+              border: none;
+              padding: 10px 20px;
+              font-size: 14px;
+              font-weight: bold;
+              border-radius: 6px;
+              cursor: pointer;
+              margin-bottom: 30px;
+              box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+              transition: background 0.2s;
+            }
+            .no-print-btn:hover {
+              background: #d97706;
+            }
+            .carnes-container {
+              display: flex;
+              gap: 30px;
+              flex-wrap: wrap;
+              justify-content: center;
+            }
+            .carne-card {
+              width: 240px;
+              height: 380px;
+              background: #ffffff;
+              border-radius: 12px;
+              box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+              border: 1px solid #e5e7eb;
+              display: flex;
+              flex-direction: column;
+              overflow: hidden;
+              position: relative;
+              box-sizing: border-box;
+            }
+            /* Front design */
+            .carne-front {
+              background: #fff;
+            }
+            .carne-front .header-band {
+              background: linear-gradient(135deg, #1e293b, #0f172a);
+              height: 80px;
+              display: flex;
+              flex-direction: column;
+              align-items: center;
+              justify-content: center;
+              padding: 10px;
+              color: white;
+              text-align: center;
+              position: relative;
+            }
+            .carne-front .header-band .logo-icon {
+              font-size: 20px;
+              margin-bottom: 2px;
+            }
+            .carne-front .header-band .company-name {
+              font-size: 13px;
+              font-weight: 800;
+              text-transform: uppercase;
+              letter-spacing: 0.05em;
+              white-space: nowrap;
+              overflow: hidden;
+              text-overflow: ellipsis;
+              width: 100%;
+            }
+            .carne-front .header-band .company-sub {
+              font-size: 8px;
+              color: #94a3b8;
+              text-transform: uppercase;
+              letter-spacing: 0.1em;
+            }
+            .carne-front .photo-wrap {
+              margin-top: -30px;
+              display: flex;
+              justify-content: center;
+              position: relative;
+              z-index: 10;
+            }
+            .carne-front .photo-frame {
+              width: 90px;
+              height: 112px;
+              border-radius: 8px;
+              background: #f3f4f6;
+              border: 3px solid #ffffff;
+              box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+              overflow: hidden;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+            }
+            .carne-front .photo-frame img {
+              width: 100%;
+              height: 100%;
+              object-fit: cover;
+            }
+            .carne-front .photo-frame .default-avatar {
+              font-size: 50px;
+              color: #9ca3af;
+            }
+            .carne-front .body-content {
+              flex: 1;
+              display: flex;
+              flex-direction: column;
+              align-items: center;
+              padding: 15px;
+              text-align: center;
+            }
+            .carne-front .emp-name {
+              font-size: 15px;
+              font-weight: 700;
+              color: #1f2937;
+              margin: 5px 0 2px 0;
+              line-height: 1.2;
+            }
+            .carne-front .emp-cargo {
+              font-size: 11px;
+              font-weight: 600;
+              color: #f59e0b;
+              text-transform: uppercase;
+              letter-spacing: 0.05em;
+              margin-bottom: 15px;
+            }
+            .carne-front .info-grid {
+              width: 100%;
+              display: flex;
+              flex-direction: column;
+              gap: 4px;
+              margin-bottom: 10px;
+              padding: 0 10px;
+              box-sizing: border-box;
+            }
+            .carne-front .info-row {
+              display: flex;
+              justify-content: space-between;
+              font-size: 10px;
+              color: #4b5563;
+              border-bottom: 1px solid #f3f4f6;
+              padding-bottom: 2px;
+            }
+            .carne-front .info-label {
+              font-weight: 600;
+              color: #9ca3af;
+            }
+            .carne-front .info-value {
+              font-weight: 700;
+              color: #1f2937;
+            }
+            /* Mock Barcode */
+            .barcode-wrap {
+              position: absolute;
+              bottom: 15px;
+              left: 0;
+              right: 0;
+              display: flex;
+              flex-direction: column;
+              align-items: center;
+              gap: 2px;
+            }
+            .barcode-lines {
+              display: flex;
+              height: 20px;
+              width: 140px;
+              background: #fff;
+              justify-content: center;
+              align-items: stretch;
+            }
+            .barcode-lines span {
+              background: #000;
+              margin-right: 1px;
+            }
+            .barcode-num {
+              font-size: 8px;
+              font-family: monospace;
+              color: #6b7280;
+            }
+
+            /* Back design */
+            .carne-back {
+              display: flex;
+              flex-direction: column;
+              padding: 20px;
+              justify-content: space-between;
+              background: radial-gradient(circle at 100% 100%, #1e293b, #0f172a);
+              color: #f8fafc;
+              border: 1px solid #0f172a;
+            }
+            .carne-back .back-title {
+              font-size: 11px;
+              font-weight: 800;
+              text-transform: uppercase;
+              letter-spacing: 0.1em;
+              color: #f59e0b;
+              border-bottom: 1px solid #334155;
+              padding-bottom: 6px;
+              text-align: center;
+            }
+            .carne-back .back-content {
+              flex: 1;
+              display: flex;
+              flex-direction: column;
+              justify-content: center;
+              gap: 12px;
+              margin: 15px 0;
+            }
+            .carne-back .back-section-title {
+              font-size: 9px;
+              font-weight: 700;
+              color: #94a3b8;
+              text-transform: uppercase;
+              margin-bottom: 4px;
+            }
+            .carne-back .back-data {
+              font-size: 10px;
+              line-height: 1.4;
+              background: rgba(255,255,255,0.05);
+              border-radius: 6px;
+              padding: 8px;
+              border: 1px solid rgba(255,255,255,0.08);
+            }
+            .carne-back .back-disclaimer {
+              font-size: 7.5px;
+              color: #94a3b8;
+              text-align: center;
+              line-height: 1.3;
+              border-top: 1px solid #334155;
+              padding-top: 8px;
+            }
+            .carne-back .back-signature {
+              display: flex;
+              flex-direction: column;
+              align-items: center;
+              margin-top: 5px;
+            }
+            .carne-back .sig-line {
+              width: 120px;
+              border-top: 1px solid #94a3b8;
+              margin-top: 20px;
+            }
+            .carne-back .sig-text {
+              font-size: 7px;
+              color: #94a3b8;
+              margin-top: 3px;
+              text-transform: uppercase;
+            }
+          </style>
+        </head>
+        <body>
+          <button class="no-print-btn" onclick="window.print()">🖨️ Imprimir Carné</button>
+          
+          <div class="carnes-container">
+            <!-- FRONT CARD -->
+            <div class="carne-card carne-front">
+              <div class="header-band">
+                <div class="logo-icon">🚗</div>
+                <div class="company-name">${tenantName}</div>
+                <div class="company-sub">Identificación Personal</div>
+              </div>
+              <div class="photo-wrap">
+                <div class="photo-frame">
+                  ${fotoSrc ? `<img src="${fotoSrc}">` : `<span class="default-avatar">👤</span>`}
+                </div>
+              </div>
+              <div class="body-content">
+                <div class="emp-name">${e.nombre}</div>
+                <div class="emp-cargo">${e.cargo || 'Mecánico'}</div>
+                
+                <div class="info-grid">
+                  <div class="info-row">
+                    <span class="info-label">DPI / CUI</span>
+                    <span class="info-value">${e.dpi || '—'}</span>
+                  </div>
+                  <div class="info-row">
+                    <span class="info-label">No. Afiliación</span>
+                    <span class="info-value">${e.igss || '—'}</span>
+                  </div>
+                  <div class="info-row">
+                    <span class="info-label">Ingreso</span>
+                    <span class="info-value">${e.fecha_ingreso ? new Date(e.fecha_ingreso).toLocaleDateString('es-GT') : '—'}</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Barcode -->
+              <div class="barcode-wrap">
+                <div class="barcode-lines">
+                  ${Array.from({length: 24}).map(() => {
+                    const width = Math.random() > 0.5 ? '2px' : '1px';
+                    return `<span style="width:${width}"></span>`;
+                  }).join('')}
+                </div>
+                <div class="barcode-num">EMP-${e.id.slice(0,8).toUpperCase()}</div>
+              </div>
+            </div>
+
+            <!-- BACK CARD -->
+            <div class="carne-card carne-back">
+              <div class="back-title">Datos Adicionales</div>
+              
+              <div class="back-content">
+                <div>
+                  <div class="back-section-title">En Caso de Emergencia Avisar a:</div>
+                  <div class="back-data">
+                    <strong>${e.emergencia_nombre || '—'}</strong> (${e.emergencia_parentesco || '—'})<br>
+                    📞 Tel: ${e.emergencia_tel || '—'}
+                  </div>
+                </div>
+
+                <div>
+                  <div class="back-section-title">Datos Médicos / Notas:</div>
+                  <div class="back-data" style="font-size: 8.5px;">
+                    ${e.notas ? e.notas.replace(/\n/g, '<br>') : 'Sin observaciones médicas registradas.'}
+                  </div>
+                </div>
+
+                <div class="back-signature">
+                  <div class="sig-line"></div>
+                  <div class="sig-text">Firma Autorizada</div>
+                </div>
+              </div>
+
+              <div class="back-disclaimer">
+                Este carné es personal e intransferible y de uso exclusivo en las instalaciones del taller. Si lo encuentra, por favor devuélvalo a la administración.
+              </div>
+            </div>
+          </div>
         </body>
       </html>
     `);
