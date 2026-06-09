@@ -257,11 +257,19 @@ Modulos.vehiculos = {
         </div>`;
     }
     return `
-      <label style="width:100%;height:100px;border-radius:10px;border:2px dashed var(--border);display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;color:var(--text3);font-size:12px;gap:8px;background:var(--surface2);transition:all 0.2s">
-        <span style="font-size:26px">📷</span>
-        <b>Escanear Tarjeta de Circulación con IA</b>
-        <input type="file" id="veh-tarjeta-file" accept="image/*" style="display:none" onchange="Modulos.vehiculos.procesarTarjeta(this)">
-      </label>`;
+      <div style="width:100%;display:flex;flex-direction:column;align-items:center;gap:12px;padding:8px 0">
+        <div style="font-size:12px;font-weight:700;color:var(--text2)">Escanear Tarjeta de Circulación con IA</div>
+        <div style="display:flex;gap:12px;width:100%;justify-content:center;flex-wrap:wrap">
+          <button type="button" class="btn btn-amber" onclick="document.getElementById('veh-tarjeta-cam').click()" style="display:flex;align-items:center;gap:6px">
+            📷 Usar Cámara
+          </button>
+          <button type="button" class="btn btn-ghost" onclick="document.getElementById('veh-tarjeta-gal').click()" style="display:flex;align-items:center;gap:6px;border:1px solid var(--border)">
+            📂 Subir Imagen
+          </button>
+        </div>
+        <input type="file" id="veh-tarjeta-cam" accept="image/*" capture="environment" style="display:none" onchange="Modulos.vehiculos.procesarTarjeta(this)">
+        <input type="file" id="veh-tarjeta-gal" accept="image/*" style="display:none" onchange="Modulos.vehiculos.procesarTarjeta(this)">
+      </div>`;
   },
 
   _refreshTarjetaBox() {
