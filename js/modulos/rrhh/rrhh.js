@@ -11,6 +11,7 @@ Modulos.rrhh = {
         <div class="tabs">
           <button class="tab-btn ${this._tab==='empleados'?'active':''}" onclick="App.navegarSub('rrhh','empleados')">👤 Empleados</button>
           <button class="tab-btn ${this._tab==='nomina'?'active':''}" onclick="App.navegarSub('rrhh','nomina')">💵 Nómina</button>
+          <button class="tab-btn ${this._tab==='igss'?'active':''}" onclick="App.navegarSub('rrhh','igss')">🏛️ Planilla IGSS</button>
           <button class="tab-btn ${this._tab==='productividad'?'active':''}" onclick="App.navegarSub('rrhh','productividad')">📈 Productividad</button>
           <button class="tab-btn ${this._tab==='organigrama'?'active':''}" onclick="App.navegarSub('rrhh','organigrama')">🏢 Organigrama</button>
           <button class="tab-btn ${this._tab==='documentos'?'active':''}" onclick="App.navegarSub('rrhh','documentos')">📄 Documentos</button>
