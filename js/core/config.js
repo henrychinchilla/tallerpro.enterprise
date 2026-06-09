@@ -54,6 +54,7 @@ const MODULOS = [
     subnav:[
       { tab:'empleados',     icon:'👤', label:'Empleados'     },
       { tab:'nomina',        icon:'💵', label:'Nómina'        },
+      { tab:'igss',          icon:'🏛️', label:'Planilla IGSS'  },
       { tab:'productividad', icon:'📈', label:'Productividad'  },
       { tab:'organigrama',   icon:'🏢', label:'Organigrama'   },
       { tab:'documentos',    icon:'📄', label:'Documentos'    }

@@ -73,7 +73,7 @@ Modulos.rrhh = {
         </div>`:''}
         <div class="table-wrap">
           <table class="data-table">
-            <thead><tr><th>Empleado</th><th>Salario</th><th>Bono</th><th>IGSS Lab.</th><th>ISR</th><th>Líquido</th><th>Estado</th></tr></thead>
+            <thead><tr><th>Empleado</th><th>Salario</th><th>Bono</th><th>IGSS Lab.</th><th>ISR</th><th>Líquido</th><th>Estado</th><th>Acciones</th></tr></thead>
             <tbody>
               ${pagos.map(p=>`<tr>
                 <td>${p.empleados?.nombre||'—'}</td>
@@ -83,12 +83,113 @@ Modulos.rrhh = {
                 <td class="mono-sm text-red">-${UI.q(p.isr)}</td>
                 <td class="mono-sm text-green"><b>${UI.q(p.liquido)}</b></td>
                 <td><span class="badge badge-${p.pagado?'green':'amber'}">${p.pagado?'Pagado':'Pendiente'}</span></td>
-              </tr>`).join('')||`<tr><td colspan="7" style="text-align:center;padding:24px;color:var(--text3)">
+                <td>
+                  ${p.pagado ? '' : `<button class="btn btn-sm btn-green" onclick="Modulos.rrhh.pagarNomina('${p.id}')">💵 Pagar</button>`}
+                </td>
+              </tr>`).join('')||`<tr><td colspan="8" style="text-align:center;padding:24px;color:var(--text3)">
                 Presiona "Calcular Nómina" para generar los pagos del mes actual
               </td></tr>`}
             </tbody>
           </table>
         </div>`;
+    }
+
+    else if (this._tab==='igss') {
+      const now = new Date();
+      if (this._igssMes === undefined) {
+        this._igssMes = now.getMonth()+1;
+        this._igssAnio = now.getFullYear();
+      }
+      const pagos = await DB.getPagosNomina(this._igssMes, this._igssAnio);
+      const totalSueldo = pagos.reduce((s, p) => s + (Number(p.salario_base) || 0), 0);
+      const totalLaboral = pagos.reduce((s, p) => s + Math.round((Number(p.salario_base) || 0) * 0.0483 * 100) / 100, 0);
+      const totalPatIgss = pagos.reduce((s, p) => s + Math.round((Number(p.salario_base) || 0) * 0.1067 * 100) / 100, 0);
+      const totalIrtra = pagos.reduce((s, p) => s + Math.round((Number(p.salario_base) || 0) * 0.01 * 100) / 100, 0);
+      const totalIntecap = pagos.reduce((s, p) => s + Math.round((Number(p.salario_base) || 0) * 0.01 * 100) / 100, 0);
+      const totalPatronal = totalPatIgss + totalIrtra + totalIntecap;
+      const granTotal = totalLaboral + totalPatronal;
+
+      el.innerHTML = `
+        <div class="card card-amber mb-4" style="padding:16px;display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap">
+          <div>
+            <div style="font-weight:700;font-size:14px;color:var(--text1)">🏛️ Registro Patronal del IGSS</div>
+            <div style="font-size:12px;color:var(--text3)">Configure el identificador oficial del taller ante el IGSS para deducciones del ISR.</div>
+          </div>
+          <div style="display:flex;gap:8px;align-items:center">
+            <input class="form-input mono-sm" id="igss-patronal-input" value="${Auth.tenant?.igss_patronal || ''}" placeholder="Ej. 1234567-8" style="width:160px">
+            <button class="btn btn-amber" onclick="Modulos.rrhh.guardarPatronalIGSS()">💾 Guardar</button>
+          </div>
+        </div>
+
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;gap:8px;flex-wrap:wrap">
+          <div style="display:flex;gap:8px;align-items:center">
+            <select class="form-select" style="width:120px" onchange="Modulos.rrhh._igssMes=parseInt(this.value);Modulos.rrhh._renderTab()">
+              ${[1,2,3,4,5,6,7,8,9,10,11,12].map(m=>`<option value="${m}" ${this._igssMes===m?'selected':''}>${new Date(2026,m-1,1).toLocaleDateString('es-GT',{month:'long'})}</option>`).join('')}
+            </select>
+            <select class="form-select" style="width:90px" onchange="Modulos.rrhh._igssAnio=parseInt(this.value);Modulos.rrhh._renderTab()">
+              ${[2024,2025,2026,2027].map(a=>`<option value="${a}" ${this._igssAnio===a?'selected':''}>${a}</option>`).join('')}
+            </select>
+          </div>
+          <div style="display:flex;gap:8px">
+            <button class="btn btn-cyan" onclick="Modulos.rrhh.imprimirIGSS()" ${pagos.length?'':'disabled'}>🖨️ Imprimir Planilla IGSS</button>
+          </div>
+        </div>
+
+        ${pagos.length ? `
+        <div class="kpi-grid" style="margin-bottom:16px">
+          <div class="kpi-card"><div class="kpi-label">Masa Salarial Base</div><div class="kpi-val amber">${UI.q(totalSueldo)}</div></div>
+          <div class="kpi-card"><div class="kpi-label">Cuota Laboral (4.83%)</div><div class="kpi-val red">${UI.q(totalLaboral)}</div><div class="kpi-trend">retención a empleados</div></div>
+          <div class="kpi-card"><div class="kpi-label">Aporte Patronal (12.67%)</div><div class="kpi-val cyan">${UI.q(totalPatronal)}</div><div class="kpi-trend">IGSS/IRTRA/INTECAP</div></div>
+          <div class="kpi-card"><div class="kpi-label">Total Pago IGSS</div><div class="kpi-val green">${UI.q(granTotal)}</div><div class="kpi-trend">17.50% de la planilla</div></div>
+        </div>
+        ` : ''}
+
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Afiliado / Empleado</th>
+                <th>DPI</th>
+                <th style="text-align:right">Sueldo Base</th>
+                <th style="text-align:right">Laboral (4.83%)</th>
+                <th style="text-align:right">Patronal IGSS (10.67%)</th>
+                <th style="text-align:right">IRTRA (1.00%)</th>
+                <th style="text-align:right">INTECAP (1.00%)</th>
+                <th style="text-align:right">Total Patronal (12.67%)</th>
+                <th style="text-align:right">Total Aporte (17.50%)</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${pagos.map(p => {
+                const base = Number(p.salario_base) || 0;
+                const lab = Math.round(base * 0.0483 * 100) / 100;
+                const patIgss = Math.round(base * 0.1067 * 100) / 100;
+                const irtra = Math.round(base * 0.01 * 100) / 100;
+                const intecap = Math.round(base * 0.01 * 100) / 100;
+                const totalPat = Math.round((patIgss + irtra + intecap) * 100) / 100;
+                const totalAporte = Math.round((lab + totalPat) * 100) / 100;
+
+                return `<tr>
+                  <td>
+                    <div style="font-weight:700">${p.empleados?.nombre || '—'}</div>
+                    <div style="font-size:11px;color:var(--text3)">Afiliación: <b>${p.empleados?.igss || 'No afiliado'}</b></div>
+                  </td>
+                  <td class="mono-sm">${p.empleados?.dpi || '—'}</td>
+                  <td class="mono-sm text-right" style="text-align:right">${UI.q(base)}</td>
+                  <td class="mono-sm text-red text-right" style="text-align:right">-${UI.q(lab)}</td>
+                  <td class="mono-sm text-amber text-right" style="text-align:right">${UI.q(patIgss)}</td>
+                  <td class="mono-sm text-amber text-right" style="text-align:right">${UI.q(irtra)}</td>
+                  <td class="mono-sm text-amber text-right" style="text-align:right">${UI.q(intecap)}</td>
+                  <td class="mono-sm text-amber text-right" style="text-align:right;font-weight:700">${UI.q(totalPat)}</td>
+                  <td class="mono-sm text-green text-right" style="text-align:right"><b>${UI.q(totalAporte)}</b></td>
+                </tr>`;
+              }).join('') || `<tr><td colspan="9" style="text-align:center;padding:24px;color:var(--text3)">
+                No hay nóminas calculadas para el período seleccionado. Presiona la pestaña "Nómina" para calcularlas.
+              </td></tr>`}
+            </tbody>
+          </table>
+        </div>
+      `;
     }
 
     else if (this._tab==='productividad') {
@@ -181,6 +282,36 @@ Modulos.rrhh = {
       });
     }
     UI.toast('Nómina calculada ✓');
+    this._renderTab();
+  },
+
+  async pagarNomina(pagoId) {
+    const now = new Date();
+    const mes = now.getMonth()+1, anio = now.getFullYear();
+    const pagos = await DB.getPagosNomina(mes, anio);
+    const p = pagos.find(x=>x.id===pagoId);
+    if (!p) return;
+    const ok = await UI.confirmar(`¿Marcar como pagado el salario de <b>${p.empleados?.nombre || 'empleado'}</b> por un monto líquido de <b>${UI.q(p.liquido)}</b>? Se registrará como egreso y salida de banco.`, 'Confirmar Pago');
+    if (!ok) return;
+
+    // 1. Actualizar el pago de nómina
+    const { error } = await DB.upsertPagoNomina({
+      id: pagoId,
+      pagado: true,
+      fecha_pago: new Date().toISOString().slice(0,10)
+    });
+    if (error) { UI.toast('Error: '+error.message,'error'); return; }
+
+    // 2. Registrar egreso en la categoría Nómina (que a su vez registra la salida en el banco por defecto)
+    await DB.upsertEgreso({
+      concepto: `Pago Planilla: ${p.empleados?.nombre || 'Empleado'} (Mes ${p.periodo_mes}/${p.periodo_anio})`,
+      monto: p.liquido,
+      categoria: 'Nómina',
+      fecha: new Date().toISOString().slice(0,10),
+      referencia: `NOM-${pagoId.slice(0,8)}`
+    });
+
+    UI.toast('Nómina pagada y egreso registrado ✓');
     this._renderTab();
   },
 
@@ -882,5 +1013,170 @@ Modulos.rrhh = {
     /* Reabrir el expediente del empleado */
     const emp = this._empleados.find(e=>e.id===empId);
     this.verDocumentos(empId, emp?.nombre||'');
+  },
+
+  async guardarPatronalIGSS() {
+    const val = document.getElementById('igss-patronal-input')?.value.trim() || null;
+    const ok = await DB.updateTenant({ igss_patronal: val });
+    if (ok) {
+      if (Auth.tenant) Auth.tenant.igss_patronal = val;
+      UI.toast('Número Patronal IGSS actualizado ✓');
+      this._renderTab();
+    } else {
+      UI.toast('Error al guardar', 'error');
+    }
+  },
+
+  async imprimirIGSS() {
+    const mes = this._igssMes;
+    const anio = this._igssAnio;
+    const pagos = await DB.getPagosNomina(mes, anio);
+    if (!pagos.length) { UI.toast('No hay datos para imprimir','warn'); return; }
+
+    const win = window.open('', '_blank');
+    const meses = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+    const periodoStr = `${meses[mes-1]} de ${anio}`;
+    const patronal = Auth.tenant?.igss_patronal || '—';
+    const nit = Auth.tenant?.nit || '—';
+    
+    // Totales
+    const totalSueldo = pagos.reduce((s, p) => s + (Number(p.salario_base) || 0), 0);
+    const totalLaboral = pagos.reduce((s, p) => s + Math.round((Number(p.salario_base) || 0) * 0.0483 * 100) / 100, 0);
+    const totalPatIgss = pagos.reduce((s, p) => s + Math.round((Number(p.salario_base) || 0) * 0.1067 * 100) / 100, 0);
+    const totalIrtra = pagos.reduce((s, p) => s + Math.round((Number(p.salario_base) || 0) * 0.01 * 100) / 100, 0);
+    const totalIntecap = pagos.reduce((s, p) => s + Math.round((Number(p.salario_base) || 0) * 0.01 * 100) / 100, 0);
+    const totalPatronal = totalPatIgss + totalIrtra + totalIntecap;
+    const granTotal = totalLaboral + totalPatronal;
+
+    win.document.write(`
+      <html>
+        <head>
+          <title>Planilla IGSS - ${periodoStr}</title>
+          <style>
+            body { font-family: Arial, sans-serif; padding: 20px; font-size: 12px; color: #333; }
+            .header { text-align: center; margin-bottom: 20px; }
+            .header h1 { margin: 0; font-size: 18px; color: #000; text-transform: uppercase; }
+            .header h2 { margin: 4px 0 0; font-size: 13px; color: #666; font-weight: normal; }
+            .meta-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 20px; border-bottom: 1px solid #000; padding-bottom: 10px; }
+            .meta-item { font-size: 12px; line-height: 1.5; }
+            table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+            th, td { border: 1px solid #ddd; padding: 8px; font-size: 11px; }
+            th { background-color: #f2f2f2; text-align: left; }
+            .text-right { text-align: right; }
+            .totals-box { display: flex; justify-content: flex-end; margin-top: 10px; }
+            .totals-table { width: 320px; border-collapse: collapse; }
+            .totals-table td { font-size: 12px; padding: 6px; border: none; }
+            .totals-table tr.total-row { font-weight: bold; border-top: 2px solid #000; }
+            .footer-sig { margin-top: 60px; display: grid; grid-template-columns: 1fr 1fr; gap: 40px; text-align: center; }
+            .sig-line { border-top: 1px solid #000; width: 200px; margin: 0 auto; padding-top: 5px; font-weight: bold; }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <h1>Planilla de Contribución IGSS, IRTRA e INTECAP</h1>
+            <h2>Declaración de Salarios y Aportes a la Seguridad Social (Guatemala)</h2>
+          </div>
+          <div class="meta-grid">
+            <div class="meta-item">
+              <strong>Patrono:</strong> ${Auth.tenant?.name || 'TallerPro'}<br>
+              <strong>NIT:</strong> ${nit}<br>
+              <strong>No. Patronal IGSS:</strong> ${patronal}
+            </div>
+            <div class="meta-item" style="text-align: right;">
+              <strong>Período:</strong> ${periodoStr}<br>
+              <strong>Fecha Emisión:</strong> ${new Date().toLocaleDateString('es-GT')}<br>
+              <strong>Deducción Autorizada:</strong> D. 10-2012 (SAT)
+            </div>
+          </div>
+          <table>
+            <thead>
+              <tr>
+                <th>Nombre del Trabajador</th>
+                <th>Afiliación IGSS</th>
+                <th>DPI</th>
+                <th class="text-right">Base Salarial</th>
+                <th class="text-right">Retención Lab. (4.83%)</th>
+                <th class="text-right">Cuota IGSS (10.67%)</th>
+                <th class="text-right">IRTRA (1.00%)</th>
+                <th class="text-right">INTECAP (1.00%)</th>
+                <th class="text-right">Total Patronal (12.67%)</th>
+                <th class="text-right">Total Aporte (17.50%)</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${pagos.map(p => {
+                const base = Number(p.salario_base) || 0;
+                const lab = Math.round(base * 0.0483 * 100) / 100;
+                const pat = Math.round(base * 0.1067 * 100) / 100;
+                const irtra = Math.round(base * 0.01 * 100) / 100;
+                const int = Math.round(base * 0.01 * 100) / 100;
+                const totP = pat + irtra + int;
+                const totA = lab + totP;
+                return `
+                  <tr>
+                    <td>${p.empleados?.nombre || '—'}</td>
+                    <td>${p.empleados?.igss || '—'}</td>
+                    <td>${p.empleados?.dpi || '—'}</td>
+                    <td class="text-right">Q${base.toFixed(2)}</td>
+                    <td class="text-right">Q${lab.toFixed(2)}</td>
+                    <td class="text-right">Q${pat.toFixed(2)}</td>
+                    <td class="text-right">Q${irtra.toFixed(2)}</td>
+                    <td class="text-right">Q${int.toFixed(2)}</td>
+                    <td class="text-right">Q${totP.toFixed(2)}</td>
+                    <td class="text-right">Q${totA.toFixed(2)}</td>
+                  </tr>
+                `;
+              }).join('')}
+              <tr style="font-weight: bold; background: #f9f9f9;">
+                <td colspan="3">TOTALES</td>
+                <td class="text-right">Q${totalSueldo.toFixed(2)}</td>
+                <td class="text-right">Q${totalLaboral.toFixed(2)}</td>
+                <td class="text-right">Q${totalPatIgss.toFixed(2)}</td>
+                <td class="text-right">Q${totalIrtra.toFixed(2)}</td>
+                <td class="text-right">Q${totalIntecap.toFixed(2)}</td>
+                <td class="text-right">Q${totalPatronal.toFixed(2)}</td>
+                <td class="text-right">Q${granTotal.toFixed(2)}</td>
+              </tr>
+            </tbody>
+          </table>
+
+          <div class="totals-box">
+            <table class="totals-table">
+              <tr>
+                <td><strong>Masa Salarial Base:</strong></td>
+                <td class="text-right">Q${totalSueldo.toFixed(2)}</td>
+              </tr>
+              <tr>
+                <td>Retención Laboral (4.83%):</td>
+                <td class="text-right">Q${totalLaboral.toFixed(2)}</td>
+              </tr>
+              <tr>
+                <td>Aporte Patronal Total (12.67%):</td>
+                <td class="text-right">Q${totalPatronal.toFixed(2)}</td>
+              </tr>
+              <tr class="total-row">
+                <td><strong>TOTAL A PAGAR AL IGSS:</strong></td>
+                <td class="text-right"><strong>Q${granTotal.toFixed(2)}</strong></td>
+              </tr>
+            </table>
+          </div>
+
+          <div style="margin-top: 30px; font-size: 10px; color: #555; line-height: 1.4; border-top: 1px solid #ddd; padding-top: 10px;">
+            <strong>Nota de Deducibilidad del ISR:</strong> El gasto por sueldos y salarios, así como la contribución patronal al IGSS, IRTRA e INTECAP son costos deducibles para el cálculo del Impuesto Sobre la Renta, conforme al artículo 21, numeral 4 del Libro I del Decreto 10-2012 del Congreso de la República (Ley de Actualización Tributaria de Guatemala). Para su validez, esta planilla debe estar efectivamente pagada y respaldada por las constancias de aportes respectivos.
+          </div>
+
+          <div class="footer-sig">
+            <div>
+              <div class="sig-line">Preparado por Contabilidad</div>
+            </div>
+            <div>
+              <div class="sig-line">Firma y Sello Representante Legal</div>
+            </div>
+          </div>
+          <script>window.print();</script>
+        </body>
+      </html>
+    `);
+    win.document.close();
   }
 };

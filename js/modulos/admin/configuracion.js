@@ -18,6 +18,8 @@ Modulos.configuracion = {
               <input class="form-input" id="cfg-nombre" value="${t.name||''}"></div>
             <div class="form-group"><label class="form-label">NIT</label>
               <input class="form-input" id="cfg-nit" value="${t.nit||''}"></div>
+            <div class="form-group"><label class="form-label">No. Patronal IGSS</label>
+              <input class="form-input mono-sm" id="cfg-igss-pat" value="${t.igss_patronal||''}" placeholder="Escriba número patronal"></div>
             <div class="form-group"><label class="form-label">Teléfono</label>
               <input class="form-input" id="cfg-tel" value="${t.tel||''}"></div>
             <div class="form-group"><label class="form-label">Email</label>
@@ -56,15 +58,23 @@ Modulos.configuracion = {
   },
 
   async guardar() {
+    const nameVal = document.getElementById('cfg-nombre')?.value.trim();
+    const igssPat = document.getElementById('cfg-igss-pat')?.value.trim()||null;
     const ok = await DB.updateTenant({
-      name:    document.getElementById('cfg-nombre')?.value.trim(),
+      name:    nameVal,
       nit:     document.getElementById('cfg-nit')?.value.trim()||null,
+      igss_patronal: igssPat,
       tel:     document.getElementById('cfg-tel')?.value.trim()||null,
       email:   document.getElementById('cfg-email')?.value.trim()||null,
       address: document.getElementById('cfg-dir')?.value.trim()||null,
       updated_at: new Date().toISOString()
     });
-    if (ok) { UI.toast('Configuración guardada ✓'); Auth.tenant.name = document.getElementById('cfg-nombre')?.value.trim(); App.renderSidebar(); }
+    if (ok) { 
+      UI.toast('Configuración guardada ✓'); 
+      Auth.tenant.name = nameVal; 
+      Auth.tenant.igss_patronal = igssPat;
+      App.renderSidebar(); 
+    }
     else UI.toast('Error al guardar','error');
   }
 };

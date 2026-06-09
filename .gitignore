@@ -28,3 +28,8 @@ Desktop.ini
 .idea/
 *.swp
 *~
+
+# Directorios temporales de CLI y Assets
+.wrangler/
+supabase/.temp/
+dashboard.jpg
