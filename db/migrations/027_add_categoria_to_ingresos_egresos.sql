@@ -1,16 +1,17 @@
 -- ── MIGRACIÓN 027: AGREGAR COLUMNAS FALTANTES A INGRESOS/EGRESOS Y RE-INTENTAR SINCRONIZACIÓN ──
 
--- 1. Asegurar todas las columnas necesarias en la tabla 'public.ingresos'
+-- 1. Asegurar todas las columnas necesarias en la tabla 'public.facturas'
+ALTER TABLE public.facturas ADD COLUMN IF NOT EXISTS num TEXT;
+ALTER TABLE public.facturas ADD COLUMN IF NOT EXISTS notas TEXT;
+
+-- 2. Asegurar todas las columnas necesarias en la tabla 'public.ingresos'
 ALTER TABLE public.ingresos ADD COLUMN IF NOT EXISTS categoria TEXT;
 ALTER TABLE public.ingresos ADD COLUMN IF NOT EXISTS orden_id UUID REFERENCES public.ordenes(id) ON DELETE SET NULL;
 ALTER TABLE public.ingresos ADD COLUMN IF NOT EXISTS cliente_id UUID REFERENCES public.clientes(id) ON DELETE SET NULL;
 
--- 2. Asegurar todas las columnas necesarias en la tabla 'public.egresos'
+-- 3. Asegurar todas las columnas necesarias en la tabla 'public.egresos'
 ALTER TABLE public.egresos ADD COLUMN IF NOT EXISTS categoria TEXT;
 ALTER TABLE public.egresos ADD COLUMN IF NOT EXISTS proveedor_id UUID REFERENCES public.proveedores(id) ON DELETE SET NULL;
-
--- 3. Asegurar columna 'num' en facturas (por consistencia con el código JS)
-ALTER TABLE public.facturas ADD COLUMN IF NOT EXISTS num TEXT;
 
 -- 4. Poblar/Sincronizar retroactivamente facturas activas existentes a ingresos
 -- (Esto disparará de forma segura el trigger 'trg_sync_ingreso_to_banco', 
@@ -23,9 +24,9 @@ SELECT
   f.total, 
   COALESCE(f.num, f.id::text), 
   f.cliente_id, 
-  f.ot_id, -- Cambiado de f.orden_id a f.ot_id
+  f.ot_id, 
   f.fecha, 
-  COALESCE(f.notes, f.notas, 'Facturado correlativo ' || COALESCE(f.num, f.id::text)), -- COALESCE para f.notes o f.notas por si acaso
+  COALESCE(f.notas, 'Facturado correlativo ' || COALESCE(f.num, f.id::text)), 
   f.created_at
 FROM public.facturas f
 WHERE f.estado != 'anulada'
