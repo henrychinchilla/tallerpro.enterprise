@@ -390,6 +390,10 @@ Modulos.rrhh = {
       <div class="form-group"><label class="form-label">Dirección</label>
         <input class="form-input" id="emp-dir" value="${e.direccion||''}"></div>
 
+      <!-- SITUACIÓN DE SALUD / ALERGIAS -->
+      <div class="form-group"><label class="form-label">Alergias / Situación de Salud (se muestra en el carné)</label>
+        <input class="form-input" id="emp-alergias" value="${e.alergias_salud||''}" placeholder="Ej. Sangre O+, Alergia a Penicilina, Diabético..."></div>
+
       <!-- CONTACTO DE EMERGENCIA -->
       <div style="border-top:1px solid var(--border);padding-top:12px;margin-top:8px;font-weight:700;font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px">Contacto de Emergencia</div>
       <div class="form-row">
@@ -590,6 +594,7 @@ Modulos.rrhh = {
       emergencia_nombre:     document.getElementById('emp-emerg-nombre')?.value||null,
       emergencia_parentesco: document.getElementById('emp-emerg-parentesco')?.value||null,
       emergencia_tel:        document.getElementById('emp-emerg-tel')?.value||null,
+      alergias_salud:        document.getElementById('emp-alergias')?.value.trim()||null,
       fecha_ingreso:         document.getElementById('emp-ingreso')?.value||null,
       rol:                   crearAcceso ? accesoRol : (prev?.rol || null),
       reporta_a:             (document.getElementById('emp-jefe')?.value && document.getElementById('emp-jefe').value!==id)
@@ -1659,9 +1664,10 @@ Modulos.rrhh = {
                 </div>
 
                 <div>
-                  <div class="back-section-title">Datos Médicos / Notas:</div>
-                  <div class="back-data" style="font-size: 8.5px;">
-                    ${e.notas ? e.notas.replace(/\n/g, '<br>') : 'Sin observaciones médicas registradas.'}
+                  <div class="back-section-title">Datos Médicos / Alergias:</div>
+                  <div class="back-data" style="font-size: 8.5px; min-height: 36px;">
+                    ${e.alergias_salud ? `<strong>Alergias/Salud:</strong> ${e.alergias_salud.replace(/\n/g, '<br>')}` : 'Sin alergias o situaciones de salud reportadas.'}
+                    ${e.notas ? `<br><span style="font-size: 7.5px; color: #cbd5e1; display: block; margin-top: 4px;">${e.notas.replace(/\n/g, '<br>')}</span>` : ''}
                   </div>
                 </div>
 
