@@ -175,7 +175,7 @@ Modulos.marketing = {
           <thead><tr><th>Fecha</th><th>Cliente</th><th>Servicio</th><th>Productos</th><th>Comentario</th><th>Pts</th></tr></thead>
           <tbody>${fb.map(f=>`<tr>
             <td class="mono-sm">${UI.fecha(f.created_at?.slice(0,10))}</td>
-            <td>${f.clientes?.nombre||f.nombre||'Anónimo'}${f.telefono?`<br><small class="text-muted">${f.telefono}</small>`:''}</td>
+            <td>${f.clientes?.nombre||f.nombre||'Anónimo'}${f.telefono?`<br><small class="text-muted">${f.telefono}</small>`:''}${(f.vehiculo||f.servicio)?`<br><small class="text-muted">${[f.vehiculo,f.servicio].filter(Boolean).join(' · ')}</small>`:''}</td>
             <td>${'⭐'.repeat(f.rating_servicio||0)||'—'}</td>
             <td>${'⭐'.repeat(f.rating_productos||0)||'—'}</td>
             <td style="font-size:12px;max-width:240px">${f.comentario||'—'}</td>

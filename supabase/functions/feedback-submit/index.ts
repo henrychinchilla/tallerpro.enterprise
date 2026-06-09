@@ -38,6 +38,8 @@ Deno.serve(async (req) => {
     nombre: (b.nombre ?? "").toString().slice(0, 120) || null,
     telefono: (b.telefono ?? "").toString().slice(0, 40) || null,
     email: (b.email ?? "").toString().slice(0, 120) || null,
+    vehiculo: (b.vehiculo ?? "").toString().slice(0, 80) || null,
+    servicio: (b.servicio ?? "").toString().slice(0, 120) || null,
     rating_servicio: Number(b.rating_servicio) || null,
     rating_productos: Number(b.rating_productos) || null,
     nps: Number(b.nps) || null,
