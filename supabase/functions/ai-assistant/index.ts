@@ -63,6 +63,32 @@ Cuando des cifras de dinero, formatéalas en Quetzales (Q).`,
 Genera un resumen ejecutivo del estado del taller a partir del snapshot: tendencia de
 ingresos, alertas (inventario bajo, OT atrasadas, saldos por cobrar, vehículos con
 mantenimiento pendiente) y 2-3 recomendaciones accionables. Usa viñetas y sé breve.`,
+  tarjeta: `Eres un asistente especializado en extraer información de imágenes de tarjetas de circulación de vehículos en Guatemala.
+Tu única tarea es analizar la imagen proporcionada y extraer todos los datos de texto de forma precisa.
+Debes devolver ÚNICAMENTE un objeto JSON válido con los siguientes campos y valores extraídos de la tarjeta. Si un campo no se encuentra en la imagen o está en blanco, devuélvelo como null.
+No agregues formato de código de markdown (como \`\`\`json), no agregues comentarios, no expliques nada, solo devuelve el objeto JSON crudo en texto plano.
+
+Campos y formatos esperados:
+{
+  "nit": "El NIT del propietario sin guiones (ej. '4354281')",
+  "cui": "El CUI de 13 dígitos del propietario (ej. '1605755322205')",
+  "placa": "El número de placa completo, ej. 'P0-811BKJ'",
+  "marca": "La marca del vehículo (ej. 'MITSUBISHI')",
+  "modelo": "El año del modelo (el número entero del campo MODELO en la tarjeta, ej. 2004)",
+  "linea": "La línea o estilo del vehículo (campo LÍNEA en la tarjeta, ej. 'MONTERO GLS')",
+  "chasis": "El número de chasis",
+  "vin": "El VIN. Si el campo VIN en la tarjeta está vacío, pero el campo CHASIS contiene un valor de 17 caracteres que parece un VIN, cópialo también aquí. Si está en blanco, pon null",
+  "motor": "El número de motor",
+  "cilindros": "Número de cilindros como entero",
+  "cc": "La cilindrada en C.C. como entero (ej. 3828)",
+  "ton": "Las toneladas como número (ej. 0)",
+  "uso": "El uso del vehículo (ej. 'PARTICULAR')",
+  "tipo": "El tipo de vehículo (ej. 'CAMIONETA')",
+  "serie": "El número de serie",
+  "asientos": "El número de asientos como entero (ej. 7)",
+  "ejes": "El número de ejes como entero (ej. 2)",
+  "color": "El color o colores del vehículo"
+}`
 };
 
 /* Snapshot del tenant. `elevado` (admin/gerente/CEO) recibe TODA la info,
@@ -174,20 +200,56 @@ Deno.serve(async (req) => {
   const contexto = body.contexto ?? {};
 
   if (!PROMPTS[modo]) return json({ error: "Modo no válido" }, 400);
-  if (!mensaje && modo !== "insights") return json({ error: "Falta el mensaje" }, 400);
+  if (!mensaje && modo !== "insights" && modo !== "tarjeta") return json({ error: "Falta el mensaje" }, 400);
 
   // ── Construir el contenido del usuario ──
   let userContent = "";
-  if (modo === "chat" || modo === "insights") {
+  let messagesPayload: any[] = [];
+
+  if (modo === "tarjeta") {
+    const base64Data = body.imagen_base64;
+    if (!base64Data) {
+      return json({ error: "Falta la imagen de la tarjeta" }, 400);
+    }
+    let mediaType = "image/jpeg";
+    let base64Raw = base64Data;
+    if (base64Data.startsWith("data:")) {
+      const parts = base64Data.split(",");
+      const meta = parts[0];
+      base64Raw = parts[1];
+      mediaType = meta.split(";")[0].split(":")[1] || "image/jpeg";
+    }
+    messagesPayload = [
+      {
+        role: "user",
+        content: [
+          {
+            type: "image",
+            source: {
+              type: "base64",
+              media_type: mediaType,
+              data: base64Raw,
+            },
+          },
+          {
+            type: "text",
+            text: "Analiza la imagen de la tarjeta de circulación de Guatemala y extrae los datos solicitados en formato JSON.",
+          },
+        ],
+      },
+    ];
+  } else if (modo === "chat" || modo === "insights") {
     if (!tenantId) return json({ error: "Sin taller asociado a tu usuario" }, 400);
     const snap = await snapshotTenant(asCaller, tenantId, elevado);
     userContent = `Fecha de hoy: ${new Date().toISOString().slice(0, 10)}\n` +
       `Snapshot del taller (JSON):\n${JSON.stringify(snap, null, 2)}\n\n` +
       (modo === "insights" ? "Genera el resumen ejecutivo." : `Pregunta: ${mensaje}`);
+    messagesPayload = [{ role: "user", content: userContent }];
   } else {
     userContent = contexto && Object.keys(contexto).length
       ? `Contexto (JSON): ${JSON.stringify(contexto)}\n\nSolicitud: ${mensaje}`
       : mensaje;
+    messagesPayload = [{ role: "user", content: userContent }];
   }
 
   // ── Llamar a Claude (fetch directo) ──
@@ -205,7 +267,7 @@ Deno.serve(async (req) => {
         thinking: { type: "adaptive" },
         output_config: { effort: EFFORT },
         system: PROMPTS[modo],
-        messages: [{ role: "user", content: userContent }],
+        messages: messagesPayload,
       }),
     });
 

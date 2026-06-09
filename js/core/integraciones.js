@@ -127,6 +127,9 @@ const IA = {
       `Síntomas: ${sintomas}`,
       { vehiculo });
   },
+  async escanearTarjeta(imagenBase64) {
+    return _invocar('ai-assistant', { modo: 'tarjeta', imagen_base64: imagenBase64 });
+  },
 
   /* ── Chat flotante con Beto ────────────────────── */
   abrirChat() {

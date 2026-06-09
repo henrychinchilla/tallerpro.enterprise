@@ -72,6 +72,7 @@ navegador → getSB().functions.invoke('whatsapp-send' | 'ai-assistant') → Met
 - **Redacción:** genera descripciones de OT, cotizaciones, mensajes (`IA.redactar`)
 - **Chat sobre tus datos:** "¿cuánto facturé en mayo?" (`IA.preguntar`)
 - **Insights:** resumen ejecutivo del negocio (`IA.insights`)
+- **Escanear Tarjeta:** lee imágenes de tarjetas de circulación de Guatemala y extrae los campos (`IA.escanearTarjeta`)
 
 Chat e insights se aterrizan en un *snapshot* del taller (clientes, OT
 abiertas, ingresos/egresos del mes, inventario bajo) — la IA no inventa

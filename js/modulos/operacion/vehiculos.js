@@ -246,60 +246,266 @@ Modulos.vehiculos = {
       </div>`;
   },
 
+  _renderTarjetaBox() {
+    if (this._tarjetaImg) {
+      return `
+        <div style="position:relative;width:100%;max-width:320px;margin:0 auto;border-radius:10px;overflow:hidden;border:1px solid var(--border)">
+          <img src="${this._tarjetaImg}" onclick="Modulos.vehiculos._lightboxTarjeta()" alt="Tarjeta"
+               style="width:100%;height:140px;object-fit:cover;cursor:zoom-in;display:block">
+          <button type="button" onclick="Modulos.vehiculos._quitarTarjeta()" title="Quitar imagen"
+            style="position:absolute;top:8px;right:8px;width:26px;height:26px;border-radius:50%;background:var(--red);border:none;color:#fff;cursor:pointer;font-weight:700;line-height:1;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 6px rgba(0,0,0,.3)">×</button>
+        </div>`;
+    }
+    return `
+      <label style="width:100%;height:100px;border-radius:10px;border:2px dashed var(--border);display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;color:var(--text3);font-size:12px;gap:8px;background:var(--surface2);transition:all 0.2s">
+        <span style="font-size:26px">📷</span>
+        <b>Escanear Tarjeta de Circulación con IA</b>
+        <input type="file" id="veh-tarjeta-file" accept="image/*" style="display:none" onchange="Modulos.vehiculos.procesarTarjeta(this)">
+      </label>`;
+  },
+
+  _refreshTarjetaBox() {
+    const b = document.getElementById('veh-tarjeta-box');
+    if (b) b.innerHTML = this._renderTarjetaBox();
+  },
+
+  _quitarTarjeta() {
+    this._tarjetaImg = '';
+    this._refreshTarjetaBox();
+  },
+
+  _lightboxTarjeta() {
+    if (!this._tarjetaImg) return;
+    const ov = document.createElement('div');
+    ov.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.85);display:flex;align-items:center;justify-content:center;cursor:zoom-out';
+    ov.onclick = () => ov.remove();
+    ov.innerHTML = `<img src="${this._tarjetaImg}" style="max-width:92vw;max-height:92vh;border-radius:10px;box-shadow:0 8px 40px rgba(0,0,0,.6)">`;
+    document.body.appendChild(ov);
+  },
+
+  async procesarTarjeta(input) {
+    const file = input.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith('image/')) { UI.toast('Selecciona una imagen válida', 'error'); return; }
+
+    const loadingEl = document.getElementById('veh-tarjeta-loading');
+    const boxEl = document.getElementById('veh-tarjeta-box');
+    if (loadingEl) loadingEl.style.display = 'block';
+    if (boxEl) boxEl.style.opacity = '0.5';
+
+    const reader = new FileReader();
+    reader.onload = e => {
+      const img = new Image();
+      img.onload = async () => {
+        try {
+          const max = 1024;
+          let w = img.width, h = img.height;
+          if (w > max || h > max) {
+            const r = Math.min(max/w, max/h);
+            w = Math.round(w*r);
+            h = Math.round(h*r);
+          }
+          const c = document.createElement('canvas');
+          c.width = w;
+          c.height = h;
+          c.getContext('2d').drawImage(img, 0, 0, w, h);
+          const base64 = c.toDataURL('image/jpeg', 0.85);
+
+          const res = await IA.escanearTarjeta(base64);
+          if (!res.ok) {
+            UI.toast('Error al escanear: ' + (res.error || 'No se pudo leer la tarjeta'), 'error');
+            return;
+          }
+
+          let txt = res.texto || '';
+          const jsonMatch = txt.match(/```json\s*([\s\S]*?)\s*```/) || txt.match(/```\s*([\s\S]*?)\s*```/);
+          if (jsonMatch) txt = jsonMatch[1];
+
+          let data;
+          try {
+            data = JSON.parse(txt.trim());
+          } catch (err) {
+            console.error('Error al parsear JSON de la tarjeta:', txt, err);
+            UI.toast('La respuesta de la IA no fue un JSON válido', 'error');
+            return;
+          }
+
+          const setVal = (id, val) => {
+            const el = document.getElementById(id);
+            if (el && val !== undefined && val !== null) el.value = val;
+          };
+
+          setVal('veh-nit', data.nit);
+          setVal('veh-cui', data.cui);
+          setVal('veh-placa', data.placa);
+          setVal('veh-marca', data.marca);
+          setVal('veh-modelo', data.linea || data.modelo);
+          setVal('veh-anio', data.modelo);
+          setVal('veh-linea', data.linea);
+          setVal('veh-chasis', data.chasis);
+          setVal('veh-vin', data.vin || data.chasis);
+          setVal('veh-motor', data.motor);
+          setVal('veh-cilindros', data.cilindros);
+          setVal('veh-cc', data.cc);
+          setVal('veh-ton', data.ton);
+          setVal('veh-uso', data.uso);
+          setVal('veh-serie', data.serie);
+          setVal('veh-asientos', data.asientos);
+          setVal('veh-ejes', data.ejes);
+          setVal('veh-color', data.color);
+
+          if (data.tipo) {
+            const tEl = document.getElementById('veh-tipo');
+            if (tEl) {
+              const tipoNormal = data.tipo.toUpperCase();
+              let matchedTipo = 'Liviano';
+              if (tipoNormal.includes('CAMIONETA') || tipoNormal.includes('SUV')) matchedTipo = 'SUV';
+              else if (tipoNormal.includes('PESADO') || tipoNormal.includes('CAMION') || tipoNormal.includes('CABEZAL')) matchedTipo = 'Pesado';
+              else if (tipoNormal.includes('MOTO')) matchedTipo = 'Motocicleta';
+              else if (tipoNormal.includes('ATV') || tipoNormal.includes('CUATRIMOTO')) matchedTipo = 'ATV';
+              
+              tEl.value = matchedTipo;
+              Modulos.vehiculos._onTipoChange();
+            }
+          }
+
+          if (data.nit) {
+            const cleanNit = data.nit.toString().replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+            const cliente = Modulos.vehiculos._clientes.find(c => {
+              const cNit = (c.nit || '').toString().replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+              return cNit && cNit === cleanNit;
+            });
+            if (cliente) {
+              setVal('veh-cliente', cliente.id);
+              UI.toast(`Tarjeta leída ✓. Cliente asociado: ${cliente.nombre}`);
+            } else {
+              UI.toast(`Tarjeta leída ✓. No se encontró cliente para el NIT: ${data.nit}`, 'info');
+            }
+          } else {
+            UI.toast('Tarjeta leída ✓');
+          }
+
+          Modulos.vehiculos._tarjetaImg = base64;
+          Modulos.vehiculos._refreshTarjetaBox();
+
+        } catch (err) {
+          console.error(err);
+          UI.toast('Error al procesar la imagen', 'error');
+        } finally {
+          if (loadingEl) loadingEl.style.display = 'none';
+          if (boxEl) boxEl.style.opacity = '1';
+        }
+      };
+      img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+  },
+
   async modalForm(id=null) {
     const v = id ? this._data.find(x=>x.id===id) : {};
     const esEdicion = !!id;
+    this._tarjetaImg = v.tarjeta_base64 || '';
+
     UI.modal(`${esEdicion?'✏️ Editar':'＋ Nuevo'} Vehículo`, `
       ${esEdicion?'<div class="alert alert-amber" style="margin-bottom:12px"><div class="alert-icon">⚠️</div><div class="alert-body" style="font-size:11px">Los cambios reemplazarán la información actual del vehículo.</div></div>':''}
+      
+      <!-- Escaneo/Carga de tarjeta de circulación -->
+      <div style="background:var(--surface2);border:1px dashed var(--border);border-radius:10px;padding:14px;margin-bottom:16px;text-align:center">
+        <div id="veh-tarjeta-box" style="display:flex;justify-content:center;align-items:center;min-height:90px">
+          ${this._renderTarjetaBox()}
+        </div>
+        <div id="veh-tarjeta-loading" style="display:none;font-size:12px;margin-top:8px;color:var(--amber);font-weight:700">
+          ⏳ Analizando tarjeta con Beto AI...
+        </div>
+      </div>
+
+      <div style="font-weight:700;font-size:12px;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px;border-bottom:1px solid var(--border);padding-bottom:4px">🚗 Identificación y Propietario</div>
       <div class="form-row">
-        <div class="form-group"><label class="form-label">Placa *</label>
-          <input class="form-input" id="veh-placa" value="${v.placa||''}" placeholder="P-123ABC" style="text-transform:uppercase"></div>
+        <div class="form-group"><label class="form-label">NIT</label>
+          <input class="form-input" id="veh-nit" value="${v.nit||''}" placeholder="NIT del propietario"></div>
+        <div class="form-group"><label class="form-label">CUI</label>
+          <input class="form-input" id="veh-cui" value="${v.cui||''}" placeholder="CUI del propietario"></div>
+      </div>
+      <div class="form-row">
         <div class="form-group"><label class="form-label">Cliente *</label>
           <select class="form-select" id="veh-cliente">
             <option value="">Seleccionar cliente...</option>
-            ${this._clientes.map(c=>`<option value="${c.id}" ${v.cliente_id===c.id?'selected':''}>${c.nombre}</option>`).join('')}
+            ${this._clientes.map(c=>`<option value="${c.id}" ${v.cliente_id===c.id?'selected':''}>${c.nombre} ${c.nit?`(${c.nit})`:''}</option>`).join('')}
           </select></div>
+        <div class="form-group"><label class="form-label">Placa *</label>
+          <input class="form-input" id="veh-placa" value="${v.placa||''}" placeholder="P-123ABC" style="text-transform:uppercase"></div>
       </div>
+
+      <div style="font-weight:700;font-size:12px;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;margin-top:14px;margin-bottom:8px;border-bottom:1px solid var(--border);padding-bottom:4px">📋 Especificaciones del Vehículo</div>
       <div class="form-row">
         <div class="form-group"><label class="form-label">Tipo *</label>
           <select class="form-select" id="veh-tipo" onchange="Modulos.vehiculos._onTipoChange()">
             ${this._tipos.map(t=>`<option ${(v.tipo||'Liviano')===t?'selected':''}>${t}</option>`).join('')}
           </select></div>
-        <div class="form-group"><label class="form-label">Marca *</label>
-          <input class="form-input" id="veh-marca" list="marcas-list" autocomplete="off" value="${v.marca||''}" placeholder="Escribe o elige..."
-                 oninput="Modulos.vehiculos._onMarcaChange()" onchange="Modulos.vehiculos._onMarcaChange()">
-          <datalist id="marcas-list">${this._opcionesMarca(v.tipo||'Liviano')}</datalist>
-          <div style="font-size:11px;color:var(--text3);margin-top:4px">Si no está en la lista, escríbela.</div></div>
+        <div class="form-group"><label class="form-label">Uso</label>
+          <input class="form-input" id="veh-uso" value="${v.uso||''}" placeholder="PARTICULAR, COMERCIAL, etc."></div>
       </div>
       <div class="form-row">
-        <div class="form-group"><label class="form-label">Modelo *</label>
+        <div class="form-group"><label class="form-label">Marca *</label>
+          <input class="form-input" id="veh-marca" list="marcas-list" autocomplete="off" value="${v.marca||''}" placeholder="Toyota, Honda..."
+                 oninput="Modulos.vehiculos._onMarcaChange()" onchange="Modulos.vehiculos._onMarcaChange()">
+          <datalist id="marcas-list">${this._opcionesMarca(v.tipo||'Liviano')}</datalist></div>
+        <div class="form-group"><label class="form-label">Línea *</label>
+          <input class="form-input" id="veh-linea" value="${v.linea||''}" placeholder="MONTERO GLS, COROLLA, etc."></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Modelo (Nombre/Línea sugerido) *</label>
           <input class="form-input" id="veh-modelo" list="modelos-list" autocomplete="off" value="${v.modelo||''}" placeholder="Elige según la marca o escribe...">
-          <datalist id="modelos-list">${this._opcionesModelo(v.marca||'', v.tipo||'Liviano')}</datalist>
-          <div style="font-size:11px;color:var(--text3);margin-top:4px">Sugerencias según la marca. Puedes escribir uno nuevo.</div></div>
-        <div class="form-group"><label class="form-label">Año</label>
+          <datalist id="modelos-list">${this._opcionesModelo(v.marca||'', v.tipo||'Liviano')}</datalist></div>
+        <div class="form-group"><label class="form-label">Año (Modelo)</label>
           <input class="form-input" id="veh-anio" type="number" value="${v.anio||''}" placeholder="2020"></div>
       </div>
       <div class="form-row">
         <div class="form-group"><label class="form-label">Color</label>
-          <input class="form-input" id="veh-color" list="colores-list" autocomplete="off" value="${v.color||''}" placeholder="Escribe o elige...">
-          <datalist id="colores-list">${this._colores.map(c=>`<option value="${c}">`).join('')}</datalist>
-          <div style="font-size:11px;color:var(--text3);margin-top:4px">Escribe uno nuevo o un dual (ej. Negro/Rojo).</div></div>
+          <input class="form-input" id="veh-color" list="colores-list" autocomplete="off" value="${v.color||''}" placeholder="Azul, Blanco...">
+          <datalist id="colores-list">${this._colores.map(c=>`<option value="${c}">`).join('')}</datalist></div>
         <div class="form-group"><label class="form-label">Combustible</label>
           <select class="form-select" id="veh-comb">
             ${['Gasolina','Diesel','Híbrido','Eléctrico','GLP'].map(c=>`<option ${v.combustible===c?'selected':''}>${c}</option>`).join('')}
           </select></div>
       </div>
+
+      <div style="font-weight:700;font-size:12px;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;margin-top:14px;margin-bottom:8px;border-bottom:1px solid var(--border);padding-bottom:4px">🔩 Chasis y Motor</div>
       <div class="form-row">
-        <div class="form-group"><label class="form-label">Kilometraje / Horas de uso</label>
-          <input class="form-input" id="veh-km" type="number" value="${v.kilometraje||''}" placeholder="km (autos) u horas (motores/generadores)"></div>
-        <div class="form-group"><label class="form-label">Motor</label>
-          <input class="form-input" id="veh-motor" value="${v.motor||''}" placeholder="1.8L"></div>
+        <div class="form-group"><label class="form-label">VIN</label>
+          <input class="form-input" id="veh-vin" value="${v.vin||''}" maxlength="17" placeholder="VIN de 17 caracteres" style="text-transform:uppercase"></div>
+        <div class="form-group"><label class="form-label">No. de Chasis</label>
+          <input class="form-input" id="veh-chasis" value="${v.chasis||''}" placeholder="Número de chasis" style="text-transform:uppercase"></div>
       </div>
-      <div class="form-group"><label class="form-label">VIN / No. de Chasis</label>
-        <input class="form-input" id="veh-vin" value="${v.vin||''}" maxlength="17" placeholder="17 caracteres" style="text-transform:uppercase">
-        <div style="font-size:11px;color:var(--text3);margin-top:4px">El VIN correcto permite a Beto identificar el vehículo y verificar fallas / códigos DTC.</div></div>
-      <div class="form-group"><label class="form-label">Notas</label>
-        <textarea class="form-input" id="veh-notas" rows="2">${v.notas||''}</textarea></div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">No. de Serie</label>
+          <input class="form-input" id="veh-serie" value="${v.serie||''}" placeholder="Número de serie" style="text-transform:uppercase"></div>
+        <div class="form-group"><label class="form-label">No. de Motor</label>
+          <input class="form-input" id="veh-motor" value="${v.motor||''}" placeholder="Número de motor"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Kilometraje / Horas</label>
+          <input class="form-input" id="veh-km" type="number" value="${v.kilometraje||''}" placeholder="km u horas"></div>
+        <div class="form-group"><label class="form-label">Cilindros</label>
+          <input class="form-input" id="veh-cilindros" type="number" value="${v.cilindros||''}" placeholder="6"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Cilindrada (C.C.)</label>
+          <input class="form-input" id="veh-cc" type="number" value="${v.cc||''}" placeholder="3800"></div>
+        <div class="form-group"><label class="form-label">Toneladas (Ton.)</label>
+          <input class="form-input" id="veh-ton" type="number" step="0.01" value="${v.ton||''}" placeholder="0"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Asientos</label>
+          <input class="form-input" id="veh-asientos" type="number" value="${v.asientos||''}" placeholder="5"></div>
+        <div class="form-group"><label class="form-label">Ejes</label>
+          <input class="form-input" id="veh-ejes" type="number" value="${v.ejes||''}" placeholder="2"></div>
+      </div>
+
+      <div style="font-weight:700;font-size:12px;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;margin-top:14px;margin-bottom:8px;border-bottom:1px solid var(--border);padding-bottom:4px">📝 Notas Adicionales</div>
+      <div class="form-group">
+        <textarea class="form-input" id="veh-notas" rows="2" placeholder="Observaciones adicionales del vehículo">${v.notas||''}</textarea></div>
+
       <div class="modal-footer">
         <button class="btn btn-ghost" onclick="UI.cerrarModal()">Cancelar</button>
         <button class="btn btn-amber" onclick="Modulos.vehiculos.guardar('${id||''}')">
@@ -315,16 +521,38 @@ Modulos.vehiculos = {
     const modelo  = document.getElementById('veh-modelo')?.value.trim();
     if (!placa||!cliente||!marca||!modelo) { UI.toast('Placa, cliente, marca y modelo son obligatorios','error'); return; }
 
+    const getInt = id => {
+      const v = document.getElementById(id)?.value;
+      return (v !== undefined && v !== '' && !isNaN(v)) ? parseInt(v) : null;
+    };
+    const getFloat = id => {
+      const v = document.getElementById(id)?.value;
+      return (v !== undefined && v !== '' && !isNaN(v)) ? parseFloat(v) : null;
+    };
+
     const fields = {
       placa, cliente_id:cliente, marca, modelo,
       tipo:        document.getElementById('veh-tipo')?.value||null,
-      anio:        parseInt(document.getElementById('veh-anio')?.value)||null,
+      anio:        getInt('veh-anio'),
       color:       document.getElementById('veh-color')?.value||null,
       combustible: document.getElementById('veh-comb')?.value||null,
-      kilometraje: parseInt(document.getElementById('veh-km')?.value)||0,
+      kilometraje: getInt('veh-km')||0,
       motor:       document.getElementById('veh-motor')?.value||null,
       vin:         (document.getElementById('veh-vin')?.value||'').trim().toUpperCase()||null,
-      notas:       document.getElementById('veh-notas')?.value||null
+      notas:       document.getElementById('veh-notas')?.value||null,
+      
+      chasis:      (document.getElementById('veh-chasis')?.value||'').trim().toUpperCase()||null,
+      serie:       (document.getElementById('veh-serie')?.value||'').trim().toUpperCase()||null,
+      uso:         document.getElementById('veh-uso')?.value||null,
+      asientos:    getInt('veh-asientos'),
+      ejes:        getInt('veh-ejes'),
+      cilindros:   getInt('veh-cilindros'),
+      cc:          getInt('veh-cc'),
+      ton:         getFloat('veh-ton'),
+      linea:       document.getElementById('veh-linea')?.value||null,
+      cui:         (document.getElementById('veh-cui')?.value||'').trim()||null,
+      nit:         (document.getElementById('veh-nit')?.value||'').trim()||null,
+      tarjeta_base64: this._tarjetaImg || null
     };
     if (id) fields.id = id;
 
