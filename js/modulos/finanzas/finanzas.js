@@ -33,16 +33,32 @@ Modulos.finanzas = {
   },
 
   async _getData() {
-    const [ingresos, egresos] = await Promise.all([DB.getIngresos(this._ini,this._fin), DB.getEgresos(this._ini,this._fin)]);
-    const totalIng = ingresos.reduce((s,i)=>s+(i.monto||0),0);
-    const totalEgr = egresos.reduce((s,e)=>s+(e.monto||0),0);
-    return { ingresos, egresos, totalIng, totalEgr, utilidad: totalIng-totalEgr };
+    const [ingresos, egresos, facturas] = await Promise.all([
+      DB.getIngresos(this._ini,this._fin),
+      DB.getEgresos(this._ini,this._fin),
+      DB.getFacturas(this._ini,this._fin).catch(()=>[])
+    ]);
+    const facturasVivas = facturas.filter(f => f.estado !== 'anulada');
+    const totalFact   = facturasVivas.reduce((s,f)=>s+(Number(f.total)||0),0);
+    const totalIngDir = ingresos.reduce((s,i)=>s+(Number(i.monto)||0),0);
+    const totalIng    = totalIngDir + totalFact;   // ventas (facturas) + ingresos directos
+    const totalEgr    = egresos.reduce((s,e)=>s+(Number(e.monto)||0),0);
+    return { ingresos, egresos, facturas: facturasVivas, totalFact, totalIngDir, totalIng, totalEgr, utilidad: totalIng-totalEgr };
+  },
+
+  /* Ingresos por categoría incluyendo la facturación (ventas) */
+  _ventasCats(ingresos, totalFact) {
+    const m = {};
+    ingresos.forEach(i => { const k = i.categoria || 'General'; m[k] = (m[k]||0) + (Number(i.monto)||0); });
+    const arr = Object.entries(m);
+    if (totalFact > 0) arr.unshift(['Facturación (ventas)', totalFact]);
+    return arr.sort((a,b)=>b[1]-a[1]);
   },
 
   async _renderTab() {
     const el = document.getElementById('fin-content');
     if (!el) return;
-    const { ingresos, egresos, totalIng, totalEgr, utilidad } = await this._getData();
+    const { ingresos, egresos, totalIng, totalEgr, utilidad, totalFact } = await this._getData();
 
     const agrupar = (items,campo) => {
       const m={};
@@ -61,7 +77,7 @@ Modulos.finanzas = {
         <div class="grid-2">
           <div class="card">
             <div class="card-sub mb-3">📈 Ingresos por Categoría</div>
-            ${agrupar(ingresos,'categoria').map(([k,v])=>`
+            ${this._ventasCats(ingresos, totalFact).map(([k,v])=>`
               <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--border);font-size:13px">
                 <span>${k}</span>
                 <div style="display:flex;align-items:center;gap:8px">
@@ -232,7 +248,7 @@ Modulos.finanzas = {
 
       // Gastos por categoría agrupados
       const gastos = agrupar(egresos,'categoria');
-      const ventas  = agrupar(ingresos,'categoria');
+      const ventas  = this._ventasCats(ingresos, totalFact);
       const costo   = egresos.filter(e=>['Compras','Repuestos'].includes(e.categoria)).reduce((s,e)=>s+(e.monto||0),0);
       const gastoOp = egresos.filter(e=>!['Compras','Repuestos'].includes(e.categoria)).reduce((s,e)=>s+(e.monto||0),0);
       /* Depreciación del período (activos) — gasto no monetario */
@@ -573,7 +589,7 @@ Modulos.finanzas = {
           <input class="form-input" id="rec-concepto" value="${r.concepto||''}" placeholder="Renta del local / Energía eléctrica"></div>
         <div class="form-group"><label class="form-label">Categoría</label>
           <select class="form-select" id="rec-cat">
-            ${['Renta','Servicios','Combustible','Nómina','Impuestos','Internet/Teléfono','Mantenimiento','Otro'].map(c=>`<option ${r.categoria===c?'selected':''}>${c}</option>`).join('')}
+            ${['Renta','Servicios','Combustible','Nómina','Impuestos','Internet/Teléfono','Mantenimiento','Contador','Certificación FEL','Otro'].map(c=>`<option ${r.categoria===c?'selected':''}>${c}</option>`).join('')}
           </select></div>
       </div>
       <div class="form-row">

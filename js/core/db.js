@@ -311,6 +311,61 @@ const DB = {
     return { data, error };
   },
 
+  /* ── COMPRAS ──────────────────────────────────── */
+  async getCompras() {
+    const { data } = await getSB().from('compras').select('*')
+      .eq('tenant_id', getTID()).order('fecha',{ascending:false}).order('created_at',{ascending:false});
+    return data || [];
+  },
+  async getCompraItems(compraId) {
+    const { data } = await getSB().from('compra_items').select('*').eq('compra_id', compraId);
+    return data || [];
+  },
+  /* Presupuesto planificado de compras del año (categorías de insumos) */
+  async getPresupuestoCompras(anio) {
+    const { data } = await getSB().from('presupuesto').select('categoria,monto_plan,tipo')
+      .eq('tenant_id', getTID()).eq('anio', anio);
+    return (data||[]).filter(p => /compra|repuesto|insumo|aceite|inventario/i.test(p.categoria||''))
+      .reduce((s,p)=>s+(Number(p.monto_plan)||0),0);
+  },
+  /* Registra una compra: cabecera + items, actualiza inventario (stock+costo)
+     y crea el egreso (categoría Compras) que sale de la cuenta de egresos. */
+  async registrarCompra({ cabecera, items }) {
+    const tid = getTID();
+    const { count } = await getSB().from('compras').select('*',{count:'exact',head:true}).eq('tenant_id',tid);
+    const num = `CMP-${new Date().getFullYear()}-${String((count||0)+1).padStart(4,'0')}`;
+    const total = items.reduce((s,i)=>s+(Number(i.total)||0),0);
+    const subtotal = Math.round(total/1.12*100)/100;
+    const iva = Math.round((total-subtotal)*100)/100;
+    const fecha = cabecera.fecha || new Date().toISOString().slice(0,10);
+    const { data: compra, error } = await getSB().from('compras').insert({
+      tenant_id:tid, num, proveedor_id:cabecera.proveedor_id||null, proveedor_nombre:cabecera.proveedor_nombre||null,
+      num_factura:cabecera.num_factura||null, fecha, subtotal, iva, total, estado:'recibida', notas:cabecera.notas||null
+    }).select().single();
+    if (error || !compra) return { error };
+    const rows = items.map(i=>({ tenant_id:tid, compra_id:compra.id, inventario_id:i.inventario_id||null,
+      descripcion:i.descripcion, categoria:i.categoria||null, cantidad:i.cantidad, costo_unit:i.costo_unit, total:i.total }));
+    await getSB().from('compra_items').insert(rows);
+    /* Inventario: suma stock y actualiza el costo del artículo */
+    for (const i of items) {
+      if (!i.inventario_id || !(i.cantidad>0)) continue;
+      const { data: inv } = await getSB().from('inventario').select('stock').eq('id', i.inventario_id).maybeSingle();
+      if (!inv) continue;
+      await getSB().from('inventario').update({
+        stock: (Number(inv.stock)||0)+Number(i.cantidad), precio_costo: i.costo_unit, updated_at:new Date().toISOString()
+      }).eq('id', i.inventario_id);
+      await this.movimientoInventario({ inventario_id:i.inventario_id, tipo:'entrada', cantidad:i.cantidad,
+        referencia:`Compra ${num}`, notas:cabecera.proveedor_nombre||null, fecha });
+    }
+    /* Egreso (categoría Compras) → cuenta de egresos + Finanzas */
+    const eg = await this.upsertEgreso({
+      concepto:`Compra ${num}${cabecera.proveedor_nombre?` — ${cabecera.proveedor_nombre}`:''}`,
+      categoria:'Compras', monto:total, fecha, referencia:cabecera.num_factura||num
+    });
+    if (eg?.data?.id) await getSB().from('compras').update({ egreso_id: eg.data.id }).eq('id', compra.id);
+    return { data: compra };
+  },
+
   /* ── BANCOS ───────────────────────────────────── */
   async getBancos() {
     const { data } = await getSB().from('bancos').select('*')
@@ -350,15 +405,30 @@ const DB = {
 
   /* Cuenta bancaria predeterminada para 'ingresos' o 'egresos'.
      Marca la cuenta con bandera; si no hay bandera pero existe UNA sola
-     cuenta activa, esa es la predeterminada; con varias y sin elegir → null. */
+     cuenta activa, esa es la predeterminada; con varias se decide por tipo:
+     'ahorro' para ingresos y 'monetaria' para egresos; si queda una sola, esa toma el rol. */
   async _cuentaDefault(tipo) {
     const { data } = await getSB().from('bancos')
-      .select('id,activa,predeterminada_ingresos,predeterminada_egresos').eq('tenant_id', getTID());
+      .select('id,activa,tipo,predeterminada_ingresos,predeterminada_egresos').eq('tenant_id', getTID());
     const activas = (data||[]).filter(b => b.activa !== false);
     if (!activas.length) return null;
+    if (activas.length === 1) return activas[0].id;
+
+    // Buscar bandera explícita primero
     const flagged = activas.find(b => tipo==='ingresos' ? b.predeterminada_ingresos : b.predeterminada_egresos);
     if (flagged) return flagged.id;
-    return activas.length === 1 ? activas[0].id : null;
+
+    // Si no hay bandera, decidir por tipo de cuenta
+    if (tipo === 'ingresos') {
+      const ahorro = activas.find(b => b.tipo === 'ahorro' || b.tipo === 'ahorros');
+      if (ahorro) return ahorro.id;
+    } else {
+      const monetaria = activas.find(b => b.tipo === 'monetaria');
+      if (monetaria) return monetaria.id;
+    }
+
+    // Fallback: usar la primera activa
+    return activas[0].id;
   },
 
   /* Registra automáticamente el movimiento bancario de un ingreso/egreso.
@@ -496,6 +566,16 @@ const DB = {
     const payload = { ...fields, tenant_id: getTID() };
     if (fields.id) {
       const { error } = await getSB().from('facturas').update(payload).eq('id', fields.id);
+      if (!error && fields.estado === 'anulada') {
+        const { data: fact } = await getSB().from('facturas').select('num').eq('id', fields.id).maybeSingle();
+        if (fact?.num) {
+          const { data: ing } = await getSB().from('ingresos').select('id').eq('tenant_id', getTID()).eq('referencia', fact.num).maybeSingle();
+          if (ing?.id) {
+            await getSB().from('ingresos').delete().eq('id', ing.id);
+          }
+          await getSB().from('banco_movimientos').delete().eq('tenant_id', getTID()).eq('referencia', fact.num);
+        }
+      }
       return { error };
     }
     /* Generar número correlativo (la columna num es obligatoria) */
@@ -507,9 +587,19 @@ const DB = {
     /* El NIT del receptor es obligatorio; CF por defecto */
     if (!payload.nit) payload.nit = 'CF';
     const { data, error } = await getSB().from('facturas').insert(payload).select().single();
-    if (data) await this._registrarBancoAuto('entrada', {
-      monto: data.total, concepto: `Factura ${data.num||''}`.trim(), referencia: data.num, fecha: data.fecha
-    });
+    if (data) {
+      // Registrar como ingreso, lo cual registrará automáticamente el movimiento bancario en la cuenta de ahorros
+      await this.upsertIngreso({
+        concepto: `Factura ${data.num||''}`.trim(),
+        categoria: 'Ventas',
+        monto: data.total,
+        referencia: data.num,
+        cliente_id: data.cliente_id,
+        orden_id: data.orden_id,
+        fecha: data.fecha,
+        notas: data.notas || data.descripcion || `Facturado correlativo ${data.num||''}`
+      });
+    }
     return { data, error };
   },
 
