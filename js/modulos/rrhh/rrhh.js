@@ -585,6 +585,7 @@ Modulos.rrhh = {
       foto:                  this._tempFoto || null,
       cargo:                 document.getElementById('emp-cargo')?.value||null,
       dpi:                   document.getElementById('emp-dpi')?.value||null,
+      igss:                  document.getElementById('emp-igss')?.value.trim()||null,
       tel:                   document.getElementById('emp-tel')?.value||null,
       email,
       fecha_nacimiento:      document.getElementById('emp-nacimiento')?.value||null,
@@ -1397,12 +1398,12 @@ Modulos.rrhh = {
             }
             .carne-front .header-band {
               background: linear-gradient(135deg, #1e293b, #0f172a);
-              height: 80px;
+              height: 70px;
               display: flex;
               flex-direction: column;
               align-items: center;
               justify-content: center;
-              padding: 10px;
+              padding: 5px 10px;
               color: white;
               text-align: center;
               position: relative;
@@ -1428,7 +1429,8 @@ Modulos.rrhh = {
               letter-spacing: 0.1em;
             }
             .carne-front .photo-wrap {
-              margin-top: -30px;
+              margin-top: 12px;
+              margin-bottom: 5px;
               display: flex;
               justify-content: center;
               position: relative;
@@ -1439,7 +1441,7 @@ Modulos.rrhh = {
               height: 112px;
               border-radius: 8px;
               background: #f3f4f6;
-              border: 3px solid #ffffff;
+              border: 2px solid #e5e7eb;
               box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
               overflow: hidden;
               display: flex;
