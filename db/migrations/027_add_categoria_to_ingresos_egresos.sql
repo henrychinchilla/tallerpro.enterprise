@@ -23,9 +23,9 @@ SELECT
   f.total, 
   COALESCE(f.num, f.id::text), 
   f.cliente_id, 
-  f.orden_id, 
+  f.ot_id, -- Cambiado de f.orden_id a f.ot_id
   f.fecha, 
-  COALESCE(f.notas, 'Facturado correlativo ' || COALESCE(f.num, f.id::text)), 
+  COALESCE(f.notes, f.notas, 'Facturado correlativo ' || COALESCE(f.num, f.id::text)), -- COALESCE para f.notes o f.notas por si acaso
   f.created_at
 FROM public.facturas f
 WHERE f.estado != 'anulada'

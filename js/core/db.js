@@ -580,7 +580,7 @@ const DB = {
         monto: data.total,
         referencia: data.num,
         cliente_id: data.cliente_id,
-        orden_id: data.orden_id,
+        orden_id: data.ot_id || data.orden_id,
         fecha: data.fecha,
         notas: data.notas || data.descripcion || `Facturado correlativo ${data.num||''}`
       });

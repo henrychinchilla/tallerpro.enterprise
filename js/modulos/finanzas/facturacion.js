@@ -79,7 +79,7 @@ Modulos.facturacion = {
         <div class="form-group"><label class="form-label">Orden de Trabajo</label>
           <select class="form-select" id="fel-ot" onchange="Modulos.facturacion._importarDeOT(this.value)">
             <option value="">Sin OT</option>
-            ${this._ordenes.filter(o=>o.estado!=='cancelado').map(o=>`<option value="${o.id}" ${f.orden_id===o.id?'selected':''}>${o.num} — ${UI.q(o.total)}</option>`).join('')}
+            ${this._ordenes.filter(o=>o.estado!=='cancelado').map(o=>`<option value="${o.id}" ${(f.ot_id||f.orden_id)===o.id?'selected':''}>${o.num} — ${UI.q(o.total)}</option>`).join('')}
           </select>
           <div style="font-size:11px;color:var(--text3);margin-top:4px">Al elegir una OT se importan cliente, montos e ítems a cobrar.</div></div>
       </div>
