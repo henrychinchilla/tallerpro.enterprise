@@ -41,18 +41,20 @@ Modulos.finanzas = {
     const facturasVivas = facturas.filter(f => f.estado !== 'anulada');
     const totalFact   = facturasVivas.reduce((s,f)=>s+(Number(f.total)||0),0);
     const totalIngDir = ingresos.reduce((s,i)=>s+(Number(i.monto)||0),0);
-    const totalIng    = totalIngDir + totalFact;   // ventas (facturas) + ingresos directos
+    const totalIng    = totalIngDir;   // Las facturas ya están registradas en ingresos (bajo categoría 'Ventas'), por lo que totalIngDir las incluye
     const totalEgr    = egresos.reduce((s,e)=>s+(Number(e.monto)||0),0);
     return { ingresos, egresos, facturas: facturasVivas, totalFact, totalIngDir, totalIng, totalEgr, utilidad: totalIng-totalEgr };
   },
 
-  /* Ingresos por categoría incluyendo la facturación (ventas) */
+  /* Ingresos por categoría (las facturas ya están registradas en ingresos con categoría 'Ventas') */
   _ventasCats(ingresos, totalFact) {
     const m = {};
-    ingresos.forEach(i => { const k = i.categoria || 'General'; m[k] = (m[k]||0) + (Number(i.monto)||0); });
-    const arr = Object.entries(m);
-    if (totalFact > 0) arr.unshift(['Facturación (ventas)', totalFact]);
-    return arr.sort((a,b)=>b[1]-a[1]);
+    ingresos.forEach(i => {
+      // Mostrar la categoría de Ventas como 'Facturación (ventas)' para mantener consistencia visual
+      const k = i.categoria === 'Ventas' ? 'Facturación (ventas)' : (i.categoria || 'General');
+      m[k] = (m[k]||0) + (Number(i.monto)||0);
+    });
+    return Object.entries(m).sort((a,b)=>b[1]-a[1]);
   },
 
   async _renderTab() {
