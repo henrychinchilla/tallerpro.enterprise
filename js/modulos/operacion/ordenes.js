@@ -171,7 +171,10 @@ Modulos.ordenes = {
                   Cliente autoriza
                 </label>`:''}
               </div>
-              <button class="btn btn-sm btn-danger" onclick="Modulos.ordenes.eliminarItem('${item.id}','${id}')" style="flex-shrink:0" title="Eliminar ítem">🗑️</button>
+              <div style="display:flex;gap:4px;flex-shrink:0">
+                <button class="btn btn-sm btn-cyan" onclick="Modulos.ordenes.modalAddItem('${id}','${item.id}')" title="Editar ítem">✏️</button>
+                <button class="btn btn-sm btn-danger" onclick="Modulos.ordenes.eliminarItem('${item.id}','${id}')" title="Eliminar ítem">🗑️</button>
+              </div>
             </div>`).join('') : '<div style="padding:16px;text-align:center;color:var(--text3);font-size:13px">Sin ítems — Agrega trabajos, repuestos o mano de obra</div>'}
         </div>
 
@@ -237,53 +240,67 @@ Modulos.ordenes = {
   },
 
   /* ── ITEMS ────────────────────────────────── */
-  async modalAddItem(ordenId) {
+  async modalAddItem(ordenId, itemId = null) {
     this._inventario = await DB.getInventario();
-    UI.modal('＋ Agregar Ítem a OT', `
+    const esEdicion = !!itemId;
+    let item = {};
+    if (esEdicion) {
+      const { data, error } = await getSB().from('ot_items').select('*').eq('id', itemId).single();
+      if (error) { UI.toast('Error al cargar ítem: ' + error.message, 'error'); return; }
+      item = data || {};
+    }
+
+    const calc = `
+      const c = parseFloat(document.getElementById('item-cant').value) || 1;
+      const p = parseFloat(document.getElementById('item-precio').value) || 0;
+      document.getElementById('item-total').value = (c * p).toFixed(2);
+    `;
+
+    UI.modal(`${esEdicion ? '✏️ Editar' : '＋ Agregar'} Ítem a OT`, `
       <div class="form-row">
         <div class="form-group"><label class="form-label">Tipo *</label>
           <select class="form-select" id="item-tipo" onchange="Modulos.ordenes._onTipoItem()">
-            <option value="servicio">🔧 Servicio</option>
-            <option value="repuesto">📦 Repuesto</option>
-            <option value="mano_obra">👷 Mano de Obra</option>
-            <option value="diagnostico">🔍 Diagnóstico</option>
-            <option value="otro">📝 Otro</option>
+            <option value="servicio" ${item.tipo === 'servicio' ? 'selected' : ''}>🔧 Servicio</option>
+            <option value="repuesto" ${item.tipo === 'repuesto' ? 'selected' : ''}>📦 Repuesto</option>
+            <option value="mano_obra" ${item.tipo === 'mano_obra' ? 'selected' : ''}>👷 Mano de Obra</option>
+            <option value="diagnostico" ${item.tipo === 'diagnostico' ? 'selected' : ''}>🔍 Diagnóstico</option>
+            <option value="otro" ${item.tipo === 'otro' ? 'selected' : ''}>📝 Otro</option>
           </select></div>
         <div class="form-group"><label class="form-label">¿Es trabajo extra?</label>
           <label style="display:flex;align-items:center;gap:8px;padding:10px;background:var(--surface2);border-radius:8px;cursor:pointer;height:40px">
-            <input type="checkbox" id="item-extra" style="accent-color:var(--amber)">
+            <input type="checkbox" id="item-extra" ${item.es_extra ? 'checked' : ''} style="accent-color:var(--amber)">
             <span style="font-size:13px">Trabajo extra no presupuestado</span>
           </label></div>
       </div>
-      <div class="form-group" id="item-inv-row" style="display:none">
+      <div class="form-group" id="item-inv-row" style="${item.tipo === 'repuesto' ? '' : 'display:none'}">
         <label class="form-label">Artículo de inventario (descuenta stock al facturar)</label>
         <select class="form-select" id="item-inv" onchange="Modulos.ordenes._onPickInventario()">
           <option value="">— Repuesto libre (no afecta inventario) —</option>
-          ${this._inventario.map(a=>`<option value="${a.id}" data-precio="${a.precio_venta||0}" data-nombre="${(a.nombre||'').replace(/"/g,'&quot;')}">${a.nombre} — stock: ${a.stock} ${a.unidad||''}</option>`).join('')}
+          ${this._inventario.map(a=>`<option value="${a.id}" ${item.inventario_id === a.id ? 'selected' : ''} data-precio="${a.precio_venta||0}" data-nombre="${(a.nombre||'').replace(/"/g,'&quot;')}">${a.nombre} — stock: ${a.stock} ${a.unidad||''}</option>`).join('')}
         </select>
       </div>
       <div class="form-group"><label class="form-label">Descripción *</label>
-        <input class="form-input" id="item-desc" placeholder="Cambio de filtro de aceite, revisión de frenos..."></div>
+        <input class="form-input" id="item-desc" value="${(item.descripcion || '').replace(/"/g, '&quot;')}" placeholder="Cambio de filtro de aceite, revisión de frenos..."></div>
       <div class="form-row">
         <div class="form-group"><label class="form-label">Cantidad</label>
-          <input class="form-input" id="item-cant" type="number" value="1" min="0.01" step="0.01"
-                 oninput="const c=parseFloat(this.value)||1;const p=parseFloat(document.getElementById('item-precio').value)||0;document.getElementById('item-total').value=(c*p).toFixed(2)"></div>
+          <input class="form-input" id="item-cant" type="number" value="${item.cantidad !== undefined ? item.cantidad : '1'}" min="0.01" step="0.01"
+                 oninput="${calc}"></div>
         <div class="form-group"><label class="form-label">Precio Unitario (Q)</label>
-          <input class="form-input" id="item-precio" type="number" min="0" step="0.01" placeholder="0.00"
-                 oninput="const c=parseFloat(document.getElementById('item-cant').value)||1;const p=parseFloat(this.value)||0;document.getElementById('item-total').value=(c*p).toFixed(2)"></div>
+          <input class="form-input" id="item-precio" type="number" min="0" step="0.01" value="${item.precio_unit !== undefined ? item.precio_unit : ''}" placeholder="0.00"
+                 oninput="${calc}"></div>
       </div>
       <div class="form-group"><label class="form-label">Total (Q)</label>
-        <input class="form-input" id="item-total" type="number" min="0" step="0.01" placeholder="0.00"
+        <input class="form-input" id="item-total" type="number" min="0" step="0.01" value="${item.total !== undefined ? item.total : ''}" placeholder="0.00"
                style="font-size:16px;font-weight:700;color:var(--amber)"></div>
-      <div id="item-autorizar-row" style="display:none">
+      <div id="item-autorizar-row" style="${item.es_extra ? '' : 'display:none'}">
         <label style="display:flex;align-items:center;gap:8px;padding:10px;background:var(--amber-dim);border-radius:8px;cursor:pointer;border:1px solid var(--amber-border)">
-          <input type="checkbox" id="item-autorizado" checked style="accent-color:var(--cyan)">
+          <input type="checkbox" id="item-autorizado" ${item.autorizado !== false ? 'checked' : ''} style="accent-color:var(--cyan)">
           <span style="font-size:12px"><b>Cliente autoriza</b> este trabajo extra</span>
         </label>
       </div>
       <div class="modal-footer">
-        <button class="btn btn-ghost" onclick="UI.cerrarModal()">Cancelar</button>
-        <button class="btn btn-amber" onclick="Modulos.ordenes.guardarItem('${ordenId}')">Agregar Ítem</button>
+        <button class="btn btn-ghost" onclick="Modulos.ordenes.verDetalle('${ordenId}')">Cancelar</button>
+        <button class="btn btn-amber" onclick="Modulos.ordenes.guardarItem('${ordenId}', ${esEdicion ? `'${itemId}'` : 'null'})">${esEdicion ? 'Guardar Cambios' : 'Agregar Ítem'}</button>
       </div>`);
 
     document.getElementById('item-extra')?.addEventListener('change', function() {
@@ -315,7 +332,7 @@ Modulos.ordenes = {
     }
   },
 
-  async guardarItem(ordenId) {
+  async guardarItem(ordenId, itemId = null) {
     const desc  = document.getElementById('item-desc')?.value.trim();
     const total = parseFloat(document.getElementById('item-total')?.value)||0;
     if (!desc) { UI.toast('La descripción es obligatoria','error'); return; }
@@ -326,7 +343,8 @@ Modulos.ordenes = {
 
     const esRepuesto = document.getElementById('item-tipo')?.value === 'repuesto';
     const invId = esRepuesto ? (document.getElementById('item-inv')?.value || null) : null;
-    const { error } = await getSB().from('ot_items').insert({
+    
+    const payload = {
       tenant_id:   getTID(),
       orden_id:    ordenId,
       tipo:        document.getElementById('item-tipo')?.value||'servicio',
@@ -335,12 +353,17 @@ Modulos.ordenes = {
       precio_unit: precio,
       total:       total||cant*precio,
       inventario_id: invId,
-      ejecutado:   false,
       es_extra:    esExtra,
       autorizado:  esExtra ? (document.getElementById('item-autorizado')?.checked||false) : true
-    });
+    };
 
-    if (error) { UI.toast('Error: '+error.message,'error'); return; }
+    if (itemId) {
+      const { error } = await getSB().from('ot_items').update(payload).eq('id', itemId);
+      if (error) { UI.toast('Error: '+error.message,'error'); return; }
+    } else {
+      const { error } = await getSB().from('ot_items').insert({ ...payload, ejecutado: false });
+      if (error) { UI.toast('Error: '+error.message,'error'); return; }
+    }
 
     /* Actualizar total de la OT */
     const { data: allItems } = await getSB().from('ot_items').select('total')
@@ -1012,6 +1035,9 @@ Modulos.ordenes = {
     UI.cerrarModal();
     UI.toast(id?'OT actualizada ✓':'OT creada ✓ — se agregó Mano de obra y la fecha al calendario');
     this.render();
+    if (id) {
+      setTimeout(() => this.verDetalle(id), 250);
+    }
   },
 
   async eliminarOT(id) {
