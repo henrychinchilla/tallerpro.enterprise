@@ -1,19 +1,31 @@
 -- ── MIGRACIÓN 027: AGREGAR COLUMNAS FALTANTES A INGRESOS/EGRESOS Y RE-INTENTAR SINCRONIZACIÓN ──
 
--- 1. Asegurar todas las columnas necesarias en la tabla 'public.facturas'
+-- 1. Quitar restricción obligatoria (NOT NULL) de columnas heredadas 'tipo' si existen
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='ingresos' AND column_name='tipo') THEN
+    ALTER TABLE public.ingresos ALTER COLUMN tipo DROP NOT NULL;
+  END IF;
+  
+  IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='egresos' AND column_name='tipo') THEN
+    ALTER TABLE public.egresos ALTER COLUMN tipo DROP NOT NULL;
+  END IF;
+END $$;
+
+-- 2. Asegurar todas las columnas necesarias en la tabla 'public.facturas'
 ALTER TABLE public.facturas ADD COLUMN IF NOT EXISTS num TEXT;
 ALTER TABLE public.facturas ADD COLUMN IF NOT EXISTS notas TEXT;
 
--- 2. Asegurar todas las columnas necesarias en la tabla 'public.ingresos'
+-- 3. Asegurar todas las columnas necesarias en la tabla 'public.ingresos'
 ALTER TABLE public.ingresos ADD COLUMN IF NOT EXISTS categoria TEXT;
 ALTER TABLE public.ingresos ADD COLUMN IF NOT EXISTS orden_id UUID REFERENCES public.ordenes(id) ON DELETE SET NULL;
 ALTER TABLE public.ingresos ADD COLUMN IF NOT EXISTS cliente_id UUID REFERENCES public.clientes(id) ON DELETE SET NULL;
 
--- 3. Asegurar todas las columnas necesarias en la tabla 'public.egresos'
+-- 4. Asegurar todas las columnas necesarias en la tabla 'public.egresos'
 ALTER TABLE public.egresos ADD COLUMN IF NOT EXISTS categoria TEXT;
 ALTER TABLE public.egresos ADD COLUMN IF NOT EXISTS proveedor_id UUID REFERENCES public.proveedores(id) ON DELETE SET NULL;
 
--- 4. Poblar/Sincronizar retroactivamente facturas activas existentes a ingresos
+-- 5. Poblar/Sincronizar retroactivamente facturas activas existentes a ingresos
 -- (Esto disparará de forma segura el trigger 'trg_sync_ingreso_to_banco', 
 -- poblando también los movimientos bancarios faltantes en la cuenta predeterminada)
 INSERT INTO public.ingresos (tenant_id, concepto, categoria, monto, referencia, cliente_id, orden_id, fecha, notas, created_at)
@@ -36,5 +48,5 @@ WHERE f.estado != 'anulada'
       AND (i.referencia = f.num OR i.referencia = f.id::text)
   );
 
--- 5. Forzar recarga del caché de PostgREST
+-- 6. Forzar recarga del caché de PostgREST
 NOTIFY pgrst, 'reload schema';
