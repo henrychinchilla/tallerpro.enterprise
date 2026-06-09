@@ -432,18 +432,10 @@ const DB = {
   },
 
   /* Registra automáticamente el movimiento bancario de un ingreso/egreso.
-     No bloquea la operación si aún no hay cuenta resoluble (varias sin elegir). */
+     (Deshabilitado en frontend; ahora manejado por triggers automáticos en la base de datos). */
   async _registrarBancoAuto(tipoMov, { monto, concepto, referencia, fecha }) {
-    const m = Number(monto) || 0;
-    if (m <= 0) return;
-    const bancoId = await this._cuentaDefault(tipoMov === 'entrada' ? 'ingresos' : 'egresos');
-    if (!bancoId) return;
-    await getSB().from('banco_movimientos').insert({
-      tenant_id: getTID(), banco_id: bancoId, tipo: tipoMov,
-      concepto: (concepto || (tipoMov==='entrada'?'Ingreso':'Egreso')).slice(0,200),
-      monto: m, referencia: referencia || null,
-      fecha: fecha || new Date().toISOString().slice(0,10), conciliado: false
-    });
+    // No-op (manejado por triggers de base de datos para sincronización en tiempo real)
+    return;
   },
 
   /* ── FINANZAS ─────────────────────────────────── */
@@ -462,9 +454,6 @@ const DB = {
       return { error };
     }
     const { data, error } = await getSB().from('ingresos').insert(payload).select().single();
-    if (data) await this._registrarBancoAuto('entrada', {
-      monto: data.monto, concepto: data.concepto||'Ingreso', referencia: data.referencia, fecha: data.fecha
-    });
     return { data, error };
   },
 
@@ -483,9 +472,6 @@ const DB = {
       return { error };
     }
     const { data, error } = await getSB().from('egresos').insert(payload).select().single();
-    if (data) await this._registrarBancoAuto('salida', {
-      monto: data.monto, concepto: data.concepto||'Egreso', referencia: data.referencia, fecha: data.fecha
-    });
     return { data, error };
   },
 
@@ -525,7 +511,6 @@ const DB = {
       referencia, notas: `Gasto recurrente${rec.notas?` — ${rec.notas}`:''}`
     });
     if (error) return { ok:false, error: error.message };
-    await this._registrarBancoAuto('salida', { monto: rec.monto||0, concepto: rec.concepto, referencia, fecha });
     await getSB().from('egresos_recurrentes')
       .update({ ultima_generacion: `${periodo}-01`, updated_at: new Date().toISOString() })
       .eq('id', rec.id);
