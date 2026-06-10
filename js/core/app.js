@@ -16,7 +16,7 @@ const App = {
     App.navegarA('dashboard');
     App.checkLicencia();
     App.registrarSW();
-    TEMAS.aplicar(localStorage.getItem('tp_tema') || 'dark');
+    TEMAS.aplicar(localStorage.getItem('tp_tema') || 'light');
   },
 
   /* ── SIDEBAR ──────────────────────────────────── */
@@ -243,7 +243,7 @@ const TEMAS = {
     { id:'slate',    icon:'🩶', label:'Slate'        }
   ],
 
-  actual() { return localStorage.getItem('tp_tema') || 'dark'; },
+  actual() { return localStorage.getItem('tp_tema') || 'light'; },
 
   aplicar(id) {
     document.documentElement.setAttribute('data-theme',
@@ -297,6 +297,27 @@ Modulos._descargarCSV = function (rows, filename) {
   a.download = filename;
   a.click();
   setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+};
+
+/* Carga SheetJS (xlsx) bajo demanda para exportar Excel real */
+Modulos._ensureXLSX = function () {
+  if (window.XLSX) return Promise.resolve();
+  return new Promise((res, rej) => {
+    const s = document.createElement('script');
+    s.src = 'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js';
+    s.onload = res; s.onerror = () => rej(new Error('No se pudo cargar Excel')); document.head.appendChild(s);
+  });
+};
+
+/* Descarga un .xlsx real. sheets = [{ nombre, rows:[[...]] }] */
+Modulos._descargarXLSX = async function (sheets, filename) {
+  await Modulos._ensureXLSX();
+  const wb = XLSX.utils.book_new();
+  sheets.forEach(sh => {
+    const ws = XLSX.utils.aoa_to_sheet(sh.rows);
+    XLSX.utils.book_append_sheet(wb, ws, (sh.nombre || 'Hoja').slice(0, 31));
+  });
+  XLSX.writeFile(wb, filename);
 };
 
 /* Parser CSV tolerante (comillas, comas y saltos dentro de celdas) */

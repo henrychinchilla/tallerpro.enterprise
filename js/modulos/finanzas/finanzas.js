@@ -117,14 +117,6 @@ Modulos.finanzas = {
         <div class="table-wrap"><table class="data-table">
           <thead><tr><th>Fecha</th><th>Concepto</th><th>Categoría</th><th>Referencia</th><th>Monto</th><th>Acciones</th></tr></thead>
           <tbody>
-            ${facturas.map(f=>`<tr style="background:var(--surface2)">
-              <td>${UI.fecha(f.fecha)}</td>
-              <td>${(f.descripcion||('Factura '+(f.num||''))).slice(0,60)}</td>
-              <td><span class="badge badge-green">Facturación</span></td>
-              <td class="mono-sm">${f.num||(f.fel_serie?`${f.fel_serie}-${f.fel_numero||''}`:'—')}</td>
-              <td class="mono-sm text-green"><b>${UI.q(f.total)}</b></td>
-              <td><span class="text-muted" style="font-size:11px">desde Facturación/POS</span></td>
-            </tr>`).join('')}
             ${ingresos.map(i=>`<tr>
             <td>${UI.fecha(i.fecha)}</td><td>${i.concepto}</td>
             <td><span class="badge badge-green">${i.categoria||'General'}</span></td>
@@ -135,7 +127,7 @@ Modulos.finanzas = {
               <button class="btn btn-sm btn-danger" onclick="Modulos.finanzas.eliminar('ingresos','${i.id}')" title="Eliminar">🗑️</button>
             </div></td>
           </tr>`).join('')}
-            ${(!facturas.length && !ingresos.length)?'<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--text3)">Sin ingresos en este período</td></tr>':''}
+            ${(!ingresos.length)?'<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--text3)">Sin ingresos en este período</td></tr>':''}
           </tbody>
         </table></div>`;
     }
@@ -350,9 +342,10 @@ Modulos.finanzas = {
           <div><span class="badge badge-cyan">${UI.fecha(this._ini)} — ${UI.fecha(this._fin)}</span>
             <span style="font-size:12px;color:var(--text3);margin-left:8px">Régimen: <b>${esPequeno?'Pequeño Contribuyente (5%)':'General (débito − crédito)'}</b></span></div>
           <div style="display:flex;gap:6px;flex-wrap:wrap">
-            <button class="btn btn-ghost" onclick="Modulos.finanzas.exportLibro('ventas')">⬇ Ventas CSV</button>
-            <button class="btn btn-ghost" onclick="Modulos.finanzas.exportLibro('compras')">⬇ Compras CSV</button>
-            <button class="btn btn-ghost" onclick="window.print()">🖨️ Imprimir</button>
+            <button class="btn btn-green" onclick="Modulos.finanzas.exportExcelContador()">⬇ Excel (contador)</button>
+            <button class="btn btn-ghost" onclick="Modulos.finanzas.exportLibro('ventas')">Ventas CSV</button>
+            <button class="btn btn-ghost" onclick="Modulos.finanzas.exportLibro('compras')">Compras CSV</button>
+            <button class="btn btn-ghost" onclick="window.print()">🖨️</button>
           </div>
         </div>
         <div class="kpi-grid" style="margin-bottom:18px">
@@ -481,6 +474,16 @@ Modulos.finanzas = {
       /* La depreciación reduce la utilidad imponible (régimen sobre utilidades) */
       const activosFis  = await DB.getActivos();
       const depFiscal   = activosFis.reduce((s,a)=>s+depEnRango(a, this._ini, this._fin),0);
+
+      /* Planilla / IGSS — sobre empleados activos (mensual) */
+      const empleadosFis = (await DB.getEmpleados()).filter(e=>e.activo!==false);
+      const plSalarios = empleadosFis.reduce((s,e)=>s+(Number(e.salario_base)||0),0);
+      const plBonif    = empleadosFis.reduce((s,e)=>s+(Number(e.bonificacion)||0),0);
+      const IGSS_LAB = 0.0483, IGSS_PAT = 0.1267;   // patronal: 10.67% IGSS + 1% IRTRA + 1% INTECAP
+      const plIgssLab = plSalarios*IGSS_LAB;
+      const plIgssPat = plSalarios*IGSS_PAT;
+      const plLiquido = plSalarios + plBonif - plIgssLab;
+      const plCostoPatronal = plSalarios + plBonif + plIgssPat;
       const utilFiscal  = utilidad - depFiscal;
       const calc = _calcImpuesto(regimen, totalIng, utilFiscal);
 
@@ -537,8 +540,61 @@ Modulos.finanzas = {
               Régimen actual seleccionado: <b>${REGIMENES.find(r=>r.id===regimen)?.label}</b>
             </div>
           </div>
+        </div>
+
+        <div class="card" style="max-width:600px;margin-top:20px">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+            <div class="card-sub">👷 Planilla / IGSS — mensual</div>
+            <button class="btn btn-sm btn-ghost" onclick="Modulos.finanzas.exportPlanilla()">⬇️ Excel</button>
+          </div>
+          <div style="font-size:13px;color:var(--text3);margin-bottom:16px">
+            ${empleadosFis.length} empleado(s) activo(s) · Cuota laboral ${(IGSS_LAB*100).toFixed(2)}% · patronal ${(IGSS_PAT*100).toFixed(2)}%
+          </div>
+          ${!empleadosFis.length?`<div style="text-align:center;padding:16px;color:var(--text3)">Sin empleados activos registrados</div>`:`
+          <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);font-size:13px">
+            <span>Salarios base (afecto a IGSS)</span><span>${UI.q(plSalarios)}</span>
+          </div>
+          <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);font-size:13px">
+            <span>Bonificación incentivo (no afecto)</span><span>${UI.q(plBonif)}</span>
+          </div>
+          <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);font-size:13px">
+            <span>IGSS laboral (descuento al empleado)</span><span class="text-red">(${UI.q(plIgssLab)})</span>
+          </div>
+          <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);font-size:13px;font-weight:700">
+            <span>Líquido a pagar a empleados</span><span class="text-green">${UI.q(plLiquido)}</span>
+          </div>
+          <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);font-size:13px">
+            <span>IGSS patronal (cuota del taller)</span><span class="text-red">(${UI.q(plIgssPat)})</span>
+          </div>
+          <div style="display:flex;justify-content:space-between;padding:12px;font-weight:800;font-size:16px;background:var(--amber-dim);border-radius:8px;margin-top:8px">
+            <span>Costo patronal total</span><span class="text-amber">${UI.q(plCostoPatronal)}</span>
+          </div>`}
+          <div class="alert alert-cyan" style="margin-top:16px">
+            <div class="alert-icon">ℹ️</div>
+            <div class="alert-body" style="font-size:11px">
+              IGSS laboral 4.83% y patronal 12.67% (incluye 1% IRTRA + 1% INTECAP) sobre el salario base.
+              La bonificación incentivo (Q250) no es afecta a IGSS. Estimado mensual orientativo.
+            </div>
+          </div>
         </div>`;
     }
+  },
+
+  async exportPlanilla() {
+    const empleados = (await DB.getEmpleados()).filter(e=>e.activo!==false);
+    if (!empleados.length) { UI.toast('Sin empleados activos','warn'); return; }
+    const IGSS_LAB = 0.0483, IGSS_PAT = 0.1267;
+    const r2 = n => Math.round(n*100)/100;
+    const rows = [['Empleado','Cargo','DPI','No. IGSS','Salario base','Bonificación','IGSS laboral 4.83%','Líquido a pagar','IGSS patronal 12.67%','Costo patronal']];
+    const tot = {sal:0,bon:0,lab:0,liq:0,pat:0,cost:0};
+    empleados.forEach(e=>{
+      const sal=Number(e.salario_base)||0, bon=Number(e.bonificacion)||0, lab=sal*IGSS_LAB, pat=sal*IGSS_PAT;
+      tot.sal+=sal; tot.bon+=bon; tot.lab+=lab; tot.liq+=sal+bon-lab; tot.pat+=pat; tot.cost+=sal+bon+pat;
+      rows.push([e.nombre||'', e.cargo||'', e.dpi||'', e.igss||'', r2(sal), r2(bon), r2(lab), r2(sal+bon-lab), r2(pat), r2(sal+bon+pat)]);
+    });
+    rows.push(['TOTAL','','','',r2(tot.sal),r2(tot.bon),r2(tot.lab),r2(tot.liq),r2(tot.pat),r2(tot.cost)]);
+    await Modulos._descargarXLSX([{ nombre:'Planilla IGSS', rows }], `planilla_igss_${this._ini.slice(0,7)}.xlsx`);
+    UI.toast('Planilla exportada ✓');
   },
 
   modalIngreso(id=null) {
@@ -662,6 +718,28 @@ Modulos.finanzas = {
       Modulos._descargarCSV(rows, `libro-compras-${this._ini}.csv`);
     }
     UI.toast('Libro exportado ✓');
+  },
+
+  /* Exporta un Excel real con hojas Ventas, Compras y Retenciones */
+  async exportExcelContador() {
+    UI.toast('Generando Excel...','info');
+    const [facturasRaw, comprasRaw, rets] = await Promise.all([
+      DB.getFacturas(this._ini, this._fin), DB.getCompras(), DB.getRetenciones(this._ini, this._fin)
+    ]);
+    const facturas = facturasRaw.filter(f=>f.estado!=='anulada');
+    const compras = comprasRaw.filter(c=>c.estado!=='anulada' && (c.fecha||'')>=this._ini && (c.fecha||'')<=this._fin);
+    const ventasRows = [['Fecha','Documento','NIT','Cliente','Base','IVA','Total']];
+    facturas.forEach(f => ventasRows.push([f.fecha, f.num||(f.fel_serie?`${f.fel_serie}-${f.fel_numero||''}`:''), f.nit||'CF', f.nombre_receptor||f.clientes?.nombre||'CF', Number(f.subtotal)||0, Number(f.iva)||0, Number(f.total)||0]));
+    const comprasRows = [['Fecha','Factura','Proveedor','Base','IVA','Total']];
+    compras.forEach(c => comprasRows.push([c.fecha, c.num_factura||c.num||'', c.proveedor_nombre||'', Number(c.subtotal)||0, Number(c.iva)||0, Number(c.total)||0]));
+    const retRows = [['Fecha','Tipo','Naturaleza','Documento','Contraparte','Base','%','Monto']];
+    rets.forEach(r => retRows.push([r.fecha, r.tipo, r.naturaleza, r.documento||'', r.contraparte||'', Number(r.base)||0, Number(r.porcentaje)||0, Number(r.monto)||0]));
+    await Modulos._descargarXLSX([
+      { nombre:'Libro Ventas', rows: ventasRows },
+      { nombre:'Libro Compras', rows: comprasRows },
+      { nombre:'Retenciones', rows: retRows }
+    ], `libros-${this._ini.slice(0,7)}.xlsx`);
+    UI.toast('Excel generado ✓');
   },
 
   async exportRetenciones() {

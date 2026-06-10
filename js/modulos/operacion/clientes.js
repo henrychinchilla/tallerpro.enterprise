@@ -99,6 +99,24 @@ Modulos.clientes = {
         </label>
         <div style="font-size:11px;color:var(--text3);margin-top:2px">Acumula Q1 = 1 punto en cada compra; canje 10 puntos = Q1.</div>
       </div>
+      <div class="form-group">
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+          <input type="checkbox" id="cli-agente-ret" ${c.agente_retencion?'checked':''}
+            onchange="document.getElementById('cli-ret-pcts').style.display=this.checked?'grid':'none'">
+          <span class="form-label" style="margin:0">🧾 Es agente de retención (ISR / IVA)</span>
+        </label>
+        <div style="font-size:11px;color:var(--text3);margin-top:2px">Al facturarle, se registra automáticamente la retención sufrida (acreditable).</div>
+        <div id="cli-ret-pcts" style="display:${c.agente_retencion?'grid':'none'};grid-template-columns:1fr 1fr;gap:10px;margin-top:8px">
+          <div>
+            <label class="form-label">% Retención IVA</label>
+            <input type="number" step="0.01" min="0" max="100" class="form-input" id="cli-ret-iva" value="${c.ret_iva_pct||''}" placeholder="ej. 15">
+          </div>
+          <div>
+            <label class="form-label">% Retención ISR</label>
+            <input type="number" step="0.01" min="0" max="100" class="form-input" id="cli-ret-isr" value="${c.ret_isr_pct||''}" placeholder="ej. 1.5">
+          </div>
+        </div>
+      </div>
       ${!esEdicion?`
       <div class="card" style="background:var(--amber-dim);border-color:var(--amber-border);margin-top:4px">
         <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px">
@@ -129,7 +147,10 @@ Modulos.clientes = {
       notas:          document.getElementById('cli-notas')?.value.trim()||null,
       nombre_empresa: tipo==='empresa'?document.getElementById('cli-empresa')?.value.trim():null,
       representante:  tipo==='empresa'?document.getElementById('cli-representante')?.value.trim():null,
-      programa_puntos: document.getElementById('cli-puntos')?.checked || false
+      programa_puntos: document.getElementById('cli-puntos')?.checked || false,
+      agente_retencion: document.getElementById('cli-agente-ret')?.checked || false,
+      ret_iva_pct: parseFloat(document.getElementById('cli-ret-iva')?.value) || 0,
+      ret_isr_pct: parseFloat(document.getElementById('cli-ret-isr')?.value) || 0
     };
     if (id) fields.id = id;
 

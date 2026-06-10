@@ -602,8 +602,28 @@ const DB = {
         fecha: data.fecha,
         notas: data.notas || data.descripcion || `Facturado correlativo ${data.num||''}`
       });
+      if (data.cliente_id) await this._retencionAutoFactura(data);
     }
     return { data, error };
+  },
+
+  /* Retención automática cuando el cliente es agente de retención (ISR/IVA).
+     Crea retenciones 'sufridas' (nos las retuvieron, acreditables). */
+  async _retencionAutoFactura(f) {
+    const { data: c } = await getSB().from('clientes')
+      .select('nombre,agente_retencion,ret_iva_pct,ret_isr_pct').eq('id', f.cliente_id).maybeSingle();
+    if (!c || !c.agente_retencion) return;
+    const base = Number(f.subtotal)||0, iva = Number(f.iva)||0;
+    const rows = [];
+    if (Number(c.ret_iva_pct)>0 && iva>0) rows.push({
+      tenant_id:getTID(), fecha:f.fecha, tipo:'IVA', naturaleza:'sufrida', documento:f.num, contraparte:c.nombre,
+      base:iva, porcentaje:c.ret_iva_pct, monto:Math.round(iva*c.ret_iva_pct/100*100)/100, notas:'Retención automática en factura'
+    });
+    if (Number(c.ret_isr_pct)>0 && base>0) rows.push({
+      tenant_id:getTID(), fecha:f.fecha, tipo:'ISR', naturaleza:'sufrida', documento:f.num, contraparte:c.nombre,
+      base, porcentaje:c.ret_isr_pct, monto:Math.round(base*c.ret_isr_pct/100*100)/100, notas:'Retención automática en factura'
+    });
+    if (rows.length) await getSB().from('retenciones').insert(rows);
   },
 
   /* Devuelve la factura existente de una OT (para evitar doble facturación) */
@@ -990,22 +1010,20 @@ const DB = {
     const [
       { count: clientes },
       { count: otsActivas },
-      { data: facturas },
       { data: ingresos },
       { data: invBajo }
     ] = await Promise.all([
       getSB().from('clientes').select('*',{count:'exact',head:true}).eq('tenant_id',tid),
       getSB().from('ordenes').select('*',{count:'exact',head:true}).eq('tenant_id',tid).not('estado','in','("entregado","cancelado")'),
-      getSB().from('facturas').select('total').eq('tenant_id',tid).gte('fecha',ini).lte('fecha',fin),
       getSB().from('ingresos').select('monto').eq('tenant_id',tid).gte('fecha',ini).lte('fecha',fin),
       getSB().from('inventario').select('id,nombre,stock,min_stock').eq('tenant_id',tid).filter('stock','lte','min_stock')
     ]);
-    const ingFact = (facturas||[]).reduce((s,f)=>s+(f.total||0),0);
+    // Las facturas ya se registran como ingreso 'Ventas', así que ingresos cubre todo
     const ingDir  = (ingresos||[]).reduce((s,i)=>s+(i.monto||0),0);
     return {
       clientes:   clientes||0,
       otsActivas: otsActivas||0,
-      ingresos:   ingFact+ingDir,
+      ingresos:   ingDir,
       invBajo:    invBajo||[],
       mesIni:     ini,
       mesFin:     fin
@@ -1023,12 +1041,10 @@ const DB = {
     const [
       { data: ingresos },
       { data: egresos },
-      { data: facturas },
       { data: ordenes }
     ] = await Promise.all([
       getSB().from('ingresos').select('monto,fecha,clientes(nombre)').eq('tenant_id', tid).gte('fecha', desdeStr),
       getSB().from('egresos').select('monto,fecha').eq('tenant_id', tid).gte('fecha', desdeStr),
-      getSB().from('facturas').select('total,fecha,clientes(nombre)').eq('tenant_id', tid).gte('fecha', desdeStr),
       getSB().from('ordenes').select('estado').eq('tenant_id', tid)
     ]);
 
@@ -1047,8 +1063,7 @@ const DB = {
       const m = idx((r.fecha || '').slice(0, 7));
       if (m) m[tipo] += Number(r[campo] || 0);
     });
-    bucket(ingresos, 'monto', 'ingresos');
-    bucket(facturas, 'total', 'ingresos');
+    bucket(ingresos, 'monto', 'ingresos');   // las facturas ya entran como ingreso 'Ventas'
     bucket(egresos,  'monto', 'egresos');
 
     /* Conteo de órdenes por estado */
@@ -1064,7 +1079,6 @@ const DB = {
         ingresosDiarios[d.getDate() - 1].monto += Number(r[campo] || 0);
     });
     addDia(ingresos, 'monto');
-    addDia(facturas, 'total');
 
     /* Top clientes por facturación (6 meses) */
     const porCliente = {};
@@ -1073,7 +1087,6 @@ const DB = {
       if (nom) porCliente[nom] = (porCliente[nom] || 0) + Number(r[campo] || 0);
     });
     addCli(ingresos, 'monto');
-    addCli(facturas, 'total');
     const topClientes = Object.entries(porCliente)
       .map(([nombre, total]) => ({ nombre, total }))
       .sort((a, b) => b.total - a.total)

@@ -366,13 +366,15 @@ Modulos.vehiculos = {
             const tEl = document.getElementById('veh-tipo');
             if (tEl) {
               const tipoNormal = data.tipo.toUpperCase();
-              let matchedTipo = 'Liviano';
+              let matchedTipo = null;
               if (tipoNormal.includes('CAMIONETA') || tipoNormal.includes('SUV')) matchedTipo = 'SUV';
               else if (tipoNormal.includes('PESADO') || tipoNormal.includes('CAMION') || tipoNormal.includes('CABEZAL')) matchedTipo = 'Pesado';
               else if (tipoNormal.includes('MOTO')) matchedTipo = 'Motocicleta';
               else if (tipoNormal.includes('ATV') || tipoNormal.includes('CUATRIMOTO')) matchedTipo = 'ATV';
-              
-              tEl.value = matchedTipo;
+              else if (tipoNormal.includes('LIVIANO') || tipoNormal.includes('SEDAN') || tipoNormal.includes('AUTO')) matchedTipo = 'Liviano';
+
+              /* Si no coincide con un tipo conocido, conserva el texto original (campo libre) */
+              tEl.value = matchedTipo || data.tipo;
               Modulos.vehiculos._onTipoChange();
             }
           }
@@ -447,9 +449,9 @@ Modulos.vehiculos = {
       <div style="font-weight:700;font-size:12px;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;margin-top:14px;margin-bottom:8px;border-bottom:1px solid var(--border);padding-bottom:4px">📋 Especificaciones del Vehículo</div>
       <div class="form-row">
         <div class="form-group"><label class="form-label">Tipo *</label>
-          <select class="form-select" id="veh-tipo" onchange="Modulos.vehiculos._onTipoChange()">
-            ${this._tipos.map(t=>`<option ${(v.tipo||'Liviano')===t?'selected':''}>${t}</option>`).join('')}
-          </select></div>
+          <input class="form-input" id="veh-tipo" list="tipos-list" autocomplete="off" value="${v.tipo||'Liviano'}" placeholder="Elige o escribe un tipo..."
+                 oninput="Modulos.vehiculos._onTipoChange()" onchange="Modulos.vehiculos._onTipoChange()">
+          <datalist id="tipos-list">${this._tipos.map(t=>`<option value="${t}">`).join('')}</datalist></div>
         <div class="form-group"><label class="form-label">Uso</label>
           <input class="form-input" id="veh-uso" value="${v.uso||''}" placeholder="PARTICULAR, COMERCIAL, etc."></div>
       </div>
