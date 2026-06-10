@@ -127,10 +127,12 @@ Modulos.calendario = {
       } else {
         /* Régimen sobre utilidades: trimestrales + anual */
         if ([0,3,6,9].includes(m)) {
-          out.push({ _sat:true, titulo:'ISR Trimestral SAT-1361 · trimestre anterior',
-            fecha_cita:`${f(new Date(y, m, 10))}T09:00:00`, sat_estado:null });
-          out.push({ _sat:true, titulo:'ISO SAT-1608 · trimestre anterior',
-            fecha_cita:`${f(finMes)}T09:00:00`, sat_estado:null });
+          const tAnt = m === 0 ? 4 : m/3;                 // trimestre que cierra
+          const yT = m === 0 ? y-1 : y;
+          out.push({ _sat:true, titulo:`ISR Trimestral SAT-1361 · T${tAnt} ${yT}`,
+            fecha_cita:`${f(new Date(y, m, 10))}T09:00:00`, sat_estado: estadoDe('ISR', `${yT}-T${tAnt}`) });
+          out.push({ _sat:true, titulo:`ISO SAT-1608 · T${tAnt} ${yT}`,
+            fecha_cita:`${f(finMes)}T09:00:00`, sat_estado: estadoDe('ISO', `${yT}-T${tAnt}`) });
         }
         if (m === 2) out.push({ _sat:true, titulo:`ISR Anual SAT-1411 · ejercicio ${y-1}`,
           fecha_cita:`${f(new Date(y, 2, 31))}T09:00:00`, sat_estado:null });

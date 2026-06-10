@@ -59,9 +59,11 @@ const MODULOS = [
   { id:'contabilidad',   icon:'🧮', label:'Contabilidad / SAT', grupo:'finanzas',
     subnav:[
       { tab:'iva',          icon:'🧾', label:'IVA del mes'      },
+      { tab:'trimestre',    icon:'🏢', label:'Trimestral / ISO' },
       { tab:'ventas',       icon:'📤', label:'Libro de Ventas'  },
       { tab:'compras',      icon:'📥', label:'Libro de Compras' },
-      { tab:'isr',          icon:'🏛️', label:'ISR'              },
+      { tab:'isr',          icon:'🏛️', label:'ISR mensual'      },
+      { tab:'fel',          icon:'⬆️', label:'Importar FEL'     },
       { tab:'obligaciones', icon:'📅', label:'Obligaciones'     }
     ] },
   { id:'rrhh',           icon:'👤', label:'RRHH & Nómina',     grupo:'rrhh',

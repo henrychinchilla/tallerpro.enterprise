@@ -1131,6 +1131,29 @@ const DB = {
     return data || [];
   },
 
+  /* FEL importado de SAT (Consulta FEL → CSV) */
+  async getFelImportados(ini, fin, naturaleza=null) {
+    let q = getSB().from('fel_importados').select('*')
+      .eq('tenant_id', getTID()).gte('fecha', ini).lte('fecha', fin).order('fecha');
+    if (naturaleza) q = q.eq('naturaleza', naturaleza);
+    const { data } = await q;
+    return data || [];
+  },
+
+  async insertFelImportados(rows) {
+    const tid = getTID();
+    const { data, error } = await getSB().from('fel_importados')
+      .insert(rows.map(r => ({ ...r, tenant_id: tid }))).select('id');
+    return { count: data?.length||0, error };
+  },
+
+  async deleteFelPeriodo(ini, fin, naturaleza) {
+    const { error } = await getSB().from('fel_importados').delete()
+      .eq('tenant_id', getTID()).eq('naturaleza', naturaleza)
+      .gte('fecha', ini).lte('fecha', fin);
+    return { error };
+  },
+
   async upsertObligacion(fields) {
     const payload = { ...fields, tenant_id: getTID() };
     if (payload.id) {
