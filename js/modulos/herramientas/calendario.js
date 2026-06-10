@@ -8,11 +8,13 @@ Modulos.calendario = {
     const hoy = new Date();
     const ini = new Date(hoy.getFullYear(), hoy.getMonth(), 1).toISOString();
     const fin = new Date(hoy.getFullYear(), hoy.getMonth()+2, 0).toISOString();
-    let vencDocs = [], recurrentes = [], envios = [];
-    [this._citas, this._clientes, this._vehiculos, this._empleados, vencDocs, recurrentes, envios] = await Promise.all([
+    let vencDocs = [], recurrentes = [], envios = [], fiscal = null, obligaciones = [];
+    [this._citas, this._clientes, this._vehiculos, this._empleados, vencDocs, recurrentes, envios, fiscal, obligaciones] = await Promise.all([
       DB.getCitas(ini.slice(0,10), fin.slice(0,10)), DB.getClientes(), DB.getVehiculos(), DB.getEmpleados(),
       DB.getVencimientosDocumentos(60).catch(()=>[]), DB.getEgresosRecurrentes().catch(()=>[]),
-      DB.getEnvios({archivado:false}).catch(()=>[])
+      DB.getEnvios({archivado:false}).catch(()=>[]),
+      DB.getConfigFiscal().catch(()=>null),
+      DB.getObligaciones(hoy.getFullYear()).catch(()=>[])
     ]);
 
     const hoyStr = hoy.toISOString().slice(0,10);
@@ -21,7 +23,9 @@ Modulos.calendario = {
     const enviosEv = (envios||[])
       .filter(e=>e.fecha_entrega_estimada && e.estado!=='cerrado')
       .map(e=>({ _envio:true, id:e.id, titulo:e.descripcion, tipo:e.tipo, fecha_cita:`${e.fecha_entrega_estimada}T10:00:00` }));
-    const eventos = [...this._citas, ...pagos, ...enviosEv]
+    /* Vencimientos SAT (según régimen fiscal) si el plan incluye contabilidad */
+    const satEv = moduloEnPlan('contabilidad') ? this._eventosSAT(hoy, fiscal, obligaciones) : [];
+    const eventos = [...this._citas, ...pagos, ...enviosEv, ...satEv]
       .sort((a,b)=>(a.fecha_cita||'').localeCompare(b.fecha_cita||''));
     const citasHoy = eventos.filter(c=>c.fecha_cita?.slice(0,10)===hoyStr);
     const citasProx = eventos.filter(c=>c.fecha_cita?.slice(0,10)>hoyStr).slice(0,6);
@@ -85,6 +89,56 @@ Modulos.calendario = {
     </div>`;
   },
 
+  /* ── Calendario fiscal SAT (Guatemala) ─────────────
+     Genera los vencimientos del mes actual y el siguiente según el
+     régimen del taller (config_fiscal), cruzados con el estado en
+     obligaciones_fiscales (✓ pagado / pendiente / por calcular):
+       • IVA mensual: SAT-2237 (o SAT-2046 pequeño contribuyente),
+         vence el último día del mes siguiente al periodo.
+       • ISR Simplificado (SAT-1311): primeros 10 días del mes siguiente.
+       • Régimen utilidades (25%): ISR trimestral SAT-1361 (día 10 de
+         ene/abr/jul/oct), ISO SAT-1608 (fin de esos meses) y
+         ISR anual SAT-1411 (31 de marzo). */
+  _eventosSAT(hoy, fiscal, obligaciones) {
+    const out = [];
+    const pequeno = (fiscal?.regimen_iva||'general').toLowerCase().startsWith('peque');
+    const utilidades = (Number(fiscal?.tasa_isr)||0.05) >= 0.2;
+    const f = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+    const estadoDe = (tipo, periodo) => {
+      const o = (obligaciones||[]).find(x=>x.tipo===tipo && x.periodo===periodo);
+      return o ? o.estado : null;   // 'pagado' | 'pendiente' | null (sin calcular)
+    };
+
+    [0,1].forEach(k => {
+      const base = new Date(hoy.getFullYear(), hoy.getMonth()+k, 1);
+      const y = base.getFullYear(), m = base.getMonth();
+      const prev = new Date(y, m-1, 1);
+      const prevPer = `${prev.getFullYear()}-${String(prev.getMonth()+1).padStart(2,'0')}`;
+      const finMes = new Date(y, m+1, 0);
+
+      /* IVA del periodo anterior — vence fin de este mes */
+      out.push({ _sat:true, titulo:`IVA ${pequeno?'SAT-2046':'SAT-2237'} · periodo ${prevPer}`,
+        fecha_cita:`${f(finMes)}T09:00:00`, sat_estado: estadoDe('IVA', prevPer) });
+
+      if (!utilidades) {
+        /* ISR opcional simplificado mensual — día 10 */
+        if (!pequeno) out.push({ _sat:true, titulo:`ISR Simplificado SAT-1311 · periodo ${prevPer}`,
+          fecha_cita:`${f(new Date(y, m, 10))}T09:00:00`, sat_estado: estadoDe('ISR', prevPer) });
+      } else {
+        /* Régimen sobre utilidades: trimestrales + anual */
+        if ([0,3,6,9].includes(m)) {
+          out.push({ _sat:true, titulo:'ISR Trimestral SAT-1361 · trimestre anterior',
+            fecha_cita:`${f(new Date(y, m, 10))}T09:00:00`, sat_estado:null });
+          out.push({ _sat:true, titulo:'ISO SAT-1608 · trimestre anterior',
+            fecha_cita:`${f(finMes)}T09:00:00`, sat_estado:null });
+        }
+        if (m === 2) out.push({ _sat:true, titulo:`ISR Anual SAT-1411 · ejercicio ${y-1}`,
+          fecha_cita:`${f(new Date(y, 2, 31))}T09:00:00`, sat_estado:null });
+      }
+    });
+    return out;
+  },
+
   /* Convierte los gastos recurrentes activos en eventos del calendario
      (su fecha del mes actual y del siguiente, según dia_mes). */
   _pagosEventos(recurrentes, hoy) {
@@ -113,6 +167,23 @@ Modulos.calendario = {
           <div style="font-size:11px;color:var(--cyan)">${conFecha?fecha+' ':''}${hora}</div>
         </div>
         <div style="font-size:11px;color:var(--text3);margin-top:2px">Entrega estimada de envío</div>
+      </div>`;
+    }
+    /* Vencimiento SAT (calculado según el régimen fiscal) */
+    if (c._sat) {
+      const st = c.sat_estado === 'pagado' ? { b:'green', t:'✓ Pagado' }
+        : c.sat_estado === 'pendiente' ? { b:'amber', t:'Pendiente' }
+        : { b:'gray', t:'Por calcular' };
+      return `<div style="padding:10px;border-left:3px solid var(--purple);margin-bottom:8px;background:var(--surface2);border-radius:0 8px 8px 0;cursor:pointer"
+           onclick="App.navegarA('contabilidad')">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+          <div style="font-weight:700;font-size:13px">🏛️ ${c.titulo}</div>
+          <div style="font-size:11px;color:var(--purple);white-space:nowrap">${conFecha?fecha:''}</div>
+        </div>
+        <div style="font-size:11px;color:var(--text3);margin-top:2px;display:flex;justify-content:space-between;align-items:center">
+          <span>Declaración SAT (Declaraguate)</span>
+          <span class="badge badge-${st.b}" style="font-size:9px">${st.t}</span>
+        </div>
       </div>`;
     }
     /* Evento de pago recurrente (no es una cita real) */
