@@ -66,6 +66,8 @@ const MODULOS = [
   { id:'configuracion',  icon:'⚙️', label:'Configuración',     grupo:'admin'      },
   { id:'usuarios',       icon:'👥', label:'Usuarios',          grupo:'admin'      },
   { id:'admin',          icon:'🗄️', label:'Administración',    grupo:'admin'      },
+  { id:'respaldos',      icon:'💾', label:'Respaldos',         grupo:'admin'      },
+  { id:'superadmin',     icon:'⚡', label:'Panel SaaS',        grupo:'saas'       },
   { id:'mi_ot',          icon:'🔍', label:'Mis Órdenes',       grupo:'cliente'    }
 ];
 
@@ -79,6 +81,7 @@ const GRUPOS = [
   { id:'marketing',    label:'Marketing'      },
   { id:'herramientas', label:'Herramientas'   },
   { id:'admin',        label:'Administración' },
+  { id:'saas',         label:'SaaS'           },
   { id:'cliente',      label:''               }
 ];
 
@@ -94,6 +97,69 @@ const PERMISOS = {
   cliente:      { dashboard:false, clientes:false, vehiculos:false, ordenes:false, inventario:false, bodegas:false, proveedores:false, compras:false, activos:false, envios:false, facturacion:false, bancos:false, finanzas:false, presupuesto:false, rrhh:false, marketing:false, calendario:false, comunicaciones:false, configuracion:false, usuarios:false, admin:false, mi_ot:true  }
 };
 
+/* ── PLANES COMERCIALES (SaaS) ────────────────────────
+   Cada plan define qué módulos incluye. El superadmin puede,
+   por taller, sobre-escribir la lista exacta (tenants.modulos_activos).
+   Módulos SIEMPRE disponibles (no se cobran / son de la cuenta):
+   dashboard, configuración, usuarios, admin, mi_ot, calendario.        */
+const MODULOS_SIEMPRE = ['dashboard','configuracion','usuarios','admin','respaldos','mi_ot','calendario'];
+
+const PLANES = {
+  basico: {
+    label: 'Básico', precio: 199, color: 'cyan',
+    desc: 'Operación del taller: clientes, vehículos, OT, inventario y POS.',
+    modulos: ['clientes','vehiculos','ordenes','inventario','pos']
+  },
+  pro: {
+    label: 'Pro', precio: 499, color: 'amber',
+    desc: 'Todo lo básico + facturación FEL, finanzas, bancos, compras y fidelización.',
+    modulos: ['clientes','vehiculos','ordenes','inventario','pos',
+              'proveedores','compras','bodegas','activos','envios',
+              'facturacion','bancos','finanzas','presupuesto','marketing','comunicaciones']
+  },
+  empresarial: {
+    label: 'Empresarial', precio: 999, color: 'green',
+    desc: 'Todo lo Pro + RRHH/Nómina y multi-sucursal. Solución completa.',
+    modulos: ['clientes','vehiculos','ordenes','inventario','pos',
+              'proveedores','compras','bodegas','activos','envios',
+              'facturacion','bancos','finanzas','presupuesto','marketing','comunicaciones','rrhh']
+  }
+};
+
+/* Lista de módulos que se pueden vender/activar a la carta (para el panel SA) */
+const MODULOS_VENDIBLES = [
+  'clientes','vehiculos','ordenes','inventario','pos','proveedores','compras',
+  'bodegas','activos','envios','facturacion','bancos','finanzas','presupuesto',
+  'marketing','comunicaciones','rrhh'
+];
+
+/* Módulos activos del taller en sesión (override del tenant o, si no, su plan). */
+function modulosActivosTenant() {
+  const t = window.Auth?.tenant;
+  if (!t) return null;                       // sin tenant cargado → no bloquear
+  if (Array.isArray(t.modulos_activos) && t.modulos_activos.length) return t.modulos_activos;
+  const plan = PLANES[t.plan];
+  if (!plan) return null;                     // plan legacy/desconocido → sin gating (todo permitido)
+  return plan.modulos;
+}
+
+/* ¿El módulo está incluido en el plan/paquete del taller? */
+function moduloEnPlan(modId) {
+  if (MODULOS_SIEMPRE.includes(modId)) return true;
+  const act = modulosActivosTenant();
+  if (!act) return true;
+  return act.includes(modId);
+}
+
+/* ¿La suscripción del taller está vigente? (vencida = solo lectura/bloqueo suave) */
+function suscripcionVigente() {
+  const t = window.Auth?.tenant;
+  if (!t) return true;
+  if (t.active === false) return false;
+  if (!t.suscripcion_vence) return true;
+  return t.suscripcion_vence >= new Date().toISOString().slice(0,10);
+}
+
 /* ── FUNCIONES DE PERMISOS ────────────────────────── */
 function getPermisos() {
   if (!window.Auth?.user) return {};
@@ -106,7 +172,9 @@ function getPermisos() {
 function tieneAcceso(modulo) {
   if (!window.Auth?.user) return false;
   const rol = window.Auth.user.rol;
-  if (rol === 'superadmin' || rol === 'admin') return true;
+  if (rol === 'superadmin') return true;          // el dueño del SaaS ve todo
+  if (!moduloEnPlan(modulo)) return false;        // gating por plan (aplica también al admin del taller)
+  if (rol === 'admin') return true;
   return getPermisos()[modulo] === true;
 }
 

@@ -73,6 +73,75 @@ const DB = {
     return data || [];
   },
 
+  /* ── SUPERADMIN / SaaS ────────────────────────────
+     (todo esto pasa por RLS: tenants y tenant_pagos solo el superadmin) */
+  async getTenantsAdmin() {
+    const { data } = await getSB().from('tenants').select('*').order('created_at',{ascending:false});
+    return data || [];
+  },
+
+  async crearTenant(fields) {
+    const { data, error } = await getSB().from('tenants').insert(fields).select().single();
+    return { data, error };
+  },
+
+  async updateTenantById(id, fields) {
+    const { error } = await getSB().from('tenants').update(fields).eq('id', id);
+    return { error };
+  },
+
+  async getTenantPagos(tenantId=null) {
+    let q = getSB().from('tenant_pagos').select('*').order('fecha',{ascending:false});
+    if (tenantId) q = q.eq('tenant_id', tenantId);
+    const { data } = await q;
+    return data || [];
+  },
+
+  async upsertTenantPago(fields) {
+    const { data, error } = await getSB().from('tenant_pagos').insert(fields).select().single();
+    return { data, error };
+  },
+
+  async deleteTenantPago(id) {
+    const { error } = await getSB().from('tenant_pagos').delete().eq('id', id);
+    return !error;
+  },
+
+  /* ── RESPALDOS ────────────────────────────────────
+     Bitácora (tabla) + exportación on-demand de los datos del taller. */
+  async getBackups(tenantId=null) {
+    let q = getSB().from('tenant_backups').select('*').order('fecha',{ascending:false});
+    if (tenantId) q = q.eq('tenant_id', tenantId);
+    const { data } = await q;
+    return data || [];
+  },
+
+  async registrarBackup(fields) {
+    const { data, error } = await getSB().from('tenant_backups')
+      .insert({ ...fields, tenant_id: fields.tenant_id || getTID() }).select().single();
+    return { data, error };
+  },
+
+  /* Exporta los datos principales del taller en sesión (para descarga JSON). */
+  async exportarDatosTenant() {
+    const tid = getTID();
+    const TABLAS = ['clientes','vehiculos','ordenes','orden_items','inventario','proveedores',
+      'compras','facturas','factura_items','ingresos','egresos','bancos','banco_movimientos',
+      'empleados','pagos_nomina','envios','retenciones','citas','puntos_movimientos'];
+    const dump = { _meta: { tenant_id: tid, generado: new Date().toISOString(), tablas: {} } };
+    let totalReg = 0;
+    for (const t of TABLAS) {
+      try {
+        const { data } = await getSB().from(t).select('*').eq('tenant_id', tid);
+        dump[t] = data || [];
+        dump._meta.tablas[t] = (data||[]).length;
+        totalReg += (data||[]).length;
+      } catch(_) { dump[t] = []; dump._meta.tablas[t] = 0; }
+    }
+    dump._meta.total_registros = totalReg;
+    return dump;
+  },
+
   /* ── USUARIOS ─────────────────────────────────── */
   async getUsuarios() {
     const tid = await waitForTenant();

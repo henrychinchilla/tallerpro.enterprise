@@ -12,11 +12,31 @@ const App = {
     document.getElementById('login-screen')?.style.setProperty('display','none');
     const appEl = document.getElementById('app');
     if (appEl) appEl.classList.add('visible');
+    TEMAS.aplicar(localStorage.getItem('tp_tema') || 'light');
+    /* Bloqueo si la cuenta del taller está suspendida (no aplica al superadmin) */
+    if (Auth.user?.rol !== 'superadmin' && Auth.tenant?.active === false) {
+      return App.pantallaSuspendido();
+    }
     App.renderSidebar();
     App.navegarA('dashboard');
     App.checkLicencia();
     App.registrarSW();
-    TEMAS.aplicar(localStorage.getItem('tp_tema') || 'light');
+  },
+
+  /* Pantalla de cuenta suspendida (suscripción/cobro) */
+  pantallaSuspendido() {
+    const main = document.getElementById('page-content') || document.getElementById('app');
+    const sb = document.getElementById('sidebar'); if (sb) sb.innerHTML = '';
+    if (main) main.innerHTML = `
+      <div style="min-height:90vh;display:flex;align-items:center;justify-content:center;padding:24px">
+        <div class="card" style="max-width:480px;text-align:center">
+          <div style="font-size:44px">⏸️</div>
+          <h2 style="margin:8px 0">Cuenta suspendida</h2>
+          <p style="color:var(--text2);font-size:14px">El acceso a <b>${Auth.tenant?.name||'tu taller'}</b> está temporalmente suspendido.
+          Ponte en contacto con soporte de TallerPro para reactivar tu suscripción.</p>
+          <div style="margin-top:16px"><button class="btn btn-ghost" onclick="Auth.logout()">Cerrar sesión</button></div>
+        </div>
+      </div>`;
   },
 
   /* ── SIDEBAR ──────────────────────────────────── */
@@ -25,8 +45,9 @@ const App = {
     const puedeVer = m => {
       if (!Auth.user) return false;
       if (m.id === 'mi_ot') return rol === 'cliente';
-      if (rol === 'superadmin' || rol === 'admin') return m.id !== 'mi_ot';
-      return tieneAcceso(m.id);
+      if (m.id === 'superadmin') return rol === 'superadmin';
+      if (rol === 'superadmin') return true;       // el dueño del SaaS ve todo
+      return tieneAcceso(m.id);                     // admin del taller queda sujeto a su plan
     };
 
     const itemHtml = m => {
@@ -71,7 +92,8 @@ const App = {
       </div>`;
 
     /* Acceso al POS (pantalla aparte) para roles de venta/gestión */
-    const posBtn = ['superadmin','admin','gerente_tal','gerente_fin','recepcionista','vendedor'].includes(rol) ? `
+    const posBtn = ['superadmin','admin','gerente_tal','gerente_fin','recepcionista','vendedor'].includes(rol)
+      && (rol === 'superadmin' || moduloEnPlan('pos')) ? `
       <div style="padding:0 12px 10px">
         <a class="btn btn-ghost btn-sm" style="width:100%;text-align:center;display:block" href="/pos.html">🛒 Punto de Venta</a>
       </div>` : '';
@@ -108,9 +130,11 @@ const App = {
     const rol = Auth.user.rol;
 
     /* Verificar permisos */
-    if (pagina !== 'mi_ot' && rol !== 'superadmin' && rol !== 'admin') {
+    if (pagina === 'superadmin') {
+      if (rol !== 'superadmin') { UI.toast('Sin acceso a este módulo', 'error'); return; }
+    } else if (pagina !== 'mi_ot' && rol !== 'superadmin') {
       if (!tieneAcceso(pagina)) {
-        UI.toast('Sin acceso a este módulo', 'error');
+        UI.toast(moduloEnPlan(pagina) ? 'Sin acceso a este módulo' : 'Este módulo no está incluido en tu plan', 'error');
         return;
       }
     }
