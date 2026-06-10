@@ -65,11 +65,12 @@ Modulos.envios = {
     const venc = e.fecha_entrega_estimada && !['entregado','cerrado'].includes(e.estado)
       && e.fecha_entrega_estimada < new Date().toISOString().slice(0,10);
     const destino = e.destinatario || e.empresa_transporte || '—';
+    const contacto = [e.telefono, [e.direccion, e.municipio].filter(Boolean).join(', ')].filter(Boolean).join(' · ');
     return `<tr>
       <td class="mono-sm">${UI.fecha(e.fecha_envio)}</td>
       <td><span class="badge badge-${tc}">${tl}</span></td>
       <td><b>${e.descripcion}</b>${e.num_factura?`<br><small class="text-muted">Fact: ${e.num_factura}</small>`:''}</td>
-      <td>${destino}</td>
+      <td>${destino}${contacto?`<br><small class="text-muted">${contacto.slice(0,60)}</small>`:''}</td>
       <td>${e.medio?this._medioLabel(e.medio):'—'}</td>
       <td class="mono-sm text-red">${UI.q(e.costo_total)}</td>
       <td class="mono-sm">${e.numero_envio||'—'}</td>
@@ -112,6 +113,16 @@ Modulos.envios = {
         <input class="form-input" id="env-desc" value="${(e.descripcion||'').replace(/"/g,'&quot;')}" placeholder="Discos de freno / repuestos a Bodega Norte"></div>
       <div class="form-group"><label class="form-label">Destinatario (proveedor / cliente / bodega)</label>
         <input class="form-input" id="env-dest" value="${(e.destinatario||'').replace(/"/g,'&quot;')}" placeholder="Torno El Progreso / Bodega Norte"></div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Teléfono de contacto</label>
+          <input class="form-input" id="env-tel" value="${(e.telefono||'').replace(/"/g,'&quot;')}" placeholder="5555-5555"></div>
+        <div class="form-group"><label class="form-label">Municipio / Depto.</label>
+          <input class="form-input" id="env-muni" value="${(e.municipio||'').replace(/"/g,'&quot;')}" placeholder="Guatemala, Mixco..."></div>
+      </div>
+      <div class="form-group"><label class="form-label">Dirección de entrega</label>
+        <textarea class="form-input" id="env-dir" rows="2" placeholder="Calle, número, zona...">${e.direccion||''}</textarea></div>
+      <div class="form-group"><label class="form-label">Referencias del lugar</label>
+        <input class="form-input" id="env-refs" value="${(e.referencias||'').replace(/"/g,'&quot;')}" placeholder="Punto de referencia, horario de entrega..."></div>
 
       <!-- INTERNO -->
       <div id="env-interno">
@@ -194,6 +205,10 @@ Modulos.envios = {
     const fields = {
       tipo, descripcion: desc,
       destinatario: document.getElementById('env-dest')?.value.trim()||null,
+      telefono: document.getElementById('env-tel')?.value.trim()||null,
+      direccion: document.getElementById('env-dir')?.value.trim()||null,
+      municipio: document.getElementById('env-muni')?.value.trim()||null,
+      referencias: document.getElementById('env-refs')?.value.trim()||null,
       orden_id: document.getElementById('env-ot')?.value||null,
       trabajo_externo_id: document.getElementById('env-te')?.value||null,
       empresa_transporte: tipo==='interno' ? null : (document.getElementById('env-empresa')?.value.trim()||null),

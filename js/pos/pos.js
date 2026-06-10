@@ -467,15 +467,15 @@ const POS = {
     /* Programar envío con los datos capturados */
     if (progEnvio) {
       const e = this._envioData;
-      const notas = [
-        `Tel: ${e.telefono||'—'}`,
-        `Dirección: ${e.direccion||'—'}${e.municipio?`, ${e.municipio}`:''}`,
-        e.refs ? `Ref: ${e.refs}` : ''
-      ].filter(Boolean).join(' · ');
       await DB.upsertEnvio({
         tipo: 'courier',
         descripcion: `Entrega venta ${factura.num||''}`,
         destinatario: e.destinatario || cli?.nombre || 'Cliente',
+        cliente_id: cli?.id || null,
+        telefono: e.telefono || null,
+        direccion: e.direccion || null,
+        municipio: e.municipio || null,
+        referencias: e.refs || null,
         empresa_transporte: e.empresa || null,
         medio: e.medio || null,
         costo_flete: e.costo || 0,
@@ -484,8 +484,7 @@ const POS = {
         orden_id: null,
         fecha_envio: new Date().toISOString().slice(0,10),
         fecha_entrega_estimada: e.fecha_entrega || null,
-        estado: 'programado',
-        notas
+        estado: 'programado'
       }).catch(()=>{});
     }
 
