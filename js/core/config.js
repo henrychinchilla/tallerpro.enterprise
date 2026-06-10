@@ -37,6 +37,10 @@ const ROLES = {
   recepcionista:{ label:'Recepcionista',        icon:'📋', color:'purple', oculto:false },
   vendedor:     { label:'Vendedor (POS)',       icon:'🛒', color:'amber',  oculto:false },
   mecanico:     { label:'Mecánico',            icon:'🪛', color:'gray',   oculto:false },
+  contador:     { label:'Contador',            icon:'🧮', color:'green',  oculto:false },
+  bodeguero:    { label:'Bodeguero',           icon:'📦', color:'cyan',   oculto:false },
+  limpieza:     { label:'Limpieza',            icon:'🧹', color:'gray',   oculto:false },
+  conserje:     { label:'Conserje',            icon:'🧰', color:'gray',   oculto:false },
   cliente:      { label:'Cliente',             icon:'🚗', color:'cyan',   oculto:false }
 };
 
@@ -72,6 +76,8 @@ const MODULOS = [
       { tab:'nomina',        icon:'💵', label:'Nómina'        },
       { tab:'igss',          icon:'🏛️', label:'Planilla IGSS'  },
       { tab:'productividad', icon:'📈', label:'Productividad'  },
+      { tab:'capacitacion',  icon:'🎓', label:'Capacitación'   },
+      { tab:'asignaciones',  icon:'🔑', label:'Asignaciones'   },
       { tab:'organigrama',   icon:'🏢', label:'Organigrama'   },
       { tab:'documentos',    icon:'📄', label:'Documentos'    }
     ] },
@@ -109,6 +115,10 @@ const PERMISOS = {
   recepcionista:{ dashboard:true,  clientes:true,  vehiculos:true,  ordenes:true,  inventario:false, bodegas:false, proveedores:false, compras:false, activos:false, envios:true,  facturacion:true,  bancos:false, finanzas:false, presupuesto:false, contabilidad:false, rrhh:false, marketing:false, calendario:true,  comunicaciones:false, configuracion:false, usuarios:false, admin:false, mi_ot:false },
   vendedor:     { dashboard:true,  clientes:true,  vehiculos:true,  ordenes:false, inventario:false, bodegas:false, proveedores:false, compras:false, activos:false, envios:true,  facturacion:false, bancos:false, finanzas:false, presupuesto:false, contabilidad:false, rrhh:false, marketing:true,  calendario:false, comunicaciones:false, configuracion:false, usuarios:false, admin:false, mi_ot:false },
   mecanico:     { dashboard:true,  clientes:false, vehiculos:true,  ordenes:true,  inventario:true,  bodegas:true,  proveedores:false, compras:false, activos:false, envios:true,  facturacion:false, bancos:false, finanzas:false, presupuesto:false, contabilidad:false, rrhh:false, marketing:false, calendario:true,  comunicaciones:false, configuracion:false, usuarios:false, admin:false, mi_ot:false },
+  contador:     { dashboard:true,  clientes:false, vehiculos:false, ordenes:false, inventario:false, bodegas:false, proveedores:true,  compras:true,  activos:true,  envios:false, facturacion:true,  bancos:true,  finanzas:true,  presupuesto:true,  contabilidad:true,  rrhh:false, marketing:false, calendario:true,  comunicaciones:true,  configuracion:false, usuarios:false, admin:false, mi_ot:false },
+  bodeguero:    { dashboard:true,  clientes:false, vehiculos:false, ordenes:false, inventario:true,  bodegas:true,  proveedores:true,  compras:true,  activos:false, envios:true,  facturacion:false, bancos:false, finanzas:false, presupuesto:false, contabilidad:false, rrhh:false, marketing:false, calendario:true,  comunicaciones:false, configuracion:false, usuarios:false, admin:false, mi_ot:false },
+  limpieza:     { dashboard:true,  clientes:false, vehiculos:false, ordenes:false, inventario:false, bodegas:false, proveedores:false, compras:false, activos:false, envios:false, facturacion:false, bancos:false, finanzas:false, presupuesto:false, contabilidad:false, rrhh:false, marketing:false, calendario:true,  comunicaciones:false, configuracion:false, usuarios:false, admin:false, mi_ot:false },
+  conserje:     { dashboard:true,  clientes:false, vehiculos:false, ordenes:false, inventario:false, bodegas:false, proveedores:false, compras:false, activos:false, envios:false, facturacion:false, bancos:false, finanzas:false, presupuesto:false, contabilidad:false, rrhh:false, marketing:false, calendario:true,  comunicaciones:false, configuracion:false, usuarios:false, admin:false, mi_ot:false },
   cliente:      { dashboard:false, clientes:false, vehiculos:false, ordenes:false, inventario:false, bodegas:false, proveedores:false, compras:false, activos:false, envios:false, facturacion:false, bancos:false, finanzas:false, presupuesto:false, contabilidad:false, rrhh:false, marketing:false, calendario:false, comunicaciones:false, configuracion:false, usuarios:false, admin:false, mi_ot:true  }
 };
 
@@ -313,13 +323,20 @@ const KPIS_POR_ROL = {
     { id:'cumplimiento_taller', label:'Cumplimiento de tiempos (taller)',peso:20, tipo:'auto',            scope:'taller' },
     { id:'liderazgo',           label:'Liderazgo y gestión del equipo', peso:15, tipo:'manual' },
     { id:'objetivos',           label:'Objetivos del mes',              peso:15, tipo:'manual' }
+  ],
+  apoyo: [
+    { id:'tareas',       label:'Cumplimiento de tareas asignadas', peso:35, tipo:'manual' },
+    { id:'orden',        label:'Orden y limpieza del área',        peso:25, tipo:'manual' },
+    { id:'puntualidad',  label:'Puntualidad y asistencia',         peso:20, tipo:'manual' },
+    { id:'actitud',      label:'Actitud y disciplina',             peso:20, tipo:'manual' }
   ]
 };
-const KPIS_ROL_LABELS = { mecanico:'🪛 Mecánico / Auxiliar', vendedor:'🛒 Vendedor (POS)', recepcionista:'📋 Recepcionista', gerente:'👑 Gerencia / Administración' };
+const KPIS_ROL_LABELS = { mecanico:'🪛 Mecánico / Auxiliar', vendedor:'🛒 Vendedor (POS)', recepcionista:'📋 Recepcionista', gerente:'👑 Gerencia / Administración', apoyo:'🧹 Apoyo (bodega, limpieza, conserjería)' };
 
 /* Grupo de plantilla KPI que corresponde al rol de un empleado */
 function plantillaKpiRol(rol) {
-  if (['admin','gerente_tal','gerente_fin','gerente','superadmin'].includes(rol)) return 'gerente';
+  if (['admin','gerente_tal','gerente_fin','gerente','superadmin','contador'].includes(rol)) return 'gerente';
+  if (['bodeguero','limpieza','conserje'].includes(rol)) return 'apoyo';
   if (KPIS_POR_ROL[rol]) return rol;
   return 'mecanico';
 }

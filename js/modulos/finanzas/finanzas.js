@@ -185,18 +185,24 @@ Modulos.finanzas = {
           <table class="data-table">
             <thead><tr><th>Fecha</th><th>Empleado</th><th>Concepto</th><th>Tipo</th><th>Monto</th><th>Estado</th><th>Acciones</th></tr></thead>
             <tbody>
-              ${viaticos.map(v=>`<tr>
+              ${viaticos.map(v=>{
+                const det = v.detalle||{};
+                const desg = v.tipo==='combustible' && det.galones
+                  ? `⛽ ${det.galones} gal × ${UI.q(det.costo_galon)} · km ${det.km||'—'}`
+                  : v.tipo==='hospedaje' && det.noches ? `🛏️ ${det.noches} noche${det.noches==1?'':'s'}` : '';
+                return `<tr>
                 <td>${UI.fecha(v.fecha)}</td>
                 <td>${v.empleados?.nombre||'—'}</td>
-                <td>${v.concepto}</td>
+                <td>${v.concepto}${desg?`<div style="font-size:10px;color:var(--text3)">${desg}</div>`:''}</td>
                 <td><span class="badge badge-gray">${v.tipo||'—'}</span></td>
                 <td class="mono-sm text-amber">${UI.q(v.monto)}</td>
                 <td><span class="badge badge-${v.aprobado?'green':'amber'}">${v.aprobado?'Aprobado':'Pendiente'}</span></td>
                 <td><div style="display:flex;gap:4px">
+                  ${v.comprobante?`<button class="btn btn-sm btn-cyan" title="Ver comprobante" onclick="Modulos.finanzas.verComprobante('${v.id}')">📎</button>`:''}
                   ${v.aprobado?'':`<button class="btn btn-sm btn-green" onclick="Modulos.finanzas.aprobarViatico('${v.id}')" title="Aprobar y cargar a egresos">✓ Aprobar</button>`}
                   ${Modulos.btnAccion('eliminar', `Modulos.eliminarRegistro('viaticos','${v.id}','este viático',()=>Modulos.finanzas._renderTab())`)}
                 </div></td>
-              </tr>`).join('')||'<tr><td colspan="7" style="text-align:center;padding:24px;color:var(--text3)">Sin viáticos en este período</td></tr>'}
+              </tr>`;}).join('')||'<tr><td colspan="7" style="text-align:center;padding:24px;color:var(--text3)">Sin viáticos en este período</td></tr>'}
             </tbody>
           </table>
         </div>
@@ -829,7 +835,10 @@ Modulos.finanzas = {
   },
 
   /* ── VIÁTICOS ─────────────────────────────────── */
+  _viaComprobante: null,
+
   modalViatico() {
+    this._viaComprobante = null;
     UI.modal('＋ Nuevo Viático', `
       <div class="form-row">
         <div class="form-group"><label class="form-label">Empleado *</label>
@@ -838,7 +847,7 @@ Modulos.finanzas = {
             ${(this._empleados||[]).filter(e=>e.activo).map(e=>`<option value="${e.id}">${e.nombre}</option>`).join('')}
           </select></div>
         <div class="form-group"><label class="form-label">Tipo</label>
-          <select class="form-select" id="via-tipo">
+          <select class="form-select" id="via-tipo" onchange="Modulos.finanzas._viaDesglose(this.value)">
             ${['alimentacion','transporte','hospedaje','combustible','otro'].map(t=>`<option>${t}</option>`).join('')}
           </select></div>
       </div>
@@ -848,33 +857,98 @@ Modulos.finanzas = {
         <div class="form-group"><label class="form-label">Monto (Q) *</label>
           <input class="form-input" id="via-monto" type="number" min="0" step="0.01"></div>
       </div>
+      <div id="via-desglose"></div>
       <div class="form-row">
         <div class="form-group"><label class="form-label">Fecha</label>
           <input class="form-input" id="via-fecha" type="date" value="${new Date().toISOString().slice(0,10)}"></div>
         <div class="form-group"><label class="form-label">Referencia / Factura</label>
           <input class="form-input" id="via-ref"></div>
       </div>
+      <div class="form-group"><label class="form-label">Comprobante (foto o scan — jpg/pdf)</label>
+        <input class="form-input" type="file" accept="image/*,application/pdf" onchange="Modulos.finanzas._onComprobante(this)">
+        <div id="via-comp-info" style="font-size:11px;color:var(--text3);margin-top:4px">Se guarda en el historial del viático.</div></div>
       <div class="modal-footer">
         <button class="btn btn-ghost" onclick="UI.cerrarModal()">Cancelar</button>
         <button class="btn btn-amber" onclick="Modulos.finanzas.guardarViatico()">Registrar</button>
-      </div>`);
+      </div>`, '580px');
+  },
+
+  /* Campos extra según el tipo: combustible pide km/galones/costo por galón
+     (de la factura); hospedaje pide cuántas noches cubre la factura. */
+  _viaDesglose(tipo) {
+    const el = document.getElementById('via-desglose');
+    if (!el) return;
+    if (tipo === 'combustible') {
+      el.innerHTML = `
+        <div class="form-row">
+          <div class="form-group"><label class="form-label">Kilometraje del vehículo *</label>
+            <input class="form-input" id="via-km" type="number" min="0" placeholder="123456"></div>
+          <div class="form-group"><label class="form-label">Galones despachados *</label>
+            <input class="form-input" id="via-gal" type="number" min="0" step="0.001" oninput="Modulos.finanzas._viaCalcGal()"></div>
+          <div class="form-group"><label class="form-label">Costo por galón (Q) *</label>
+            <input class="form-input" id="via-cpg" type="number" min="0" step="0.01" oninput="Modulos.finanzas._viaCalcGal()"></div>
+        </div>
+        <div style="font-size:11px;color:var(--text3);margin:-6px 0 10px">Galones y costo/galón se toman de la factura; el kilometraje se anota del tablero.</div>`;
+    } else if (tipo === 'hospedaje') {
+      el.innerHTML = `
+        <div class="form-group"><label class="form-label">Noches pagadas con esta factura *</label>
+          <input class="form-input" id="via-noches" type="number" min="1" step="1" placeholder="2"></div>`;
+    } else el.innerHTML = '';
+  },
+
+  _viaCalcGal() {
+    const gal = parseFloat(document.getElementById('via-gal')?.value)||0;
+    const cpg = parseFloat(document.getElementById('via-cpg')?.value)||0;
+    const m = document.getElementById('via-monto');
+    if (m && gal>0 && cpg>0) m.value = (Math.round(gal*cpg*100)/100).toFixed(2);
+  },
+
+  _onComprobante(input) {
+    const f = input.files?.[0];
+    if (!f) { this._viaComprobante = null; return; }
+    UI.fileABase64(f, { maxPx: 1400 }).then(r => {
+      this._viaComprobante = r.base64;
+      const i = document.getElementById('via-comp-info'); if (i) i.textContent = '✓ ' + r.nombre;
+    }).catch(e => { UI.toast(e.message,'error'); input.value=''; });
   },
 
   async guardarViatico() {
     const empId = document.getElementById('via-emp')?.value;
     const conc  = document.getElementById('via-concepto')?.value.trim();
     const monto = parseFloat(document.getElementById('via-monto')?.value)||0;
+    const tipo  = document.getElementById('via-tipo')?.value;
     if (!empId||!conc||monto<=0) { UI.toast('Completa empleado, concepto y monto','error'); return; }
+
+    /* Desglose obligatorio según tipo */
+    let detalle = null;
+    if (tipo === 'combustible') {
+      const km = parseFloat(document.getElementById('via-km')?.value)||0;
+      const galones = parseFloat(document.getElementById('via-gal')?.value)||0;
+      const costo_galon = parseFloat(document.getElementById('via-cpg')?.value)||0;
+      if (!km || !galones || !costo_galon) { UI.toast('Combustible: kilometraje, galones y costo por galón son obligatorios','error'); return; }
+      detalle = { km, galones, costo_galon };
+    } else if (tipo === 'hospedaje') {
+      const noches = parseInt(document.getElementById('via-noches')?.value)||0;
+      if (!noches) { UI.toast('Hospedaje: indica cuántas noches cubre la factura','error'); return; }
+      detalle = { noches };
+    }
+
     const {error} = await DB.upsertViatico({
-      empleado_id: empId, concepto: conc, monto,
-      tipo:        document.getElementById('via-tipo')?.value,
+      empleado_id: empId, concepto: conc, monto, tipo, detalle,
       fecha:       document.getElementById('via-fecha')?.value,
       referencia:  document.getElementById('via-ref')?.value||null,
+      comprobante: this._viaComprobante,
       aprobado:    false
     });
     if (error) { UI.toast('Error: '+error.message,'error'); return; }
     UI.cerrarModal(); UI.toast('Viático registrado ✓');
     this._tab='viaticos'; this._renderTab();
+  },
+
+  async verComprobante(id) {
+    const viaticos = await DB.getViaticos(null, this._ini, this._fin);
+    const v = viaticos.find(x=>x.id===id);
+    if (v?.comprobante) UI.verAdjunto(v.comprobante, `📎 Comprobante — ${v.concepto}`);
   },
 
   async aprobarViatico(id) {

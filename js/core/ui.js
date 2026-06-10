@@ -88,6 +88,50 @@ const UI = {
     if (btn) btn.textContent = inp.type === 'password' ? '👁' : '🙈';
   },
 
+  /* ── ARCHIVO → BASE64 ─────────────────────────────
+     Imágenes: se redimensionan a maxPx y se comprimen (JPEG).
+     PDFs: se guardan tal cual si pesan ≤ maxPdfMB.
+     Devuelve Promise<{ base64, nombre, esPdf }> o rechaza con mensaje. */
+  fileABase64(file, { maxPx = 1000, calidad = 0.8, maxPdfMB = 2 } = {}) {
+    return new Promise((resolve, reject) => {
+      if (!file) return reject(new Error('Sin archivo'));
+      const esPdf = file.type === 'application/pdf';
+      if (!esPdf && !file.type.startsWith('image/')) return reject(new Error('Solo imágenes o PDF'));
+      if (esPdf && file.size > maxPdfMB*1024*1024) return reject(new Error(`El PDF supera ${maxPdfMB}MB`));
+      const reader = new FileReader();
+      reader.onerror = () => reject(new Error('No se pudo leer el archivo'));
+      reader.onload = ev => {
+        if (esPdf) return resolve({ base64: ev.target.result, nombre: file.name, esPdf: true });
+        const img = new Image();
+        img.onerror = () => reject(new Error('Imagen inválida'));
+        img.onload = () => {
+          const esc = Math.min(1, maxPx / Math.max(img.width, img.height));
+          const cv = document.createElement('canvas');
+          cv.width = Math.round(img.width*esc); cv.height = Math.round(img.height*esc);
+          cv.getContext('2d').drawImage(img, 0, 0, cv.width, cv.height);
+          resolve({ base64: cv.toDataURL('image/jpeg', calidad), nombre: file.name, esPdf: false });
+        };
+        img.src = ev.target.result;
+      };
+      reader.readAsDataURL(file);
+    });
+  },
+
+  /* Ver un adjunto base64 (imagen en modal; PDF en pestaña nueva) */
+  verAdjunto(base64, titulo='Adjunto') {
+    if (!base64) return;
+    if (base64.startsWith('data:application/pdf')) {
+      const bin = atob(base64.split(',')[1]);
+      const bytes = new Uint8Array(bin.length);
+      for (let i=0;i<bin.length;i++) bytes[i] = bin.charCodeAt(i);
+      const url = URL.createObjectURL(new Blob([bytes], { type:'application/pdf' }));
+      window.open(url, '_blank');
+      setTimeout(()=>URL.revokeObjectURL(url), 60000);
+      return;
+    }
+    UI.modal(titulo, `<img src="${base64}" style="max-width:100%;border-radius:8px">`, '640px');
+  },
+
   /* ── LOADER ───────────────────────────────────── */
   loading(el, msg='Cargando...') {
     if (!el) return;

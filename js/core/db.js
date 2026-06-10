@@ -807,6 +807,46 @@ const DB = {
     return { data, error };
   },
 
+  /* ── CAPACITACIÓN (entrenamientos/seminarios/cursos) ── */
+  async getEntrenamientos(empleadoId=null) {
+    let q = getSB().from('entrenamientos').select('*,empleados(nombre,cargo)')
+      .eq('tenant_id', getTID()).order('fecha_inicio', { ascending:false });
+    if (empleadoId) q = q.eq('empleado_id', empleadoId);
+    const { data } = await q;
+    return data || [];
+  },
+
+  async upsertEntrenamiento(fields) {
+    const payload = { ...fields, tenant_id: getTID() };
+    if (payload.id) {
+      const { id, ...resto } = payload;
+      const { error } = await getSB().from('entrenamientos').update(resto).eq('id', id);
+      return { error };
+    }
+    const { data, error } = await getSB().from('entrenamientos').insert(payload).select().single();
+    return { data, error };
+  },
+
+  /* ── ASIGNACIONES AL EMPLEADO (acta de entrega) ── */
+  async getAsignaciones(empleadoId=null) {
+    let q = getSB().from('empleado_asignaciones').select('*,empleados(nombre,cargo,dpi,email)')
+      .eq('tenant_id', getTID()).order('fecha_entrega', { ascending:false });
+    if (empleadoId) q = q.eq('empleado_id', empleadoId);
+    const { data } = await q;
+    return data || [];
+  },
+
+  async upsertAsignacion(fields) {
+    const payload = { ...fields, tenant_id: getTID() };
+    if (payload.id) {
+      const { id, ...resto } = payload;
+      const { error } = await getSB().from('empleado_asignaciones').update(resto).eq('id', id);
+      return { error };
+    }
+    const { data, error } = await getSB().from('empleado_asignaciones').insert(payload).select().single();
+    return { data, error };
+  },
+
   /* ── PRODUCTIVIDAD / KPIs ─────────────────────── */
   async getConfigProductividad() {
     const { data } = await getSB().from('config_productividad')

@@ -13,6 +13,8 @@ Modulos.rrhh = {
           <button class="tab-btn ${this._tab==='nomina'?'active':''}" onclick="App.navegarSub('rrhh','nomina')">💵 Nómina</button>
           <button class="tab-btn ${this._tab==='igss'?'active':''}" onclick="App.navegarSub('rrhh','igss')">🏛️ Planilla IGSS</button>
           <button class="tab-btn ${this._tab==='productividad'?'active':''}" onclick="App.navegarSub('rrhh','productividad')">📈 Productividad</button>
+          <button class="tab-btn ${this._tab==='capacitacion'?'active':''}" onclick="App.navegarSub('rrhh','capacitacion')">🎓 Capacitación</button>
+          <button class="tab-btn ${this._tab==='asignaciones'?'active':''}" onclick="App.navegarSub('rrhh','asignaciones')">🔑 Asignaciones</button>
           <button class="tab-btn ${this._tab==='organigrama'?'active':''}" onclick="App.navegarSub('rrhh','organigrama')">🏢 Organigrama</button>
           <button class="tab-btn ${this._tab==='documentos'?'active':''}" onclick="App.navegarSub('rrhh','documentos')">📄 Documentos</button>
         </div>
@@ -196,6 +198,14 @@ Modulos.rrhh = {
 
     else if (this._tab==='productividad') {
       await this._renderProductividad(el);
+    }
+
+    else if (this._tab==='capacitacion') {
+      await this._renderCapacitacion(el);
+    }
+
+    else if (this._tab==='asignaciones') {
+      await this._renderAsignaciones(el);
     }
 
     else if (this._tab==='organigrama') {
@@ -1112,7 +1122,382 @@ Modulos.rrhh = {
     UI.cerrarModal(); UI.toast('Criterios actualizados ✓'); this._renderTab();
   },
 
-  _tiposDoc: ['DPI','Pasaporte','Contrato de Trabajo','IGSS','IRTRA','Antecedentes Penales','Antecedentes Policiales','Tarjeta de Salud','Tarjeta de Pulmones','Título Académico','Licencia de Conducir','Otro'],
+  /* ══ CAPACITACIÓN: entrenamientos / seminarios / cursos ══ */
+  _capFiltroEmp: '',
+  _capCertificado: null,
+
+  async _renderCapacitacion(el) {
+    const cursos = await DB.getEntrenamientos();
+    const lista = this._capFiltroEmp ? cursos.filter(c=>c.empleado_id===this._capFiltroEmp) : cursos;
+    const anio = new Date().getFullYear();
+    const delAnio = cursos.filter(c=>(c.fecha_inicio||'').startsWith(String(anio)));
+    const horas = delAnio.reduce((s,c)=>s+(Number(c.horas)||0),0);
+    const inversion = delAnio.reduce((s,c)=>s+(Number(c.costo)||0),0);
+
+    el.innerHTML = `
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:16px">
+        <select class="form-select" style="width:auto" onchange="Modulos.rrhh._capFiltroEmp=this.value;Modulos.rrhh._renderTab()">
+          <option value="">Todos los empleados</option>
+          ${this._empleados.map(e=>`<option value="${e.id}" ${this._capFiltroEmp===e.id?'selected':''}>${e.nombre}</option>`).join('')}
+        </select>
+        <button class="btn btn-amber" onclick="Modulos.rrhh.modalCapacitacion()">＋ Registrar capacitación</button>
+      </div>
+      <div class="kpi-grid" style="margin-bottom:16px">
+        <div class="kpi-card"><div class="kpi-label">Capacitaciones ${anio}</div><div class="kpi-val cyan">${delAnio.length}</div></div>
+        <div class="kpi-card"><div class="kpi-label">Horas de formación</div><div class="kpi-val green">${horas}</div><div class="kpi-trend">este año</div></div>
+        <div class="kpi-card"><div class="kpi-label">Inversión</div><div class="kpi-val amber">${UI.q(inversion)}</div><div class="kpi-trend">este año</div></div>
+        <div class="kpi-card"><div class="kpi-label">Con certificado</div><div class="kpi-val purple">${cursos.filter(c=>c.certificado).length}</div></div>
+      </div>
+      <div class="table-wrap"><table class="data-table">
+        <thead><tr><th>Empleado</th><th>Capacitación</th><th>Modalidad</th><th>Fechas</th><th>Horas</th><th>Costo</th><th>Resultado</th><th>Acciones</th></tr></thead>
+        <tbody>${lista.map(c=>`<tr>
+          <td><b>${c.empleados?.nombre||'—'}</b><div style="font-size:10px;color:var(--text3)">${c.empleados?.cargo||''}</div></td>
+          <td>${c.titulo}<div style="font-size:10px;color:var(--text3)">${c.instructor?'Por: '+c.instructor:''}</div></td>
+          <td><span class="badge badge-cyan" style="font-size:10px">${c.tipo||'Curso'}</span></td>
+          <td class="mono-sm">${UI.fecha(c.fecha_inicio)}${c.fecha_fin?' → '+UI.fecha(c.fecha_fin):''}</td>
+          <td class="mono-sm" style="text-align:center">${c.horas||'—'}</td>
+          <td class="mono-sm text-amber">${c.costo?UI.q(c.costo):'—'}</td>
+          <td><span class="badge badge-${c.resultado==='Aprobado'||c.resultado==='Completado'?'green':c.resultado==='Reprobado'?'red':'amber'}">${c.resultado||'En curso'}</span></td>
+          <td><div style="display:flex;gap:4px">
+            ${c.certificado?`<button class="btn btn-sm btn-cyan" title="Ver certificado" onclick="UI.verAdjunto(Modulos.rrhh._certDe('${c.id}'),'🎓 Certificado')">🎓</button>`:''}
+            ${Modulos.btnAccion('editar', `Modulos.rrhh.modalCapacitacion('${c.id}')`)}
+            ${Modulos.btnAccion('eliminar', `Modulos.eliminarRegistro('entrenamientos','${c.id}','esta capacitación',()=>Modulos.rrhh._renderTab())`)}
+          </div></td>
+        </tr>`).join('')||'<tr><td colspan="8" style="text-align:center;padding:24px;color:var(--text3)">Sin capacitaciones registradas</td></tr>'}</tbody>
+      </table></div>`;
+    this._cursosCache = cursos;
+  },
+
+  _certDe(id) { return (this._cursosCache||[]).find(c=>c.id===id)?.certificado || null; },
+
+  async modalCapacitacion(id=null) {
+    const c = id ? (this._cursosCache||[]).find(x=>x.id===id)||{} : {};
+    this._capCertificado = null;
+    UI.modal(`${id?'✏️ Editar':'🎓 Registrar'} capacitación`, `
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Empleado *</label>
+          <select class="form-select" id="cap-emp">
+            ${this._empleados.filter(e=>e.activo||e.id===c.empleado_id).map(e=>`<option value="${e.id}" ${c.empleado_id===e.id?'selected':''}>${e.nombre}</option>`).join('')}
+          </select></div>
+        <div class="form-group"><label class="form-label">Modalidad</label>
+          <select class="form-select" id="cap-tipo">
+            ${['Curso en línea','Seminario','Entrenamiento','Taller','Certificación','Diplomado'].map(t=>`<option ${c.tipo===t?'selected':''}>${t}</option>`).join('')}
+          </select></div>
+      </div>
+      <div class="form-group"><label class="form-label">Título / Tema *</label>
+        <input class="form-input" id="cap-titulo" value="${c.titulo||''}" placeholder="Diagnóstico de inyección electrónica"></div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Inicio *</label>
+          <input class="form-input" id="cap-ini" type="date" value="${c.fecha_inicio||new Date().toISOString().slice(0,10)}"></div>
+        <div class="form-group"><label class="form-label">Fin</label>
+          <input class="form-input" id="cap-fin" type="date" value="${c.fecha_fin||''}"></div>
+        <div class="form-group"><label class="form-label">Horas</label>
+          <input class="form-input" id="cap-horas" type="number" min="0" step="0.5" value="${c.horas||''}"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Instructor / Entidad</label>
+          <input class="form-input" id="cap-inst" value="${c.instructor||''}" placeholder="INTECAP, Bosch, Udemy..."></div>
+        <div class="form-group"><label class="form-label">Costo (Q)</label>
+          <input class="form-input" id="cap-costo" type="number" min="0" step="0.01" value="${c.costo||''}"></div>
+        <div class="form-group"><label class="form-label">Resultado</label>
+          <select class="form-select" id="cap-res">
+            ${['En curso','Completado','Aprobado','Reprobado'].map(r=>`<option ${(c.resultado||'En curso')===r?'selected':''}>${r}</option>`).join('')}
+          </select></div>
+      </div>
+      <div class="form-group"><label class="form-label">Certificado / Diploma (jpg o pdf)</label>
+        <input class="form-input" type="file" accept="image/*,application/pdf" onchange="Modulos.rrhh._onCertificado(this)">
+        <div id="cap-cert-info" style="font-size:11px;color:var(--text3);margin-top:4px">${c.certificado?'📎 Ya tiene certificado adjunto (subir otro lo reemplaza)':''}</div></div>
+      <div class="form-group"><label class="form-label">Notas</label>
+        <textarea class="form-input" id="cap-notas" rows="2">${c.notas||''}</textarea></div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" onclick="UI.cerrarModal()">Cancelar</button>
+        <button class="btn btn-amber" onclick="Modulos.rrhh.guardarCapacitacion('${id||''}')">Guardar</button>
+      </div>`, '600px');
+  },
+
+  _onCertificado(input) {
+    const f = input.files?.[0];
+    if (!f) { this._capCertificado = null; return; }
+    UI.fileABase64(f, { maxPx: 1400 }).then(r => {
+      this._capCertificado = r.base64;
+      const i = document.getElementById('cap-cert-info'); if (i) i.textContent = '✓ ' + r.nombre;
+    }).catch(e => { UI.toast(e.message,'error'); input.value=''; });
+  },
+
+  async guardarCapacitacion(id='') {
+    const titulo = document.getElementById('cap-titulo')?.value.trim();
+    const empleado_id = document.getElementById('cap-emp')?.value;
+    if (!titulo || !empleado_id) { UI.toast('Empleado y título son obligatorios','error'); return; }
+    const fields = {
+      empleado_id, titulo,
+      tipo:         document.getElementById('cap-tipo')?.value,
+      fecha_inicio: document.getElementById('cap-ini')?.value||null,
+      fecha_fin:    document.getElementById('cap-fin')?.value||null,
+      horas:        parseFloat(document.getElementById('cap-horas')?.value)||null,
+      instructor:   document.getElementById('cap-inst')?.value||null,
+      costo:        parseFloat(document.getElementById('cap-costo')?.value)||null,
+      resultado:    document.getElementById('cap-res')?.value,
+      notas:        document.getElementById('cap-notas')?.value||null
+    };
+    if (this._capCertificado) fields.certificado = this._capCertificado;
+    if (id) fields.id = id;
+    const { error } = await DB.upsertEntrenamiento(fields);
+    if (error) { UI.toast('Error: '+error.message,'error'); return; }
+    UI.cerrarModal(); UI.toast('Capacitación guardada ✓');
+    this._renderTab();
+  },
+
+  /* ══ ASIGNACIONES: licencias, apps, herramientas y vehículos
+     entregados al empleado, con acta de entrega firmable ══ */
+  _asigFiltroEmp: '',
+  _asigFotos: [],
+  _asigTipos: { herramienta:'🛠️ Herramienta', vehiculo:'🚗 Vehículo', licencia:'📜 Licencia', aplicacion:'📱 Aplicación / Acceso', equipo:'💻 Equipo', otro:'📦 Otro' },
+
+  async _renderAsignaciones(el) {
+    const asigs = await DB.getAsignaciones();
+    this._asigsCache = asigs;
+    const lista = this._asigFiltroEmp ? asigs.filter(a=>a.empleado_id===this._asigFiltroEmp) : asigs;
+    const activas = asigs.filter(a=>a.estado==='asignado');
+
+    el.innerHTML = `
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:16px">
+        <select class="form-select" style="width:auto" onchange="Modulos.rrhh._asigFiltroEmp=this.value;Modulos.rrhh._renderTab()">
+          <option value="">Todos los empleados</option>
+          ${this._empleados.map(e=>`<option value="${e.id}" ${this._asigFiltroEmp===e.id?'selected':''}>${e.nombre}</option>`).join('')}
+        </select>
+        <button class="btn btn-amber" onclick="Modulos.rrhh.modalAsignacion()">＋ Nueva entrega</button>
+      </div>
+      <div class="kpi-grid" style="margin-bottom:16px">
+        <div class="kpi-card"><div class="kpi-label">Asignaciones activas</div><div class="kpi-val cyan">${activas.length}</div></div>
+        <div class="kpi-card"><div class="kpi-label">Sin firma de recibido</div><div class="kpi-val ${activas.filter(a=>!a.firma_fecha).length?'red':'gray'}">${activas.filter(a=>!a.firma_fecha).length}</div></div>
+        <div class="kpi-card"><div class="kpi-label">Vehículos entregados</div><div class="kpi-val amber">${activas.filter(a=>a.tipo==='vehiculo').length}</div></div>
+        <div class="kpi-card"><div class="kpi-label">Devueltas</div><div class="kpi-val gray">${asigs.filter(a=>a.estado==='devuelto').length}</div></div>
+      </div>
+      <div class="table-wrap"><table class="data-table">
+        <thead><tr><th>Empleado</th><th>Tipo</th><th>Descripción</th><th>Entrega</th><th>Firma de recibido</th><th>Estado</th><th>Acciones</th></tr></thead>
+        <tbody>${lista.map(a=>{
+          const esMia = Auth.user?.email && a.empleados?.email && Auth.user.email.toLowerCase()===a.empleados.email.toLowerCase();
+          return `<tr style="${a.estado==='devuelto'?'opacity:.6':''}">
+            <td><b>${a.empleados?.nombre||'—'}</b><div style="font-size:10px;color:var(--text3)">${a.empleados?.cargo||''}</div></td>
+            <td><span class="badge badge-cyan" style="font-size:10px">${this._asigTipos[a.tipo]||a.tipo}</span></td>
+            <td>${a.descripcion}<div style="font-size:10px;color:var(--text3)">${a.identificador||''} ${(a.fotos||[]).length?`· 📷 ${(a.fotos||[]).length}`:''}</div></td>
+            <td class="mono-sm">${UI.fecha(a.fecha_entrega)}</td>
+            <td>${a.firma_fecha
+              ? `<span class="badge badge-green" style="font-size:10px">✍️ ${a.firma_tipo==='digital'?'Digital':'En papel'} · ${a.firma_nombre||''}</span>`
+              : `<span class="badge badge-red" style="font-size:10px">Sin firmar</span>`}</td>
+            <td><span class="badge badge-${a.estado==='asignado'?'amber':'gray'}">${a.estado==='asignado'?'Asignado':'Devuelto '+(a.fecha_devolucion?UI.fecha(a.fecha_devolucion):'')}</span></td>
+            <td><div style="display:flex;gap:4px;flex-wrap:wrap">
+              <button class="btn btn-sm btn-cyan" title="Ver / imprimir acta" onclick="Modulos.rrhh.imprimirActa('${a.id}')">🖨️ Acta</button>
+              ${!a.firma_fecha ? `<button class="btn btn-sm btn-green" title="${esMia?'Firmar de recibido con tu usuario':'Marcar firmada (acta impresa)'}" onclick="Modulos.rrhh.firmarAsignacion('${a.id}')">✍️</button>` : ''}
+              ${a.estado==='asignado' ? `<button class="btn btn-sm btn-ghost" title="Registrar devolución" onclick="Modulos.rrhh.devolverAsignacion('${a.id}')">↩️</button>` : ''}
+              ${Modulos.btnAccion('eliminar', `Modulos.eliminarRegistro('empleado_asignaciones','${a.id}','esta asignación',()=>Modulos.rrhh._renderTab())`)}
+            </div></td>
+          </tr>`;}).join('')||'<tr><td colspan="7" style="text-align:center;padding:24px;color:var(--text3)">Sin asignaciones registradas</td></tr>'}</tbody>
+      </table></div>
+      <div class="alert alert-cyan" style="margin-top:12px">
+        <div class="alert-icon">✍️</div>
+        <div class="alert-body" style="font-size:12px">El empleado puede <b>firmar de recibido con su usuario</b> (firma digital con fecha y hora) o puedes <b>imprimir el acta</b> para firma física y marcarla firmada. Adjunta fotos del estado al entregar — valen oro al recibir de vuelta.</div>
+      </div>`;
+  },
+
+  modalAsignacion() {
+    this._asigFotos = [];
+    UI.modal('🔑 Nueva entrega al empleado', `
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Empleado *</label>
+          <select class="form-select" id="asig-emp">
+            ${this._empleados.filter(e=>e.activo).map(e=>`<option value="${e.id}">${e.nombre}</option>`).join('')}
+          </select></div>
+        <div class="form-group"><label class="form-label">Tipo *</label>
+          <select class="form-select" id="asig-tipo">
+            ${Object.entries(this._asigTipos).map(([k,l])=>`<option value="${k}">${l}</option>`).join('')}
+          </select></div>
+      </div>
+      <div class="form-group"><label class="form-label">Descripción del bien / acceso *</label>
+        <input class="form-input" id="asig-desc" placeholder="Caja de herramientas Stanley 150 pzs / Pickup Toyota Hilux / Licencia Office 365"></div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Identificador (serie, placa, usuario)</label>
+          <input class="form-input" id="asig-ident" placeholder="No. serie / P-123ABC / usuario@app"></div>
+        <div class="form-group"><label class="form-label">Fecha de entrega</label>
+          <input class="form-input" id="asig-fecha" type="date" value="${new Date().toISOString().slice(0,10)}"></div>
+      </div>
+      <div class="form-group"><label class="form-label">Estado al entregar</label>
+        <textarea class="form-input" id="asig-estado" rows="2" placeholder="Nuevo / Usado en buen estado, rayón en puerta izquierda..."></textarea></div>
+      <div class="form-group"><label class="form-label">Fotos del estado (hasta 4)</label>
+        <input class="form-input" type="file" accept="image/*" multiple onchange="Modulos.rrhh._onFotosAsig(this)">
+        <div id="asig-fotos-prev" style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap"></div></div>
+      <div class="form-group"><label class="form-label">Notas / condiciones</label>
+        <textarea class="form-input" id="asig-notas" rows="2" placeholder="Uso exclusivo laboral, devolución al terminar la relación laboral..."></textarea></div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" onclick="UI.cerrarModal()">Cancelar</button>
+        <button class="btn btn-amber" onclick="Modulos.rrhh.guardarAsignacion()">Registrar entrega</button>
+      </div>`, '620px');
+  },
+
+  async _onFotosAsig(input) {
+    const files = Array.from(input.files||[]).slice(0,4);
+    this._asigFotos = [];
+    for (const f of files) {
+      try { this._asigFotos.push((await UI.fileABase64(f, { maxPx: 900, calidad: 0.75 })).base64); }
+      catch(e) { UI.toast(e.message,'error'); }
+    }
+    const prev = document.getElementById('asig-fotos-prev');
+    if (prev) prev.innerHTML = this._asigFotos.map(b=>`<img src="${b}" style="width:64px;height:64px;object-fit:cover;border-radius:8px;border:1px solid var(--border)">`).join('');
+  },
+
+  async guardarAsignacion() {
+    const empleado_id = document.getElementById('asig-emp')?.value;
+    const descripcion = document.getElementById('asig-desc')?.value.trim();
+    if (!empleado_id || !descripcion) { UI.toast('Empleado y descripción son obligatorios','error'); return; }
+    const { error } = await DB.upsertAsignacion({
+      empleado_id, descripcion,
+      tipo: document.getElementById('asig-tipo')?.value||'herramienta',
+      identificador: document.getElementById('asig-ident')?.value||null,
+      fecha_entrega: document.getElementById('asig-fecha')?.value||new Date().toISOString().slice(0,10),
+      estado_entrega: document.getElementById('asig-estado')?.value||null,
+      fotos: this._asigFotos.length ? this._asigFotos : null,
+      notas: document.getElementById('asig-notas')?.value||null,
+      estado: 'asignado'
+    });
+    if (error) { UI.toast('Error: '+error.message,'error'); return; }
+    UI.cerrarModal(); UI.toast('Entrega registrada ✓ — imprime el acta o pide la firma digital');
+    this._renderTab();
+  },
+
+  async firmarAsignacion(id) {
+    const a = (this._asigsCache||[]).find(x=>x.id===id); if (!a) return;
+    const esMia = Auth.user?.email && a.empleados?.email && Auth.user.email.toLowerCase()===a.empleados.email.toLowerCase();
+    if (esMia) {
+      const ok = await UI.confirmar(
+        `<b>Firma digital de recibido</b><br><br>Yo, <b>${a.empleados?.nombre}</b>, confirmo que recibí
+        <b>${a.descripcion}</b>${a.identificador?` (${a.identificador})`:''} en el estado descrito,
+        y me comprometo a su cuidado y devolución conforme a las condiciones indicadas.<br><br>
+        La firma quedará registrada con tu usuario, fecha y hora.`, '✍️ Firmar de recibido');
+      if (!ok) return;
+      const { error } = await DB.upsertAsignacion({
+        id, firma_tipo:'digital', firmado_por: Auth.user.id,
+        firma_nombre: Auth.user.nombre || Auth.user.email, firma_fecha: new Date().toISOString()
+      });
+      if (error) { UI.toast('Error: '+error.message,'error'); return; }
+      UI.toast('Firmado de recibido ✓');
+    } else {
+      const ok = await UI.confirmar(
+        `¿Marcar esta entrega como <b>firmada en papel</b> por <b>${a.empleados?.nombre}</b>?<br>
+        <span style="font-size:11px;color:var(--text3)">Úsalo cuando el acta impresa ya fue firmada físicamente. Si el empleado tiene usuario, lo ideal es que firme digitalmente al ingresar.</span>`, 'Acta en papel');
+      if (!ok) return;
+      const { error } = await DB.upsertAsignacion({
+        id, firma_tipo:'papel', firmado_por: Auth.user.id,
+        firma_nombre: a.empleados?.nombre, firma_fecha: new Date().toISOString()
+      });
+      if (error) { UI.toast('Error: '+error.message,'error'); return; }
+      UI.toast('Acta marcada como firmada en papel ✓');
+    }
+    this._renderTab();
+  },
+
+  async devolverAsignacion(id) {
+    const a = (this._asigsCache||[]).find(x=>x.id===id); if (!a) return;
+    UI.modal('↩️ Registrar devolución', `
+      <div style="font-size:13px;margin-bottom:10px"><b>${a.descripcion}</b> — ${a.empleados?.nombre}</div>
+      <div class="form-group"><label class="form-label">Fecha de devolución</label>
+        <input class="form-input" id="dev-fecha" type="date" value="${new Date().toISOString().slice(0,10)}"></div>
+      <div class="form-group"><label class="form-label">Estado al devolver / observaciones</label>
+        <textarea class="form-input" id="dev-notas" rows="3" placeholder="Completo y en buen estado / Faltante: ..."></textarea></div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" onclick="UI.cerrarModal()">Cancelar</button>
+        <button class="btn btn-amber" onclick="Modulos.rrhh._confirmarDevolucion('${id}')">Registrar devolución</button>
+      </div>`);
+  },
+
+  async _confirmarDevolucion(id) {
+    const { error } = await DB.upsertAsignacion({
+      id, estado:'devuelto',
+      fecha_devolucion: document.getElementById('dev-fecha')?.value||new Date().toISOString().slice(0,10),
+      devolucion_notas: document.getElementById('dev-notas')?.value||null
+    });
+    if (error) { UI.toast('Error: '+error.message,'error'); return; }
+    UI.cerrarModal(); UI.toast('Devolución registrada ✓');
+    this._renderTab();
+  },
+
+  /* Acta de entrega formal (imprimible) */
+  imprimirActa(id) {
+    const a = (this._asigsCache||[]).find(x=>x.id===id); if (!a) return;
+    const t = Auth.tenant||{};
+    const e = a.empleados||{};
+    const w = window.open('', '_blank');
+    w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Acta de entrega</title>
+      <style>
+        body { font-family: Arial, Helvetica, sans-serif; color:#111; max-width:720px; margin:30px auto; padding:0 24px; font-size:13px; line-height:1.55; }
+        .head { display:flex; align-items:center; gap:14px; border-bottom:2px solid #111; padding-bottom:12px; }
+        .head img { width:56px; height:56px; object-fit:contain; }
+        h1 { font-size:17px; margin:18px 0 4px; text-align:center; letter-spacing:1px; }
+        h2 { font-size:13px; margin:16px 0 6px; border-bottom:1px solid #999; padding-bottom:3px; }
+        table { width:100%; border-collapse:collapse; margin:6px 0; }
+        td { padding:5px 8px; border:1px solid #ccc; vertical-align:top; }
+        td.k { width:32%; background:#f4f4f4; font-weight:bold; }
+        .fotos { display:flex; gap:8px; flex-wrap:wrap; margin-top:6px; }
+        .fotos img { width:150px; height:112px; object-fit:cover; border:1px solid #999; }
+        .firmas { display:flex; gap:40px; margin-top:60px; }
+        .firma { flex:1; text-align:center; border-top:1px solid #111; padding-top:6px; font-size:12px; }
+        .dig { margin-top:30px; border:1px dashed #16a34a; background:#f0fdf4; padding:10px 14px; font-size:12px; }
+        @media print { .noprint { display:none; } }
+      </style></head><body>
+      <div class="head">
+        ${t.logo_base64?`<img src="${t.logo_base64}">`:''}
+        <div><b style="font-size:16px">${t.name||'Taller'}</b><br>
+        <span style="font-size:11px;color:#555">NIT: ${t.nit||'—'} · Tel: ${t.tel||'—'} · ${t.address||''}</span></div>
+      </div>
+      <h1>ACTA DE ENTREGA Y RESPONSABILIDAD</h1>
+      <div style="text-align:center;font-size:11px;color:#555">${this._asigTipos[a.tipo]||a.tipo} · Fecha de entrega: ${UI.fecha(a.fecha_entrega)}</div>
+
+      <h2>1. Receptor</h2>
+      <table>
+        <tr><td class="k">Nombre del empleado</td><td>${e.nombre||'—'}</td></tr>
+        <tr><td class="k">DPI</td><td>${e.dpi||'—'}</td></tr>
+        <tr><td class="k">Cargo</td><td>${e.cargo||'—'}</td></tr>
+      </table>
+
+      <h2>2. Bien o acceso entregado</h2>
+      <table>
+        <tr><td class="k">Tipo</td><td>${(this._asigTipos[a.tipo]||a.tipo).replace(/^\S+\s/,'')}</td></tr>
+        <tr><td class="k">Descripción</td><td>${a.descripcion}</td></tr>
+        <tr><td class="k">Identificador (serie/placa/usuario)</td><td>${a.identificador||'—'}</td></tr>
+        <tr><td class="k">Estado al entregar</td><td>${a.estado_entrega||'—'}</td></tr>
+        ${a.notas?`<tr><td class="k">Condiciones</td><td>${a.notas}</td></tr>`:''}
+      </table>
+      ${(a.fotos||[]).length?`<h2>3. Registro fotográfico del estado</h2><div class="fotos">${a.fotos.map(f=>`<img src="${f}">`).join('')}</div>`:''}
+
+      <h2>${(a.fotos||[]).length?'4':'3'}. Declaración</h2>
+      <p>El receptor declara haber recibido a su entera satisfacción el bien o acceso arriba descrito,
+      en el estado indicado, y se compromete a: darle uso exclusivamente laboral, custodiarlo con
+      diligencia, reportar de inmediato cualquier daño, pérdida o robo, y devolverlo al término de la
+      relación laboral o cuando la empresa lo requiera, en el mismo estado salvo el desgaste normal por uso.</p>
+
+      ${a.firma_fecha && a.firma_tipo==='digital' ? `
+        <div class="dig">✍️ <b>Firmado digitalmente</b> por <b>${a.firma_nombre}</b>
+        el ${new Date(a.firma_fecha).toLocaleString('es-GT')} mediante su usuario de TallerPro.
+        Esta firma electrónica registra fecha, hora e identidad del usuario.</div>
+        <div class="firmas"><div class="firma">Entrega — ${t.name||''}</div></div>`
+      : `<div class="firmas">
+          <div class="firma">${e.nombre||'Empleado'}<br>Recibí conforme</div>
+          <div class="firma">Entrega — ${t.name||''}</div>
+        </div>`}
+
+      ${a.estado==='devuelto'?`<h2>Devolución</h2>
+      <table>
+        <tr><td class="k">Fecha de devolución</td><td>${UI.fecha(a.fecha_devolucion)}</td></tr>
+        <tr><td class="k">Observaciones</td><td>${a.devolucion_notas||'—'}</td></tr>
+      </table>`:''}
+
+      <div class="noprint" style="text-align:center;margin-top:24px">
+        <button onclick="window.print()" style="padding:10px 24px;font-size:14px;cursor:pointer">🖨️ Imprimir</button>
+      </div>
+      </body></html>`);
+    w.document.close();
+  },
+
+  _tiposDoc: ['DPI','Pasaporte','Contrato de Trabajo','Carné IGSS','Carné IRTRA','Antecedentes Penales','Antecedentes Policiales','Tarjeta de Salud','Tarjeta de Pulmones','Título Académico','Licencia de Conducir','Otro'],
   _docFile: null,
 
   /* Clasifica el estado de vencimiento de un documento */

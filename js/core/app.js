@@ -21,7 +21,52 @@ const App = {
     App.navegarA('dashboard');
     await App._iniciarTrialSiAplica();
     App.checkSuscripcion();
+    App.avisoSAT();
     App.registrarSW();
+  },
+
+  /* ── AVISO SAT AL ENTRAR ──────────────────────────
+     Para el personal de finanzas/contabilidad (admin, gerente_fin,
+     contador): obligaciones fiscales pendientes que vencen en ≤2 días
+     o ya vencidas → aviso al iniciar sesión. */
+  async avisoSAT() {
+    try {
+      const rol = Auth.user?.rol;
+      if (!['admin','gerente_fin','contador'].includes(rol)) return;
+      if (typeof moduloEnPlan === 'function' && !moduloEnPlan('contabilidad')) return;
+      const anio = new Date().getFullYear();
+      const [o1, o2] = await Promise.all([
+        DB.getObligaciones(anio).catch(()=>[]),
+        DB.getObligaciones(anio-1).catch(()=>[])   // dic. del año pasado vence en enero
+      ]);
+      const hoyStr = new Date().toISOString().slice(0,10);
+      const limite = new Date(Date.now() + 2*86400000).toISOString().slice(0,10);
+      const proximas = [...o1, ...o2]
+        .filter(o => o.estado !== 'pagado' && o.fecha_vencimiento && o.fecha_vencimiento <= limite)
+        .sort((a,b) => (a.fecha_vencimiento||'').localeCompare(b.fecha_vencimiento||''));
+      if (!proximas.length) return;
+
+      UI.modal('⚠️ Obligaciones SAT por vencer', `
+        <div style="display:flex;flex-direction:column;gap:8px">
+          ${proximas.map(o => {
+            const vencida = o.fecha_vencimiento < hoyStr;
+            return `<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;background:var(--surface2);border-left:3px solid var(--${vencida?'red':'amber'});border-radius:0 8px 8px 0;padding:10px">
+              <div>
+                <div style="font-weight:700;font-size:13px">🏛️ ${o.tipo} · ${o.periodo}</div>
+                <div style="font-size:11px;color:var(--text3)">${o.notas||''}</div>
+              </div>
+              <div style="text-align:right">
+                <div class="mono-sm" style="font-weight:800;color:var(--amber)">${UI.q(o.monto_calculado)}</div>
+                <span class="badge badge-${vencida?'red':'amber'}" style="font-size:10px">${vencida?'⚠️ VENCIDA':'vence '+UI.fecha(o.fecha_vencimiento)}</span>
+              </div>
+            </div>`;
+          }).join('')}
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-ghost" onclick="UI.cerrarModal()">Después</button>
+          <button class="btn btn-amber" onclick="UI.cerrarModal();App.navegarA('contabilidad')">🧮 Ir a Contabilidad</button>
+        </div>`, '480px');
+    } catch (_) { /* el aviso nunca debe bloquear el ingreso */ }
   },
 
   /* El trial de 30 días arranca con el PRIMER USO del taller (no al
