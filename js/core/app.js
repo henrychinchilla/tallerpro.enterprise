@@ -19,7 +19,7 @@ const App = {
     }
     App.renderSidebar();
     App.navegarA('dashboard');
-    App.checkLicencia();
+    App.checkSuscripcion();
     App.registrarSW();
   },
 
@@ -82,8 +82,9 @@ const App = {
     const sidebar = document.getElementById('sidebar');
     if (!sidebar) return;
 
-    /* Botón del asistente IA (oculto para el rol cliente) */
-    const iaBtn = rol === 'cliente' ? '' : `
+    /* Botón del asistente IA: oculto para clientes y gateado por el
+       módulo 'ia' (incluido en Empresarial; add-on para Básico/Pro) */
+    const iaBtn = (rol === 'cliente' || (rol !== 'superadmin' && !moduloEnPlan('ia'))) ? '' : `
       <div class="sidebar-ia">
         <button class="btn-ia" onclick="IA.abrirChat()">
           <span class="btn-ia-icon">🔧</span>
@@ -192,58 +193,33 @@ const App = {
     document.getElementById('sidebar-overlay')?.classList.toggle('open');
   },
 
-  /* ── LICENCIA ─────────────────────────────────── */
-  checkLicencia() {
-    const lic = Auth.licencia;
-    if (!lic || lic.tipo === 'completa') return;
-    const dias = lic.dias_restantes;
-    if (dias === undefined || dias > 7) return;
+  /* ── SUSCRIPCIÓN (reemplaza a la licencia vieja) ──
+     Banner cuando la suscripción/prueba está por vencer (≤7 días) o vencida.
+     La activación/cobro la gestiona el superadmin desde el panel SaaS. */
+  checkSuscripcion() {
+    if (Auth.user?.rol === 'superadmin') return;
+    const vence = Auth.tenant?.suscripcion_vence;
+    if (!vence) return;
+    const dias = Math.ceil((new Date(vence + 'T00:00:00') - Date.now()) / 86400000);
+    if (dias > 7) return;
+
+    const esTrial = (Auth.tenant?.notas_admin || '').toLowerCase().includes('prueba');
+    const vencida = dias < 0;
+    const texto = vencida
+      ? `⚠️ Tu ${esTrial ? 'prueba gratis' : 'suscripción'} venció el ${UI.fecha ? UI.fecha(vence) : vence}. Comunícate con tu proveedor para reactivarla.`
+      : `⏰ Tu ${esTrial ? 'prueba gratis' : 'suscripción'} vence en ${dias} día${dias === 1 ? '' : 's'}.`;
 
     const banner = document.createElement('div');
-    banner.id = 'lic-banner';
+    banner.id = 'susc-banner';
     banner.style.cssText = `position:fixed;bottom:0;left:0;right:0;z-index:999;
-      background:${dias<=3?'var(--red)':'var(--amber)'};color:#000;
+      background:${vencida || dias <= 3 ? 'var(--red)' : 'var(--amber)'};color:#000;
       padding:8px 16px;font-size:12px;font-weight:600;
       display:flex;align-items:center;justify-content:space-between;`;
     banner.innerHTML = `
-      <span>⚠️ Demo: ${dias} día${dias===1?'':'s'} restante${dias===1?'':'s'}</span>
-      <div style="display:flex;gap:8px">
-        <button onclick="App.activarLicencia()"
-          style="background:#000;color:#fff;border:none;padding:4px 12px;border-radius:4px;cursor:pointer;font-size:11px">
-          🔑 Activar
-        </button>
-        <button onclick="document.getElementById('lic-banner').remove()"
-          style="background:none;border:none;cursor:pointer;font-size:16px">✕</button>
-      </div>`;
+      <span>${texto}</span>
+      <button onclick="document.getElementById('susc-banner').remove()"
+        style="background:none;border:none;cursor:pointer;font-size:16px">✕</button>`;
     document.body.appendChild(banner);
-  },
-
-  activarLicencia() {
-    UI.modal('🔑 Activar Licencia', `
-      <div class="form-group">
-        <label class="form-label">Código de Licencia</label>
-        <input class="form-input" id="lic-code" placeholder="TALLERPRO-XXXX-XXXX"
-               style="font-family:monospace;letter-spacing:2px;text-transform:uppercase">
-      </div>
-      <div style="font-size:12px;color:var(--text3);margin-bottom:12px">
-        Contacta a <a href="mailto:soporte@tallerpro.gt" style="color:var(--cyan)">soporte@tallerpro.gt</a>
-      </div>
-      <div class="modal-footer">
-        <button class="btn btn-ghost" onclick="UI.cerrarModal()">Cancelar</button>
-        <button class="btn btn-amber" onclick="App._procesarLicencia()">Activar</button>
-      </div>`
-    );
-  },
-
-  async _procesarLicencia() {
-    const codigo = document.getElementById('lic-code')?.value.trim().toUpperCase();
-    if (!codigo) { UI.toast('Ingresa el código','error'); return; }
-    const r = await DB.activarLicencia(codigo, Auth.user?.email);
-    if (!r.ok) { UI.toast('Código inválido: '+r.error,'error'); return; }
-    document.getElementById('lic-banner')?.remove();
-    UI.cerrarModal();
-    UI.toast('¡Licencia activada! ✓');
-    Auth.licencia = { tipo:'completa' };
   },
 
   /* ── SERVICE WORKER ───────────────────────────── */

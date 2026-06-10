@@ -1084,17 +1084,6 @@ const DB = {
     return data;
   },
 
-  async activarLicencia(codigo, email) {
-    const { data: existente } = await getSB().from('licencias')
-      .select('tenant_id').eq('codigo', codigo).maybeSingle();
-    if (existente) return { ok:false, error:'Código ya utilizado' };
-    const { error } = await getSB().from('licencias').update({
-      tipo:'completa', codigo, activa:true, activada_por:email,
-      fecha_vencimiento:null, updated_at:new Date().toISOString()
-    }).eq('tenant_id', getTID());
-    return { ok:!error, error:error?.message };
-  },
-
   /* ── KPIs DASHBOARD ───────────────────────────── */
   async getKPIs(ym=null) {
     const { ini, fin } = rangoMes(ym);

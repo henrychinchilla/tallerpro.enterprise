@@ -33,19 +33,10 @@ const Auth = {
     Auth.supaUser = data.user;
     await Auth._cargarPerfil(data.user.id, email, tenantSlug);
 
-    /* Verificar licencia */
-    if (email !== 'henry.chinchilla@gmail.com' && Auth.tenant?.id) {
-      const { data: lic } = await getSB().from('licencias')
-        .select('*').eq('tenant_id', Auth.tenant.id).maybeSingle();
-      if (lic) {
-        Auth.licencia = lic;
-        if (lic.tipo === 'demo') {
-          const dias = Math.ceil((new Date(lic.fecha_vencimiento) - Date.now()) / 86400000);
-          if (dias < 0) return { ok:false, error:'demo_expirado', licencia:lic };
-          Auth.licencia.dias_restantes = dias;
-        }
-      }
-    }
+    /* La vigencia ahora la gobierna la SUSCRIPCIÓN (tenants.suscripcion_vence):
+       el banner de App.checkSuscripcion avisa y el superadmin suspende
+       (tenants.active=false → pantallaSuspendido). La licencia vieja queda
+       retirada del flujo de login. */
 
     return { ok:true, debe_cambiar: Auth.user?.debe_cambiar_password === true };
   },

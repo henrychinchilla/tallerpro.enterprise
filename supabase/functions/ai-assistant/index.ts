@@ -25,9 +25,12 @@ const json = (body: unknown, status = 200) =>
     headers: { ...cors, "Content-Type": "application/json" },
   });
 
-const MODELO = Deno.env.get("AI_MODEL") ?? "claude-opus-4-8";
+// Haiku 4.5: excelente calidad para chat de taller a una fracción del costo.
+// Se puede subir de modelo por taller exigente vía secret AI_MODEL.
+const MODELO = Deno.env.get("AI_MODEL") ?? "claude-haiku-4-5-20251001";
 const EFFORT = Deno.env.get("AI_EFFORT") ?? "medium";
 const NOMBRE = Deno.env.get("AI_NOMBRE") ?? "Beto";
+const LIMITE_DEFAULT = 300; // consultas IA/mes si el tenant no tiene ai_limite_mes
 
 const BASE_GT = `Eres ${NOMBRE}, el asistente mecánico de TallerPro, un sistema para talleres
 automotrices en Guatemala. Eres un hombre, mecánico experto, con trato amable y cercano.
@@ -192,6 +195,41 @@ Deno.serve(async (req) => {
     tenantId = t?.id;
   }
 
+  // ── Gating comercial: módulo 'ia' + tope mensual ──
+  // Mismo criterio que el frontend: modulos_activos (a la carta) manda;
+  // si no hay override, 'ia' viene incluido solo en el plan Empresarial;
+  // planes legacy/desconocidos no se bloquean. El superadmin está exento.
+  const esSuperadmin = userData.user.email?.toLowerCase() === "henry.chinchilla@gmail.com" ||
+    rol === "superadmin";
+  if (!esSuperadmin && tenantId) {
+    const { data: tn } = await asCaller.from("tenants")
+      .select("plan, modulos_activos, ai_limite_mes").eq("id", tenantId).maybeSingle();
+
+    let iaHabilitada = true;
+    if (Array.isArray(tn?.modulos_activos) && tn.modulos_activos.length) {
+      iaHabilitada = tn.modulos_activos.includes("ia");
+    } else if (tn?.plan === "basico" || tn?.plan === "pro") {
+      iaHabilitada = false;
+    }
+    if (!iaHabilitada) {
+      return json({
+        error: `${NOMBRE} (Asistente IA) no está incluido en tu plan. Pídelo como módulo adicional a tu proveedor de TallerPro.`,
+      }, 403);
+    }
+
+    const limite = Number(tn?.ai_limite_mes) || LIMITE_DEFAULT;
+    const hoy = new Date();
+    const iniMes = `${hoy.getUTCFullYear()}-${String(hoy.getUTCMonth() + 1).padStart(2, "0")}-01`;
+    const { count } = await asCaller.from("ai_conversaciones")
+      .select("*", { count: "exact", head: true })
+      .eq("tenant_id", tenantId).gte("created_at", iniMes);
+    if ((count ?? 0) >= limite) {
+      return json({
+        error: `Alcanzaste el límite mensual de consultas de ${NOMBRE} (${limite}). Si necesitas más, pide una ampliación a tu proveedor de TallerPro.`,
+      }, 429);
+    }
+  }
+
   // ── Payload ──
   let body: any;
   try { body = await req.json(); } catch { return json({ error: "JSON inválido" }, 400); }
@@ -264,8 +302,12 @@ Deno.serve(async (req) => {
       body: JSON.stringify({
         model: MODELO,
         max_tokens: 4096,
-        thinking: { type: "adaptive" },
-        output_config: { effort: EFFORT },
+        /* thinking adaptativo + effort solo existen en Opus 4.6+/Fable;
+           Haiku los rechaza, así que se omiten para ese modelo */
+        ...(MODELO.includes("haiku") ? {} : {
+          thinking: { type: "adaptive" },
+          output_config: { effort: EFFORT },
+        }),
         system: PROMPTS[modo],
         messages: messagesPayload,
       }),

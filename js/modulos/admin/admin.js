@@ -37,14 +37,21 @@ Modulos.admin = {
             <div style="font-size:12px;color:var(--text3)">NIT: ${Auth.tenant?.nit||'—'}</div>
             <div style="font-size:12px;color:var(--text3)">ID: ${Auth.tenant?.id?.slice(0,12)||'—'}...</div>
           </div>
-          <div class="card card-${Auth.licencia?.tipo==='completa'?'green':'amber'}">
-            <div class="card-sub mb-3">🔑 Licencia</div>
-            <div style="margin-bottom:8px">
-              ${Auth.licencia?.tipo==='completa'
-                ? '<span class="badge badge-green" style="font-size:13px">✓ Licencia Completa</span>'
-                : `<span class="badge badge-amber" style="font-size:13px">Demo · ${Auth.licencia?.dias_restantes||0} días</span>`}
+          <div class="card card-${suscripcionVigente()?'green':'red'}">
+            <div class="card-sub mb-3">💳 Suscripción</div>
+            <div style="margin-bottom:6px;display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+              <span class="badge badge-${PLANES[Auth.tenant?.plan]?.color||'gray'}" style="font-size:13px">
+                ${PLANES[Auth.tenant?.plan]?.label || 'Plan personalizado'}</span>
+              ${suscripcionVigente()
+                ? '<span class="badge badge-green">✓ Vigente</span>'
+                : '<span class="badge badge-red">Vencida</span>'}
             </div>
-            <button class="btn btn-amber btn-sm" onclick="App.activarLicencia()">🔑 Activar Licencia</button>
+            <div style="font-size:12px;color:var(--text3)">
+              ${Auth.tenant?.suscripcion_vence ? 'Vence: ' + UI.fecha(Auth.tenant.suscripcion_vence) : 'Sin fecha de vencimiento'}
+            </div>
+            <div style="font-size:11px;color:var(--text3);margin-top:6px">
+              Los planes, módulos y pagos se gestionan con tu proveedor de TallerPro.
+            </div>
           </div>
         </div>
         <div class="card">

@@ -124,7 +124,7 @@ Modulos.superadmin = {
               <div style="font-size:28px;font-weight:800;margin:6px 0">${UI.q(p.precio)}<span style="font-size:13px;color:var(--text3)">/mes</span></div>
               <div style="font-size:12px;color:var(--text3);margin-bottom:10px">${p.desc}</div>
               <div style="display:flex;flex-wrap:wrap;gap:4px">
-                ${p.modulos.map(m=>`<span class="badge badge-gray" style="font-size:10px">${(MODULOS.find(x=>x.id===m)?.label)||m}</span>`).join('')}
+                ${p.modulos.map(m=>`<span class="badge badge-gray" style="font-size:10px">${labelModulo(m)}</span>`).join('')}
               </div>
             </div>`).join('')}
         </div>
@@ -132,6 +132,12 @@ Modulos.superadmin = {
           Estos son los paquetes por defecto. En cada taller (⚙️) puedes activar/desactivar módulos <b>a la carta</b>
           y fijar un precio propio, sin importar el plan. Los módulos de cuenta (Dashboard, Calendario, Configuración,
           Usuarios, Administración, Respaldos) están siempre incluidos.
+        </div></div>
+        <div class="alert alert-amber" style="margin-top:12px"><div class="alert-icon">🤖</div><div class="alert-body" style="font-size:12px">
+          <b>Beto (Asistente IA)</b> viene incluido en <b>Empresarial</b> y se vende como <b>add-on de Q99/mes</b>
+          para Básico y Pro (actívalo a la carta en ⚙️ y suma Q99 al precio). Todos los talleres tienen un
+          <b>tope mensual de consultas</b> (default 300, ampliable por taller). Los talleres en prueba de 30 días
+          lo traen activado para que lo conozcan.
         </div></div>`;
     }
   },
@@ -258,15 +264,20 @@ Modulos.superadmin = {
       </div>
       <div class="form-group"><label class="form-label">Módulos activos (a la carta)</label>
         <div id="sa-modulos" style="display:grid;grid-template-columns:1fr 1fr;gap:6px;max-height:220px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;padding:10px">
-          ${MODULOS_VENDIBLES.map(m=>{ const lbl=(MODULOS.find(x=>x.id===m)?.label)||m; return `
+          ${MODULOS_VENDIBLES.map(m=>{ const lbl=labelModulo(m); return `
             <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer">
               <input type="checkbox" class="sa-mod" value="${m}" ${activos.includes(m)?'checked':''}> ${lbl}
             </label>`;}).join('')}
         </div>
         <div style="font-size:11px;color:var(--text3);margin-top:4px">Dashboard, Calendario, Configuración, Usuarios, Administración y Respaldos siempre están incluidos.</div>
       </div>
-      <div class="form-group"><label class="form-label">Notas internas</label>
-        <textarea class="form-input" id="sa-notas" rows="2">${t.notas_admin||''}</textarea></div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Límite Beto IA (consultas/mes)</label>
+          <input class="form-input" id="sa-ia-limite" type="number" min="0" step="50" value="${t.ai_limite_mes??300}">
+          <div style="font-size:11px;color:var(--text3);margin-top:4px">Add-on sugerido: Q99/mes con 300 consultas (incluido en Empresarial).</div></div>
+        <div class="form-group"><label class="form-label">Notas internas</label>
+          <textarea class="form-input" id="sa-notas" rows="2">${t.notas_admin||''}</textarea></div>
+      </div>
       <div class="modal-footer">
         <button class="btn btn-ghost" onclick="UI.cerrarModal()">Cancelar</button>
         <button class="btn btn-amber" onclick="Modulos.superadmin.guardarTaller('${id}')">Guardar</button>
@@ -288,6 +299,7 @@ Modulos.superadmin = {
       suscripcion_vence: document.getElementById('sa-vence')?.value||null,
       ciclo_pago: document.getElementById('sa-ciclo')?.value||'mensual',
       modulos_activos: modulos,
+      ai_limite_mes: parseInt(document.getElementById('sa-ia-limite')?.value)||300,
       notas_admin: document.getElementById('sa-notas')?.value||null
     };
     const { error } = await DB.updateTenantById(id, fields);

@@ -119,19 +119,26 @@ const PLANES = {
   },
   empresarial: {
     label: 'Empresarial', precio: 999, color: 'green',
-    desc: 'Todo lo Pro + RRHH/Nómina y multi-sucursal. Solución completa.',
+    desc: 'Todo lo Pro + RRHH/Nómina y Beto, tu mecánico experto IA. Solución completa.',
     modulos: ['clientes','vehiculos','ordenes','inventario','pos',
               'proveedores','compras','bodegas','activos','envios',
-              'facturacion','bancos','finanzas','presupuesto','marketing','comunicaciones','rrhh']
+              'facturacion','bancos','finanzas','presupuesto','marketing','comunicaciones','rrhh','ia']
   }
 };
 
-/* Lista de módulos que se pueden vender/activar a la carta (para el panel SA) */
+/* Lista de módulos que se pueden vender/activar a la carta (para el panel SA).
+   'ia' (Beto) viene incluido en Empresarial y es add-on para Básico/Pro. */
 const MODULOS_VENDIBLES = [
   'clientes','vehiculos','ordenes','inventario','pos','proveedores','compras',
   'bodegas','activos','envios','facturacion','bancos','finanzas','presupuesto',
-  'marketing','comunicaciones','rrhh'
+  'marketing','comunicaciones','rrhh','ia'
 ];
+
+/* Etiqueta legible de un módulo (los que no tienen página propia en MODULOS) */
+function labelModulo(id) {
+  return (typeof MODULOS !== 'undefined' && MODULOS.find(x => x.id === id)?.label)
+    || ({ ia: '🤖 Beto (Asistente IA)' })[id] || id;
+}
 
 /* Módulos activos del taller en sesión (override del tenant o, si no, su plan). */
 function modulosActivosTenant() {
