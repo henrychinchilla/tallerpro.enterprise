@@ -56,6 +56,14 @@ const MODULOS = [
   { id:'bancos',         icon:'🏦', label:'Bancos',            grupo:'finanzas'   },
   { id:'finanzas',       icon:'💰', label:'Finanzas',          grupo:'finanzas'   },
   { id:'presupuesto',    icon:'📊', label:'Presupuesto',       grupo:'finanzas'   },
+  { id:'contabilidad',   icon:'🧮', label:'Contabilidad / SAT', grupo:'finanzas',
+    subnav:[
+      { tab:'iva',          icon:'🧾', label:'IVA del mes'      },
+      { tab:'ventas',       icon:'📤', label:'Libro de Ventas'  },
+      { tab:'compras',      icon:'📥', label:'Libro de Compras' },
+      { tab:'isr',          icon:'🏛️', label:'ISR'              },
+      { tab:'obligaciones', icon:'📅', label:'Obligaciones'     }
+    ] },
   { id:'rrhh',           icon:'👤', label:'RRHH & Nómina',     grupo:'rrhh',
     subnav:[
       { tab:'empleados',     icon:'👤', label:'Empleados'     },
@@ -92,14 +100,14 @@ const GRUPOS = [
 
 /* ── PERMISOS POR ROL ─────────────────────────────── */
 const PERMISOS = {
-  superadmin:   { dashboard:true,  clientes:true,  vehiculos:true,  ordenes:true,  inventario:true,  bodegas:true,  proveedores:true,  compras:true,  activos:true,  envios:true,  facturacion:true,  bancos:true,  finanzas:true,  presupuesto:true,  rrhh:true,  marketing:true,  calendario:true,  comunicaciones:true,  configuracion:true,  usuarios:true,  admin:true,  mi_ot:false },
-  admin:        { dashboard:true,  clientes:true,  vehiculos:true,  ordenes:true,  inventario:true,  bodegas:true,  proveedores:true,  compras:true,  activos:true,  envios:true,  facturacion:true,  bancos:true,  finanzas:true,  presupuesto:true,  rrhh:true,  marketing:true,  calendario:true,  comunicaciones:true,  configuracion:true,  usuarios:true,  admin:true,  mi_ot:false },
-  gerente_tal:  { dashboard:true,  clientes:true,  vehiculos:true,  ordenes:true,  inventario:true,  bodegas:true,  proveedores:true,  compras:true,  activos:true,  envios:true,  facturacion:false, bancos:false, finanzas:false, presupuesto:false, rrhh:true,  marketing:true,  calendario:true,  comunicaciones:true,  configuracion:false, usuarios:false, admin:false, mi_ot:false },
-  gerente_fin:  { dashboard:true,  clientes:false, vehiculos:false, ordenes:false, inventario:false, bodegas:false, proveedores:true,  compras:true,  activos:true,  envios:true,  facturacion:true,  bancos:true,  finanzas:true,  presupuesto:true,  rrhh:true,  marketing:false, calendario:false, comunicaciones:true,  configuracion:false, usuarios:false, admin:false, mi_ot:false },
-  recepcionista:{ dashboard:true,  clientes:true,  vehiculos:true,  ordenes:true,  inventario:false, bodegas:false, proveedores:false, compras:false, activos:false, envios:true,  facturacion:true,  bancos:false, finanzas:false, presupuesto:false, rrhh:false, marketing:false, calendario:true,  comunicaciones:false, configuracion:false, usuarios:false, admin:false, mi_ot:false },
-  vendedor:     { dashboard:true,  clientes:true,  vehiculos:true,  ordenes:false, inventario:false, bodegas:false, proveedores:false, compras:false, activos:false, envios:true,  facturacion:false, bancos:false, finanzas:false, presupuesto:false, rrhh:false, marketing:true,  calendario:false, comunicaciones:false, configuracion:false, usuarios:false, admin:false, mi_ot:false },
-  mecanico:     { dashboard:true,  clientes:false, vehiculos:true,  ordenes:true,  inventario:true,  bodegas:true,  proveedores:false, compras:false, activos:false, envios:true,  facturacion:false, bancos:false, finanzas:false, presupuesto:false, rrhh:false, marketing:false, calendario:true,  comunicaciones:false, configuracion:false, usuarios:false, admin:false, mi_ot:false },
-  cliente:      { dashboard:false, clientes:false, vehiculos:false, ordenes:false, inventario:false, bodegas:false, proveedores:false, compras:false, activos:false, envios:false, facturacion:false, bancos:false, finanzas:false, presupuesto:false, rrhh:false, marketing:false, calendario:false, comunicaciones:false, configuracion:false, usuarios:false, admin:false, mi_ot:true  }
+  superadmin:   { dashboard:true,  clientes:true,  vehiculos:true,  ordenes:true,  inventario:true,  bodegas:true,  proveedores:true,  compras:true,  activos:true,  envios:true,  facturacion:true,  bancos:true,  finanzas:true,  presupuesto:true,  contabilidad:true,  rrhh:true,  marketing:true,  calendario:true,  comunicaciones:true,  configuracion:true,  usuarios:true,  admin:true,  mi_ot:false },
+  admin:        { dashboard:true,  clientes:true,  vehiculos:true,  ordenes:true,  inventario:true,  bodegas:true,  proveedores:true,  compras:true,  activos:true,  envios:true,  facturacion:true,  bancos:true,  finanzas:true,  presupuesto:true,  contabilidad:true,  rrhh:true,  marketing:true,  calendario:true,  comunicaciones:true,  configuracion:true,  usuarios:true,  admin:true,  mi_ot:false },
+  gerente_tal:  { dashboard:true,  clientes:true,  vehiculos:true,  ordenes:true,  inventario:true,  bodegas:true,  proveedores:true,  compras:true,  activos:true,  envios:true,  facturacion:false, bancos:false, finanzas:false, presupuesto:false, contabilidad:false, rrhh:true,  marketing:true,  calendario:true,  comunicaciones:true,  configuracion:false, usuarios:false, admin:false, mi_ot:false },
+  gerente_fin:  { dashboard:true,  clientes:false, vehiculos:false, ordenes:false, inventario:false, bodegas:false, proveedores:true,  compras:true,  activos:true,  envios:true,  facturacion:true,  bancos:true,  finanzas:true,  presupuesto:true,  contabilidad:true,  rrhh:true,  marketing:false, calendario:false, comunicaciones:true,  configuracion:false, usuarios:false, admin:false, mi_ot:false },
+  recepcionista:{ dashboard:true,  clientes:true,  vehiculos:true,  ordenes:true,  inventario:false, bodegas:false, proveedores:false, compras:false, activos:false, envios:true,  facturacion:true,  bancos:false, finanzas:false, presupuesto:false, contabilidad:false, rrhh:false, marketing:false, calendario:true,  comunicaciones:false, configuracion:false, usuarios:false, admin:false, mi_ot:false },
+  vendedor:     { dashboard:true,  clientes:true,  vehiculos:true,  ordenes:false, inventario:false, bodegas:false, proveedores:false, compras:false, activos:false, envios:true,  facturacion:false, bancos:false, finanzas:false, presupuesto:false, contabilidad:false, rrhh:false, marketing:true,  calendario:false, comunicaciones:false, configuracion:false, usuarios:false, admin:false, mi_ot:false },
+  mecanico:     { dashboard:true,  clientes:false, vehiculos:true,  ordenes:true,  inventario:true,  bodegas:true,  proveedores:false, compras:false, activos:false, envios:true,  facturacion:false, bancos:false, finanzas:false, presupuesto:false, contabilidad:false, rrhh:false, marketing:false, calendario:true,  comunicaciones:false, configuracion:false, usuarios:false, admin:false, mi_ot:false },
+  cliente:      { dashboard:false, clientes:false, vehiculos:false, ordenes:false, inventario:false, bodegas:false, proveedores:false, compras:false, activos:false, envios:false, facturacion:false, bancos:false, finanzas:false, presupuesto:false, contabilidad:false, rrhh:false, marketing:false, calendario:false, comunicaciones:false, configuracion:false, usuarios:false, admin:false, mi_ot:true  }
 };
 
 /* ── PLANES COMERCIALES (SaaS) ────────────────────────
@@ -120,14 +128,14 @@ const PLANES = {
     desc: 'Todo lo básico + facturación FEL, finanzas, bancos, compras y fidelización.',
     modulos: ['clientes','vehiculos','ordenes','inventario','pos',
               'proveedores','compras','bodegas','activos','envios',
-              'facturacion','bancos','finanzas','presupuesto','marketing','comunicaciones']
+              'facturacion','bancos','finanzas','presupuesto','contabilidad','marketing','comunicaciones']
   },
   empresarial: {
     label: 'Empresarial', precio: 999, color: 'green',
     desc: 'Todo lo Pro + RRHH/Nómina y Beto, tu mecánico experto IA. Solución completa.',
     modulos: ['clientes','vehiculos','ordenes','inventario','pos',
               'proveedores','compras','bodegas','activos','envios',
-              'facturacion','bancos','finanzas','presupuesto','marketing','comunicaciones','rrhh','ia']
+              'facturacion','bancos','finanzas','presupuesto','contabilidad','marketing','comunicaciones','rrhh','ia']
   },
   medida: {
     label: 'A la Medida', precio: 199, color: 'purple', negociable: true,
@@ -142,7 +150,7 @@ const PLANES = {
 const MODULOS_PRECIOS = {
   proveedores: 49,  compras: 49,   bodegas: 59,   activos: 49,
   envios: 59,       facturacion: 99, bancos: 59,  finanzas: 99,
-  presupuesto: 49,  marketing: 59, comunicaciones: 49,
+  presupuesto: 49,  contabilidad: 99, marketing: 59, comunicaciones: 49,
   rrhh: 149,        ia: 99
 };
 
@@ -151,7 +159,7 @@ const MODULOS_PRECIOS = {
 const MODULOS_VENDIBLES = [
   'clientes','vehiculos','ordenes','inventario','pos','proveedores','compras',
   'bodegas','activos','envios','facturacion','bancos','finanzas','presupuesto',
-  'marketing','comunicaciones','rrhh','ia'
+  'contabilidad','marketing','comunicaciones','rrhh','ia'
 ];
 
 /* Etiqueta legible de un módulo (los que no tienen página propia en MODULOS) */

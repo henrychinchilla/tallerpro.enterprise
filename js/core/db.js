@@ -1092,6 +1092,58 @@ const DB = {
     return data;
   },
 
+  /* ── CONTABILIDAD / SAT ───────────────────────────
+     Datos del periodo para la hoja de IVA (SAT-2237), ISR y los
+     libros de compras y ventas. */
+  async getFacturasPeriodo(ini, fin) {
+    const { data } = await getSB().from('facturas')
+      .select('id,num,fel_serie,fel_numero,fecha,nit,nombre_receptor,subtotal,iva,total,estado')
+      .eq('tenant_id', getTID()).gte('fecha', ini).lte('fecha', fin).order('fecha');
+    return data || [];
+  },
+
+  async getComprasPeriodo(ini, fin) {
+    const { data } = await getSB().from('compras')
+      .select('id,num,proveedor_nombre,num_factura,fecha,subtotal,iva,total,estado')
+      .eq('tenant_id', getTID()).gte('fecha', ini).lte('fecha', fin).order('fecha');
+    return data || [];
+  },
+
+  async getEgresosIvaPeriodo(ini, fin) {
+    const { data } = await getSB().from('egresos')
+      .select('id,concepto,proveedor,num_factura,fecha,monto,iva_credito')
+      .eq('tenant_id', getTID()).gt('iva_credito', 0)
+      .gte('fecha', ini).lte('fecha', fin).order('fecha');
+    return data || [];
+  },
+
+  async getRetencionesPeriodo(ini, fin) {
+    const { data } = await getSB().from('retenciones')
+      .select('*').eq('tenant_id', getTID())
+      .gte('fecha', ini).lte('fecha', fin).order('fecha');
+    return data || [];
+  },
+
+  async getObligaciones(anio) {
+    const { data } = await getSB().from('obligaciones_fiscales')
+      .select('*').eq('tenant_id', getTID())
+      .like('periodo', `${anio}%`).order('fecha_vencimiento');
+    return data || [];
+  },
+
+  async upsertObligacion(fields) {
+    const payload = { ...fields, tenant_id: getTID() };
+    if (payload.id) {
+      const { id, ...resto } = payload;
+      const { data, error } = await getSB().from('obligaciones_fiscales')
+        .update(resto).eq('id', id).select().single();
+      return { data, error };
+    }
+    const { data, error } = await getSB().from('obligaciones_fiscales')
+      .insert(payload).select().single();
+    return { data, error };
+  },
+
   /* ── KPIs DASHBOARD ───────────────────────────── */
   async getKPIs(ym=null) {
     const { ini, fin } = rangoMes(ym);
