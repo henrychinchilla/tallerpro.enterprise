@@ -14,7 +14,7 @@ const APP = {
 /* Site key pública de Cloudflare Turnstile (anti-bots en "Crear nuevo taller").
    Se crea en dash.cloudflare.com → Turnstile (el secret va en los secrets de
    Supabase como TURNSTILE_SECRET). Vacía = el captcha no se muestra. */
-const TURNSTILE_SITE_KEY = '';
+const TURNSTILE_SITE_KEY = '0x4AAAAAADiKf8P4Nfiu4WBV';
 
 /* ── SUPABASE ─────────────────────────────────────── */
 const SUPABASE_URL = 'https://oanguccrxleznozumpbi.supabase.co';
