@@ -176,6 +176,14 @@ const DB = {
     return data || {};
   },
 
+  /* Lectura SIN caché (la usa Contabilidad: el régimen debe estar al día) */
+  async getConfigFiscalFresh() {
+    const { data } = await getSB().from('config_fiscal')
+      .select('*').eq('tenant_id', getTID()).maybeSingle();
+    if (data) localStorage.setItem('tp_fiscal_' + (getTID()||'demo'), JSON.stringify(data));
+    return data;
+  },
+
   async saveConfigFiscal(fields) {
     const key = 'tp_fiscal_' + (getTID()||'demo');
     localStorage.setItem(key, JSON.stringify(fields));

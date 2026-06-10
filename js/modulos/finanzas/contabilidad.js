@@ -32,7 +32,7 @@ Modulos.contabilidad = {
   async render() {
     const el = document.getElementById('page-content');
     UI.loading(el);
-    this._fiscal = await DB.getConfigFiscal().catch(()=>null);
+    this._fiscal = await DB.getConfigFiscalFresh().catch(()=>null);
     const { mes, anio } = this._rango();
     const meses = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
 
