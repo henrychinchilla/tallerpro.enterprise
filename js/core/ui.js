@@ -92,7 +92,7 @@ const UI = {
   loading(el, msg='Cargando...') {
     if (!el) return;
     el.innerHTML = `<div class="empty-state">
-      <div class="empty-state-sm">⏳</div>${msg}</div>`;
+      <div class="spinner"></div>${msg}</div>`;
   },
 
   /* ── ERROR ────────────────────────────────────── */

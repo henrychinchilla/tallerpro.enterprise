@@ -95,7 +95,7 @@ const App = {
     const posBtn = ['superadmin','admin','gerente_tal','gerente_fin','recepcionista','vendedor'].includes(rol)
       && (rol === 'superadmin' || moduloEnPlan('pos')) ? `
       <div style="padding:0 12px 10px">
-        <a class="btn btn-ghost btn-sm" style="width:100%;text-align:center;display:block" href="/pos.html">🛒 Punto de Venta</a>
+        <a class="btn btn-ghost btn-sm" style="width:100%;text-align:center;display:block" href="/pos.html" target="_blank" rel="noopener">🛒 Punto de Venta</a>
       </div>` : '';
 
     sidebar.innerHTML = `

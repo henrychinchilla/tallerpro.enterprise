@@ -123,6 +123,45 @@ body {
 }
 .modal-shake { animation: shake .35s ease; }
 
+@keyframes spin { to { transform: rotate(360deg); } }
+.spinner {
+  width: 30px; height: 30px;
+  border: 3px solid var(--border);
+  border-top-color: var(--amber);
+  border-radius: 50%;
+  animation: spin .7s linear infinite;
+  margin: 0 auto 14px;
+}
+
+/* Entrada suave del contenido de cada página */
+.page-header, .page-body { animation: fadeIn .25s ease; }
+
+/* ── DETALLES GLOBALES ───────────────────────────── */
+::selection { background: var(--amber); color: #000; }
+
+/* Scrollbars discretos acordes al tema */
+* { scrollbar-width: thin; scrollbar-color: var(--surface3) transparent; }
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: var(--surface3); border-radius: 8px;
+  border: 2px solid transparent; background-clip: content-box;
+}
+::-webkit-scrollbar-thumb:hover { background: var(--text3); background-clip: content-box; }
+
+/* Anillo de foco accesible para navegación con teclado */
+:focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; border-radius: 4px; }
+.form-input:focus-visible, .form-select:focus-visible { outline: none; }
+
+/* Accesibilidad: respetar la preferencia de menos movimiento */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
+  }
+}
+
 /* ── UTILIDADES ──────────────────────────────────── */
 .hidden { display: none !important; }
 .text-amber { color: var(--amber); }

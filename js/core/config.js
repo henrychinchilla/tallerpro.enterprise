@@ -6,8 +6,8 @@
 
 const APP = {
   nombre:   'TallerPro Enterprise',
-  version:  '3.0.0',
-  build:    '20260509',
+  version:  '3.1.0',
+  build:    '20260610',
   url:      'https://app.cmtelecommgt.com'
 };
 
