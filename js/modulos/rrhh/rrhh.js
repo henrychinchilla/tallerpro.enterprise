@@ -269,12 +269,15 @@ Modulos.rrhh = {
   },
 
   async calcularNomina(mes, anio) {
+    const activos = this._empleados.filter(x=>x.activo);
+    if (!activos.length) { UI.toast('No hay empleados activos para calcular','error'); return; }
     UI.toast('Calculando nómina Guatemala 2026...','info');
-    for (const e of this._empleados.filter(x=>x.activo)) {
+    const errores = [];
+    for (const e of activos) {
       const isr  = calcularISR(e.salario_base);
       const igss = e.salario_base * GT.igss_laboral;
       const liquido = e.salario_base + (e.bonificacion||GT.bonificacion_incentivo) - igss - isr;
-      await DB.upsertPagoNomina({
+      const { error } = await DB.upsertPagoNomina({
         empleado_id:  e.id, periodo_mes: mes, periodo_anio: anio,
         salario_base: e.salario_base,
         bonificacion: e.bonificacion || GT.bonificacion_incentivo,
@@ -282,8 +285,14 @@ Modulos.rrhh = {
         isr:          Math.round(isr*100)/100,
         liquido:      Math.round(liquido*100)/100
       });
+      if (error) errores.push(`${e.nombre}: ${error.message}`);
     }
-    UI.toast('Nómina calculada ✓');
+    if (errores.length) {
+      console.error('calcularNomina:', errores);
+      UI.toast(`Nómina con errores (${errores.length}/${activos.length}): ${errores[0]}`,'error');
+    } else {
+      UI.toast(`Nómina calculada ✓ (${activos.length} empleados)`);
+    }
     this._renderTab();
   },
 

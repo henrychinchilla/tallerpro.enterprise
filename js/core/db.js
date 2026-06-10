@@ -837,13 +837,20 @@ const DB = {
   },
 
   async getPagosNomina(mes, anio) {
-    const { data } = await getSB().from('pagos_nomina').select('*,empleados(nombre,cargo)')
+    const { data } = await getSB().from('pagos_nomina').select('*,empleados(nombre,cargo,igss,dpi)')
       .eq('tenant_id', getTID()).eq('periodo_mes', mes).eq('periodo_anio', anio);
     return data || [];
   },
 
   async upsertPagoNomina(fields) {
     const payload = { ...fields, tenant_id: getTID() };
+    /* Con id → UPDATE directo (ej. marcar pagado); sin id → upsert por periodo */
+    if (payload.id) {
+      const { id, ...resto } = payload;
+      const { data, error } = await getSB().from('pagos_nomina')
+        .update(resto).eq('id', id).select().single();
+      return { data, error };
+    }
     const { data, error } = await getSB().from('pagos_nomina')
       .upsert(payload, { onConflict:'empleado_id,periodo_mes,periodo_anio' }).select().single();
     return { data, error };
