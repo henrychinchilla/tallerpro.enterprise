@@ -68,7 +68,9 @@ const Auth = {
         nombre:   fields.nombre,
         rol:      fields.rol,
         telefono: fields.telefono || null,
-        avatar:   fields.avatar || '👤'
+        avatar:   fields.avatar || '👤',
+        /* Solo lo honra la Edge si el llamante es superadmin (alta de talleres) */
+        tenant_id: fields.tenant_id || undefined
       }
     });
 

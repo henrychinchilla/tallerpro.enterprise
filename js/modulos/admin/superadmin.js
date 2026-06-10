@@ -18,6 +18,11 @@ Modulos.superadmin = {
       <div class="page-header">
         <div><h1 class="page-title">⚡ Panel SaaS</h1>
         <p class="page-subtitle">// gestión comercial de TallerPro</p></div>
+        <div class="page-actions">
+          <button class="btn btn-ghost" onclick="Modulos.superadmin.respaldarTodos()" title="Respaldo inmediato de todos los talleres a Storage">💾 Respaldar todos</button>
+          <button class="btn btn-ghost" onclick="Modulos.superadmin.enviarRecordatorios()" title="Enviar recordatorios de cobro/vencimiento por email">📧 Recordatorios</button>
+          <button class="btn btn-amber" onclick="Modulos.superadmin.modalNuevoTaller()">➕ Nuevo taller</button>
+        </div>
       </div>
       <div class="page-body">
         <div class="tabs">
@@ -129,6 +134,104 @@ Modulos.superadmin = {
           Usuarios, Administración, Respaldos) están siempre incluidos.
         </div></div>`;
     }
+  },
+
+  /* ── NUEVO TALLER: tenant + usuario admin en un paso ── */
+  modalNuevoTaller() {
+    const venceDefault = (()=>{ const d=new Date(); d.setMonth(d.getMonth()+1); return d.toISOString().slice(0,10); })();
+    UI.modal('➕ Nuevo taller', `
+      <div style="font-weight:700;font-size:13px;color:var(--amber);margin-bottom:8px">Datos del taller</div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Nombre del taller *</label>
+          <input class="form-input" id="nt-nombre" placeholder="Taller El Buen Freno"></div>
+        <div class="form-group"><label class="form-label">NIT</label>
+          <input class="form-input" id="nt-nit" placeholder="CF o 1234567-8"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Email del taller</label>
+          <input class="form-input" id="nt-email" type="email" placeholder="contacto@taller.com"></div>
+        <div class="form-group"><label class="form-label">Teléfono</label>
+          <input class="form-input" id="nt-tel" placeholder="5555-5555"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Plan *</label>
+          <select class="form-select" id="nt-plan" onchange="Modulos.superadmin._precioDePlan(this.value)">
+            ${Object.entries(PLANES).map(([k,p])=>`<option value="${k}">${p.label} — ${UI.q(p.precio)}/mes</option>`).join('')}
+          </select></div>
+        <div class="form-group"><label class="form-label">Precio mensual (Q)</label>
+          <input class="form-input" id="nt-precio" type="number" min="0" step="0.01" value="${PLANES[Object.keys(PLANES)[0]]?.precio||0}"></div>
+        <div class="form-group"><label class="form-label">Suscripción vence</label>
+          <input class="form-input" id="nt-vence" type="date" value="${venceDefault}"></div>
+      </div>
+      <div style="font-weight:700;font-size:13px;color:var(--amber);margin:14px 0 8px;border-top:1px solid var(--border);padding-top:12px">Usuario administrador del taller</div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Nombre *</label>
+          <input class="form-input" id="nt-adm-nombre" placeholder="Juan Pérez"></div>
+        <div class="form-group"><label class="form-label">Email (login) *</label>
+          <input class="form-input" id="nt-adm-email" type="email" placeholder="dueno@taller.com"></div>
+      </div>
+      <div class="form-group"><label class="form-label">Contraseña inicial *</label>
+        <input class="form-input" id="nt-adm-pass" type="text" placeholder="Mínimo 6 caracteres">
+        <div style="font-size:11px;color:var(--text3);margin-top:4px">Se le pedirá cambiarla al primer ingreso.</div></div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" onclick="UI.cerrarModal()">Cancelar</button>
+        <button class="btn btn-amber" id="nt-guardar" onclick="Modulos.superadmin.guardarNuevoTaller()">Crear taller</button>
+      </div>`, '640px');
+  },
+
+  _precioDePlan(plan) {
+    const precio = document.getElementById('nt-precio');
+    if (precio && PLANES[plan]) precio.value = PLANES[plan].precio;
+  },
+
+  _slug(nombre) {
+    const base = nombre.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'')
+      .replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'').slice(0,40) || 'taller';
+    return base + '-' + Math.random().toString(36).slice(2,6);
+  },
+
+  async guardarNuevoTaller() {
+    const v = id => document.getElementById(id)?.value?.trim() || '';
+    const nombre = v('nt-nombre'), plan = v('nt-plan');
+    const admNombre = v('nt-adm-nombre'), admEmail = v('nt-adm-email'), admPass = v('nt-adm-pass');
+    if (!nombre) { UI.toast('El nombre del taller es obligatorio','error'); return; }
+    if (!admNombre || !admEmail || !admPass) { UI.toast('Completa los datos del administrador','error'); return; }
+    if (admPass.length < 6) { UI.toast('La contraseña debe tener al menos 6 caracteres','error'); return; }
+
+    const btn = document.getElementById('nt-guardar');
+    if (btn) { btn.disabled = true; btn.textContent = 'Creando...'; }
+    const reactivar = () => { if (btn) { btn.disabled = false; btn.textContent = 'Crear taller'; } };
+
+    /* 1. Crear el tenant */
+    const { data: tenant, error: tErr } = await DB.crearTenant({
+      slug: this._slug(nombre),
+      name: nombre,
+      nit: v('nt-nit')||null,
+      email: v('nt-email')||null,
+      tel: v('nt-tel')||null,
+      plan,
+      precio_mensual: parseFloat(v('nt-precio'))||PLANES[plan]?.precio||0,
+      suscripcion_vence: v('nt-vence')||null,
+      ciclo_pago: 'mensual',
+      active: true
+    });
+    if (tErr || !tenant) { UI.toast('Error creando el taller: '+(tErr?.message||''),'error'); reactivar(); return; }
+
+    /* 2. Crear el usuario admin dentro del nuevo tenant (Edge crear-usuario) */
+    const res = await Auth.crearUsuario({
+      email: admEmail, password: admPass, nombre: admNombre,
+      rol: 'admin', tenant_id: tenant.id
+    });
+    if (!res.ok) {
+      /* rollback: no dejar un taller sin administrador */
+      await DB.deleteTenantById(tenant.id).catch(()=>{});
+      UI.toast('No se pudo crear el administrador: '+(res.error||''),'error');
+      reactivar(); return;
+    }
+
+    UI.cerrarModal();
+    UI.toast(`Taller "${nombre}" creado con su administrador ✓`);
+    this.render();
   },
 
   /* ── EDITAR TALLER: plan, módulos, precio, vencimiento ── */
@@ -255,5 +358,22 @@ Modulos.superadmin = {
     await DB.deleteTenantPago(id);
     UI.toast('Cobro eliminado');
     this.render();
+  },
+
+  /* ── OPERACIONES SaaS (Edge Functions; el cron diario hace esto solo) ── */
+  async respaldarTodos() {
+    UI.toast('Respaldando todos los talleres a Storage...','info');
+    const { data, error } = await getSB().functions.invoke('backup-tenants', { body: {} });
+    if (error || data?.error) { UI.toast('Error: '+(data?.error||error.message),'error'); return; }
+    UI.toast(`Respaldo completo ✓ ${data.talleres} talleres · ${data.registros} registros`);
+    if (data.errores?.length) console.warn('backup-tenants errores:', data.errores);
+  },
+
+  async enviarRecordatorios() {
+    UI.toast('Enviando recordatorios de suscripción...','info');
+    const { data, error } = await getSB().functions.invoke('saas-recordatorios', { body: {} });
+    if (error || data?.error) { UI.toast('Error: '+(data?.error||error.message),'error'); return; }
+    UI.toast(`Recordatorios ✓ ${data.enviados} enviados · ${data.por_vencer} por vencer · ${data.vencidos} vencidos`);
+    if (data.errores?.length) console.warn('saas-recordatorios errores:', data.errores);
   }
 };

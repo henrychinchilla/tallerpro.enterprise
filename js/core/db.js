@@ -90,6 +90,12 @@ const DB = {
     return { error };
   },
 
+  /* Solo para rollback del alta de taller (si falla la creación del admin) */
+  async deleteTenantById(id) {
+    const { error } = await getSB().from('tenants').delete().eq('id', id);
+    return { error };
+  },
+
   async getTenantPagos(tenantId=null) {
     let q = getSB().from('tenant_pagos').select('*').order('fecha',{ascending:false});
     if (tenantId) q = q.eq('tenant_id', tenantId);
