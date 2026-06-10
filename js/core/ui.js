@@ -137,3 +137,54 @@ window.addEventListener('unhandledrejection', e => {
 window.addEventListener('error', e => {
   if (e.error) console.error('[window.error]', e.error);
 });
+
+/* ── ORDENAMIENTO UNIVERSAL DE TABLAS ──────────────────
+   Click en cualquier <th> de una .data-table ordena por esa
+   columna (asc ⇄ desc). Detecta montos (Q1,234.56), números,
+   porcentajes y fechas (dd/mm/yyyy o yyyy-mm-dd); el resto se
+   ordena como texto. Las filas con colspan (estados vacíos,
+   totales) se mantienen al final. Aplica a TODOS los módulos
+   sin tocarlos: delegación global. */
+UI._sortVal = (td) => {
+  const t = (td?.textContent || '').trim();
+  if (!t || t === '—') return { n: null, t: '' };
+  const num = t.replace(/[Qq$%\s,]/g, '');
+  if (num && !isNaN(num)) return { n: parseFloat(num), t };
+  let m = t.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+  if (m) return { n: +(new Date(+m[3], +m[2] - 1, +m[1])), t };
+  if (/^\d{4}-\d{2}-\d{2}/.test(t)) return { n: +(new Date(t.slice(0, 10))), t };
+  return { n: null, t: t.toLowerCase() };
+};
+
+document.addEventListener('click', (e) => {
+  const th = e.target.closest('.data-table th');
+  if (!th || e.target.closest('button, a, input, select')) return;
+  const table = th.closest('table');
+  const tbody = table?.tBodies[0];
+  if (!tbody || tbody.rows.length < 2) return;
+  const idx = Array.prototype.indexOf.call(th.parentNode.children, th);
+
+  const filas = Array.from(tbody.rows);
+  /* columna de acciones (mayoría de celdas con botones): no ordenar */
+  const conBtn = filas.filter(r => r.cells[idx]?.querySelector('button, .btn')).length;
+  if (conBtn > filas.length / 2) return;
+
+  const dir = th.classList.contains('th-asc') ? -1 : 1;
+  table.querySelectorAll('th').forEach(h => h.classList.remove('th-asc', 'th-desc'));
+  th.classList.add(dir === 1 ? 'th-asc' : 'th-desc');
+
+  const fijas = [], movibles = [];
+  for (const r of filas) {
+    if (!r.cells[idx] || Array.from(r.cells).some(c => c.colSpan > 1)) fijas.push(r);
+    else movibles.push(r);
+  }
+  movibles.sort((a, b) => {
+    const va = UI._sortVal(a.cells[idx]), vb = UI._sortVal(b.cells[idx]);
+    if (va.n !== null && vb.n !== null) return (va.n - vb.n) * dir;
+    if (va.n !== null) return -1 * dir;
+    if (vb.n !== null) return 1 * dir;
+    return va.t.localeCompare(vb.t, 'es') * dir;
+  });
+  movibles.forEach(r => tbody.appendChild(r));
+  fijas.forEach(r => tbody.appendChild(r));
+});
