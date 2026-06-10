@@ -14,6 +14,19 @@ Modulos.configuracion = {
         <div class="grid-2">
           <div class="card card-amber">
             <div class="card-sub mb-4">🏪 Información del Taller</div>
+            <div class="form-group"><label class="form-label">Logo del taller</label>
+              <div style="display:flex;align-items:center;gap:12px">
+                <div id="cfg-logo-prev" style="width:64px;height:64px;border-radius:12px;border:1px solid var(--border);background:var(--surface2);display:flex;align-items:center;justify-content:center;overflow:hidden;flex-shrink:0">
+                  ${t.logo_base64?`<img src="${t.logo_base64}" style="width:100%;height:100%;object-fit:contain">`:'<span style="font-size:24px">🏪</span>'}
+                </div>
+                <div style="display:flex;flex-direction:column;gap:6px">
+                  <input type="file" id="cfg-logo-file" accept="image/*" style="display:none" onchange="Modulos.configuracion._onLogo(this)">
+                  <button class="btn btn-ghost btn-sm" onclick="document.getElementById('cfg-logo-file').click()">📷 Subir logo</button>
+                  ${t.logo_base64?`<button class="btn btn-ghost btn-sm" onclick="Modulos.configuracion.quitarLogo()">🗑️ Quitar</button>`:''}
+                </div>
+              </div>
+              <div style="font-size:11px;color:var(--text3);margin-top:4px">PNG/JPG, se ajusta automáticamente. Aparece en el menú y en tus documentos.</div>
+            </div>
             <div class="form-group"><label class="form-label">Nombre *</label>
               <input class="form-input" id="cfg-nombre" value="${t.name||''}"></div>
             <div class="form-group"><label class="form-label">NIT</label>
@@ -69,12 +82,51 @@ Modulos.configuracion = {
       address: document.getElementById('cfg-dir')?.value.trim()||null,
       updated_at: new Date().toISOString()
     });
-    if (ok) { 
-      UI.toast('Configuración guardada ✓'); 
-      Auth.tenant.name = nameVal; 
+    if (ok) {
+      UI.toast('Configuración guardada ✓');
+      Auth.tenant.name = nameVal;
       Auth.tenant.igss_patronal = igssPat;
-      App.renderSidebar(); 
+      App.renderSidebar();
     }
     else UI.toast('Error al guardar','error');
+  },
+
+  /* ── LOGO DEL TALLER ──────────────────────────────
+     Se redimensiona a máx 320px y se guarda como base64 en tenants. */
+  _onLogo(input) {
+    const f = input.files?.[0];
+    if (!f) return;
+    if (!f.type.startsWith('image/')) { UI.toast('Selecciona una imagen','error'); return; }
+    const reader = new FileReader();
+    reader.onload = ev => {
+      const img = new Image();
+      img.onload = async () => {
+        const MAX = 320;
+        const escala = Math.min(1, MAX / Math.max(img.width, img.height));
+        const cv = document.createElement('canvas');
+        cv.width = Math.round(img.width * escala);
+        cv.height = Math.round(img.height * escala);
+        cv.getContext('2d').drawImage(img, 0, 0, cv.width, cv.height);
+        const base64 = cv.toDataURL('image/png');
+        const ok = await DB.updateTenant({ logo_base64: base64, updated_at: new Date().toISOString() });
+        if (!ok) { UI.toast('No se pudo guardar el logo','error'); return; }
+        Auth.tenant.logo_base64 = base64;
+        UI.toast('Logo actualizado ✓');
+        App.renderSidebar();
+        this.render();
+      };
+      img.src = ev.target.result;
+    };
+    reader.readAsDataURL(f);
+  },
+
+  async quitarLogo() {
+    if (!confirm('¿Quitar el logo del taller?')) return;
+    const ok = await DB.updateTenant({ logo_base64: null, updated_at: new Date().toISOString() });
+    if (!ok) { UI.toast('No se pudo quitar el logo','error'); return; }
+    Auth.tenant.logo_base64 = null;
+    UI.toast('Logo eliminado');
+    App.renderSidebar();
+    this.render();
   }
 };

@@ -842,6 +842,14 @@ const DB = {
     return data || [];
   },
 
+  /* Historial de scores/bonos para la tendencia del dashboard de KPIs */
+  async getKpiHistorial() {
+    const { data } = await getSB().from('kpi_empleado')
+      .select('empleado_id,periodo_mes,periodo_anio,score,bono,aprobado')
+      .eq('tenant_id', getTID());
+    return data || [];
+  },
+
   async upsertPagoNomina(fields) {
     const payload = { ...fields, tenant_id: getTID() };
     /* Con id → UPDATE directo (ej. marcar pagado); sin id → upsert por periodo */

@@ -104,8 +104,9 @@ const App = {
         <div class="sidebar-brand-name">TALLERPRO</div>
         <div class="sidebar-brand-sub">Enterprise v${APP.version}</div>
       </div>
-      <div class="sidebar-tenant" onclick="App.toggleSidebar()">
-        <div class="sidebar-tenant-name">${Auth.tenant?.name || 'TallerPro'}</div>
+      <div class="sidebar-tenant" onclick="App.toggleSidebar()" style="display:flex;align-items:center;gap:8px">
+        ${Auth.tenant?.logo_base64 ? `<img src="${Auth.tenant.logo_base64}" alt="logo" style="width:28px;height:28px;border-radius:6px;object-fit:contain;background:var(--surface2);flex-shrink:0">` : ''}
+        <div class="sidebar-tenant-name" title="${Auth.tenant?.name || ''}">${Auth.tenant?.name || 'TallerPro'}</div>
       </div>
       <nav class="sidebar-nav"><ul>${nav}</ul></nav>
       ${posBtn}

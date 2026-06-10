@@ -250,6 +250,50 @@ const PRODUCTIVIDAD_DEFAULTS = {
   ]
 };
 
+/* ── KPIs POR ROL ─────────────────────────────────────
+   Un gerente no ejecuta OTs: cada rol mide lo suyo.
+   tipo 'auto'  → lo calcula el sistema; scope 'taller' usa los datos
+                  de TODO el taller (gestión/ventas) en vez de las OTs propias.
+   tipo 'manual'→ lo evalúa RRHH con un control 0-100.
+   RRHH puede ajustar pesos/metas y AGREGAR KPIs personalizados por rol
+   (se guardan en config_productividad.settings.kpis_rol del tenant). */
+const KPIS_POR_ROL = {
+  mecanico: [
+    { id:'ots_entregadas', label:'OTs entregadas',           peso:30, tipo:'auto',  meta:10    },
+    { id:'ingresos',       label:'Ingresos generados (Q)',   peso:25, tipo:'auto',  meta:20000 },
+    { id:'cumplimiento',   label:'Cumplimiento de tiempo',   peso:20, tipo:'auto'              },
+    { id:'calidad',        label:'Calidad (sin garantías)',  peso:15, tipo:'auto'              },
+    { id:'actitud',        label:'Actitud y disciplina',     peso:10, tipo:'manual'            }
+  ],
+  vendedor: [
+    { id:'ingresos_taller', label:'Ingresos del taller (Q)', peso:30, tipo:'auto',  meta:50000, scope:'taller' },
+    { id:'atencion',        label:'Atención al cliente',     peso:30, tipo:'manual' },
+    { id:'orden_caja',      label:'Orden de caja y cobros',  peso:20, tipo:'manual' },
+    { id:'actitud',         label:'Actitud y disciplina',    peso:20, tipo:'manual' }
+  ],
+  recepcionista: [
+    { id:'ots_taller',  label:'OTs entregadas del taller',   peso:25, tipo:'auto',  meta:30, scope:'taller' },
+    { id:'atencion',    label:'Atención al cliente',         peso:35, tipo:'manual' },
+    { id:'seguimiento', label:'Seguimiento de citas y OTs',  peso:20, tipo:'manual' },
+    { id:'actitud',     label:'Actitud y disciplina',        peso:20, tipo:'manual' }
+  ],
+  gerente: [
+    { id:'ots_taller',          label:'OTs entregadas del taller',      peso:25, tipo:'auto', meta:30,    scope:'taller' },
+    { id:'ingresos_taller',     label:'Ingresos del taller (Q)',        peso:25, tipo:'auto', meta:80000, scope:'taller' },
+    { id:'cumplimiento_taller', label:'Cumplimiento de tiempos (taller)',peso:20, tipo:'auto',            scope:'taller' },
+    { id:'liderazgo',           label:'Liderazgo y gestión del equipo', peso:15, tipo:'manual' },
+    { id:'objetivos',           label:'Objetivos del mes',              peso:15, tipo:'manual' }
+  ]
+};
+const KPIS_ROL_LABELS = { mecanico:'🪛 Mecánico / Auxiliar', vendedor:'🛒 Vendedor (POS)', recepcionista:'📋 Recepcionista', gerente:'👑 Gerencia / Administración' };
+
+/* Grupo de plantilla KPI que corresponde al rol de un empleado */
+function plantillaKpiRol(rol) {
+  if (['admin','gerente_tal','gerente_fin','gerente','superadmin'].includes(rol)) return 'gerente';
+  if (KPIS_POR_ROL[rol]) return rol;
+  return 'mecanico';
+}
+
 /* Costo mensual cargado y hora-hombre de un empleado según la config */
 function calcularHoraHombre(salarioBase, cfg = PRODUCTIVIDAD_DEFAULTS) {
   const s = Number(salarioBase) || 0;

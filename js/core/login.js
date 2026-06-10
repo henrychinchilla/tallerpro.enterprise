@@ -60,8 +60,7 @@ function renderLogin(vista='login') {
         </div>
 
         <div style="text-align:center;margin-top:16px;padding-top:16px;border-top:1px solid var(--border)">
-          <span style="font-size:12px;color:var(--text3)">¿Primera vez? </span>
-          <button class="btn btn-ghost btn-sm" onclick="loginDemo()">🚀 Acceso demo</button>
+          <span style="font-size:12px;color:var(--text3)">¿Primera vez? Crea tu taller y estrena 30 días de prueba gratis.</span>
         </div>
       </div>`,
 
@@ -228,8 +227,6 @@ async function doLogin() {
   if (r.ok) {
     if (r.debe_cambiar) { renderLogin('cambiar-pass'); return; }
     App.iniciar();
-  } else if (r.error === 'demo_expirado') {
-    UI.toast('Demo expirado — activa tu licencia','error');
   } else {
     UI.toast(r.error || 'Correo o contraseña incorrectos','error');
   }
@@ -286,14 +283,6 @@ async function loginCambiarPass() {
   if (!r.ok) { UI.toast('Error: '+r.error,'error'); return; }
   UI.toast('¡Contraseña guardada! ✓');
   setTimeout(() => App.iniciar(), 800);
-}
-
-function loginDemo() {
-  const emailEl = document.getElementById('l-email');
-  const passEl  = document.getElementById('l-pass');
-  if (emailEl) emailEl.value = 'demo@demo.com';
-  if (passEl)  passEl.value  = 'demo123';
-  doLogin();
 }
 
 

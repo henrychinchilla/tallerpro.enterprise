@@ -646,9 +646,18 @@ Modulos.rrhh = {
     return { mes, anio, ini, fin };
   },
 
-  /* Calcula los KPIs (auto + manual) y el score ponderado de un empleado */
-  _kpiScores(emp, ordenes, manual, cfg) {
-    const ots = ordenes.filter(o => o.mecanico_id === emp.id);
+  /* KPIs que aplican a un empleado según su ROL (con overrides del tenant).
+     Prioridad: settings.kpis_rol[grupo] → legacy settings.kpis (solo mecánico)
+     → plantilla KPIS_POR_ROL del sistema. */
+  _kpisDe(emp, cfg) {
+    const grupo = plantillaKpiRol(emp.rol || 'mecanico');
+    if (cfg?.kpis_rol?.[grupo]?.length) return cfg.kpis_rol[grupo];
+    if (grupo === 'mecanico' && cfg?.kpis?.length) return cfg.kpis;
+    return KPIS_POR_ROL[grupo];
+  },
+
+  /* Métricas de un conjunto de OTs (del empleado o de todo el taller) */
+  _metricasOts(ots) {
     const entregadasArr = ots.filter(o => ['entregado','listo'].includes(o.estado));
     const trabajadas = ots.length;
     const entregadas = entregadasArr.length;
@@ -658,28 +667,38 @@ Modulos.rrhh = {
     const aTiempo    = conFechas.filter(o => o.fecha_entrega <= o.fecha_estimada).length;
     const cumplimiento = conFechas.length ? Math.round(aTiempo/conFechas.length*100) : (entregadas ? 100 : 0);
     const calidad      = trabajadas ? Math.max(0, Math.round(100 - garantias/trabajadas*100)) : 100;
+    return { trabajadas, entregadas, ingresos, garantias, cumplimiento, calidad };
+  },
 
-    const detail = (cfg.kpis||[]).map(k => {
+  /* Calcula los KPIs (auto + manual) y el score ponderado de un empleado.
+     Los KPIs dependen del ROL: gerencia/ventas miden el TALLER (scope:'taller'),
+     los mecánicos miden SUS OTs. Los personalizados son manuales (0-100). */
+  _kpiScores(emp, ordenes, manual, cfg) {
+    const propio = this._metricasOts(ordenes.filter(o => o.mecanico_id === emp.id));
+    const taller = this._metricasOts(ordenes);
+
+    const detail = this._kpisDe(emp, cfg).map(k => {
+      const m = k.scope === 'taller' ? taller : propio;
       let score = 0, valor = '—';
       if (k.tipo === 'manual') {
         score = Math.max(0, Math.min(100, Number(manual?.[k.id]) || 0));
         valor = `${score}%`;
-      } else if (k.id === 'ots_entregadas') {
-        score = Math.min(100, Math.round(entregadas/(k.meta||10)*100));
-        valor = `${entregadas}/${trabajadas} (meta ${k.meta||10})`;
-      } else if (k.id === 'ingresos') {
-        score = Math.min(100, Math.round(ingresos/(k.meta||20000)*100));
-        valor = `${UI.q(ingresos)} (meta ${UI.q(k.meta||20000)})`;
-      } else if (k.id === 'cumplimiento') {
-        score = cumplimiento; valor = `${cumplimiento}% a tiempo`;
+      } else if (k.id === 'ots_entregadas' || k.id === 'ots_taller') {
+        score = Math.min(100, Math.round(m.entregadas/(k.meta||10)*100));
+        valor = `${m.entregadas}/${m.trabajadas} (meta ${k.meta||10})`;
+      } else if (k.id === 'ingresos' || k.id === 'ingresos_taller') {
+        score = Math.min(100, Math.round(m.ingresos/(k.meta||20000)*100));
+        valor = `${UI.q(m.ingresos)} (meta ${UI.q(k.meta||20000)})`;
+      } else if (k.id === 'cumplimiento' || k.id === 'cumplimiento_taller') {
+        score = m.cumplimiento; valor = `${m.cumplimiento}% a tiempo`;
       } else if (k.id === 'calidad') {
-        score = calidad; valor = `${garantias} garantía(s)`;
+        score = m.calidad; valor = `${m.garantias} garantía(s)`;
       }
-      return { id:k.id, label:k.label, peso:Number(k.peso)||0, tipo:k.tipo, valor, score };
+      return { id:k.id, label:k.label, peso:Number(k.peso)||0, tipo:k.tipo, scope:k.scope, valor, score };
     });
     const pesoTotal = detail.reduce((s,d)=>s+d.peso,0) || 1;
     const score = Math.round(detail.reduce((s,d)=>s+d.score*d.peso,0)/pesoTotal);
-    return { detail, score, raw:{ trabajadas, entregadas, ingresos, garantias, cumplimiento, calidad } };
+    return { detail, score, raw: propio, taller };
   },
 
   _calcBono(salario, score, cfg) {
@@ -691,29 +710,37 @@ Modulos.rrhh = {
   async _renderProductividad(el) {
     const { mes, anio, ini, fin } = this._rangoMes();
     this._cfgProd = await DB.getConfigProductividad();
-    const [ordenes, registros] = await Promise.all([
+    const [ordenes, registros, historial] = await Promise.all([
       DB.getOrdenesPeriodo(ini, fin),
-      DB.getKpiEmpleados(mes, anio)
+      DB.getKpiEmpleados(mes, anio),
+      DB.getKpiHistorial()
     ]);
     const cfg = this._cfgProd;
     const recByEmp = {}; registros.forEach(r => recByEmp[r.empleado_id] = r);
     const activos = this._empleados.filter(e => e.activo);
+    const vista = this._prodVista || 'tabla';
 
     const nombreMes = new Date(anio, mes-1, 1).toLocaleDateString('es-GT',{month:'long',year:'numeric'});
     const meses = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
     const anios = [anio-1, anio, anio+1];
 
+    /* Datos calculados una vez para ambas vistas */
     let totalBono = 0, totalCosto = 0;
-    const filas = activos.map(e => {
+    const datos = activos.map(e => {
       const rec = recByEmp[e.id];
-      const { score, raw } = this._kpiScores(e, ordenes, rec?.manual||{}, cfg);
+      const { score, raw, detail } = this._kpiScores(e, ordenes, rec?.manual||{}, cfg);
       const hh = calcularHoraHombre(e.salario_base, cfg);
-      const bono = this._calcBono(e.salario_base, score, cfg);
-      totalBono += rec?.aprobado ? (rec.bono||bono) : bono;
+      const bono = rec?.aprobado ? (rec.bono ?? this._calcBono(e.salario_base, score, cfg))
+                                 : this._calcBono(e.salario_base, score, cfg);
+      totalBono += bono;
       totalCosto += hh.costoMensual;
+      return { e, rec, score, raw, detail, hh, bono };
+    });
+
+    const filas = datos.map(({ e, rec, score, raw, hh, bono }) => {
       const col = score>=80?'green':score>=50?'amber':'red';
       return `<tr>
-        <td><div style="font-weight:700">${e.nombre}</div><div style="font-size:11px;color:var(--text3)">${e.cargo||ROLES[e.rol]?.label||'—'}</div></td>
+        <td><div style="font-weight:700">${e.nombre}</div><div style="font-size:11px;color:var(--text3)">${e.cargo||ROLES[e.rol]?.label||'—'} · KPIs ${KPIS_ROL_LABELS[plantillaKpiRol(e.rol)]?.replace(/^\S+\s/,'')||''}</div></td>
         <td class="mono-sm">${UI.q(hh.horaHombre)}<div style="font-size:10px;color:var(--text3)">${UI.q(hh.costoMensual)}/mes</div></td>
         <td style="text-align:center" class="mono-sm">${raw.entregadas}/${raw.trabajadas}</td>
         <td class="mono-sm text-green">${UI.q(raw.ingresos)}</td>
@@ -725,7 +752,7 @@ Modulos.rrhh = {
             <b style="color:var(--${col})">${score}%</b>
           </div>
         </td>
-        <td class="mono-sm text-amber"><b>${UI.q(rec?.aprobado?(rec.bono||bono):bono)}</b></td>
+        <td class="mono-sm text-amber"><b>${UI.q(bono)}</b></td>
         <td><span class="badge badge-${rec?.aprobado?'green':'gray'}">${rec?.aprobado?'Aprobado':'Borrador'}</span></td>
         <td><div style="display:flex;gap:4px">
           <button class="btn btn-sm btn-cyan" onclick="Modulos.rrhh.detalleEmpleado('${e.id}')" title="Ver / editar KPIs">👁 Ver</button>
@@ -734,6 +761,13 @@ Modulos.rrhh = {
         </div></td>
       </tr>`;
     }).join('');
+
+    const cuerpo = vista === 'dash'
+      ? this._htmlProdDashboard(datos, historial, mes, anio)
+      : `<div class="table-wrap"><table class="data-table">
+          <thead><tr><th>Empleado</th><th>Hora-Hombre</th><th style="text-align:center">OTs</th><th>Ingresos</th><th>Score</th><th>Bono</th><th>Estado</th><th>Acciones</th></tr></thead>
+          <tbody>${filas||'<tr><td colspan="8" style="text-align:center;padding:24px;color:var(--text3)">Sin empleados activos</td></tr>'}</tbody>
+        </table></div>`;
 
     el.innerHTML = `
       <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:16px;flex-wrap:wrap">
@@ -744,6 +778,10 @@ Modulos.rrhh = {
           <select class="form-select" style="width:auto" onchange="Modulos.rrhh._prodAnio=parseInt(this.value);Modulos.rrhh._renderTab()">
             ${anios.map(a=>`<option value="${a}" ${anio===a?'selected':''}>${a}</option>`).join('')}
           </select>
+          <div class="view-toggle">
+            <button class="view-btn ${vista==='tabla'?'active':''}" title="Vista tabla" onclick="Modulos.rrhh._prodVista='tabla';Modulos.rrhh._renderTab()">📋</button>
+            <button class="view-btn ${vista==='dash'?'active':''}" title="Dashboard de KPIs" onclick="Modulos.rrhh._prodVista='dash';Modulos.rrhh._renderTab()">📊</button>
+          </div>
         </div>
         <button class="btn btn-ghost" onclick="Modulos.rrhh.modalConfigProductividad()">⚙️ Configurar criterios</button>
       </div>
@@ -755,14 +793,70 @@ Modulos.rrhh = {
         <div class="kpi-card"><div class="kpi-label">Hora-Hombre prom.</div><div class="kpi-val green">${UI.q(activos.length?totalCosto/activos.length/(cfg.horas_mes||240):0)}</div><div class="kpi-trend">base ${cfg.horas_mes||240} h/mes</div></div>
       </div>
 
-      <div class="table-wrap"><table class="data-table">
-        <thead><tr><th>Empleado</th><th>Hora-Hombre</th><th style="text-align:center">OTs</th><th>Ingresos</th><th>Score</th><th>Bono</th><th>Estado</th><th>Acciones</th></tr></thead>
-        <tbody>${filas||'<tr><td colspan="8" style="text-align:center;padding:24px;color:var(--text3)">Sin empleados activos</td></tr>'}</tbody>
-      </table></div>
+      ${cuerpo}
       <div class="alert alert-cyan" style="margin-top:12px">
         <div class="alert-icon">ℹ️</div>
-        <div class="alert-body" style="font-size:12px">El <b>score</b> combina los KPIs según sus pesos. El <b>bono</b> = salario × ${cfg.bono_max_pct||30}% × score. Al <b>aprobar</b>, el bono se registra como egreso (categoría Bonos) del mes.</div>
+        <div class="alert-body" style="font-size:12px">Los KPIs dependen del <b>rol</b> de cada empleado (gerencia mide el taller completo, mecánicos sus OTs). El <b>bono</b> = salario × ${cfg.bono_max_pct||30}% × score. Al <b>aprobar</b>, el bono se registra como egreso (categoría Bonos) del mes.</div>
       </div>`;
+  },
+
+  /* ── Mini dashboard de KPIs por empleado ───────────
+     Tarjeta por empleado: anillo de score, barras por KPI,
+     bono y tendencia de los últimos 6 meses. */
+  _htmlProdDashboard(datos, historial, mes, anio) {
+    if (!datos.length) return '<div class="empty-state">Sin empleados activos</div>';
+
+    /* últimos 6 periodos terminando en el mes seleccionado */
+    const periodos = [];
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date(anio, mes-1-i, 1);
+      periodos.push({ m: d.getMonth()+1, a: d.getFullYear(), lbl: d.toLocaleDateString('es-GT',{month:'short'}) });
+    }
+
+    return `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(290px,1fr));gap:14px">
+      ${datos.map(({ e, rec, score, detail, bono }) => {
+        const col = score>=80?'green':score>=50?'amber':'red';
+        const hist = periodos.map(p => {
+          const r = historial.find(h => h.empleado_id===e.id && h.periodo_mes===p.m && h.periodo_anio===p.a);
+          return { ...p, score: r ? (Number(r.score)||0) : null };
+        });
+        return `
+        <div class="card" style="cursor:pointer" onclick="Modulos.rrhh.detalleEmpleado('${e.id}')">
+          <div style="display:flex;gap:12px;align-items:center;margin-bottom:10px">
+            <div style="width:62px;height:62px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;
+                        background:conic-gradient(var(--${col}) ${score*3.6}deg, var(--surface3) 0deg)">
+              <div style="width:48px;height:48px;border-radius:50%;background:var(--surface);display:flex;align-items:center;justify-content:center;font-weight:800;color:var(--${col})">${score}%</div>
+            </div>
+            <div style="min-width:0">
+              <div style="font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${e.avatar||'👤'} ${e.nombre}</div>
+              <div style="font-size:11px;color:var(--text3)">${e.cargo||ROLES[e.rol]?.label||'—'}</div>
+              <div style="margin-top:3px"><span class="badge badge-${rec?.aprobado?'green':'amber'}" style="font-size:10px">Bono ${UI.q(bono)}${rec?.aprobado?' ✓':''}</span></div>
+            </div>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:5px;margin-bottom:10px">
+            ${detail.map(d=>`
+              <div style="display:flex;align-items:center;gap:8px;font-size:11px">
+                <span style="flex:1;color:var(--text2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${d.valor}">${d.label}</span>
+                <div style="width:90px;height:5px;background:var(--surface3);border-radius:3px;overflow:hidden;flex-shrink:0">
+                  <div style="height:100%;width:${d.score}%;background:var(--${d.score>=80?'green':d.score>=50?'amber':'red'})"></div>
+                </div>
+                <b style="width:34px;text-align:right;color:var(--${d.score>=80?'green':d.score>=50?'amber':'red'})">${d.score}%</b>
+              </div>`).join('')}
+          </div>
+          <div style="border-top:1px solid var(--border);padding-top:8px">
+            <div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px">Tendencia 6 meses</div>
+            <div style="display:flex;align-items:flex-end;gap:5px;height:36px">
+              ${hist.map(h=>`
+                <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:2px" title="${h.lbl}: ${h.score===null?'sin registro':h.score+'%'}">
+                  <div style="width:100%;height:${h.score===null?2:Math.max(2,h.score*0.3)}px;border-radius:2px;
+                              background:${h.score===null?'var(--surface3)':`var(--${h.score>=80?'green':h.score>=50?'amber':'red'})`}"></div>
+                  <span style="font-size:8px;color:var(--text3)">${h.lbl}</span>
+                </div>`).join('')}
+            </div>
+          </div>
+        </div>`;
+      }).join('')}
+    </div>`;
   },
 
   async detalleEmpleado(empId) {
@@ -822,10 +916,10 @@ Modulos.rrhh = {
       </div>`, '560px');
   },
 
-  /* Lee los KPIs manuales del modal de detalle */
-  _leerManual(cfg) {
+  /* Lee los KPIs manuales del modal de detalle (lista de KPIs del empleado) */
+  _leerManual(kpis) {
     const manual = {};
-    (cfg.kpis||[]).filter(k=>k.tipo==='manual').forEach(k=>{
+    (kpis||[]).filter(k=>k.tipo==='manual').forEach(k=>{
       const inp = document.getElementById('kpi-'+k.id);
       if (inp) manual[k.id] = parseInt(inp.value)||0;
     });
@@ -836,7 +930,7 @@ Modulos.rrhh = {
     const e = this._empleados.find(x=>x.id===empId);
     const { mes, anio, ini, fin } = this._rangoMes();
     const cfg = this._cfgProd || await DB.getConfigProductividad();
-    const manual = this._leerManual(cfg);
+    const manual = this._leerManual(this._kpisDe(e, cfg));
     const ordenes = await DB.getOrdenesPeriodo(ini, fin);
     const { score } = this._kpiScores(e, ordenes, manual, cfg);
     const bono = this._calcBono(e.salario_base, score, cfg);
@@ -855,8 +949,8 @@ Modulos.rrhh = {
     const rec = registros.find(r=>r.empleado_id===empId);
     if (rec?.aprobado) { UI.toast('Este bono ya fue aprobado','info'); return; }
     /* Tomar KPIs manuales del modal si está abierto, si no del registro */
-    const manual = document.getElementById('kpi-actitud') !== null
-      ? this._leerManual(cfg) : (rec?.manual || {});
+    const manual = document.querySelector('input[id^="kpi-"]') !== null
+      ? this._leerManual(this._kpisDe(e, cfg)) : (rec?.manual || {});
     const ordenes = await DB.getOrdenesPeriodo(ini, fin);
     const { score } = this._kpiScores(e, ordenes, manual, cfg);
     const bono = this._calcBono(e.salario_base, score, cfg);
@@ -913,33 +1007,89 @@ Modulos.rrhh = {
         Incluir bonificación en la base de indemnización (jurisprudencia GT)
       </label>
 
-      <div style="font-weight:700;font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px;border-top:1px solid var(--border);padding-top:12px">Pesos de los KPIs (deben sumar 100%)</div>
-      <div id="cfg-kpis" style="display:flex;flex-direction:column;gap:6px">
-        ${(cfg.kpis||[]).map(k=>`
-          <div style="display:flex;align-items:center;gap:8px;background:var(--surface2);border-radius:8px;padding:8px">
-            <span style="flex:1;font-size:12px">${k.label} <span style="color:var(--text3)">(${k.tipo})</span></span>
-            ${k.meta!==undefined?`<input class="form-input" style="width:90px" type="number" id="cfg-meta-${k.id}" value="${k.meta}" title="Meta" placeholder="meta">`:''}
-            <input class="form-input" style="width:70px" type="number" id="cfg-peso-${k.id}" value="${k.peso}" min="0" max="100"> <span style="font-size:12px;color:var(--text3)">%</span>
-          </div>`).join('')}
+      <div style="font-weight:700;font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px;border-top:1px solid var(--border);padding-top:12px">KPIs por rol (los pesos de cada rol deben sumar 100%)</div>
+      <select class="form-select" id="cfg-rol" style="margin-bottom:8px" onchange="Modulos.rrhh._cambiarCfgRol(this.value)">
+        ${Object.entries(KPIS_ROL_LABELS).map(([k,l])=>`<option value="${k}">${l}</option>`).join('')}
+      </select>
+      <div id="cfg-kpis" style="display:flex;flex-direction:column;gap:6px"></div>
+      <div style="display:flex;gap:6px;margin-top:8px;align-items:center">
+        <input class="form-input" id="cfg-nuevo-kpi" placeholder="KPI personalizado (ej. Puntualidad, 5S del área...)" style="flex:1">
+        <button class="btn btn-cyan btn-sm" onclick="Modulos.rrhh._agregarKpiCustom()">➕ Agregar</button>
       </div>
-      <div id="cfg-pesos-aviso" style="font-size:11px;color:var(--text3);margin-top:6px"></div>
+      <div style="font-size:11px;color:var(--text3);margin-top:4px">Los KPIs personalizados se evalúan manualmente (0-100) en la ficha de cada empleado.</div>
 
       <div class="modal-footer">
         <button class="btn btn-ghost" onclick="UI.cerrarModal()">Cancelar</button>
         <button class="btn btn-amber" onclick="Modulos.rrhh.guardarConfigProductividad()">Guardar criterios</button>
       </div>`, '560px');
+
+    /* Copia editable de los KPIs de los 4 grupos (override del tenant o plantilla) */
+    this._kpisEdit = {};
+    Object.keys(KPIS_POR_ROL).forEach(g => {
+      const src = cfg.kpis_rol?.[g]?.length ? cfg.kpis_rol[g]
+        : (g === 'mecanico' && cfg.kpis?.length ? cfg.kpis : KPIS_POR_ROL[g]);
+      this._kpisEdit[g] = src.map(k => ({ ...k }));
+    });
+    this._cfgRol = 'mecanico';
+    this._renderCfgKpis();
+  },
+
+  /* Vuelca los inputs del grupo visible a la copia editable */
+  _syncCfgKpis() {
+    (this._kpisEdit?.[this._cfgRol] || []).forEach(k => {
+      const peso = document.getElementById('cfg-peso-'+k.id);
+      const meta = document.getElementById('cfg-meta-'+k.id);
+      if (peso) k.peso = parseInt(peso.value)||0;
+      if (meta && k.meta !== undefined) k.meta = parseFloat(meta.value)||k.meta;
+    });
+  },
+
+  _cambiarCfgRol(rol) { this._syncCfgKpis(); this._cfgRol = rol; this._renderCfgKpis(); },
+
+  _renderCfgKpis() {
+    const el = document.getElementById('cfg-kpis');
+    if (!el) return;
+    const kpis = this._kpisEdit[this._cfgRol] || [];
+    el.innerHTML = kpis.map(k=>`
+      <div style="display:flex;align-items:center;gap:8px;background:var(--surface2);border-radius:8px;padding:8px">
+        <span style="flex:1;font-size:12px">${k.label}
+          <span style="color:var(--text3)">(${k.tipo==='manual'?'manual':'auto'}${k.scope==='taller'?' · taller':''})</span></span>
+        ${k.meta!==undefined?`<input class="form-input" style="width:90px" type="number" id="cfg-meta-${k.id}" value="${k.meta}" title="Meta" placeholder="meta">`:''}
+        <input class="form-input" style="width:70px" type="number" id="cfg-peso-${k.id}" value="${k.peso}" min="0" max="100"> <span style="font-size:12px;color:var(--text3)">%</span>
+        ${String(k.id).startsWith('custom_')?`<button class="btn btn-sm btn-danger" title="Quitar KPI personalizado" onclick="Modulos.rrhh._quitarKpiCustom('${k.id}')">✕</button>`:''}
+      </div>`).join('');
+    const suma = kpis.reduce((s,k)=>s+(Number(k.peso)||0),0);
+    el.innerHTML += `<div style="font-size:11px;color:var(--${suma===100?'green':'amber'});text-align:right">Suma de pesos: ${suma}%</div>`;
+  },
+
+  _agregarKpiCustom() {
+    const inp = document.getElementById('cfg-nuevo-kpi');
+    const label = inp?.value.trim();
+    if (!label) { UI.toast('Escribe el nombre del KPI','error'); return; }
+    this._syncCfgKpis();
+    const id = 'custom_' + label.toLowerCase().normalize('NFD').replace(/[^a-z0-9]+/g,'_').replace(/^_+|_+$/g,'').slice(0,30);
+    if (this._kpisEdit[this._cfgRol].some(k=>k.id===id)) { UI.toast('Ya existe un KPI con ese nombre','error'); return; }
+    this._kpisEdit[this._cfgRol].push({ id, label, peso: 10, tipo: 'manual' });
+    if (inp) inp.value = '';
+    this._renderCfgKpis();
+  },
+
+  _quitarKpiCustom(id) {
+    this._syncCfgKpis();
+    this._kpisEdit[this._cfgRol] = this._kpisEdit[this._cfgRol].filter(k=>k.id!==id);
+    this._renderCfgKpis();
   },
 
   async guardarConfigProductividad() {
     const base = this._cfgProd || PRODUCTIVIDAD_DEFAULTS;
-    const kpis = (base.kpis||[]).map(k => ({
-      ...k,
-      peso: parseInt(document.getElementById('cfg-peso-'+k.id)?.value)||0,
-      ...(k.meta!==undefined ? { meta: parseFloat(document.getElementById('cfg-meta-'+k.id)?.value)||k.meta } : {})
-    }));
-    const sumaPesos = kpis.reduce((s,k)=>s+k.peso,0);
-    if (sumaPesos !== 100) {
-      const seguir = await UI.confirmar(`Los pesos suman <b>${sumaPesos}%</b> (lo ideal es 100%). El score se normaliza igual. ¿Guardar de todas formas?`, 'Guardar');
+    this._syncCfgKpis();
+    const kpis_rol = this._kpisEdit;
+    const desbalance = Object.entries(kpis_rol)
+      .map(([g,ks])=>({ g, suma: ks.reduce((s,k)=>s+(Number(k.peso)||0),0) }))
+      .filter(x=>x.suma!==100);
+    if (desbalance.length) {
+      const det = desbalance.map(x=>`${KPIS_ROL_LABELS[x.g]||x.g}: ${x.suma}%`).join(' · ');
+      const seguir = await UI.confirmar(`Hay roles cuyos pesos no suman 100% (${det}). El score se normaliza igual. ¿Guardar de todas formas?`, 'Guardar');
       if (!seguir) return;
     }
     const settings = {
@@ -953,7 +1103,8 @@ Modulos.rrhh = {
         vacaciones:    document.getElementById('cfg-prov-vacaciones')?.checked,
         indemnizacion: document.getElementById('cfg-prov-indemnizacion')?.checked
       },
-      kpis
+      kpis_rol,
+      kpis: kpis_rol.mecanico   /* compat con código/datos previos */
     };
     const ok = await DB.saveConfigProductividad(settings);
     if (!ok) { UI.toast('Error al guardar la configuración','error'); return; }
