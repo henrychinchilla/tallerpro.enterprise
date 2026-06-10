@@ -865,7 +865,12 @@ Modulos.finanzas = {
           <input class="form-input" id="via-ref"></div>
       </div>
       <div class="form-group"><label class="form-label">Comprobante (foto o scan — jpg/pdf)</label>
-        <input class="form-input" type="file" accept="image/*,application/pdf" onchange="Modulos.finanzas._onComprobante(this)">
+        <div style="display:flex;gap:6px">
+          <button type="button" class="btn btn-ghost btn-sm" onclick="document.getElementById('via-comp-cam').click()">📷 Tomar foto</button>
+          <button type="button" class="btn btn-ghost btn-sm" onclick="document.getElementById('via-comp-file').click()">📁 Subir archivo</button>
+        </div>
+        <input type="file" id="via-comp-cam" accept="image/*" capture="environment" style="display:none" onchange="Modulos.finanzas._onComprobante(this)">
+        <input type="file" id="via-comp-file" accept="image/*,application/pdf" style="display:none" onchange="Modulos.finanzas._onComprobante(this)">
         <div id="via-comp-info" style="font-size:11px;color:var(--text3);margin-top:4px">Se guarda en el historial del viático.</div></div>
       <div class="modal-footer">
         <button class="btn btn-ghost" onclick="UI.cerrarModal()">Cancelar</button>

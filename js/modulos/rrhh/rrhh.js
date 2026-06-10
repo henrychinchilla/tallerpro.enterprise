@@ -1324,7 +1324,13 @@ Modulos.rrhh = {
       <div class="form-group"><label class="form-label">Estado al entregar</label>
         <textarea class="form-input" id="asig-estado" rows="2" placeholder="Nuevo / Usado en buen estado, rayón en puerta izquierda..."></textarea></div>
       <div class="form-group"><label class="form-label">Fotos del estado (hasta 4)</label>
-        <input class="form-input" type="file" accept="image/*" multiple onchange="Modulos.rrhh._onFotosAsig(this)">
+        <div style="display:flex;gap:6px">
+          <button type="button" class="btn btn-ghost btn-sm" onclick="document.getElementById('asig-foto-cam').click()">📷 Tomar foto</button>
+          <button type="button" class="btn btn-ghost btn-sm" onclick="document.getElementById('asig-foto-file').click()">📁 Subir fotos</button>
+          <button type="button" class="btn btn-ghost btn-sm" onclick="Modulos.rrhh._limpiarFotosAsig()">🗑️</button>
+        </div>
+        <input type="file" id="asig-foto-cam" accept="image/*" capture="environment" style="display:none" onchange="Modulos.rrhh._onFotosAsig(this)">
+        <input type="file" id="asig-foto-file" accept="image/*" multiple style="display:none" onchange="Modulos.rrhh._onFotosAsig(this)">
         <div id="asig-fotos-prev" style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap"></div></div>
       <div class="form-group"><label class="form-label">Notas / condiciones</label>
         <textarea class="form-input" id="asig-notas" rows="2" placeholder="Uso exclusivo laboral, devolución al terminar la relación laboral..."></textarea></div>
@@ -1334,15 +1340,24 @@ Modulos.rrhh = {
       </div>`, '620px');
   },
 
+  /* Acumula fotos (la cámara entrega una a la vez); máximo 4 */
   async _onFotosAsig(input) {
-    const files = Array.from(input.files||[]).slice(0,4);
-    this._asigFotos = [];
+    const files = Array.from(input.files||[]);
     for (const f of files) {
+      if (this._asigFotos.length >= 4) { UI.toast('Máximo 4 fotos','error'); break; }
       try { this._asigFotos.push((await UI.fileABase64(f, { maxPx: 900, calidad: 0.75 })).base64); }
       catch(e) { UI.toast(e.message,'error'); }
     }
+    input.value = '';
+    this._pintarFotosAsig();
+  },
+
+  _limpiarFotosAsig() { this._asigFotos = []; this._pintarFotosAsig(); },
+
+  _pintarFotosAsig() {
     const prev = document.getElementById('asig-fotos-prev');
-    if (prev) prev.innerHTML = this._asigFotos.map(b=>`<img src="${b}" style="width:64px;height:64px;object-fit:cover;border-radius:8px;border:1px solid var(--border)">`).join('');
+    if (prev) prev.innerHTML = this._asigFotos.map(b=>`<img src="${b}" style="width:64px;height:64px;object-fit:cover;border-radius:8px;border:1px solid var(--border)">`).join('')
+      || '<span style="font-size:11px;color:var(--text3)">Sin fotos aún</span>';
   },
 
   async guardarAsignacion() {
