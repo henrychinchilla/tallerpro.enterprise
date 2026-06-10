@@ -60,7 +60,7 @@ Modulos.finanzas = {
   async _renderTab() {
     const el = document.getElementById('fin-content');
     if (!el) return;
-    const { ingresos, egresos, totalIng, totalEgr, utilidad, totalFact } = await this._getData();
+    const { ingresos, egresos, totalIng, totalEgr, utilidad, totalFact, facturas } = await this._getData();
 
     const agrupar = (items,campo) => {
       const m={};
@@ -114,7 +114,16 @@ Modulos.finanzas = {
         </div>
         <div class="table-wrap"><table class="data-table">
           <thead><tr><th>Fecha</th><th>Concepto</th><th>Categoría</th><th>Referencia</th><th>Monto</th><th>Acciones</th></tr></thead>
-          <tbody>${ingresos.map(i=>`<tr>
+          <tbody>
+            ${facturas.map(f=>`<tr style="background:var(--surface2)">
+              <td>${UI.fecha(f.fecha)}</td>
+              <td>${(f.descripcion||('Factura '+(f.num||''))).slice(0,60)}</td>
+              <td><span class="badge badge-green">Facturación</span></td>
+              <td class="mono-sm">${f.num||(f.fel_serie?`${f.fel_serie}-${f.fel_numero||''}`:'—')}</td>
+              <td class="mono-sm text-green"><b>${UI.q(f.total)}</b></td>
+              <td><span class="text-muted" style="font-size:11px">desde Facturación/POS</span></td>
+            </tr>`).join('')}
+            ${ingresos.map(i=>`<tr>
             <td>${UI.fecha(i.fecha)}</td><td>${i.concepto}</td>
             <td><span class="badge badge-green">${i.categoria||'General'}</span></td>
             <td class="mono-sm">${i.referencia||'—'}</td>
@@ -123,7 +132,9 @@ Modulos.finanzas = {
               <button class="btn btn-sm btn-cyan" onclick="Modulos.finanzas.modalIngreso('${i.id}')" title="Editar">✏️ Editar</button>
               <button class="btn btn-sm btn-danger" onclick="Modulos.finanzas.eliminar('ingresos','${i.id}')" title="Eliminar">🗑️</button>
             </div></td>
-          </tr>`).join('')||'<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--text3)">Sin ingresos</td></tr>'}</tbody>
+          </tr>`).join('')}
+            ${(!facturas.length && !ingresos.length)?'<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--text3)">Sin ingresos en este período</td></tr>':''}
+          </tbody>
         </table></div>`;
     }
 

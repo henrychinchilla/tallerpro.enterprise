@@ -138,14 +138,13 @@ Modulos.marketing = {
       const fb = await DB.getFeedback();
       const tid = Auth.tenant?.id || '';
       const url = `${location.origin}/feedback.html?t=${encodeURIComponent(tid)}`;
-      const ratings = [];
-      fb.forEach(f=>{ if(f.rating_servicio) ratings.push(f.rating_servicio); if(f.rating_productos) ratings.push(f.rating_productos); });
-      const prom = ratings.length ? Math.round(ratings.reduce((a,b)=>a+b,0)/ratings.length*10)/10 : 0;
+      const ASP = [['rating_servicio','Servicio'],['rating_instalaciones','Instalaciones'],['rating_limpieza','Limpieza personal'],['rating_entrega','Condiciones de entrega'],['rating_documentos','Documentos']];
       const avg = a => a.length ? Math.round(a.reduce((x,y)=>x+y,0)/a.length*10)/10 : 0;
-      const promServ = avg(fb.map(f=>f.rating_servicio).filter(Boolean));
-      const promProd = avg(fb.map(f=>f.rating_productos).filter(Boolean));
+      const ratings = [];
+      fb.forEach(f => ASP.forEach(([k]) => { if (f[k]) ratings.push(f[k]); }));
       const satis = ratings.length ? Math.round(ratings.filter(r=>r>=4).length/ratings.length*100) : 0;
-      const aMejorar = fb.filter(f=>(f.rating_servicio&&f.rating_servicio<=2)||(f.rating_productos&&f.rating_productos<=2)).length;
+      const aMejorar = fb.filter(f => ASP.some(([k]) => f[k] && f[k] <= 2)).length;
+      const promAsp = ASP.map(([k,l]) => [l, avg(fb.map(f=>f[k]).filter(Boolean))]);
       const mesAct = new Date().toISOString().slice(0,7);
       const esteMes = fb.filter(f=>(f.created_at||'').slice(0,7)===mesAct).length;
       el.innerHTML = `
@@ -164,8 +163,10 @@ Modulos.marketing = {
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
               <div class="kpi-card"><div class="kpi-label">Respuestas</div><div class="kpi-val cyan">${fb.length}</div><div class="kpi-trend">${esteMes} este mes</div></div>
               <div class="kpi-card"><div class="kpi-label">Satisfacción</div><div class="kpi-val ${satis>=80?'green':satis>=60?'amber':'red'}">${satis}%</div><div class="kpi-trend">califican 4–5★</div></div>
-              <div class="kpi-card"><div class="kpi-label">Prom. servicio</div><div class="kpi-val amber">${promServ||'—'}/5</div></div>
-              <div class="kpi-card"><div class="kpi-label">Prom. productos</div><div class="kpi-val amber">${promProd||'—'}/5</div></div>
+            </div>
+            <div style="margin-top:10px">
+              <div style="font-size:11px;color:var(--text3);font-weight:700;text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">Promedio por aspecto</div>
+              ${promAsp.map(([l,v])=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px solid var(--border);font-size:12px"><span>${l}</span><span class="text-amber" style="font-weight:700">${v||'—'} / 5</span></div>`).join('')}
             </div>
             ${aMejorar>0?`<div class="alert alert-red" style="margin-top:10px"><div class="alert-icon">⚠️</div><div class="alert-body" style="font-size:12px"><b>${aMejorar}</b> respuesta(s) con calificación baja (≤2★) — revisa los comentarios para tu estrategia de mejora.</div></div>`:''}
           </div>

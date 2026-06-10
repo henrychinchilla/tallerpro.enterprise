@@ -28,7 +28,8 @@ Modulos.dashboard = {
     const entregadas  = ordenes.filter(o => o.estado === 'entregado').length;
     const pctEntreg   = totalOT ? Math.round(entregadas / totalOT * 100) : 0;
     const rts = [];
-    fb.forEach(f => { if (f.rating_servicio) rts.push(f.rating_servicio); if (f.rating_productos) rts.push(f.rating_productos); });
+    const _aspK = ['rating_servicio','rating_instalaciones','rating_limpieza','rating_entrega','rating_documentos','rating_productos'];
+    fb.forEach(f => _aspK.forEach(k => { if (f[k]) rts.push(f[k]); }));
     const satis = rts.length ? Math.round(rts.filter(r => r >= 4).length / rts.length * 100) : 0;
 
     const hero = (label, valor, sub, pct, colorVar, destino) => `

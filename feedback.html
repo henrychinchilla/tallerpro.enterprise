@@ -59,7 +59,7 @@
         <div style="flex:1"><span class="lbl">📞 Teléfono</span><input id="fb-tel" inputmode="tel" placeholder="5555-5555"></div>
         <div style="flex:1"><span class="lbl">✉️ Correo</span><input id="fb-mail" type="email" placeholder="opcional"></div>
       </div>
-      <span class="lbl">🚗 Placa / vehículo</span>
+      <span class="lbl">🚗 Placa / vehículo <span style="font-weight:400;color:#94a3b8">(opcional si ya estás registrado)</span></span>
       <input id="fb-veh" placeholder="P-123ABC · Toyota Corolla">
       <span class="lbl">🔧 ¿Qué servicio recibiste?</span>
       <input id="fb-serv" placeholder="Cambio de aceite, frenos, diagnóstico...">
@@ -69,10 +69,16 @@
 
     <!-- PASO 2: CALIFICACIÓN -->
     <div id="step2" class="hidden">
-      <span class="lbl">⭐ Calidad del servicio</span>
+      <span class="lbl">🔧 Servicio recibido</span>
       <div class="stars" id="st-serv"></div>
-      <span class="lbl">📦 Calidad de los productos / repuestos</span>
-      <div class="stars" id="st-prod"></div>
+      <span class="lbl">🏢 Instalaciones</span>
+      <div class="stars" id="st-inst"></div>
+      <span class="lbl">🧼 Limpieza y presentación del personal</span>
+      <div class="stars" id="st-limp"></div>
+      <span class="lbl">📦 Condiciones de entrega</span>
+      <div class="stars" id="st-entr"></div>
+      <span class="lbl">📄 Documentos entregados</span>
+      <div class="stars" id="st-doc"></div>
       <span class="lbl">💬 Comentario (opcional)</span>
       <textarea id="fb-com" rows="3" placeholder="¿Qué podemos mejorar?"></textarea>
       <button class="btn" id="fb-send">Enviar opinión</button>
@@ -85,14 +91,15 @@
     const params = new URLSearchParams(location.search);
     const TENANT = params.get('t') || params.get('tenant') || '';
     const origen = params.get('o') || 'qr';
-    const rate = { serv: 0, prod: 0 };
+    const rate = { serv: 0, inst: 0, limp: 0, entr: 0, doc: 0 };
+    const STARS = [['st-serv','serv'],['st-inst','inst'],['st-limp','limp'],['st-entr','entr'],['st-doc','doc']];
 
     function render(boxId, key) {
       const el = document.getElementById(boxId);
       el.innerHTML = [1,2,3,4,5].map(n => `<button type="button" class="star ${n <= rate[key] ? 'on' : ''}">★</button>`).join('');
       [...el.children].forEach((b, i) => b.addEventListener('click', () => { rate[key] = i + 1; render(boxId, key); }));
     }
-    render('st-serv', 'serv'); render('st-prod', 'prod');
+    STARS.forEach(([box,key]) => render(box, key));
 
     document.getElementById('go2').addEventListener('click', () => {
       document.getElementById('step1').classList.add('hidden');
@@ -112,7 +119,7 @@
     async function enviar() {
       const btn = document.getElementById('fb-send');
       if (!TENANT) { msg.style.color = '#dc2626'; msg.textContent = 'Enlace inválido (falta el taller).'; return; }
-      if (!rate.serv && !rate.prod) { msg.style.color = '#dc2626'; msg.textContent = 'Por favor califica al menos un aspecto.'; return; }
+      if (!Object.values(rate).some(v => v > 0)) { msg.style.color = '#dc2626'; msg.textContent = 'Por favor califica al menos un aspecto.'; return; }
       btn.disabled = true; msg.style.color = '#64748b'; msg.textContent = 'Enviando...';
       try {
         const r = await fetch(`${SUPABASE_URL}/functions/v1/feedback-submit`, {
@@ -126,7 +133,8 @@
             vehiculo: document.getElementById('fb-veh').value.trim(),
             servicio: document.getElementById('fb-serv').value.trim(),
             comentario: document.getElementById('fb-com').value.trim(),
-            rating_servicio: rate.serv, rating_productos: rate.prod
+            rating_servicio: rate.serv, rating_instalaciones: rate.inst,
+            rating_limpieza: rate.limp, rating_entrega: rate.entr, rating_documentos: rate.doc
           })
         });
         const d = await r.json().catch(() => ({}));
