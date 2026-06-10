@@ -85,9 +85,15 @@ function renderLogin(vista='login') {
           <label class="form-label">Tu nombre *</label>
           <input class="form-input" id="nt-admin" placeholder="Juan García">
         </div>
-        <div class="form-group">
-          <label class="form-label">Correo Electrónico *</label>
-          <input class="form-input" id="nt-email" type="email" placeholder="admin@taller.gt">
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Correo Electrónico *</label>
+            <input class="form-input" id="nt-email" type="email" placeholder="admin@taller.gt">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Teléfono *</label>
+            <input class="form-input" id="nt-tel" type="tel" placeholder="5555-5555">
+          </div>
         </div>
         <div class="form-group">
           <label class="form-label">Contraseña *</label>
@@ -100,9 +106,12 @@ function renderLogin(vista='login') {
           </div>
         </div>
 
+        <div id="nt-turnstile" style="margin-bottom:12px"></div>
+
         <div class="alert alert-amber" style="margin-bottom:12px">
           <div class="alert-icon">💡</div>
-          <div class="alert-body" style="font-size:11px">30 días de prueba gratuita · Sin tarjeta de crédito</div>
+          <div class="alert-body" style="font-size:11px">30 días de prueba gratuita · Sin tarjeta de crédito.
+          Tu taller se activa tras una breve revisión (te avisamos por correo).</div>
         </div>
 
         <button class="btn btn-amber" style="width:100%" onclick="loginRegistrarTaller()">
@@ -117,7 +126,7 @@ function renderLogin(vista='login') {
       <div class="login-card">
         <div class="login-logo">
           <h1 style="font-size:28px">🔑 Recuperar acceso</h1>
-          <p>Te enviaremos un enlace a tu correo</p>
+          <p>Por enlace o con un código de 6 dígitos</p>
         </div>
         <div class="form-group">
           <label class="form-label">Correo Electrónico</label>
@@ -125,10 +134,46 @@ function renderLogin(vista='login') {
                  onkeydown="if(event.key==='Enter')loginRecuperarPass()">
         </div>
         <button class="btn btn-amber" style="width:100%" onclick="loginRecuperarPass()">
-          Enviar enlace de recuperación →
+          📧 Enviar enlace de recuperación →
+        </button>
+        <button class="btn btn-cyan" style="width:100%;margin-top:8px" onclick="loginSolicitarOTP()">
+          🔢 Enviarme un código de 6 dígitos
         </button>
         <button class="btn btn-ghost" style="width:100%;margin-top:8px" onclick="renderLogin('login')">
           ← Volver al login
+        </button>
+      </div>`,
+
+    'recovery-otp': `
+      <div class="login-card">
+        <div class="login-logo">
+          <div style="font-size:40px;margin-bottom:8px">🔢</div>
+          <h1 style="font-size:24px;color:var(--amber)">Código de recuperación</h1>
+          <p>Revisa tu correo — vence en 15 minutos</p>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Código (6 dígitos)</label>
+          <input class="form-input mono-sm" id="ro-codigo" inputmode="numeric" maxlength="6" placeholder="000000"
+                 style="font-size:22px;letter-spacing:8px;text-align:center">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Nueva Contraseña *</label>
+          <div style="position:relative">
+            <input class="form-input" id="ro-pass1" type="password" placeholder="Mínimo 8 caracteres" style="padding-right:44px">
+            <button type="button" onclick="UI.togglePass('ro-pass1',this)"
+              style="position:absolute;right:12px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;font-size:16px;color:var(--text3)">👁</button>
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Confirmar Contraseña *</label>
+          <input class="form-input" id="ro-pass2" type="password" placeholder="Repetir contraseña"
+                 onkeydown="if(event.key==='Enter')loginVerificarOTP()">
+        </div>
+        <button class="btn btn-amber" style="width:100%" onclick="loginVerificarOTP()">
+          Cambiar contraseña →
+        </button>
+        <button class="btn btn-ghost" style="width:100%;margin-top:8px" onclick="renderLogin('recovery')">
+          ← Pedir otro código
         </button>
       </div>`,
 
@@ -189,6 +234,28 @@ function renderLogin(vista='login') {
   };
 
   screen.innerHTML = vistas[vista] || vistas.login;
+
+  /* Captcha Turnstile en el registro de talleres (si hay site key) */
+  if (vista === 'nuevo-taller' && typeof TURNSTILE_SITE_KEY !== 'undefined' && TURNSTILE_SITE_KEY) {
+    _cargarTurnstile();
+  }
+}
+
+/* ── TURNSTILE (anti-bots) ────────────────────────── */
+let _turnstileWidget = null;
+function _cargarTurnstile() {
+  const render = () => {
+    const el = document.getElementById('nt-turnstile');
+    if (!el || !window.turnstile) return;
+    el.innerHTML = '';
+    _turnstileWidget = window.turnstile.render('#nt-turnstile', { sitekey: TURNSTILE_SITE_KEY, theme: 'auto' });
+  };
+  if (window.turnstile) { render(); return; }
+  const s = document.createElement('script');
+  s.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
+  s.async = true;
+  s.onload = render;
+  document.head.appendChild(s);
 }
 
 /* ── FUNCIONES DE LOGIN ───────────────────────────── */
@@ -236,18 +303,88 @@ async function loginRegistrarTaller() {
   const nombre = document.getElementById('nt-nombre')?.value.trim();
   const admin  = document.getElementById('nt-admin')?.value.trim();
   const email  = document.getElementById('nt-email')?.value.trim();
+  const tel    = document.getElementById('nt-tel')?.value.trim();
   const pass   = document.getElementById('nt-pass')?.value;
   const nit    = document.getElementById('nt-nit')?.value.trim();
 
-  if (!nombre||!admin||!email||!pass) { UI.toast('Completa todos los campos','error'); return; }
+  if (!nombre||!admin||!email||!tel||!pass) { UI.toast('Completa todos los campos','error'); return; }
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { UI.toast('El correo no es válido','error'); return; }
+  if (!/^\+?[\d\s-]{8,15}$/.test(tel)) { UI.toast('El teléfono no es válido (mínimo 8 dígitos)','error'); return; }
   if (pass.length < 8) { UI.toast('Contraseña mínimo 8 caracteres','error'); return; }
   if (email === 'henry.chinchilla@gmail.com') { UI.toast('Correo reservado','error'); return; }
 
-  UI.toast('Creando taller...','info');
-  const r = await Auth.registrarTaller({ nombre_taller:nombre, nit, nombre:admin, email, password:pass });
-  if (!r.ok) { UI.toast('Error: '+r.error,'error'); return; }
-  UI.toast('¡Taller creado! Bienvenido 🎉');
-  setTimeout(() => App.iniciar(), 800);
+  /* Token del captcha (si Turnstile está activo) */
+  let turnstile_token = null;
+  if (typeof TURNSTILE_SITE_KEY !== 'undefined' && TURNSTILE_SITE_KEY && window.turnstile) {
+    turnstile_token = window.turnstile.getResponse(_turnstileWidget);
+    if (!turnstile_token) { UI.toast('Completa la verificación de seguridad','error'); return; }
+  }
+
+  UI.toast('Registrando tu taller...','info');
+  const { data, error } = await getSB().functions.invoke('registrar-taller', {
+    body: { nombre_taller: nombre, nit, nombre_admin: admin, email, telefono: tel, password: pass, turnstile_token }
+  });
+
+  let msg = data?.error || null;
+  if (error) { try { const j = await error.context.json(); msg = j?.error || error.message; } catch(_) { msg = error.message; } }
+  if (msg) {
+    UI.toast(msg,'error');
+    if (window.turnstile && _turnstileWidget !== null) window.turnstile.reset(_turnstileWidget);
+    return;
+  }
+
+  renderLogin('login');
+  UI.modal('🎉 ¡Taller registrado!', `
+    <div style="text-align:center;padding:8px 4px">
+      <div style="font-size:44px;margin-bottom:10px">🏪</div>
+      <div style="font-weight:800;font-size:16px;margin-bottom:8px">${nombre}</div>
+      <p style="font-size:13px;color:var(--text2);line-height:1.6">
+        Tu registro fue recibido y tu taller está en <b>revisión de activación</b>
+        (normalmente en horas). Te avisaremos a <b>${email}</b> cuando esté listo
+        para iniciar tus <b>30 días de prueba gratis</b>.
+      </p>
+      <div class="modal-footer" style="justify-content:center">
+        <button class="btn btn-amber" onclick="UI.cerrarModal()">Entendido</button>
+      </div>
+    </div>`);
+}
+
+/* ── RECUPERACIÓN POR CÓDIGO OTP ──────────────────── */
+let _otpEmail = null;
+async function loginSolicitarOTP() {
+  const email = document.getElementById('rc-email')?.value.trim();
+  if (!email) { UI.toast('Ingresa tu correo','error'); return; }
+  UI.toast('Enviando código...','info');
+  const { data, error } = await getSB().functions.invoke('recuperar-password', {
+    body: { op:'solicitar', email }
+  });
+  let msg = data?.error || null;
+  if (error) { try { const j = await error.context.json(); msg = j?.error || error.message; } catch(_) { msg = error.message; } }
+  if (msg) { UI.toast(msg,'error'); return; }
+  _otpEmail = email;
+  UI.toast('Si el correo existe, recibirás un código de 6 dígitos ✓');
+  renderLogin('recovery-otp');
+}
+
+async function loginVerificarOTP() {
+  const codigo = document.getElementById('ro-codigo')?.value.trim();
+  const p1 = document.getElementById('ro-pass1')?.value;
+  const p2 = document.getElementById('ro-pass2')?.value;
+  if (!/^\d{6}$/.test(codigo||'')) { UI.toast('Ingresa el código de 6 dígitos','error'); return; }
+  if (!p1 || p1.length < 8) { UI.toast('Mínimo 8 caracteres','error'); return; }
+  if (p1 !== p2) { UI.toast('Las contraseñas no coinciden','error'); return; }
+  if (!_otpEmail) { renderLogin('recovery'); return; }
+
+  UI.toast('Verificando...','info');
+  const { data, error } = await getSB().functions.invoke('recuperar-password', {
+    body: { op:'verificar', email:_otpEmail, codigo, password:p1 }
+  });
+  let msg = data?.error || null;
+  if (error) { try { const j = await error.context.json(); msg = j?.error || error.message; } catch(_) { msg = error.message; } }
+  if (msg) { UI.toast(msg,'error'); return; }
+  UI.toast('¡Contraseña actualizada! Inicia sesión 🎉');
+  _otpEmail = null;
+  renderLogin('login');
 }
 
 async function loginRecuperarPass() {

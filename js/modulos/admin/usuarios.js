@@ -159,6 +159,8 @@ Modulos.usuarios = {
     const avatar = document.getElementById('nu-avatar')?.value||'👤';
     const jefe = document.getElementById('nu-jefe')?.value || null;
     if (!nombre||!email||!rol||!pass) { UI.toast('Completa todos los campos obligatorios','error'); return; }
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { UI.toast('El correo no es válido','error'); return; }
+    if (!tel || !/^\+?[\d\s-]{8,15}$/.test(tel)) { UI.toast('El teléfono es obligatorio (mínimo 8 dígitos) — se usa para recuperar el acceso','error'); return; }
     if (pass.length<8) { UI.toast('Contraseña mínimo 8 caracteres','error'); return; }
     UI.toast('Creando usuario...','info');
     const r = await Auth.crearUsuario({ nombre, email, rol, telefono:tel, avatar, password:pass });

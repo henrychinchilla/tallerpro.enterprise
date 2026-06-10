@@ -11,6 +11,11 @@ const APP = {
   url:      'https://app.cmtelecommgt.com'
 };
 
+/* Site key pública de Cloudflare Turnstile (anti-bots en "Crear nuevo taller").
+   Se crea en dash.cloudflare.com → Turnstile (el secret va en los secrets de
+   Supabase como TURNSTILE_SECRET). Vacía = el captcha no se muestra. */
+const TURNSTILE_SITE_KEY = '';
+
 /* ── SUPABASE ─────────────────────────────────────── */
 const SUPABASE_URL = 'https://oanguccrxleznozumpbi.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9hbmd1Y2NyeGxlem5venVtcGJpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzczODk4MzEsImV4cCI6MjA5Mjk2NTgzMX0.DcQS5AMHV3s4k-tvLlpb8ZWzkODPOSaiQjP1rLJVPAs';

@@ -23,11 +23,22 @@ const App = {
     App.registrarSW();
   },
 
-  /* Pantalla de cuenta suspendida (suscripción/cobro) */
+  /* Pantalla de cuenta suspendida (suscripción/cobro) o pendiente de activación */
   pantallaSuspendido() {
     const main = document.getElementById('page-content') || document.getElementById('app');
     const sb = document.getElementById('sidebar'); if (sb) sb.innerHTML = '';
-    if (main) main.innerHTML = `
+    const pendiente = (Auth.tenant?.notas_admin || '').includes('Pendiente de aprobación');
+    if (main) main.innerHTML = pendiente ? `
+      <div style="min-height:90vh;display:flex;align-items:center;justify-content:center;padding:24px">
+        <div class="card" style="max-width:480px;text-align:center">
+          <div style="font-size:44px">⏳</div>
+          <h2 style="margin:8px 0">Estamos activando tu taller</h2>
+          <p style="color:var(--text2);font-size:14px"><b>${Auth.tenant?.name||'Tu taller'}</b> fue registrado con éxito
+          y está en revisión de activación (normalmente toma unas horas).
+          Te avisaremos a tu correo cuando puedas empezar tus <b>30 días de prueba gratis</b>.</p>
+          <div style="margin-top:16px"><button class="btn btn-ghost" onclick="Auth.logout()">Cerrar sesión</button></div>
+        </div>
+      </div>` : `
       <div style="min-height:90vh;display:flex;align-items:center;justify-content:center;padding:24px">
         <div class="card" style="max-width:480px;text-align:center">
           <div style="font-size:44px">⏸️</div>

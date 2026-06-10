@@ -86,6 +86,13 @@ Deno.serve(async (req) => {
   if (!email || !password || !nombre || !rol) {
     return json({ error: "Faltan campos: email, password, nombre, rol" }, 400);
   }
+  // Todo usuario debe tener email y teléfono VÁLIDOS (recuperación/OTP)
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+    return json({ error: "El correo no es válido" }, 400);
+  }
+  if (!telefono || !/^\+?[\d\s-]{8,15}$/.test(String(telefono).trim())) {
+    return json({ error: "El teléfono es obligatorio y debe ser válido (mínimo 8 dígitos)" }, 400);
+  }
 
   // El tenant destino es el del admin; superadmin puede especificar otro.
   const tenantDestino = esSuperadmin && tenant_id ? tenant_id : perfil?.tenant_id;
