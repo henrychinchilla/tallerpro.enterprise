@@ -311,6 +311,24 @@ const DB = {
     return { data, error };
   },
 
+  /* ── RETENCIONES (ISR / IVA) ──────────────────── */
+  async getRetenciones(ini=null, fin=null) {
+    const m = mesActual();
+    const { data } = await getSB().from('retenciones').select('*')
+      .eq('tenant_id', getTID()).gte('fecha', ini||m.ini).lte('fecha', fin||m.fin)
+      .order('fecha', { ascending:false });
+    return data || [];
+  },
+  async upsertRetencion(fields) {
+    const payload = { ...fields, tenant_id: getTID() };
+    if (fields.id) {
+      const { error } = await getSB().from('retenciones').update(payload).eq('id', fields.id);
+      return { error };
+    }
+    const { data, error } = await getSB().from('retenciones').insert(payload).select().single();
+    return { data, error };
+  },
+
   /* ── COMPRAS ──────────────────────────────────── */
   async getCompras() {
     const { data } = await getSB().from('compras').select('*')

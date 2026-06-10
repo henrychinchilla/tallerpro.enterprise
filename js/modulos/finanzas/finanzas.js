@@ -26,6 +26,7 @@ Modulos.finanzas = {
           <button class="tab-btn ${this._tab==='recurrentes'?'active':''}" onclick="Modulos.finanzas._tab='recurrentes';Modulos.finanzas._renderTab()">🔁 Recurrentes</button>
           <button class="tab-btn ${this._tab==='balance'?'active':''}" onclick="Modulos.finanzas._tab='balance';Modulos.finanzas._renderTab()">📋 Estado de Resultados</button>
           <button class="tab-btn ${this._tab==='libros'?'active':''}" onclick="Modulos.finanzas._tab='libros';Modulos.finanzas._renderTab()">📚 Libro IVA</button>
+          <button class="tab-btn ${this._tab==='retenciones'?'active':''}" onclick="Modulos.finanzas._tab='retenciones';Modulos.finanzas._renderTab()">🧾 Retenciones / ISR</button>
           <button class="tab-btn ${this._tab==='fiscal'?'active':''}" onclick="Modulos.finanzas._tab='fiscal';Modulos.finanzas._renderTab()">🏛️ Fiscal SAT</button>
         </div>
         <div id="fin-content"><div class="empty-state">⏳ Cargando...</div></div>
@@ -348,7 +349,11 @@ Modulos.finanzas = {
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
           <div><span class="badge badge-cyan">${UI.fecha(this._ini)} — ${UI.fecha(this._fin)}</span>
             <span style="font-size:12px;color:var(--text3);margin-left:8px">Régimen: <b>${esPequeno?'Pequeño Contribuyente (5%)':'General (débito − crédito)'}</b></span></div>
-          <button class="btn btn-ghost" onclick="window.print()">🖨️ Imprimir</button>
+          <div style="display:flex;gap:6px;flex-wrap:wrap">
+            <button class="btn btn-ghost" onclick="Modulos.finanzas.exportLibro('ventas')">⬇ Ventas CSV</button>
+            <button class="btn btn-ghost" onclick="Modulos.finanzas.exportLibro('compras')">⬇ Compras CSV</button>
+            <button class="btn btn-ghost" onclick="window.print()">🖨️ Imprimir</button>
+          </div>
         </div>
         <div class="kpi-grid" style="margin-bottom:18px">
           <div class="kpi-card"><div class="kpi-label">IVA Débito (ventas)</div><div class="kpi-val green">${UI.q(ivaDebito)}</div><div class="kpi-trend">base ${UI.q(baseVentas)}</div></div>
@@ -393,6 +398,57 @@ Modulos.finanzas = {
           <div class="alert-body" style="font-size:11px">${esPequeno
             ? 'Como <b>Pequeño Contribuyente</b>, el IVA es el <b>5% sobre las ventas</b> del mes (no se acredita el IVA de compras). Cambia el régimen en la pestaña Fiscal SAT.'
             : 'IVA a pagar = <b>IVA débito (ventas) − IVA crédito (compras)</b> del mes. Las compras alimentan el crédito desde el módulo Compras. Cambia el régimen en Fiscal SAT.'}</div></div>`;
+    }
+
+    else if (this._tab==='retenciones') {
+      const rets = await DB.getRetenciones(this._ini, this._fin);
+      const sum = (tipo,nat) => rets.filter(r=>r.tipo===tipo && r.naturaleza===nat).reduce((s,r)=>s+(Number(r.monto)||0),0);
+      const sufISR = sum('ISR','sufrida'), sufIVA = sum('IVA','sufrida');
+      const efeISR = sum('ISR','efectuada'), efeIVA = sum('IVA','efectuada');
+      const regimen = localStorage.getItem('tp_regimen') || 'general';
+      let isrMes = 0, isrNota = '';
+      if (regimen === 'simplificado') { isrMes = totalIng<=30000 ? totalIng*0.05 : 30000*0.05+(totalIng-30000)*0.07; isrNota = '5% hasta Q30k · 7% excedente'; }
+      else if (regimen === 'utilidades') { isrMes = Math.max(0,utilidad)*0.25; isrNota = '25% sobre utilidad'; }
+      else { isrMes = 0; isrNota = regimen==='pequeno' ? 'Pequeño Contribuyente: sin ISR' : 'Régimen general: sin ISR sobre utilidades'; }
+      const isrNeto = Math.max(0, isrMes - sufISR);
+      const natBadge = n => n==='sufrida' ? '<span class="badge badge-cyan">Sufrida (nos retuvieron)</span>' : '<span class="badge badge-amber">Efectuada (retuvimos)</span>';
+
+      el.innerHTML = `
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:8px">
+          <span class="badge badge-cyan">${UI.fecha(this._ini)} — ${UI.fecha(this._fin)}</span>
+          <div style="display:flex;gap:6px;flex-wrap:wrap">
+            <button class="btn btn-ghost" onclick="Modulos.finanzas.exportRetenciones()">⬇ CSV</button>
+            <button class="btn btn-amber" onclick="Modulos.finanzas.modalRetencion()">＋ Nueva Retención</button>
+          </div>
+        </div>
+        <div class="kpi-grid" style="margin-bottom:8px">
+          <div class="kpi-card"><div class="kpi-label">ISR del mes (estimado)</div><div class="kpi-val amber">${UI.q(isrMes)}</div><div class="kpi-trend">${isrNota}</div></div>
+          <div class="kpi-card"><div class="kpi-label">ISR retenido (sufrido)</div><div class="kpi-val green">${UI.q(sufISR)}</div><div class="kpi-trend">acreditable</div></div>
+          <div class="kpi-card"><div class="kpi-label">ISR neto a pagar</div><div class="kpi-val red">${UI.q(isrNeto)}</div><div class="kpi-trend">ISR − retenciones</div></div>
+          <div class="kpi-card"><div class="kpi-label">IVA retenido (sufrido)</div><div class="kpi-val cyan">${UI.q(sufIVA)}</div><div class="kpi-trend">crédito de IVA</div></div>
+        </div>
+        ${(efeISR>0||efeIVA>0)?`<div class="alert alert-amber" style="margin-bottom:12px"><div class="alert-icon">⚠️</div><div class="alert-body" style="font-size:12px">Retenciones <b>efectuadas</b> por enterar a la SAT: ISR ${UI.q(efeISR)} · IVA ${UI.q(efeIVA)}.</div></div>`:''}
+        <div class="table-wrap"><table class="data-table" style="font-size:12px">
+          <thead><tr><th>Fecha</th><th>Tipo</th><th>Naturaleza</th><th>Documento</th><th>Contraparte</th><th style="text-align:right">Base</th><th style="text-align:right">%</th><th style="text-align:right">Monto</th><th>Acciones</th></tr></thead>
+          <tbody>
+            ${rets.map(r=>`<tr>
+              <td class="mono-sm">${UI.fecha(r.fecha)}</td>
+              <td><span class="badge badge-${r.tipo==='ISR'?'purple':'cyan'}">${r.tipo}</span></td>
+              <td>${natBadge(r.naturaleza)}</td>
+              <td class="mono-sm">${r.documento||'—'}</td>
+              <td>${r.contraparte||'—'}</td>
+              <td class="mono-sm" style="text-align:right">${UI.q(r.base)}</td>
+              <td class="mono-sm" style="text-align:right">${r.porcentaje||0}%</td>
+              <td class="mono-sm text-amber" style="text-align:right"><b>${UI.q(r.monto)}</b></td>
+              <td><div style="display:flex;gap:4px">
+                ${Modulos.btnAccion('editar', `Modulos.finanzas.modalRetencion('${r.id}')`)}
+                ${Modulos.btnAccion('eliminar', `Modulos.eliminarRegistro('retenciones','${r.id}','esta retención',()=>Modulos.finanzas._renderTab())`)}
+              </div></td>
+            </tr>`).join('')||'<tr><td colspan="9" style="text-align:center;padding:18px;color:var(--text3)">Sin retenciones en el mes</td></tr>'}
+          </tbody>
+        </table></div>
+        <div class="alert alert-cyan" style="margin-top:12px"><div class="alert-icon">ℹ️</div>
+          <div class="alert-body" style="font-size:11px"><b>Sufridas</b>: te las retuvo un cliente/agente retenedor (se acreditan a tu ISR/IVA). <b>Efectuadas</b>: tú las retuviste y debes enterarlas a la SAT. El ISR del mes depende del régimen (cámbialo en Fiscal SAT).</div></div>`;
     }
 
     else if (this._tab==='fiscal') {
@@ -583,6 +639,105 @@ Modulos.finanzas = {
     const r = await DB.deleteRegistro(tabla, id);
     if (r) { UI.toast('Eliminado ✓'); this._renderTab(); }
     else UI.toast('Error al eliminar','error');
+  },
+
+  /* ── EXPORTACIÓN DE LIBROS (CSV para el contador) ── */
+  async exportLibro(tipo) {
+    if (tipo === 'ventas') {
+      const facturas = (await DB.getFacturas(this._ini, this._fin)).filter(f=>f.estado!=='anulada');
+      const rows = [['Fecha','Documento','NIT','Cliente','Base','IVA','Total']];
+      facturas.forEach(f => rows.push([
+        f.fecha, f.num || (f.fel_serie?`${f.fel_serie}-${f.fel_numero||''}`:''),
+        f.nit||'CF', f.nombre_receptor||f.clientes?.nombre||'CF',
+        Number(f.subtotal)||0, Number(f.iva)||0, Number(f.total)||0
+      ]));
+      Modulos._descargarCSV(rows, `libro-ventas-${this._ini}.csv`);
+    } else {
+      const compras = (await DB.getCompras()).filter(c=>c.estado!=='anulada' && (c.fecha||'')>=this._ini && (c.fecha||'')<=this._fin);
+      const rows = [['Fecha','Factura','Proveedor','Base','IVA','Total']];
+      compras.forEach(c => rows.push([
+        c.fecha, c.num_factura||c.num||'', c.proveedor_nombre||'',
+        Number(c.subtotal)||0, Number(c.iva)||0, Number(c.total)||0
+      ]));
+      Modulos._descargarCSV(rows, `libro-compras-${this._ini}.csv`);
+    }
+    UI.toast('Libro exportado ✓');
+  },
+
+  async exportRetenciones() {
+    const rets = await DB.getRetenciones(this._ini, this._fin);
+    const rows = [['Fecha','Tipo','Naturaleza','Documento','Contraparte','Base','Porcentaje','Monto']];
+    rets.forEach(r => rows.push([r.fecha, r.tipo, r.naturaleza, r.documento||'', r.contraparte||'', Number(r.base)||0, Number(r.porcentaje)||0, Number(r.monto)||0]));
+    Modulos._descargarCSV(rows, `retenciones-${this._ini}.csv`);
+    UI.toast('Retenciones exportadas ✓');
+  },
+
+  /* ── RETENCIONES ──────────────────────────────── */
+  async modalRetencion(id=null) {
+    const r = id ? (await DB.getRetenciones('2000-01-01','2999-12-31')).find(x=>x.id===id)||{} : {};
+    UI.modal(`${id?'✏️ Editar':'＋ Nueva'} Retención`, `
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Impuesto *</label>
+          <select class="form-select" id="ret-tipo">${['ISR','IVA'].map(t=>`<option ${r.tipo===t?'selected':''}>${t}</option>`).join('')}</select></div>
+        <div class="form-group"><label class="form-label">Naturaleza *</label>
+          <select class="form-select" id="ret-nat">
+            <option value="sufrida" ${r.naturaleza==='sufrida'?'selected':''}>Sufrida (nos retuvieron)</option>
+            <option value="efectuada" ${r.naturaleza==='efectuada'?'selected':''}>Efectuada (retuvimos)</option>
+          </select></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Fecha</label>
+          <input class="form-input" id="ret-fecha" type="date" value="${r.fecha||new Date().toISOString().slice(0,10)}"></div>
+        <div class="form-group"><label class="form-label">Documento / Constancia</label>
+          <input class="form-input" id="ret-doc" value="${r.documento||''}" placeholder="No. factura o constancia"></div>
+      </div>
+      <div class="form-group"><label class="form-label">Contraparte</label>
+        <input class="form-input" id="ret-contra" value="${(r.contraparte||'').replace(/"/g,'&quot;')}" placeholder="Cliente / proveedor / agente"></div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Base (Q)</label>
+          <input class="form-input" id="ret-base" type="number" min="0" step="0.01" value="${r.base||''}" oninput="Modulos.finanzas._calcRet()"></div>
+        <div class="form-group"><label class="form-label">Porcentaje %</label>
+          <input class="form-input" id="ret-pct" type="number" min="0" step="0.01" value="${r.porcentaje||''}" oninput="Modulos.finanzas._calcRet()"></div>
+      </div>
+      <div class="form-group"><label class="form-label">Monto retenido (Q) *</label>
+        <input class="form-input" id="ret-monto" type="number" min="0" step="0.01" value="${r.monto||''}" style="font-weight:800;color:var(--amber)"></div>
+      <div class="form-group"><label class="form-label">Notas</label>
+        <textarea class="form-input" id="ret-notas" rows="2">${r.notas||''}</textarea></div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" onclick="UI.cerrarModal()">Cancelar</button>
+        <button class="btn btn-amber" onclick="Modulos.finanzas.guardarRetencion('${id||''}')">${id?'Guardar':'Registrar'}</button>
+      </div>`);
+  },
+
+  _calcRet() {
+    const base = parseFloat(document.getElementById('ret-base')?.value)||0;
+    const pct  = parseFloat(document.getElementById('ret-pct')?.value)||0;
+    if (pct > 0) {
+      const m = document.getElementById('ret-monto');
+      if (m) m.value = (Math.round(base*pct/100*100)/100).toFixed(2);
+    }
+  },
+
+  async guardarRetencion(id='') {
+    const base = parseFloat(document.getElementById('ret-base')?.value)||0;
+    const pct  = parseFloat(document.getElementById('ret-pct')?.value)||0;
+    let monto  = parseFloat(document.getElementById('ret-monto')?.value)||0;
+    if (!monto && pct) monto = Math.round(base*pct/100*100)/100;
+    if (monto <= 0) { UI.toast('Ingresa el monto (o base y porcentaje)','error'); return; }
+    const fields = {
+      tipo:       document.getElementById('ret-tipo')?.value||'ISR',
+      naturaleza: document.getElementById('ret-nat')?.value||'sufrida',
+      fecha:      document.getElementById('ret-fecha')?.value,
+      documento:  document.getElementById('ret-doc')?.value||null,
+      contraparte:document.getElementById('ret-contra')?.value||null,
+      base, porcentaje: pct, monto,
+      notas:      document.getElementById('ret-notas')?.value||null
+    };
+    if (id) fields.id = id;
+    const { error } = await DB.upsertRetencion(fields);
+    if (error) { UI.toast('Error: '+error.message,'error'); return; }
+    UI.cerrarModal(); UI.toast(id?'Retención actualizada ✓':'Retención registrada ✓');
+    this._tab = 'retenciones'; this._renderTab();
   },
 
   /* ── VIÁTICOS ─────────────────────────────────── */
