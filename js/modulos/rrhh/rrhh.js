@@ -1397,7 +1397,7 @@ Modulos.rrhh = {
               background: #fff;
             }
             .carne-front .header-band {
-              background: linear-gradient(135deg, #1e293b, #0f172a);
+              background: linear-gradient(135deg, #1e3a8a, #172554);
               height: 70px;
               display: flex;
               flex-direction: column;
@@ -1540,17 +1540,17 @@ Modulos.rrhh = {
               flex-direction: column;
               padding: 20px;
               justify-content: space-between;
-              background: radial-gradient(circle at 100% 100%, #1e293b, #0f172a);
-              color: #f8fafc;
-              border: 1px solid #0f172a;
+              background: #ffffff;
+              color: #1f2937;
+              border: 1px solid #e5e7eb;
             }
             .carne-back .back-title {
               font-size: 11px;
               font-weight: 800;
               text-transform: uppercase;
               letter-spacing: 0.1em;
-              color: #f59e0b;
-              border-bottom: 1px solid #334155;
+              color: #d97706;
+              border-bottom: 1px solid #e5e7eb;
               padding-bottom: 6px;
               text-align: center;
             }
@@ -1565,24 +1565,24 @@ Modulos.rrhh = {
             .carne-back .back-section-title {
               font-size: 9px;
               font-weight: 700;
-              color: #94a3b8;
+              color: #6b7280;
               text-transform: uppercase;
               margin-bottom: 4px;
             }
             .carne-back .back-data {
               font-size: 10px;
               line-height: 1.4;
-              background: rgba(255,255,255,0.05);
+              background: #f8fafc;
               border-radius: 6px;
               padding: 8px;
-              border: 1px solid rgba(255,255,255,0.08);
+              border: 1px solid #e5e7eb;
             }
             .carne-back .back-disclaimer {
               font-size: 7.5px;
-              color: #94a3b8;
+              color: #6b7280;
               text-align: center;
               line-height: 1.3;
-              border-top: 1px solid #334155;
+              border-top: 1px solid #e5e7eb;
               padding-top: 8px;
             }
             .carne-back .back-signature {
@@ -1593,12 +1593,12 @@ Modulos.rrhh = {
             }
             .carne-back .sig-line {
               width: 120px;
-              border-top: 1px solid #94a3b8;
+              border-top: 1px solid #9ca3af;
               margin-top: 20px;
             }
             .carne-back .sig-text {
               font-size: 7px;
-              color: #94a3b8;
+              color: #6b7280;
               margin-top: 3px;
               text-transform: uppercase;
             }

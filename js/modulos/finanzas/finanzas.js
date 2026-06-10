@@ -25,6 +25,7 @@ Modulos.finanzas = {
           <button class="tab-btn ${this._tab==='viaticos'?'active':''}" onclick="Modulos.finanzas._tab='viaticos';Modulos.finanzas._renderTab()">🚗 Viáticos</button>
           <button class="tab-btn ${this._tab==='recurrentes'?'active':''}" onclick="Modulos.finanzas._tab='recurrentes';Modulos.finanzas._renderTab()">🔁 Recurrentes</button>
           <button class="tab-btn ${this._tab==='balance'?'active':''}" onclick="Modulos.finanzas._tab='balance';Modulos.finanzas._renderTab()">📋 Estado de Resultados</button>
+          <button class="tab-btn ${this._tab==='libros'?'active':''}" onclick="Modulos.finanzas._tab='libros';Modulos.finanzas._renderTab()">📚 Libro IVA</button>
           <button class="tab-btn ${this._tab==='fiscal'?'active':''}" onclick="Modulos.finanzas._tab='fiscal';Modulos.finanzas._renderTab()">🏛️ Fiscal SAT</button>
         </div>
         <div id="fin-content"><div class="empty-state">⏳ Cargando...</div></div>
@@ -330,6 +331,68 @@ Modulos.finanzas = {
             <span class="${utilNeta>=0?'text-amber':'text-red'}">${UI.q(utilNeta)}</span>
           </div>
         </div>`;
+    }
+
+    else if (this._tab==='libros') {
+      const compras = (await DB.getCompras())
+        .filter(c => c.estado !== 'anulada' && (c.fecha||'') >= this._ini && (c.fecha||'') <= this._fin);
+      const ivaDebito  = facturas.reduce((s,f)=>s+(Number(f.iva)||0),0);
+      const baseVentas = facturas.reduce((s,f)=>s+(Number(f.subtotal)||0),0);
+      const ivaCredito = compras.reduce((s,c)=>s+(Number(c.iva)||0),0);
+      const baseCompras= compras.reduce((s,c)=>s+(Number(c.subtotal)||0),0);
+      const regimen = localStorage.getItem('tp_regimen') || 'general';
+      const esPequeno = regimen === 'pequeno';
+      const ivaPagar = esPequeno ? totalFact * 0.05 : (ivaDebito - ivaCredito);
+
+      el.innerHTML = `
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+          <div><span class="badge badge-cyan">${UI.fecha(this._ini)} — ${UI.fecha(this._fin)}</span>
+            <span style="font-size:12px;color:var(--text3);margin-left:8px">Régimen: <b>${esPequeno?'Pequeño Contribuyente (5%)':'General (débito − crédito)'}</b></span></div>
+          <button class="btn btn-ghost" onclick="window.print()">🖨️ Imprimir</button>
+        </div>
+        <div class="kpi-grid" style="margin-bottom:18px">
+          <div class="kpi-card"><div class="kpi-label">IVA Débito (ventas)</div><div class="kpi-val green">${UI.q(ivaDebito)}</div><div class="kpi-trend">base ${UI.q(baseVentas)}</div></div>
+          ${esPequeno?'':`<div class="kpi-card"><div class="kpi-label">IVA Crédito (compras)</div><div class="kpi-val cyan">${UI.q(ivaCredito)}</div><div class="kpi-trend">base ${UI.q(baseCompras)}</div></div>`}
+          <div class="kpi-card"><div class="kpi-label">IVA a pagar del mes</div><div class="kpi-val ${ivaPagar>=0?'red':'green'}">${UI.q(ivaPagar)}</div><div class="kpi-trend">${esPequeno?'5% sobre ventas':'débito − crédito'}</div></div>
+        </div>
+
+        <div class="card-sub mb-3">🧾 Libro de Ventas (facturación del mes)</div>
+        <div class="table-wrap" style="margin-bottom:20px"><table class="data-table" style="font-size:12px">
+          <thead><tr><th>Fecha</th><th>Documento</th><th>NIT</th><th>Cliente</th><th style="text-align:right">Base</th><th style="text-align:right">IVA</th><th style="text-align:right">Total</th></tr></thead>
+          <tbody>
+            ${facturas.map(f=>`<tr>
+              <td class="mono-sm">${UI.fecha(f.fecha)}</td>
+              <td class="mono-sm">${f.num||(f.fel_serie?`${f.fel_serie}-${f.fel_numero||''}`:'—')}</td>
+              <td class="mono-sm">${f.nit||'CF'}</td>
+              <td>${f.nombre_receptor||f.clientes?.nombre||'CF'}</td>
+              <td class="mono-sm" style="text-align:right">${UI.q(f.subtotal)}</td>
+              <td class="mono-sm" style="text-align:right">${UI.q(f.iva)}</td>
+              <td class="mono-sm text-green" style="text-align:right"><b>${UI.q(f.total)}</b></td>
+            </tr>`).join('')||'<tr><td colspan="7" style="text-align:center;padding:18px;color:var(--text3)">Sin ventas en el mes</td></tr>'}
+          </tbody>
+          ${facturas.length?`<tfoot><tr style="font-weight:800;border-top:2px solid var(--border)"><td colspan="4">TOTALES</td><td class="mono-sm" style="text-align:right">${UI.q(baseVentas)}</td><td class="mono-sm" style="text-align:right">${UI.q(ivaDebito)}</td><td class="mono-sm text-green" style="text-align:right">${UI.q(totalFact)}</td></tr></tfoot>`:''}
+        </table></div>
+
+        <div class="card-sub mb-3">🛒 Libro de Compras (del mes)</div>
+        <div class="table-wrap"><table class="data-table" style="font-size:12px">
+          <thead><tr><th>Fecha</th><th>Factura</th><th>Proveedor</th><th style="text-align:right">Base</th><th style="text-align:right">IVA</th><th style="text-align:right">Total</th></tr></thead>
+          <tbody>
+            ${compras.map(c=>`<tr>
+              <td class="mono-sm">${UI.fecha(c.fecha)}</td>
+              <td class="mono-sm">${c.num_factura||c.num||'—'}</td>
+              <td>${c.proveedor_nombre||'—'}</td>
+              <td class="mono-sm" style="text-align:right">${UI.q(c.subtotal)}</td>
+              <td class="mono-sm" style="text-align:right">${UI.q(c.iva)}</td>
+              <td class="mono-sm text-red" style="text-align:right"><b>${UI.q(c.total)}</b></td>
+            </tr>`).join('')||'<tr><td colspan="6" style="text-align:center;padding:18px;color:var(--text3)">Sin compras en el mes</td></tr>'}
+          </tbody>
+          ${compras.length?`<tfoot><tr style="font-weight:800;border-top:2px solid var(--border)"><td colspan="3">TOTALES</td><td class="mono-sm" style="text-align:right">${UI.q(baseCompras)}</td><td class="mono-sm" style="text-align:right">${UI.q(ivaCredito)}</td><td class="mono-sm text-red" style="text-align:right">${UI.q(compras.reduce((s,c)=>s+(Number(c.total)||0),0))}</td></tr></tfoot>`:''}
+        </table></div>
+
+        <div class="alert alert-cyan" style="margin-top:14px"><div class="alert-icon">ℹ️</div>
+          <div class="alert-body" style="font-size:11px">${esPequeno
+            ? 'Como <b>Pequeño Contribuyente</b>, el IVA es el <b>5% sobre las ventas</b> del mes (no se acredita el IVA de compras). Cambia el régimen en la pestaña Fiscal SAT.'
+            : 'IVA a pagar = <b>IVA débito (ventas) − IVA crédito (compras)</b> del mes. Las compras alimentan el crédito desde el módulo Compras. Cambia el régimen en Fiscal SAT.'}</div></div>`;
     }
 
     else if (this._tab==='fiscal') {

@@ -162,7 +162,7 @@ const POS = {
             <button class="btn btn-ghost btn-sm" onclick="POS.confirmarSalida()">⏻ Salir</button>
           </div>
         </header>
-        <div style="flex:1;display:grid;grid-template-columns:1fr 380px;gap:0;overflow:hidden">
+        <div style="flex:1;display:grid;grid-template-columns:1fr 480px;gap:0;overflow:hidden">
           <!-- Catálogo -->
           <div style="padding:14px;overflow-y:auto">
             <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
@@ -201,7 +201,7 @@ const POS = {
     const cont = document.getElementById('pos-grid');
     if (!cont) return;
     const items = this._filtrados();
-    cont.innerHTML = `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px">
+    cont.innerHTML = `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:9px">
       ${items.map(p=>{
         const sinStock = (p.stock||0) <= 0;
         const thumb = p.imagen_url
@@ -265,50 +265,50 @@ const POS = {
         <div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--border)">
           ${l.imagen_url?`<img src="${l.imagen_url}" style="width:38px;height:38px;border-radius:6px;object-fit:cover;flex-shrink:0">`:'<div style="width:38px;height:38px;border-radius:6px;background:var(--surface3,#222);display:flex;align-items:center;justify-content:center;flex-shrink:0">📦</div>'}
           <div style="flex:1;min-width:0">
-            <div style="font-size:12px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${l.nombre}</div>
-            <div style="font-size:11px;color:var(--text3)">${UI.q(l.precio)} c/u</div>
+            <div style="font-size:14px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${l.nombre}</div>
+            <div style="font-size:12.5px;color:var(--text3)">${UI.q(l.precio)} c/u</div>
           </div>
-          <div style="display:flex;align-items:center;gap:4px">
-            <button class="btn btn-ghost btn-sm" style="padding:2px 8px" onclick="POS.cambiarCant('${l.id}',-1)">−</button>
-            <span style="min-width:22px;text-align:center;font-weight:700">${l.cant}</span>
-            <button class="btn btn-ghost btn-sm" style="padding:2px 8px" onclick="POS.cambiarCant('${l.id}',1)">+</button>
+          <div style="display:flex;align-items:center;gap:6px">
+            <button class="btn btn-ghost btn-sm" style="padding:4px 11px;font-size:17px;line-height:1" onclick="POS.cambiarCant('${l.id}',-1)">−</button>
+            <span style="min-width:28px;text-align:center;font-weight:800;font-size:16px">${l.cant}</span>
+            <button class="btn btn-ghost btn-sm" style="padding:4px 11px;font-size:17px;line-height:1" onclick="POS.cambiarCant('${l.id}',1)">+</button>
           </div>
-          <div style="width:74px;text-align:right;font-weight:700" class="text-amber">${UI.q(l.cant*l.precio)}</div>
-          <button class="btn btn-ghost btn-sm" style="padding:2px 6px" onclick="POS.quitar('${l.id}')">🗑️</button>
+          <div style="width:92px;text-align:right;font-weight:800;font-size:15px" class="text-amber">${UI.q(l.cant*l.precio)}</div>
+          <button class="btn btn-ghost btn-sm" style="padding:4px 7px" onclick="POS.quitar('${l.id}')">🗑️</button>
         </div>`).join('') : '<div class="text-muted" style="padding:20px;text-align:center;font-size:13px">Toca un producto para agregarlo</div>'}`;
 
     const t = this._totales();
     const cli = this._cliente;
     const puntosCli = cli?.programa_puntos ? (Number(cli.puntos_saldo)||0) : null;
     tot.innerHTML = `
-      <div style="margin-bottom:8px">
-        <button class="btn btn-ghost btn-sm" style="width:100%;text-align:left" onclick="POS.modalCliente()">
+      <div style="margin-bottom:10px">
+        <button class="btn btn-ghost" style="width:100%;text-align:left;font-size:14px;padding:10px 12px" onclick="POS.modalCliente()">
           👤 ${cli ? cli.nombre : 'Consumidor Final (CF)'}${puntosCli!==null?` · ${puntosCli} pts`:''}
         </button>
       </div>
       ${puntosCli!==null && puntosCli>=10 ? `
-      <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;font-size:12px">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;font-size:14px">
         <span>Canjear puntos:</span>
-        <input class="form-input" style="width:90px;padding:4px 8px" type="number" min="0" step="10" max="${Math.min(puntosCli, t.bruto*10)}"
+        <input class="form-input" style="width:110px;padding:8px 10px;font-size:15px" type="number" min="0" step="10" max="${Math.min(puntosCli, t.bruto*10)}"
                value="${this._canje}" onchange="POS.setCanje(this.value)">
         <span class="text-muted">= ${UI.q(this._canje/10)}</span>
       </div>`:''}
-      <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;font-size:12px">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;font-size:14px">
         <span>Descuento Q:</span>
-        <input class="form-input" style="width:90px;padding:4px 8px" type="number" min="0" step="0.01"
+        <input class="form-input" style="width:110px;padding:8px 10px;font-size:15px" type="number" min="0" step="0.01"
                value="${this._descuento}" onchange="POS.setDescuento(this.value)">
-        <select class="form-select" style="flex:1;padding:4px 8px" onchange="POS._metodo=this.value">
+        <select class="form-select" style="flex:1;padding:8px 10px;font-size:15px" onchange="POS._metodo=this.value">
           ${['Efectivo','Tarjeta','Transferencia','Cheque','Depósito'].map(m=>`<option ${this._metodo===m?'selected':''}>${m}</option>`).join('')}
         </select>
       </div>
-      <label style="display:flex;align-items:center;gap:6px;font-size:12px;margin-bottom:8px;cursor:pointer">
-        <input type="checkbox" id="pos-envio-on"> 🚚 Programar envío al cliente
+      <label style="display:flex;align-items:center;gap:8px;font-size:14px;margin-bottom:10px;cursor:pointer">
+        <input type="checkbox" id="pos-envio-on" style="width:17px;height:17px"> 🚚 Programar envío al cliente
       </label>
-      ${t.desc>0?`<div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text3)"><span>Descuento</span><span>− ${UI.q(t.desc)}</span></div>`:''}
-      <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text3)"><span>Subtotal</span><span>${UI.q(t.subtotal)}</span></div>
-      <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text3)"><span>IVA (12%)</span><span>${UI.q(t.iva)}</span></div>
-      <div style="display:flex;justify-content:space-between;font-size:20px;font-weight:800;margin:6px 0 10px"><span>Total</span><span class="text-amber">${UI.q(t.total)}</span></div>
-      <button class="btn btn-amber" style="width:100%;font-size:15px;padding:12px" onclick="POS.cobrar()" ${this._cart.length?'':'disabled'}>💵 Cobrar ${UI.q(t.total)}</button>`;
+      ${t.desc>0?`<div style="display:flex;justify-content:space-between;font-size:14px;color:var(--text3);padding:2px 0"><span>Descuento</span><span>− ${UI.q(t.desc)}</span></div>`:''}
+      <div style="display:flex;justify-content:space-between;font-size:15px;color:var(--text2);padding:3px 0"><span>Subtotal</span><span>${UI.q(t.subtotal)}</span></div>
+      <div style="display:flex;justify-content:space-between;font-size:15px;color:var(--text2);padding:3px 0"><span>IVA (12%)</span><span>${UI.q(t.iva)}</span></div>
+      <div style="display:flex;justify-content:space-between;font-size:30px;font-weight:800;margin:8px 0 12px"><span>Total</span><span class="text-amber">${UI.q(t.total)}</span></div>
+      <button class="btn btn-amber" style="width:100%;font-size:19px;padding:16px;font-weight:800" onclick="POS.cobrar()" ${this._cart.length?'':'disabled'}>💵 Cobrar ${UI.q(t.total)}</button>`;
   },
 
   setDescuento(v) { this._descuento = Math.max(0, parseFloat(v)||0); this._pintarCart(); },
