@@ -8,7 +8,7 @@ const App = {
   _subActivo: null,   // sub-sección activa del módulo actual (para el submenú lateral)
 
   /* ── INICIAR APP ──────────────────────────────── */
-  iniciar() {
+  async iniciar() {
     document.getElementById('login-screen')?.style.setProperty('display','none');
     const appEl = document.getElementById('app');
     if (appEl) appEl.classList.add('visible');
