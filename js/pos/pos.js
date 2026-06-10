@@ -152,7 +152,7 @@ const POS = {
     const root = document.getElementById('pos-root');
     root.innerHTML = `
       <div style="display:flex;flex-direction:column;height:100vh">
-        <header style="display:flex;align-items:center;gap:12px;padding:10px 16px;background:var(--bg-surface,#111);border-bottom:1px solid var(--border)">
+        <header style="display:flex;align-items:center;gap:12px;padding:10px 16px;background:var(--surface);border-bottom:1px solid var(--border)">
           <div style="font-family:'Bebas Neue',sans-serif;font-size:22px;letter-spacing:1px">🛒 POS</div>
           <div style="font-size:12px;color:var(--text3)">${Auth.tenant?.name||''}</div>
           <div style="margin-left:auto;display:flex;gap:6px;flex-wrap:wrap">
@@ -176,7 +176,7 @@ const POS = {
             <div id="pos-grid"></div>
           </div>
           <!-- Carrito -->
-          <div style="border-left:1px solid var(--border);background:var(--bg-surface,#111);display:flex;flex-direction:column">
+          <div style="border-left:1px solid var(--border);background:var(--surface);display:flex;flex-direction:column">
             <div id="pos-cart" style="flex:1;overflow-y:auto;padding:14px"></div>
             <div id="pos-totales" style="border-top:1px solid var(--border);padding:14px"></div>
           </div>
