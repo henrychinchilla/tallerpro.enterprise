@@ -119,6 +119,7 @@ Deno.serve(async (req) => {
     slug, name: nombreTaller, nit, email, tel: telefono,
     plan: "empresarial", precio_mensual: 0,
     suscripcion_vence: vence, ciclo_pago: "mensual",
+    ai_limite_mes: 50,   // cuota de Beto en el trial (anzuelo; cliente pagando = 300)
     active: false,
     notas_admin: "Pendiente de aprobación (auto-registro). Prueba gratis 30 días.",
   }).select().single();
