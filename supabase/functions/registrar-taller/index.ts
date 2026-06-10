@@ -113,12 +113,13 @@ Deno.serve(async (req) => {
   const slug = nombreTaller.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "")
     .replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40)
     + "-" + Date.now().toString(36);
-  const vence = new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10);
 
+  // El trial NO fija fecha de vencimiento aquí: los 30 días arrancan con el
+  // PRIMER USO (App._iniciarTrialSiAplica), no mientras espera aprobación.
   const { data: tenant, error: tErr } = await admin.from("tenants").insert({
     slug, name: nombreTaller, nit, email, tel: telefono,
     plan: "empresarial", precio_mensual: 0,
-    suscripcion_vence: vence, ciclo_pago: "mensual",
+    suscripcion_vence: null, ciclo_pago: "mensual",
     ai_limite_mes: 50,   // cuota de Beto en el trial (anzuelo; cliente pagando = 300)
     active: false,
     notas_admin: "Pendiente de aprobación (auto-registro). Prueba gratis 30 días.",

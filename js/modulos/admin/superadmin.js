@@ -256,7 +256,11 @@ Modulos.superadmin = {
       </div>
       <div class="form-row">
         <div class="form-group"><label class="form-label">Suscripción vence</label>
-          <input class="form-input" id="sa-vence" type="date" value="${t.suscripcion_vence||''}"></div>
+          <div style="display:flex;gap:6px">
+            <input class="form-input" id="sa-vence" type="date" value="${t.suscripcion_vence||''}" style="flex:1">
+            <button class="btn btn-sm btn-cyan" title="Convertir a cliente: regala los días que quedan del mes (gracia) y cobra desde el mes siguiente completo" onclick="Modulos.superadmin._aplicarGracia()">🎁</button>
+          </div>
+          <div style="font-size:10px;color:var(--text3);margin-top:3px">🎁 = gracia: resto del mes gratis + 1er mes completo (vence fin del mes siguiente)</div></div>
         <div class="form-group"><label class="form-label">Ciclo</label>
           <select class="form-select" id="sa-ciclo">
             ${['mensual','trimestral','anual'].map(c=>`<option ${t.ciclo_pago===c?'selected':''}>${c}</option>`).join('')}
@@ -282,6 +286,20 @@ Modulos.superadmin = {
         <button class="btn btn-ghost" onclick="UI.cerrarModal()">Cancelar</button>
         <button class="btn btn-amber" onclick="Modulos.superadmin.guardarTaller('${id}')">Guardar</button>
       </div>`, '600px');
+  },
+
+  /* 🎁 Conversión con gracia: si la demo termina (o terminó) a media mes,
+     los días restantes de ESE mes son gratis y el primer mes cobrado es el
+     siguiente completo → vence = último día del mes siguiente. */
+  _aplicarGracia() {
+    const inp = document.getElementById('sa-vence');
+    if (!inp) return;
+    const base = inp.value ? new Date(inp.value + 'T00:00:00') : new Date();
+    const hoy = new Date();
+    const ref = base > hoy ? base : hoy;            // demo ya vencida → contar desde hoy
+    const fin = new Date(ref.getFullYear(), ref.getMonth() + 2, 0); // último día del mes siguiente
+    inp.value = `${fin.getFullYear()}-${String(fin.getMonth()+1).padStart(2,'0')}-${String(fin.getDate()).padStart(2,'0')}`;
+    UI.toast(`Gracia aplicada: cobra desde el mes siguiente — vence ${UI.fecha(inp.value)} ✓`,'info');
   },
 
   _aplicarPlanModulos(plan) {

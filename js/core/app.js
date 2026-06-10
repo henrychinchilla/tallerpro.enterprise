@@ -19,8 +19,25 @@ const App = {
     }
     App.renderSidebar();
     App.navegarA('dashboard');
+    await App._iniciarTrialSiAplica();
     App.checkSuscripcion();
     App.registrarSW();
+  },
+
+  /* El trial de 30 días arranca con el PRIMER USO del taller (no al
+     registrarse ni mientras espera aprobación): si es un taller de
+     prueba sin fecha de vencimiento, se fija hoy + 30. */
+  async _iniciarTrialSiAplica() {
+    const t = Auth.tenant;
+    if (!t || t.suscripcion_vence || t.active === false) return;
+    if (Auth.user?.rol === 'superadmin') return;
+    if (!(t.notas_admin || '').includes('Prueba gratis 30 días')) return;
+    const vence = new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10);
+    const ok = await DB.updateTenant({ suscripcion_vence: vence });
+    if (ok) {
+      t.suscripcion_vence = vence;
+      UI.toast(`🎉 ¡Tu prueba gratis de 30 días inició hoy! Vence el ${UI.fecha(vence)}`, 'info', 6000);
+    }
   },
 
   /* Pantalla de cuenta suspendida (suscripción/cobro) o pendiente de activación */
