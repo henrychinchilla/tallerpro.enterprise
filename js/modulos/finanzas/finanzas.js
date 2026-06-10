@@ -13,8 +13,9 @@ Modulos.finanzas = {
       <div class="page-header">
         <div><h1 class="page-title">💰 Finanzas</h1></div>
         <div class="page-actions">
-          <input type="date" class="form-input" style="width:140px" value="${this._ini}" onchange="Modulos.finanzas._ini=this.value;Modulos.finanzas._renderTab()">
-          <input type="date" class="form-input" style="width:140px" value="${this._fin}" onchange="Modulos.finanzas._fin=this.value;Modulos.finanzas._renderTab()">
+          <input type="month" class="form-input" style="width:150px" value="${this._ini.slice(0,7)}" title="Ver un mes" onchange="Modulos.finanzas._setMes(this.value)">
+          <input type="date" class="form-input" style="width:140px" value="${this._ini}" title="Desde" onchange="Modulos.finanzas._ini=this.value;Modulos.finanzas._renderTab()">
+          <input type="date" class="form-input" style="width:140px" value="${this._fin}" title="Hasta" onchange="Modulos.finanzas._fin=this.value;Modulos.finanzas._renderTab()">
         </div>
       </div>
       <div class="page-body">
@@ -32,6 +33,15 @@ Modulos.finanzas = {
         <div id="fin-content"><div class="empty-state">⏳ Cargando...</div></div>
       </div>`;
     await this._renderTab();
+  },
+
+  /* Fija el periodo a un mes completo (YYYY-MM) y re-dibuja */
+  _setMes(ym) {
+    if (!ym) return;
+    const [y,m] = ym.split('-').map(Number);
+    this._ini = `${ym}-01`;
+    this._fin = new Date(y, m, 0).toISOString().slice(0,10);
+    this.render();
   },
 
   async _getData() {

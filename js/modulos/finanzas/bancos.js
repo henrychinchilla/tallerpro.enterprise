@@ -83,51 +83,85 @@ Modulos.bancos = {
     return `•••• •••• •••• ${last}`;
   },
 
-  async verMovimientos(bancoId) {
+  async verMovimientos(bancoId, mes=null) {
     this._bancoActivo = bancoId;
     const banco = this._bancos.find(b=>b.id===bancoId);
-    const movs = await DB.getMovimientosBanco(bancoId);
-    const totalEntradas = movs.filter(m=>m.tipo==='entrada'||m.tipo==='deposito').reduce((s,m)=>s+(m.monto||0),0);
-    const totalSalidas  = movs.filter(m=>m.tipo==='salida'||m.tipo==='retiro').reduce((s,m)=>s+(m.monto||0),0);
-    const saldo = (banco.saldo_inicial||0) + totalEntradas - totalSalidas;
+    if (!banco) { this.render(); return; }
+    const esEntrada = t => t==='entrada'||t==='deposito';
+
+    /* Mes seleccionado (YYYY-MM); por defecto el mes actual */
+    const now = new Date();
+    this._mesBanco = mes || this._mesBanco || `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+    const [y,mm] = this._mesBanco.split('-').map(Number);
+    const iniMes = `${this._mesBanco}-01`;
+    const finMes = new Date(y, mm, 0).toISOString().slice(0,10);
+    const mesLabel = new Date(y, mm-1, 1).toLocaleDateString('es-GT',{month:'long',year:'numeric'});
+
+    /* Todos los movimientos para poder arrastrar el saldo */
+    const todos = await DB.getMovimientosBanco(bancoId);
+
+    /* Saldo inicial del mes = saldo inicial de la cuenta + neto de TODO lo anterior al mes */
+    const netoPrevios = todos
+      .filter(m => (m.fecha||'') < iniMes)
+      .reduce((s,m)=> s + (esEntrada(m.tipo)? (m.monto||0) : -(m.monto||0)), 0);
+    const saldoInicialMes = (banco.saldo_inicial||0) + netoPrevios;
+
+    /* Movimientos del mes y running balance (de antiguo a reciente) */
+    const movsMes = todos.filter(m => (m.fecha||'') >= iniMes && (m.fecha||'') <= finMes);
+    const entradasMes = movsMes.filter(m=>esEntrada(m.tipo)).reduce((s,m)=>s+(m.monto||0),0);
+    const salidasMes  = movsMes.filter(m=>!esEntrada(m.tipo)).reduce((s,m)=>s+(m.monto||0),0);
+    const saldoFinalMes = saldoInicialMes + entradasMes - salidasMes;
+    const utilMes = entradasMes - salidasMes;
+
+    const movsAsc = [...movsMes].sort((a,b)=> (a.fecha||'').localeCompare(b.fecha||'') || (a.created_at||'').localeCompare(b.created_at||''));
+    let run = saldoInicialMes;
+    movsAsc.forEach(m => { run += esEntrada(m.tipo)? (m.monto||0) : -(m.monto||0); m._saldo = run; });
+    const movs = movsAsc.reverse();  // mostrar reciente arriba
 
     const el = document.getElementById('page-content');
     el.innerHTML = `
       <div class="page-header">
         <div>
           <h1 class="page-title">🏦 ${banco.nombre}</h1>
-          <p class="page-subtitle">// ${banco.banco} · ${banco.numero||'—'}</p>
+          <p class="page-subtitle">// ${banco.banco} · ${banco.numero||'—'} · Saldo actual total: <b>${UI.q(banco._saldo!=null?banco._saldo:saldoFinalMes)}</b></p>
         </div>
         <div class="page-actions">
           <button class="btn btn-ghost" onclick="Modulos.bancos.render()">← Volver</button>
+          <input type="month" class="form-input" style="width:160px" value="${this._mesBanco}" onchange="Modulos.bancos.verMovimientos('${bancoId}', this.value)">
           <button class="btn btn-amber" onclick="Modulos.bancos.modalMovimiento('${bancoId}')">＋ Nuevo Movimiento</button>
         </div>
       </div>
       <div class="page-body">
         <div class="kpi-grid" style="margin-bottom:20px">
-          <div class="kpi-card"><div class="kpi-label">Saldo Actual</div><div class="kpi-val ${saldo>=0?'cyan':'red'}">${UI.q(saldo)}</div></div>
-          <div class="kpi-card"><div class="kpi-label">Total Entradas</div><div class="kpi-val green">${UI.q(totalEntradas)}</div></div>
-          <div class="kpi-card"><div class="kpi-label">Total Salidas</div><div class="kpi-val red">${UI.q(totalSalidas)}</div></div>
-          <div class="kpi-card"><div class="kpi-label">Movimientos</div><div class="kpi-val amber">${movs.length}</div></div>
+          <div class="kpi-card"><div class="kpi-label">Saldo inicial · ${mesLabel}</div><div class="kpi-val ${saldoInicialMes>=0?'cyan':'red'}">${UI.q(saldoInicialMes)}</div><div class="kpi-trend">arrastrado del mes anterior</div></div>
+          <div class="kpi-card"><div class="kpi-label">Entradas del mes</div><div class="kpi-val green">${UI.q(entradasMes)}</div></div>
+          <div class="kpi-card"><div class="kpi-label">Salidas del mes</div><div class="kpi-val red">${UI.q(salidasMes)}</div></div>
+          <div class="kpi-card"><div class="kpi-label">Saldo final del mes</div><div class="kpi-val ${saldoFinalMes>=0?'cyan':'red'}">${UI.q(saldoFinalMes)}</div><div class="kpi-trend ${utilMes>=0?'text-green':'text-red'}">${utilMes>=0?'▲ ganancia':'▼ pérdida'} ${UI.q(Math.abs(utilMes))}</div></div>
         </div>
         <div class="table-wrap">
           <table class="data-table">
-            <thead><tr><th>Fecha</th><th>Concepto</th><th>Tipo</th><th>Referencia</th><th>Monto</th><th>Conciliado</th><th>Acciones</th></tr></thead>
+            <thead><tr><th>Fecha</th><th>Concepto</th><th>Tipo</th><th>Referencia</th><th>Monto</th><th>Saldo</th><th>Conciliado</th><th>Acciones</th></tr></thead>
             <tbody>
+              <tr style="background:var(--surface2)">
+                <td colspan="5" style="font-weight:700">Saldo inicial del mes (${mesLabel})</td>
+                <td class="mono-sm" style="font-weight:700">${UI.q(saldoInicialMes)}</td>
+                <td colspan="2"></td>
+              </tr>
               ${movs.map(m=>`<tr>
                 <td>${UI.fecha(m.fecha)}</td>
                 <td>${m.concepto}</td>
-                <td><span class="badge badge-${m.tipo==='entrada'||m.tipo==='deposito'?'green':'red'}">${m.tipo}</span></td>
+                <td><span class="badge badge-${esEntrada(m.tipo)?'green':'red'}">${m.tipo}</span></td>
                 <td class="mono-sm">${m.referencia||'—'}</td>
-                <td class="mono-sm ${m.tipo==='entrada'||m.tipo==='deposito'?'text-green':'text-red'}">
-                  ${m.tipo==='entrada'||m.tipo==='deposito'?'+':'-'}${UI.q(m.monto)}
+                <td class="mono-sm ${esEntrada(m.tipo)?'text-green':'text-red'}">
+                  ${esEntrada(m.tipo)?'+':'-'}${UI.q(m.monto)}
                 </td>
+                <td class="mono-sm">${UI.q(m._saldo)}</td>
                 <td><span class="badge badge-${m.conciliado?'green':'gray'}">${m.conciliado?'✓':'Pendiente'}</span></td>
                 <td><div style="display:flex;gap:4px">
                   ${Modulos.btnAccion('editar', `Modulos.bancos.modalMovimiento('${bancoId}','${m.id}')`)}
                   ${Modulos.btnAccion('eliminar', `Modulos.eliminarRegistro('banco_movimientos','${m.id}','este movimiento',()=>Modulos.bancos.verMovimientos('${bancoId}'))`)}
                 </div></td>
-              </tr>`).join('')||'<tr><td colspan="7" style="text-align:center;padding:24px;color:var(--text3)">Sin movimientos registrados</td></tr>'}
+              </tr>`).join('')||`<tr><td colspan="8" style="text-align:center;padding:24px;color:var(--text3)">Sin movimientos en ${mesLabel}</td></tr>`}
             </tbody>
           </table>
         </div>
