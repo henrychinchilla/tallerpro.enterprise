@@ -1,19 +1,27 @@
 /* Dashboard Module */
 Modulos.dashboard = {
+  _mes: null,
+
+  _setMes(ym) { if (ym) { this._mes = ym; this.render(); } },
+
   async render() {
     const el = document.getElementById('page-content');
     UI.loading(el, 'Cargando dashboard...');
 
+    const ahora = new Date();
+    if (!this._mes) this._mes = `${ahora.getFullYear()}-${String(ahora.getMonth()+1).padStart(2,'0')}`;
+    const esMesActual = this._mes === `${ahora.getFullYear()}-${String(ahora.getMonth()+1).padStart(2,'0')}`;
+
     const hoyStr = new Date().toISOString().slice(0, 10);
     const [kpi, dd, citas, ordenes, fb] = await Promise.all([
-      DB.getKPIs(),
-      DB.getDashboardData(),
+      DB.getKPIs(this._mes),
+      DB.getDashboardData(this._mes),
       DB.getCitas(hoyStr, hoyStr).catch(() => []),
       DB.getOrdenes().catch(() => []),
       DB.getFeedback().catch(() => [])
     ]);
-    const ahora = new Date();
-    const mes = ahora.toLocaleDateString('es-GT', { month: 'long', year: 'numeric' });
+    const [my, mm] = this._mes.split('-').map(Number);
+    const mes = new Date(my, mm-1, 1).toLocaleDateString('es-GT', { month: 'long', year: 'numeric' });
     const h = ahora.getHours();
     const saludo = h < 12 ? 'Buenos días' : h < 19 ? 'Buenas tardes' : 'Buenas noches';
     const nombre = (Auth.user?.nombre || '').split(' ')[0] || '';
@@ -89,9 +97,11 @@ Modulos.dashboard = {
       <div class="page-header">
         <div>
           <h1 class="page-title">${saludo}${nombre ? ', ' + nombre : ''} 👋</h1>
-          <p class="page-subtitle">// ${ahora.toLocaleDateString('es-GT', { weekday: 'long', day: 'numeric', month: 'long' })} · ${mes}</p>
+          <p class="page-subtitle">// ${esMesActual ? ahora.toLocaleDateString('es-GT', { weekday: 'long', day: 'numeric', month: 'long' }) + ' · ' : 'Periodo: '}${mes}${esMesActual ? '' : ' (histórico)'}</p>
         </div>
         <div class="page-actions">
+          <input type="month" class="form-input" style="width:160px" value="${this._mes}" title="Ver otro mes" onchange="Modulos.dashboard._setMes(this.value)">
+          ${esMesActual ? '' : `<button class="btn btn-ghost" onclick="Modulos.dashboard._setMes('${ahora.getFullYear()}-${String(ahora.getMonth()+1).padStart(2,'0')}')" title="Volver al mes actual">📅 Mes actual</button>`}
           <button class="btn btn-ghost" onclick="Modulos.dashboard.render()" title="Actualizar">🔄 Actualizar</button>
         </div>
       </div>
@@ -122,7 +132,7 @@ Modulos.dashboard = {
 
         <div class="dash-charts">
           <div class="card">
-            <div class="card-sub mb-4">📈 Ingresos vs Egresos · últimos 6 meses</div>
+            <div class="card-sub mb-4">📈 Ingresos vs Egresos · 6 meses hasta ${mes}</div>
             ${trend}
           </div>
           <div class="card">
@@ -159,11 +169,11 @@ Modulos.dashboard = {
 
         <div class="dash-charts">
           <div class="card">
-            <div class="card-sub mb-4">📅 Ingresos por día · este mes</div>
+            <div class="card-sub mb-4">📅 Ingresos por día · ${mes}</div>
             ${diario}
           </div>
           <div class="card">
-            <div class="card-sub mb-4">🏆 Top clientes · últimos 6 meses</div>
+            <div class="card-sub mb-4">🏆 Top clientes · 6 meses hasta ${mes}</div>
             ${topCli}
           </div>
         </div>

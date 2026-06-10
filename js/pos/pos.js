@@ -8,7 +8,7 @@
 const POS = {
   _prod: [], _clientes: [], _cart: [], _cliente: null,
   _metodo: 'Efectivo', _descuento: 0, _canje: 0,
-  _busca: '', _cat: '',
+  _busca: '', _cat: '', _envioData: null,
   _ROLES_OK: ['superadmin','admin','gerente_tal','gerente_fin','recepcionista'],
 
   async iniciar() {
@@ -302,8 +302,12 @@ const POS = {
         </select>
       </div>
       <label style="display:flex;align-items:center;gap:8px;font-size:14px;margin-bottom:10px;cursor:pointer">
-        <input type="checkbox" id="pos-envio-on" style="width:17px;height:17px"> 🚚 Programar envío al cliente
+        <input type="checkbox" id="pos-envio-on" style="width:17px;height:17px" ${this._envioData?'checked':''} onchange="POS._toggleEnvio(this.checked)"> 🚚 Programar envío al cliente
       </label>
+      ${this._envioData?`<div style="font-size:12px;color:var(--cyan);background:var(--surface2);border-radius:8px;padding:8px 10px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center">
+        <span>📦 ${this._envioData.destinatario||'Cliente'} · ${(this._envioData.direccion||'').slice(0,40)}</span>
+        <button class="btn btn-sm btn-ghost" style="padding:2px 8px" onclick="POS.modalEnvio()">✏️</button>
+      </div>`:''}
       ${t.desc>0?`<div style="display:flex;justify-content:space-between;font-size:14px;color:var(--text3);padding:2px 0"><span>Descuento</span><span>− ${UI.q(t.desc)}</span></div>`:''}
       <div style="display:flex;justify-content:space-between;font-size:15px;color:var(--text2);padding:3px 0"><span>Subtotal</span><span>${UI.q(t.subtotal)}</span></div>
       <div style="display:flex;justify-content:space-between;font-size:15px;color:var(--text2);padding:3px 0"><span>IVA (12%)</span><span>${UI.q(t.iva)}</span></div>
@@ -353,11 +357,83 @@ const POS = {
     this._pintarCart();
   },
 
+  /* ── ENVÍO ───────────────────────────────────────── */
+  _toggleEnvio(on) {
+    if (on) this.modalEnvio();
+    else { this._envioData = null; this._pintarCart(); }
+  },
+
+  modalEnvio() {
+    const e = this._envioData || {};
+    const cli = this._cliente;
+    const hoy = new Date().toISOString().slice(0,10);
+    UI.modal('🚚 Datos del envío al cliente', `
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Destinatario *</label>
+          <input class="form-input" id="env-dest" value="${e.destinatario||cli?.nombre||''}" placeholder="Nombre de quien recibe"></div>
+        <div class="form-group"><label class="form-label">Teléfono *</label>
+          <input class="form-input" id="env-tel" value="${e.telefono||cli?.tel||''}" placeholder="5555-5555"></div>
+      </div>
+      <div class="form-group"><label class="form-label">Dirección de entrega *</label>
+        <textarea class="form-input" id="env-dir" rows="2" placeholder="Calle, número, zona, referencias...">${e.direccion||cli?.direccion||''}</textarea></div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Municipio / Depto.</label>
+          <input class="form-input" id="env-muni" value="${e.municipio||''}" placeholder="Guatemala, Mixco..."></div>
+        <div class="form-group"><label class="form-label">Medio de envío</label>
+          <select class="form-select" id="env-medio">
+            ${['Courier','Mensajería en moto','Vehículo propio','Encomienda / bus','Retiro en tienda'].map(m=>`<option ${e.medio===m?'selected':''}>${m}</option>`).join('')}
+          </select></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Empresa / Courier</label>
+          <input class="form-input" id="env-empresa" value="${e.empresa||''}" placeholder="Cargo Expreso, Guatex..."></div>
+        <div class="form-group"><label class="form-label">Costo del flete (Q)</label>
+          <input class="form-input" id="env-costo" type="number" min="0" step="0.01" value="${e.costo||''}" placeholder="0.00"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Entrega estimada</label>
+          <input class="form-input" id="env-fecha" type="date" value="${e.fecha_entrega||hoy}"></div>
+        <div class="form-group"><label class="form-label">Referencia / Notas</label>
+          <input class="form-input" id="env-notas" value="${e.refs||''}" placeholder="Punto de referencia, horario..."></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" onclick="POS._cancelEnvio()">Cancelar</button>
+        <button class="btn btn-amber" onclick="POS._guardarEnvioDatos()">Guardar datos de envío</button>
+      </div>`, '560px');
+  },
+
+  _cancelEnvio() {
+    /* Si no había datos previos, desmarca la casilla */
+    if (!this._envioData) { const c = document.getElementById('pos-envio-on'); if (c) c.checked = false; }
+    UI.cerrarModal();
+  },
+
+  _guardarEnvioDatos() {
+    const destinatario = document.getElementById('env-dest')?.value.trim();
+    const telefono     = document.getElementById('env-tel')?.value.trim();
+    const direccion    = document.getElementById('env-dir')?.value.trim();
+    if (!destinatario || !telefono || !direccion) {
+      UI.toast('Destinatario, teléfono y dirección son obligatorios','error'); return;
+    }
+    this._envioData = {
+      destinatario, telefono, direccion,
+      municipio: document.getElementById('env-muni')?.value.trim()||'',
+      medio:     document.getElementById('env-medio')?.value||'',
+      empresa:   document.getElementById('env-empresa')?.value.trim()||'',
+      costo:     parseFloat(document.getElementById('env-costo')?.value)||0,
+      fecha_entrega: document.getElementById('env-fecha')?.value||'',
+      refs:      document.getElementById('env-notas')?.value.trim()||''
+    };
+    UI.cerrarModal();
+    UI.toast('Datos de envío guardados ✓');
+    this._pintarCart();
+  },
+
   /* ── COBRO ───────────────────────────────────────── */
   async cobrar() {
     if (!this._cart.length) return;
     const t = this._totales();
-    const progEnvio = document.getElementById('pos-envio-on')?.checked;
+    const progEnvio = !!this._envioData;
     const cli = this._cliente;
 
     const res = await DB.upsertFactura({
@@ -388,19 +464,35 @@ const POS = {
       }
     }
 
-    /* Programar envío */
+    /* Programar envío con los datos capturados */
     if (progEnvio) {
+      const e = this._envioData;
+      const notas = [
+        `Tel: ${e.telefono||'—'}`,
+        `Dirección: ${e.direccion||'—'}${e.municipio?`, ${e.municipio}`:''}`,
+        e.refs ? `Ref: ${e.refs}` : ''
+      ].filter(Boolean).join(' · ');
       await DB.upsertEnvio({
-        tipo: 'courier', descripcion: `Entrega venta ${factura.num||''}`,
-        destinatario: cli?.nombre || 'Cliente', orden_id: null,
-        fecha_envio: new Date().toISOString().slice(0,10), estado: 'programado'
+        tipo: 'courier',
+        descripcion: `Entrega venta ${factura.num||''}`,
+        destinatario: e.destinatario || cli?.nombre || 'Cliente',
+        empresa_transporte: e.empresa || null,
+        medio: e.medio || null,
+        costo_flete: e.costo || 0,
+        costo_total: e.costo || 0,
+        num_factura: factura.num || null,
+        orden_id: null,
+        fecha_envio: new Date().toISOString().slice(0,10),
+        fecha_entrega_estimada: e.fecha_entrega || null,
+        estado: 'programado',
+        notas
       }).catch(()=>{});
     }
 
     const totalPagado = t.total;
     const ganados = cli?.programa_puntos ? Math.floor(t.total) : 0;
     /* Reset venta */
-    this._cart = []; this._descuento = 0; this._canje = 0; this._cliente = null; this._metodo = 'Efectivo';
+    this._cart = []; this._descuento = 0; this._canje = 0; this._cliente = null; this._metodo = 'Efectivo'; this._envioData = null;
     await this.render();
     this._recibo(factura, items, totalPagado, ganados, progEnvio);
   },

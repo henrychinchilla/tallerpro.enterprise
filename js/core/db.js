@@ -37,6 +37,16 @@ function mesActual() {
   return { ini, fin };
 }
 
+/* Rango ini/fin de un mes dado en formato 'YYYY-MM' (default: mes actual) */
+function rangoMes(ym) {
+  if (!ym) return mesActual();
+  const [y,m] = ym.split('-').map(Number);
+  return {
+    ini: `${ym}-01`,
+    fin: new Date(y, m, 0).toISOString().slice(0,10)
+  };
+}
+
 const DB = {
 
   /* ── TENANTS ──────────────────────────────────── */
@@ -1004,8 +1014,8 @@ const DB = {
   },
 
   /* ── KPIs DASHBOARD ───────────────────────────── */
-  async getKPIs() {
-    const { ini, fin } = mesActual();
+  async getKPIs(ym=null) {
+    const { ini, fin } = rangoMes(ym);
     const tid = getTID();
     const [
       { count: clientes },
@@ -1031,27 +1041,30 @@ const DB = {
   },
 
   /* ── DATOS PARA GRÁFICAS DEL DASHBOARD ─────────── */
-  async getDashboardData() {
+  async getDashboardData(ym=null) {
     const tid = getTID();
-    const hoy = new Date();
-    /* Inicio del rango: primer día del mes hace 5 meses (6 meses en total) */
-    const desde = new Date(hoy.getFullYear(), hoy.getMonth() - 5, 1);
+    /* Mes ancla: el seleccionado o el actual */
+    const anc = ym ? new Date(Number(ym.split('-')[0]), Number(ym.split('-')[1]) - 1, 1) : new Date();
+    const ancY = anc.getFullYear(), ancM = anc.getMonth();
+    /* Ventana de 6 meses que TERMINA en el mes ancla */
+    const desde = new Date(ancY, ancM - 5, 1);
     const desdeStr = desde.toISOString().slice(0, 10);
+    const hastaStr = new Date(ancY, ancM + 1, 0).toISOString().slice(0, 10);
 
     const [
       { data: ingresos },
       { data: egresos },
       { data: ordenes }
     ] = await Promise.all([
-      getSB().from('ingresos').select('monto,fecha,clientes(nombre)').eq('tenant_id', tid).gte('fecha', desdeStr),
-      getSB().from('egresos').select('monto,fecha').eq('tenant_id', tid).gte('fecha', desdeStr),
+      getSB().from('ingresos').select('monto,fecha,clientes(nombre)').eq('tenant_id', tid).gte('fecha', desdeStr).lte('fecha', hastaStr),
+      getSB().from('egresos').select('monto,fecha').eq('tenant_id', tid).gte('fecha', desdeStr).lte('fecha', hastaStr),
       getSB().from('ordenes').select('estado').eq('tenant_id', tid)
     ]);
 
-    /* Buckets de los últimos 6 meses */
+    /* Buckets de los 6 meses que terminan en el mes ancla */
     const meses = [];
     for (let i = 5; i >= 0; i--) {
-      const d = new Date(hoy.getFullYear(), hoy.getMonth() - i, 1);
+      const d = new Date(ancY, ancM - i, 1);
       meses.push({
         key:   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`,
         label: d.toLocaleDateString('es-GT', { month: 'short' }),
@@ -1070,17 +1083,17 @@ const DB = {
     const porEstado = {};
     (ordenes || []).forEach(o => { porEstado[o.estado] = (porEstado[o.estado] || 0) + 1; });
 
-    /* Ingresos por día del mes actual */
-    const diasMes = new Date(hoy.getFullYear(), hoy.getMonth() + 1, 0).getDate();
+    /* Ingresos por día del mes ancla */
+    const diasMes = new Date(ancY, ancM + 1, 0).getDate();
     const ingresosDiarios = Array.from({ length: diasMes }, (_, i) => ({ dia: i + 1, monto: 0 }));
     const addDia = (arr, campo) => (arr || []).forEach(r => {
       const d = new Date((r.fecha || '') + 'T12:00:00');
-      if (!isNaN(d) && d.getFullYear() === hoy.getFullYear() && d.getMonth() === hoy.getMonth())
+      if (!isNaN(d) && d.getFullYear() === ancY && d.getMonth() === ancM)
         ingresosDiarios[d.getDate() - 1].monto += Number(r[campo] || 0);
     });
     addDia(ingresos, 'monto');
 
-    /* Top clientes por facturación (6 meses) */
+    /* Top clientes por facturación (6 meses que terminan en el mes ancla) */
     const porCliente = {};
     const addCli = (arr, campo) => (arr || []).forEach(r => {
       const nom = r.clientes?.nombre;
