@@ -30,6 +30,7 @@ const ROLES = {
   gerente_fin:  { label:'Gerente Financiero',  icon:'💰', color:'green',  oculto:false },
   gerente_tal:  { label:'Gerente de Taller',   icon:'🔧', color:'cyan',   oculto:false },
   recepcionista:{ label:'Recepcionista',        icon:'📋', color:'purple', oculto:false },
+  vendedor:     { label:'Vendedor (POS)',       icon:'🛒', color:'amber',  oculto:false },
   mecanico:     { label:'Mecánico',            icon:'🪛', color:'gray',   oculto:false },
   cliente:      { label:'Cliente',             icon:'🚗', color:'cyan',   oculto:false }
 };
@@ -88,6 +89,7 @@ const PERMISOS = {
   gerente_tal:  { dashboard:true,  clientes:true,  vehiculos:true,  ordenes:true,  inventario:true,  bodegas:true,  proveedores:true,  compras:true,  activos:true,  envios:true,  facturacion:false, bancos:false, finanzas:false, presupuesto:false, rrhh:true,  marketing:true,  calendario:true,  comunicaciones:true,  configuracion:false, usuarios:false, admin:false, mi_ot:false },
   gerente_fin:  { dashboard:true,  clientes:false, vehiculos:false, ordenes:false, inventario:false, bodegas:false, proveedores:true,  compras:true,  activos:true,  envios:true,  facturacion:true,  bancos:true,  finanzas:true,  presupuesto:true,  rrhh:true,  marketing:false, calendario:false, comunicaciones:true,  configuracion:false, usuarios:false, admin:false, mi_ot:false },
   recepcionista:{ dashboard:true,  clientes:true,  vehiculos:true,  ordenes:true,  inventario:false, bodegas:false, proveedores:false, compras:false, activos:false, envios:true,  facturacion:true,  bancos:false, finanzas:false, presupuesto:false, rrhh:false, marketing:false, calendario:true,  comunicaciones:false, configuracion:false, usuarios:false, admin:false, mi_ot:false },
+  vendedor:     { dashboard:true,  clientes:true,  vehiculos:true,  ordenes:false, inventario:false, bodegas:false, proveedores:false, compras:false, activos:false, envios:true,  facturacion:false, bancos:false, finanzas:false, presupuesto:false, rrhh:false, marketing:true,  calendario:false, comunicaciones:false, configuracion:false, usuarios:false, admin:false, mi_ot:false },
   mecanico:     { dashboard:true,  clientes:false, vehiculos:true,  ordenes:true,  inventario:true,  bodegas:true,  proveedores:false, compras:false, activos:false, envios:true,  facturacion:false, bancos:false, finanzas:false, presupuesto:false, rrhh:false, marketing:false, calendario:true,  comunicaciones:false, configuracion:false, usuarios:false, admin:false, mi_ot:false },
   cliente:      { dashboard:false, clientes:false, vehiculos:false, ordenes:false, inventario:false, bodegas:false, proveedores:false, compras:false, activos:false, envios:false, facturacion:false, bancos:false, finanzas:false, presupuesto:false, rrhh:false, marketing:false, calendario:false, comunicaciones:false, configuracion:false, usuarios:false, admin:false, mi_ot:true  }
 };

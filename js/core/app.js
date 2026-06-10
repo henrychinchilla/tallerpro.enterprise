@@ -71,7 +71,7 @@ const App = {
       </div>`;
 
     /* Acceso al POS (pantalla aparte) para roles de venta/gestión */
-    const posBtn = ['superadmin','admin','gerente_tal','gerente_fin','recepcionista'].includes(rol) ? `
+    const posBtn = ['superadmin','admin','gerente_tal','gerente_fin','recepcionista','vendedor'].includes(rol) ? `
       <div style="padding:0 12px 10px">
         <a class="btn btn-ghost btn-sm" style="width:100%;text-align:center;display:block" href="/pos.html">🛒 Punto de Venta</a>
       </div>` : '';

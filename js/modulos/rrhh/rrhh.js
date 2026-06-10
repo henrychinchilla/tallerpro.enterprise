@@ -438,7 +438,7 @@ Modulos.rrhh = {
           <div class="form-row">
             <div class="form-group"><label class="form-label">Rol en el Sistema *</label>
               <select class="form-select" id="emp-rol">
-                ${['mecanico','recepcionista','gerente_tal','gerente_fin','admin'].map(r=>`<option value="${r}" ${e.rol===r?'selected':''}>${ROLES[r]?.icon||''} ${ROLES[r]?.label||r}</option>`).join('')}
+                ${['mecanico','vendedor','recepcionista','gerente_tal','gerente_fin','admin'].map(r=>`<option value="${r}" ${e.rol===r?'selected':''}>${ROLES[r]?.icon||''} ${ROLES[r]?.label||r}</option>`).join('')}
               </select></div>
             <div class="form-group"><label class="form-label">Contraseña Temporal *</label>
               <div style="position:relative">

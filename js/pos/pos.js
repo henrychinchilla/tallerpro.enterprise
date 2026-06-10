@@ -9,7 +9,7 @@ const POS = {
   _prod: [], _clientes: [], _cart: [], _cliente: null,
   _metodo: 'Efectivo', _descuento: 0, _canje: 0,
   _busca: '', _cat: '', _envioData: null,
-  _ROLES_OK: ['superadmin','admin','gerente_tal','gerente_fin','recepcionista'],
+  _ROLES_OK: ['superadmin','admin','gerente_tal','gerente_fin','recepcionista','vendedor'],
 
   async iniciar() {
     try {
