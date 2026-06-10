@@ -111,7 +111,7 @@ const MODULOS_SIEMPRE = ['dashboard','configuracion','usuarios','admin','respald
 
 const PLANES = {
   basico: {
-    label: 'Básico', precio: 199, color: 'cyan',
+    label: 'Básico / Emprendedor', precio: 199, color: 'cyan',
     desc: 'Operación del taller: clientes, vehículos, OT, inventario y POS.',
     modulos: ['clientes','vehiculos','ordenes','inventario','pos']
   },
@@ -128,7 +128,22 @@ const PLANES = {
     modulos: ['clientes','vehiculos','ordenes','inventario','pos',
               'proveedores','compras','bodegas','activos','envios',
               'facturacion','bancos','finanzas','presupuesto','marketing','comunicaciones','rrhh','ia']
+  },
+  medida: {
+    label: 'A la Medida', precio: 199, color: 'purple', negociable: true,
+    desc: 'Para negociar: arranca con la base del Emprendedor y suma solo los módulos que el taller necesita, cada uno con su precio.',
+    modulos: ['clientes','vehiculos','ordenes','inventario','pos']
   }
+};
+
+/* Precio mensual de cada módulo adicional para el plan A la Medida.
+   La base (clientes, vehículos, OT, inventario, POS) va incluida en el
+   precio del plan; estos se SUMAN al marcar el módulo en el panel SA. */
+const MODULOS_PRECIOS = {
+  proveedores: 49,  compras: 49,   bodegas: 59,   activos: 49,
+  envios: 59,       facturacion: 99, bancos: 59,  finanzas: 99,
+  presupuesto: 49,  marketing: 59, comunicaciones: 49,
+  rrhh: 149,        ia: 99
 };
 
 /* Lista de módulos que se pueden vender/activar a la carta (para el panel SA).

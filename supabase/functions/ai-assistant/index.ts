@@ -208,7 +208,7 @@ Deno.serve(async (req) => {
     let iaHabilitada = true;
     if (Array.isArray(tn?.modulos_activos) && tn.modulos_activos.length) {
       iaHabilitada = tn.modulos_activos.includes("ia");
-    } else if (tn?.plan === "basico" || tn?.plan === "pro") {
+    } else if (["basico", "pro", "medida"].includes(tn?.plan)) {
       iaHabilitada = false;
     }
     if (!iaHabilitada) {

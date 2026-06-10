@@ -121,10 +121,11 @@ Modulos.superadmin = {
           ${Object.entries(PLANES).map(([k,p])=>`
             <div class="card card-${p.color}" style="border:2px solid var(--${p.color})">
               <div style="font-weight:800;font-size:18px;color:var(--${p.color})">${p.label}</div>
-              <div style="font-size:28px;font-weight:800;margin:6px 0">${UI.q(p.precio)}<span style="font-size:13px;color:var(--text3)">/mes</span></div>
+              <div style="font-size:28px;font-weight:800;margin:6px 0">${p.negociable?'<span style="font-size:14px;color:var(--text3)">desde </span>':''}${UI.q(p.precio)}<span style="font-size:13px;color:var(--text3)">/mes</span></div>
               <div style="font-size:12px;color:var(--text3);margin-bottom:10px">${p.desc}</div>
               <div style="display:flex;flex-wrap:wrap;gap:4px">
                 ${p.modulos.map(m=>`<span class="badge badge-gray" style="font-size:10px">${labelModulo(m)}</span>`).join('')}
+                ${p.negociable?`<span class="badge badge-purple" style="font-size:10px">+ módulos a elección (c/u con precio)</span>`:''}
               </div>
             </div>`).join('')}
         </div>
@@ -268,9 +269,11 @@ Modulos.superadmin = {
       </div>
       <div class="form-group"><label class="form-label">Módulos activos (a la carta)</label>
         <div id="sa-modulos" style="display:grid;grid-template-columns:1fr 1fr;gap:6px;max-height:220px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;padding:10px">
-          ${MODULOS_VENDIBLES.map(m=>{ const lbl=labelModulo(m); return `
+          ${MODULOS_VENDIBLES.map(m=>{ const lbl=labelModulo(m); const enBase=PLANES.medida.modulos.includes(m); return `
             <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer">
-              <input type="checkbox" class="sa-mod" value="${m}" ${activos.includes(m)?'checked':''}> ${lbl}
+              <input type="checkbox" class="sa-mod" value="${m}" ${activos.includes(m)?'checked':''} onchange="Modulos.superadmin._recalcPrecioMedida()">
+              <span style="flex:1">${lbl}</span>
+              <span class="sa-mod-precio" style="font-size:10px;color:var(--text3)">${enBase?'base':'+'+UI.q(MODULOS_PRECIOS[m]||0)}</span>
             </label>`;}).join('')}
         </div>
         <div style="font-size:11px;color:var(--text3);margin-top:4px">Dashboard, Calendario, Configuración, Usuarios, Administración y Respaldos siempre están incluidos.</div>
@@ -307,6 +310,20 @@ Modulos.superadmin = {
     document.querySelectorAll('.sa-mod').forEach(c=>{ c.checked = mods.includes(c.value); });
     const precio = document.getElementById('sa-precio');
     if (precio && PLANES[plan]) precio.value = PLANES[plan].precio;
+    this._recalcPrecioMedida();
+  },
+
+  /* Plan A la Medida: precio = base + suma de los módulos extra marcados.
+     Solo recalcula en ese plan; en los demás el precio del plan manda. */
+  _recalcPrecioMedida() {
+    if (document.getElementById('sa-plan')?.value !== 'medida') return;
+    const precio = document.getElementById('sa-precio');
+    if (!precio) return;
+    let total = PLANES.medida.precio;
+    document.querySelectorAll('.sa-mod:checked').forEach(c => {
+      if (!PLANES.medida.modulos.includes(c.value)) total += (MODULOS_PRECIOS[c.value] || 0);
+    });
+    precio.value = total;
   },
 
   async guardarTaller(id) {
