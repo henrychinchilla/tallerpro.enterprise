@@ -217,6 +217,35 @@
   background: var(--bg);
 }
 
+/* ── SIDEBAR COLAPSABLE (escritorio) ─────────────── */
+#sb-toggle {
+  position: fixed;
+  top: 14px;
+  left: calc(var(--sidebar-w) - 14px);
+  z-index: 130;
+  width: 28px; height: 28px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: var(--surface2);
+  color: var(--text2);
+  font-size: 12px; line-height: 1;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0,0,0,.18);
+  transition: left .25s ease, background .15s ease;
+}
+#sb-toggle:hover { background: var(--amber); color: #000; }
+
+@media (min-width: 769px) {
+  #sidebar { transition: transform .25s ease; }
+  #main    { transition: margin-left .25s ease; }
+  body.sb-oculto #sidebar { transform: translateX(-100%); }
+  body.sb-oculto #main    { margin-left: 0; }
+  body.sb-oculto #sb-toggle { left: 10px; }
+}
+@media (max-width: 768px) {
+  #sb-toggle { display: none; }   /* en móvil manda el botón hamburguesa */
+}
+
 .page-content { min-height: 100vh; }
 
 .page-header {

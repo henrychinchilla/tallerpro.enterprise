@@ -18,6 +18,7 @@ const App = {
       return App.pantallaSuspendido();
     }
     App.renderSidebar();
+    App._initSidebarToggle();
     App.navegarA(App._restaurarRuta());
     await App._iniciarTrialSiAplica();
     App.checkSuscripcion();
@@ -296,6 +297,31 @@ const App = {
   async cerrarSesion() {
     await Auth.logout();
     location.reload();
+  },
+
+  /* ── SIDEBAR COLAPSABLE (escritorio) ──────────────
+     Botón flotante en el borde del menú: ◀ lo oculta (contenido a
+     pantalla completa), ☰ lo vuelve a mostrar. Preferencia recordada. */
+  _initSidebarToggle() {
+    if (document.getElementById('sb-toggle')) return;
+    const b = document.createElement('button');
+    b.id = 'sb-toggle';
+    b.title = 'Mostrar / ocultar menú';
+    b.onclick = () => App.toggleSidebarDesktop();
+    document.body.appendChild(b);
+    if (localStorage.getItem('tp_sb_oculto') === '1') document.body.classList.add('sb-oculto');
+    App._pintarSbToggle();
+  },
+
+  toggleSidebarDesktop() {
+    const oculto = document.body.classList.toggle('sb-oculto');
+    localStorage.setItem('tp_sb_oculto', oculto ? '1' : '0');
+    App._pintarSbToggle();
+  },
+
+  _pintarSbToggle() {
+    const b = document.getElementById('sb-toggle');
+    if (b) b.textContent = document.body.classList.contains('sb-oculto') ? '☰' : '◀';
   },
 
   /* ── SIDEBAR TOGGLE MÓVIL ─────────────────────── */
