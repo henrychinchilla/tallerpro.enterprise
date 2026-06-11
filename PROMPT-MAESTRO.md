@@ -189,6 +189,10 @@ F6. Pulido: sorter de tablas, ruta persistente, logo, calendario, cámara en adj
 8. Storage no permite DELETE por SQL (usa la API); pg_net no soporta SET SCHEMA (drop+create).
 9. En cada lista: tabla ordenable, acciones consistentes, estados vacíos amables, fechas es-GT.
 10. Mensajes de límite/bloqueo comerciales son oportunidades de venta: "pídelo a tu proveedor".
+11. `const X = {...}` en scripts clásicos NO se cuelga de window: si algún código consulta
+    `window.X` (helpers de config, gating), asigna EXPLÍCITAMENTE `window.X = X` al final del
+    archivo. En TallerPro, window.Auth undefined dejó el menú vacío para roles no-superadmin
+    y rompió el gating sin que el superadmin lo notara (él tenía un atajo).
 
 ═══════════════════════════════════════════════
 9. SECRETS QUE YO CONFIGURO (recuérdamelos al final de F5)
