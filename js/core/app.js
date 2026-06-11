@@ -18,7 +18,7 @@ const App = {
       return App.pantallaSuspendido();
     }
     App.renderSidebar();
-    App.navegarA('dashboard');
+    App.navegarA(App._restaurarRuta());
     await App._iniciarTrialSiAplica();
     App.checkSuscripcion();
     App.avisoSAT();
@@ -221,6 +221,7 @@ const App = {
     App._subActivo = (def?.subnav?.length)
       ? (modulo?._tab || def.subnav[0].tab)
       : null;
+    App._guardarRuta();
     App.renderSidebar();
 
     /* Cargar módulo */
@@ -242,6 +243,7 @@ const App = {
     if (App.paginaActual !== pagina) {
       App.paginaActual = pagina;
       if (modulo) modulo._tab = tab;
+      App._guardarRuta();
       App.renderSidebar();
       modulo?.render?.();
       return;
@@ -249,10 +251,30 @@ const App = {
     /* Ya estamos en el módulo: solo cambiar de pestaña */
     if (modulo) {
       modulo._tab = tab;
+      App._guardarRuta();
       App.renderSidebar();
       if (modulo._renderTab) modulo._renderTab();
       else modulo.render?.();
     }
+  },
+
+  /* ── RUTA PERSISTENTE (#modulo/pestaña) ───────────
+     Sobrevive al refresh: la ruta vive en el hash de la URL y
+     App.iniciar la restaura validando que el módulo exista y que
+     el usuario tenga acceso. */
+  _guardarRuta() {
+    const ruta = '#' + App.paginaActual + (App._subActivo ? '/' + App._subActivo : '');
+    if (location.hash !== ruta) history.replaceState(null, '', ruta);
+  },
+
+  _restaurarRuta() {
+    const [pagina, tab] = (location.hash || '').replace(/^#/, '').split('/');
+    if (!pagina || pagina === 'dashboard') return 'dashboard';
+    const def = MODULOS.find(m => m.id === pagina);
+    if (!def || !window.Modulos?.[pagina]) return 'dashboard';
+    if (typeof tieneAcceso === 'function' && !tieneAcceso(pagina)) return 'dashboard';
+    if (tab && def.subnav?.some(s => s.tab === tab)) window.Modulos[pagina]._tab = tab;
+    return pagina;
   },
 
   /* ── CERRAR SESIÓN ────────────────────────────── */
