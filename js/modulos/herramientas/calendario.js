@@ -68,8 +68,11 @@ Modulos.calendario = {
     const enviosEv = (envios||[])
       .filter(e=>enRango(e.fecha_entrega_estimada) && e.estado!=='cerrado')
       .map(e=>({ _envio:true, id:e.id, titulo:e.descripcion, tipo:e.tipo, fecha_cita:`${e.fecha_entrega_estimada}T10:00:00` }));
-    const satEv = (typeof moduloEnPlan!=='function' || moduloEnPlan('contabilidad'))
-      ? this._eventosSATRango(ini, fin, fiscal, obligaciones).filter(e=>enRango(e.fecha_cita.slice(0,10)))
+    const conSAT  = (typeof moduloEnPlan!=='function' || moduloEnPlan('contabilidad'));
+    const conRRHH = (typeof moduloEnPlan!=='function' || moduloEnPlan('rrhh'));
+    const satEv = (conSAT || conRRHH)
+      ? this._eventosSATRango(ini, fin, fiscal, obligaciones, { sat: conSAT, igss: conRRHH })
+        .filter(e=>enRango(e.fecha_cita.slice(0,10)))
       : [];
     const eventos = [...this._citas, ...pagos, ...enviosEv, ...satEv]
       .sort((a,b)=>(a.fecha_cita||'').localeCompare(b.fecha_cita||''));
@@ -125,7 +128,8 @@ Modulos.calendario = {
 
   /* ── Chip compacto de evento (vistas mes/semana) ── */
   _chip(c) {
-    const conf = c._sat   ? { col:'purple', ico:'🏛️', click:`App.navegarA('contabilidad')` }
+    const conf = c._igss  ? { col:'green',  ico:'🏥', click:`App.navegarSub('rrhh','igss')` }
+      : c._sat  ? { col:'purple', ico:'🏛️', click:`App.navegarA('contabilidad')` }
       : c._pago ? { col:'red',    ico:'💸', click:`Modulos.finanzas&&(Modulos.finanzas._tab='recurrentes');App.navegarA('finanzas')` }
       : c._envio? { col:'cyan',   ico:'🚚', click:`App.navegarA('envios')` }
       :           { col:'amber',  ico:'🔧', click:`Modulos.calendario.modalCita('${c.id}')` };
@@ -176,7 +180,7 @@ Modulos.calendario = {
       <tbody>${filas}</tbody>
     </table></div>
     <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:8px;font-size:11px;color:var(--text3)">
-      <span>🔧 Citas</span><span>💸 Pagos programados</span><span>🚚 Envíos</span><span>🏛️ SAT</span>
+      <span>🔧 Citas</span><span>💸 Pagos programados</span><span>🚚 Envíos</span><span>🏛️ SAT</span><span>🏥 IGSS·IRTRA·INTECAP</span>
     </div>`;
   },
 
@@ -262,12 +266,15 @@ Modulos.calendario = {
     return out;
   },
 
-  /* ── Calendario fiscal SAT (Guatemala) para los meses del rango ──
-     IVA mensual (SAT-2237/2046) vence el último día del mes siguiente;
-     ISR Simplificado SAT-1311 el día 10; régimen utilidades (25%):
-     SAT-1361 (día 10 ene/abr/jul/oct), ISO SAT-1608 (fin de esos meses)
-     y SAT-1411 anual (31 de marzo). Estado desde obligaciones_fiscales. */
-  _eventosSATRango(ini, fin, fiscal, obligaciones) {
+  /* ── Calendario fiscal (Guatemala) para los meses del rango ──
+     SAT: IVA mensual (SAT-2237/2046) vence el último día del mes
+     siguiente; ISR Simplificado SAT-1311 el día 10; régimen utilidades
+     (25%): SAT-1361 (día 10 ene/abr/jul/oct), ISO SAT-1608 (fin de esos
+     meses) y SAT-1411 anual (31 de marzo).
+     IGSS: la planilla IGSS + IRTRA + INTECAP vence el día 20 del mes
+     siguiente (se registra desde RRHH → Planilla IGSS).
+     Estado desde obligaciones_fiscales. */
+  _eventosSATRango(ini, fin, fiscal, obligaciones, incluir = { sat:true, igss:true }) {
     const out = [];
     const pequeno = (fiscal?.regimen_iva||'general').toLowerCase().startsWith('peque');
     const utilidades = (Number(fiscal?.tasa_isr)||0.05) >= 0.2;
@@ -283,6 +290,14 @@ Modulos.calendario = {
       const prev = new Date(y, m-1, 1);
       const prevPer = `${prev.getFullYear()}-${String(prev.getMonth()+1).padStart(2,'0')}`;
       const finMes = new Date(y, m+1, 0);
+
+      /* Planilla IGSS + IRTRA + INTECAP del mes anterior — vence el día 20 */
+      if (incluir.igss) {
+        out.push({ _sat:true, _igss:true, titulo:`Planilla IGSS · IRTRA · INTECAP · ${prevPer}`,
+          fecha_cita:`${f(new Date(y, m, 20))}T09:00:00`, sat_estado: estadoDe('IGSS', prevPer) });
+      }
+
+      if (!incluir.sat) { cur.setMonth(cur.getMonth()+1); continue; }
 
       out.push({ _sat:true, titulo:`IVA ${pequeno?'SAT-2046':'SAT-2237'} · ${prevPer}`,
         fecha_cita:`${f(finMes)}T09:00:00`, sat_estado: estadoDe('IVA', prevPer) });
@@ -315,14 +330,18 @@ Modulos.calendario = {
       const st = c.sat_estado === 'pagado' ? { b:'green', t:'✓ Pagado' }
         : c.sat_estado === 'pendiente' ? { b:'amber', t:'Pendiente' }
         : { b:'gray', t:'Por calcular' };
-      return `<div style="padding:10px;border-left:3px solid var(--purple);margin-bottom:8px;background:var(--surface2);border-radius:0 8px 8px 0;cursor:pointer"
-           onclick="App.navegarA('contabilidad')">
+      const col = c._igss ? 'green' : 'purple';
+      const ico = c._igss ? '🏥' : '🏛️';
+      const sub = c._igss ? 'Pago patronal — RRHH → Planilla IGSS' : 'Declaración SAT (Declaraguate)';
+      const click = c._igss ? `App.navegarSub('rrhh','igss')` : `App.navegarA('contabilidad')`;
+      return `<div style="padding:10px;border-left:3px solid var(--${col});margin-bottom:8px;background:var(--surface2);border-radius:0 8px 8px 0;cursor:pointer"
+           onclick="${click}">
         <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
-          <div style="font-weight:700;font-size:13px">🏛️ ${c.titulo}</div>
-          <div style="font-size:11px;color:var(--purple);white-space:nowrap">${conFecha?fecha:''}</div>
+          <div style="font-weight:700;font-size:13px">${ico} ${c.titulo}</div>
+          <div style="font-size:11px;color:var(--${col});white-space:nowrap">${conFecha?fecha:''}</div>
         </div>
         <div style="font-size:11px;color:var(--text3);margin-top:2px;display:flex;justify-content:space-between;align-items:center">
-          <span>Declaración SAT (Declaraguate)</span>
+          <span>${sub}</span>
           <span class="badge badge-${st.b}" style="font-size:9px">${st.t}</span>
         </div>
       </div>`;

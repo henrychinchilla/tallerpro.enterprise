@@ -135,6 +135,8 @@ Modulos.rrhh = {
             </select>
           </div>
           <div style="display:flex;gap:8px">
+            <button class="btn btn-amber" onclick="Modulos.rrhh.registrarPagoIGSS(${this._igssMes},${this._igssAnio},${granTotal})" ${pagos.length?'':'disabled'}
+              title="Registrar la obligación de pago (vence el día 20 del mes siguiente) — aparece en el Calendario y en Contabilidad → Obligaciones">📅 Registrar pago IGSS</button>
             <button class="btn btn-cyan" onclick="Modulos.rrhh.imprimirIGSS()" ${pagos.length?'':'disabled'}>🖨️ Imprimir Planilla IGSS</button>
           </div>
         </div>
@@ -276,6 +278,27 @@ Modulos.rrhh = {
         </div>
         ${hijosHtml}
       </li>`;
+  },
+
+  /* Registrar la obligación de pago de la planilla IGSS+IRTRA+INTECAP
+     (vence el día 20 del mes siguiente). Alimenta el Calendario,
+     el aviso al login y Contabilidad → Obligaciones. */
+  async registrarPagoIGSS(mes, anio, monto) {
+    const periodo = `${anio}-${String(mes).padStart(2,'0')}`;
+    const vence = new Date(anio, mes, 20).toISOString().slice(0,10);
+    const ok = await UI.confirmar(
+      `¿Registrar la obligación de la <b>planilla IGSS · IRTRA · INTECAP</b> del periodo <b>${periodo}</b>
+      por <b>${UI.q(monto)}</b> (17.50% de la masa salarial)?<br>
+      <span style="font-size:11px;color:var(--text3)">Vence el ${UI.fecha(vence)} — aparecerá en el Calendario y en Contabilidad → Obligaciones.</span>`,
+      '📅 Registrar pago IGSS');
+    if (!ok) return;
+    const { error } = await DB.upsertObligacion({
+      tipo: 'IGSS', periodo, monto_calculado: Math.round(monto*100)/100,
+      fecha_vencimiento: vence, estado: 'pendiente',
+      notas: 'Planilla IGSS + IRTRA + INTECAP (cuota laboral 4.83% + patronal 12.67%)'
+    });
+    if (error) { UI.toast('Error: '+error.message,'error'); return; }
+    UI.toast(`Obligación IGSS ${periodo} registrada ✓ — vence el ${UI.fecha(vence)}`);
   },
 
   async calcularNomina(mes, anio) {
