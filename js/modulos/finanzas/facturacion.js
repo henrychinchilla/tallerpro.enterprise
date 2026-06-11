@@ -172,9 +172,10 @@ Modulos.facturacion = {
       const nro = res.data.num || res.data.id.slice(0,8);
       descontados = await DB.descontarInventarioVenta(this._itemsImportados, `Factura ${nro}`);
     }
-    /* Fidelización: acumula Q1 = 1 punto si el cliente está inscrito (solo al emitir) */
+    /* Fidelización: acumula según la política del taller (solo al emitir) */
     if (!id && res.data?.id && cli?.programa_puntos) {
-      const pts = Math.floor(Number(res.data.total ?? fields.total) || 0);
+      const fid = fidelizacionCfg();
+      const pts = Math.floor((Number(res.data.total ?? fields.total) || 0) * (Number(fid.puntos_por_q)||0));
       if (pts > 0) await DB.registrarPuntos(cli.id, pts, { tipo:'gana', motivo:'Factura', referencia:res.data.num, factura_id:res.data.id });
     }
     this._itemsImportados = [];

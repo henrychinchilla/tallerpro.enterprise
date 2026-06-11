@@ -748,9 +748,9 @@ Modulos.ordenes = {
     })));
     const descontados = await DB.descontarInventarioVenta(itemsList, nro);
 
-    /* Fidelización: acumula Q1 = 1 punto si el cliente está inscrito */
+    /* Fidelización: acumula según la política del taller */
     if (cli?.programa_puntos) {
-      const pts = Math.floor(Number(total) || 0);
+      const pts = Math.floor((Number(total) || 0) * (Number(fidelizacionCfg().puntos_por_q)||0));
       if (pts > 0) await DB.registrarPuntos(o.cliente_id, pts, { tipo:'gana', motivo:'OT facturada', referencia:factura.num, factura_id:factura.id });
     }
 

@@ -247,7 +247,8 @@ const POS = {
 
   _totales() {
     const bruto = this._cart.reduce((s,l)=>s+l.cant*l.precio, 0);
-    const descCanje = this._canje > 0 ? this._canje/10 : 0;   // 10 pts = Q1
+    const tasa = Number(fidelizacionCfg().puntos_por_q1_canje)||10;   // pts que valen Q1
+    const descCanje = this._canje > 0 ? this._canje/tasa : 0;
     const desc = Math.min(bruto, (Number(this._descuento)||0) + descCanje);
     const total = Math.max(0, bruto - desc);
     const subtotal = Math.round(total/1.12*100)/100;
@@ -286,13 +287,13 @@ const POS = {
           👤 ${cli ? cli.nombre : 'Consumidor Final (CF)'}${puntosCli!==null?` · ${puntosCli} pts`:''}
         </button>
       </div>
-      ${puntosCli!==null && puntosCli>=10 ? `
+      ${puntosCli!==null && puntosCli>=(Number(fidelizacionCfg().puntos_por_q1_canje)||10) ? (()=>{ const tasa=Number(fidelizacionCfg().puntos_por_q1_canje)||10; return `
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;font-size:14px">
         <span>Canjear puntos:</span>
-        <input class="form-input" style="width:110px;padding:8px 10px;font-size:15px" type="number" min="0" step="10" max="${Math.min(puntosCli, t.bruto*10)}"
+        <input class="form-input" style="width:110px;padding:8px 10px;font-size:15px" type="number" min="0" step="${tasa}" max="${Math.min(puntosCli, Math.floor(t.bruto*tasa))}"
                value="${this._canje}" onchange="POS.setCanje(this.value)">
-        <span class="text-muted">= ${UI.q(this._canje/10)}</span>
-      </div>`:''}
+        <span class="text-muted">= ${UI.q(this._canje/tasa)}</span>
+      </div>`; })():''}
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;font-size:14px">
         <span>Descuento Q:</span>
         <input class="form-input" style="width:110px;padding:8px 10px;font-size:15px" type="number" min="0" step="0.01"
@@ -317,11 +318,12 @@ const POS = {
 
   setDescuento(v) { this._descuento = Math.max(0, parseFloat(v)||0); this._pintarCart(); },
   setCanje(v) {
+    const tasa = Number(fidelizacionCfg().puntos_por_q1_canje)||10;
     let n = parseInt(v)||0;
-    n = Math.floor(n/10)*10;   // múltiplos de 10
+    n = Math.floor(n/tasa)*tasa;   // múltiplos de la tasa de canje
     const saldo = Number(this._cliente?.puntos_saldo)||0;
     const bruto = this._totales().bruto;
-    this._canje = Math.max(0, Math.min(n, saldo, Math.floor(bruto*10)));
+    this._canje = Math.max(0, Math.min(n, saldo, Math.floor(bruto*tasa)));
     this._pintarCart();
   },
 
@@ -453,12 +455,13 @@ const POS = {
     await DB.insertFacturaItems(factura.id, items);
     await DB.descontarInventarioVenta(items, `Factura ${factura.num||factura.id.slice(0,8)}`);
 
-    /* Fidelización: canje (descuento) y acumulación */
+    /* Fidelización: canje (descuento) y acumulación según política del taller */
+    const fid = fidelizacionCfg();
     if (cli?.programa_puntos) {
       if (this._canje > 0) {
         await DB.registrarPuntos(cli.id, -this._canje, { tipo:'canje', motivo:'Canje en venta POS', referencia:factura.num, factura_id:factura.id });
       }
-      const ganados = Math.floor(t.total);   // Q1 = 1 punto
+      const ganados = Math.floor(t.total * (Number(fid.puntos_por_q)||0));
       if (ganados > 0) {
         await DB.registrarPuntos(cli.id, ganados, { tipo:'gana', motivo:'Compra POS', referencia:factura.num, factura_id:factura.id });
       }
@@ -489,7 +492,7 @@ const POS = {
     }
 
     const totalPagado = t.total;
-    const ganados = cli?.programa_puntos ? Math.floor(t.total) : 0;
+    const ganados = cli?.programa_puntos ? Math.floor(t.total * (Number(fid.puntos_por_q)||0)) : 0;
     /* Reset venta */
     this._cart = []; this._descuento = 0; this._canje = 0; this._cliente = null; this._metodo = 'Efectivo'; this._envioData = null;
     await this.render();

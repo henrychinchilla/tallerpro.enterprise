@@ -198,6 +198,20 @@ function moduloEnPlan(modId) {
   return act.includes(modId);
 }
 
+/* ── FIDELIZACIÓN (políticas configurables por taller) ──
+   Se guardan en tenants.fidelizacion (jsonb); estos son los defaults.
+   puntos_por_q: puntos ganados por cada Q1 de compra (0 = no acumula)
+   puntos_por_q1_canje: puntos que equivalen a Q1 al canjear
+   bono_afiliacion / bono_feedback: puntos de regalo (0 = desactivado)
+   feedback_max_mes: máx. de bonos de encuesta por cliente al mes      */
+const FIDELIZACION_DEFAULTS = {
+  puntos_por_q: 1, puntos_por_q1_canje: 10,
+  bono_afiliacion: 50, bono_feedback: 50, feedback_max_mes: 2
+};
+function fidelizacionCfg() {
+  return { ...FIDELIZACION_DEFAULTS, ...(window.Auth?.tenant?.fidelizacion || {}) };
+}
+
 /* ¿La suscripción del taller está vigente? (vencida = solo lectura/bloqueo suave) */
 function suscripcionVigente() {
   const t = window.Auth?.tenant;

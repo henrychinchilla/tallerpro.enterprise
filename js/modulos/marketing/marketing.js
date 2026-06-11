@@ -114,21 +114,29 @@ Modulos.marketing = {
 
     else if (this._tab==='fidelizacion') {
       const clientes = await DB.getClientes();
+      const fid = fidelizacionCfg();
+      const tasa = Number(fid.puntos_por_q1_canje)||10;
       const inscritos = clientes.filter(c=>c.programa_puntos).sort((a,b)=>(b.puntos_saldo||0)-(a.puntos_saldo||0));
       const totalPts = inscritos.reduce((s,c)=>s+(Number(c.puntos_saldo)||0),0);
       el.innerHTML = `
-        <div class="alert alert-cyan" style="margin-bottom:16px"><div class="alert-icon">⭐</div>
-          <div class="alert-body" style="font-size:12px">Política: <b>Q1 = 1 punto</b> en cada compra · <b>10 puntos = Q1</b> en el canje · <b>+50 puntos</b> por responder la encuesta. Inscribe clientes desde su ficha en <b>Clientes</b>.</div></div>
+        <div class="alert alert-cyan" style="margin-bottom:16px;display:flex;align-items:flex-start;gap:12px"><div class="alert-icon">⭐</div>
+          <div class="alert-body" style="font-size:12px;flex:1">Política del taller:
+            <b>Q1 = ${fid.puntos_por_q} punto${fid.puntos_por_q==1?'':'s'}</b> en cada compra ·
+            <b>${tasa} puntos = Q1</b> en el canje ·
+            <b>${fid.bono_afiliacion>0?`+${fid.bono_afiliacion} pts`:'sin bono'}</b> al afiliarse ·
+            <b>${fid.bono_feedback>0?`+${fid.bono_feedback} pts`:'sin bono'}</b> por encuesta (máx ${fid.feedback_max_mes}/mes).
+            Inscribe clientes desde su ficha en <b>Clientes</b>.</div>
+          <button class="btn btn-ghost btn-sm" onclick="Modulos.marketing.modalPoliticas()">⚙️ Cambiar políticas</button></div>
         <div class="kpi-grid" style="margin-bottom:16px">
           <div class="kpi-card"><div class="kpi-label">Clientes inscritos</div><div class="kpi-val cyan">${inscritos.length}</div></div>
-          <div class="kpi-card"><div class="kpi-label">Puntos en circulación</div><div class="kpi-val amber">${totalPts.toLocaleString()}</div><div class="kpi-trend">≈ ${UI.q(totalPts/10)} en canjes</div></div>
+          <div class="kpi-card"><div class="kpi-label">Puntos en circulación</div><div class="kpi-val amber">${totalPts.toLocaleString()}</div><div class="kpi-trend">≈ ${UI.q(totalPts/tasa)} en canjes</div></div>
         </div>
         <div class="table-wrap"><table class="data-table">
           <thead><tr><th>Cliente</th><th>Teléfono</th><th>Saldo</th><th>Equivale a</th><th>Movimientos</th></tr></thead>
           <tbody>${inscritos.map(c=>`<tr>
             <td><b>${c.nombre}</b></td><td class="mono-sm">${c.tel||'—'}</td>
             <td class="mono-sm text-amber"><b>${(c.puntos_saldo||0).toLocaleString()}</b> pts</td>
-            <td class="mono-sm text-green">${UI.q((c.puntos_saldo||0)/10)}</td>
+            <td class="mono-sm text-green">${UI.q((c.puntos_saldo||0)/tasa)}</td>
             <td><button class="btn btn-sm btn-ghost" onclick="Modulos.marketing.verPuntos('${c.id}','${(c.nombre||'').replace(/'/g,"\\'")}')">📜 Ver</button></td>
           </tr>`).join('')||'<tr><td colspan="5" style="text-align:center;padding:24px;color:var(--text3)">Aún no hay clientes inscritos. Actívalo en la ficha del cliente.</td></tr>'}</tbody>
         </table></div>`;
@@ -188,6 +196,62 @@ Modulos.marketing = {
   },
 
   /* ── Fidelización ───────────────────────────────── */
+  /* ── POLÍTICAS DE FIDELIZACIÓN (configurables por taller) ── */
+  modalPoliticas() {
+    const f = fidelizacionCfg();
+    UI.modal('⚙️ Políticas de fidelización', `
+      <div class="alert alert-amber" style="margin-bottom:14px"><div class="alert-icon">⚠️</div>
+        <div class="alert-body" style="font-size:11px">Los cambios aplican a las ventas y bonos <b>futuros</b>;
+        los puntos ya acumulados no se recalculan. Pon un bono en <b>0</b> para desactivarlo.</div></div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Puntos por cada Q1 de compra</label>
+          <input class="form-input" id="fid-ppq" type="number" min="0" step="0.5" value="${f.puntos_por_q}">
+          <div style="font-size:11px;color:var(--text3);margin-top:3px">0 = no se acumulan puntos al comprar</div></div>
+        <div class="form-group"><label class="form-label">Puntos que valen Q1 al canjear</label>
+          <input class="form-input" id="fid-tasa" type="number" min="1" step="1" value="${f.puntos_por_q1_canje}">
+          <div style="font-size:11px;color:var(--text3);margin-top:3px">ej. 10 → 100 pts = Q10 de descuento</div></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Bono por afiliarse (pts)</label>
+          <input class="form-input" id="fid-afil" type="number" min="0" step="5" value="${f.bono_afiliacion}"></div>
+        <div class="form-group"><label class="form-label">Bono por encuesta (pts)</label>
+          <input class="form-input" id="fid-fb" type="number" min="0" step="5" value="${f.bono_feedback}"></div>
+        <div class="form-group"><label class="form-label">Máx. encuestas con bono / mes</label>
+          <input class="form-input" id="fid-fbmax" type="number" min="0" step="1" value="${f.feedback_max_mes}"></div>
+      </div>
+      <div id="fid-ejemplo" style="background:var(--surface2);border-radius:8px;padding:10px;font-size:12px;color:var(--text2)"></div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" onclick="UI.cerrarModal()">Cancelar</button>
+        <button class="btn btn-amber" onclick="Modulos.marketing.guardarPoliticas()">Guardar políticas</button>
+      </div>`, '560px');
+    /* ejemplo en vivo */
+    const pintar = () => {
+      const ppq = parseFloat(document.getElementById('fid-ppq')?.value)||0;
+      const tasa = parseInt(document.getElementById('fid-tasa')?.value)||10;
+      const ej = document.getElementById('fid-ejemplo');
+      if (ej) ej.innerHTML = `💡 Ejemplo: una compra de <b>Q500</b> da <b>${Math.floor(500*ppq)} puntos</b>,
+        que al canjear valen <b>${UI.q(Math.floor(500*ppq)/tasa)}</b>
+        (retorno del ${(ppq/tasa*100).toFixed(1)}% — entre 1% y 5% es lo sano).`;
+    };
+    ['fid-ppq','fid-tasa'].forEach(id=>document.getElementById(id)?.addEventListener('input', pintar));
+    pintar();
+  },
+
+  async guardarPoliticas() {
+    const fidelizacion = {
+      puntos_por_q:        Math.max(0, parseFloat(document.getElementById('fid-ppq')?.value)||0),
+      puntos_por_q1_canje: Math.max(1, parseInt(document.getElementById('fid-tasa')?.value)||10),
+      bono_afiliacion:     Math.max(0, parseInt(document.getElementById('fid-afil')?.value)||0),
+      bono_feedback:       Math.max(0, parseInt(document.getElementById('fid-fb')?.value)||0),
+      feedback_max_mes:    Math.max(0, parseInt(document.getElementById('fid-fbmax')?.value)||0)
+    };
+    const ok = await DB.updateTenant({ fidelizacion, updated_at: new Date().toISOString() });
+    if (!ok) { UI.toast('No se pudieron guardar las políticas','error'); return; }
+    if (Auth.tenant) Auth.tenant.fidelizacion = fidelizacion;
+    UI.cerrarModal(); UI.toast('Políticas de fidelización actualizadas ✓');
+    this._renderTab();
+  },
+
   async verPuntos(clienteId, nombre) {
     const movs = await DB.getPuntosMovimientos(clienteId);
     UI.modal(`📜 Puntos — ${nombre}`, `
@@ -226,7 +290,7 @@ Modulos.marketing = {
     win.document.write(`<html><head><title>QR Feedback</title></head>
       <body style="text-align:center;font-family:Arial;padding:36px">
       <h2>${taller}</h2><h3>📱 Escanea y déjanos tu opinión</h3>
-      <p style="color:#d97706;font-weight:700">¡Gana 50 puntos de fidelización!</p>
+      ${fidelizacionCfg().bono_feedback>0?`<p style="color:#d97706;font-weight:700">¡Gana ${fidelizacionCfg().bono_feedback} puntos de fidelización!</p>`:''}
       ${img}
       <p style="font-size:11px;color:#666;margin-top:10px">${this._qrUrl}</p>
       <script>window.print()<\/script></body></html>`);
@@ -236,7 +300,7 @@ Modulos.marketing = {
     UI.modal('✉️ Enviar encuesta por correo', `
       <div class="form-group"><label class="form-label">Correo del cliente</label>
         <input class="form-input" id="enc-mail" type="email" placeholder="cliente@correo.com"></div>
-      <div style="font-size:11px;color:var(--text3)">Se enviará un enlace a la encuesta. Si el cliente está registrado, ganará 50 puntos al responder.</div>
+      <div style="font-size:11px;color:var(--text3)">Se enviará un enlace a la encuesta.${fidelizacionCfg().bono_feedback>0?` Si el cliente está registrado, ganará ${fidelizacionCfg().bono_feedback} puntos al responder.`:''}</div>
       <div class="modal-footer">
         <button class="btn btn-ghost" onclick="UI.cerrarModal()">Cancelar</button>
         <button class="btn btn-amber" onclick="Modulos.marketing.enviarEncuesta()">Enviar</button>
@@ -249,7 +313,7 @@ Modulos.marketing = {
     const url = `${location.origin}/feedback.html?t=${encodeURIComponent(tid)}&o=email`;
     const taller = Auth.tenant?.name || 'TallerPro';
     const html = `<div style="font-family:Arial,sans-serif;max-width:480px"><h2 style="color:#d97706">🔧 ${taller}</h2>`+
-      `<p>¡Tu opinión nos importa! Cuéntanos cómo te fue y <b>gana 50 puntos</b> de fidelización.</p>`+
+      `<p>¡Tu opinión nos importa! Cuéntanos cómo te fue${fidelizacionCfg().bono_feedback>0?` y <b>gana ${fidelizacionCfg().bono_feedback} puntos</b> de fidelización`:''}.</p>`+
       `<p style="text-align:center;margin:18px 0"><a href="${url}" style="background:#d97706;color:#fff;padding:12px 22px;border-radius:8px;text-decoration:none;font-weight:700">Responder encuesta</a></p>`+
       `<p style="font-size:11px;color:#666">${url}</p></div>`;
     UI.toast('Enviando...','info');
