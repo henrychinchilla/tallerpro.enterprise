@@ -277,3 +277,10 @@ const Auth = {
     return tenant;
   }
 };
+
+/* ⚠️ CRÍTICO: `const` no se cuelga de window en scripts clásicos, y media
+   app consulta window.Auth (tieneAcceso, moduloEnPlan, getTID, getPermisos,
+   fidelizacionCfg...). Sin esta línea, window.Auth es undefined: el menú
+   queda vacío para roles no-superadmin, el gating por plan se apaga y la
+   restauración de ruta del refresh cae al dashboard. */
+window.Auth = Auth;
