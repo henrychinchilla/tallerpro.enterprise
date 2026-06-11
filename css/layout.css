@@ -347,3 +347,12 @@
   .kpi-grid { grid-template-columns: repeat(2, 1fr); }
   .grid-3, .grid-4 { grid-template-columns: repeat(2, 1fr); }
 }
+
+/* ── PWA INSTALADA: respetar el notch / barra del sistema ── */
+@supports (padding: env(safe-area-inset-top)) {
+  @media (max-width: 768px) {
+    .mobile-header { padding-top: env(safe-area-inset-top); height: calc(var(--header-h) + env(safe-area-inset-top)); }
+    #main          { padding-top: calc(var(--header-h) + env(safe-area-inset-top)); }
+    #sidebar       { padding-top: env(safe-area-inset-top); }
+  }
+}

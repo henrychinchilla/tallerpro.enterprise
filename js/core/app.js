@@ -200,6 +200,10 @@ const App = {
         <span style="margin-left:auto;opacity:.5;font-size:14px">🎨</span>
       </div>
       <div class="sidebar-footer">
+        ${App._puedeInstalar() ? `
+        <button class="btn btn-cyan btn-sm" onclick="App.instalarApp()" style="width:100%;margin-bottom:8px">
+          📲 Instalar como App
+        </button>` : ''}
         <button class="btn btn-ghost btn-sm" onclick="App.cerrarSesion()" style="width:100%">
           ⏻ Cerrar sesión
         </button>
@@ -359,6 +363,43 @@ const App = {
     document.body.appendChild(banner);
   },
 
+  /* ── INSTALAR COMO APP (PWA → Android/iOS) ────────
+     Android/Chrome: prompt nativo capturado en beforeinstallprompt.
+     iOS/Safari: no hay prompt — se muestran instrucciones.
+     Si ya corre instalada (standalone), el botón no aparece. */
+  _esStandalone() {
+    return matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+  },
+  _esIOS() { return /iphone|ipad|ipod/i.test(navigator.userAgent); },
+  _puedeInstalar() {
+    return !App._esStandalone() && (!!window._pwaPrompt || App._esIOS());
+  },
+
+  async instalarApp() {
+    if (window._pwaPrompt) {
+      window._pwaPrompt.prompt();
+      const { outcome } = await window._pwaPrompt.userChoice.catch(()=>({outcome:'dismissed'}));
+      if (outcome === 'accepted') {
+        UI.toast('¡Listo! Busca TallerPro en tu pantalla de inicio 📲', 'success', 5000);
+        window._pwaPrompt = null;
+        App.renderSidebar();
+      }
+      return;
+    }
+    /* iOS: instrucciones paso a paso */
+    UI.modal('📲 Instalar TallerPro', `
+      <div style="font-size:14px;line-height:1.8">
+        <p style="margin-bottom:10px">En tu <b>iPhone o iPad</b> (con Safari):</p>
+        <div style="display:flex;flex-direction:column;gap:10px">
+          <div style="background:var(--surface2);border-radius:10px;padding:10px 14px">1️⃣ Toca el botón <b>Compartir</b> <span style="font-size:16px">⬆️</span> (abajo al centro)</div>
+          <div style="background:var(--surface2);border-radius:10px;padding:10px 14px">2️⃣ Busca y toca <b>"Agregar a pantalla de inicio"</b> ➕</div>
+          <div style="background:var(--surface2);border-radius:10px;padding:10px 14px">3️⃣ Toca <b>"Agregar"</b> — y listo 🎉</div>
+        </div>
+        <p style="font-size:12px;color:var(--text3);margin-top:12px">La app abre a pantalla completa, con su propio ícono, y funciona aun sin conexión para consultar.</p>
+      </div>
+      <div class="modal-footer"><button class="btn btn-amber" onclick="UI.cerrarModal()">Entendido</button></div>`);
+  },
+
   /* ── SERVICE WORKER ───────────────────────────── */
   registrarSW() {
     if ('serviceWorker' in navigator) {
@@ -416,6 +457,18 @@ const TEMAS = {
 
 /* Namespace de módulos */
 window.Modulos = {};
+
+/* Captura el prompt de instalación PWA (Android/Chrome/Edge) para
+   dispararlo desde el botón "📲 Instalar como App" del sidebar. */
+window.addEventListener('beforeinstallprompt', e => {
+  e.preventDefault();
+  window._pwaPrompt = e;
+  if (window.Auth?.user) App.renderSidebar();   // refrescar para mostrar el botón
+});
+window.addEventListener('appinstalled', () => {
+  window._pwaPrompt = null;
+  if (window.Auth?.user) App.renderSidebar();
+});
 
 /* ── Utilidades CSV compartidas (export / import) ──────────────── */
 

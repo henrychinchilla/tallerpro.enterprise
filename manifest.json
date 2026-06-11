@@ -19,8 +19,12 @@
     { "src": "icons/icon-384.png", "sizes": "384x384", "type": "image/png", "purpose": "any" },
     { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
   ],
+  "id": "/",
+  "categories": ["business", "productivity"],
   "shortcuts": [
-    { "name": "Nueva OT",  "url": "/?mod=ordenes",   "icons": [{ "src": "icons/icon-96.png", "sizes": "96x96" }] },
-    { "name": "Dashboard", "url": "/?mod=dashboard", "icons": [{ "src": "icons/icon-96.png", "sizes": "96x96" }] }
+    { "name": "Órdenes de Trabajo", "url": "/#ordenes",    "icons": [{ "src": "icons/icon-96.png", "sizes": "96x96" }] },
+    { "name": "Punto de Venta",     "url": "/pos.html",    "icons": [{ "src": "icons/icon-96.png", "sizes": "96x96" }] },
+    { "name": "Calendario",         "url": "/#calendario", "icons": [{ "src": "icons/icon-96.png", "sizes": "96x96" }] },
+    { "name": "Dashboard",          "url": "/#dashboard",  "icons": [{ "src": "icons/icon-96.png", "sizes": "96x96" }] }
   ]
 }
