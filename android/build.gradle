@@ -1,0 +1,5 @@
+// TallerPro Enterprise — app Android nativa (TWA)
+// Se construye 100% por línea de comandos con Gradle (sin Android Studio).
+plugins {
+    id 'com.android.application' version '8.7.3' apply false
+}

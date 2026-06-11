@@ -1,0 +1,10 @@
+# Compilación
+.gradle/
+build/
+app/build/
+local.properties
+
+# 🔐 FIRMA — NUNCA al repositorio (respáldalos aparte: sin el keystore
+# no se pueden publicar actualizaciones de la app)
+tallerpro.keystore
+keystore.properties

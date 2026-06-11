@@ -1,0 +1,51 @@
+plugins {
+    id 'com.android.application'
+}
+
+/* Credenciales de firma: viven en android/keystore.properties (NO va a git) */
+def keystoreProps = new Properties()
+def keystoreFile = rootProject.file("keystore.properties")
+if (keystoreFile.exists()) {
+    keystoreProps.load(new FileInputStream(keystoreFile))
+}
+
+android {
+    namespace 'com.cmtelecom.tallerpro'
+    compileSdk 35
+
+    defaultConfig {
+        applicationId "com.cmtelecom.tallerpro"
+        minSdk 24
+        targetSdk 35
+        versionCode 1
+        versionName "1.0.0"
+    }
+
+    signingConfigs {
+        release {
+            storeFile rootProject.file(keystoreProps.getProperty('storeFile', 'tallerpro.keystore'))
+            storePassword keystoreProps.getProperty('storePassword', '')
+            keyAlias keystoreProps.getProperty('keyAlias', 'tallerpro')
+            keyPassword keystoreProps.getProperty('keyPassword', '')
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            signingConfig signingConfigs.release
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
+
+dependencies {
+    /* Trusted Web Activity: la app nativa que renderiza el sistema a
+       pantalla completa con el motor de Chrome (cámara, descargas,
+       notificaciones y todo el runtime web funcionan al 100%). */
+    implementation 'com.google.androidbrowserhelper:androidbrowserhelper:2.5.0'
+}
