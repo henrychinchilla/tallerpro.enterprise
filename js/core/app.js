@@ -155,6 +155,12 @@ const App = {
     const sidebar = document.getElementById('sidebar');
     if (!sidebar) return;
 
+    /* El sidebar se reconstruye en cada navegación: conservar su scroll
+       (en memoria entre renders y en sessionStorage para el refresh) */
+    const scrollPrevio = sidebar.scrollTop > 0
+      ? sidebar.scrollTop
+      : (parseInt(sessionStorage.getItem('tp_sb_scroll')) || 0);
+
     /* Botón del asistente IA: oculto para clientes y gateado por el
        módulo 'ia' (incluido en Empresarial; add-on para Básico/Pro) */
     const iaBtn = (rol === 'cliente' || (rol !== 'superadmin' && !moduloEnPlan('ia'))) ? '' : `
@@ -197,6 +203,15 @@ const App = {
           ⏻ Cerrar sesión
         </button>
       </div>`;
+
+    /* Restaurar la posición del menú y mantenerla persistida */
+    sidebar.scrollTop = scrollPrevio;
+    if (!sidebar._scrollHook) {
+      sidebar._scrollHook = true;
+      sidebar.addEventListener('scroll', () => {
+        sessionStorage.setItem('tp_sb_scroll', String(sidebar.scrollTop));
+      }, { passive: true });
+    }
   },
 
   /* ── NAVEGACIÓN ───────────────────────────────── */
