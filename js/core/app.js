@@ -286,8 +286,17 @@ const App = {
       modulo._tab = tab;
       App._guardarRuta();
       App.renderSidebar();
-      if (modulo._renderTab) modulo._renderTab();
-      else modulo.render?.();
+      if (modulo._renderTab) {
+        /* _renderTab() solo redibuja el contenido; la barra de pestañas
+           (.tabs) quedó fija desde el render() inicial, así que hay que
+           actualizar a mano cuál botón luce "activo" */
+        document.querySelectorAll('#page-content .tabs .tab-btn').forEach(btn => {
+          btn.classList.toggle('active', (btn.getAttribute('onclick') || '').includes(`,'${tab}')`));
+        });
+        modulo._renderTab();
+      } else {
+        modulo.render?.();
+      }
     }
   },
 

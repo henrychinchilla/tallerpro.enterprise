@@ -134,13 +134,13 @@ const IA = {
   /* ── Chat flotante con Beto ────────────────────── */
   abrirChat() {
     UI.modal('🔧 Beto — Asistente Mecánico', `
-      <div id="ia-historial" style="max-height:340px;overflow-y:auto;margin-bottom:12px;
+      <div id="ia-historial" style="max-height:420px;overflow-y:auto;margin-bottom:12px;
            display:flex;flex-direction:column;gap:8px">
-        <div class="text-muted" style="font-size:12px">
-          ¡Hola! Soy <b>Beto</b>. Puedo ayudarte con:<br>
-          🔧 <b>Mecánica:</b> "¿qué significa el código P0420?", "pasos para cambiar la banda de tiempo",
-          "mantenimiento de los 10,000 km"<br>
-          📊 <b>Tu taller:</b> "¿cuánto facturé este mes?", "¿qué vehículos tienen mantenimiento pendiente?"
+        <div class="text-muted" style="font-size:12.5px;line-height:1.7">
+          ¡Hola! Soy <b>Beto</b>, tu asistente.<br>
+          🔧 <b>Mecánica:</b> códigos DTC, diagnósticos y mantenimientos.<br>
+          📊 <b>Tu taller:</b> facturación, pendientes y reportes.<br>
+          Escribe tu pregunta abajo para comenzar.
         </div>
       </div>
       <div style="display:flex;gap:8px">
@@ -151,7 +151,7 @@ const IA = {
       <div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap">
         <button class="btn btn-ghost btn-sm" onclick="IA._insightsChat()">📊 Resumen del negocio</button>
         <button class="btn btn-ghost btn-sm" onclick="document.getElementById('ia-input').value='¿Qué significa el código de falla ';document.getElementById('ia-input').focus()">🔧 Consultar código DTC</button>
-      </div>`, '560px');
+      </div>`, '680px');
   },
 
   _push(rol, texto) {
