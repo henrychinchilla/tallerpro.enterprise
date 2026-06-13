@@ -17,6 +17,8 @@ Modulos.admin = {
           ${['admin','superadmin'].includes(Auth.user?.rol)?`
           <button class="tab-btn ${this._tab==='importar'?'active':''}" onclick="Modulos.admin._ir('importar')">⬆️ Importar</button>
           <button class="tab-btn ${this._tab==='peligro'?'active':''}" style="color:var(--red)" onclick="Modulos.admin._ir('peligro')">⚠️ Zona de Peligro</button>`:''}
+          ${puedeVerDocsEmpresa()?`
+          <button class="tab-btn ${this._tab==='documentos'?'active':''}" onclick="Modulos.admin._ir('documentos')">🗂️ Documentos Legales</button>`:''}
         </div>
         <div id="admin-content"></div>
       </div>`;
@@ -254,6 +256,143 @@ Modulos.admin = {
           </button>
         </div>`;
     }
+
+    else if (this._tab==='documentos') {
+      if (!puedeVerDocsEmpresa()) {
+        el.innerHTML = `<div class="alert alert-amber">
+          <div class="alert-icon">🔒</div>
+          <div class="alert-body">No tienes acceso habilitado para ver los documentos legales de la empresa.</div>
+        </div>`;
+        return;
+      }
+      await this._renderDocumentosEmpresa();
+    }
+  },
+
+  /* ── DOCUMENTOS LEGALES DE LA EMPRESA ──────── */
+  _DOC_TIPOS: [
+    'Patente de Comercio', 'Patente de Empresa', 'RTU Actualizado',
+    'Registro Mercantil', 'Escritura de Sociedad',
+    'Nombramiento de Representante Legal', 'DPI Representante Legal'
+  ],
+
+  async _renderDocumentosEmpresa() {
+    const el = document.getElementById('admin-content');
+    if (!el) return;
+    const docs = await DB.getDocumentosEmpresa();
+    const porTipo = tipo => docs.find(d => d.tipo === tipo);
+    const adicionales = docs.filter(d => !this._DOC_TIPOS.includes(d.tipo));
+
+    el.innerHTML = `
+      <div class="alert alert-cyan" style="margin-bottom:16px">
+        <div class="alert-icon">🗂️</div>
+        <div class="alert-body" style="font-size:12px">
+          Documentos legales del taller (patentes, RTU, escritura de sociedad, representación legal, etc.).
+          Solo visibles para Dueño/Administración/Gerencia con acceso habilitado.
+        </div>
+      </div>
+      <div class="card" style="margin-bottom:16px">
+        <div class="card-sub mb-3">📋 Documentos requeridos</div>
+        <div style="display:flex;flex-direction:column;gap:8px">
+          ${this._DOC_TIPOS.map(tipo => {
+            const d = porTipo(tipo);
+            return `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 10px;background:var(--surface2);border-radius:8px;flex-wrap:wrap;gap:6px">
+              <div>
+                <b style="font-size:13px">${tipo}</b>
+                ${d ? `<div style="font-size:11px;color:var(--text3)">${d.nombre_archivo||''} · subido ${UI.fecha(d.created_at)}</div>`
+                    : `<div style="font-size:11px;color:var(--amber)">⚠ Pendiente de subir</div>`}
+              </div>
+              <div style="display:flex;gap:6px">
+                ${d ? `<button class="btn btn-sm btn-cyan" onclick="Modulos.admin.verDocEmpresa('${d.id}')">👁 Ver</button>` : ''}
+                <button class="btn btn-sm btn-ghost" onclick="Modulos.admin.modalDocEmpresa('${tipo}','${d?.id||''}')">${d?'🔄 Reemplazar':'⬆️ Subir'}</button>
+                ${d ? Modulos.btnAccion('eliminar', `Modulos.eliminarRegistro('documentos_empresa','${d.id}','${tipo}',()=>Modulos.admin._renderDocumentosEmpresa())`) : ''}
+              </div>
+            </div>`;
+          }).join('')}
+        </div>
+      </div>
+      <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+          <div class="card-sub" style="margin:0">📎 Documentos adicionales</div>
+          <button class="btn btn-sm btn-amber" onclick="Modulos.admin.modalDocEmpresa('')">＋ Agregar documento</button>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:8px">
+          ${adicionales.length ? adicionales.map(d => `
+            <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 10px;background:var(--surface2);border-radius:8px;flex-wrap:wrap;gap:6px">
+              <div>
+                <b style="font-size:13px">${d.tipo}</b>
+                <div style="font-size:11px;color:var(--text3)">${d.nombre_archivo||''} · subido ${UI.fecha(d.created_at)}</div>
+              </div>
+              <div style="display:flex;gap:6px">
+                <button class="btn btn-sm btn-cyan" onclick="Modulos.admin.verDocEmpresa('${d.id}')">👁 Ver</button>
+                <button class="btn btn-sm btn-ghost" onclick="Modulos.admin.modalDocEmpresa('${d.tipo.replace(/'/g,"\\'")}','${d.id}')">🔄 Reemplazar</button>
+                ${Modulos.btnAccion('eliminar', `Modulos.eliminarRegistro('documentos_empresa','${d.id}','${d.tipo.replace(/'/g,"\\'")}',()=>Modulos.admin._renderDocumentosEmpresa())`)}
+              </div>
+            </div>`).join('') : `<div class="text-muted" style="font-size:12px">Sin documentos adicionales.</div>`}
+        </div>
+      </div>`;
+  },
+
+  modalDocEmpresa(tipo='', docId='') {
+    this._docEmpresaFile = null;
+    const esNuevo = !tipo;
+    UI.modal(esNuevo ? '🗂️ Agregar Documento' : `🗂️ ${tipo}`, `
+      ${esNuevo ? `
+      <div class="form-group"><label class="form-label">Nombre del documento *</label>
+        <input class="form-input" id="de-tipo" placeholder="Ej. Licencia Sanitaria"></div>` : ''}
+      <div class="form-group">
+        <label class="form-label">Archivo (imagen o PDF)</label>
+        <label class="btn btn-ghost" style="width:100%;cursor:pointer;text-align:center;display:block">
+          📂 Seleccionar archivo
+          <input type="file" accept="image/*,application/pdf" class="hidden" onchange="Modulos.admin._seleccionarDocEmpresa(this)">
+        </label>
+        <div id="de-info" style="font-size:11px;color:var(--text3);margin-top:6px"></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" onclick="UI.cerrarModal()">Cancelar</button>
+        <button class="btn btn-amber" onclick="Modulos.admin.guardarDocEmpresa('${tipo.replace(/'/g,"\\'")}','${docId}')">Guardar</button>
+      </div>`, '480px');
+  },
+
+  async _seleccionarDocEmpresa(input) {
+    const f = input.files?.[0];
+    if (!f) return;
+    try {
+      const r = await UI.fileABase64(f, { maxPx: 1600, maxPdfMB: 5 });
+      this._docEmpresaFile = { nombre: f.name, base64: r.base64, esPdf: r.esPdf };
+      const info = document.getElementById('de-info');
+      if (info) info.textContent = '✓ ' + f.name;
+    } catch(e) { UI.toast(e.message,'error'); input.value=''; }
+  },
+
+  async guardarDocEmpresa(tipo, docId) {
+    if (!tipo) tipo = document.getElementById('de-tipo')?.value.trim();
+    if (!tipo) { UI.toast('Ingresa el nombre del documento','error'); return; }
+    if (!this._docEmpresaFile && !docId) { UI.toast('Selecciona un archivo','error'); return; }
+
+    const fields = { tipo };
+    if (docId) fields.id = docId;
+    if (this._docEmpresaFile) {
+      fields.nombre_archivo = this._docEmpresaFile.nombre;
+      fields.base64 = this._docEmpresaFile.base64;
+      fields.es_pdf = this._docEmpresaFile.esPdf;
+      fields.updated_at = new Date().toISOString();
+    }
+    if (!docId) fields.created_by = Auth.user?.id || null;
+
+    const { error } = await DB.upsertDocumentoEmpresa(fields);
+    if (error) { UI.toast('Error: '+error.message,'error'); return; }
+    this._docEmpresaFile = null;
+    UI.cerrarModal();
+    UI.toast('Documento guardado ✓');
+    this._renderDocumentosEmpresa();
+  },
+
+  async verDocEmpresa(id) {
+    const docs = await DB.getDocumentosEmpresa();
+    const d = docs.find(x=>x.id===id);
+    if (!d?.base64) { UI.toast('Sin archivo','error'); return; }
+    UI.verAdjunto(d.base64, d.tipo);
   },
 
   /* ── AUDITORÍA ──────────────────────────── */

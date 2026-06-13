@@ -936,6 +936,24 @@ const DB = {
     return { data, error };
   },
 
+  /* ── DOCUMENTOS LEGALES DE LA EMPRESA ──────────── */
+  async getDocumentosEmpresa() {
+    const { data } = await getSB().from('documentos_empresa').select('*')
+      .eq('tenant_id', getTID()).order('created_at',{ ascending:false });
+    return data || [];
+  },
+
+  async upsertDocumentoEmpresa(fields) {
+    const payload = { ...fields, tenant_id: getTID() };
+    if (fields.id) {
+      const { id, ...resto } = payload;
+      const { error } = await getSB().from('documentos_empresa').update(resto).eq('id', id);
+      return { error };
+    }
+    const { data, error } = await getSB().from('documentos_empresa').insert(payload).select().single();
+    return { data, error };
+  },
+
   /* ── PRESUPUESTO / BUDGET ─────────────────────── */
   async getPresupuesto(anio) {
     const { data } = await getSB().from('presupuesto').select('*')

@@ -235,6 +235,19 @@ Modulos.usuarios = {
               ${esCustom?'<span style="margin-left:auto;color:var(--amber);font-size:10px">★ custom</span>':''}
             </label>`;
           }).join('')}
+          ${(()=>{
+            const base   = permsBase.doc_empresa || false;
+            const custom = permsCustom.doc_empresa;
+            const activo = custom !== undefined ? custom : base;
+            const esCustom = custom !== undefined && custom !== base;
+            return `<label style="display:flex;align-items:center;gap:6px;padding:7px 10px;
+              background:var(--surface2);border-radius:8px;cursor:pointer;font-size:12px;
+              border:1px solid ${activo?'var(--cyan-border)':'var(--border)'}">
+              <input type="checkbox" data-mod="doc_empresa" ${activo?'checked':''} style="accent-color:var(--cyan)">
+              <span>🗂️ Documentos legales (empresa)</span>
+              ${esCustom?'<span style="margin-left:auto;color:var(--amber);font-size:10px">★ custom</span>':''}
+            </label>`;
+          })()}
         </div>
       </div>
 
