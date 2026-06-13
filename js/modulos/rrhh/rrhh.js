@@ -70,10 +70,10 @@ Modulos.rrhh = {
         </div>
         ${pagos.length?`
         <div class="kpi-grid" style="margin-bottom:16px">
-          <div class="kpi-card"><div class="kpi-label">Total Salarios</div><div class="kpi-val amber">${UI.q(pagos.reduce((s,p)=>s+p.salario_base,0))}</div></div>
-          <div class="kpi-card"><div class="kpi-label">Total Bonificaciones</div><div class="kpi-val cyan">${UI.q(pagos.reduce((s,p)=>s+p.bonificacion,0))}</div></div>
-          <div class="kpi-card"><div class="kpi-label">Total IGSS</div><div class="kpi-val red">${UI.q(pagos.reduce((s,p)=>s+p.igss_laboral,0))}</div></div>
-          <div class="kpi-card"><div class="kpi-label">Total Líquido</div><div class="kpi-val green">${UI.q(pagos.reduce((s,p)=>s+p.liquido,0))}</div></div>
+          ${UI.kpiCard({ icon:'💵', clase:'amber', label:'Total Salarios', value: pagos.reduce((s,p)=>s+p.salario_base,0), money:true })}
+          ${UI.kpiCard({ icon:'⭐', clase:'cyan', label:'Total Bonificaciones', value: pagos.reduce((s,p)=>s+p.bonificacion,0), money:true })}
+          ${UI.kpiCard({ icon:'🏛️', clase:'red', label:'Total IGSS', value: pagos.reduce((s,p)=>s+p.igss_laboral,0), money:true })}
+          ${UI.kpiCard({ icon:'✅', clase:'green', label:'Total Líquido', value: pagos.reduce((s,p)=>s+p.liquido,0), money:true })}
         </div>`:''}
         <div class="table-wrap">
           <table class="data-table">
@@ -143,10 +143,10 @@ Modulos.rrhh = {
 
         ${pagos.length ? `
         <div class="kpi-grid" style="margin-bottom:16px">
-          <div class="kpi-card"><div class="kpi-label">Masa Salarial Base</div><div class="kpi-val amber">${UI.q(totalSueldo)}</div></div>
-          <div class="kpi-card"><div class="kpi-label">Cuota Laboral (4.83%)</div><div class="kpi-val red">${UI.q(totalLaboral)}</div><div class="kpi-trend">retención a empleados</div></div>
-          <div class="kpi-card"><div class="kpi-label">Aporte Patronal (12.67%)</div><div class="kpi-val cyan">${UI.q(totalPatronal)}</div><div class="kpi-trend">IGSS/IRTRA/INTECAP</div></div>
-          <div class="kpi-card"><div class="kpi-label">Total Pago IGSS</div><div class="kpi-val green">${UI.q(granTotal)}</div><div class="kpi-trend">17.50% de la planilla</div></div>
+          ${UI.kpiCard({ icon:'💵', clase:'amber', label:'Masa Salarial Base', value: totalSueldo, money:true })}
+          ${UI.kpiCard({ icon:'🧾', clase:'red', label:'Cuota Laboral (4.83%)', value: totalLaboral, money:true, trend:'retención a empleados' })}
+          ${UI.kpiCard({ icon:'🏛️', clase:'cyan', label:'Aporte Patronal (12.67%)', value: totalPatronal, money:true, trend:'IGSS/IRTRA/INTECAP' })}
+          ${UI.kpiCard({ icon:'💰', clase:'green', label:'Total Pago IGSS', value: granTotal, money:true, trend:'17.50% de la planilla' })}
         </div>
         ` : ''}
 
@@ -820,10 +820,10 @@ Modulos.rrhh = {
       </div>
 
       <div class="kpi-grid" style="margin-bottom:16px">
-        <div class="kpi-card"><div class="kpi-label">Empleados</div><div class="kpi-val cyan">${activos.length}</div><div class="kpi-trend">activos</div></div>
-        <div class="kpi-card"><div class="kpi-label">Costo Mensual (cargado)</div><div class="kpi-val red">${UI.q(totalCosto)}</div><div class="kpi-trend">${nombreMes}</div></div>
-        <div class="kpi-card"><div class="kpi-label">Bonos del Mes</div><div class="kpi-val amber">${UI.q(totalBono)}</div><div class="kpi-trend">según desempeño</div></div>
-        <div class="kpi-card"><div class="kpi-label">Hora-Hombre prom.</div><div class="kpi-val green">${UI.q(activos.length?totalCosto/activos.length/(cfg.horas_mes||240):0)}</div><div class="kpi-trend">base ${cfg.horas_mes||240} h/mes</div></div>
+        ${UI.kpiCard({ icon:'👥', clase:'cyan', label:'Empleados', value: activos.length, trend:'activos' })}
+        ${UI.kpiCard({ icon:'💰', clase:'red', label:'Costo Mensual (cargado)', value: totalCosto, money:true, trend: nombreMes })}
+        ${UI.kpiCard({ icon:'⭐', clase:'amber', label:'Bonos del Mes', value: totalBono, money:true, trend:'según desempeño' })}
+        ${UI.kpiCard({ icon:'⏱️', clase:'green', label:'Hora-Hombre prom.', value: activos.length?totalCosto/activos.length/(cfg.horas_mes||240):0, money:true, trend:`base ${cfg.horas_mes||240} h/mes` })}
       </div>
 
       ${cuerpo}
@@ -1166,10 +1166,10 @@ Modulos.rrhh = {
         <button class="btn btn-amber" onclick="Modulos.rrhh.modalCapacitacion()">＋ Registrar capacitación</button>
       </div>
       <div class="kpi-grid" style="margin-bottom:16px">
-        <div class="kpi-card"><div class="kpi-label">Capacitaciones ${anio}</div><div class="kpi-val cyan">${delAnio.length}</div></div>
-        <div class="kpi-card"><div class="kpi-label">Horas de formación</div><div class="kpi-val green">${horas}</div><div class="kpi-trend">este año</div></div>
-        <div class="kpi-card"><div class="kpi-label">Inversión</div><div class="kpi-val amber">${UI.q(inversion)}</div><div class="kpi-trend">este año</div></div>
-        <div class="kpi-card"><div class="kpi-label">Con certificado</div><div class="kpi-val purple">${cursos.filter(c=>c.certificado).length}</div></div>
+        ${UI.kpiCard({ icon:'🎓', clase:'cyan', label:`Capacitaciones ${anio}`, value: delAnio.length })}
+        ${UI.kpiCard({ icon:'⏱️', clase:'green', label:'Horas de formación', value: horas, trend:'este año' })}
+        ${UI.kpiCard({ icon:'💰', clase:'amber', label:'Inversión', value: inversion, money:true, trend:'este año' })}
+        ${UI.kpiCard({ icon:'📜', clase:'purple', label:'Con certificado', value: cursos.filter(c=>c.certificado).length })}
       </div>
       <div class="table-wrap"><table class="data-table">
         <thead><tr><th>Empleado</th><th>Capacitación</th><th>Modalidad</th><th>Fechas</th><th>Horas</th><th>Costo</th><th>Resultado</th><th>Acciones</th></tr></thead>
@@ -1291,10 +1291,10 @@ Modulos.rrhh = {
         <button class="btn btn-amber" onclick="Modulos.rrhh.modalAsignacion()">＋ Nueva entrega</button>
       </div>
       <div class="kpi-grid" style="margin-bottom:16px">
-        <div class="kpi-card"><div class="kpi-label">Asignaciones activas</div><div class="kpi-val cyan">${activas.length}</div></div>
-        <div class="kpi-card"><div class="kpi-label">Sin firma de recibido</div><div class="kpi-val ${activas.filter(a=>!a.firma_fecha).length?'red':'gray'}">${activas.filter(a=>!a.firma_fecha).length}</div></div>
-        <div class="kpi-card"><div class="kpi-label">Vehículos entregados</div><div class="kpi-val amber">${activas.filter(a=>a.tipo==='vehiculo').length}</div></div>
-        <div class="kpi-card"><div class="kpi-label">Devueltas</div><div class="kpi-val gray">${asigs.filter(a=>a.estado==='devuelto').length}</div></div>
+        ${UI.kpiCard({ icon:'🧰', clase:'cyan', label:'Asignaciones activas', value: activas.length })}
+        ${UI.kpiCard({ icon:'✍️', clase: activas.filter(a=>!a.firma_fecha).length?'red':'gray', label:'Sin firma de recibido', value: activas.filter(a=>!a.firma_fecha).length })}
+        ${UI.kpiCard({ icon:'🚗', clase:'amber', label:'Vehículos entregados', value: activas.filter(a=>a.tipo==='vehiculo').length })}
+        ${UI.kpiCard({ icon:'↩️', clase:'gray', label:'Devueltas', value: asigs.filter(a=>a.estado==='devuelto').length })}
       </div>
       <div class="table-wrap"><table class="data-table">
         <thead><tr><th>Empleado</th><th>Tipo</th><th>Descripción</th><th>Entrega</th><th>Firma de recibido</th><th>Estado</th><th>Acciones</th></tr></thead>

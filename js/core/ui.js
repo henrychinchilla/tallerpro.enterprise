@@ -147,6 +147,35 @@ const UI = {
     UI.toast(msg || 'Ocurrió un error', 'error');
   },
 
+  /* ── TARJETA KPI ──────────────────────────────────
+     opts = { icon?, label, value, clase?='cyan', trend?, money?=false,
+              destino?, delta?, spark?:[...] }
+     - delta: variación % vs periodo anterior (número; signo define up/down)
+     - spark: serie de valores numéricos para la mini gráfica */
+  kpiCard({ icon, label, value, clase='cyan', trend='', money=false, destino, delta=null, spark=null, id='' }) {
+    const clickable = destino ? `onclick="App.navegarA('${destino}')" style="cursor:pointer"` : '';
+    const head = (icon || delta !== null) ? `
+      <div class="kpi-card-head">
+        ${icon ? `<div class="kpi-icon">${icon}</div>` : '<div></div>'}
+        ${delta !== null ? (() => {
+          const d = Number(delta) || 0;
+          const dir = d > 0.05 ? 'up' : d < -0.05 ? 'down' : 'flat';
+          const arrow = dir === 'up' ? '▲' : dir === 'down' ? '▼' : '·';
+          return `<span class="kpi-delta ${dir}">${arrow} ${Math.abs(d).toFixed(1)}%</span>`;
+        })() : ''}
+      </div>` : '';
+    const sparkHtml = (spark && spark.length >= 2)
+      ? `<div class="kpi-spark">${Charts.sparkline({ valores: spark, colorVar: clase })}</div>` : '';
+    return `
+      <div class="kpi-card ${clase}" ${clickable}>
+        ${head}
+        <div class="kpi-label">${label}</div>
+        <div class="kpi-val ${clase}"${id ? ` id="${id}"` : ''}${typeof value==='number' ? ` data-count="${value}" data-money="${money?1:0}"` : ''}>${typeof value==='number' ? (money?UI.q(value):value) : value}</div>
+        ${trend ? `<div class="kpi-trend">${trend}</div>` : ''}
+        ${sparkHtml}
+      </div>`;
+  },
+
   /* ── ESTADO VACÍO ─────────────────────────────── */
   vacio(icono='📭', titulo='Sin datos', subtitulo='') {
     return `<div class="empty-state empty-state-lg">

@@ -354,7 +354,7 @@ const App = {
     const banner = document.createElement('div');
     banner.id = 'susc-banner';
     banner.style.cssText = `position:fixed;bottom:0;left:0;right:0;z-index:999;
-      background:${vencida || dias <= 3 ? 'var(--red)' : 'var(--amber)'};color:#000;
+      background:${vencida || dias <= 3 ? 'var(--red)' : 'var(--amber)'};color:#fff;
       padding:8px 16px;font-size:12px;font-weight:600;
       display:flex;align-items:center;justify-content:space-between;`;
     banner.innerHTML = `

@@ -21,14 +21,10 @@ Modulos.respaldos = {
       </div>
       <div class="page-body">
         <div class="kpi-grid" style="margin-bottom:20px">
-          <div class="kpi-card"><div class="kpi-label">Último respaldo manual</div>
-            <div class="kpi-val cyan" style="font-size:18px">${ultimo?UI.fecha(ultimo.fecha):'—'}</div>
-            <div class="kpi-trend">${ultimo?`${ultimo.registros||0} registros · ${ultimo.tablas||0} tablas`:'aún sin respaldos'}</div></div>
-          <div class="kpi-card"><div class="kpi-label">Respaldos registrados</div>
-            <div class="kpi-val amber">${this._data.length}</div></div>
-          <div class="kpi-card"><div class="kpi-label">Respaldo automático</div>
-            <div class="kpi-val green" style="font-size:18px">Diario</div>
-            <div class="kpi-trend">a nivel de base de datos</div></div>
+          ${UI.kpiCard({ icon:'🕓', clase:'cyan', label:'Último respaldo manual', value: ultimo?UI.fecha(ultimo.fecha):'—',
+            trend: ultimo?`${ultimo.registros||0} registros · ${ultimo.tablas||0} tablas`:'aún sin respaldos' })}
+          ${UI.kpiCard({ icon:'📦', clase:'amber', label:'Respaldos registrados', value: this._data.length })}
+          ${UI.kpiCard({ icon:'⚙️', clase:'green', label:'Respaldo automático', value:'Diario', trend:'a nivel de base de datos' })}
         </div>
 
         <div class="alert alert-cyan" style="margin-bottom:18px">

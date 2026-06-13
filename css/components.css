@@ -13,7 +13,7 @@
 .btn:not(:disabled):hover  { transform: translateY(-1px); box-shadow: 0 4px 14px rgba(0,0,0,.14); }
 .btn:not(:disabled):active { transform: translateY(0) scale(.98); box-shadow: none; transition-duration: .08s; }
 
-.btn-amber  { background: var(--amber); color: #000; box-shadow: 0 2px 8px color-mix(in srgb, var(--amber) 28%, transparent); }
+.btn-amber  { background: var(--amber); color: #fff; box-shadow: 0 2px 8px color-mix(in srgb, var(--amber) 28%, transparent); }
 .btn-amber:hover { filter: brightness(1.08); }
 
 .btn-cyan   { background: var(--cyan-dim); color: var(--cyan); border: 1px solid var(--cyan-border); }
@@ -55,8 +55,9 @@
 .kpi-card {
   background: var(--surface);
   border: 1px solid var(--border);
+  border-left: 3px solid var(--border);
   border-radius: 12px;
-  padding: 20px;
+  padding: 18px 20px;
   position: relative;
   box-shadow: 0 1px 3px rgba(0,0,0,.05);
   transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease;
@@ -66,14 +67,42 @@
   box-shadow: 0 8px 22px rgba(0,0,0,.09);
   border-color: color-mix(in srgb, var(--amber) 30%, var(--border));
 }
+.kpi-card.amber  { border-left-color: var(--amber);  }
+.kpi-card.cyan   { border-left-color: var(--cyan);   }
+.kpi-card.green  { border-left-color: var(--green);  }
+.kpi-card.red    { border-left-color: var(--red);    }
+.kpi-card.purple { border-left-color: var(--purple); }
+.kpi-card.gray   { border-left-color: var(--text3);  }
+
+.kpi-card-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; margin-bottom: 12px; }
+.kpi-icon {
+  width: 36px; height: 36px; border-radius: 10px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center; font-size: 17px;
+  background: var(--surface2);
+}
+.kpi-card.amber  .kpi-icon { background: var(--amber-dim);  }
+.kpi-card.cyan   .kpi-icon { background: var(--cyan-dim);   }
+.kpi-card.green  .kpi-icon { background: var(--green-dim);  }
+.kpi-card.red    .kpi-icon { background: var(--red-dim);    }
+.kpi-card.purple .kpi-icon { background: var(--purple-dim); }
+
+.kpi-delta { font-size: 11px; font-weight: 700; padding: 3px 7px; border-radius: 6px; white-space: nowrap; }
+.kpi-delta.up   { color: var(--green); background: var(--green-dim); }
+.kpi-delta.down { color: var(--red);   background: var(--red-dim);   }
+.kpi-delta.flat { color: var(--text3); background: var(--surface2);  }
+
 .kpi-label { font-size: 11px; color: var(--text3); font-weight: 600; text-transform: uppercase; letter-spacing: .08em; }
-.kpi-val   { font-family: 'Bebas Neue', sans-serif; font-size: 36px; letter-spacing: 1px; margin: 4px 0; }
+.kpi-val   { font-family: 'Manrope', sans-serif; font-weight: 800; font-size: 28px; letter-spacing: -.3px; line-height: 1.2; margin: 3px 0; }
 .kpi-trend { font-size: 11px; color: var(--text3); }
 .kpi-val.amber  { color: var(--amber); }
 .kpi-val.cyan   { color: var(--cyan);  }
 .kpi-val.green  { color: var(--green); }
 .kpi-val.red    { color: var(--red);   }
+.kpi-val.purple { color: var(--purple); }
 .kpi-val.gray   { color: var(--text3); }
+
+.kpi-spark { margin-top: 10px; line-height: 0; }
+.kpi-spark svg { display: block; width: 100%; height: 34px; overflow: visible; }
 
 /* ── TABLAS ──────────────────────────────────────── */
 .table-wrap {
@@ -249,7 +278,7 @@
 /* ── TOAST ───────────────────────────────────────── */
 .toast {
   position: fixed; bottom: 24px; right: 24px; z-index: 9999;
-  color: #000; padding: 12px 20px; border-radius: 12px;
+  color: #fff; padding: 12px 20px; border-radius: 12px;
   font-weight: 700; font-size: 13px; font-family: 'Manrope', sans-serif;
   box-shadow: 0 8px 28px rgba(0,0,0,0.28);
   animation: toastIn .3s cubic-bezier(.16,1,.3,1); max-width: 340px;
@@ -482,7 +511,7 @@
   transition: all .15s;
 }
 .view-btn:hover { color: var(--text); background: var(--surface3); }
-.view-btn.active { background: var(--amber); color: #000; }
+.view-btn.active { background: var(--amber); color: #fff; }
 
 /* ── TARJETAS DE BANCOS ──────────────────────────── */
 .bank-grid {

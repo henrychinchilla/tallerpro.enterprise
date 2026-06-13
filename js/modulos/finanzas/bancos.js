@@ -28,8 +28,8 @@ Modulos.bancos = {
     const activas = this._bancos.filter(b=>b.activa!==false).length;
     const totalMovs = this._bancos.reduce((s,b)=>s+(b._movs||0),0);
     const monedaCards = Object.entries(porMoneda).map(([m,v])=>
-      `<div class="kpi-card"><div class="kpi-label">Saldo Total ${m}</div><div class="kpi-val ${v>=0?'cyan':'red'}">${UI.q(v)}</div></div>`
-    ).join('') || `<div class="kpi-card"><div class="kpi-label">Saldo Total</div><div class="kpi-val cyan">${UI.q(0)}</div></div>`;
+      UI.kpiCard({ icon:'🏦', clase: v>=0?'cyan':'red', label:`Saldo Total ${m}`, value: v, money:true })
+    ).join('') || UI.kpiCard({ icon:'🏦', clase:'cyan', label:'Saldo Total', value: 0, money:true });
 
     const varClase = m => m==='USD'?'v-usd':m==='EUR'?'v-eur':'';
 
@@ -44,8 +44,8 @@ Modulos.bancos = {
       <div class="page-body">
         <div class="kpi-grid" style="margin-bottom:20px">
           ${monedaCards}
-          <div class="kpi-card"><div class="kpi-label">Cuentas Activas</div><div class="kpi-val amber">${activas}</div><div class="kpi-trend">de ${this._bancos.length} totales</div></div>
-          <div class="kpi-card"><div class="kpi-label">Movimientos</div><div class="kpi-val green">${totalMovs}</div><div class="kpi-trend">registrados</div></div>
+          ${UI.kpiCard({ icon:'🏦', clase:'amber', label:'Cuentas Activas', value: activas, trend:`de ${this._bancos.length} totales` })}
+          ${UI.kpiCard({ icon:'🔁', clase:'green', label:'Movimientos', value: totalMovs, trend:'registrados' })}
         </div>
         <div class="bank-grid">
           ${this._bancos.map(b=>`
@@ -133,10 +133,11 @@ Modulos.bancos = {
       </div>
       <div class="page-body">
         <div class="kpi-grid" style="margin-bottom:20px">
-          <div class="kpi-card"><div class="kpi-label">Saldo inicial · ${mesLabel}</div><div class="kpi-val ${saldoInicialMes>=0?'cyan':'red'}">${UI.q(saldoInicialMes)}</div><div class="kpi-trend">arrastrado del mes anterior</div></div>
-          <div class="kpi-card"><div class="kpi-label">Entradas del mes</div><div class="kpi-val green">${UI.q(entradasMes)}</div></div>
-          <div class="kpi-card"><div class="kpi-label">Salidas del mes</div><div class="kpi-val red">${UI.q(salidasMes)}</div></div>
-          <div class="kpi-card"><div class="kpi-label">Saldo final del mes</div><div class="kpi-val ${saldoFinalMes>=0?'cyan':'red'}">${UI.q(saldoFinalMes)}</div><div class="kpi-trend ${utilMes>=0?'text-green':'text-red'}">${utilMes>=0?'▲ ganancia':'▼ pérdida'} ${UI.q(Math.abs(utilMes))}</div></div>
+          ${UI.kpiCard({ icon:'📅', clase: saldoInicialMes>=0?'cyan':'red', label:`Saldo inicial · ${mesLabel}`, value: saldoInicialMes, money:true, trend:'arrastrado del mes anterior' })}
+          ${UI.kpiCard({ icon:'⬆️', clase:'green', label:'Entradas del mes', value: entradasMes, money:true })}
+          ${UI.kpiCard({ icon:'⬇️', clase:'red', label:'Salidas del mes', value: salidasMes, money:true })}
+          ${UI.kpiCard({ icon:'💰', clase: saldoFinalMes>=0?'cyan':'red', label:'Saldo final del mes', value: saldoFinalMes, money:true,
+            trend: `${utilMes>=0?'▲ ganancia':'▼ pérdida'} ${UI.q(Math.abs(utilMes))}` })}
         </div>
         <div class="table-wrap">
           <table class="data-table">

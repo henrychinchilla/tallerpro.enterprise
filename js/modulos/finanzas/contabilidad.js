@@ -174,10 +174,10 @@ Modulos.contabilidad = {
 
       el.innerHTML = `
         <div class="kpi-grid" style="margin-bottom:16px">
-          <div class="kpi-card"><div class="kpi-label">Débito fiscal</div><div class="kpi-val amber">${UI.q(d.debito)}</div><div class="kpi-trend">${d.ventas.length} facturas del sistema</div></div>
-          <div class="kpi-card"><div class="kpi-label">Crédito fiscal (${this._fuenteCredito==='fel'?'FEL SAT':'sistema'})</div><div class="kpi-val cyan">${UI.q(d.creditoUsado)}</div><div class="kpi-trend">${this._fuenteCredito==='fel'?d.felRec+' DTE recibidos':'compras + gastos'}</div></div>
-          <div class="kpi-card"><div class="kpi-label">Remanente anterior</div><div class="kpi-val purple">${UI.q(d.remanenteAnterior)}</div><div class="kpi-trend">arrastre desde enero ${anio}</div></div>
-          <div class="kpi-card"><div class="kpi-label">${saldo>=0?'IVA a pagar':'Remanente'}</div><div class="kpi-val ${saldo>=0?'red':'green'}">${UI.q(Math.abs(saldo))}</div><div class="kpi-trend">${nombreMes}</div></div>
+          ${UI.kpiCard({ icon:'🧾', clase:'amber', label:'Débito fiscal', value: d.debito, money:true, trend:`${d.ventas.length} facturas del sistema` })}
+          ${UI.kpiCard({ icon:'💳', clase:'cyan', label:`Crédito fiscal (${this._fuenteCredito==='fel'?'FEL SAT':'sistema'})`, value: d.creditoUsado, money:true, trend: this._fuenteCredito==='fel'?d.felRec+' DTE recibidos':'compras + gastos' })}
+          ${UI.kpiCard({ icon:'🔄', clase:'purple', label:'Remanente anterior', value: d.remanenteAnterior, money:true, trend:`arrastre desde enero ${anio}` })}
+          ${UI.kpiCard({ icon:'⚖️', clase: saldo>=0?'red':'green', label: saldo>=0?'IVA a pagar':'Remanente', value: Math.abs(saldo), money:true, trend: nombreMes })}
         </div>
 
         <div class="card" style="max-width:680px;margin-bottom:14px">
@@ -252,10 +252,10 @@ Modulos.contabilidad = {
       el.innerHTML = `
         ${enCurso?`<div class="alert alert-amber" style="margin-bottom:14px;max-width:680px"><div class="alert-icon">⏳</div><div class="alert-body" style="font-size:12px">El trimestre T${t} aún está en curso — las cifras se actualizan conforme registres operaciones.</div></div>`:''}
         <div class="kpi-grid" style="margin-bottom:16px">
-          <div class="kpi-card"><div class="kpi-label">Ingresos T${t} (sin IVA)</div><div class="kpi-val green">${UI.q(d.ventasNetas)}</div></div>
-          <div class="kpi-card"><div class="kpi-label">Gastos + Depreciación</div><div class="kpi-val red">${UI.q(gastos+dep)}</div><div class="kpi-trend">dep: ${UI.q(dep)}</div></div>
-          <div class="kpi-card"><div class="kpi-label">Utilidad del trimestre</div><div class="kpi-val ${utilidad>=0?'cyan':'red'}">${UI.q(utilidad)}</div></div>
-          <div class="kpi-card"><div class="kpi-label">ISR trimestral a pagar</div><div class="kpi-val amber">${UI.q(isrAPagar)}</div></div>
+          ${UI.kpiCard({ icon:'📈', clase:'green', label:`Ingresos T${t} (sin IVA)`, value: d.ventasNetas, money:true })}
+          ${UI.kpiCard({ icon:'📉', clase:'red', label:'Gastos + Depreciación', value: gastos+dep, money:true, trend:`dep: ${UI.q(dep)}` })}
+          ${UI.kpiCard({ icon:'💹', clase: utilidad>=0?'cyan':'red', label:'Utilidad del trimestre', value: utilidad, money:true })}
+          ${UI.kpiCard({ icon:'🏛️', clase:'amber', label:'ISR trimestral a pagar', value: isrAPagar, money:true })}
         </div>
 
         <div class="grid-2" style="align-items:start">
@@ -352,10 +352,10 @@ Modulos.contabilidad = {
       const aPagar = Math.max(0, Math.round((isr - d.retIsr)*100)/100);
       el.innerHTML = `
         <div class="kpi-grid" style="margin-bottom:16px">
-          <div class="kpi-card"><div class="kpi-label">Renta del mes (sin IVA)</div><div class="kpi-val cyan">${UI.q(base)}</div></div>
-          <div class="kpi-card"><div class="kpi-label">ISR calculado (5%/7%)</div><div class="kpi-val amber">${UI.q(isr)}</div></div>
-          <div class="kpi-card"><div class="kpi-label">Retenciones ISR</div><div class="kpi-val purple">${UI.q(d.retIsr)}</div></div>
-          <div class="kpi-card"><div class="kpi-label">ISR a pagar</div><div class="kpi-val red">${UI.q(aPagar)}</div></div>
+          ${UI.kpiCard({ icon:'💵', clase:'cyan', label:'Renta del mes (sin IVA)', value: base, money:true })}
+          ${UI.kpiCard({ icon:'🏛️', clase:'amber', label:'ISR calculado (5%/7%)', value: isr, money:true })}
+          ${UI.kpiCard({ icon:'🧾', clase:'purple', label:'Retenciones ISR', value: d.retIsr, money:true })}
+          ${UI.kpiCard({ icon:'⚖️', clase:'red', label:'ISR a pagar', value: aPagar, money:true })}
         </div>
         <div class="card" style="max-width:640px">
           <div class="card-sub mb-3">🏛️ Hoja de trabajo — ISR Opcional Simplificado (SAT-1311) · ${nombreMes}</div>

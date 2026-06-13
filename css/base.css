@@ -5,26 +5,26 @@
 
 /* ── TEMAS ───────────────────────────────────────── */
 :root, [data-theme="dark"] {
-  --bg:#0A0E1A; --surface:#0F1623; --surface2:#161E2E; --surface3:#1C2640;
+  --bg:#0B1220; --surface:#111A2C; --surface2:#1A2538; --surface3:#243349;
   --border:rgba(255,255,255,0.07);
-  --amber:#F59E0B; --amber-dim:rgba(245,158,11,0.1); --amber-border:rgba(245,158,11,0.25);
-  --cyan:#06B6D4; --cyan-dim:rgba(6,182,212,0.1); --cyan-border:rgba(6,182,212,0.25);
+  --amber:#3B82F6; --amber-dim:rgba(59,130,246,0.12); --amber-border:rgba(59,130,246,0.28);
+  --cyan:#38BDF8; --cyan-dim:rgba(56,189,248,0.1); --cyan-border:rgba(56,189,248,0.25);
   --green:#10B981; --green-dim:rgba(16,185,129,0.1); --green-border:rgba(16,185,129,0.25);
   --red:#EF4444; --red-dim:rgba(239,68,68,0.1); --red-border:rgba(239,68,68,0.25);
   --purple:#8B5CF6; --purple-dim:rgba(139,92,246,0.1); --purple-border:rgba(139,92,246,0.25);
   --gray:#6B7280; --gray-dim:rgba(107,114,128,0.1);
-  --text:#E2E8F0; --text2:#94A3B8; --text3:#4A5568;
+  --text:#E5E9F0; --text2:#94A3B8; --text3:#586478;
 }
 [data-theme="light"] {
-  --bg:#F1F5F9; --surface:#FFFFFF; --surface2:#E2E8F0; --surface3:#CBD5E1;
-  --border:rgba(15,23,42,0.25);
-  --amber:#92400E; --amber-dim:rgba(146,64,14,0.08); --amber-border:rgba(146,64,14,0.25);
-  --cyan:#075985; --cyan-dim:rgba(7,89,133,0.08); --cyan-border:rgba(7,89,133,0.25);
-  --green:#065F46; --green-dim:rgba(6,95,70,0.08); --green-border:rgba(6,95,70,0.25);
-  --red:#991B1B; --red-dim:rgba(153,27,27,0.08); --red-border:rgba(153,27,27,0.25);
-  --purple:#5B21B6; --purple-dim:rgba(91,33,182,0.08); --purple-border:rgba(91,33,182,0.25);
+  --bg:#F4F6F9; --surface:#FFFFFF; --surface2:#EEF1F5; --surface3:#DDE3EA;
+  --border:rgba(15,23,42,0.1);
+  --amber:#2563EB; --amber-dim:rgba(37,99,235,0.08); --amber-border:rgba(37,99,235,0.22);
+  --cyan:#0369A1; --cyan-dim:rgba(3,105,161,0.08); --cyan-border:rgba(3,105,161,0.22);
+  --green:#047857; --green-dim:rgba(4,120,87,0.08); --green-border:rgba(4,120,87,0.22);
+  --red:#B91C1C; --red-dim:rgba(185,28,28,0.08); --red-border:rgba(185,28,28,0.22);
+  --purple:#6D28D9; --purple-dim:rgba(109,40,217,0.08); --purple-border:rgba(109,40,217,0.22);
   --gray:#475569; --gray-dim:rgba(71,85,105,0.08);
-  --text:#0F172A; --text2:#334155; --text3:#475569;
+  --text:#0F172A; --text2:#334155; --text3:#64748B;
 }
 /* En claro, los acentos son oscuros → texto blanco en botones sólidos para máximo contraste */
 [data-theme="light"] .btn-amber,
@@ -137,7 +137,7 @@ body {
 .page-header, .page-body { animation: fadeIn .25s ease; }
 
 /* ── DETALLES GLOBALES ───────────────────────────── */
-::selection { background: var(--amber); color: #000; }
+::selection { background: var(--amber); color: #fff; }
 
 /* Scrollbars discretos acordes al tema */
 * { scrollbar-width: thin; scrollbar-color: var(--surface3) transparent; }

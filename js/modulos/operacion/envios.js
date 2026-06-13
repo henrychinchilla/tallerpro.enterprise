@@ -46,9 +46,9 @@ Modulos.envios = {
           <button class="tab-btn ${this._tab==='historial'?'active':''}" onclick="Modulos.envios._tab='historial';Modulos.envios.render()">🗄️ Historial</button>
         </div>
         ${!archivado?`<div class="kpi-grid" style="margin-bottom:16px">
-          <div class="kpi-card"><div class="kpi-label">Programados</div><div class="kpi-val gray">${programados}</div></div>
-          <div class="kpi-card"><div class="kpi-label">En tránsito</div><div class="kpi-val amber">${enTransito}</div></div>
-          <div class="kpi-card"><div class="kpi-label">Costo total (fletes)</div><div class="kpi-val red">${UI.q(costoTotal)}</div></div>
+          ${UI.kpiCard({ icon:'📦', clase:'gray', label:'Programados', value: programados })}
+          ${UI.kpiCard({ icon:'🚚', clase:'amber', label:'En tránsito', value: enTransito })}
+          ${UI.kpiCard({ icon:'💰', clase:'red', label:'Costo total (fletes)', value: costoTotal, money:true })}
         </div>`:''}
         <div class="table-wrap"><table class="data-table">
           <thead><tr><th>Fecha</th><th>Tipo</th><th>Descripción</th><th>Destino / Empresa</th><th>Medio</th><th>Costo</th><th>No. envío</th><th>Entrega est.</th><th>Estado</th><th>Acciones</th></tr></thead>

@@ -42,10 +42,10 @@ Modulos.activos = {
 
     return `
       <div class="kpi-grid" style="margin-bottom:16px">
-        <div class="kpi-card"><div class="kpi-label">Activos</div><div class="kpi-val cyan">${this._data.length}</div><div class="kpi-trend">${activos.length} en uso</div></div>
-        <div class="kpi-card"><div class="kpi-label">Valor de Adquisición</div><div class="kpi-val amber">${UI.q(totalCosto)}</div></div>
-        <div class="kpi-card"><div class="kpi-label">Valor en Libros (hoy)</div><div class="kpi-val green">${UI.q(totalLibros)}</div></div>
-        <div class="kpi-card"><div class="kpi-label">Depreciación Mensual</div><div class="kpi-val red">${UI.q(depMes)}</div><div class="kpi-trend">gasto operativo/mes</div></div>
+        ${UI.kpiCard({ icon:'🧰', clase:'cyan', label:'Activos', value: this._data.length, trend:`${activos.length} en uso` })}
+        ${UI.kpiCard({ icon:'💰', clase:'amber', label:'Valor de Adquisición', value: totalCosto, money:true })}
+        ${UI.kpiCard({ icon:'📒', clase:'green', label:'Valor en Libros (hoy)', value: totalLibros, money:true })}
+        ${UI.kpiCard({ icon:'📉', clase:'red', label:'Depreciación Mensual', value: depMes, money:true, trend:'gasto operativo/mes' })}
       </div>
       <div class="table-wrap"><table class="data-table">
         <thead><tr><th>Activo</th><th>Categoría</th><th>Adquisición</th><th>Costo</th><th>Vida útil</th><th>Dep. mensual</th><th>Valor en libros</th><th>Estado</th><th>Acciones</th></tr></thead>
@@ -111,9 +111,9 @@ Modulos.activos = {
         <button class="btn btn-ghost" onclick="window.print()">🖨️ Imprimir</button>
       </div>
       <div class="kpi-grid" style="margin-bottom:16px">
-        <div class="kpi-card"><div class="kpi-label">Depreciación ${trim}º Trim. ${anio}</div><div class="kpi-val red">${UI.q(totQ)}</div><div class="kpi-trend">deducible trimestral</div></div>
-        <div class="kpi-card"><div class="kpi-label">Depreciación Año ${anio}</div><div class="kpi-val amber">${UI.q(totA)}</div></div>
-        <div class="kpi-card"><div class="kpi-label">Activos depreciables</div><div class="kpi-val cyan">${this._data.filter(a=>depMensual(a)>0).length}</div></div>
+        ${UI.kpiCard({ icon:'📉', clase:'red', label:`Depreciación ${trim}º Trim. ${anio}`, value: totQ, money:true, trend:'deducible trimestral' })}
+        ${UI.kpiCard({ icon:'📉', clase:'amber', label:`Depreciación Año ${anio}`, value: totA, money:true })}
+        ${UI.kpiCard({ icon:'🧰', clase:'cyan', label:'Activos depreciables', value: this._data.filter(a=>depMensual(a)>0).length })}
       </div>
       <div class="table-wrap"><table class="data-table">
         <thead><tr><th>Activo</th><th>Costo</th><th>Dep. ${trim}º Trim.</th><th>Dep. Año</th><th>Dep. Acum.</th><th>Valor en libros</th></tr></thead>

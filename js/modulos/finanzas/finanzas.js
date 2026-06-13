@@ -85,10 +85,10 @@ Modulos.finanzas = {
     if (this._tab==='dashboard') {
       el.innerHTML = `
         <div class="kpi-grid" style="margin-bottom:20px">
-          <div class="kpi-card"><div class="kpi-label">Ingresos</div><div class="kpi-val green">${UI.q(totalIng)}</div><div class="kpi-trend">${ingresos.length} registros</div></div>
-          <div class="kpi-card"><div class="kpi-label">Egresos</div><div class="kpi-val red">${UI.q(totalEgr)}</div><div class="kpi-trend">${egresos.length} registros</div></div>
-          <div class="kpi-card"><div class="kpi-label">Utilidad Bruta</div><div class="kpi-val ${utilidad>=0?'amber':'red'}">${UI.q(utilidad)}</div><div class="kpi-trend">${totalIng>0?Math.round(utilidad/totalIng*100):0}% margen</div></div>
-          <div class="kpi-card"><div class="kpi-label">Período</div><div class="kpi-val amber" style="font-size:18px">${UI.fecha(this._ini)}</div><div class="kpi-trend">al ${UI.fecha(this._fin)}</div></div>
+          ${UI.kpiCard({ icon:'⬆️', clase:'green', label:'Ingresos', value: totalIng, money:true, trend:`${ingresos.length} registros` })}
+          ${UI.kpiCard({ icon:'⬇️', clase:'red', label:'Egresos', value: totalEgr, money:true, trend:`${egresos.length} registros` })}
+          ${UI.kpiCard({ icon:'💹', clase: utilidad>=0?'amber':'red', label:'Utilidad Bruta', value: utilidad, money:true, trend:`${totalIng>0?Math.round(utilidad/totalIng*100):0}% margen` })}
+          ${UI.kpiCard({ icon:'📅', clase:'amber', label:'Período', value: UI.fecha(this._ini), trend:`al ${UI.fecha(this._fin)}` })}
         </div>
         <div class="grid-2">
           <div class="card">
@@ -176,9 +176,9 @@ Modulos.finanzas = {
       const pend = totalVia - aprobados;
       el.innerHTML = `
         <div class="kpi-grid" style="margin-bottom:16px">
-          <div class="kpi-card"><div class="kpi-label">Total Viáticos</div><div class="kpi-val amber">${UI.q(totalVia)}</div><div class="kpi-trend">${viaticos.length} registros</div></div>
-          <div class="kpi-card"><div class="kpi-label">Aprobados</div><div class="kpi-val green">${UI.q(aprobados)}</div><div class="kpi-trend">Cargados a egresos</div></div>
-          <div class="kpi-card"><div class="kpi-label">Pendientes</div><div class="kpi-val red">${UI.q(pend)}</div><div class="kpi-trend">Por aprobar</div></div>
+          ${UI.kpiCard({ icon:'🚗', clase:'amber', label:'Total Viáticos', value: totalVia, money:true, trend:`${viaticos.length} registros` })}
+          ${UI.kpiCard({ icon:'✅', clase:'green', label:'Aprobados', value: aprobados, money:true, trend:'Cargados a egresos' })}
+          ${UI.kpiCard({ icon:'⏳', clase:'red', label:'Pendientes', value: pend, money:true, trend:'Por aprobar' })}
         </div>
         <div style="display:flex;justify-content:flex-end;margin-bottom:16px">
           <button class="btn btn-amber" onclick="Modulos.finanzas.modalViatico()">＋ Nuevo Viático</button>
@@ -225,9 +225,9 @@ Modulos.finanzas = {
       const FREQ = { mensual:'Mensual', bimestral:'Bimestral', trimestral:'Trimestral', anual:'Anual' };
       el.innerHTML = `
         <div class="kpi-grid" style="margin-bottom:16px">
-          <div class="kpi-card"><div class="kpi-label">Gastos Recurrentes</div><div class="kpi-val cyan">${activos.length}</div><div class="kpi-trend">activos</div></div>
-          <div class="kpi-card"><div class="kpi-label">Total Mensual</div><div class="kpi-val red">${UI.q(totalMensual)}</div><div class="kpi-trend">compromiso fijo/mes</div></div>
-          <div class="kpi-card"><div class="kpi-label">Pendientes de ${nombreMes}</div><div class="kpi-val amber">${pendientes.length}</div><div class="kpi-trend">por generar</div></div>
+          ${UI.kpiCard({ icon:'🔁', clase:'cyan', label:'Gastos Recurrentes', value: activos.length, trend:'activos' })}
+          ${UI.kpiCard({ icon:'📌', clase:'red', label:'Total Mensual', value: totalMensual, money:true, trend:'compromiso fijo/mes' })}
+          ${UI.kpiCard({ icon:'⏳', clase:'amber', label:`Pendientes de ${nombreMes}`, value: pendientes.length, trend:'por generar' })}
         </div>
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;gap:8px;flex-wrap:wrap">
           <div style="font-size:12px;color:var(--text3)">Renta, energía, teléfono, internet, nómina... se cargan como egreso cada período.</div>
@@ -367,9 +367,9 @@ Modulos.finanzas = {
           </div>
         </div>
         <div class="kpi-grid" style="margin-bottom:18px">
-          <div class="kpi-card"><div class="kpi-label">IVA Débito (ventas)</div><div class="kpi-val green">${UI.q(ivaDebito)}</div><div class="kpi-trend">base ${UI.q(baseVentas)}</div></div>
-          ${esPequeno?'':`<div class="kpi-card"><div class="kpi-label">IVA Crédito (compras)</div><div class="kpi-val cyan">${UI.q(ivaCredito)}</div><div class="kpi-trend">base ${UI.q(baseCompras)}</div></div>`}
-          <div class="kpi-card"><div class="kpi-label">IVA a pagar del mes</div><div class="kpi-val ${ivaPagar>=0?'red':'green'}">${UI.q(ivaPagar)}</div><div class="kpi-trend">${esPequeno?'5% sobre ventas':'débito − crédito'}</div></div>
+          ${UI.kpiCard({ icon:'🧾', clase:'green', label:'IVA Débito (ventas)', value: ivaDebito, money:true, trend:`base ${UI.q(baseVentas)}` })}
+          ${esPequeno?'':UI.kpiCard({ icon:'💳', clase:'cyan', label:'IVA Crédito (compras)', value: ivaCredito, money:true, trend:`base ${UI.q(baseCompras)}` })}
+          ${UI.kpiCard({ icon:'⚖️', clase: ivaPagar>=0?'red':'green', label:'IVA a pagar del mes', value: ivaPagar, money:true, trend: esPequeno?'5% sobre ventas':'débito − crédito' })}
         </div>
 
         <div class="card-sub mb-3">🧾 Libro de Ventas (facturación del mes)</div>
@@ -433,10 +433,10 @@ Modulos.finanzas = {
           </div>
         </div>
         <div class="kpi-grid" style="margin-bottom:8px">
-          <div class="kpi-card"><div class="kpi-label">ISR del mes (estimado)</div><div class="kpi-val amber">${UI.q(isrMes)}</div><div class="kpi-trend">${isrNota}</div></div>
-          <div class="kpi-card"><div class="kpi-label">ISR retenido (sufrido)</div><div class="kpi-val green">${UI.q(sufISR)}</div><div class="kpi-trend">acreditable</div></div>
-          <div class="kpi-card"><div class="kpi-label">ISR neto a pagar</div><div class="kpi-val red">${UI.q(isrNeto)}</div><div class="kpi-trend">ISR − retenciones</div></div>
-          <div class="kpi-card"><div class="kpi-label">IVA retenido (sufrido)</div><div class="kpi-val cyan">${UI.q(sufIVA)}</div><div class="kpi-trend">crédito de IVA</div></div>
+          ${UI.kpiCard({ icon:'🏛️', clase:'amber', label:'ISR del mes (estimado)', value: isrMes, money:true, trend: isrNota })}
+          ${UI.kpiCard({ icon:'🧾', clase:'green', label:'ISR retenido (sufrido)', value: sufISR, money:true, trend:'acreditable' })}
+          ${UI.kpiCard({ icon:'⚖️', clase:'red', label:'ISR neto a pagar', value: isrNeto, money:true, trend:'ISR − retenciones' })}
+          ${UI.kpiCard({ icon:'💳', clase:'cyan', label:'IVA retenido (sufrido)', value: sufIVA, money:true, trend:'crédito de IVA' })}
         </div>
         ${(efeISR>0||efeIVA>0)?`<div class="alert alert-amber" style="margin-bottom:12px"><div class="alert-icon">⚠️</div><div class="alert-body" style="font-size:12px">Retenciones <b>efectuadas</b> por enterar a la SAT: ISR ${UI.q(efeISR)} · IVA ${UI.q(efeIVA)}.</div></div>`:''}
         <div class="table-wrap"><table class="data-table" style="font-size:12px">

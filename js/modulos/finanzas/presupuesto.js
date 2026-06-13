@@ -110,10 +110,10 @@ Modulos.presupuesto = {
           <div class="alert-body" style="font-size:12px">Aún no hay presupuesto para ${anio}. Los valores mostrados son la <b>proyección automática</b> (últimos 12 meses + nómina + depreciación). Ajústalos y presiona <b>Guardar</b>.</div></div>`:''}
 
         <div class="kpi-grid" style="margin-bottom:20px">
-          <div class="kpi-card"><div class="kpi-label">Ingresos presupuestados</div><div class="kpi-val green" id="pp-kpi-ing">${UI.q(plan.ingresos)}</div></div>
-          <div class="kpi-card"><div class="kpi-label">Egresos presupuestados</div><div class="kpi-val red" id="pp-kpi-egr">${UI.q(0)}</div></div>
-          <div class="kpi-card"><div class="kpi-label">Utilidad proyectada</div><div class="kpi-val amber" id="pp-kpi-util">${UI.q(0)}</div></div>
-          <div class="kpi-card"><div class="kpi-label">Plan de herramientas (Capex)</div><div class="kpi-val cyan" id="pp-kpi-capex">${UI.q(0)}</div></div>
+          ${UI.kpiCard({ icon:'📈', clase:'green', label:'Ingresos presupuestados', value: UI.q(plan.ingresos), id:'pp-kpi-ing' })}
+          ${UI.kpiCard({ icon:'📉', clase:'red', label:'Egresos presupuestados', value: UI.q(0), id:'pp-kpi-egr' })}
+          ${UI.kpiCard({ icon:'💹', clase:'amber', label:'Utilidad proyectada', value: UI.q(0), id:'pp-kpi-util' })}
+          ${UI.kpiCard({ icon:'🛠️', clase:'cyan', label:'Plan de herramientas (Capex)', value: UI.q(0), id:'pp-kpi-capex' })}
         </div>
 
         <div class="card" style="max-width:760px;margin-bottom:20px">

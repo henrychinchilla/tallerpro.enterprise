@@ -51,10 +51,10 @@ Modulos.superadmin = {
       const vencidos = this._tenants.filter(t=>t.suscripcion_vence && t.suscripcion_vence < hoy && t.active!==false);
       el.innerHTML = `
         <div class="kpi-grid" style="margin-bottom:20px">
-          <div class="kpi-card"><div class="kpi-label">Talleres totales</div><div class="kpi-val amber">${this._tenants.length}</div></div>
-          <div class="kpi-card"><div class="kpi-label">Activos</div><div class="kpi-val green">${activos.length}</div></div>
-          <div class="kpi-card"><div class="kpi-label">MRR (ingreso recurrente)</div><div class="kpi-val cyan">${UI.q(mrr)}</div><div class="kpi-trend">por mes</div></div>
-          <div class="kpi-card"><div class="kpi-label">Suscripciones vencidas</div><div class="kpi-val ${vencidos.length?'red':'gray'}">${vencidos.length}</div></div>
+          ${UI.kpiCard({ icon:'🏢', clase:'amber', label:'Talleres totales', value: this._tenants.length })}
+          ${UI.kpiCard({ icon:'✅', clase:'green', label:'Activos', value: activos.length })}
+          ${UI.kpiCard({ icon:'💰', clase:'cyan', label:'MRR (ingreso recurrente)', value: mrr, money:true, trend:'por mes' })}
+          ${UI.kpiCard({ icon:'⚠️', clase: vencidos.length?'red':'gray', label:'Suscripciones vencidas', value: vencidos.length })}
         </div>
         <div class="table-wrap">
           <table class="data-table">
@@ -90,9 +90,9 @@ Modulos.superadmin = {
       const sinCobrar = activos.filter(t=>!conPago.has(t.id));
       el.innerHTML = `
         <div class="kpi-grid" style="margin-bottom:20px">
-          <div class="kpi-card"><div class="kpi-label">Cobrado este mes</div><div class="kpi-val green">${UI.q(cobradoMes)}</div></div>
-          <div class="kpi-card"><div class="kpi-label">Pendiente este mes</div><div class="kpi-val amber">${UI.q(pendienteMes)}</div></div>
-          <div class="kpi-card"><div class="kpi-label">Sin cobrar (${mesAct})</div><div class="kpi-val ${sinCobrar.length?'red':'gray'}">${sinCobrar.length}</div><div class="kpi-trend">talleres activos</div></div>
+          ${UI.kpiCard({ icon:'💵', clase:'green', label:'Cobrado este mes', value: cobradoMes, money:true })}
+          ${UI.kpiCard({ icon:'⏳', clase:'amber', label:'Pendiente este mes', value: pendienteMes, money:true })}
+          ${UI.kpiCard({ icon:'⚠️', clase: sinCobrar.length?'red':'gray', label:`Sin cobrar (${mesAct})`, value: sinCobrar.length, trend:'talleres activos' })}
         </div>
         ${sinCobrar.length?`<div class="alert alert-amber" style="margin-bottom:16px"><div class="alert-icon">⏰</div><div class="alert-body" style="font-size:12px">
           Sin cobro de ${mesAct}: ${sinCobrar.map(t=>`<b>${t.name||t.slug}</b>`).join(', ')}.

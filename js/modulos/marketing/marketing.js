@@ -128,8 +128,8 @@ Modulos.marketing = {
             Inscribe clientes desde su ficha en <b>Clientes</b>.</div>
           <button class="btn btn-ghost btn-sm" onclick="Modulos.marketing.modalPoliticas()">⚙️ Cambiar políticas</button></div>
         <div class="kpi-grid" style="margin-bottom:16px">
-          <div class="kpi-card"><div class="kpi-label">Clientes inscritos</div><div class="kpi-val cyan">${inscritos.length}</div></div>
-          <div class="kpi-card"><div class="kpi-label">Puntos en circulación</div><div class="kpi-val amber">${totalPts.toLocaleString()}</div><div class="kpi-trend">≈ ${UI.q(totalPts/tasa)} en canjes</div></div>
+          ${UI.kpiCard({ icon:'👥', clase:'cyan', label:'Clientes inscritos', value: inscritos.length })}
+          ${UI.kpiCard({ icon:'⭐', clase:'amber', label:'Puntos en circulación', value: totalPts, trend:`≈ ${UI.q(totalPts/tasa)} en canjes` })}
         </div>
         <div class="table-wrap"><table class="data-table">
           <thead><tr><th>Cliente</th><th>Teléfono</th><th>Saldo</th><th>Equivale a</th><th>Movimientos</th></tr></thead>
@@ -169,8 +169,8 @@ Modulos.marketing = {
           <div class="card">
             <div class="card-sub mb-3">📊 KPIs de mejora</div>
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-              <div class="kpi-card"><div class="kpi-label">Respuestas</div><div class="kpi-val cyan">${fb.length}</div><div class="kpi-trend">${esteMes} este mes</div></div>
-              <div class="kpi-card"><div class="kpi-label">Satisfacción</div><div class="kpi-val ${satis>=80?'green':satis>=60?'amber':'red'}">${satis}%</div><div class="kpi-trend">califican 4–5★</div></div>
+              ${UI.kpiCard({ icon:'💬', clase:'cyan', label:'Respuestas', value: fb.length, trend:`${esteMes} este mes` })}
+              ${UI.kpiCard({ icon:'😊', clase: satis>=80?'green':satis>=60?'amber':'red', label:'Satisfacción', value: `${satis}%`, trend:'califican 4–5★' })}
             </div>
             <div style="margin-top:10px">
               <div style="font-size:11px;color:var(--text3);font-weight:700;text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">Promedio por aspecto</div>

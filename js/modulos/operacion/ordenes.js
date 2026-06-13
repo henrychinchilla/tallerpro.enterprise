@@ -809,13 +809,13 @@ Modulos.ordenes = {
       <meta charset="UTF-8">
       <style>
         body{font-family:Arial,sans-serif;padding:20px;max-width:700px;margin:0 auto;color:#111}
-        h2{text-align:center;border-bottom:2px solid #F59E0B;padding-bottom:8px}
+        h2{text-align:center;border-bottom:2px solid #3B82F6;padding-bottom:8px}
         .header{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px}
         .section{border:1px solid #ddd;border-radius:6px;padding:12px;margin-bottom:12px}
         table{width:100%;border-collapse:collapse;font-size:13px}
-        th{background:#F59E0B;color:#000;padding:6px 8px;text-align:left}
+        th{background:#3B82F6;color:#fff;padding:6px 8px;text-align:left}
         td{padding:6px 8px;border-bottom:1px solid #eee}
-        .total{font-size:16px;font-weight:bold;text-align:right;margin-top:8px;color:#D97706}
+        .total{font-size:16px;font-weight:bold;text-align:right;margin-top:8px;color:#2563EB}
         .firma{margin-top:40px;display:grid;grid-template-columns:1fr 1fr;gap:40px}
         .firma-line{border-top:1px solid #111;padding-top:4px;text-align:center;font-size:12px}
         .check{color:green;font-weight:bold}

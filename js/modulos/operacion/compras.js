@@ -29,9 +29,10 @@ Modulos.compras = {
       </div>
       <div class="page-body">
         <div class="kpi-grid" style="margin-bottom:16px">
-          <div class="kpi-card"><div class="kpi-label">Compras del mes</div><div class="kpi-val red">${UI.q(totalMes)}</div></div>
-          <div class="kpi-card"><div class="kpi-label">Compras del año</div><div class="kpi-val amber">${UI.q(totalAnio)}</div></div>
-          <div class="kpi-card"><div class="kpi-label">Presupuesto compras ${anio}</div><div class="kpi-val cyan">${presCompras>0?UI.q(presCompras):'—'}</div>${presCompras>0?`<div class="kpi-trend ${pct>100?'':''}" style="color:${pct>100?'var(--red)':'var(--green)'}">${pct}% ejecutado</div>`:'<div class="kpi-trend">Define metas en Presupuesto</div>'}</div>
+          ${UI.kpiCard({ icon:'🛒', clase:'red', label:'Compras del mes', value: totalMes, money:true })}
+          ${UI.kpiCard({ icon:'📦', clase:'amber', label:'Compras del año', value: totalAnio, money:true })}
+          ${UI.kpiCard({ icon:'🎯', clase:'cyan', label:`Presupuesto compras ${anio}`, value: presCompras>0?UI.q(presCompras):'—',
+            trend: presCompras>0?`<span style="color:${pct>100?'var(--red)':'var(--green)'}">${pct}% ejecutado</span>`:'Define metas en Presupuesto' })}
         </div>
         ${presCompras>0?`<div style="height:8px;background:var(--surface2);border-radius:4px;overflow:hidden;margin-bottom:16px">
           <div style="height:100%;width:${Math.min(100,pct)}%;background:var(--${pct>100?'red':pct>85?'amber':'green'})"></div></div>`:''}

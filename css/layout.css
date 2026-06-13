@@ -192,7 +192,7 @@
   cursor: pointer;
   transition: all .15s;
 }
-.btn-ia:hover { background: var(--amber); color: #000; }
+.btn-ia:hover { background: var(--amber); color: #fff; }
 .btn-ia-icon { font-size: 16px; }
 
 .sidebar-user {
@@ -233,7 +233,7 @@
   box-shadow: 0 2px 8px rgba(0,0,0,.18);
   transition: left .25s ease, background .15s ease;
 }
-#sb-toggle:hover { background: var(--amber); color: #000; }
+#sb-toggle:hover { background: var(--amber); color: #fff; }
 
 @media (min-width: 769px) {
   #sidebar { transition: transform .25s ease; }

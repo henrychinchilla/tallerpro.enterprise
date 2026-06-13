@@ -15,6 +15,27 @@ const Charts = {
     return 'Q' + Math.round(n);
   },
 
+  /* ── SPARKLINE (mini línea para tarjetas KPI) ──────
+     opts = { valores:[...], colorVar? } */
+  sparkline({ valores = [], colorVar = 'cyan' }) {
+    if (!valores.length || valores.length < 2) return '';
+    const W = 200, H = 40, pad = 3;
+    const max = Math.max(...valores), min = Math.min(...valores);
+    const span = (max - min) || 1;
+    const n = valores.length;
+    const pts = valores.map((v, i) => {
+      const x = pad + (i / (n - 1)) * (W - pad * 2);
+      const y = H - pad - ((v - min) / span) * (H - pad * 2);
+      return [x, y];
+    });
+    const line = pts.map(([x, y], i) => `${i === 0 ? 'M' : 'L'}${x.toFixed(1)},${y.toFixed(1)}`).join(' ');
+    const area = `${line} L${pts[n-1][0].toFixed(1)},${H} L${pts[0][0].toFixed(1)},${H} Z`;
+    return `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">
+      <path d="${area}" style="fill:var(--${colorVar})" opacity=".12"/>
+      <path d="${line}" fill="none" style="stroke:var(--${colorVar})" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>`;
+  },
+
   /* ── ÁREA + LÍNEAS ─────────────────────────────────
      opts = { labels:[...], series:[{nombre, valores:[], colorVar, area?}] } */
   areaLineas({ labels, series, alto = 230 }) {

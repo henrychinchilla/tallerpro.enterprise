@@ -26,9 +26,14 @@ Modulos.dashboard = {
     const saludo = h < 12 ? 'Buenos días' : h < 19 ? 'Buenas tardes' : 'Buenas noches';
     const nombre = (Auth.user?.nombre || '').split(' ')[0] || '';
 
-    /* Utilidad del mes actual (último bucket) */
+    /* Utilidad del mes actual (último bucket) y del anterior, para variación y sparkline */
     const actual = dd.meses[dd.meses.length - 1] || { ingresos: 0, egresos: 0 };
-    const utilidad = actual.ingresos - actual.egresos;
+    const previo  = dd.meses[dd.meses.length - 2] || null;
+    const utilidad     = actual.ingresos - actual.egresos;
+    const utilidadPrev = previo ? (previo.ingresos - previo.egresos) : null;
+    const utilidadDelta = (utilidadPrev !== null && utilidadPrev !== 0)
+      ? (utilidad - utilidadPrev) / Math.abs(utilidadPrev) * 100 : null;
+    const utilidadSpark = dd.meses.map(m => m.ingresos - m.egresos);
 
     /* Métricas BI para las tarjetas hero (anillos de %) */
     const margen      = kpi.ingresos > 0 ? Math.round(utilidad / kpi.ingresos * 100) : 0;
@@ -85,14 +90,6 @@ Modulos.dashboard = {
     /* Órdenes recientes (5) */
     const recientes = ordenes.slice(0, 5);
 
-    /* KPI clicable con contador animado (data-count) */
-    const kpiCard = (clase, label, valor, trend, destino, money = false) => `
-      <div class="kpi-card ${clase}" ${destino ? `onclick="App.navegarA('${destino}')" style="cursor:pointer"` : ''}>
-        <div class="kpi-label">${label}</div>
-        <div class="kpi-val ${clase}" data-count="${valor}" data-money="${money ? 1 : 0}">${money ? UI.q(valor) : valor}</div>
-        <div class="kpi-trend">${trend}</div>
-      </div>`;
-
     el.innerHTML = `
       <div class="page-header">
         <div>
@@ -124,10 +121,14 @@ Modulos.dashboard = {
         </div>
 
         <div class="kpi-grid">
-          ${kpiCard(utilidad >= 0 ? 'green' : 'red', 'Utilidad del Mes', utilidad, 'Ingresos − egresos', 'finanzas', true)}
-          ${kpiCard('cyan', 'Órdenes Activas', kpi.otsActivas, 'En proceso actualmente', 'ordenes')}
-          ${kpiCard('amber', 'Clientes', kpi.clientes, 'Registrados', 'clientes')}
-          ${kpiCard(kpi.invBajo.length > 0 ? 'red' : 'gray', 'Stock Bajo', kpi.invBajo.length, kpi.invBajo.length > 0 ? 'Artículos bajo mínimo' : 'Inventario OK', 'inventario')}
+          ${UI.kpiCard({ icon:'💹', clase: utilidad >= 0 ? 'green' : 'red', label:'Utilidad del Mes', value: utilidad, money:true,
+            trend: 'Ingresos − egresos', destino:'finanzas', delta: utilidadDelta, spark: utilidadSpark })}
+          ${UI.kpiCard({ icon:'🔧', clase:'cyan', label:'Órdenes Activas', value: kpi.otsActivas,
+            trend:'En proceso actualmente', destino:'ordenes' })}
+          ${UI.kpiCard({ icon:'👥', clase:'amber', label:'Clientes', value: kpi.clientes,
+            trend:'Registrados', destino:'clientes' })}
+          ${UI.kpiCard({ icon: kpi.invBajo.length > 0 ? '⚠️' : '📦', clase: kpi.invBajo.length > 0 ? 'red' : 'gray', label:'Stock Bajo', value: kpi.invBajo.length,
+            trend: kpi.invBajo.length > 0 ? 'Artículos bajo mínimo' : 'Inventario OK', destino:'inventario' })}
         </div>
 
         <div class="dash-charts">
