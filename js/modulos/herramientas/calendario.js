@@ -74,7 +74,8 @@ Modulos.calendario = {
       ? this._eventosSATRango(ini, fin, fiscal, obligaciones, { sat: conSAT, igss: conRRHH })
         .filter(e=>enRango(e.fecha_cita.slice(0,10)))
       : [];
-    const eventos = [...this._citas, ...pagos, ...enviosEv, ...satEv]
+    const feriadosEv = this._feriadosEventosRango(ini, fin);
+    const eventos = [...this._citas, ...pagos, ...enviosEv, ...satEv, ...feriadosEv]
       .sort((a,b)=>(a.fecha_cita||'').localeCompare(b.fecha_cita||''));
     this._eventosMes = eventos;
 
@@ -129,11 +130,12 @@ Modulos.calendario = {
   /* ── Chip compacto de evento (vistas mes/semana) ── */
   _chip(c) {
     const conf = c._igss  ? { col:'green',  ico:'🏥', click:`App.navegarSub('rrhh','igss')` }
+      : c._feriado ? { col:'green', ico:'🎉', click:`App.navegarSub('rrhh','horasextra')` }
       : c._sat  ? { col:'purple', ico:'🏛️', click:`App.navegarA('contabilidad')` }
       : c._pago ? { col:'red',    ico:'💸', click:`Modulos.finanzas&&(Modulos.finanzas._tab='recurrentes');App.navegarA('finanzas')` }
       : c._envio? { col:'cyan',   ico:'🚚', click:`App.navegarA('envios')` }
       :           { col:'amber',  ico:'🔧', click:`Modulos.calendario.modalCita('${c.id}')` };
-    const hora = (!c._sat && !c._pago && c.fecha_cita) ? new Date(c.fecha_cita).toLocaleTimeString('es-GT',{hour:'2-digit',minute:'2-digit'}) : '';
+    const hora = (!c._sat && !c._pago && !c._feriado && c.fecha_cita) ? new Date(c.fecha_cita).toLocaleTimeString('es-GT',{hour:'2-digit',minute:'2-digit'}) : '';
     return `<div onclick="event.stopPropagation();${conf.click}" title="${(c.titulo||'').replace(/"/g,'&quot;')}"
       style="font-size:10px;padding:2px 6px;border-radius:5px;background:var(--${conf.col}-dim);color:var(--${conf.col});
              border-left:2px solid var(--${conf.col});margin-bottom:2px;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">
@@ -180,7 +182,7 @@ Modulos.calendario = {
       <tbody>${filas}</tbody>
     </table></div>
     <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:8px;font-size:11px;color:var(--text3)">
-      <span>🔧 Citas</span><span>💸 Pagos programados</span><span>🚚 Envíos</span><span>🏛️ SAT</span><span>🏥 IGSS·IRTRA·INTECAP</span>
+      <span>🔧 Citas</span><span>💸 Pagos programados</span><span>🚚 Envíos</span><span>🏛️ SAT</span><span>🏥 IGSS·IRTRA·INTECAP</span><span>🎉 Días feriados</span>
     </div>`;
   },
 
@@ -266,6 +268,20 @@ Modulos.calendario = {
     return out;
   },
 
+  /* ── Días feriados de Guatemala dentro del rango visible ── */
+  _feriadosEventosRango(ini, fin) {
+    const out = [];
+    const anios = new Set([ini.getFullYear(), fin.getFullYear()]);
+    anios.forEach(anio => {
+      FERIADOS_GT(anio).forEach(fer => {
+        if (fer.fecha >= this._f(ini) && fer.fecha <= this._f(fin)) {
+          out.push({ _feriado:true, titulo: fer.nombre, completo: fer.completo, fecha_cita: `${fer.fecha}T00:00:00` });
+        }
+      });
+    });
+    return out;
+  },
+
   /* ── Calendario fiscal (Guatemala) para los meses del rango ──
      SAT: IVA mensual (SAT-2237/2046) vence el último día del mes
      siguiente; ISR Simplificado SAT-1311 el día 10; régimen utilidades
@@ -326,6 +342,18 @@ Modulos.calendario = {
   _renderCitaCard(c, conFecha=false) {
     const hora = c.fecha_cita ? new Date(c.fecha_cita).toLocaleTimeString('es-GT',{hour:'2-digit',minute:'2-digit'}) : '';
     const fecha = c.fecha_cita ? new Date(c.fecha_cita).toLocaleDateString('es-GT',{day:'numeric',month:'short'}) : '';
+    if (c._feriado) {
+      return `<div style="padding:10px;border-left:3px solid var(--green);margin-bottom:8px;background:var(--surface2);border-radius:0 8px 8px 0;cursor:pointer"
+           onclick="App.navegarSub('rrhh','horasextra')">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+          <div style="font-weight:700;font-size:13px">🎉 ${c.titulo}</div>
+          <div style="font-size:11px;color:var(--green);white-space:nowrap">${conFecha?fecha:''}</div>
+        </div>
+        <div style="font-size:11px;color:var(--text3);margin-top:2px">
+          Día feriado de Guatemala${c.completo===false?' (medio día)':''} — si hay personal trabajando, regístralo en RRHH → Horas Extra
+        </div>
+      </div>`;
+    }
     if (c._sat) {
       const st = c.sat_estado === 'pagado' ? { b:'green', t:'✓ Pagado' }
         : c.sat_estado === 'pendiente' ? { b:'amber', t:'Pendiente' }

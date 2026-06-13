@@ -98,7 +98,11 @@ const MODULOS = [
       { tab:'capacitacion',  icon:'🎓', label:'Capacitación'   },
       { tab:'asignaciones',  icon:'🔑', label:'Asignaciones'   },
       { tab:'organigrama',   icon:'🏢', label:'Organigrama'   },
-      { tab:'documentos',    icon:'📄', label:'Documentos'    }
+      { tab:'documentos',    icon:'📄', label:'Documentos'    },
+      { tab:'reclutamiento', icon:'🧑‍💼', label:'Reclutamiento' },
+      { tab:'disciplina',    icon:'⚖️', label:'Disciplina'    },
+      { tab:'vacaciones',    icon:'🏖️', label:'Vacaciones'    },
+      { tab:'horasextra',    icon:'⏰', label:'Horas Extra'   }
     ] },
   { id:'marketing',      icon:'🎯', label:'Marketing',         grupo:'marketing'  },
   { id:'calendario',     icon:'📅', label:'Calendario',        grupo:'herramientas'},
@@ -424,6 +428,41 @@ function calcularHoraHombre(salarioBase, cfg = PRODUCTIVIDAD_DEFAULTS) {
     horasMes: horas,
     horaHombre: horas>0 ? costoMensual/horas : 0
   };
+}
+
+/* ── DÍAS FERIADOS DE GUATEMALA (Código de Trabajo) ─── */
+function _pascuaDomingo(anio) {
+  // Algoritmo de Gauss/Anonymous Gregorian para calcular Domingo de Pascua
+  const a = anio % 19, b = Math.floor(anio/100), c = anio % 100;
+  const d = Math.floor(b/4), e = b % 4, f = Math.floor((b+8)/25);
+  const g = Math.floor((b-f+1)/3), h = (19*a + b - d - g + 15) % 30;
+  const i = Math.floor(c/4), k = c % 4, l = (32 + 2*e + 2*i - h - k) % 7;
+  const m = Math.floor((a + 11*h + 22*l)/451);
+  const mes = Math.floor((h + l - 7*m + 114)/31);
+  const dia = ((h + l - 7*m + 114) % 31) + 1;
+  return new Date(anio, mes-1, dia);
+}
+function _fechaISO(d) {
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+function FERIADOS_GT(anio) {
+  const pascua = _pascuaDomingo(anio);
+  const restarDias = (n) => { const f = new Date(pascua); f.setDate(f.getDate()-n); return f; };
+  return [
+    { fecha: `${anio}-01-01`, nombre: 'Año Nuevo', completo: true },
+    { fecha: _fechaISO(restarDias(3)), nombre: 'Jueves Santo', completo: true },
+    { fecha: _fechaISO(restarDias(2)), nombre: 'Viernes Santo', completo: true },
+    { fecha: _fechaISO(restarDias(1)), nombre: 'Sábado Santo', completo: true },
+    { fecha: `${anio}-05-01`, nombre: 'Día del Trabajo', completo: true },
+    { fecha: `${anio}-06-30`, nombre: 'Día del Ejército', completo: true },
+    { fecha: `${anio}-08-15`, nombre: 'Día de la Asunción (Guatemala)', completo: true, local: true },
+    { fecha: `${anio}-09-15`, nombre: 'Día de la Independencia', completo: true },
+    { fecha: `${anio}-10-20`, nombre: 'Día de la Revolución', completo: true },
+    { fecha: `${anio}-11-01`, nombre: 'Día de Todos los Santos', completo: true },
+    { fecha: `${anio}-12-24`, nombre: 'Nochebuena (medio día)', completo: false },
+    { fecha: `${anio}-12-25`, nombre: 'Navidad', completo: true },
+    { fecha: `${anio}-12-31`, nombre: 'Fin de Año (medio día)', completo: false },
+  ];
 }
 
 /* ── DEPRECIACIÓN DE ACTIVOS (línea recta) ─────────── */

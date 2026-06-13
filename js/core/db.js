@@ -954,6 +954,98 @@ const DB = {
     return { data, error };
   },
 
+  /* ── RECLUTAMIENTO: vacantes + aplicantes ──────── */
+  async getVacantes() {
+    const { data } = await getSB().from('vacantes').select('*')
+      .eq('tenant_id', getTID()).order('created_at',{ ascending:false });
+    return data || [];
+  },
+  async upsertVacante(fields) {
+    const payload = { ...fields, tenant_id: getTID() };
+    if (fields.id) {
+      const { id, ...resto } = payload;
+      const { error } = await getSB().from('vacantes').update(resto).eq('id', id);
+      return { error };
+    }
+    const { data, error } = await getSB().from('vacantes').insert(payload).select().single();
+    return { data, error };
+  },
+  async getAplicantes(vacanteId) {
+    let q = getSB().from('aplicantes').select('*').eq('tenant_id', getTID());
+    if (vacanteId) q = q.eq('vacante_id', vacanteId);
+    const { data } = await q.order('created_at',{ ascending:false });
+    return data || [];
+  },
+  async upsertAplicante(fields) {
+    const payload = { ...fields, tenant_id: getTID() };
+    if (fields.id) {
+      const { id, ...resto } = payload;
+      const { error } = await getSB().from('aplicantes').update(resto).eq('id', id);
+      return { error };
+    }
+    const { data, error } = await getSB().from('aplicantes').insert(payload).select().single();
+    return { data, error };
+  },
+
+  /* ── DISCIPLINA (Código de Trabajo) ─────────────── */
+  async getDisciplina(empleadoId) {
+    let q = getSB().from('disciplina').select('*,empleados(nombre)').eq('tenant_id', getTID());
+    if (empleadoId) q = q.eq('empleado_id', empleadoId);
+    const { data } = await q.order('fecha',{ ascending:false });
+    return data || [];
+  },
+  async upsertDisciplina(fields) {
+    const payload = { ...fields, tenant_id: getTID() };
+    if (fields.id) {
+      const { id, ...resto } = payload;
+      const { error } = await getSB().from('disciplina').update(resto).eq('id', id);
+      return { error };
+    }
+    const { data, error } = await getSB().from('disciplina').insert(payload).select().single();
+    return { data, error };
+  },
+
+  /* ── VACACIONES: movimientos de goce/pago ──────── */
+  async getVacacionesMovimientos(empleadoId) {
+    let q = getSB().from('vacaciones_movimientos').select('*,empleados(nombre)').eq('tenant_id', getTID());
+    if (empleadoId) q = q.eq('empleado_id', empleadoId);
+    const { data } = await q.order('created_at',{ ascending:false });
+    return data || [];
+  },
+  async upsertVacacionMovimiento(fields) {
+    const payload = { ...fields, tenant_id: getTID() };
+    if (fields.id) {
+      const { id, ...resto } = payload;
+      const { error } = await getSB().from('vacaciones_movimientos').update(resto).eq('id', id);
+      return { error };
+    }
+    const { data, error } = await getSB().from('vacaciones_movimientos').insert(payload).select().single();
+    return { data, error };
+  },
+
+  /* ── HORAS EXTRA / TRABAJO EN DÍA FERIADO ──────── */
+  async getHorasExtra(mes, anio, soloPendientes) {
+    let q = getSB().from('horas_extra').select('*,empleados(nombre)').eq('tenant_id', getTID());
+    if (mes && anio) {
+      const ini = `${anio}-${String(mes).padStart(2,'0')}-01`;
+      const fin = `${anio}-${String(mes).padStart(2,'0')}-31`;
+      q = q.gte('fecha', ini).lte('fecha', fin);
+    }
+    if (soloPendientes) q = q.eq('pagada', false);
+    const { data } = await q.order('fecha',{ ascending:false });
+    return data || [];
+  },
+  async upsertHoraExtra(fields) {
+    const payload = { ...fields, tenant_id: getTID() };
+    if (fields.id) {
+      const { id, ...resto } = payload;
+      const { error } = await getSB().from('horas_extra').update(resto).eq('id', id);
+      return { error };
+    }
+    const { data, error } = await getSB().from('horas_extra').insert(payload).select().single();
+    return { data, error };
+  },
+
   /* ── PRESUPUESTO / BUDGET ─────────────────────── */
   async getPresupuesto(anio) {
     const { data } = await getSB().from('presupuesto').select('*')

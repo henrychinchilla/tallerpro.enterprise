@@ -17,6 +17,10 @@ Modulos.rrhh = {
           <button class="tab-btn ${this._tab==='asignaciones'?'active':''}" onclick="App.navegarSub('rrhh','asignaciones')">🔑 Asignaciones</button>
           <button class="tab-btn ${this._tab==='organigrama'?'active':''}" onclick="App.navegarSub('rrhh','organigrama')">🏢 Organigrama</button>
           <button class="tab-btn ${this._tab==='documentos'?'active':''}" onclick="App.navegarSub('rrhh','documentos')">📄 Documentos</button>
+          <button class="tab-btn ${this._tab==='reclutamiento'?'active':''}" onclick="App.navegarSub('rrhh','reclutamiento')">🧑‍💼 Reclutamiento</button>
+          <button class="tab-btn ${this._tab==='disciplina'?'active':''}" onclick="App.navegarSub('rrhh','disciplina')">⚖️ Disciplina</button>
+          <button class="tab-btn ${this._tab==='vacaciones'?'active':''}" onclick="App.navegarSub('rrhh','vacaciones')">🏖️ Vacaciones</button>
+          <button class="tab-btn ${this._tab==='horasextra'?'active':''}" onclick="App.navegarSub('rrhh','horasextra')">⏰ Horas Extra</button>
         </div>
         <div id="rrhh-content"></div>
       </div>`;
@@ -77,7 +81,7 @@ Modulos.rrhh = {
         </div>`:''}
         <div class="table-wrap">
           <table class="data-table">
-            <thead><tr><th>Empleado</th><th>Salario</th><th>Bono</th><th>IGSS Lab.</th><th>ISR</th><th>Líquido</th><th>Estado</th><th>Acciones</th></tr></thead>
+            <thead><tr><th>Empleado</th><th>Salario</th><th>Bono</th><th>IGSS Lab.</th><th>ISR</th><th>Extra/Feriado</th><th>Líquido</th><th>Estado</th><th>Acciones</th></tr></thead>
             <tbody>
               ${pagos.map(p=>`<tr>
                 <td>${p.empleados?.nombre||'—'}</td>
@@ -85,12 +89,13 @@ Modulos.rrhh = {
                 <td class="mono-sm">${UI.q(p.bonificacion)}</td>
                 <td class="mono-sm text-red">-${UI.q(p.igss_laboral)}</td>
                 <td class="mono-sm text-red">-${UI.q(p.isr)}</td>
+                <td class="mono-sm text-cyan">${p.extra_feriado?'+'+UI.q(p.extra_feriado):'—'}</td>
                 <td class="mono-sm text-green"><b>${UI.q(p.liquido)}</b></td>
                 <td><span class="badge badge-${p.pagado?'green':'amber'}">${p.pagado?'Pagado':'Pendiente'}</span></td>
                 <td>
                   ${p.pagado ? '' : `<button class="btn btn-sm btn-green" onclick="Modulos.rrhh.pagarNomina('${p.id}')">💵 Pagar</button>`}
                 </td>
-              </tr>`).join('')||`<tr><td colspan="8" style="text-align:center;padding:24px;color:var(--text3)">
+              </tr>`).join('')||`<tr><td colspan="9" style="text-align:center;padding:24px;color:var(--text3)">
                 Presiona "Calcular Nómina" para generar los pagos del mes actual
               </td></tr>`}
             </tbody>
@@ -252,6 +257,22 @@ Modulos.rrhh = {
             </div>`).join('')||'<div class="text-muted">Sin empleados registrados</div>'}
         </div>`;
     }
+
+    else if (this._tab==='reclutamiento') {
+      await this._renderReclutamiento(el);
+    }
+
+    else if (this._tab==='disciplina') {
+      await this._renderDisciplina(el);
+    }
+
+    else if (this._tab==='vacaciones') {
+      await this._renderVacaciones(el);
+    }
+
+    else if (this._tab==='horasextra') {
+      await this._renderHorasExtra(el);
+    }
   },
 
   /* Render recursivo de un nodo del organigrama (con guarda anti-ciclos) */
@@ -306,19 +327,26 @@ Modulos.rrhh = {
     if (!activos.length) { UI.toast('No hay empleados activos para calcular','error'); return; }
     UI.toast('Calculando nómina Guatemala 2026...','info');
     const errores = [];
+    const horasExtraPend = await DB.getHorasExtra(mes, anio, true);
     for (const e of activos) {
       const isr  = calcularISR(e.salario_base);
       const igss = e.salario_base * GT.igss_laboral;
-      const liquido = e.salario_base + (e.bonificacion||GT.bonificacion_incentivo) - igss - isr;
+      const extrasEmp = horasExtraPend.filter(h=>h.empleado_id===e.id);
+      const extraFeriado = extrasEmp.reduce((s,h)=>s+(Number(h.monto)||0),0);
+      const liquido = e.salario_base + (e.bonificacion||GT.bonificacion_incentivo) - igss - isr + extraFeriado;
       const { error } = await DB.upsertPagoNomina({
         empleado_id:  e.id, periodo_mes: mes, periodo_anio: anio,
         salario_base: e.salario_base,
         bonificacion: e.bonificacion || GT.bonificacion_incentivo,
         igss_laboral: Math.round(igss*100)/100,
         isr:          Math.round(isr*100)/100,
+        extra_feriado: Math.round(extraFeriado*100)/100,
         liquido:      Math.round(liquido*100)/100
       });
-      if (error) errores.push(`${e.nombre}: ${error.message}`);
+      if (error) { errores.push(`${e.nombre}: ${error.message}`); continue; }
+      for (const h of extrasEmp) {
+        await DB.upsertHoraExtra({ id: h.id, pagada: true, periodo_mes: mes, periodo_anio: anio });
+      }
     }
     if (errores.length) {
       console.error('calcularNomina:', errores);
@@ -2271,5 +2299,614 @@ Modulos.rrhh = {
       </html>
     `);
     win.document.close();
+  },
+
+  /* ══ RECLUTAMIENTO: vacantes y aplicantes ══ */
+  _reclutVacanteSel: '',
+  _aplCV: null,
+
+  async _renderReclutamiento(el) {
+    const vacantes = await DB.getVacantes();
+    this._vacantesCache = vacantes;
+    const aplicantesAll = await DB.getAplicantes();
+    this._aplicantesCache = aplicantesAll;
+    const aplicantes = this._reclutVacanteSel ? aplicantesAll.filter(a=>a.vacante_id===this._reclutVacanteSel) : aplicantesAll;
+    const publicadas = vacantes.filter(v=>v.estado==='publicada');
+    const contratados = aplicantesAll.filter(a=>a.estado==='contratado').length;
+    const vacSel = vacantes.find(v=>v.id===this._reclutVacanteSel);
+
+    el.innerHTML = `
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+        <div style="font-weight:700">Vacantes</div>
+        <button class="btn btn-amber" onclick="Modulos.rrhh.modalVacante()">＋ Nueva vacante</button>
+      </div>
+      <div class="kpi-grid" style="margin-bottom:16px">
+        ${UI.kpiCard({ icon:'📢', clase:'green', label:'Publicadas', value: publicadas.length })}
+        ${UI.kpiCard({ icon:'📋', clase:'cyan', label:'Total vacantes', value: vacantes.length })}
+        ${UI.kpiCard({ icon:'🧑', clase:'amber', label:'Aplicantes', value: aplicantesAll.length })}
+        ${UI.kpiCard({ icon:'✅', clase:'purple', label:'Contratados', value: contratados })}
+      </div>
+      <div class="table-wrap"><table class="data-table">
+        <thead><tr><th>Puesto</th><th>Depto</th><th>Salario</th><th>Vacantes</th><th>Estado</th><th>Acciones</th></tr></thead>
+        <tbody>${vacantes.map(v=>`<tr>
+          <td><b>${v.puesto}</b></td>
+          <td>${v.departamento||'—'}</td>
+          <td class="mono-sm">${v.salario_min?UI.q(v.salario_min):'—'}${v.salario_max?' – '+UI.q(v.salario_max):''}</td>
+          <td style="text-align:center">${v.vacantes_disponibles||1}</td>
+          <td><span class="badge badge-${v.estado==='publicada'?'green':v.estado==='cerrada'?'gray':'amber'}">${v.estado}</span></td>
+          <td><div style="display:flex;gap:4px;flex-wrap:wrap">
+            ${Modulos.btnAccion('editar', `Modulos.rrhh.modalVacante('${v.id}')`)}
+            <button class="btn btn-sm btn-${v.estado==='publicada'?'ghost':'green'}" onclick="Modulos.rrhh.togglePublicarVacante('${v.id}')">${v.estado==='publicada'?'⏸️ Despublicar':'📢 Publicar'}</button>
+            <button class="btn btn-sm btn-cyan" onclick="Modulos.rrhh._reclutVacanteSel='${v.id}';Modulos.rrhh._renderTab()">👥 Aplicantes</button>
+            ${Modulos.btnAccion('eliminar', `Modulos.eliminarRegistro('vacantes','${v.id}','${(v.puesto||'').replace(/'/g,"\\'")}',()=>Modulos.rrhh._renderTab())`)}
+          </div></td>
+        </tr>`).join('')||'<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--text3)">Sin vacantes registradas</td></tr>'}</tbody>
+      </table></div>
+
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin:20px 0 12px">
+        <div style="font-weight:700">Aplicantes ${vacSel?'— '+vacSel.puesto:'(todas las vacantes)'}</div>
+        <div style="display:flex;gap:8px">
+          ${this._reclutVacanteSel?`<button class="btn btn-ghost btn-sm" onclick="Modulos.rrhh._reclutVacanteSel='';Modulos.rrhh._renderTab()">Ver todos</button>`:''}
+          <button class="btn btn-amber" onclick="Modulos.rrhh.modalAplicante()">＋ Nuevo aplicante</button>
+        </div>
+      </div>
+      <div class="table-wrap"><table class="data-table">
+        <thead><tr><th>Nombre</th><th>Vacante</th><th>Contacto</th><th>CV</th><th>Estado</th><th>Acciones</th></tr></thead>
+        <tbody>${aplicantes.map(a=>{
+          const vac = vacantes.find(v=>v.id===a.vacante_id);
+          return `<tr>
+          <td><b>${a.nombre}</b>${a.notas?`<div style="font-size:10px;color:var(--text3)">${a.notas}</div>`:''}</td>
+          <td>${vac?.puesto||'—'}</td>
+          <td class="mono-sm">${a.telefono||''}${a.email?'<br>'+a.email:''}</td>
+          <td>${a.cv_base64?`<button class="btn btn-sm btn-cyan" onclick="UI.verAdjunto(Modulos.rrhh._cvDe('${a.id}'),'📄 CV')">📄 Ver</button>`:'—'}</td>
+          <td><select class="form-select" style="font-size:11px;padding:3px 6px" onchange="Modulos.rrhh.cambiarEstadoAplicante('${a.id}',this.value)">
+            ${['nuevo','entrevista','rechazado','contratado'].map(s=>`<option value="${s}" ${a.estado===s?'selected':''}>${s}</option>`).join('')}
+          </select></td>
+          <td><div style="display:flex;gap:4px">
+            ${Modulos.btnAccion('editar', `Modulos.rrhh.modalAplicante('${a.id}')`)}
+            ${Modulos.btnAccion('eliminar', `Modulos.eliminarRegistro('aplicantes','${a.id}','${(a.nombre||'').replace(/'/g,"\\'")}',()=>Modulos.rrhh._renderTab())`)}
+          </div></td>
+        </tr>`;}).join('')||'<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--text3)">Sin aplicantes registrados</td></tr>'}</tbody>
+      </table></div>`;
+  },
+
+  modalVacante(id=null) {
+    const v = id ? (this._vacantesCache||[]).find(x=>x.id===id)||{} : {};
+    UI.modal(`${id?'✏️ Editar':'🧑‍💼 Nueva'} vacante`, `
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Puesto *</label>
+          <input class="form-input" id="vac-puesto" value="${v.puesto||''}" placeholder="Mecánico automotriz"></div>
+        <div class="form-group"><label class="form-label">Departamento</label>
+          <input class="form-input" id="vac-depto" value="${v.departamento||''}" placeholder="Taller"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Salario mínimo (Q)</label>
+          <input class="form-input" id="vac-smin" type="number" min="0" step="0.01" value="${v.salario_min||''}"></div>
+        <div class="form-group"><label class="form-label">Salario máximo (Q)</label>
+          <input class="form-input" id="vac-smax" type="number" min="0" step="0.01" value="${v.salario_max||''}"></div>
+        <div class="form-group"><label class="form-label">Vacantes disponibles</label>
+          <input class="form-input" id="vac-cant" type="number" min="1" value="${v.vacantes_disponibles||1}"></div>
+      </div>
+      <div class="form-group"><label class="form-label">Descripción</label>
+        <textarea class="form-input" id="vac-desc" rows="3">${v.descripcion||''}</textarea></div>
+      <div class="form-group"><label class="form-label">Requisitos</label>
+        <textarea class="form-input" id="vac-req" rows="3">${v.requisitos||''}</textarea></div>
+      <div class="form-group"><label class="form-label">Estado</label>
+        <select class="form-select" id="vac-estado">
+          ${['borrador','publicada','cerrada'].map(s=>`<option ${(v.estado||'borrador')===s?'selected':''}>${s}</option>`).join('')}
+        </select></div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" onclick="UI.cerrarModal()">Cancelar</button>
+        <button class="btn btn-amber" onclick="Modulos.rrhh.guardarVacante('${id||''}')">Guardar</button>
+      </div>`, '600px');
+  },
+
+  async guardarVacante(id='') {
+    const puesto = document.getElementById('vac-puesto')?.value.trim();
+    if (!puesto) { UI.toast('El puesto es obligatorio','error'); return; }
+    const estado = document.getElementById('vac-estado')?.value;
+    const fields = {
+      puesto,
+      departamento: document.getElementById('vac-depto')?.value||null,
+      descripcion:  document.getElementById('vac-desc')?.value||null,
+      requisitos:   document.getElementById('vac-req')?.value||null,
+      salario_min:  parseFloat(document.getElementById('vac-smin')?.value)||null,
+      salario_max:  parseFloat(document.getElementById('vac-smax')?.value)||null,
+      vacantes_disponibles: parseInt(document.getElementById('vac-cant')?.value)||1,
+      estado
+    };
+    if (estado==='publicada') fields.publicado_en = new Date().toISOString();
+    if (id) fields.id = id;
+    const { error } = await DB.upsertVacante(fields);
+    if (error) { UI.toast('Error: '+error.message,'error'); return; }
+    UI.cerrarModal(); UI.toast('Vacante guardada ✓');
+    this._renderTab();
+  },
+
+  async togglePublicarVacante(id) {
+    const v = (this._vacantesCache||[]).find(x=>x.id===id);
+    if (!v) return;
+    const nuevo = v.estado==='publicada' ? 'borrador' : 'publicada';
+    const fields = { id, estado: nuevo };
+    if (nuevo==='publicada') fields.publicado_en = new Date().toISOString();
+    const { error } = await DB.upsertVacante(fields);
+    if (error) { UI.toast('Error: '+error.message,'error'); return; }
+    UI.toast(nuevo==='publicada'?'Vacante publicada ✓':'Vacante despublicada');
+    this._renderTab();
+  },
+
+  modalAplicante(id=null) {
+    const a = id ? (this._aplicantesCache||[]).find(x=>x.id===id)||{} : {};
+    this._aplCV = null;
+    UI.modal(`${id?'✏️ Editar':'🧑 Nuevo'} aplicante`, `
+      <div class="form-group"><label class="form-label">Vacante *</label>
+        <select class="form-select" id="apl-vac">
+          ${(this._vacantesCache||[]).map(v=>`<option value="${v.id}" ${(a.vacante_id||this._reclutVacanteSel)===v.id?'selected':''}>${v.puesto}</option>`).join('')}
+        </select></div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Nombre *</label>
+          <input class="form-input" id="apl-nombre" value="${a.nombre||''}"></div>
+        <div class="form-group"><label class="form-label">Teléfono</label>
+          <input class="form-input" id="apl-tel" value="${a.telefono||''}"></div>
+        <div class="form-group"><label class="form-label">Email</label>
+          <input class="form-input" id="apl-email" value="${a.email||''}"></div>
+      </div>
+      <div class="form-group"><label class="form-label">CV (pdf o imagen)</label>
+        <input class="form-input" type="file" accept="image/*,application/pdf" onchange="Modulos.rrhh._onCV(this)">
+        <div id="apl-cv-info" style="font-size:11px;color:var(--text3);margin-top:4px">${a.cv_base64?'📎 Ya tiene CV adjunto (subir otro lo reemplaza)':''}</div></div>
+      <div class="form-group"><label class="form-label">Estado</label>
+        <select class="form-select" id="apl-estado">
+          ${['nuevo','entrevista','rechazado','contratado'].map(s=>`<option ${(a.estado||'nuevo')===s?'selected':''}>${s}</option>`).join('')}
+        </select></div>
+      <div class="form-group"><label class="form-label">Notas</label>
+        <textarea class="form-input" id="apl-notas" rows="2">${a.notas||''}</textarea></div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" onclick="UI.cerrarModal()">Cancelar</button>
+        <button class="btn btn-amber" onclick="Modulos.rrhh.guardarAplicante('${id||''}')">Guardar</button>
+      </div>`, '560px');
+  },
+
+  _onCV(input) {
+    const f = input.files?.[0];
+    if (!f) { this._aplCV = null; return; }
+    UI.fileABase64(f, { maxPx: 1400, maxPdfMB: 5 }).then(r => {
+      this._aplCV = r;
+      const i = document.getElementById('apl-cv-info'); if (i) i.textContent = '✓ ' + r.nombre;
+    }).catch(e => { UI.toast(e.message,'error'); input.value=''; });
+  },
+
+  async guardarAplicante(id='') {
+    const nombre = document.getElementById('apl-nombre')?.value.trim();
+    const vacante_id = document.getElementById('apl-vac')?.value;
+    if (!nombre || !vacante_id) { UI.toast('Vacante y nombre son obligatorios','error'); return; }
+    const fields = {
+      vacante_id, nombre,
+      telefono: document.getElementById('apl-tel')?.value||null,
+      email:    document.getElementById('apl-email')?.value||null,
+      estado:   document.getElementById('apl-estado')?.value,
+      notas:    document.getElementById('apl-notas')?.value||null
+    };
+    if (this._aplCV) { fields.cv_base64 = this._aplCV.base64; fields.cv_nombre = this._aplCV.nombre; }
+    if (id) fields.id = id;
+    const { error } = await DB.upsertAplicante(fields);
+    if (error) { UI.toast('Error: '+error.message,'error'); return; }
+    UI.cerrarModal(); UI.toast('Aplicante guardado ✓');
+    this._renderTab();
+  },
+
+  async cambiarEstadoAplicante(id, estado) {
+    const { error } = await DB.upsertAplicante({ id, estado });
+    if (error) { UI.toast('Error: '+error.message,'error'); return; }
+    UI.toast('Estado actualizado ✓');
+    this._renderTab();
+  },
+
+  _cvDe(id) { return (this._aplicantesCache||[]).find(a=>a.id===id)?.cv_base64 || null; },
+
+  /* ══ DISCIPLINA: medidas conforme al Código de Trabajo de Guatemala ══ */
+  _discFiltroEmp: '',
+  _discDoc: null,
+  _DISC_TIPOS: ['Llamada de atención','Amonestación escrita','Suspensión','Sanción económica','Despido'],
+  _DISC_ARTICULOS: {
+    'Llamada de atención':  'Art. 60-64 (obligaciones de los trabajadores)',
+    'Amonestación escrita': 'Art. 60-64 (obligaciones de los trabajadores)',
+    'Suspensión':           'Art. 60, 76 (suspensión disciplinaria sin goce de salario)',
+    'Sanción económica':    'Art. 61, reglamento interno de trabajo',
+    'Despido':              'Art. 77 (causas de despido justificado sin responsabilidad patronal)'
+  },
+
+  async _renderDisciplina(el) {
+    const registros = await DB.getDisciplina(this._discFiltroEmp || null);
+    this._discCache = registros;
+    const anio = new Date().getFullYear();
+    const delAnio = registros.filter(r=>(r.fecha||'').startsWith(String(anio)));
+
+    el.innerHTML = `
+      <div class="alert alert-amber" style="margin-bottom:16px">
+        <div class="alert-icon">⚖️</div>
+        <div class="alert-body" style="font-size:12px">
+          Registro de medidas disciplinarias conforme al <b>Código de Trabajo de Guatemala</b> (Art. 60-64 obligaciones de los
+          trabajadores, Art. 77 causas de despido justificado, Art. 82 indemnización). Documenta cada caso con fecha, motivo y
+          artículo aplicable para respaldar al taller ante una inconformidad o demanda laboral.
+        </div>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:16px">
+        <select class="form-select" style="width:auto" onchange="Modulos.rrhh._discFiltroEmp=this.value;Modulos.rrhh._renderTab()">
+          <option value="">Todos los empleados</option>
+          ${this._empleados.map(e=>`<option value="${e.id}" ${this._discFiltroEmp===e.id?'selected':''}>${e.nombre}</option>`).join('')}
+        </select>
+        <button class="btn btn-amber" onclick="Modulos.rrhh.modalDisciplina()">＋ Nuevo registro</button>
+      </div>
+      <div class="kpi-grid" style="margin-bottom:16px">
+        ${UI.kpiCard({ icon:'⚠️', clase:'amber', label:`Registros ${anio}`, value: delAnio.length })}
+        ${UI.kpiCard({ icon:'📢', clase:'cyan', label:'Llamadas de atención', value: registros.filter(r=>r.tipo==='Llamada de atención').length })}
+        ${UI.kpiCard({ icon:'⛔', clase:'red', label:'Despidos', value: registros.filter(r=>r.tipo==='Despido').length })}
+        ${UI.kpiCard({ icon:'💰', clase:'purple', label:'Sanciones económicas', value: registros.reduce((s,r)=>s+(Number(r.monto_sancion)||0),0), money:true })}
+      </div>
+      <div class="table-wrap"><table class="data-table">
+        <thead><tr><th>Empleado</th><th>Tipo</th><th>Motivo</th><th>Fecha</th><th>Artículo</th><th>Detalle</th><th>Acciones</th></tr></thead>
+        <tbody>${registros.map(r=>`<tr>
+          <td><b>${r.empleados?.nombre||'—'}</b></td>
+          <td><span class="badge badge-${this._discColor(r.tipo)}" style="font-size:10px">${r.tipo}</span></td>
+          <td>${r.motivo}</td>
+          <td class="mono-sm">${UI.fecha(r.fecha)}</td>
+          <td class="mono-sm">${r.articulo||'—'}</td>
+          <td class="mono-sm">${r.dias_suspension?r.dias_suspension+' día(s) susp.':''}${r.monto_sancion?UI.q(r.monto_sancion):''}</td>
+          <td><div style="display:flex;gap:4px">
+            ${r.documento_base64?`<button class="btn btn-sm btn-cyan" title="Ver documento" onclick="UI.verAdjunto(Modulos.rrhh._discDocDe('${r.id}'),'⚖️ Documento')">📎</button>`:''}
+            ${Modulos.btnAccion('editar', `Modulos.rrhh.modalDisciplina('${r.id}')`)}
+            ${Modulos.btnAccion('eliminar', `Modulos.eliminarRegistro('disciplina','${r.id}','este registro',()=>Modulos.rrhh._renderTab())`)}
+          </div></td>
+        </tr>`).join('')||'<tr><td colspan="7" style="text-align:center;padding:24px;color:var(--text3)">Sin registros disciplinarios</td></tr>'}</tbody>
+      </table></div>`;
+  },
+
+  _discColor(tipo) {
+    return { 'Llamada de atención':'amber', 'Amonestación escrita':'amber', 'Suspensión':'red', 'Sanción económica':'purple', 'Despido':'red' }[tipo] || 'gray';
+  },
+
+  _discDocDe(id) { return (this._discCache||[]).find(r=>r.id===id)?.documento_base64 || null; },
+
+  modalDisciplina(id=null) {
+    const r = id ? (this._discCache||[]).find(x=>x.id===id)||{} : {};
+    this._discDoc = null;
+    const tipoIni = r.tipo || this._DISC_TIPOS[0];
+    UI.modal(`${id?'✏️ Editar':'⚖️ Nuevo'} registro disciplinario`, `
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Empleado *</label>
+          <select class="form-select" id="disc-emp">
+            ${this._empleados.map(e=>`<option value="${e.id}" ${r.empleado_id===e.id?'selected':''}>${e.nombre}</option>`).join('')}
+          </select></div>
+        <div class="form-group"><label class="form-label">Tipo *</label>
+          <select class="form-select" id="disc-tipo" onchange="Modulos.rrhh._actualizarArticuloDisc()">
+            ${this._DISC_TIPOS.map(t=>`<option ${tipoIni===t?'selected':''}>${t}</option>`).join('')}
+          </select></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Fecha *</label>
+          <input class="form-input" id="disc-fecha" type="date" value="${r.fecha||new Date().toISOString().slice(0,10)}"></div>
+        <div class="form-group"><label class="form-label">Artículo (Código de Trabajo)</label>
+          <input class="form-input" id="disc-articulo" value="${r.articulo||this._DISC_ARTICULOS[tipoIni]||''}"></div>
+      </div>
+      <div class="form-group"><label class="form-label">Motivo *</label>
+        <textarea class="form-input" id="disc-motivo" rows="3">${r.motivo||''}</textarea></div>
+      <div class="form-row">
+        <div class="form-group" id="disc-dias-wrap" style="${tipoIni==='Suspensión'?'':'display:none'}">
+          <label class="form-label">Días de suspensión</label>
+          <input class="form-input" id="disc-dias" type="number" min="1" value="${r.dias_suspension||''}"></div>
+        <div class="form-group" id="disc-monto-wrap" style="${tipoIni==='Sanción económica'?'':'display:none'}">
+          <label class="form-label">Monto de sanción (Q)</label>
+          <input class="form-input" id="disc-monto" type="number" min="0" step="0.01" value="${r.monto_sancion||''}"></div>
+      </div>
+      <div class="form-group"><label class="form-label">Documento de respaldo (acta, carta, fotos)</label>
+        <input class="form-input" type="file" accept="image/*,application/pdf" onchange="Modulos.rrhh._onDiscDoc(this)">
+        <div id="disc-doc-info" style="font-size:11px;color:var(--text3);margin-top:4px">${r.documento_base64?'📎 Ya tiene documento adjunto (subir otro lo reemplaza)':''}</div></div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" onclick="UI.cerrarModal()">Cancelar</button>
+        <button class="btn btn-amber" onclick="Modulos.rrhh.guardarDisciplina('${id||''}')">Guardar</button>
+      </div>`, '600px');
+  },
+
+  _actualizarArticuloDisc() {
+    const tipo = document.getElementById('disc-tipo')?.value;
+    const art = document.getElementById('disc-articulo');
+    if (art) art.value = this._DISC_ARTICULOS[tipo] || '';
+    const diasWrap = document.getElementById('disc-dias-wrap');
+    const montoWrap = document.getElementById('disc-monto-wrap');
+    if (diasWrap) diasWrap.style.display = tipo==='Suspensión' ? '' : 'none';
+    if (montoWrap) montoWrap.style.display = tipo==='Sanción económica' ? '' : 'none';
+  },
+
+  _onDiscDoc(input) {
+    const f = input.files?.[0];
+    if (!f) { this._discDoc = null; return; }
+    UI.fileABase64(f, { maxPx: 1400, maxPdfMB: 5 }).then(r => {
+      this._discDoc = r;
+      const i = document.getElementById('disc-doc-info'); if (i) i.textContent = '✓ ' + r.nombre;
+    }).catch(e => { UI.toast(e.message,'error'); input.value=''; });
+  },
+
+  async guardarDisciplina(id='') {
+    const empleado_id = document.getElementById('disc-emp')?.value;
+    const motivo = document.getElementById('disc-motivo')?.value.trim();
+    if (!empleado_id || !motivo) { UI.toast('Empleado y motivo son obligatorios','error'); return; }
+    const fields = {
+      empleado_id,
+      tipo:    document.getElementById('disc-tipo')?.value,
+      motivo,
+      fecha:   document.getElementById('disc-fecha')?.value,
+      articulo: document.getElementById('disc-articulo')?.value||null,
+      dias_suspension: parseInt(document.getElementById('disc-dias')?.value)||null,
+      monto_sancion:   parseFloat(document.getElementById('disc-monto')?.value)||null
+    };
+    if (this._discDoc) { fields.documento_base64 = this._discDoc.base64; fields.documento_nombre = this._discDoc.nombre; }
+    if (id) fields.id = id;
+    const { error } = await DB.upsertDisciplina(fields);
+    if (error) { UI.toast('Error: '+error.message,'error'); return; }
+    UI.cerrarModal(); UI.toast('Registro guardado ✓');
+    this._renderTab();
+  },
+
+  /* ══ VACACIONES: acumulación (1.25 días/mes) y goce/pago ══ */
+  async _renderVacaciones(el) {
+    const movs = await DB.getVacacionesMovimientos();
+    this._vacMovsCache = movs;
+    const activos = this._empleados.filter(e=>e.activo);
+    const hoy = new Date();
+    const filas = activos.map(e=>{
+      const ingreso = e.fecha_ingreso ? new Date(e.fecha_ingreso) : null;
+      const meses = ingreso ? Math.max(0, (hoy.getFullYear()-ingreso.getFullYear())*12 + (hoy.getMonth()-ingreso.getMonth()) - (hoy.getDate()<ingreso.getDate()?1:0)) : 0;
+      const acumulado = Math.round(meses*1.25*100)/100;
+      const propios = movs.filter(m=>m.empleado_id===e.id);
+      const gozados = propios.filter(m=>m.tipo==='goce').reduce((s,m)=>s+(Number(m.dias)||0),0);
+      const pagados = propios.filter(m=>m.tipo==='pago').reduce((s,m)=>s+(Number(m.dias)||0),0);
+      const saldo = Math.round((acumulado - gozados - pagados)*100)/100;
+      const salarioDiario = (Number(e.salario_base)||0)/30;
+      return { e, acumulado, gozados, pagados, saldo, salarioDiario };
+    });
+    const totalSaldo = filas.reduce((s,f)=>s+f.saldo,0);
+    const totalValor = filas.reduce((s,f)=>s+f.saldo*f.salarioDiario,0);
+
+    el.innerHTML = `
+      <div class="alert alert-cyan" style="margin-bottom:16px">
+        <div class="alert-icon">🏖️</div>
+        <div class="alert-body" style="font-size:12px">
+          Acumulación de <b>1.25 días por mes trabajado (15 días hábiles al año)</b> según el Código de Trabajo de Guatemala
+          (Art. 130-136). Si el empleado no goza sus vacaciones, puedes registrar el <b>pago</b> con base en su salario diario.
+        </div>
+      </div>
+      <div class="kpi-grid" style="margin-bottom:16px">
+        ${UI.kpiCard({ icon:'📅', clase:'cyan', label:'Días pendientes (todos)', value: Math.round(totalSaldo*10)/10 })}
+        ${UI.kpiCard({ icon:'💰', clase:'amber', label:'Valor si se pagaran', value: totalValor, money:true })}
+        ${UI.kpiCard({ icon:'👤', clase:'green', label:'Empleados activos', value: activos.length })}
+      </div>
+      <div class="table-wrap"><table class="data-table">
+        <thead><tr><th>Empleado</th><th>Ingreso</th><th>Acumulados</th><th>Gozados</th><th>Pagados</th><th>Saldo</th><th>Valor saldo</th><th>Acciones</th></tr></thead>
+        <tbody>${filas.map(f=>`<tr>
+          <td><b>${f.e.nombre}</b><div style="font-size:10px;color:var(--text3)">${f.e.cargo||''}</div></td>
+          <td class="mono-sm">${UI.fecha(f.e.fecha_ingreso)}</td>
+          <td class="mono-sm" style="text-align:center">${f.acumulado}</td>
+          <td class="mono-sm" style="text-align:center">${f.gozados}</td>
+          <td class="mono-sm" style="text-align:center">${f.pagados}</td>
+          <td class="mono-sm" style="text-align:center"><b class="${f.saldo<0?'text-red':'text-green'}">${f.saldo}</b></td>
+          <td class="mono-sm text-amber">${UI.q(f.saldo*f.salarioDiario)}</td>
+          <td><div style="display:flex;gap:4px">
+            <button class="btn btn-sm btn-cyan" onclick="Modulos.rrhh.modalVacacion('${f.e.id}','goce')">🏖️ Goce</button>
+            <button class="btn btn-sm btn-amber" onclick="Modulos.rrhh.modalVacacion('${f.e.id}','pago')">💵 Pago</button>
+          </div></td>
+        </tr>`).join('')||'<tr><td colspan="8" style="text-align:center;padding:24px;color:var(--text3)">Sin empleados activos</td></tr>'}</tbody>
+      </table></div>
+      <div style="font-weight:700;margin:20px 0 12px">Historial de movimientos</div>
+      <div class="table-wrap"><table class="data-table">
+        <thead><tr><th>Empleado</th><th>Tipo</th><th>Periodo</th><th>Días</th><th>Monto</th><th>Notas</th><th>Acciones</th></tr></thead>
+        <tbody>${movs.map(m=>{
+          const emp = this._empleados.find(e=>e.id===m.empleado_id);
+          return `<tr>
+          <td>${emp?.nombre||'—'}</td>
+          <td><span class="badge badge-${m.tipo==='goce'?'cyan':'amber'}">${m.tipo==='goce'?'Goce':'Pago'}</span></td>
+          <td class="mono-sm">${m.fecha_inicio?UI.fecha(m.fecha_inicio)+(m.fecha_fin?' → '+UI.fecha(m.fecha_fin):''):'—'}</td>
+          <td class="mono-sm" style="text-align:center">${m.dias}</td>
+          <td class="mono-sm text-amber">${m.monto?UI.q(m.monto):'—'}</td>
+          <td>${m.notas||''}</td>
+          <td>${Modulos.btnAccion('eliminar', `Modulos.eliminarRegistro('vacaciones_movimientos','${m.id}','este movimiento',()=>Modulos.rrhh._renderTab())`)}</td>
+        </tr>`;}).join('')||'<tr><td colspan="7" style="text-align:center;padding:24px;color:var(--text3)">Sin movimientos registrados</td></tr>'}</tbody>
+      </table></div>`;
+  },
+
+  modalVacacion(empleadoId, tipo) {
+    const e = this._empleados.find(x=>x.id===empleadoId);
+    if (!e) return;
+    const salarioDiario = (Number(e.salario_base)||0)/30;
+    UI.modal(`${tipo==='goce'?'🏖️ Registrar goce de vacaciones':'💵 Pagar vacaciones no gozadas'} — ${e.nombre}`, `
+      <input type="hidden" id="vac-tipo" value="${tipo}">
+      ${tipo==='goce' ? `
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Inicio *</label>
+          <input class="form-input" id="vac-ini" type="date" value="${new Date().toISOString().slice(0,10)}" onchange="Modulos.rrhh._calcDiasVac()"></div>
+        <div class="form-group"><label class="form-label">Fin *</label>
+          <input class="form-input" id="vac-fin" type="date" value="${new Date().toISOString().slice(0,10)}" onchange="Modulos.rrhh._calcDiasVac()"></div>
+      </div>` : ''}
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Días *</label>
+          <input class="form-input" id="vac-dias" type="number" min="0.5" step="0.5" value="${tipo==='goce'?1:''}" onchange="Modulos.rrhh._calcMontoVac()"></div>
+        ${tipo==='pago'?`
+        <div class="form-group"><label class="form-label">Salario diario (Q)</label>
+          <input class="form-input" id="vac-saldiario" type="number" step="0.01" value="${salarioDiario.toFixed(2)}" onchange="Modulos.rrhh._calcMontoVac()"></div>
+        <div class="form-group"><label class="form-label">Monto a pagar (Q)</label>
+          <input class="form-input" id="vac-monto" type="number" step="0.01" value="0"></div>`:''}
+      </div>
+      <div class="form-group"><label class="form-label">Notas</label>
+        <textarea class="form-input" id="vac-notas" rows="2"></textarea></div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" onclick="UI.cerrarModal()">Cancelar</button>
+        <button class="btn btn-amber" onclick="Modulos.rrhh.guardarVacacion('${empleadoId}')">Guardar</button>
+      </div>`, '520px');
+    if (tipo==='pago') setTimeout(()=>this._calcMontoVac(),0);
+  },
+
+  _calcDiasVac() {
+    const ini = document.getElementById('vac-ini')?.value;
+    const fin = document.getElementById('vac-fin')?.value;
+    if (!ini || !fin) return;
+    const dias = Math.round((new Date(fin)-new Date(ini))/86400000) + 1;
+    const inp = document.getElementById('vac-dias');
+    if (inp && dias>0) inp.value = dias;
+  },
+
+  _calcMontoVac() {
+    const dias = parseFloat(document.getElementById('vac-dias')?.value)||0;
+    const sal = parseFloat(document.getElementById('vac-saldiario')?.value)||0;
+    const m = document.getElementById('vac-monto');
+    if (m) m.value = Math.round(dias*sal*100)/100;
+  },
+
+  async guardarVacacion(empleadoId) {
+    const tipo = document.getElementById('vac-tipo')?.value;
+    const dias = parseFloat(document.getElementById('vac-dias')?.value)||0;
+    if (dias<=0) { UI.toast('Indica los días','error'); return; }
+    const fields = {
+      empleado_id: empleadoId, tipo, dias,
+      notas: document.getElementById('vac-notas')?.value||null
+    };
+    if (tipo==='goce') {
+      fields.fecha_inicio = document.getElementById('vac-ini')?.value||null;
+      fields.fecha_fin    = document.getElementById('vac-fin')?.value||null;
+    } else {
+      fields.monto = parseFloat(document.getElementById('vac-monto')?.value)||0;
+    }
+    const { error } = await DB.upsertVacacionMovimiento(fields);
+    if (error) { UI.toast('Error: '+error.message,'error'); return; }
+    UI.cerrarModal(); UI.toast(tipo==='goce'?'Goce registrado ✓':'Pago de vacaciones registrado ✓ — agrégalo a egresos si corresponde');
+    this._renderTab();
+  },
+
+  /* ══ HORAS EXTRA / TRABAJO EN DÍA FERIADO ══ */
+  _heTipos: { extra:'⏰ Hora extra', feriado_trabajado:'🎉 Feriado trabajado', feriado_descanso:'🛌 Feriado descanso' },
+
+  async _renderHorasExtra(el) {
+    const now = new Date();
+    if (this._heMes===undefined) { this._heMes = now.getMonth()+1; this._heAnio = now.getFullYear(); }
+    const registros = await DB.getHorasExtra(this._heMes, this._heAnio);
+    this._heCache = registros;
+    const feriadosMes = FERIADOS_GT(this._heAnio).filter(f=>parseInt(f.fecha.slice(5,7))===this._heMes);
+    const totalMonto = registros.reduce((s,r)=>s+(Number(r.monto)||0),0);
+    const pendientes = registros.filter(r=>!r.pagada);
+    const totalPendiente = pendientes.reduce((s,r)=>s+(Number(r.monto)||0),0);
+    const meses = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+
+    el.innerHTML = `
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:16px">
+        <div style="display:flex;gap:8px;align-items:center">
+          <select class="form-select" onchange="Modulos.rrhh._heMes=parseInt(this.value);Modulos.rrhh._renderTab()">
+            ${meses.map((m,i)=>`<option value="${i+1}" ${this._heMes===i+1?'selected':''}>${m}</option>`).join('')}
+          </select>
+          <select class="form-select" onchange="Modulos.rrhh._heAnio=parseInt(this.value);Modulos.rrhh._renderTab()">
+            ${[now.getFullYear()-1, now.getFullYear(), now.getFullYear()+1].map(a=>`<option value="${a}" ${this._heAnio===a?'selected':''}>${a}</option>`).join('')}
+          </select>
+        </div>
+        <button class="btn btn-amber" onclick="Modulos.rrhh.modalHoraExtra()">＋ Registrar horas</button>
+      </div>
+      ${feriadosMes.length?`<div class="alert alert-cyan" style="margin-bottom:16px">
+        <div class="alert-icon">🎉</div>
+        <div class="alert-body" style="font-size:12px">Feriados de ${meses[this._heMes-1]} ${this._heAnio}: ${feriadosMes.map(f=>`${UI.fecha(f.fecha)} ${f.nombre}`).join(' · ')}.
+        Si algún empleado trabajó ese día, regístralo aquí con tipo "Feriado trabajado" para incluirlo en la nómina.</div>
+      </div>`:''}
+      <div class="kpi-grid" style="margin-bottom:16px">
+        ${UI.kpiCard({ icon:'⏰', clase:'cyan', label:'Registros del mes', value: registros.length })}
+        ${UI.kpiCard({ icon:'💰', clase:'amber', label:'Monto total', value: totalMonto, money:true })}
+        ${UI.kpiCard({ icon:'⏳', clase: pendientes.length?'red':'green', label:'Pendiente de nómina', value: totalPendiente, money:true })}
+      </div>
+      <div class="table-wrap"><table class="data-table">
+        <thead><tr><th>Empleado</th><th>Fecha</th><th>Tipo</th><th>Horas</th><th>Factor</th><th>Monto</th><th>Estado</th><th>Acciones</th></tr></thead>
+        <tbody>${registros.map(r=>`<tr>
+          <td><b>${r.empleados?.nombre||'—'}</b></td>
+          <td class="mono-sm">${UI.fecha(r.fecha)}</td>
+          <td><span class="badge badge-${r.tipo==='extra'?'cyan':'green'}" style="font-size:10px">${this._heTipos[r.tipo]||r.tipo}</span></td>
+          <td class="mono-sm" style="text-align:center">${r.horas||'—'}</td>
+          <td class="mono-sm" style="text-align:center">${r.factor||'—'}</td>
+          <td class="mono-sm text-amber">${UI.q(r.monto)}</td>
+          <td><span class="badge badge-${r.pagada?'green':'amber'}">${r.pagada?'En nómina':'Pendiente'}</span></td>
+          <td><div style="display:flex;gap:4px">
+            ${!r.pagada?Modulos.btnAccion('editar', `Modulos.rrhh.modalHoraExtra('${r.id}')`):''}
+            ${!r.pagada?Modulos.btnAccion('eliminar', `Modulos.eliminarRegistro('horas_extra','${r.id}','este registro',()=>Modulos.rrhh._renderTab())`):''}
+          </div></td>
+        </tr>`).join('')||'<tr><td colspan="8" style="text-align:center;padding:24px;color:var(--text3)">Sin horas extra registradas en este periodo</td></tr>'}</tbody>
+      </table></div>`;
+  },
+
+  modalHoraExtra(id=null) {
+    const r = id ? (this._heCache||[]).find(x=>x.id===id)||{} : {};
+    const tipoIni = r.tipo || 'extra';
+    UI.modal(`${id?'✏️ Editar':'⏰ Registrar'} horas extra / feriado`, `
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Empleado *</label>
+          <select class="form-select" id="he-emp" onchange="Modulos.rrhh._calcMontoHE()">
+            ${this._empleados.filter(e=>e.activo||e.id===r.empleado_id).map(e=>`<option value="${e.id}" ${r.empleado_id===e.id?'selected':''}>${e.nombre}</option>`).join('')}
+          </select></div>
+        <div class="form-group"><label class="form-label">Fecha *</label>
+          <input class="form-input" id="he-fecha" type="date" value="${r.fecha||new Date().toISOString().slice(0,10)}"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Tipo *</label>
+          <select class="form-select" id="he-tipo" onchange="Modulos.rrhh._calcMontoHE()">
+            <option value="extra" ${tipoIni==='extra'?'selected':''}>⏰ Hora extra (factor 1.5)</option>
+            <option value="feriado_trabajado" ${tipoIni==='feriado_trabajado'?'selected':''}>🎉 Feriado trabajado (día doble)</option>
+            <option value="feriado_descanso" ${tipoIni==='feriado_descanso'?'selected':''}>🛌 Feriado descanso (día pagado, no trabajado)</option>
+          </select></div>
+        <div class="form-group"><label class="form-label">Horas</label>
+          <input class="form-input" id="he-horas" type="number" min="0" step="0.5" value="${r.horas||(tipoIni==='extra'?1:8)}" onchange="Modulos.rrhh._calcMontoHE()"></div>
+        <div class="form-group"><label class="form-label">Factor</label>
+          <input class="form-input" id="he-factor" type="number" min="0" step="0.1" value="${r.factor||1.5}" onchange="Modulos.rrhh._calcMontoHE()"></div>
+      </div>
+      <div class="form-group"><label class="form-label">Monto (Q) *</label>
+        <input class="form-input" id="he-monto" type="number" min="0" step="0.01" value="${r.monto||0}"></div>
+      <div class="form-group"><label class="form-label">Notas</label>
+        <textarea class="form-input" id="he-notas" rows="2">${r.notas||''}</textarea></div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" onclick="UI.cerrarModal()">Cancelar</button>
+        <button class="btn btn-amber" onclick="Modulos.rrhh.guardarHoraExtra('${id||''}')">Guardar</button>
+      </div>`, '560px');
+    if (!id) setTimeout(()=>this._calcMontoHE(),0);
+  },
+
+  _calcMontoHE() {
+    const empId = document.getElementById('he-emp')?.value;
+    const e = this._empleados.find(x=>x.id===empId);
+    if (!e) return;
+    const tipo = document.getElementById('he-tipo')?.value;
+    const salarioDiario = (Number(e.salario_base)||0)/30;
+    const factorInp = document.getElementById('he-factor');
+    const horasInp = document.getElementById('he-horas');
+    const montoInp = document.getElementById('he-monto');
+    if (tipo==='extra') {
+      const factor = parseFloat(factorInp?.value)||1.5;
+      const horas = parseFloat(horasInp?.value)||0;
+      const horaOrdinaria = salarioDiario/8;
+      if (montoInp) montoInp.value = Math.round(horaOrdinaria*horas*factor*100)/100;
+    } else {
+      if (factorInp) factorInp.value = 1;
+      if (horasInp) horasInp.value = 8;
+      if (montoInp) montoInp.value = Math.round(salarioDiario*100)/100;
+    }
+  },
+
+  async guardarHoraExtra(id='') {
+    const empleado_id = document.getElementById('he-emp')?.value;
+    const fecha = document.getElementById('he-fecha')?.value;
+    const monto = parseFloat(document.getElementById('he-monto')?.value)||0;
+    if (!empleado_id || !fecha || monto<=0) { UI.toast('Empleado, fecha y monto son obligatorios','error'); return; }
+    const fields = {
+      empleado_id, fecha,
+      tipo:   document.getElementById('he-tipo')?.value,
+      horas:  parseFloat(document.getElementById('he-horas')?.value)||null,
+      factor: parseFloat(document.getElementById('he-factor')?.value)||null,
+      monto,
+      notas:  document.getElementById('he-notas')?.value||null
+    };
+    if (id) fields.id = id;
+    const { error } = await DB.upsertHoraExtra(fields);
+    if (error) { UI.toast('Error: '+error.message,'error'); return; }
+    UI.cerrarModal(); UI.toast('Registro guardado ✓ — se agregará a la nómina al calcularla');
+    this._renderTab();
   }
 };
