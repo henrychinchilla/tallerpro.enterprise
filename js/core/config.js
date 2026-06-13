@@ -467,11 +467,11 @@ function FERIADOS_GT(anio) {
 
 /* ── PERFILES PREDEFINIDOS PARA RECLUTAMIENTO ──────── */
 const PERFILES_RECLUTAMIENTO = [
-  { puesto:'Asistente Administrativo', departamento:'Administración', salario_min:3000, salario_max:4500,
+  { puesto:'Asistente Administrativo', departamento:'Administración', salario_min:4300, salario_max:5500,
     descripcion:'Apoyo administrativo general: atención telefónica, agendamiento de citas, archivo, control de correspondencia y apoyo a gerencia y recepción.',
     requisitos:'Diversificado graduado. Manejo de paquetes office (Word, Excel). Buena presentación y atención al cliente. Organización y discreción con información confidencial.' },
 
-  { puesto:'Vendedor', departamento:'Ventas', salario_min:3500, salario_max:5500,
+  { puesto:'Vendedor', departamento:'Ventas', salario_min:4300, salario_max:6000,
     descripcion:'Atención y asesoría a clientes sobre servicios y repuestos, generación de cotizaciones, seguimiento de oportunidades y cumplimiento de metas de venta mensuales.',
     requisitos:'Diversificado graduado. Experiencia en ventas o atención al cliente (deseable en repuestos/automotriz). Habilidad de negociación, orientación a resultados y buena comunicación.' },
 
@@ -495,7 +495,7 @@ const PERFILES_RECLUTAMIENTO = [
     descripcion:'Dirección general del negocio: planificación estratégica, supervisión de todas las áreas (operación, finanzas, RRHH, ventas), toma de decisiones y representación legal ante terceros.',
     requisitos:'Licenciatura en Administración de Empresas, Ingeniería Industrial o carrera afín (MBA deseable). 5+ años de experiencia en dirección o gerencia general. Visión estratégica, liderazgo y manejo financiero.' },
 
-  { puesto:'Mecánico Junior', departamento:'Taller', salario_min:3000, salario_max:4500,
+  { puesto:'Mecánico Junior', departamento:'Taller', salario_min:4300, salario_max:5500,
     descripcion:'Apoyo en reparaciones y mantenimientos básicos (cambio de aceite, frenos, llantas, revisiones de rutina) bajo la supervisión de mecánicos senior.',
     requisitos:'Perito en Mecánica Automotriz o formación técnica equivalente (INTECAP). 0-2 años de experiencia. Disposición para aprender, orden y responsabilidad con las herramientas.' },
 
@@ -503,11 +503,11 @@ const PERFILES_RECLUTAMIENTO = [
     descripcion:'Diagnóstico y reparación de fallas mecánicas, eléctricas y de inyección electrónica en vehículos. Soporte técnico a mecánicos junior y control de calidad de los trabajos entregados.',
     requisitos:'Perito en Mecánica Automotriz o técnico equivalente. 5+ años de experiencia comprobable. Manejo de escáner automotriz y diagnóstico computarizado. Responsabilidad y autonomía en el trabajo.' },
 
-  { puesto:'Auxiliar de Mecánica', departamento:'Taller', salario_min:2800, salario_max:3800,
+  { puesto:'Auxiliar de Mecánica', departamento:'Taller', salario_min:4300, salario_max:5000,
     descripcion:'Apoyo general en el taller: limpieza de vehículos y áreas de trabajo, traslado de herramientas y repuestos, y asistencia directa a los mecánicos durante las reparaciones.',
     requisitos:'Educación básica completa (deseable diversificado). No se requiere experiencia previa. Buena actitud, puntualidad y disposición para el trabajo físico.' },
 
-  { puesto:'Bodeguero', departamento:'Bodega', salario_min:3000, salario_max:4200,
+  { puesto:'Bodeguero', departamento:'Bodega', salario_min:4300, salario_max:5200,
     descripcion:'Control de entradas y salidas de repuestos e insumos, organización física de la bodega, conteos de inventario periódicos y coordinación con compras y mecánicos.',
     requisitos:'Diversificado graduado. Experiencia previa en manejo de inventarios (deseable). Orden, honestidad y manejo básico de sistemas/Excel.' },
 

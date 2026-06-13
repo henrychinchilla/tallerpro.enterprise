@@ -128,7 +128,7 @@ const App = {
       const activo = App.paginaActual === m.id;
       /* Submenú interno (solo visible cuando el módulo está activo) */
       const subnav = (m.subnav || []).filter(s => !s.roles || s.roles.includes(rol));
-      const sub = (activo && subnav.length) ? `
+      const sub = (activo && subnav.length && !App._subColapsado) ? `
         <ul class="nav-sub">
           ${subnav.map(s => `
             <li class="nav-subitem ${App._subActivo === s.tab ? 'active' : ''}"
@@ -225,6 +225,17 @@ const App = {
     if (!Auth.user) return;
     const rol = Auth.user.rol;
 
+    /* Click sobre el módulo ya activo: contraer/expandir sus pestañas
+       en vez de volver a renderizar la página */
+    if (App.paginaActual === pagina) {
+      const def = MODULOS.find(m => m.id === pagina);
+      if (def?.subnav?.length) {
+        App._subColapsado = !App._subColapsado;
+        App.renderSidebar();
+        return;
+      }
+    }
+
     /* Verificar permisos */
     if (pagina === 'superadmin') {
       if (rol !== 'superadmin') { UI.toast('Sin acceso a este módulo', 'error'); return; }
@@ -236,6 +247,7 @@ const App = {
     }
 
     App.paginaActual = pagina;
+    App._subColapsado = false;
     /* Sincronizar la sub-sección activa con la pestaña interna del módulo */
     const def = MODULOS.find(m => m.id === pagina);
     const modulo = window.Modulos?.[pagina];
