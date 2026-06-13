@@ -465,6 +465,61 @@ function FERIADOS_GT(anio) {
   ];
 }
 
+/* ── PERFILES PREDEFINIDOS PARA RECLUTAMIENTO ──────── */
+const PERFILES_RECLUTAMIENTO = [
+  { puesto:'Asistente Administrativo', departamento:'Administración', salario_min:3000, salario_max:4500,
+    descripcion:'Apoyo administrativo general: atención telefónica, agendamiento de citas, archivo, control de correspondencia y apoyo a gerencia y recepción.',
+    requisitos:'Diversificado graduado. Manejo de paquetes office (Word, Excel). Buena presentación y atención al cliente. Organización y discreción con información confidencial.' },
+
+  { puesto:'Vendedor', departamento:'Ventas', salario_min:3500, salario_max:5500,
+    descripcion:'Atención y asesoría a clientes sobre servicios y repuestos, generación de cotizaciones, seguimiento de oportunidades y cumplimiento de metas de venta mensuales.',
+    requisitos:'Diversificado graduado. Experiencia en ventas o atención al cliente (deseable en repuestos/automotriz). Habilidad de negociación, orientación a resultados y buena comunicación.' },
+
+  { puesto:'Gerente', departamento:'Gerencia', salario_min:8000, salario_max:15000,
+    descripcion:'Coordinación de las áreas operativas y administrativas del taller, supervisión de equipos de trabajo, control de indicadores (KPIs) y reporte a la Gerencia General.',
+    requisitos:'Licenciatura en Administración de Empresas o carrera afín (deseable). 3+ años de experiencia en puestos de coordinación o gerencia media. Liderazgo, análisis de datos y manejo de personal.' },
+
+  { puesto:'Jefe de Taller', departamento:'Taller', salario_min:6000, salario_max:10000,
+    descripcion:'Supervisión diaria del taller: distribución de órdenes de trabajo entre mecánicos, control de calidad de reparaciones, cumplimiento de tiempos de entrega y seguridad del personal.',
+    requisitos:'Técnico en mecánica automotriz o carrera afín. 3+ años de experiencia como mecánico con al menos 1 año en supervisión de personal. Liderazgo, organización y conocimiento de diagnóstico mecánico/eléctrico.' },
+
+  { puesto:'Gerente de RRHH', departamento:'RRHH', salario_min:7000, salario_max:12000,
+    descripcion:'Gestión integral de recursos humanos: reclutamiento y selección, control de nómina y prestaciones, capacitación, disciplina laboral y cumplimiento del Código de Trabajo de Guatemala.',
+    requisitos:'Licenciatura en Psicología Industrial, Administración de RRHH o carrera afín. 2+ años de experiencia en gestión de personal. Conocimiento de legislación laboral guatemalteca (IGSS, Código de Trabajo) y manejo de nómina.' },
+
+  { puesto:'Gerente de Taller', departamento:'Taller', salario_min:7000, salario_max:12000,
+    descripcion:'Responsable de la operación integral del taller: productividad de mecánicos, control de inventario de repuestos, satisfacción del cliente y rentabilidad del área operativa.',
+    requisitos:'Técnico o Licenciatura en Mecánica Automotriz, Ingeniería o Administración. 3+ años de experiencia en gestión de talleres automotrices. Habilidades de liderazgo, control de costos y atención al cliente.' },
+
+  { puesto:'Administrador / Gerente General', departamento:'Gerencia General', salario_min:10000, salario_max:20000,
+    descripcion:'Dirección general del negocio: planificación estratégica, supervisión de todas las áreas (operación, finanzas, RRHH, ventas), toma de decisiones y representación legal ante terceros.',
+    requisitos:'Licenciatura en Administración de Empresas, Ingeniería Industrial o carrera afín (MBA deseable). 5+ años de experiencia en dirección o gerencia general. Visión estratégica, liderazgo y manejo financiero.' },
+
+  { puesto:'Mecánico Junior', departamento:'Taller', salario_min:3000, salario_max:4500,
+    descripcion:'Apoyo en reparaciones y mantenimientos básicos (cambio de aceite, frenos, llantas, revisiones de rutina) bajo la supervisión de mecánicos senior.',
+    requisitos:'Perito en Mecánica Automotriz o formación técnica equivalente (INTECAP). 0-2 años de experiencia. Disposición para aprender, orden y responsabilidad con las herramientas.' },
+
+  { puesto:'Mecánico Senior', departamento:'Taller', salario_min:5000, salario_max:8000,
+    descripcion:'Diagnóstico y reparación de fallas mecánicas, eléctricas y de inyección electrónica en vehículos. Soporte técnico a mecánicos junior y control de calidad de los trabajos entregados.',
+    requisitos:'Perito en Mecánica Automotriz o técnico equivalente. 5+ años de experiencia comprobable. Manejo de escáner automotriz y diagnóstico computarizado. Responsabilidad y autonomía en el trabajo.' },
+
+  { puesto:'Auxiliar de Mecánica', departamento:'Taller', salario_min:2800, salario_max:3800,
+    descripcion:'Apoyo general en el taller: limpieza de vehículos y áreas de trabajo, traslado de herramientas y repuestos, y asistencia directa a los mecánicos durante las reparaciones.',
+    requisitos:'Educación básica completa (deseable diversificado). No se requiere experiencia previa. Buena actitud, puntualidad y disposición para el trabajo físico.' },
+
+  { puesto:'Bodeguero', departamento:'Bodega', salario_min:3000, salario_max:4200,
+    descripcion:'Control de entradas y salidas de repuestos e insumos, organización física de la bodega, conteos de inventario periódicos y coordinación con compras y mecánicos.',
+    requisitos:'Diversificado graduado. Experiencia previa en manejo de inventarios (deseable). Orden, honestidad y manejo básico de sistemas/Excel.' },
+
+  { puesto:'Gerente Financiero', departamento:'Finanzas', salario_min:8000, salario_max:14000,
+    descripcion:'Administración de las finanzas del taller: flujo de caja, presupuestos, relación con bancos, análisis de rentabilidad y reportes financieros para la Gerencia General.',
+    requisitos:'Licenciatura en Administración de Empresas, Contaduría Pública y Auditoría o Economía. 3+ años de experiencia en finanzas. Manejo de presupuestos, análisis financiero y herramientas de Excel/ERP.' },
+
+  { puesto:'Contador', departamento:'Contabilidad', salario_min:5000, salario_max:9000,
+    descripcion:'Registro y control contable de las operaciones del taller, elaboración de declaraciones ante la SAT (IVA, ISR), conciliaciones bancarias y apoyo en el cierre mensual.',
+    requisitos:'Perito Contador o estudiante avanzado/graduado de Contaduría Pública y Auditoría. Conocimiento de obligaciones fiscales guatemaltecas (SAT) y manejo de sistemas contables.' }
+];
+
 /* ── DEPRECIACIÓN DE ACTIVOS (línea recta) ─────────── */
 function _mesIdx(fechaStr) {
   if (!fechaStr) return null;

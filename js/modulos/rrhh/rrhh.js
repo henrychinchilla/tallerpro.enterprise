@@ -2303,6 +2303,7 @@ Modulos.rrhh = {
 
   /* ══ RECLUTAMIENTO: vacantes y aplicantes ══ */
   _reclutVacanteSel: '',
+  _reclutMostrarPerfiles: false,
   _aplCV: null,
 
   async _renderReclutamiento(el) {
@@ -2326,6 +2327,25 @@ Modulos.rrhh = {
         ${UI.kpiCard({ icon:'🧑', clase:'amber', label:'Aplicantes', value: aplicantesAll.length })}
         ${UI.kpiCard({ icon:'✅', clase:'purple', label:'Contratados', value: contratados })}
       </div>
+
+      <div class="card" style="margin-bottom:16px">
+        <div style="display:flex;justify-content:space-between;align-items:center;cursor:pointer" onclick="Modulos.rrhh._reclutMostrarPerfiles=!Modulos.rrhh._reclutMostrarPerfiles;Modulos.rrhh._renderTab()">
+          <div class="card-sub" style="margin:0">📋 Perfiles predefinidos de puestos (${PERFILES_RECLUTAMIENTO.length})</div>
+          <span style="font-size:12px;color:var(--text3)">${this._reclutMostrarPerfiles?'▲ Ocultar':'▼ Mostrar'}</span>
+        </div>
+        ${this._reclutMostrarPerfiles?`
+        <div style="font-size:12px;color:var(--text3);margin:8px 0 12px">Usa una plantilla para crear rápidamente una vacante con descripción, requisitos y rango salarial sugerido (puedes editarlos antes de guardar).</div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px">
+          ${PERFILES_RECLUTAMIENTO.map((p,i)=>`
+            <div class="card" style="padding:12px">
+              <div style="font-weight:700;font-size:13px">${p.puesto}</div>
+              <div style="font-size:11px;color:var(--text3);margin:2px 0 6px">${p.departamento}</div>
+              <div class="mono-sm text-amber" style="margin-bottom:8px">${UI.q(p.salario_min)} – ${UI.q(p.salario_max)}</div>
+              <button class="btn btn-ghost btn-sm" style="width:100%" onclick="Modulos.rrhh.modalVacante(null,${i})">＋ Crear vacante</button>
+            </div>`).join('')}
+        </div>`:''}
+      </div>
+
       <div class="table-wrap"><table class="data-table">
         <thead><tr><th>Puesto</th><th>Depto</th><th>Salario</th><th>Vacantes</th><th>Estado</th><th>Acciones</th></tr></thead>
         <tbody>${vacantes.map(v=>`<tr>
@@ -2370,8 +2390,9 @@ Modulos.rrhh = {
       </table></div>`;
   },
 
-  modalVacante(id=null) {
-    const v = id ? (this._vacantesCache||[]).find(x=>x.id===id)||{} : {};
+  modalVacante(id=null, plantillaIdx=null) {
+    const v = id ? (this._vacantesCache||[]).find(x=>x.id===id)||{}
+      : (plantillaIdx!=null ? { ...PERFILES_RECLUTAMIENTO[plantillaIdx] } : {});
     UI.modal(`${id?'✏️ Editar':'🧑‍💼 Nueva'} vacante`, `
       <div class="form-row">
         <div class="form-group"><label class="form-label">Puesto *</label>
