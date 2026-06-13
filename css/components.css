@@ -240,6 +240,15 @@
 }
 .modal-close:hover { background: var(--surface2); color: var(--text); }
 
+/* Encabezado destacado (p.ej. chat de Beto): se ajusta al color de
+   acento del tema activo automáticamente vía var(--amber) */
+.modal-header-ia {
+  background: var(--amber); border-bottom-color: var(--amber);
+}
+.modal-header-ia .modal-title { color: #fff; }
+.modal-header-ia .modal-close { color: #fff; }
+.modal-header-ia .modal-close:hover { background: rgba(255,255,255,0.18); color: #fff; }
+
 .modal-body { padding: 20px; }
 
 .modal-footer {

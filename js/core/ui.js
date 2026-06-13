@@ -21,6 +21,7 @@ const UI = {
     document.getElementById('modal-titulo').textContent = titulo;
     document.getElementById('modal-body').innerHTML = contenido;
     document.getElementById('modal-box').style.maxWidth = ancho;
+    document.querySelector('#modal-box .modal-header')?.classList.remove('modal-header-ia');
   },
 
   cerrarModal() {

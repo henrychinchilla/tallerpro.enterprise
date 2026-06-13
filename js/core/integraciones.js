@@ -152,6 +152,7 @@ const IA = {
         <button class="btn btn-ghost btn-sm" onclick="IA._insightsChat()">📊 Resumen del negocio</button>
         <button class="btn btn-ghost btn-sm" onclick="document.getElementById('ia-input').value='¿Qué significa el código de falla ';document.getElementById('ia-input').focus()">🔧 Consultar código DTC</button>
       </div>`, '680px');
+    document.querySelector('#modal-box .modal-header')?.classList.add('modal-header-ia');
   },
 
   _push(rol, texto) {
@@ -163,10 +164,23 @@ const IA = {
       max-width:85%;padding:8px 12px;border-radius:10px;font-size:13px;white-space:pre-wrap;
       background:${esUser ? 'var(--amber-dim)' : 'var(--surface2)'};
       border:1px solid var(--border);color:var(--text)`;
-    burbuja.textContent = texto;
+    burbuja.innerHTML = IA._formatear(texto);
     cont.appendChild(burbuja);
     cont.scrollTop = cont.scrollHeight;
     return burbuja;
+  },
+
+  /* Convierte enlaces Markdown [texto](url) a <a> clicables; escapa el
+     resto del texto para evitar inyección de HTML */
+  _formatear(texto) {
+    const esc = s => s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    return esc(texto).replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g,
+      (_, label, url) => `<a href="${url}" target="_blank" rel="noopener" style="color:var(--amber)">${label}</a>`);
+  },
+
+  /* Actualiza el texto de una burbuja ya creada (ej. al recibir la respuesta) */
+  _actualizar(burbuja, texto) {
+    if (burbuja) burbuja.innerHTML = IA._formatear(texto);
   },
 
   async _enviarChat() {
@@ -177,12 +191,12 @@ const IA = {
     IA._push('user', msg);
     const cargando = IA._push('ai', '⏳ Pensando...');
     const r = await IA.preguntar(msg);
-    if (cargando) cargando.textContent = r.ok ? r.texto : '⚠️ ' + r.error;
+    IA._actualizar(cargando, r.ok ? r.texto : '⚠️ ' + r.error);
   },
 
   async _insightsChat() {
     const cargando = IA._push('ai', '⏳ Analizando el negocio...');
     const r = await IA.insights();
-    if (cargando) cargando.textContent = r.ok ? r.texto : '⚠️ ' + r.error;
+    IA._actualizar(cargando, r.ok ? r.texto : '⚠️ ' + r.error);
   }
 };
