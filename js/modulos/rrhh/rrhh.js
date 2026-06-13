@@ -2304,6 +2304,7 @@ Modulos.rrhh = {
   /* ══ RECLUTAMIENTO: vacantes y aplicantes ══ */
   _reclutVacanteSel: '',
   _reclutMostrarPerfiles: false,
+  _reclutMostrarHistorial: false,
   _aplCV: null,
 
   async _renderReclutamiento(el) {
@@ -2312,6 +2313,12 @@ Modulos.rrhh = {
     const aplicantesAll = await DB.getAplicantes();
     this._aplicantesCache = aplicantesAll;
     const aplicantes = this._reclutVacanteSel ? aplicantesAll.filter(a=>a.vacante_id===this._reclutVacanteSel) : aplicantesAll;
+    let historial = [];
+    if (this._reclutMostrarHistorial) {
+      historial = await DB.getAplicantesHistorial();
+      if (this._reclutVacanteSel) historial = historial.filter(a=>a.vacante_id===this._reclutVacanteSel);
+      this._aplicantesCache = aplicantesAll.concat(historial);
+    }
     const publicadas = vacantes.filter(v=>v.estado==='publicada');
     const contratados = aplicantesAll.filter(a=>a.estado==='contratado').length;
     const vacSel = vacantes.find(v=>v.id===this._reclutVacanteSel);
@@ -2387,7 +2394,30 @@ Modulos.rrhh = {
             ${Modulos.btnAccion('eliminar', `Modulos.eliminarRegistro('aplicantes','${a.id}','${(a.nombre||'').replace(/'/g,"\\'")}',()=>Modulos.rrhh._renderTab())`)}
           </div></td>
         </tr>`;}).join('')||'<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--text3)">Sin aplicantes registrados</td></tr>'}</tbody>
-      </table></div>`;
+      </table></div>
+
+      <div class="card" style="margin-top:16px">
+        <div style="display:flex;justify-content:space-between;align-items:center;cursor:pointer" onclick="Modulos.rrhh._reclutMostrarHistorial=!Modulos.rrhh._reclutMostrarHistorial;Modulos.rrhh._renderTab()">
+          <div class="card-sub" style="margin:0">🗄️ Historial de aplicantes (más de 1 mes)</div>
+          <span style="font-size:12px;color:var(--text3)">${this._reclutMostrarHistorial?'▲ Ocultar':'▼ Mostrar'}</span>
+        </div>
+        ${this._reclutMostrarHistorial?`
+        <div style="font-size:12px;color:var(--text3);margin:8px 0 12px">Aplicantes con más de un mes de antigüedad. Se ocultan de la vista principal para no sobrecargar el sistema.</div>
+        <div class="table-wrap"><table class="data-table">
+          <thead><tr><th>Nombre</th><th>Vacante</th><th>Contacto</th><th>CV</th><th>Estado</th><th>Fecha</th><th>Acciones</th></tr></thead>
+          <tbody>${historial.map(a=>{
+            const vac = vacantes.find(v=>v.id===a.vacante_id);
+            return `<tr>
+            <td><b>${a.nombre}</b>${a.notas?`<div style="font-size:10px;color:var(--text3)">${a.notas}</div>`:''}</td>
+            <td>${vac?.puesto||'—'}</td>
+            <td class="mono-sm">${a.telefono||''}${a.email?'<br>'+a.email:''}</td>
+            <td>${a.cv_base64?`<button class="btn btn-sm btn-cyan" onclick="UI.verAdjunto(Modulos.rrhh._cvDe('${a.id}'),'📄 CV')">📄 Ver</button>`:'—'}</td>
+            <td><span class="badge badge-${a.estado==='contratado'?'green':a.estado==='rechazado'?'gray':'amber'}">${a.estado}</span></td>
+            <td class="mono-sm">${UI.fecha(a.created_at)}</td>
+            <td>${Modulos.btnAccion('eliminar', `Modulos.eliminarRegistro('aplicantes','${a.id}','${(a.nombre||'').replace(/'/g,"\\'")}',()=>Modulos.rrhh._renderTab())`)}</td>
+          </tr>`;}).join('')||'<tr><td colspan="7" style="text-align:center;padding:24px;color:var(--text3)">Sin aplicantes en historial</td></tr>'}</tbody>
+        </table></div>`:''}
+      </div>`;
   },
 
   modalVacante(id=null, plantillaIdx=null) {

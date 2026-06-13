@@ -971,7 +971,19 @@ const DB = {
     return { data, error };
   },
   async getAplicantes(vacanteId) {
-    let q = getSB().from('aplicantes').select('*').eq('tenant_id', getTID());
+    /* Solo aplicantes del último mes (visible en pantalla); los más
+       antiguos quedan en historial para no cargar el sistema */
+    const corte = new Date(); corte.setMonth(corte.getMonth() - 1);
+    let q = getSB().from('aplicantes').select('*').eq('tenant_id', getTID())
+      .gte('created_at', corte.toISOString());
+    if (vacanteId) q = q.eq('vacante_id', vacanteId);
+    const { data } = await q.order('created_at',{ ascending:false });
+    return data || [];
+  },
+  async getAplicantesHistorial(vacanteId) {
+    const corte = new Date(); corte.setMonth(corte.getMonth() - 1);
+    let q = getSB().from('aplicantes').select('*').eq('tenant_id', getTID())
+      .lt('created_at', corte.toISOString());
     if (vacanteId) q = q.eq('vacante_id', vacanteId);
     const { data } = await q.order('created_at',{ ascending:false });
     return data || [];
