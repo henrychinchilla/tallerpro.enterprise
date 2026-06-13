@@ -24,12 +24,14 @@ Modulos.activos = {
       </div>
       <div class="page-body">
         <div class="tabs">
-          <button class="tab-btn ${this._tab==='activos'?'active':''}" onclick="Modulos.activos._tab='activos';Modulos.activos.render()">🛠️ Inventario de Activos</button>
-          <button class="tab-btn ${this._tab==='depreciacion'?'active':''}" onclick="Modulos.activos._tab='depreciacion';Modulos.activos.render()">📉 Depreciación</button>
+          <button class="tab-btn ${this._tab==='activos'?'active':''}" onclick="Modulos.activos._ir('activos')">🛠️ Inventario de Activos</button>
+          <button class="tab-btn ${this._tab==='depreciacion'?'active':''}" onclick="Modulos.activos._ir('depreciacion')">📉 Depreciación</button>
         </div>
         ${this._tab==='activos' ? this._renderActivos() : this._renderDepreciacion()}
       </div>`;
   },
+
+  _ir(t){ this._tab=t; App._subActivo=t; App._guardarRuta(); App.renderSidebar(); this.render(); },
 
   _renderActivos() {
     const hoy = new Date().toISOString().slice(0,10);

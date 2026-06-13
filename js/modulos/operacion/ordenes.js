@@ -1,7 +1,7 @@
 /* TallerPro v3.0 — ordenes/index.js */
 Modulos.ordenes = {
   _data:[], _vehiculos:[], _clientes:[], _mecanicos:[],
-  _vista:'lista', _fotos:[],
+  _tab:'lista', _fotos:[],
 
   async render(filtros={}) {
     const el = document.getElementById('page-content');
@@ -25,16 +25,18 @@ Modulos.ordenes = {
             <option value="">Todos los estados</option>
             ${Object.entries(ESTADOS_OT).map(([k,v])=>`<option value="${k}">${v.label}</option>`).join('')}
           </select>
-          <button class="btn btn-ghost" onclick="Modulos.ordenes._vista='kanban';Modulos.ordenes.render()" title="Kanban">⬛</button>
-          <button class="btn btn-ghost" onclick="Modulos.ordenes._vista='lista';Modulos.ordenes.render()" title="Lista">☰</button>
+          <button class="btn btn-ghost" onclick="Modulos.ordenes._ir('kanban')" title="Kanban">⬛</button>
+          <button class="btn btn-ghost" onclick="Modulos.ordenes._ir('lista')" title="Lista">☰</button>
           <button class="btn btn-ghost" onclick="window.print()">🖨️</button>
           <button class="btn btn-amber" onclick="Modulos.ordenes.modalForm()">＋ Nueva OT</button>
         </div>
       </div>
       <div class="page-body">
-        ${this._vista==='kanban' ? this._renderKanban() : this._renderLista()}
+        ${this._tab==='kanban' ? this._renderKanban() : this._renderLista()}
       </div>`;
   },
+
+  _ir(t){ this._tab=t; App._subActivo=t; App._guardarRuta(); App.renderSidebar(); this.render(); },
 
   _filtrarTabla(busca) {
     const rows = document.querySelectorAll('#ot-tbody tr');

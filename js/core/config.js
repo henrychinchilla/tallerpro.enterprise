@@ -49,16 +49,35 @@ const MODULOS = [
   { id:'dashboard',      icon:'📊', label:'Dashboard',         grupo:'principal' },
   { id:'clientes',       icon:'👥', label:'Clientes',          grupo:'operacion'  },
   { id:'vehiculos',      icon:'🚗', label:'Vehículos',         grupo:'operacion'  },
-  { id:'ordenes',        icon:'📋', label:'Órdenes de Trabajo', grupo:'operacion' },
+  { id:'ordenes',        icon:'📋', label:'Órdenes de Trabajo', grupo:'operacion',
+    subnav:[
+      { tab:'lista',  icon:'☰', label:'Lista'   },
+      { tab:'kanban', icon:'⬛', label:'Kanban'  }
+    ] },
   { id:'inventario',     icon:'📦', label:'Inventario',        grupo:'operacion'  },
   { id:'bodegas',        icon:'🏭', label:'Bodegas',           grupo:'operacion'  },
   { id:'proveedores',    icon:'🏪', label:'Proveedores',       grupo:'operacion'  },
   { id:'compras',        icon:'🛒', label:'Compras',           grupo:'operacion'  },
-  { id:'activos',        icon:'🛠️', label:'Herramientas y Activos', grupo:'operacion' },
+  { id:'activos',        icon:'🛠️', label:'Herramientas y Activos', grupo:'operacion',
+    subnav:[
+      { tab:'activos',      icon:'🛠️', label:'Inventario de Activos' },
+      { tab:'depreciacion', icon:'📉', label:'Depreciación'          }
+    ] },
   { id:'envios',         icon:'🚚', label:'Envíos / Fletes',   grupo:'operacion'  },
   { id:'facturacion',    icon:'🧾', label:'Facturación FEL',   grupo:'finanzas'   },
   { id:'bancos',         icon:'🏦', label:'Bancos',            grupo:'finanzas'   },
-  { id:'finanzas',       icon:'💰', label:'Finanzas',          grupo:'finanzas'   },
+  { id:'finanzas',       icon:'💰', label:'Finanzas',          grupo:'finanzas',
+    subnav:[
+      { tab:'dashboard',   icon:'📊', label:'Resumen'              },
+      { tab:'ingresos',    icon:'📈', label:'Ingresos'             },
+      { tab:'egresos',     icon:'📉', label:'Egresos'              },
+      { tab:'viaticos',    icon:'🚗', label:'Viáticos'             },
+      { tab:'recurrentes', icon:'🔁', label:'Recurrentes'          },
+      { tab:'balance',     icon:'📋', label:'Estado de Resultados' },
+      { tab:'libros',      icon:'📚', label:'Libro IVA'            },
+      { tab:'retenciones', icon:'🧾', label:'Retenciones / ISR'    },
+      { tab:'fiscal',      icon:'🏛️', label:'Fiscal SAT'           }
+    ] },
   { id:'presupuesto',    icon:'📊', label:'Presupuesto',       grupo:'finanzas'   },
   { id:'contabilidad',   icon:'🧮', label:'Contabilidad / SAT', grupo:'finanzas',
     subnav:[
@@ -83,12 +102,29 @@ const MODULOS = [
     ] },
   { id:'marketing',      icon:'🎯', label:'Marketing',         grupo:'marketing'  },
   { id:'calendario',     icon:'📅', label:'Calendario',        grupo:'herramientas'},
-  { id:'comunicaciones', icon:'🔔', label:'Comunicaciones',    grupo:'herramientas'},
+  { id:'comunicaciones', icon:'🔔', label:'Comunicaciones',    grupo:'herramientas',
+    subnav:[
+      { tab:'whatsapp', icon:'💬', label:'WhatsApp'       },
+      { tab:'email',    icon:'📧', label:'Email'          },
+      { tab:'config',   icon:'⚙️', label:'Configuración'  }
+    ] },
   { id:'configuracion',  icon:'⚙️', label:'Configuración',     grupo:'admin'      },
   { id:'usuarios',       icon:'👥', label:'Usuarios',          grupo:'admin'      },
-  { id:'admin',          icon:'🗄️', label:'Administración',    grupo:'admin'      },
+  { id:'admin',          icon:'🗄️', label:'Administración',    grupo:'admin',
+    subnav:[
+      { tab:'overview',  icon:'📊', label:'Estado'           },
+      { tab:'exportar',  icon:'⬇️', label:'Exportar'         },
+      { tab:'auditoria', icon:'📜', label:'Auditoría',        roles:['admin','superadmin','gerente_fin','gerente_tal'] },
+      { tab:'importar',  icon:'⬆️', label:'Importar',         roles:['admin','superadmin'] },
+      { tab:'peligro',   icon:'⚠️', label:'Zona de Peligro',  roles:['admin','superadmin'] }
+    ] },
   { id:'respaldos',      icon:'💾', label:'Respaldos',         grupo:'admin'      },
-  { id:'superadmin',     icon:'⚡', label:'Panel SaaS',        grupo:'saas'       },
+  { id:'superadmin',     icon:'⚡', label:'Panel SaaS',        grupo:'saas',
+    subnav:[
+      { tab:'talleres', icon:'🏪', label:'Talleres' },
+      { tab:'cobros',   icon:'💵', label:'Cobros'   },
+      { tab:'planes',   icon:'🎚️', label:'Planes'   }
+    ] },
   { id:'mi_ot',          icon:'🔍', label:'Mis Órdenes',       grupo:'cliente'    }
 ];
 

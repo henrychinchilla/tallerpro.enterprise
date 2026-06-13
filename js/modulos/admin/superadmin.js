@@ -35,7 +35,7 @@ Modulos.superadmin = {
     this._renderTab();
   },
 
-  _ir(t){ this._tab=t; this._renderTab(); },
+  _ir(t){ this._tab=t; App._subActivo=t; App._guardarRuta(); App.renderSidebar(); this._renderTab(); },
 
   _mesActual(){ const n=new Date(); return `${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,'0')}`; },
   _planLabel(p){ return (PLANES[p]?.label)||p||'—'; },

@@ -10,18 +10,20 @@ Modulos.admin = {
       </div>
       <div class="page-body">
         <div class="tabs">
-          <button class="tab-btn ${this._tab==='overview'?'active':''}" onclick="Modulos.admin._tab='overview';Modulos.admin._renderTab()">📊 Estado</button>
-          <button class="tab-btn ${this._tab==='exportar'?'active':''}" onclick="Modulos.admin._tab='exportar';Modulos.admin._renderTab()">⬇️ Exportar</button>
+          <button class="tab-btn ${this._tab==='overview'?'active':''}" onclick="Modulos.admin._ir('overview')">📊 Estado</button>
+          <button class="tab-btn ${this._tab==='exportar'?'active':''}" onclick="Modulos.admin._ir('exportar')">⬇️ Exportar</button>
           ${['admin','superadmin','gerente_fin','gerente_tal'].includes(Auth.user?.rol)?`
-          <button class="tab-btn ${this._tab==='auditoria'?'active':''}" onclick="Modulos.admin._tab='auditoria';Modulos.admin._renderTab()">📜 Auditoría</button>`:''}
+          <button class="tab-btn ${this._tab==='auditoria'?'active':''}" onclick="Modulos.admin._ir('auditoria')">📜 Auditoría</button>`:''}
           ${['admin','superadmin'].includes(Auth.user?.rol)?`
-          <button class="tab-btn ${this._tab==='importar'?'active':''}" onclick="Modulos.admin._tab='importar';Modulos.admin._renderTab()">⬆️ Importar</button>
-          <button class="tab-btn ${this._tab==='peligro'?'active':''}" style="color:var(--red)" onclick="Modulos.admin._tab='peligro';Modulos.admin._renderTab()">⚠️ Zona de Peligro</button>`:''}
+          <button class="tab-btn ${this._tab==='importar'?'active':''}" onclick="Modulos.admin._ir('importar')">⬆️ Importar</button>
+          <button class="tab-btn ${this._tab==='peligro'?'active':''}" style="color:var(--red)" onclick="Modulos.admin._ir('peligro')">⚠️ Zona de Peligro</button>`:''}
         </div>
         <div id="admin-content"></div>
       </div>`;
     await this._renderTab();
   },
+
+  _ir(t){ this._tab=t; App._subActivo=t; App._guardarRuta(); App.renderSidebar(); this._renderTab(); },
 
   async _renderTab() {
     const el = document.getElementById('admin-content');

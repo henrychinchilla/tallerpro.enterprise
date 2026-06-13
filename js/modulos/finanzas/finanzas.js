@@ -20,20 +20,22 @@ Modulos.finanzas = {
       </div>
       <div class="page-body">
         <div class="tabs">
-          <button class="tab-btn ${this._tab==='dashboard'?'active':''}" onclick="Modulos.finanzas._tab='dashboard';Modulos.finanzas._renderTab()">📊 Resumen</button>
-          <button class="tab-btn ${this._tab==='ingresos'?'active':''}" onclick="Modulos.finanzas._tab='ingresos';Modulos.finanzas._renderTab()">📈 Ingresos</button>
-          <button class="tab-btn ${this._tab==='egresos'?'active':''}" onclick="Modulos.finanzas._tab='egresos';Modulos.finanzas._renderTab()">📉 Egresos</button>
-          <button class="tab-btn ${this._tab==='viaticos'?'active':''}" onclick="Modulos.finanzas._tab='viaticos';Modulos.finanzas._renderTab()">🚗 Viáticos</button>
-          <button class="tab-btn ${this._tab==='recurrentes'?'active':''}" onclick="Modulos.finanzas._tab='recurrentes';Modulos.finanzas._renderTab()">🔁 Recurrentes</button>
-          <button class="tab-btn ${this._tab==='balance'?'active':''}" onclick="Modulos.finanzas._tab='balance';Modulos.finanzas._renderTab()">📋 Estado de Resultados</button>
-          <button class="tab-btn ${this._tab==='libros'?'active':''}" onclick="Modulos.finanzas._tab='libros';Modulos.finanzas._renderTab()">📚 Libro IVA</button>
-          <button class="tab-btn ${this._tab==='retenciones'?'active':''}" onclick="Modulos.finanzas._tab='retenciones';Modulos.finanzas._renderTab()">🧾 Retenciones / ISR</button>
-          <button class="tab-btn ${this._tab==='fiscal'?'active':''}" onclick="Modulos.finanzas._tab='fiscal';Modulos.finanzas._renderTab()">🏛️ Fiscal SAT</button>
+          <button class="tab-btn ${this._tab==='dashboard'?'active':''}" onclick="Modulos.finanzas._ir('dashboard')">📊 Resumen</button>
+          <button class="tab-btn ${this._tab==='ingresos'?'active':''}" onclick="Modulos.finanzas._ir('ingresos')">📈 Ingresos</button>
+          <button class="tab-btn ${this._tab==='egresos'?'active':''}" onclick="Modulos.finanzas._ir('egresos')">📉 Egresos</button>
+          <button class="tab-btn ${this._tab==='viaticos'?'active':''}" onclick="Modulos.finanzas._ir('viaticos')">🚗 Viáticos</button>
+          <button class="tab-btn ${this._tab==='recurrentes'?'active':''}" onclick="Modulos.finanzas._ir('recurrentes')">🔁 Recurrentes</button>
+          <button class="tab-btn ${this._tab==='balance'?'active':''}" onclick="Modulos.finanzas._ir('balance')">📋 Estado de Resultados</button>
+          <button class="tab-btn ${this._tab==='libros'?'active':''}" onclick="Modulos.finanzas._ir('libros')">📚 Libro IVA</button>
+          <button class="tab-btn ${this._tab==='retenciones'?'active':''}" onclick="Modulos.finanzas._ir('retenciones')">🧾 Retenciones / ISR</button>
+          <button class="tab-btn ${this._tab==='fiscal'?'active':''}" onclick="Modulos.finanzas._ir('fiscal')">🏛️ Fiscal SAT</button>
         </div>
         <div id="fin-content"><div class="empty-state">⏳ Cargando...</div></div>
       </div>`;
     await this._renderTab();
   },
+
+  _ir(t){ this._tab=t; App._subActivo=t; App._guardarRuta(); App.renderSidebar(); this._renderTab(); },
 
   /* Fija el periodo a un mes completo (YYYY-MM) y re-dibuja */
   _setMes(ym) {

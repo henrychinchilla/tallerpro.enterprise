@@ -127,9 +127,10 @@ const App = {
     const itemHtml = m => {
       const activo = App.paginaActual === m.id;
       /* Submenú interno (solo visible cuando el módulo está activo) */
-      const sub = (activo && m.subnav?.length) ? `
+      const subnav = (m.subnav || []).filter(s => !s.roles || s.roles.includes(rol));
+      const sub = (activo && subnav.length) ? `
         <ul class="nav-sub">
-          ${m.subnav.map(s => `
+          ${subnav.map(s => `
             <li class="nav-subitem ${App._subActivo === s.tab ? 'active' : ''}"
                 onclick="event.stopPropagation();App.navegarSub('${m.id}','${s.tab}')">
               <span class="nav-icon">${s.icon}</span>

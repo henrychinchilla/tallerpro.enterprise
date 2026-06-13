@@ -10,14 +10,16 @@ Modulos.comunicaciones = {
       </div>
       <div class="page-body">
         <div class="tabs">
-          <button class="tab-btn ${this._tab==='whatsapp'?'active':''}" onclick="Modulos.comunicaciones._tab='whatsapp';Modulos.comunicaciones._renderTab()">💬 WhatsApp</button>
-          <button class="tab-btn ${this._tab==='email'?'active':''}" onclick="Modulos.comunicaciones._tab='email';Modulos.comunicaciones._renderTab()">📧 Email</button>
-          <button class="tab-btn ${this._tab==='config'?'active':''}" onclick="Modulos.comunicaciones._tab='config';Modulos.comunicaciones._renderTab()">⚙️ Configuración</button>
+          <button class="tab-btn ${this._tab==='whatsapp'?'active':''}" onclick="Modulos.comunicaciones._ir('whatsapp')">💬 WhatsApp</button>
+          <button class="tab-btn ${this._tab==='email'?'active':''}" onclick="Modulos.comunicaciones._ir('email')">📧 Email</button>
+          <button class="tab-btn ${this._tab==='config'?'active':''}" onclick="Modulos.comunicaciones._ir('config')">⚙️ Configuración</button>
         </div>
         <div id="com-content"></div>
       </div>`;
     this._renderTab();
   },
+
+  _ir(t){ this._tab=t; App._subActivo=t; App._guardarRuta(); App.renderSidebar(); this._renderTab(); },
 
   _renderTab() {
     const el = document.getElementById('com-content');
