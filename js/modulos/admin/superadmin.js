@@ -4,6 +4,7 @@
 Modulos.superadmin = {
   _tab: 'talleres',
   _tenants: [], _pagos: [],
+  _dbTenantId: null, _dbBackups: [],
 
   async render() {
     const el = document.getElementById('page-content');
@@ -29,6 +30,7 @@ Modulos.superadmin = {
           <button class="tab-btn ${this._tab==='talleres'?'active':''}" onclick="Modulos.superadmin._ir('talleres')">🏪 Talleres</button>
           <button class="tab-btn ${this._tab==='cobros'?'active':''}" onclick="Modulos.superadmin._ir('cobros')">💵 Cobros</button>
           <button class="tab-btn ${this._tab==='planes'?'active':''}" onclick="Modulos.superadmin._ir('planes')">🎚️ Planes</button>
+          <button class="tab-btn ${this._tab==='basedatos'?'active':''}" onclick="Modulos.superadmin._ir('basedatos')">🗄️ Base de datos</button>
         </div>
         <div id="sa-content"></div>
       </div>`;
@@ -141,6 +143,99 @@ Modulos.superadmin = {
           lo traen activado para que lo conozcan.
         </div></div>`;
     }
+
+    else if (this._tab==='basedatos') {
+      el.innerHTML = `
+        <div class="alert alert-red" style="margin-bottom:16px">
+          <div class="alert-icon">⚠️</div>
+          <div class="alert-body" style="font-size:12px">
+            Herramientas de <b>alto riesgo</b>, solo superadmin. Restaurar o borrar sobrescribe los datos
+            del taller seleccionado. Antes de restaurar o borrar se genera automáticamente un respaldo
+            de seguridad silencioso.
+          </div>
+        </div>
+        <div class="form-group" style="max-width:420px">
+          <label class="form-label">Taller</label>
+          <select class="form-select" id="db-tenant" onchange="Modulos.superadmin._dbCargar(this.value)">
+            <option value="">— Selecciona un taller —</option>
+            ${this._tenants.map(t=>`<option value="${t.id}" ${this._dbTenantId===t.id?'selected':''}>${t.name||t.slug}</option>`).join('')}
+          </select>
+        </div>
+        <div id="db-detalle"></div>`;
+      if (this._dbTenantId) this._dbRenderDetalle();
+    }
+  },
+
+  /* ── BASE DE DATOS (superadmin): respaldos por taller, restaurar, borrar ── */
+  async _dbCargar(id) {
+    this._dbTenantId = id || null;
+    this._dbBackups = [];
+    if (!this._dbTenantId) { this._dbRenderDetalle(); return; }
+    const el = document.getElementById('db-detalle');
+    if (el) el.innerHTML = '<div class="empty-state">Cargando respaldos...</div>';
+    const { data, error } = await getSB().functions.invoke('tenant-db-tools', { body:{ op:'listar', tenant_id:this._dbTenantId } });
+    if (error || data?.error) { UI.toast('Error: '+(data?.error||error.message),'error'); this._dbBackups=[]; }
+    else this._dbBackups = data.backups||[];
+    this._dbRenderDetalle();
+  },
+
+  _dbRenderDetalle() {
+    const el = document.getElementById('db-detalle');
+    if (!el) return;
+    if (!this._dbTenantId) { el.innerHTML=''; return; }
+    const t = this._tenants.find(x=>x.id===this._dbTenantId);
+    el.innerHTML = `
+      <div class="table-wrap" style="margin-top:16px">
+        <table class="data-table">
+          <thead><tr><th>Respaldo</th><th>Tamaño</th><th>Acciones</th></tr></thead>
+          <tbody>
+            ${this._dbBackups.map(b=>`<tr>
+              <td class="mono-sm">${b.nombre}</td>
+              <td class="mono-sm">${b.tamano?Math.round(b.tamano/1024)+' KB':'—'}</td>
+              <td><div style="display:flex;gap:4px;flex-wrap:wrap">
+                ${b.url?`<a class="btn btn-sm btn-cyan" href="${b.url}" target="_blank">⬇️ Descargar</a>`:''}
+                <button class="btn btn-sm btn-amber" onclick="Modulos.superadmin._dbRestaurar('${b.nombre}')">♻️ Restaurar</button>
+              </div></td>
+            </tr>`).join('')||'<tr><td colspan="3" style="text-align:center;padding:24px;color:var(--text3)">Sin respaldos para este taller</td></tr>'}
+          </tbody>
+        </table>
+      </div>
+      <div class="card" style="margin-top:20px;border:2px solid var(--red)">
+        <div style="font-weight:800;color:var(--red);margin-bottom:6px">🗑️ Borrar datos de "${t?.name||t?.slug}"</div>
+        <div style="font-size:12px;color:var(--text3);margin-bottom:10px">
+          Elimina todos los datos operativos de este taller (clientes, órdenes, facturas, inventario, finanzas, etc.).
+          Se genera un respaldo de seguridad automático antes de borrar. Esta acción no se puede deshacer desde la app.
+        </div>
+        <div class="form-group">
+          <label class="form-label">Escribe <b>${t?.slug||t?.id}</b> para confirmar</label>
+          <input class="form-input" id="db-confirm-borrar" placeholder="${t?.slug||''}">
+        </div>
+        <button class="btn btn-danger" onclick="Modulos.superadmin._dbBorrar()">Borrar datos del taller</button>
+      </div>`;
+  },
+
+  async _dbRestaurar(nombre) {
+    const t = this._tenants.find(x=>x.id===this._dbTenantId);
+    if (!confirm(`¿Restaurar "${t?.name||t?.slug}" con el respaldo ${nombre}?\n\nSe sobrescribirán los datos actuales (se genera un respaldo de seguridad antes de continuar).`)) return;
+    UI.toast('Restaurando...','info');
+    const { data, error } = await getSB().functions.invoke('tenant-db-tools', {
+      body:{ op:'restaurar', tenant_id:this._dbTenantId, path:`${this._dbTenantId}/${nombre}` }
+    });
+    if (error || data?.error) { UI.toast('Error: '+(data?.error||error.message),'error'); return; }
+    UI.toast(`Restauración completa ✓ ${data.tablas} tablas · ${data.registros} registros`);
+    this._dbCargar(this._dbTenantId);
+  },
+
+  async _dbBorrar() {
+    const t = this._tenants.find(x=>x.id===this._dbTenantId);
+    const txt = document.getElementById('db-confirm-borrar')?.value?.trim();
+    if (!t || txt !== (t.slug||t.id)) { UI.toast('Escribe el identificador exacto del taller para confirmar','error'); return; }
+    if (!confirm(`¿Borrar TODOS los datos de "${t.name||t.slug}"?\n\nSe generará un respaldo de seguridad automático antes de borrar. Esta acción no se puede deshacer desde la app.`)) return;
+    UI.toast('Borrando datos del taller...','info');
+    const { data, error } = await getSB().functions.invoke('tenant-db-tools', { body:{ op:'borrar', tenant_id:this._dbTenantId } });
+    if (error || data?.error) { UI.toast('Error: '+(data?.error||error.message),'error'); return; }
+    UI.toast(`Datos borrados ✓ ${data.registros_eliminados} registros eliminados`);
+    this._dbCargar(this._dbTenantId);
   },
 
   /* ── NUEVO TALLER: tenant + usuario admin en un paso ── */
