@@ -22,11 +22,34 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 const RETENCION = 14; // respaldos por taller que se conservan en Storage
 const SUPERADMIN_EMAIL = "henry.chinchilla@gmail.com";
 
+/* Tablas con tenant_id, en orden de inserción (padres antes que hijos según
+   sus llaves foráneas). Para borrar se recorre en reversa (hijos primero).
+   'entradas_detalle' no tiene tenant_id (depende de entradas_inventario) y
+   se respalda/restaura por separado. */
 const TABLAS = [
-  "clientes", "vehiculos", "ordenes", "orden_items", "inventario", "proveedores",
-  "compras", "facturas", "factura_items", "ingresos", "egresos", "bancos",
-  "banco_movimientos", "empleados", "pagos_nomina", "envios", "retenciones",
-  "citas", "puntos_movimientos", "usuarios",
+  // sin dependencias de otras tablas del tenant
+  "clientes", "proveedores", "bodegas", "bancos", "combos", "vacantes", "documentos",
+  "tenant_users", "retenciones", "licencias", "mensajes", "obligaciones_fiscales",
+  "presupuesto", "fel_importados", "egresos_recurrentes", "config_fiscal",
+  "config_integraciones", "config_productividad", "activos", "actividad_log",
+  "ai_conversaciones", "documentos_empresa", "usuarios",
+  // dependen solo de la capa anterior
+  "vehiculos", "empleados", "inventario", "compras", "entradas_inventario", "egresos",
+  "promociones", "aplicantes", "puntos_movimientos", "feedback",
+  // dependen de empleados/inventario/etc.
+  "ordenes", "compra_items", "inv_movimientos", "inventario_movimientos", "asistencia",
+  "disciplina", "empleado_asignaciones", "empleado_documentos", "entrenamientos",
+  "horas_extra", "kpi_empleado", "liquidaciones", "llamadas_atencion", "nomina",
+  "pagos_nomina", "vacaciones_movimientos", "viaticos",
+  // dependen de ordenes
+  "citas", "facturas", "cuentas_cobrar", "ot_items", "ot_repuestos", "ot_servicios",
+  "trabajos_externos",
+  // dependen de facturas/ordenes
+  "factura_items", "ingresos", "abonos", "envios",
+  // dependen de ingresos/egresos/envios
+  "banco_movimientos", "traslados",
+  // dependen de traslados
+  "traslado_items",
 ];
 
 const cors = {
@@ -74,6 +97,19 @@ async function respaldarTenant(admin: any, tenant: any) {
       registros += (data ?? []).length;
     } catch (_) { dump[t] = []; meta[t] = 0; }
   }
+
+  /* entradas_detalle no tiene tenant_id: depende de entradas_inventario */
+  try {
+    const ids = ((dump["entradas_inventario"] as any[]) || []).map((r: any) => r.id);
+    let detalle: any[] = [];
+    if (ids.length) {
+      const { data } = await admin.from("entradas_detalle").select("*").in("entrada_id", ids);
+      detalle = data ?? [];
+    }
+    dump["entradas_detalle"] = detalle;
+    meta["entradas_detalle"] = detalle.length;
+    registros += detalle.length;
+  } catch (_) { dump["entradas_detalle"] = []; meta["entradas_detalle"] = 0; }
 
   dump._meta = {
     tenant_id: tenant.id,

@@ -19,11 +19,34 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 
 const SUPERADMIN_EMAIL = "henry.chinchilla@gmail.com";
 
+/* Tablas con tenant_id, en orden de inserción (padres antes que hijos según
+   sus llaves foráneas). Para borrar se recorre en reversa (hijos primero).
+   'entradas_detalle' no tiene tenant_id (depende de entradas_inventario) y
+   se respalda/restaura por separado. */
 const TABLAS = [
-  "clientes", "vehiculos", "ordenes", "orden_items", "inventario", "proveedores",
-  "compras", "facturas", "factura_items", "ingresos", "egresos", "bancos",
-  "banco_movimientos", "empleados", "pagos_nomina", "envios", "retenciones",
-  "citas", "puntos_movimientos", "usuarios",
+  // sin dependencias de otras tablas del tenant
+  "clientes", "proveedores", "bodegas", "bancos", "combos", "vacantes", "documentos",
+  "tenant_users", "retenciones", "licencias", "mensajes", "obligaciones_fiscales",
+  "presupuesto", "fel_importados", "egresos_recurrentes", "config_fiscal",
+  "config_integraciones", "config_productividad", "activos", "actividad_log",
+  "ai_conversaciones", "documentos_empresa", "usuarios",
+  // dependen solo de la capa anterior
+  "vehiculos", "empleados", "inventario", "compras", "entradas_inventario", "egresos",
+  "promociones", "aplicantes", "puntos_movimientos", "feedback",
+  // dependen de empleados/inventario/etc.
+  "ordenes", "compra_items", "inv_movimientos", "inventario_movimientos", "asistencia",
+  "disciplina", "empleado_asignaciones", "empleado_documentos", "entrenamientos",
+  "horas_extra", "kpi_empleado", "liquidaciones", "llamadas_atencion", "nomina",
+  "pagos_nomina", "vacaciones_movimientos", "viaticos",
+  // dependen de ordenes
+  "citas", "facturas", "cuentas_cobrar", "ot_items", "ot_repuestos", "ot_servicios",
+  "trabajos_externos",
+  // dependen de facturas/ordenes
+  "factura_items", "ingresos", "abonos", "envios",
+  // dependen de ingresos/egresos/envios
+  "banco_movimientos", "traslados",
+  // dependen de traslados
+  "traslado_items",
 ];
 
 const cors = {
@@ -66,6 +89,19 @@ async function respaldoSilencioso(admin: any, tenant: any, tipo: string) {
       registros += (data ?? []).length;
     } catch (_) { dump[t] = []; meta[t] = 0; }
   }
+
+  /* entradas_detalle no tiene tenant_id: depende de entradas_inventario */
+  try {
+    const ids = ((dump["entradas_inventario"] as any[]) || []).map((r: any) => r.id);
+    let detalle: any[] = [];
+    if (ids.length) {
+      const { data } = await admin.from("entradas_detalle").select("*").in("entrada_id", ids);
+      detalle = data ?? [];
+    }
+    dump["entradas_detalle"] = detalle;
+    meta["entradas_detalle"] = detalle.length;
+    registros += detalle.length;
+  } catch (_) { dump["entradas_detalle"] = []; meta["entradas_detalle"] = 0; }
 
   dump._meta = {
     tenant_id: tenant.id,
@@ -155,24 +191,41 @@ Deno.serve(async (req) => {
     /* Respaldo de seguridad del estado actual antes de sobrescribir */
     await respaldoSilencioso(admin, tenant, "pre_restauracion");
 
-    const tablasDump = Object.keys(dump).filter((k) => k !== "_meta" && TABLAS.includes(k));
+    const tablasDump = TABLAS.filter((t) => Object.prototype.hasOwnProperty.call(dump, t));
+    const tieneDetalle = Array.isArray(dump["entradas_detalle"]);
 
-    /* Borrar en orden inverso (hijos primero) y volver a insertar en orden normal */
+    /* Borrar en orden inverso (hijos primero). entradas_detalle se borra en
+       cascada al borrar entradas_inventario (no tiene tenant_id propio). */
     for (const t of [...tablasDump].reverse()) {
       await admin.from(t).delete().eq("tenant_id", tenant_id);
     }
 
+    /* Reasignar tenant_id por si el respaldo es de otro taller (recuperación
+       restaurando en un taller recién creado) */
+    const remapTenant = (rows: any[]) =>
+      rows.map((r: any) => (r && typeof r === "object" && "tenant_id" in r) ? { ...r, tenant_id } : r);
+
     let registros = 0;
     const errores: any[] = [];
     for (const t of tablasDump) {
-      const rows = Array.isArray(dump[t]) ? dump[t] : [];
+      const rows = remapTenant(Array.isArray(dump[t]) ? dump[t] : []);
       if (!rows.length) continue;
       const { error } = await admin.from(t).insert(rows);
       if (error) errores.push({ tabla: t, error: error.message });
       else registros += rows.length;
     }
 
-    return json({ ok: errores.length === 0, tablas: tablasDump.length, registros, ...(errores.length ? { errores } : {}) });
+    /* entradas_detalle al final, depende de entradas_inventario ya restaurado */
+    if (tieneDetalle) {
+      const rows = dump["entradas_detalle"] as any[];
+      if (rows.length) {
+        const { error } = await admin.from("entradas_detalle").insert(rows);
+        if (error) errores.push({ tabla: "entradas_detalle", error: error.message });
+        else registros += rows.length;
+      }
+    }
+
+    return json({ ok: errores.length === 0, tablas: tablasDump.length + (tieneDetalle ? 1 : 0), registros, ...(errores.length ? { errores } : {}) });
   }
 
   if (op === "borrar") {

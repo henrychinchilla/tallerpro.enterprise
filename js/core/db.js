@@ -131,9 +131,27 @@ const DB = {
   /* Exporta los datos principales del taller en sesión (para descarga JSON). */
   async exportarDatosTenant() {
     const tid = getTID();
-    const TABLAS = ['clientes','vehiculos','ordenes','orden_items','inventario','proveedores',
-      'compras','facturas','factura_items','ingresos','egresos','bancos','banco_movimientos',
-      'empleados','pagos_nomina','envios','retenciones','citas','puntos_movimientos'];
+    /* Tablas con tenant_id, en orden de inserción (padres antes que hijos
+       según sus llaves foráneas). 'entradas_detalle' no tiene tenant_id
+       (depende de entradas_inventario) y se exporta por separado. */
+    const TABLAS = [
+      'clientes','proveedores','bodegas','bancos','combos','vacantes','documentos',
+      'tenant_users','retenciones','licencias','mensajes','obligaciones_fiscales',
+      'presupuesto','fel_importados','egresos_recurrentes','config_fiscal',
+      'config_integraciones','config_productividad','activos','actividad_log',
+      'ai_conversaciones','documentos_empresa','usuarios',
+      'vehiculos','empleados','inventario','compras','entradas_inventario','egresos',
+      'promociones','aplicantes','puntos_movimientos','feedback',
+      'ordenes','compra_items','inv_movimientos','inventario_movimientos','asistencia',
+      'disciplina','empleado_asignaciones','empleado_documentos','entrenamientos',
+      'horas_extra','kpi_empleado','liquidaciones','llamadas_atencion','nomina',
+      'pagos_nomina','vacaciones_movimientos','viaticos',
+      'citas','facturas','cuentas_cobrar','ot_items','ot_repuestos','ot_servicios',
+      'trabajos_externos',
+      'factura_items','ingresos','abonos','envios',
+      'banco_movimientos','traslados',
+      'traslado_items',
+    ];
     const dump = { _meta: { tenant_id: tid, generado: new Date().toISOString(), tablas: {} } };
     let totalReg = 0;
     for (const t of TABLAS) {
@@ -144,6 +162,18 @@ const DB = {
         totalReg += (data||[]).length;
       } catch(_) { dump[t] = []; dump._meta.tablas[t] = 0; }
     }
+    /* entradas_detalle no tiene tenant_id: depende de entradas_inventario */
+    try {
+      const ids = (dump['entradas_inventario']||[]).map(r=>r.id);
+      let detalle = [];
+      if (ids.length) {
+        const { data } = await getSB().from('entradas_detalle').select('*').in('entrada_id', ids);
+        detalle = data || [];
+      }
+      dump['entradas_detalle'] = detalle;
+      dump._meta.tablas['entradas_detalle'] = detalle.length;
+      totalReg += detalle.length;
+    } catch(_) { dump['entradas_detalle'] = []; dump._meta.tablas['entradas_detalle'] = 0; }
     dump._meta.total_registros = totalReg;
     return dump;
   },
