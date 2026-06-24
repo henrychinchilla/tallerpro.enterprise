@@ -24,6 +24,7 @@ const App = {
     App.checkSuscripcion();
     App.avisoSAT();
     App.registrarSW();
+    App.iniciarInactividad(Auth.tenant?.session_timeout_minutes);
   },
 
   /* ── AVISO SAT AL ENTRAR ──────────────────────────
@@ -323,6 +324,32 @@ const App = {
   async cerrarSesion() {
     await Auth.logout();
     location.reload();
+  },
+
+  /* ── CIERRE DE SESIÓN POR INACTIVIDAD ─────────────
+     Editable por taller (Configuración > Seguridad de Sesión,
+     tenants.session_timeout_minutes, default 15). Reinicia el
+     contador en cualquier interacción del usuario. */
+  iniciarInactividad(minutes) {
+    const mins = Math.min(480, Math.max(1, parseInt(minutes, 10) || 15));
+    this._idleMs = mins * 60 * 1000;
+    if (!this._idleBound) {
+      this._idleBound = () => this._resetIdle();
+      ['mousemove', 'mousedown', 'keydown', 'scroll', 'touchstart', 'click'].forEach(ev =>
+        window.addEventListener(ev, this._idleBound, { passive: true })
+      );
+    }
+    this._resetIdle();
+  },
+
+  _resetIdle() {
+    if (!Auth.user) return;
+    clearTimeout(this._idleTimer);
+    this._idleTimer = setTimeout(async () => {
+      localStorage.setItem('tp_logout_reason', 'inactivity');
+      await Auth.logout();
+      location.reload();
+    }, this._idleMs);
   },
 
   /* ── SIDEBAR COLAPSABLE (escritorio) ──────────────

@@ -449,4 +449,15 @@ window.addEventListener('load', async () => {
     }
   } catch(e) { console.warn('Session:', e.message); }
   renderLogin('login');
+
+  /* Avisar el motivo si la sesión anterior se cerró por inactividad
+     o expiración (la dejó App._resetIdle / Supabase al expirar). */
+  const reason = localStorage.getItem('tp_logout_reason');
+  if (reason) {
+    localStorage.removeItem('tp_logout_reason');
+    const msg = reason === 'inactivity'
+      ? 'Sesión cerrada por inactividad.'
+      : 'Su sesión expiró. Inicie sesión nuevamente.';
+    setTimeout(() => UI.toast(msg, 'error'), 400);
+  }
 });

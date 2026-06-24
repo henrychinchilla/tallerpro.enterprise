@@ -42,6 +42,14 @@ Modulos.configuracion = {
             <button class="btn btn-amber" onclick="Modulos.configuracion.guardar()">Guardar Cambios</button>
           </div>
           <div>
+            <div class="card card-red mb-4">
+              <div class="card-sub mb-3">🔒 Seguridad de Sesión</div>
+              <div class="form-group"><label class="form-label">Cierre de sesión por inactividad (minutos)</label>
+                <input type="number" step="1" min="1" max="480" class="form-input" id="cfg-session-timeout" value="${t.session_timeout_minutes||15}">
+                <div style="font-size:11px;color:var(--text3);margin-top:4px">La sesión se cerrará automáticamente tras este tiempo sin actividad. Recomendado: 15 minutos.</div>
+              </div>
+              <button class="btn btn-danger" onclick="Modulos.configuracion.guardarSeguridad()">Guardar</button>
+            </div>
             <div class="card card-purple mb-4">
               <div class="card-sub mb-3">👥 Usuarios del Sistema</div>
               <button class="btn btn-cyan" style="width:100%" onclick="App.navegarA('usuarios')">
@@ -87,6 +95,17 @@ Modulos.configuracion = {
       Auth.tenant.name = nameVal;
       Auth.tenant.igss_patronal = igssPat;
       App.renderSidebar();
+    }
+    else UI.toast('Error al guardar','error');
+  },
+
+  async guardarSeguridad() {
+    const minutos = Math.min(480, Math.max(1, parseInt(document.getElementById('cfg-session-timeout')?.value,10)||15));
+    const ok = await DB.updateTenant({ session_timeout_minutes: minutos, updated_at: new Date().toISOString() });
+    if (ok) {
+      Auth.tenant.session_timeout_minutes = minutos;
+      if (App.iniciarInactividad) App.iniciarInactividad(minutos);
+      UI.toast('Seguridad de sesión guardada ✓');
     }
     else UI.toast('Error al guardar','error');
   },
