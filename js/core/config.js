@@ -87,7 +87,8 @@ const MODULOS = [
       { tab:'compras',      icon:'📥', label:'Libro de Compras' },
       { tab:'isr',          icon:'🏛️', label:'ISR mensual'      },
       { tab:'fel',          icon:'⬆️', label:'Importar FEL'     },
-      { tab:'obligaciones', icon:'📅', label:'Obligaciones'     }
+      { tab:'obligaciones', icon:'📅', label:'Obligaciones'     },
+      { tab:'formularios_sat', icon:'📋', label:'Formularios SAT' }
     ] },
   { id:'rrhh',           icon:'👤', label:'RRHH & Nómina',     grupo:'rrhh',
     subnav:[

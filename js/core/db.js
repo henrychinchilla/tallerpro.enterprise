@@ -1367,6 +1367,26 @@ const DB = {
     return { data, error };
   },
 
+  /* Formularios SAT (DeclaraGuate) — declaraciones llenables */
+  async getFormulariosTributarios() {
+    const { data } = await getSB().from('formularios_tributarios')
+      .select('*').eq('tenant_id', getTID()).order('created_at', { ascending: false });
+    return data || [];
+  },
+
+  async upsertFormularioTributario(fields) {
+    const payload = { ...fields, tenant_id: getTID() };
+    if (payload.id) {
+      const { id, ...resto } = payload;
+      const { data, error } = await getSB().from('formularios_tributarios')
+        .update(resto).eq('id', id).select().single();
+      return { data, error };
+    }
+    const { data, error } = await getSB().from('formularios_tributarios')
+      .insert(payload).select().single();
+    return { data, error };
+  },
+
   /* ── KPIs DASHBOARD ───────────────────────────── */
   async getKPIs(ym=null) {
     const { ini, fin } = rangoMes(ym);

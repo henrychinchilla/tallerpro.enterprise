@@ -52,7 +52,7 @@ Modulos.contabilidad = {
       </div>
       <div class="page-body">
         <div class="tabs">
-          ${[['iva','🧾 IVA del mes'],['trimestre','🏢 Trimestral / ISO'],['ventas','📤 Libro de Ventas'],['compras','📥 Libro de Compras'],['isr','🏛️ ISR mensual'],['fel','⬆️ Importar FEL'],['obligaciones','📅 Obligaciones']]
+          ${[['iva','🧾 IVA del mes'],['trimestre','🏢 Trimestral / ISO'],['ventas','📤 Libro de Ventas'],['compras','📥 Libro de Compras'],['isr','🏛️ ISR mensual'],['fel','⬆️ Importar FEL'],['obligaciones','📅 Obligaciones'],['formularios_sat','📋 Formularios SAT']]
             .map(([t,l])=>`<button class="tab-btn ${this._tab===t?'active':''}" onclick="Modulos.contabilidad._ir('${t}')">${l}</button>`).join('')}
         </div>
         <div id="cont-content"></div>
@@ -452,6 +452,11 @@ Modulos.contabilidad = {
           <div class="alert-icon">📅</div>
           <div class="alert-body" style="font-size:12px">Registra aquí cada declaración al calcularla y márcala <b>pagada</b> al presentar en Declaraguate (boleta SAT-2000). Estos estados alimentan el <b>Calendario</b> y el acreditamiento del ISO al ISR trimestral.</div>
         </div>`;
+    }
+
+    /* ── FORMULARIOS SAT (Declaraguate) ──────────── */
+    else if (this._tab === 'formularios_sat') {
+      await this.sat.renderLista(this);
     }
   },
 
