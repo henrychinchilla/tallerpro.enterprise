@@ -33,6 +33,8 @@ const TABLAS = [
   // dependen solo de la capa anterior
   "vehiculos", "empleados", "inventario", "compras", "entradas_inventario", "egresos",
   "promociones", "aplicantes", "puntos_movimientos", "feedback",
+  // módulos verticales especializados (solo dependen de clientes/empleados/vehiculos)
+  "herreria_proyectos", "peleteria_pedidos", "reparaciones_electronicas", "refrigeracion_servicios",
   // dependen de empleados/inventario/etc.
   "ordenes", "compra_items", "inv_movimientos", "inventario_movimientos", "asistencia",
   "disciplina", "empleado_asignaciones", "empleado_documentos", "entrenamientos",
@@ -40,9 +42,9 @@ const TABLAS = [
   "pagos_nomina", "vacaciones_movimientos", "viaticos",
   // dependen de ordenes
   "citas", "facturas", "cuentas_cobrar", "ot_items", "ot_repuestos", "ot_servicios",
-  "trabajos_externos",
-  // dependen de facturas/ordenes
-  "factura_items", "ingresos", "abonos", "envios",
+  "trabajos_externos", "cotizaciones",
+  // dependen de facturas/ordenes/cotizaciones
+  "factura_items", "ingresos", "abonos", "envios", "cotizacion_items",
   // dependen de ingresos/egresos/envios
   "banco_movimientos", "traslados",
   // dependen de traslados

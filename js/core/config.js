@@ -54,6 +54,7 @@ const MODULOS = [
       { tab:'lista',  icon:'☰', label:'Lista'   },
       { tab:'kanban', icon:'⬛', label:'Kanban'  }
     ] },
+  { id:'cotizaciones',   icon:'📝', label:'Cotizaciones',      grupo:'operacion'  },
   { id:'inventario',     icon:'📦', label:'Inventario',        grupo:'operacion'  },
   { id:'bodegas',        icon:'🏭', label:'Bodegas',           grupo:'operacion'  },
   { id:'proveedores',    icon:'🏪', label:'Proveedores',       grupo:'operacion'  },
@@ -64,6 +65,10 @@ const MODULOS = [
       { tab:'depreciacion', icon:'📉', label:'Depreciación'          }
     ] },
   { id:'envios',         icon:'🚚', label:'Envíos / Fletes',   grupo:'operacion'  },
+  { id:'herreria',       icon:'⚒️', label:'Herrería y Ventanería', grupo:'especializados' },
+  { id:'peleteria',      icon:'👜', label:'Peletería',         grupo:'especializados' },
+  { id:'electronica',    icon:'🔌', label:'Reparación Electrónica', grupo:'especializados' },
+  { id:'refrigeracion',  icon:'❄️', label:'Refrigeración y A/C', grupo:'especializados' },
   { id:'facturacion',    icon:'🧾', label:'Facturación FEL',   grupo:'finanzas'   },
   { id:'bancos',         icon:'🏦', label:'Bancos',            grupo:'finanzas'   },
   { id:'finanzas',       icon:'💰', label:'Finanzas',          grupo:'finanzas',
@@ -137,8 +142,9 @@ const MODULOS = [
 /* ── GRUPOS DEL SIDEBAR (orden y encabezados) ─────── */
 /* El orden aquí define el orden del menú. label vacío = sin encabezado. */
 const GRUPOS = [
-  { id:'principal',    label:''               },
-  { id:'operacion',    label:'Operación'      },
+  { id:'principal',      label:''                         },
+  { id:'operacion',      label:'Operación'                },
+  { id:'especializados', label:'Servicios Especializados' },
   { id:'finanzas',     label:'Finanzas'       },
   { id:'rrhh',         label:'RRHH & Nómina'  },
   { id:'marketing',    label:'Marketing'      },
@@ -150,18 +156,18 @@ const GRUPOS = [
 
 /* ── PERMISOS POR ROL ─────────────────────────────── */
 const PERMISOS = {
-  superadmin:   { dashboard:true,  clientes:true,  vehiculos:true,  ordenes:true,  inventario:true,  bodegas:true,  proveedores:true,  compras:true,  activos:true,  envios:true,  facturacion:true,  bancos:true,  finanzas:true,  presupuesto:true,  contabilidad:true,  rrhh:true,  marketing:true,  calendario:true,  comunicaciones:true,  configuracion:true,  usuarios:true,  admin:true,  mi_ot:false, doc_empresa:true  },
-  admin:        { dashboard:true,  clientes:true,  vehiculos:true,  ordenes:true,  inventario:true,  bodegas:true,  proveedores:true,  compras:true,  activos:true,  envios:true,  facturacion:true,  bancos:true,  finanzas:true,  presupuesto:true,  contabilidad:true,  rrhh:true,  marketing:true,  calendario:true,  comunicaciones:true,  configuracion:true,  usuarios:true,  admin:true,  mi_ot:false, doc_empresa:true  },
-  gerente_tal:  { dashboard:true,  clientes:true,  vehiculos:true,  ordenes:true,  inventario:true,  bodegas:true,  proveedores:true,  compras:true,  activos:true,  envios:true,  facturacion:false, bancos:false, finanzas:false, presupuesto:false, contabilidad:false, rrhh:true,  marketing:true,  calendario:true,  comunicaciones:true,  configuracion:false, usuarios:false, admin:false, mi_ot:false, doc_empresa:true  },
-  gerente_fin:  { dashboard:true,  clientes:false, vehiculos:false, ordenes:false, inventario:false, bodegas:false, proveedores:true,  compras:true,  activos:true,  envios:true,  facturacion:true,  bancos:true,  finanzas:true,  presupuesto:true,  contabilidad:true,  rrhh:true,  marketing:false, calendario:false, comunicaciones:true,  configuracion:false, usuarios:false, admin:false, mi_ot:false, doc_empresa:true  },
-  recepcionista:{ dashboard:true,  clientes:true,  vehiculos:true,  ordenes:true,  inventario:false, bodegas:false, proveedores:false, compras:false, activos:false, envios:true,  facturacion:true,  bancos:false, finanzas:false, presupuesto:false, contabilidad:false, rrhh:false, marketing:false, calendario:true,  comunicaciones:false, configuracion:false, usuarios:false, admin:false, mi_ot:false, doc_empresa:false },
-  vendedor:     { dashboard:true,  clientes:true,  vehiculos:true,  ordenes:false, inventario:false, bodegas:false, proveedores:false, compras:false, activos:false, envios:true,  facturacion:false, bancos:false, finanzas:false, presupuesto:false, contabilidad:false, rrhh:false, marketing:true,  calendario:false, comunicaciones:false, configuracion:false, usuarios:false, admin:false, mi_ot:false, doc_empresa:false },
-  mecanico:     { dashboard:true,  clientes:false, vehiculos:true,  ordenes:true,  inventario:true,  bodegas:true,  proveedores:false, compras:false, activos:false, envios:true,  facturacion:false, bancos:false, finanzas:false, presupuesto:false, contabilidad:false, rrhh:false, marketing:false, calendario:true,  comunicaciones:false, configuracion:false, usuarios:false, admin:false, mi_ot:false, doc_empresa:false },
-  contador:     { dashboard:true,  clientes:false, vehiculos:false, ordenes:false, inventario:false, bodegas:false, proveedores:true,  compras:true,  activos:true,  envios:false, facturacion:true,  bancos:true,  finanzas:true,  presupuesto:true,  contabilidad:true,  rrhh:false, marketing:false, calendario:true,  comunicaciones:true,  configuracion:false, usuarios:false, admin:false, mi_ot:false, doc_empresa:false },
-  bodeguero:    { dashboard:true,  clientes:false, vehiculos:false, ordenes:false, inventario:true,  bodegas:true,  proveedores:true,  compras:true,  activos:false, envios:true,  facturacion:false, bancos:false, finanzas:false, presupuesto:false, contabilidad:false, rrhh:false, marketing:false, calendario:true,  comunicaciones:false, configuracion:false, usuarios:false, admin:false, mi_ot:false, doc_empresa:false },
-  limpieza:     { dashboard:true,  clientes:false, vehiculos:false, ordenes:false, inventario:false, bodegas:false, proveedores:false, compras:false, activos:false, envios:false, facturacion:false, bancos:false, finanzas:false, presupuesto:false, contabilidad:false, rrhh:false, marketing:false, calendario:true,  comunicaciones:false, configuracion:false, usuarios:false, admin:false, mi_ot:false, doc_empresa:false },
-  conserje:     { dashboard:true,  clientes:false, vehiculos:false, ordenes:false, inventario:false, bodegas:false, proveedores:false, compras:false, activos:false, envios:false, facturacion:false, bancos:false, finanzas:false, presupuesto:false, contabilidad:false, rrhh:false, marketing:false, calendario:true,  comunicaciones:false, configuracion:false, usuarios:false, admin:false, mi_ot:false, doc_empresa:false },
-  cliente:      { dashboard:false, clientes:false, vehiculos:false, ordenes:false, inventario:false, bodegas:false, proveedores:false, compras:false, activos:false, envios:false, facturacion:false, bancos:false, finanzas:false, presupuesto:false, contabilidad:false, rrhh:false, marketing:false, calendario:false, comunicaciones:false, configuracion:false, usuarios:false, admin:false, mi_ot:true,  doc_empresa:false }
+  superadmin:   { dashboard:true,  clientes:true,  vehiculos:true,  ordenes:true,  cotizaciones:true,  herreria:true,  peleteria:true,  electronica:true,  refrigeracion:true,  inventario:true,  bodegas:true,  proveedores:true,  compras:true,  activos:true,  envios:true,  facturacion:true,  bancos:true,  finanzas:true,  presupuesto:true,  contabilidad:true,  rrhh:true,  marketing:true,  calendario:true,  comunicaciones:true,  configuracion:true,  usuarios:true,  admin:true,  mi_ot:false, doc_empresa:true  },
+  admin:        { dashboard:true,  clientes:true,  vehiculos:true,  ordenes:true,  cotizaciones:true,  herreria:true,  peleteria:true,  electronica:true,  refrigeracion:true,  inventario:true,  bodegas:true,  proveedores:true,  compras:true,  activos:true,  envios:true,  facturacion:true,  bancos:true,  finanzas:true,  presupuesto:true,  contabilidad:true,  rrhh:true,  marketing:true,  calendario:true,  comunicaciones:true,  configuracion:true,  usuarios:true,  admin:true,  mi_ot:false, doc_empresa:true  },
+  gerente_tal:  { dashboard:true,  clientes:true,  vehiculos:true,  ordenes:true,  cotizaciones:true,  herreria:true,  peleteria:true,  electronica:true,  refrigeracion:true,  inventario:true,  bodegas:true,  proveedores:true,  compras:true,  activos:true,  envios:true,  facturacion:false, bancos:false, finanzas:false, presupuesto:false, contabilidad:false, rrhh:true,  marketing:true,  calendario:true,  comunicaciones:true,  configuracion:false, usuarios:false, admin:false, mi_ot:false, doc_empresa:true  },
+  gerente_fin:  { dashboard:true,  clientes:false, vehiculos:false, ordenes:false, cotizaciones:false, herreria:false, peleteria:false, electronica:false, refrigeracion:false, inventario:false, bodegas:false, proveedores:true,  compras:true,  activos:true,  envios:true,  facturacion:true,  bancos:true,  finanzas:true,  presupuesto:true,  contabilidad:true,  rrhh:true,  marketing:false, calendario:false, comunicaciones:true,  configuracion:false, usuarios:false, admin:false, mi_ot:false, doc_empresa:true  },
+  recepcionista:{ dashboard:true,  clientes:true,  vehiculos:true,  ordenes:true,  cotizaciones:true,  herreria:true,  peleteria:true,  electronica:true,  refrigeracion:true,  inventario:false, bodegas:false, proveedores:false, compras:false, activos:false, envios:true,  facturacion:true,  bancos:false, finanzas:false, presupuesto:false, contabilidad:false, rrhh:false, marketing:false, calendario:true,  comunicaciones:false, configuracion:false, usuarios:false, admin:false, mi_ot:false, doc_empresa:false },
+  vendedor:     { dashboard:true,  clientes:true,  vehiculos:true,  ordenes:false, cotizaciones:false, herreria:false, peleteria:false, electronica:false, refrigeracion:false, inventario:false, bodegas:false, proveedores:false, compras:false, activos:false, envios:true,  facturacion:false, bancos:false, finanzas:false, presupuesto:false, contabilidad:false, rrhh:false, marketing:true,  calendario:false, comunicaciones:false, configuracion:false, usuarios:false, admin:false, mi_ot:false, doc_empresa:false },
+  mecanico:     { dashboard:true,  clientes:false, vehiculos:true,  ordenes:true,  cotizaciones:true,  herreria:true,  peleteria:true,  electronica:true,  refrigeracion:true,  inventario:true,  bodegas:true,  proveedores:false, compras:false, activos:false, envios:true,  facturacion:false, bancos:false, finanzas:false, presupuesto:false, contabilidad:false, rrhh:false, marketing:false, calendario:true,  comunicaciones:false, configuracion:false, usuarios:false, admin:false, mi_ot:false, doc_empresa:false },
+  contador:     { dashboard:true,  clientes:false, vehiculos:false, ordenes:false, cotizaciones:false, herreria:false, peleteria:false, electronica:false, refrigeracion:false, inventario:false, bodegas:false, proveedores:true,  compras:true,  activos:true,  envios:false, facturacion:true,  bancos:true,  finanzas:true,  presupuesto:true,  contabilidad:true,  rrhh:false, marketing:false, calendario:true,  comunicaciones:true,  configuracion:false, usuarios:false, admin:false, mi_ot:false, doc_empresa:false },
+  bodeguero:    { dashboard:true,  clientes:false, vehiculos:false, ordenes:false, cotizaciones:false, herreria:false, peleteria:false, electronica:false, refrigeracion:false, inventario:true,  bodegas:true,  proveedores:true,  compras:true,  activos:false, envios:true,  facturacion:false, bancos:false, finanzas:false, presupuesto:false, contabilidad:false, rrhh:false, marketing:false, calendario:true,  comunicaciones:false, configuracion:false, usuarios:false, admin:false, mi_ot:false, doc_empresa:false },
+  limpieza:     { dashboard:true,  clientes:false, vehiculos:false, ordenes:false, cotizaciones:false, herreria:false, peleteria:false, electronica:false, refrigeracion:false, inventario:false, bodegas:false, proveedores:false, compras:false, activos:false, envios:false, facturacion:false, bancos:false, finanzas:false, presupuesto:false, contabilidad:false, rrhh:false, marketing:false, calendario:true,  comunicaciones:false, configuracion:false, usuarios:false, admin:false, mi_ot:false, doc_empresa:false },
+  conserje:     { dashboard:true,  clientes:false, vehiculos:false, ordenes:false, cotizaciones:false, herreria:false, peleteria:false, electronica:false, refrigeracion:false, inventario:false, bodegas:false, proveedores:false, compras:false, activos:false, envios:false, facturacion:false, bancos:false, finanzas:false, presupuesto:false, contabilidad:false, rrhh:false, marketing:false, calendario:true,  comunicaciones:false, configuracion:false, usuarios:false, admin:false, mi_ot:false, doc_empresa:false },
+  cliente:      { dashboard:false, clientes:false, vehiculos:false, ordenes:false, cotizaciones:false, herreria:false, peleteria:false, electronica:false, refrigeracion:false, inventario:false, bodegas:false, proveedores:false, compras:false, activos:false, envios:false, facturacion:false, bancos:false, finanzas:false, presupuesto:false, contabilidad:false, rrhh:false, marketing:false, calendario:false, comunicaciones:false, configuracion:false, usuarios:false, admin:false, mi_ot:true,  doc_empresa:false }
 };
 
 /* ── PLANES COMERCIALES (SaaS) ────────────────────────
@@ -205,15 +211,22 @@ const MODULOS_PRECIOS = {
   proveedores: 49,  compras: 49,   bodegas: 59,   activos: 49,
   envios: 59,       facturacion: 99, bancos: 59,  finanzas: 99,
   presupuesto: 49,  contabilidad: 99, marketing: 59, comunicaciones: 49,
-  rrhh: 149,        ia: 99
+  rrhh: 149,        ia: 99,
+  /* Módulos verticales especializados (talleres no automotrices) */
+  cotizaciones: 49, herreria: 89,  peleteria: 69, electronica: 79, refrigeracion: 89
 };
 
 /* Lista de módulos que se pueden vender/activar a la carta (para el panel SA).
-   'ia' (Beto) viene incluido en Empresarial y es add-on para Básico/Pro. */
+   'ia' (Beto) viene incluido en Empresarial y es add-on para Básico/Pro.
+   Los 5 últimos son módulos VERTICALES: se activan a demanda según el tipo
+   de negocio del taller (herrería, peletería, electrónica, refrigeración) y
+   no vienen incluidos en ningún plan por defecto — el superadmin los prende
+   por taller en el Panel SaaS (⚙️ → Módulos activos). */
 const MODULOS_VENDIBLES = [
   'clientes','vehiculos','ordenes','inventario','pos','proveedores','compras',
   'bodegas','activos','envios','facturacion','bancos','finanzas','presupuesto',
-  'contabilidad','marketing','comunicaciones','rrhh','ia'
+  'contabilidad','marketing','comunicaciones','rrhh','ia',
+  'cotizaciones','herreria','peleteria','electronica','refrigeracion'
 ];
 
 /* Etiqueta legible de un módulo (los que no tienen página propia en MODULOS) */

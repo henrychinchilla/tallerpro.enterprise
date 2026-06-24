@@ -328,6 +328,147 @@ const DB = {
     return { data, error };
   },
 
+  /* ── COTIZACIÓN DE SERVICIOS (universal, cualquier vertical) ── */
+  async getCotizaciones(filtros={}) {
+    let q = getSB().from('cotizaciones')
+      .select('*, clientes(nombre,tel,email), vehiculos(placa,marca,modelo)')
+      .eq('tenant_id', getTID()).order('created_at',{ascending:false});
+    if (filtros.estado)        q = q.eq('estado', filtros.estado);
+    if (filtros.modulo_origen) q = q.eq('modulo_origen', filtros.modulo_origen);
+    const { data } = await q;
+    return data || [];
+  },
+
+  async getCotizacion(id) {
+    const { data } = await getSB().from('cotizaciones')
+      .select('*, clientes(*), vehiculos(*), cotizacion_items(*)')
+      .eq('id', id).maybeSingle();
+    return data;
+  },
+
+  /* Guarda cabecera + reemplaza todas sus líneas (cotizacion_items) */
+  async guardarCotizacion(fields, items=[]) {
+    const payload = { ...fields, tenant_id: getTID(), updated_at: new Date().toISOString() };
+    let cotId = fields.id;
+    if (cotId) {
+      const { error } = await getSB().from('cotizaciones').update(payload).eq('id', cotId);
+      if (error) return { error };
+    } else {
+      const { count } = await getSB().from('cotizaciones').select('*',{count:'exact',head:true}).eq('tenant_id',getTID());
+      payload.num = `COT-${new Date().getFullYear()}-${String((count||0)+1).padStart(4,'0')}`;
+      const { data, error } = await getSB().from('cotizaciones').insert(payload).select().single();
+      if (error) return { error };
+      cotId = data.id;
+    }
+    await getSB().from('cotizacion_items').delete().eq('cotizacion_id', cotId);
+    if (items.length) {
+      const filas = items.map(it => ({ ...it, tenant_id: getTID(), cotizacion_id: cotId }));
+      const { error: errItems } = await getSB().from('cotizacion_items').insert(filas);
+      if (errItems) return { error: errItems };
+    }
+    return { data: { id: cotId } };
+  },
+
+  /* Convierte una cotización en una Orden de Trabajo (la marca "convertida") */
+  async convertirCotizacionAOrden(id) {
+    const cot = await this.getCotizacion(id);
+    if (!cot) return { error: { message: 'Cotización no encontrada' } };
+    const descripcion = (cot.cotizacion_items||[]).map(i=>`${i.cantidad}x ${i.descripcion}`).join('; ') || cot.notas || 'Generado desde cotización';
+    const { data: orden, error } = await this.upsertOrden({
+      cliente_id: cot.cliente_id, vehiculo_id: cot.vehiculo_id,
+      descripcion, total: cot.total, saldo: cot.total
+    });
+    if (error) return { error };
+    await getSB().from('cotizaciones').update({
+      estado:'convertida', convertida_orden_id: orden.id, updated_at: new Date().toISOString()
+    }).eq('id', id);
+    return { data: orden };
+  },
+
+  /* ── HERRERÍA INDUSTRIAL Y VENTANERÍA PVC/ALUMINIO ───── */
+  async getHerreriaProyectos(filtros={}) {
+    let q = getSB().from('herreria_proyectos').select('*, clientes(nombre,tel,email)')
+      .eq('tenant_id', getTID()).order('created_at',{ascending:false});
+    if (filtros.estado) q = q.eq('estado', filtros.estado);
+    const { data } = await q;
+    return data || [];
+  },
+
+  async upsertHerreriaProyecto(fields) {
+    const payload = { ...fields, tenant_id: getTID(), updated_at: new Date().toISOString() };
+    if (fields.id) {
+      const { error } = await getSB().from('herreria_proyectos').update(payload).eq('id', fields.id);
+      return { error };
+    }
+    const { count } = await getSB().from('herreria_proyectos').select('*',{count:'exact',head:true}).eq('tenant_id',getTID());
+    payload.num = `HER-${new Date().getFullYear()}-${String((count||0)+1).padStart(4,'0')}`;
+    const { data, error } = await getSB().from('herreria_proyectos').insert(payload).select().single();
+    return { data, error };
+  },
+
+  /* ── PELETERÍA ────────────────────────────────────────── */
+  async getPeleteriaPedidos(filtros={}) {
+    let q = getSB().from('peleteria_pedidos').select('*, clientes(nombre,tel,email)')
+      .eq('tenant_id', getTID()).order('created_at',{ascending:false});
+    if (filtros.estado) q = q.eq('estado', filtros.estado);
+    const { data } = await q;
+    return data || [];
+  },
+
+  async upsertPeleteriaPedido(fields) {
+    const payload = { ...fields, tenant_id: getTID(), updated_at: new Date().toISOString() };
+    if (fields.id) {
+      const { error } = await getSB().from('peleteria_pedidos').update(payload).eq('id', fields.id);
+      return { error };
+    }
+    const { count } = await getSB().from('peleteria_pedidos').select('*',{count:'exact',head:true}).eq('tenant_id',getTID());
+    payload.num = `PEL-${new Date().getFullYear()}-${String((count||0)+1).padStart(4,'0')}`;
+    const { data, error } = await getSB().from('peleteria_pedidos').insert(payload).select().single();
+    return { data, error };
+  },
+
+  /* ── REPARACIONES ELECTRÓNICAS ───────────────────────── */
+  async getReparacionesElectronicas(filtros={}) {
+    let q = getSB().from('reparaciones_electronicas').select('*, clientes(nombre,tel,email)')
+      .eq('tenant_id', getTID()).order('created_at',{ascending:false});
+    if (filtros.estado) q = q.eq('estado', filtros.estado);
+    const { data } = await q;
+    return data || [];
+  },
+
+  async upsertReparacionElectronica(fields) {
+    const payload = { ...fields, tenant_id: getTID(), updated_at: new Date().toISOString() };
+    if (fields.id) {
+      const { error } = await getSB().from('reparaciones_electronicas').update(payload).eq('id', fields.id);
+      return { error };
+    }
+    const { count } = await getSB().from('reparaciones_electronicas').select('*',{count:'exact',head:true}).eq('tenant_id',getTID());
+    payload.num = `REP-${new Date().getFullYear()}-${String((count||0)+1).padStart(4,'0')}`;
+    const { data, error } = await getSB().from('reparaciones_electronicas').insert(payload).select().single();
+    return { data, error };
+  },
+
+  /* ── REPARACIÓN DE REFRIGERACIÓN Y A/C (vehicular/domiciliar/industrial) ── */
+  async getRefrigeracionServicios(filtros={}) {
+    let q = getSB().from('refrigeracion_servicios').select('*, clientes(nombre,tel,email), vehiculos(placa,marca,modelo)')
+      .eq('tenant_id', getTID()).order('created_at',{ascending:false});
+    if (filtros.estado) q = q.eq('estado', filtros.estado);
+    const { data } = await q;
+    return data || [];
+  },
+
+  async upsertRefrigeracionServicio(fields) {
+    const payload = { ...fields, tenant_id: getTID(), updated_at: new Date().toISOString() };
+    if (fields.id) {
+      const { error } = await getSB().from('refrigeracion_servicios').update(payload).eq('id', fields.id);
+      return { error };
+    }
+    const { count } = await getSB().from('refrigeracion_servicios').select('*',{count:'exact',head:true}).eq('tenant_id',getTID());
+    payload.num = `REF-${new Date().getFullYear()}-${String((count||0)+1).padStart(4,'0')}`;
+    const { data, error } = await getSB().from('refrigeracion_servicios').insert(payload).select().single();
+    return { data, error };
+  },
+
   /* ── FIDELIZACIÓN / PUNTOS ─────────────────────── */
   /* Registra un movimiento de puntos y actualiza el saldo del cliente.
      puntos: positivo = gana, negativo = canje. Devuelve el nuevo saldo. */

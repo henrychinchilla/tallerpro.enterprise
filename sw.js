@@ -8,7 +8,7 @@
    Para forzar actualización: subir CACHE_VERSION.
 ═══════════════════════════════════════════════════════ */
 
-const CACHE_VERSION = 'v3.14.0-20260623';
+const CACHE_VERSION = 'v3.15.0-20260624';
 const CACHE_NAME = `tallerpro-${CACHE_VERSION}`;
 
 /* App shell — se precachea en install para que funcione offline */
@@ -40,6 +40,11 @@ const PRECACHE = [
   '/js/modulos/operacion/envios.js',
   '/js/modulos/operacion/traslados.js',
   '/js/modulos/operacion/mi_ot.js',
+  '/js/modulos/operacion/cotizaciones.js',
+  '/js/modulos/especializados/herreria.js',
+  '/js/modulos/especializados/peleteria.js',
+  '/js/modulos/especializados/electronica.js',
+  '/js/modulos/especializados/refrigeracion.js',
   '/js/modulos/finanzas/presupuesto.js',
   '/js/modulos/finanzas/contabilidad.js',
   '/js/modulos/finanzas/formularios_sat.js',
