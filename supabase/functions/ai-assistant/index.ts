@@ -32,9 +32,18 @@ const EFFORT = Deno.env.get("AI_EFFORT") ?? "medium";
 const NOMBRE = Deno.env.get("AI_NOMBRE") ?? "Beto";
 const LIMITE_DEFAULT = 300; // consultas IA/mes si el tenant no tiene ai_limite_mes
 
-const BASE_GT = `Eres ${NOMBRE}, el asistente mecánico de TallerPro, un sistema para talleres
-automotrices en Guatemala. Eres un hombre, mecánico experto, con trato amable y cercano.
-Hablas en español guatemalteco, claro y directo, de mecánico a mecánico. La moneda es el Quetzal (Q).`;
+const BASE_GT = `Eres ${NOMBRE}, el asistente de TallerPro, sistema de gestión para negocios de servicio en Guatemala.
+Eres experto en mecánica automotriz y en todos los servicios especializados que ofrece la plataforma.
+Hablas en español guatemalteco, claro y directo. La moneda es el Quetzal (Q).
+
+MÓDULOS QUE PUEDES APOYAR:
+🔧 TALLER MECÁNICO: Órdenes de trabajo, diagnóstico DTC/OBD-II, procedimientos de reparación, torques, intervalos de mantenimiento.
+🏗️ HERRERÍA (HER-NNNN): Portones, barandas, estructuras metálicas, ventanas/puertas PVC-aluminio. Presupuestación por m², materiales (hierro, aluminio, PVC), pintura anticorrosiva.
+👜 PELETERÍA (PEL-NNNN): Cinturones, bolsos, carteras, calzado, talabartería. Materiales: cuero genuino, sintético, lona. Estados: pedido→en proceso→control calidad→terminado→entregado.
+📱 ELECTRÓNICA (REP-NNNN): Celulares, tablets, laptops, TVs, consolas, electrodomésticos. Diagnóstico, presupuesto, reparación, garantía. Pantallas, baterías, placas.
+❄️ REFRIGERACIÓN Y A/C (REF-NNNN): A/C vehicular/domiciliar/industrial, cámaras frías. Gases R134a/R410A/R32/R22, presiones, diagnóstico de fugas, carga de gas.
+📋 COTIZACIONES (COT-NNNN): Sistema universal — pueden aprobarse, rechazarse o convertirse en Orden de Trabajo.
+Responde según los módulos que el taller tenga activos. Si el taller no usa un módulo, indícalo amablemente.`;
 
 const SUGERENCIA_RECURSOS = `
 Cuando la consulta sea sobre una falla, código DTC, procedimiento de reparación o
@@ -291,11 +300,31 @@ Deno.serve(async (req) => {
     ];
   } else if (modo === "chat" || modo === "insights") {
     if (!tenantId) return json({ error: "Sin taller asociado a tu usuario" }, 400);
+
+    // Historial de las últimas 3 conversaciones para dar contexto continuo a Beto
+    let historialCtx: Array<{ role: "user" | "assistant"; content: string }> = [];
+    if (modo === "chat") {
+      const { data: prevConvs } = await asCaller
+        .from("ai_conversaciones")
+        .select("pregunta, respuesta")
+        .eq("tenant_id", tenantId)
+        .eq("usuario_id", userData.user.id)
+        .eq("modo", "chat")
+        .order("created_at", { ascending: false })
+        .limit(3);
+      if (prevConvs && prevConvs.length > 0) {
+        historialCtx = [...prevConvs].reverse().flatMap((c: any) => [
+          { role: "user" as const, content: c.pregunta },
+          { role: "assistant" as const, content: c.respuesta },
+        ]);
+      }
+    }
+
     const snap = await snapshotTenant(asCaller, tenantId, elevado);
     userContent = `Fecha de hoy: ${new Date().toISOString().slice(0, 10)}\n` +
       `Snapshot del taller (JSON):\n${JSON.stringify(snap, null, 2)}\n\n` +
       (modo === "insights" ? "Genera el resumen ejecutivo." : `Pregunta: ${mensaje}`);
-    messagesPayload = [{ role: "user", content: userContent }];
+    messagesPayload = [...historialCtx, { role: "user", content: userContent }];
   } else {
     userContent = contexto && Object.keys(contexto).length
       ? `Contexto (JSON): ${JSON.stringify(contexto)}\n\nSolicitud: ${mensaje}`
@@ -341,12 +370,24 @@ Deno.serve(async (req) => {
       .join("\n")
       .trim();
 
-    // Log opcional (no bloquea si la tabla no existe aún)
+    // Log + FIFO: guarda la consulta y mantiene solo las últimas 10 por usuario
     if (tenantId) {
       asCaller.from("ai_conversaciones").insert({
         tenant_id: tenantId, usuario_id: userData.user.id,
         modo, pregunta: mensaje || "(insights)", respuesta: texto,
-      }).then(() => {}, () => {});
+      }).then(async () => {
+        // FIFO automático: eliminar las más antiguas si superan el límite de 10
+        const { data: todas } = await asCaller
+          .from("ai_conversaciones")
+          .select("id")
+          .eq("tenant_id", tenantId)
+          .eq("usuario_id", userData.user.id)
+          .order("created_at", { ascending: false });
+        if (todas && todas.length > 10) {
+          const idsViejos = todas.slice(10).map((c: any) => c.id);
+          await asCaller.from("ai_conversaciones").delete().in("id", idsViejos);
+        }
+      }, () => {});
     }
 
     return json({ ok: true, texto });

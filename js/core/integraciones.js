@@ -133,26 +133,118 @@ const IA = {
 
   /* ── Chat flotante con Beto ────────────────────── */
   abrirChat() {
-    UI.modal('🔧 Beto — Asistente Mecánico', `
-      <div id="ia-historial" style="max-height:420px;overflow-y:auto;margin-bottom:12px;
-           display:flex;flex-direction:column;gap:8px">
-        <div class="text-muted" style="font-size:12.5px;line-height:1.7">
-          ¡Hola! Soy <b>Beto</b>, tu asistente.<br>
-          🔧 <b>Mecánica:</b> códigos DTC, diagnósticos y mantenimientos.<br>
-          📊 <b>Tu taller:</b> facturación, pendientes y reportes.<br>
-          Escribe tu pregunta abajo para comenzar.
+    UI.modal('🔧 Beto — Asistente', `
+      <div class="tabs" style="margin:-4px 0 14px">
+        <button class="tab-btn active" id="beto-tab-chat" onclick="IA._tabChat()">💬 Chat</button>
+        <button class="tab-btn" id="beto-tab-hist" onclick="IA._tabHistorial()">📋 Historial</button>
+      </div>
+
+      <div id="beto-panel-chat">
+        <div id="ia-historial" style="max-height:340px;overflow-y:auto;margin-bottom:12px;
+             display:flex;flex-direction:column;gap:8px">
+          <div class="text-muted" style="font-size:12.5px;line-height:1.8">
+            ¡Hola! Soy <b>Beto</b>, tu asistente.<br>
+            🔧 <b>Mecánica:</b> DTC, diagnósticos, mantenimientos.<br>
+            🏗️ <b>Herrería · Peletería · Electrónica · Refrigeración.</b><br>
+            📊 <b>Tu negocio:</b> facturación, órdenes, reportes.<br>
+            Escribe tu consulta para comenzar.
+          </div>
+        </div>
+        <div style="display:flex;gap:8px">
+          <input class="form-input" id="ia-input" placeholder="Escribe tu consulta..."
+                 onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();IA._enviarChat()}">
+          <button class="btn btn-amber" onclick="IA._enviarChat()">Enviar</button>
+        </div>
+        <div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap">
+          <button class="btn btn-ghost btn-sm" onclick="IA._insightsChat()">📊 Resumen negocio</button>
+          <button class="btn btn-ghost btn-sm" onclick="document.getElementById('ia-input').value='¿Qué significa el código DTC ';document.getElementById('ia-input').focus()">🔧 Código DTC</button>
+          <button class="btn btn-ghost btn-sm" onclick="document.getElementById('ia-input').value='Cotización para ';document.getElementById('ia-input').focus()">📋 Cotización</button>
         </div>
       </div>
-      <div style="display:flex;gap:8px">
-        <input class="form-input" id="ia-input" placeholder="Escribe tu pregunta o un código DTC..."
-               onkeydown="if(event.key==='Enter')IA._enviarChat()">
-        <button class="btn btn-amber" onclick="IA._enviarChat()">Enviar</button>
-      </div>
-      <div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap">
-        <button class="btn btn-ghost btn-sm" onclick="IA._insightsChat()">📊 Resumen del negocio</button>
-        <button class="btn btn-ghost btn-sm" onclick="document.getElementById('ia-input').value='¿Qué significa el código de falla ';document.getElementById('ia-input').focus()">🔧 Consultar código DTC</button>
-      </div>`, '680px');
+
+      <div id="beto-panel-hist" style="display:none">
+        <div id="beto-hist-lista" style="max-height:400px;overflow-y:auto;display:flex;flex-direction:column;gap:8px">
+          <div class="text-muted" style="padding:8px;font-size:13px">Cargando historial...</div>
+        </div>
+        <button class="btn btn-danger btn-sm" style="margin-top:10px;width:100%" onclick="IA._limpiarTodoHistorial()">🗑️ Limpiar todo el historial</button>
+      </div>`, '700px');
     document.querySelector('#modal-box .modal-header')?.classList.add('modal-header-ia');
+    // Inicializar conteo del historial en la pestaña
+    DB.getBetoHistorial(10).then(convs => {
+      const btn = document.getElementById('beto-tab-hist');
+      if (btn && convs.length) btn.textContent = `📋 Historial (${convs.length})`;
+    }).catch(() => {});
+  },
+
+  _tabChat() {
+    document.getElementById('beto-tab-chat')?.classList.add('active');
+    document.getElementById('beto-tab-hist')?.classList.remove('active');
+    document.getElementById('beto-panel-chat').style.display = '';
+    document.getElementById('beto-panel-hist').style.display = 'none';
+  },
+
+  _tabHistorial() {
+    document.getElementById('beto-tab-chat')?.classList.remove('active');
+    document.getElementById('beto-tab-hist')?.classList.add('active');
+    document.getElementById('beto-panel-chat').style.display = 'none';
+    document.getElementById('beto-panel-hist').style.display = '';
+    IA._cargarHistorial();
+  },
+
+  async _cargarHistorial() {
+    const cont = document.getElementById('beto-hist-lista');
+    if (!cont) return;
+    cont.innerHTML = '<div class="text-muted" style="padding:8px;font-size:13px">Cargando...</div>';
+    try {
+      const convs = await DB.getBetoHistorial(10);
+      const btn = document.getElementById('beto-tab-hist');
+      if (btn) btn.textContent = `📋 Historial${convs.length ? ' (' + convs.length + ')' : ''}`;
+      if (!convs.length) {
+        cont.innerHTML = '<div class="empty-state"><div class="empty-state-icon">💬</div><div style="font-weight:700">Sin historial aún</div><div class="text-muted" style="font-size:12px">Las consultas a Beto aparecerán aquí</div></div>';
+        return;
+      }
+      const modoColor = { chat:'amber', tecnico:'cyan', redaccion:'green', diagnostico:'purple', insights:'gray' };
+      cont.innerHTML = convs.map(c => `
+        <div style="border:1px solid var(--border);border-radius:10px;padding:10px 12px;background:var(--surface2)">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+            <span class="badge badge-${modoColor[c.modo]||'gray'}">${c.modo}</span>
+            <div style="display:flex;align-items:center;gap:8px">
+              <span style="font-size:11px;color:var(--text3)">${UI.fechaHora(c.created_at)}</span>
+              <button class="btn btn-danger btn-xs" onclick="IA._eliminarConversacion('${c.id}')" title="Eliminar esta consulta">✕</button>
+            </div>
+          </div>
+          <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:4px;
+                      overflow:hidden;text-overflow:ellipsis;white-space:nowrap"
+               title="${(c.pregunta||'').replace(/"/g,'&quot;')}">${c.pregunta || '(Resumen del negocio)'}</div>
+          <div style="font-size:12px;color:var(--text3);overflow:hidden;display:-webkit-box;
+                      -webkit-line-clamp:2;-webkit-box-orient:vertical">${c.respuesta || ''}</div>
+        </div>`).join('');
+    } catch (e) {
+      cont.innerHTML = `<div class="alert alert-red"><div class="alert-body">Error al cargar historial: ${e.message}</div></div>`;
+    }
+  },
+
+  async _eliminarConversacion(id) {
+    try {
+      await DB.deleteBetoConversacion(id);
+      await IA._cargarHistorial();
+      UI.toast('Consulta eliminada del historial', 'success');
+    } catch (e) {
+      UI.toast('Error al eliminar: ' + e.message, 'error');
+    }
+  },
+
+  async _limpiarTodoHistorial() {
+    const ok = await UI.confirmar('¿Eliminar todo el historial de consultas a Beto? Esta acción no se puede deshacer.', 'Limpiar todo');
+    if (!ok) return;
+    try {
+      const convs = await DB.getBetoHistorial(100);
+      await Promise.all(convs.map(c => DB.deleteBetoConversacion(c.id)));
+      await IA._cargarHistorial();
+      UI.toast('Historial limpiado', 'success');
+    } catch (e) {
+      UI.toast('Error: ' + e.message, 'error');
+    }
   },
 
   _push(rol, texto) {
@@ -192,6 +284,13 @@ const IA = {
     const cargando = IA._push('ai', '⏳ Pensando...');
     const r = await IA.preguntar(msg);
     IA._actualizar(cargando, r.ok ? r.texto : '⚠️ ' + r.error);
+    // Actualizar badge del historial tras cada respuesta
+    if (r.ok) {
+      DB.getBetoHistorial(10).then(convs => {
+        const btn = document.getElementById('beto-tab-hist');
+        if (btn) btn.textContent = `📋 Historial${convs.length ? ' (' + convs.length + ')' : ''}`;
+      }).catch(() => {});
+    }
   },
 
   async _insightsChat() {
