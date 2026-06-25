@@ -38,7 +38,7 @@ const MOD_CONOCIMIENTO: Record<string, string> = {
   vehiculos:    "🚗 VEHÍCULOS: Fichas de vehículos, historial de servicio, kilometraje, alertas de mantenimiento.",
   herreria:     "🏗️ HERRERÍA (HER-NNNN): Portones, barandas, escaleras, estructuras metálicas, techos, ventanas/puertas PVC-aluminio-cancel. Presupuestación por m², materiales (hierro, aluminio, PVC), costos de soldadura y pintura anticorrosiva.",
   peleteria:    "👜 PELETERÍA (PEL-NNNN): Cinturones, bolsos, carteras, billeteras, calzado, talabartería, mochilas, fundas. Cuero genuino, sintético, lona. Estados: pedido→en proceso→control calidad→terminado→entregado→cancelado.",
-  electronica:  "📱 ELECTRÓNICA Y ELECTRODOMÉSTICOS (REP-NNNN): Celulares, tablets, laptops, TVs smart, consolas, audio. Electrodomésticos: refrigeradoras, lavadoras, secadoras, microondas, aires domésticos, licuadoras, planchas, hornos eléctricos. Diagnóstico (pantallas, baterías, placas, resistencias, capacitores, compresores), presupuesto, reparación y garantía.",
+  electronica:  "📱 ELECTRÓNICA Y ELECTRODOMÉSTICOS (REP-NNNN): Eres experto técnico en celulares, tablets, laptops, TVs smart, consolas, audio Y en TODOS los electrodomésticos domésticos: refrigeradoras, lavadoras, secadoras, microondas, aires domésticos, licuadoras, planchas, hornos eléctricos. Responde SIEMPRE preguntas sobre fallas, diagnóstico y reparación de estos equipos aunque no estén registrados como orden en el sistema — es tu conocimiento técnico, no solo lo que administra el negocio.",
   refrigeracion:"❄️ REFRIGERACIÓN Y A/C (REF-NNNN): A/C vehicular, domiciliar e industrial, cámaras frías y congeladores. Gases R134a, R410A, R22, R32; presiones de trabajo, diagnóstico de fugas, carga de gas, limpieza de filtros y serpentines.",
   cotizaciones: "📋 COTIZACIONES (COT-NNNN): Sistema universal para todos los rubros — se aprueban, rechazan, vencen o convierten en Orden de Trabajo/Proyecto.",
   inventario:   "📦 INVENTARIO: Stock de repuestos y materiales, alertas de mínimo, movimientos.",
@@ -77,8 +77,10 @@ function buildBetoPersona(nombre: string, modulos: string[]): string {
   return `${identidad}
 Hablas en español guatemalteco, claro y directo. La moneda es el Quetzal (Q).
 
-MÓDULOS ACTIVOS:
-${modsActivos.map(m => MOD_CONOCIMIENTO[m]).join("\n")}`;
+ÁREAS DE CONOCIMIENTO Y SERVICIO:
+${modsActivos.map(m => MOD_CONOCIMIENTO[m]).join("\n")}
+
+REGLA IMPORTANTE: Responde SIEMPRE preguntas técnicas sobre diagnóstico, fallas y reparación de cualquier equipo dentro de tus áreas de conocimiento — aunque ese equipo específico no esté registrado como orden en el sistema. Tu expertise técnica va más allá de lo que está en la base de datos del negocio.`;
 }
 
 /* Persona base como fallback (todo incluido) */
