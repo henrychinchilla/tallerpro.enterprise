@@ -61,6 +61,7 @@ Modulos.cotizaciones = {
                   ${Modulos.btnAccion('ver', `Modulos.cotizaciones.verDetalle('${c.id}')`)}
                   ${c.estado!=='convertida'?Modulos.btnAccion('editar', `Modulos.cotizaciones.modalForm('${c.id}')`):''}
                   ${c.estado==='aprobada'?`<button class="btn btn-sm btn-green" title="Convertir a Orden de Trabajo" onclick="Modulos.cotizaciones.convertirAOrden('${c.id}')">🔁 OT</button>`:''}
+                  ${c.estado==='aprobada'?`<button class="btn btn-sm btn-cyan" title="Generar factura" onclick="Modulos.facturacion.facturarCotizacion('${c.id}')">🧾 Factura</button>`:''}
                   ${c.estado!=='convertida'?Modulos.btnAccion('eliminar', `Modulos.eliminarRegistro('cotizaciones','${c.id}','la cotización ${c.num||''}',()=>Modulos.cotizaciones.render(Modulos.cotizaciones._filtroEstado))`):''}
                 </div></td>
               </tr>`;
@@ -108,6 +109,7 @@ Modulos.cotizaciones = {
         ${c.estado==='pendiente'?`<button class="btn btn-danger" onclick="Modulos.cotizaciones.cambiarEstado('${c.id}','rechazada')">✗ Rechazar</button>`:''}
         ${c.estado==='pendiente'?`<button class="btn btn-green" onclick="Modulos.cotizaciones.cambiarEstado('${c.id}','aprobada')">✓ Aprobar</button>`:''}
         ${c.estado==='aprobada'?`<button class="btn btn-amber" onclick="UI.cerrarModal();Modulos.cotizaciones.convertirAOrden('${c.id}')">🔁 Convertir a OT</button>`:''}
+        ${c.estado==='aprobada'?`<button class="btn btn-cyan" onclick="UI.cerrarModal();Modulos.facturacion.facturarCotizacion('${c.id}')">🧾 Facturar</button>`:''}
       </div>`, '640px');
   },
 

@@ -1,8 +1,8 @@
 /* TallerPro v3.0 — facturacion/index.js */
 Modulos.facturacion = {
-  _data: [], _clientes: [], _ordenes: [],
+  _data: [], _clientes: [], _ordenes: [], _cotizaciones: [],
   _ini: null, _fin: null,
-  _itemsImportados: [],   // líneas de detalle traídas de una OT (para guardar al emitir)
+  _itemsImportados: [],   // líneas de detalle traídas de una OT o cotización (para guardar al emitir)
 
   async render() {
     const el = document.getElementById('page-content');
@@ -12,8 +12,8 @@ Modulos.facturacion = {
       this._ini = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0,10);
       this._fin = new Date(now.getFullYear(), now.getMonth()+1, 0).toISOString().slice(0,10);
     }
-    [this._data, this._clientes, this._ordenes] = await Promise.all([
-      DB.getFacturas(this._ini, this._fin), DB.getClientes(), DB.getOrdenes()
+    [this._data, this._clientes, this._ordenes, this._cotizaciones] = await Promise.all([
+      DB.getFacturas(this._ini, this._fin), DB.getClientes(), DB.getOrdenes(), DB.getCotizaciones({estado:'aprobada'})
     ]);
 
     const totalFEL = this._data.reduce((s,f)=>s+(f.total||0), 0);
@@ -61,7 +61,7 @@ Modulos.facturacion = {
       </div>`;
   },
 
-  async modalFactura(id=null) {
+  async modalFactura(id=null, cotizacionId=null) {
     const f = id ? this._data.find(x=>x.id===id) : {};
     const esEdicion = !!id;
     const iva = Auth.tenant?.tasa_iva || 0.12;
@@ -80,9 +80,14 @@ Modulos.facturacion = {
           <select class="form-select" id="fel-ot" onchange="Modulos.facturacion._importarDeOT(this.value)">
             <option value="">Sin OT</option>
             ${this._ordenes.filter(o=>o.estado!=='cancelado').map(o=>`<option value="${o.id}" ${(f.ot_id||f.orden_id)===o.id?'selected':''}>${o.num} — ${UI.q(o.total)}</option>`).join('')}
-          </select>
-          <div style="font-size:11px;color:var(--text3);margin-top:4px">Al elegir una OT se importan cliente, montos e ítems a cobrar.</div></div>
+          </select></div>
+        <div class="form-group"><label class="form-label">Cotización aprobada</label>
+          <select class="form-select" id="fel-cot" onchange="Modulos.facturacion._importarDeCotizacion(this.value)">
+            <option value="">Sin cotización</option>
+            ${this._cotizaciones.map(c=>`<option value="${c.id}" ${f.cotizacion_id===c.id?'selected':''}>${c.num||'—'} — ${c.clientes?.nombre||''} — ${UI.q(c.total)}</option>`).join('')}
+          </select></div>
       </div>
+      <div style="font-size:11px;color:var(--text3);margin:-8px 0 12px">Al elegir una OT o una cotización aprobada se importan cliente, montos e ítems a cobrar.</div>
       <div id="fel-items-box">${this._renderItemsBox(itemsExistentes)}</div>
       <div class="form-row">
         <div class="form-group"><label class="form-label">Serie FEL (opcional)</label>
@@ -116,6 +121,16 @@ Modulos.facturacion = {
           ${esEdicion?'Guardar Cambios':'Emitir Factura'}
         </button>
       </div>`,'580px');
+    if (!id && cotizacionId) await this._importarDeCotizacion(cotizacionId);
+  },
+
+  /* Abre Facturación con una cotización aprobada lista para emitir
+     (entrada rápida desde el módulo de Cotizaciones). */
+  async facturarCotizacion(cotizacionId) {
+    App.navegarA('facturacion');
+    if (App.paginaActual !== 'facturacion') return;   // sin acceso (navegarA ya mostró el aviso)
+    await this.render();
+    await this.modalFactura(null, cotizacionId);
   },
 
   /* Tabla de desglose (una línea por ítem cobrado) */
@@ -146,6 +161,7 @@ Modulos.facturacion = {
     const fields = {
       cliente_id: cliId,
       ot_id:      document.getElementById('fel-ot')?.value||null,
+      cotizacion_id: document.getElementById('fel-cot')?.value||null,
       nit:        cli?.nit?.trim() || 'CF',
       nombre_receptor: cli?.nombre || 'Consumidor Final',
       tipo_cliente: (cli?.nit && cli.nit.toUpperCase()!=='CF') ? 'NIT' : 'CF',
@@ -156,21 +172,29 @@ Modulos.facturacion = {
       estado:     document.getElementById('fel-estado')?.value||'pendiente',
       descripcion: document.getElementById('fel-notas')?.value||null
     };
-    /* Evitar doble facturación de una misma OT (doble descuento de inventario) */
+    /* Evitar doble facturación de una misma OT o cotización (doble descuento de inventario / doble cobro) */
     if (!id && fields.ot_id) {
       const yaFact = await DB.facturaDeOrden(fields.ot_id);
       if (yaFact) { UI.toast(`Esa OT ya tiene factura (${yaFact.num||'—'})`,'error'); return; }
     }
+    if (!id && fields.cotizacion_id) {
+      const yaFact = await DB.facturaDeCotizacion(fields.cotizacion_id);
+      if (yaFact) { UI.toast(`Esa cotización ya tiene factura (${yaFact.num||'—'})`,'error'); return; }
+    }
     if (id) fields.id = id;
     const res = await DB.upsertFactura(fields);
     if (res.error) { UI.toast('Error: '+res.error.message,'error'); return; }
-    /* Persistir el desglose en una factura nueva creada desde una OT
-       y descontar del inventario los repuestos vendidos. */
+    /* Persistir el desglose en una factura nueva creada desde una OT o
+       cotización, y descontar del inventario los repuestos vendidos. */
     let descontados = 0;
     if (!id && res.data?.id && this._itemsImportados.length) {
       await DB.insertFacturaItems(res.data.id, this._itemsImportados);
       const nro = res.data.num || res.data.id.slice(0,8);
       descontados = await DB.descontarInventarioVenta(this._itemsImportados, `Factura ${nro}`);
+    }
+    /* Marcar la cotización como convertida (igual que al pasar por una OT) */
+    if (!id && res.data?.id && fields.cotizacion_id) {
+      await DB.marcarCotizacionConvertida(fields.cotizacion_id, res.data.id);
     }
     /* Fidelización: acumula según la política del taller (solo al emitir) */
     if (!id && res.data?.id && cli?.programa_puntos) {
@@ -189,6 +213,8 @@ Modulos.facturacion = {
      OT → se desglosa) y el detalle de ítems hacia las notas. */
   async _importarDeOT(otId) {
     if (!otId) return;
+    const cotSel = document.getElementById('fel-cot');
+    if (cotSel) cotSel.value = '';   // una factura solo puede traer su detalle de un origen
     const iva = Auth.tenant?.tasa_iva || 0.12;
     const orden = this._ordenes.find(o => o.id === otId);
 
@@ -230,6 +256,41 @@ Modulos.facturacion = {
     if (notasEl && desc) notasEl.value = desc.slice(0,500);
 
     UI.toast(`Importado de ${orden?.num||'OT'}: ${itemsList.length} ítem(s) · ${UI.q(totalConIva)} ✓`);
+  },
+
+  /* Importa de una cotización APROBADA todo lo cobrable: cliente, ítems y
+     montos (la cotización ya guarda subtotal/IVA/total desglosados). */
+  async _importarDeCotizacion(cotizacionId) {
+    if (!cotizacionId) return;
+    const otSel = document.getElementById('fel-ot');
+    if (otSel) otSel.value = '';   // una factura solo puede traer su detalle de un origen
+    const cot = await DB.getCotizacion(cotizacionId);
+    if (!cot) return;
+
+    if (cot.cliente_id) {
+      const cliSel = document.getElementById('fel-cli');
+      if (cliSel) cliSel.value = cot.cliente_id;
+    }
+
+    const itemsList = (cot.cotizacion_items||[]).map(i=>({
+      descripcion: i.descripcion, cantidad: i.cantidad,
+      precio_unit: i.precio_unit, total: i.total
+    }));
+    this._itemsImportados = itemsList;
+    const box = document.getElementById('fel-items-box');
+    if (box) box.innerHTML = this._renderItemsBox(itemsList);
+
+    const subEl = document.getElementById('fel-sub');
+    const ivaEl = document.getElementById('fel-iva');
+    const totEl = document.getElementById('fel-total');
+    if (subEl) subEl.value = (Number(cot.subtotal)||0).toFixed(2);
+    if (ivaEl) ivaEl.value = (Number(cot.iva)||0).toFixed(2);
+    if (totEl) totEl.value = (Number(cot.total)||0).toFixed(2);
+
+    const notasEl = document.getElementById('fel-notas');
+    if (notasEl && !notasEl.value) notasEl.value = `Generado desde cotización ${cot.num||''}`.trim();
+
+    UI.toast(`Importado de ${cot.num||'cotización'}: ${itemsList.length} ítem(s) · ${UI.q(cot.total)} ✓`);
   },
 
   /* Envía la factura al email del cliente (Edge Function email-send) */

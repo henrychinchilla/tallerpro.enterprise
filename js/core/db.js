@@ -898,6 +898,21 @@ const DB = {
     return data?.[0] || null;
   },
 
+  /* Devuelve la factura existente de una cotización (para evitar doble facturación) */
+  async facturaDeCotizacion(cotizacionId) {
+    if (!cotizacionId) return null;
+    const { data } = await getSB().from('facturas')
+      .select('id,num,fel_serie,fel_numero,cotizacion_id').eq('tenant_id', getTID()).eq('cotizacion_id', cotizacionId).limit(1);
+    return data?.[0] || null;
+  },
+
+  /* Marca la cotización como convertida tras facturarla directamente (sin pasar por OT) */
+  async marcarCotizacionConvertida(cotizacionId, facturaId) {
+    await getSB().from('cotizaciones').update({
+      estado: 'convertida', convertida_factura_id: facturaId, updated_at: new Date().toISOString()
+    }).eq('id', cotizacionId);
+  },
+
   async getFacturaItems(facturaId) {
     const { data } = await getSB().from('factura_items').select('*')
       .eq('factura_id', facturaId).order('created_at');
