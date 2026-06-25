@@ -45,13 +45,46 @@ Modulos.dashboard = {
     fb.forEach(f => _aspK.forEach(k => { if (f[k]) rts.push(f[k]); }));
     const satis = rts.length ? Math.round(rts.filter(r => r >= 4).length / rts.length * 100) : 0;
 
-    const hero = (label, valor, sub, pct, colorVar, destino) => `
-      <div class="card" style="display:flex;align-items:center;gap:16px${destino ? ';cursor:pointer' : ''}" ${destino ? `onclick="App.navegarA('${destino}')"` : ''}>
-        ${Charts.gauge({ pct, colorVar, size: 104, grosor: 13 })}
-        <div style="min-width:0">
-          <div class="kpi-label">${label}</div>
-          <div style="font-size:25px;font-weight:800;color:var(--${colorVar});line-height:1.1">${valor}</div>
-          <div class="kpi-trend">${sub}</div>
+    const heroHtml = `
+      <div class="dash-hero">
+        <div class="dash-hero-left">
+          <div class="dash-hero-saludo">${saludo}${nombre ? ', ' + nombre : ''}</div>
+          <div class="dash-hero-fecha">${esMesActual ? ahora.toLocaleDateString('es-GT', { weekday: 'long', day: 'numeric', month: 'long' }) : 'Periodo: ' + mes}</div>
+          <div class="dash-hero-stats">
+            <div class="dash-hero-stat">
+              <div class="dash-hero-stat-val text-green">${UI.q(kpi.ingresos)}</div>
+              <div class="dash-hero-stat-label">Facturación</div>
+            </div>
+            <div class="dash-hero-sep"></div>
+            <div class="dash-hero-stat">
+              <div class="dash-hero-stat-val text-cyan">${entregadas}/${totalOT}</div>
+              <div class="dash-hero-stat-label">OTs entregadas</div>
+            </div>
+            <div class="dash-hero-sep"></div>
+            <div class="dash-hero-stat">
+              <div class="dash-hero-stat-val text-purple">${satis}%</div>
+              <div class="dash-hero-stat-label">Satisfacción</div>
+            </div>
+            <div class="dash-hero-sep"></div>
+            <div class="dash-hero-stat">
+              <div class="dash-hero-stat-val ${utilidad >= 0 ? 'text-green' : 'text-red'}">${UI.q(utilidad)}</div>
+              <div class="dash-hero-stat-label">Utilidad</div>
+            </div>
+          </div>
+        </div>
+        <div class="dash-hero-gauges">
+          <div class="dash-hero-gauge-wrap">
+            ${Charts.gauge({ pct: margen, colorVar: 'green', size: 90, grosor: 11 })}
+            <div class="dash-hero-gauge-label">Margen</div>
+          </div>
+          <div class="dash-hero-gauge-wrap">
+            ${Charts.gauge({ pct: pctEntreg, colorVar: 'cyan', size: 90, grosor: 11 })}
+            <div class="dash-hero-gauge-label">Entregas</div>
+          </div>
+          <div class="dash-hero-gauge-wrap">
+            ${Charts.gauge({ pct: satis, colorVar: 'purple', size: 90, grosor: 11 })}
+            <div class="dash-hero-gauge-label">Satisf.</div>
+          </div>
         </div>
       </div>`;
 
@@ -93,7 +126,7 @@ Modulos.dashboard = {
     el.innerHTML = `
       <div class="page-header">
         <div>
-          <h1 class="page-title">${saludo}${nombre ? ', ' + nombre : ''} 👋</h1>
+          <h1 class="page-title">Dashboard</h1>
           <p class="page-subtitle">// ${esMesActual ? ahora.toLocaleDateString('es-GT', { weekday: 'long', day: 'numeric', month: 'long' }) + ' · ' : 'Periodo: '}${mes}${esMesActual ? '' : ' (histórico)'}</p>
         </div>
         <div class="page-actions">
@@ -113,12 +146,8 @@ Modulos.dashboard = {
           ${tieneAcceso('calendario') ? `<button class="quick-btn" onclick="App.navegarA('calendario')"><span class="quick-ico">📅</span>Agenda</button>` : ''}
         </div>
 
-        <!-- HERO BI: tarjetas con anillo de % -->
-        <div class="grid-3" style="margin-bottom:16px">
-          ${hero('Facturación del mes', UI.q(kpi.ingresos), `Margen ${margen}%`, margen, 'green', 'finanzas')}
-          ${hero('Órdenes entregadas', `${entregadas}/${totalOT}`, 'del total de OTs', pctEntreg, 'cyan', 'ordenes')}
-          ${hero('Satisfacción', `${satis}%`, `${fb.length} encuesta(s)`, satis, 'purple', 'marketing')}
-        </div>
+        <!-- HERO BI: banner resumen del mes -->
+        ${heroHtml}
 
         <div class="kpi-grid">
           ${UI.kpiCard({ icon:'💹', clase: utilidad >= 0 ? 'green' : 'red', label:'Utilidad del Mes', value: utilidad, money:true,
