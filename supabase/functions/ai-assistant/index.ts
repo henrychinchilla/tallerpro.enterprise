@@ -32,18 +32,57 @@ const EFFORT = Deno.env.get("AI_EFFORT") ?? "medium";
 const NOMBRE = Deno.env.get("AI_NOMBRE") ?? "Beto";
 const LIMITE_DEFAULT = 300; // consultas IA/mes si el tenant no tiene ai_limite_mes
 
-const BASE_GT = `Eres ${NOMBRE}, el asistente de TallerPro, sistema de gestión para negocios de servicio en Guatemala.
-Eres experto en mecánica automotriz y en todos los servicios especializados que ofrece la plataforma.
+/* Conocimiento específico por módulo para que Beto lo aplique según el tenant */
+const MOD_CONOCIMIENTO: Record<string, string> = {
+  ordenes:      "🔧 TALLER MECÁNICO: Órdenes de trabajo (OT-NNNN), diagnóstico DTC/OBD-II, procedimientos de reparación, torques, intervalos de mantenimiento preventivo por km/tiempo.",
+  vehiculos:    "🚗 VEHÍCULOS: Fichas de vehículos, historial de servicio, kilometraje, alertas de mantenimiento.",
+  herreria:     "🏗️ HERRERÍA (HER-NNNN): Portones, barandas, escaleras, estructuras metálicas, techos, ventanas/puertas PVC-aluminio-cancel. Presupuestación por m², materiales (hierro, aluminio, PVC), costos de soldadura y pintura anticorrosiva.",
+  peleteria:    "👜 PELETERÍA (PEL-NNNN): Cinturones, bolsos, carteras, billeteras, calzado, talabartería, mochilas, fundas. Cuero genuino, sintético, lona. Estados: pedido→en proceso→control calidad→terminado→entregado→cancelado.",
+  electronica:  "📱 ELECTRÓNICA Y ELECTRODOMÉSTICOS (REP-NNNN): Celulares, tablets, laptops, TVs smart, consolas, audio. Electrodomésticos: refrigeradoras, lavadoras, secadoras, microondas, aires domésticos, licuadoras, planchas, hornos eléctricos. Diagnóstico (pantallas, baterías, placas, resistencias, capacitores, compresores), presupuesto, reparación y garantía.",
+  refrigeracion:"❄️ REFRIGERACIÓN Y A/C (REF-NNNN): A/C vehicular, domiciliar e industrial, cámaras frías y congeladores. Gases R134a, R410A, R22, R32; presiones de trabajo, diagnóstico de fugas, carga de gas, limpieza de filtros y serpentines.",
+  cotizaciones: "📋 COTIZACIONES (COT-NNNN): Sistema universal para todos los rubros — se aprueban, rechazan, vencen o convierten en Orden de Trabajo/Proyecto.",
+  inventario:   "📦 INVENTARIO: Stock de repuestos y materiales, alertas de mínimo, movimientos.",
+  clientes:     "👥 CLIENTES: Registro, historial de servicio, fidelización y contacto.",
+};
+
+/* Construye la identidad y conocimiento de Beto según módulos activos del tenant.
+   Si modulos=[] (sin override) → experto en todo (comportamiento legacy). */
+function buildBetoPersona(nombre: string, modulos: string[]): string {
+  const tiene = (m: string) => !modulos.length || modulos.includes(m);
+  const tieneMec  = tiene("ordenes") || tiene("vehiculos");
+  const tieneHer  = tiene("herreria");
+  const tienePel  = tiene("peleteria");
+  const tieneElec = tiene("electronica");
+  const tieneRef  = tiene("refrigeracion");
+  const nEspec    = [tieneHer, tienePel, tieneElec, tieneRef].filter(Boolean).length;
+
+  let identidad: string;
+  if (!modulos.length) {
+    identidad = `Eres ${nombre}, el asistente de TallerPro. Eres experto en mecánica automotriz y en todos los servicios especializados de la plataforma.`;
+  } else if (tieneMec && nEspec === 0) {
+    identidad = `Eres ${nombre}, el asistente mecánico de TallerPro. Trato amable y directo, de mecánico a mecánico.`;
+  } else if (!tieneMec && tieneHer && nEspec === 1) {
+    identidad = `Eres ${nombre}, asistente experto en herrería y ventanería de TallerPro. Conoces portones, estructuras metálicas, PVC y aluminio a fondo.`;
+  } else if (!tieneMec && tienePel && nEspec === 1) {
+    identidad = `Eres ${nombre}, asistente experto en peletería y talabartería de TallerPro. Conoces cuero, calzado, bolsos y artículos de piel.`;
+  } else if (!tieneMec && tieneElec && nEspec === 1) {
+    identidad = `Eres ${nombre}, asistente experto en reparación electrónica y electrodomésticos de TallerPro. Diagnosticas y asesoras en celulares, laptops, TVs, refrigeradoras, lavadoras y todo tipo de aparatos eléctricos.`;
+  } else if (!tieneMec && tieneRef && nEspec === 1) {
+    identidad = `Eres ${nombre}, asistente experto en refrigeración y aire acondicionado de TallerPro. Conoces gases refrigerantes, presiones, diagnóstico de fugas y sistemas A/C.`;
+  } else {
+    identidad = `Eres ${nombre}, asistente de TallerPro para negocios de servicio en Guatemala. Eres experto en los servicios que maneja este negocio.`;
+  }
+
+  const modsActivos = Object.keys(MOD_CONOCIMIENTO).filter(m => tiene(m));
+  return `${identidad}
 Hablas en español guatemalteco, claro y directo. La moneda es el Quetzal (Q).
 
-MÓDULOS QUE PUEDES APOYAR:
-🔧 TALLER MECÁNICO: Órdenes de trabajo, diagnóstico DTC/OBD-II, procedimientos de reparación, torques, intervalos de mantenimiento.
-🏗️ HERRERÍA (HER-NNNN): Portones, barandas, estructuras metálicas, ventanas/puertas PVC-aluminio. Presupuestación por m², materiales (hierro, aluminio, PVC), pintura anticorrosiva.
-👜 PELETERÍA (PEL-NNNN): Cinturones, bolsos, carteras, calzado, talabartería. Materiales: cuero genuino, sintético, lona. Estados: pedido→en proceso→control calidad→terminado→entregado.
-📱 ELECTRÓNICA (REP-NNNN): Celulares, tablets, laptops, TVs, consolas, electrodomésticos. Diagnóstico, presupuesto, reparación, garantía. Pantallas, baterías, placas.
-❄️ REFRIGERACIÓN Y A/C (REF-NNNN): A/C vehicular/domiciliar/industrial, cámaras frías. Gases R134a/R410A/R32/R22, presiones, diagnóstico de fugas, carga de gas.
-📋 COTIZACIONES (COT-NNNN): Sistema universal — pueden aprobarse, rechazarse o convertirse en Orden de Trabajo.
-Responde según los módulos que el taller tenga activos. Si el taller no usa un módulo, indícalo amablemente.`;
+MÓDULOS ACTIVOS:
+${modsActivos.map(m => MOD_CONOCIMIENTO[m]).join("\n")}`;
+}
+
+/* Persona base como fallback (todo incluido) */
+const BASE_GT = buildBetoPersona(NOMBRE, []);
 
 const SUGERENCIA_RECURSOS = `
 Cuando la consulta sea sobre una falla, código DTC, procedimiento de reparación o
@@ -265,6 +304,7 @@ Deno.serve(async (req) => {
   // ── Construir el contenido del usuario ──
   let userContent = "";
   let messagesPayload: any[] = [];
+  let sistemaPrompt = PROMPTS[modo]; // puede ser sobreescrito por persona dinámica en chat/insights
 
   if (modo === "tarjeta") {
     const base64Data = body.imagen_base64;
@@ -301,6 +341,16 @@ Deno.serve(async (req) => {
   } else if (modo === "chat" || modo === "insights") {
     if (!tenantId) return json({ error: "Sin taller asociado a tu usuario" }, 400);
 
+    // Persona adaptativa: obtener módulos activos del tenant
+    let personaDinamica = BASE_GT;
+    {
+      const { data: tnMods } = await asCaller.from("tenants")
+        .select("modulos_activos, plan").eq("id", tenantId).maybeSingle();
+      const mods: string[] = Array.isArray(tnMods?.modulos_activos) && tnMods.modulos_activos.length
+        ? tnMods.modulos_activos : [];
+      personaDinamica = buildBetoPersona(NOMBRE, mods);
+    }
+
     // Historial de las últimas 3 conversaciones para dar contexto continuo a Beto
     let historialCtx: Array<{ role: "user" | "assistant"; content: string }> = [];
     if (modo === "chat") {
@@ -322,9 +372,13 @@ Deno.serve(async (req) => {
 
     const snap = await snapshotTenant(asCaller, tenantId, elevado);
     userContent = `Fecha de hoy: ${new Date().toISOString().slice(0, 10)}\n` +
-      `Snapshot del taller (JSON):\n${JSON.stringify(snap, null, 2)}\n\n` +
+      `Snapshot del negocio (JSON):\n${JSON.stringify(snap, null, 2)}\n\n` +
       (modo === "insights" ? "Genera el resumen ejecutivo." : `Pregunta: ${mensaje}`);
     messagesPayload = [...historialCtx, { role: "user", content: userContent }];
+    // Sobreescribir sistema prompt con persona adaptada al tenant
+    sistemaPrompt = personaDinamica + "\n" + (modo === "insights"
+      ? "Genera un resumen ejecutivo del estado del negocio a partir del snapshot: tendencia de ingresos, alertas y 2-3 recomendaciones accionables. Usa viñetas y sé breve."
+      : `Tienes dos fuentes:\n1) Tu conocimiento técnico del servicio activo — úsalo libremente.\n2) El snapshot de datos del negocio — úsalo SOLO para preguntas del negocio.\nPara datos que NO estén en el snapshot, dilo en vez de inventarlos.\nCuando des cifras de dinero, formateálas en Quetzales (Q).\n${SUGERENCIA_RECURSOS}`);
   } else {
     userContent = contexto && Object.keys(contexto).length
       ? `Contexto (JSON): ${JSON.stringify(contexto)}\n\nSolicitud: ${mensaje}`
@@ -350,7 +404,7 @@ Deno.serve(async (req) => {
           thinking: { type: "adaptive" },
           output_config: { effort: EFFORT },
         }),
-        system: PROMPTS[modo],
+        system: sistemaPrompt,
         messages: messagesPayload,
       }),
     });

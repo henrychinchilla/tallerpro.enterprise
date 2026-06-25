@@ -67,7 +67,7 @@ const MODULOS = [
   { id:'envios',         icon:'🚚', label:'Envíos / Fletes',   grupo:'operacion'  },
   { id:'herreria',       icon:'⚒️', label:'Herrería y Ventanería', grupo:'especializados' },
   { id:'peleteria',      icon:'👜', label:'Peletería',         grupo:'especializados' },
-  { id:'electronica',    icon:'🔌', label:'Reparación Electrónica', grupo:'especializados' },
+  { id:'electronica',    icon:'🔌', label:'Electrónica y Electrodomésticos', grupo:'especializados' },
   { id:'refrigeracion',  icon:'❄️', label:'Refrigeración y A/C', grupo:'especializados' },
   { id:'facturacion',    icon:'🧾', label:'Facturación FEL',   grupo:'finanzas'   },
   { id:'bancos',         icon:'🏦', label:'Bancos',            grupo:'finanzas'   },
@@ -192,7 +192,7 @@ const PLANES = {
   },
   empresarial: {
     label: 'Empresarial', precio: 999, color: 'green',
-    desc: 'Todo lo Pro + RRHH/Nómina y Beto, tu mecánico experto IA. Solución completa.',
+    desc: 'Todo lo Pro + RRHH/Nómina y Beto, tu asistente IA experto. Solución completa.',
     modulos: ['clientes','vehiculos','ordenes','inventario','pos',
               'proveedores','compras','bodegas','activos','envios',
               'facturacion','bancos','finanzas','presupuesto','contabilidad','marketing','comunicaciones','rrhh','ia']
