@@ -1,4 +1,4 @@
-/* TallerPro Enterprise v3.0 — components.css */
+﻿/* TallerPro Enterprise v3.0 — components.css */
 
 /* ── BOTONES ─────────────────────────────────────── */
 .btn {
@@ -56,23 +56,55 @@
   background: var(--surface);
   border: 1px solid var(--border);
   border-left: 3px solid var(--border);
-  border-radius: 12px;
-  padding: 18px 20px;
+  border-radius: 14px;
+  padding: 20px;
   position: relative;
-  box-shadow: 0 1px 3px rgba(0,0,0,.05);
-  transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease;
+  overflow: hidden;
+  box-shadow: 0 2px 10px rgba(0,0,0,.07);
+  transition: transform .2s ease, box-shadow .2s ease;
+}
+.kpi-card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(105deg, var(--kpi-bg, transparent) 0%, transparent 55%);
+  pointer-events: none;
 }
 .kpi-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 8px 22px rgba(0,0,0,.09);
-  border-color: color-mix(in srgb, var(--amber) 30%, var(--border));
+  transform: translateY(-3px);
+  box-shadow: 0 14px 36px rgba(0,0,0,.13), var(--kpi-glow, 0 0 0 rgba(0,0,0,0));
 }
-.kpi-card.amber  { border-left-color: var(--amber);  }
-.kpi-card.cyan   { border-left-color: var(--cyan);   }
-.kpi-card.green  { border-left-color: var(--green);  }
-.kpi-card.red    { border-left-color: var(--red);    }
-.kpi-card.purple { border-left-color: var(--purple); }
-.kpi-card.gray   { border-left-color: var(--text3);  }
+.kpi-card.amber {
+  --kpi-bg: var(--amber-dim);
+  --kpi-glow: 0 0 28px color-mix(in srgb, var(--amber) 22%, transparent);
+  border-left-color: var(--amber);
+  border-color: var(--amber-border);
+}
+.kpi-card.cyan {
+  --kpi-bg: var(--cyan-dim);
+  --kpi-glow: 0 0 28px color-mix(in srgb, var(--cyan) 20%, transparent);
+  border-left-color: var(--cyan);
+  border-color: var(--cyan-border);
+}
+.kpi-card.green {
+  --kpi-bg: var(--green-dim);
+  --kpi-glow: 0 0 28px color-mix(in srgb, var(--green) 20%, transparent);
+  border-left-color: var(--green);
+  border-color: var(--green-border);
+}
+.kpi-card.red {
+  --kpi-bg: var(--red-dim);
+  --kpi-glow: 0 0 28px color-mix(in srgb, var(--red) 20%, transparent);
+  border-left-color: var(--red);
+  border-color: var(--red-border);
+}
+.kpi-card.purple {
+  --kpi-bg: var(--purple-dim);
+  --kpi-glow: 0 0 28px color-mix(in srgb, var(--purple) 22%, transparent);
+  border-left-color: var(--purple);
+  border-color: var(--purple-border);
+}
+.kpi-card.gray { border-left-color: var(--text3); }
 
 .kpi-card-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; margin-bottom: 12px; }
 .kpi-icon {
@@ -584,4 +616,117 @@
   #main { margin-left: 0 !important; }
   .card { border: 1px solid #ccc !important; }
   body { background: white !important; color: black !important; }
+}
+
+
+/* ── DASHBOARD HERO BANNER ────────────────────────── */
+.dash-hero {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  background: linear-gradient(135deg, var(--surface) 0%, var(--surface2) 100%);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 28px 32px;
+  margin-bottom: 20px;
+  position: relative;
+  overflow: hidden;
+}
+.dash-hero::before {
+  content: '';
+  position: absolute;
+  top: -80px; right: -60px;
+  width: 240px; height: 240px;
+  background: radial-gradient(circle, color-mix(in srgb, var(--amber) 14%, transparent) 0%, transparent 70%);
+  pointer-events: none;
+}
+.dash-hero::after {
+  content: '';
+  position: absolute;
+  bottom: -60px; left: 25%;
+  width: 180px; height: 180px;
+  background: radial-gradient(circle, color-mix(in srgb, var(--cyan) 10%, transparent) 0%, transparent 70%);
+  pointer-events: none;
+}
+.dash-hero-left {
+  flex: 1;
+  min-width: 0;
+  position: relative;
+  z-index: 1;
+}
+.dash-hero-saludo {
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 34px;
+  letter-spacing: 2px;
+  line-height: 1;
+  margin-bottom: 4px;
+  color: var(--text);
+}
+.dash-hero-fecha {
+  font-size: 12px;
+  color: var(--text3);
+  letter-spacing: .5px;
+  text-transform: capitalize;
+  margin-bottom: 22px;
+}
+.dash-hero-stats {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  row-gap: 10px;
+}
+.dash-hero-stat {
+  padding: 0 20px;
+  text-align: center;
+}
+.dash-hero-stat:first-child { padding-left: 0; }
+.dash-hero-stat-val {
+  font-size: 20px;
+  font-weight: 800;
+  line-height: 1.1;
+  letter-spacing: -.3px;
+}
+.dash-hero-stat-label {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text3);
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  margin-top: 3px;
+}
+.dash-hero-sep {
+  width: 1px;
+  height: 40px;
+  background: var(--border);
+  flex-shrink: 0;
+}
+.dash-hero-gauges {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  position: relative;
+  z-index: 1;
+  flex-shrink: 0;
+}
+.dash-hero-gauge-wrap {
+  text-align: center;
+}
+.dash-hero-gauge-label {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text3);
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  margin-top: 4px;
+}
+@media (max-width: 900px) {
+  .dash-hero { padding: 20px 22px; gap: 16px; }
+  .dash-hero-gauges { display: none; }
+  .dash-hero-saludo { font-size: 28px; }
+}
+@media (max-width: 600px) {
+  .dash-hero { flex-direction: column; padding: 16px 18px; }
+  .dash-hero-fecha { margin-bottom: 14px; }
+  .dash-hero-stat { padding: 0 12px; }
 }

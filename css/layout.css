@@ -1,4 +1,4 @@
-/* TallerPro Enterprise v3.0 — layout.css */
+﻿/* TallerPro Enterprise v3.0 — layout.css */
 
 :root {
   --sidebar-w: 230px;
@@ -117,7 +117,7 @@
 }
 .nav-item:hover { background: var(--surface2); color: var(--text); padding-left: 16px; }
 .nav-item.active {
-  background: var(--amber-dim);
+  background: linear-gradient(90deg, var(--amber-dim) 0%, transparent 100%);
   color: var(--amber);
   border-left-color: var(--amber);
 }
@@ -263,7 +263,10 @@
 .page-title {
   font-family: 'Bebas Neue', sans-serif;
   font-size: 28px;
-  color: var(--amber);
+  background: linear-gradient(135deg, var(--amber) 0%, color-mix(in srgb, var(--amber) 60%, var(--cyan)) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
   letter-spacing: 2px;
   line-height: 1;
 }
