@@ -210,6 +210,7 @@ const IA = {
             <span class="badge badge-${modoColor[c.modo]||'gray'}">${c.modo}</span>
             <div style="display:flex;align-items:center;gap:8px">
               <span style="font-size:11px;color:var(--text3)">${UI.fechaHora(c.created_at)}</span>
+              <button class="btn btn-ghost btn-xs" onclick="IA._continuarDesde('${c.id}')" title="Continuar este chat">↩ Continuar</button>
               <button class="btn btn-danger btn-xs" onclick="IA._eliminarConversacion('${c.id}')" title="Eliminar esta consulta">✕</button>
             </div>
           </div>
@@ -221,6 +222,29 @@ const IA = {
         </div>`).join('');
     } catch (e) {
       cont.innerHTML = `<div class="alert alert-red"><div class="alert-body">Error al cargar historial: ${e.message}</div></div>`;
+    }
+  },
+
+  async _continuarDesde(id) {
+    try {
+      const convs = await DB.getBetoHistorial(10);
+      const conv = convs.find(c => c.id === id);
+      if (!conv) return;
+      // Cambiar al tab de chat
+      IA._tabChat();
+      // Limpiar el chat y cargar esa conversación como contexto visual
+      const hist = document.getElementById('ia-historial');
+      if (hist) {
+        hist.innerHTML = '';
+        IA._push('user', conv.pregunta || '(Resumen del negocio)');
+        IA._push('ai', conv.respuesta || '');
+      }
+      // Enfocar el input para que el usuario escriba el seguimiento
+      const inp = document.getElementById('ia-input');
+      if (inp) { inp.value = ''; inp.focus(); }
+      UI.toast('Historial cargado — escribe tu seguimiento', 'info');
+    } catch (e) {
+      UI.toast('Error al cargar conversación: ' + e.message, 'error');
     }
   },
 
