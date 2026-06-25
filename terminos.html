@@ -1,0 +1,492 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="index, follow">
+  <title>Términos de Uso — TallerPro Enterprise</title>
+  <link rel="icon" type="image/png" href="/icons/icon-72.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --brand: #3B82F6;
+      --brand-dark: #1D4ED8;
+      --text: #1e293b;
+      --muted: #64748b;
+      --border: #e2e8f0;
+      --bg: #f8fafc;
+      --surface: #ffffff;
+      --radius: 12px;
+    }
+    body {
+      font-family: 'Manrope', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.7;
+      font-size: 16px;
+    }
+    header {
+      background: linear-gradient(135deg, #1e3a5f 0%, #1D4ED8 60%, #3B82F6 100%);
+      color: #fff;
+      padding: 48px 24px 40px;
+      text-align: center;
+    }
+    header .logo-line {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      margin-bottom: 20px;
+    }
+    header .logo-line span.badge {
+      background: rgba(255,255,255,0.15);
+      border: 1px solid rgba(255,255,255,0.3);
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 1px;
+      padding: 3px 10px;
+      text-transform: uppercase;
+    }
+    header h1 {
+      font-size: clamp(24px, 5vw, 36px);
+      font-weight: 800;
+      letter-spacing: -0.5px;
+    }
+    header p.sub {
+      margin-top: 8px;
+      font-size: 14px;
+      opacity: 0.8;
+    }
+    .back-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      color: rgba(255,255,255,0.85);
+      text-decoration: none;
+      font-size: 13px;
+      font-weight: 600;
+      margin-bottom: 20px;
+      transition: color 0.2s;
+    }
+    .back-link:hover { color: #fff; }
+
+    main {
+      max-width: 860px;
+      margin: 0 auto;
+      padding: 48px 24px 80px;
+    }
+    .toc {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-left: 4px solid var(--brand);
+      border-radius: var(--radius);
+      padding: 24px 28px;
+      margin-bottom: 40px;
+    }
+    .toc h2 { font-size: 14px; font-weight: 700; color: var(--brand-dark); margin-bottom: 12px; text-transform: uppercase; letter-spacing: 0.5px; }
+    .toc ol { padding-left: 20px; }
+    .toc li { margin-bottom: 6px; }
+    .toc a { color: var(--brand); text-decoration: none; font-size: 14px; font-weight: 600; }
+    .toc a:hover { text-decoration: underline; }
+
+    section {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 32px;
+      margin-bottom: 20px;
+      scroll-margin-top: 20px;
+    }
+    section h2 {
+      font-size: 20px;
+      font-weight: 800;
+      color: var(--brand-dark);
+      margin-bottom: 16px;
+      padding-bottom: 12px;
+      border-bottom: 2px solid var(--border);
+    }
+    section h3 {
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--text);
+      margin: 20px 0 8px;
+    }
+    p { margin-bottom: 12px; color: #334155; }
+    ul, ol { padding-left: 22px; margin-bottom: 12px; }
+    li { margin-bottom: 6px; color: #334155; }
+    .highlight {
+      background: #eff6ff;
+      border: 1px solid #bfdbfe;
+      border-radius: 8px;
+      padding: 16px 20px;
+      margin: 16px 0;
+      font-size: 14px;
+      color: #1e40af;
+      font-weight: 600;
+    }
+    .warning {
+      background: #fff7ed;
+      border: 1px solid #fed7aa;
+      border-radius: 8px;
+      padding: 16px 20px;
+      margin: 16px 0;
+      font-size: 14px;
+      color: #c2410c;
+    }
+    .critical {
+      background: #fef2f2;
+      border: 1px solid #fecaca;
+      border-radius: 8px;
+      padding: 16px 20px;
+      margin: 16px 0;
+      font-size: 14px;
+      color: #991b1b;
+      font-weight: 600;
+    }
+    .ip-box {
+      background: linear-gradient(135deg, #1e3a5f10, #3B82F610);
+      border: 2px solid var(--brand);
+      border-radius: var(--radius);
+      padding: 24px 28px;
+      margin: 20px 0;
+    }
+    .ip-box h3 {
+      color: var(--brand-dark);
+      font-size: 16px;
+      margin-bottom: 12px;
+      margin-top: 0;
+    }
+
+    footer {
+      background: #1e293b;
+      color: #94a3b8;
+      text-align: center;
+      padding: 32px 24px;
+      font-size: 13px;
+    }
+    footer a { color: #60a5fa; text-decoration: none; }
+    footer a:hover { text-decoration: underline; }
+    footer .footer-links { display: flex; justify-content: center; gap: 24px; margin-bottom: 12px; flex-wrap: wrap; }
+
+    @media (max-width: 600px) {
+      section { padding: 20px; }
+      header { padding: 32px 16px 28px; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <a href="/" class="back-link">← Volver a TallerPro</a>
+  <div class="logo-line">
+    <strong style="font-size:22px;font-weight:800;">TallerPro</strong>
+    <span class="badge">Enterprise</span>
+  </div>
+  <h1>Términos de Uso</h1>
+  <p class="sub">Última actualización: 25 de junio de 2026 · Versión 1.0</p>
+</header>
+
+<main>
+
+  <div class="toc">
+    <h2>Contenido</h2>
+    <ol>
+      <li><a href="#aceptacion">Aceptación de los términos</a></li>
+      <li><a href="#servicio">Descripción del servicio</a></li>
+      <li><a href="#cuentas">Cuentas y acceso</a></li>
+      <li><a href="#uso-permitido">Uso permitido y prohibido</a></li>
+      <li><a href="#contenido">Contenido del usuario</a></li>
+      <li><a href="#pi">Propiedad intelectual</a></li>
+      <li><a href="#ia">Asistente de IA (Beto)</a></li>
+      <li><a href="#planes">Planes, pagos y suscripciones</a></li>
+      <li><a href="#disponibilidad">Disponibilidad del servicio</a></li>
+      <li><a href="#responsabilidad">Limitación de responsabilidad</a></li>
+      <li><a href="#suspension">Suspensión y terminación</a></li>
+      <li><a href="#indemnizacion">Indemnización</a></li>
+      <li><a href="#ley">Ley aplicable y jurisdicción</a></li>
+      <li><a href="#cambios">Cambios a los términos</a></li>
+      <li><a href="#contacto">Contacto</a></li>
+    </ol>
+  </div>
+
+  <section id="aceptacion">
+    <h2>1. Aceptación de los términos</h2>
+    <p>Al registrarse, acceder o utilizar <strong>TallerPro Enterprise</strong> (la "Plataforma"), disponible en <strong>tallerpro.telecommgt.com</strong> o mediante la aplicación móvil, usted (el "Usuario" o "Cliente") acepta quedar vinculado por estos Términos de Uso (los "Términos"), nuestra <a href="/privacidad.html">Política de Privacidad</a> y cualquier condición adicional aplicable al plan contratado.</p>
+    <p>Si accede a la Plataforma en nombre de una empresa u organización, declara tener autorización legal para aceptar estos Términos en nombre de dicha entidad.</p>
+    <p>Si no está de acuerdo con estos Términos, debe abstenerse de usar la Plataforma.</p>
+    <div class="highlight">Estos Términos constituyen un contrato legalmente vinculante entre usted y TallerPro Enterprise. Léalos detenidamente antes de continuar.</div>
+  </section>
+
+  <section id="servicio">
+    <h2>2. Descripción del servicio</h2>
+    <p>TallerPro Enterprise es una plataforma SaaS (Software como Servicio) de gestión empresarial orientada a talleres mecánicos, negocios de reparación y empresas de servicios especializados en Guatemala y Centroamérica.</p>
+    <p>Los módulos disponibles incluyen, según el plan contratado:</p>
+    <ul>
+      <li>Gestión de órdenes de trabajo y presupuestos</li>
+      <li>Inventario y punto de venta (POS)</li>
+      <li>Módulos especializados: herrería, peletería, electrónica y electrodomésticos, refrigeración, cotizaciones</li>
+      <li>Facturación electrónica FEL (Guatemala SAT)</li>
+      <li>Gestión de recursos humanos, planillas, IGSS/IRTRA</li>
+      <li>Contabilidad y reportes financieros</li>
+      <li>Asistente de inteligencia artificial "Beto"</li>
+      <li>Portal de clientes (mi orden)</li>
+      <li>Sistema de fidelización, programa de puntos</li>
+      <li>Respaldo y recuperación de datos</li>
+    </ul>
+    <p>TallerPro se reserva el derecho de modificar, agregar o discontinuar módulos o funcionalidades con previo aviso a los usuarios.</p>
+  </section>
+
+  <section id="cuentas">
+    <h2>3. Cuentas y acceso</h2>
+
+    <h3>3.1 Registro</h3>
+    <p>Para usar la Plataforma, el administrador del negocio debe crear una cuenta ("tenant"). Al registrarse, usted provee información verídica y actualizada, y acepta mantenerla al día.</p>
+
+    <h3>3.2 Credenciales</h3>
+    <p>Usted es responsable de mantener la confidencialidad de sus credenciales de acceso (correo electrónico y contraseña). Notifique a TallerPro de inmediato si sospecha acceso no autorizado a su cuenta.</p>
+    <p>TallerPro no será responsable por daños derivados del uso no autorizado de sus credenciales que resulten de su negligencia en protegerlas.</p>
+
+    <h3>3.3 Múltiples usuarios</h3>
+    <p>El administrador puede crear cuentas adicionales para empleados o colaboradores dentro del mismo tenant. Cada usuario es responsable del uso que haga de la plataforma bajo sus propias credenciales. El administrador responde por las acciones de los usuarios que él crea.</p>
+
+    <h3>3.4 Acceso de clientes finales</h3>
+    <p>La Plataforma permite habilitar un portal de consulta de órdenes para los clientes del negocio, con acceso de solo lectura mediante número de teléfono. Este acceso es limitado y no otorga derechos administrativos.</p>
+  </section>
+
+  <section id="uso-permitido">
+    <h2>4. Uso permitido y prohibido</h2>
+
+    <h3>4.1 Uso permitido</h3>
+    <p>La Plataforma está diseñada para uso empresarial legítimo. Usted puede:</p>
+    <ul>
+      <li>Gestionar las operaciones de su negocio según los módulos contratados</li>
+      <li>Invitar a empleados autorizados a usar la plataforma</li>
+      <li>Exportar sus propios datos en los formatos disponibles</li>
+      <li>Integrar los servicios ofrecidos (facturación SAT, WhatsApp, correo) con sus operaciones</li>
+    </ul>
+
+    <h3>4.2 Uso prohibido</h3>
+    <p>Queda expresamente prohibido:</p>
+    <ul>
+      <li>Usar la Plataforma para actividades ilegales bajo las leyes guatemaltecas o internacionales</li>
+      <li>Intentar acceder a datos de otros tenants o usuarios</li>
+      <li>Realizar ingeniería inversa, descompilar o intentar extraer el código fuente de la Plataforma</li>
+      <li>Copiar, reproducir, distribuir o crear obras derivadas de la Plataforma o sus componentes</li>
+      <li>Usar la Plataforma para almacenar o distribuir contenido que infrinja derechos de autor o propiedad intelectual de terceros</li>
+      <li>Sobrecargar los servidores intencionalmente con tráfico automatizado o ataques de denegación de servicio</li>
+      <li>Revender o sublicenciar el acceso a la Plataforma a terceros sin autorización escrita</li>
+      <li>Usar el asistente IA "Beto" para generar contenido dañino, ilegal o engañoso</li>
+      <li>Suplantar la identidad de TallerPro o sus representantes</li>
+    </ul>
+    <div class="critical">La violación de cualquiera de estas prohibiciones puede resultar en la suspensión inmediata de la cuenta sin reembolso, y en acciones legales si corresponde.</div>
+  </section>
+
+  <section id="contenido">
+    <h2>5. Contenido del usuario</h2>
+
+    <h3>5.1 Propiedad de sus datos</h3>
+    <p>Usted conserva todos los derechos sobre los datos operativos que ingresa a la Plataforma (clientes, órdenes, inventario, etc.). TallerPro no reclama propiedad sobre dichos datos.</p>
+
+    <h3>5.2 Licencia de uso operativo</h3>
+    <p>Al subir contenido a la Plataforma, usted otorga a TallerPro una licencia limitada, no exclusiva y revocable para almacenar, procesar y mostrar dicho contenido exclusivamente con el propósito de prestarle el servicio contratado. Esta licencia no incluye el derecho de compartir su contenido con terceros fuera del contexto del servicio.</p>
+
+    <h3>5.3 Contenido con derechos de autor</h3>
+    <p>Usted <strong>no debe subir</strong> imágenes, documentos, logotipos, música, software ni ningún material protegido por derechos de autor del cual no posea los derechos o licencias necesarias.</p>
+    <p>TallerPro no verifica el origen del contenido subido por los usuarios. Cualquier reclamación de infracción de derechos de autor deberá resolverse directamente entre el usuario y el titular de los derechos. TallerPro cooperará con notificaciones legítimas de takedown (DMCA o equivalente guatemalteco) eliminando el contenido señalado.</p>
+
+    <h3>5.4 Exportación y portabilidad</h3>
+    <p>Puede exportar sus datos en cualquier momento desde la Plataforma en los formatos disponibles (PDF, CSV). TallerPro facilita la portabilidad de sus datos durante la vigencia de su suscripción.</p>
+  </section>
+
+  <section id="pi">
+    <h2>6. Propiedad intelectual</h2>
+
+    <div class="ip-box">
+      <h3>TallerPro Enterprise — Derechos Reservados</h3>
+      <p>TallerPro Enterprise y todos sus componentes son propiedad exclusiva de sus creadores y desarrolladores. Esto incluye, sin limitación:</p>
+      <ul>
+        <li><strong>Código fuente</strong> — Todo el código de frontend (HTML, CSS, JavaScript), backend (Edge Functions, SQL, migraciones de base de datos) y scripts de automatización</li>
+        <li><strong>Módulos del sistema</strong> — La arquitectura, lógica y flujos de todos los módulos: órdenes, inventario, POS, RRHH, contabilidad, facturación FEL, herrería, peletería, electrónica, refrigeración, cotizaciones, fidelización, envíos y trabajos externos</li>
+        <li><strong>Asistente Beto IA</strong> — El nombre "Beto", la identidad del asistente, sus prompts de sistema, la metodología de respuestas adaptativas por módulos y el sistema de historial conversacional</li>
+        <li><strong>Diseño y experiencia de usuario</strong> — La paleta de colores, tipografía, componentes visuales, íconos propios, flujos de usuario y el sistema de diseño de la interfaz</li>
+        <li><strong>Estrategias y metodologías</strong> — Los flujos de trabajo, estrategias financieras, modelos de suscripción, estructura de planes y cualquier metodología de negocio implementada en la plataforma</li>
+        <li><strong>Documentación</strong> — PROMPT-MAESTRO, guías técnicas, documentos de arquitectura y cualquier material de documentación propietaria</li>
+        <li><strong>Marca</strong> — El nombre "TallerPro", "TallerPro Enterprise", el logotipo y los materiales de marca asociados</li>
+      </ul>
+    </div>
+
+    <h3>6.1 Prohibición de copia y reproducción</h3>
+    <p>Queda terminantemente prohibido, sin autorización escrita previa:</p>
+    <ul>
+      <li>Copiar, clonar, reproducir o crear obras derivadas de cualquier parte de TallerPro</li>
+      <li>Usar el nombre "TallerPro", "Beto IA" o elementos de la marca en otros productos o servicios</li>
+      <li>Reverse-engineer o intentar reconstruir la arquitectura técnica del sistema</li>
+      <li>Compartir capturas de pantalla, código o documentación propietaria con fines competitivos</li>
+      <li>Utilizar la plataforma como referencia para desarrollar un producto competidor</li>
+    </ul>
+
+    <h3>6.2 Propiedad del cliente sobre sus datos</h3>
+    <p>Esta sección no afecta la propiedad del Cliente sobre sus propios datos operativos. Los derechos aquí descritos aplican exclusivamente al software, diseño y metodología de TallerPro, no a los datos ingresados por el Cliente.</p>
+
+    <h3>6.3 Licencia de uso</h3>
+    <p>Al contratar el servicio, el Cliente recibe una <strong>licencia de uso limitada, no exclusiva, intransferible y revocable</strong> para acceder y usar TallerPro según el plan contratado. Esta licencia no implica transferencia de propiedad ni derechos sobre el software.</p>
+  </section>
+
+  <section id="ia">
+    <h2>7. Asistente de IA (Beto)</h2>
+    <p>El asistente "Beto" es una funcionalidad impulsada por modelos de lenguaje de inteligencia artificial de Anthropic. Al usarlo, usted entiende y acepta que:</p>
+    <ul>
+      <li>Las respuestas de Beto son <strong>orientativas e informativas</strong>, no constituyen asesoría profesional certificada (legal, médica, contable, técnica-ingenieril)</li>
+      <li>TallerPro no garantiza que las respuestas de IA sean siempre correctas, completas o actualizadas</li>
+      <li>Las preguntas que usted envía a Beto son procesadas por la API de Anthropic; no incluya contraseñas, datos bancarios personales ni información altamente sensible en el chat</li>
+      <li>El historial de sus últimas 10 conversaciones con Beto se almacena en la plataforma y es visible solo para su usuario; puede eliminarlo desde el módulo de IA</li>
+      <li>TallerPro no se hace responsable por decisiones de negocio o técnicas tomadas basándose exclusivamente en respuestas de Beto</li>
+    </ul>
+    <p>El acceso a Beto IA está disponible según el plan contratado. Los planes gratuitos pueden tener límites de consultas mensuales.</p>
+  </section>
+
+  <section id="planes">
+    <h2>8. Planes, pagos y suscripciones</h2>
+
+    <h3>8.1 Planes disponibles</h3>
+    <p>TallerPro ofrece diferentes planes de suscripción con acceso a distintos módulos. Los detalles y precios vigentes se comunican al momento de la contratación y pueden consultarse con el equipo de ventas.</p>
+
+    <h3>8.2 Facturación</h3>
+    <p>Las suscripciones se facturan de forma mensual o anual según lo acordado. Los pagos se procesan a través de los métodos autorizados en el momento de la contratación.</p>
+
+    <h3>8.3 Período de prueba</h3>
+    <p>TallerPro puede ofrecer períodos de prueba gratuita. Al finalizar el período de prueba, el servicio se suspende hasta que el Cliente active un plan de pago.</p>
+
+    <h3>8.4 Cancelación</h3>
+    <p>El Cliente puede cancelar su suscripción en cualquier momento. Al cancelar:</p>
+    <ul>
+      <li>La cuenta permanecerá activa hasta el final del período facturado</li>
+      <li>Los datos se conservan por 90 días adicionales para exportación</li>
+      <li>No se realizan reembolsos por períodos parciales salvo acuerdo expreso</li>
+    </ul>
+
+    <h3>8.5 Impuestos</h3>
+    <p>Los precios publicados no incluyen impuestos aplicables (IVA u otros). El Cliente es responsable de los impuestos correspondientes en su jurisdicción.</p>
+  </section>
+
+  <section id="disponibilidad">
+    <h2>9. Disponibilidad del servicio</h2>
+    <p>TallerPro aspira a una disponibilidad del 99.5% mensual (excluyendo mantenimientos programados). Sin embargo, no garantizamos un servicio ininterrumpido y no somos responsables por interrupciones causadas por:</p>
+    <ul>
+      <li>Fallas en servicios de terceros (Supabase, Cloudflare, proveedores de internet)</li>
+      <li>Mantenimientos programados notificados con anticipación</li>
+      <li>Causas de fuerza mayor (desastres naturales, pandemias, conflictos)</li>
+      <li>Ataques informáticos externos (DDoS, ransomware)</li>
+    </ul>
+    <p>Realizamos mantenimientos programados generalmente fuera del horario laboral guatemalteco y notificamos a los administradores con al menos 24 horas de anticipación.</p>
+  </section>
+
+  <section id="responsabilidad">
+    <h2>10. Limitación de responsabilidad</h2>
+
+    <div class="warning">
+      ⚠️ Esta sección limita la responsabilidad de TallerPro. Léala detenidamente.
+    </div>
+
+    <h3>10.1 Exoneración general</h3>
+    <p>En la máxima medida permitida por la ley guatemalteca, TallerPro no será responsable por:</p>
+    <ul>
+      <li>Pérdida de datos por error del usuario o fuerza mayor</li>
+      <li>Daños indirectos, incidentales, especiales o consecuentes derivados del uso o imposibilidad de uso de la Plataforma</li>
+      <li>Pérdida de ganancias o ingresos esperados</li>
+      <li>Errores en reportes financieros, contables o de inventario causados por datos incorrectos ingresados por el usuario</li>
+      <li>Consecuencias de decisiones tomadas con base en información del sistema o de Beto IA</li>
+    </ul>
+
+    <h3>10.2 Contenido del usuario</h3>
+    <p>TallerPro no se hace responsable por:</p>
+    <ul>
+      <li>Contenido ilegal, inexacto o que infrinja derechos de terceros subido por el usuario</li>
+      <li>Imágenes, documentos o archivos con derechos de autor no adquiridos o no declarados subidos a la plataforma</li>
+      <li>Uso indebido de datos de clientes finales por parte del administrador del negocio</li>
+      <li>Información personal de terceros almacenada en la plataforma sin consentimiento</li>
+    </ul>
+
+    <h3>10.3 Límite máximo de responsabilidad</h3>
+    <p>En ningún caso la responsabilidad total de TallerPro ante el Cliente superará el monto total pagado por el Cliente durante los <strong>tres (3) meses anteriores</strong> al evento que originó la reclamación.</p>
+
+    <h3>10.4 Facturación SAT</h3>
+    <p>TallerPro facilita la integración con el sistema FEL de la SAT, pero no es responsable por rechazos, errores o sanciones derivados de datos incorrectos proporcionados por el usuario (NIT, dirección, descripción de productos). La responsabilidad tributaria ante la SAT corresponde siempre al contribuyente.</p>
+  </section>
+
+  <section id="suspension">
+    <h2>11. Suspensión y terminación</h2>
+
+    <h3>11.1 Por parte de TallerPro</h3>
+    <p>Nos reservamos el derecho de suspender o cancelar el acceso a la Plataforma, con o sin previo aviso, en los siguientes casos:</p>
+    <ul>
+      <li>Incumplimiento de estos Términos de Uso</li>
+      <li>Falta de pago de la suscripción vigente</li>
+      <li>Uso fraudulento o actividad ilegal detectada</li>
+      <li>Acciones que pongan en riesgo la seguridad de otros usuarios o de la infraestructura</li>
+      <li>Orden judicial o requerimiento de autoridad competente</li>
+    </ul>
+    <p>En casos de violaciones graves, la suspensión puede ser inmediata y sin reembolso.</p>
+
+    <h3>11.2 Por parte del Cliente</h3>
+    <p>El Cliente puede cancelar su cuenta en cualquier momento siguiendo el proceso indicado en la Plataforma. Tras la cancelación, los datos permanecerán disponibles para exportación durante 90 días.</p>
+
+    <h3>11.3 Efectos de la terminación</h3>
+    <p>Al terminar la relación contractual: la licencia de uso se revoca inmediatamente, el acceso a la Plataforma se suspende y los datos se eliminarán permanentemente al vencer el período de retención de 90 días.</p>
+  </section>
+
+  <section id="indemnizacion">
+    <h2>12. Indemnización</h2>
+    <p>Usted acepta defender, indemnizar y mantener indemne a TallerPro Enterprise, sus desarrolladores, colaboradores y prestadores de servicios frente a cualquier reclamación, demanda, daño, pérdida, costo o gasto (incluyendo honorarios legales razonables) que surja de:</p>
+    <ul>
+      <li>Su uso de la Plataforma en violación de estos Términos</li>
+      <li>Contenido que usted suba a la Plataforma que infrinja derechos de terceros</li>
+      <li>Cualquier actividad ilegal que realice a través de la Plataforma</li>
+      <li>Violación de derechos de privacidad de sus clientes finales gestionados en la Plataforma</li>
+      <li>Reclamaciones de sus empleados relacionadas con el uso del sistema de RRHH</li>
+    </ul>
+  </section>
+
+  <section id="ley">
+    <h2>13. Ley aplicable y jurisdicción</h2>
+    <p>Estos Términos de Uso se rigen por las leyes de la <strong>República de Guatemala</strong>, incluyendo el Código Civil, el Código de Comercio y demás normativa aplicable.</p>
+    <p>Cualquier disputa derivada de o relacionada con estos Términos se someterá a la jurisdicción exclusiva de los tribunales civiles competentes de <strong>Guatemala City, Guatemala</strong>.</p>
+    <p>Antes de iniciar cualquier proceso legal, las partes se comprometen a intentar resolver la disputa de manera amigable mediante comunicación directa durante un período mínimo de 30 días.</p>
+  </section>
+
+  <section id="cambios">
+    <h2>14. Cambios a los términos</h2>
+    <p>TallerPro puede modificar estos Términos en cualquier momento. Las modificaciones materiales se comunicarán a los administradores de cuenta por correo electrónico con al menos <strong>15 días de anticipación</strong>.</p>
+    <p>El uso continuado de la Plataforma después de la fecha de vigencia de los nuevos Términos constituye aceptación de los mismos. Si no está de acuerdo con los cambios, debe cancelar su suscripción antes de la fecha de entrada en vigor.</p>
+    <p>La versión vigente siempre estará disponible en <strong>tallerpro.telecommgt.com/terminos.html</strong>.</p>
+  </section>
+
+  <section id="contacto">
+    <h2>15. Contacto</h2>
+    <p>Para consultas sobre estos Términos de Uso, contratos empresariales o solicitudes legales:</p>
+    <ul>
+      <li><strong>Correo legal:</strong> legal@telecommgt.com</li>
+      <li><strong>Correo general:</strong> privacidad@telecommgt.com</li>
+      <li><strong>Plataforma:</strong> tallerpro.telecommgt.com</li>
+      <li><strong>País:</strong> República de Guatemala</li>
+    </ul>
+    <p>Para notificaciones de infracción de derechos de autor (DMCA/takedown), envíe su solicitud al correo legal con la identificación del contenido, la prueba de titularidad del derecho y sus datos de contacto.</p>
+  </section>
+
+</main>
+
+<footer>
+  <div class="footer-links">
+    <a href="/terminos.html">Términos de Uso</a>
+    <a href="/privacidad.html">Política de Privacidad</a>
+    <a href="/">Volver a TallerPro</a>
+  </div>
+  <p>© 2026 TallerPro Enterprise. Todos los derechos reservados.</p>
+  <p style="margin-top:6px;font-size:12px;">tallerpro.telecommgt.com · Guatemala · Versión 1.0</p>
+</footer>
+
+</body>
+</html>

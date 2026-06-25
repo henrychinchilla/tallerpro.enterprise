@@ -209,6 +209,13 @@ const App = {
         <button class="btn btn-ghost btn-sm" onclick="App.cerrarSesion()" style="width:100%">
           ⏻ Cerrar sesión
         </button>
+        <div style="display:flex;justify-content:center;gap:12px;margin-top:10px;padding-top:8px;border-top:1px solid rgba(255,255,255,0.08)">
+          <a href="/privacidad.html" target="_blank" style="font-size:10px;color:rgba(255,255,255,0.4);text-decoration:none;transition:color .2s" onmouseover="this.style.color='rgba(255,255,255,0.75)'" onmouseout="this.style.color='rgba(255,255,255,0.4)'">Privacidad</a>
+          <span style="font-size:10px;color:rgba(255,255,255,0.2)">·</span>
+          <a href="/terminos.html" target="_blank" style="font-size:10px;color:rgba(255,255,255,0.4);text-decoration:none;transition:color .2s" onmouseover="this.style.color='rgba(255,255,255,0.75)'" onmouseout="this.style.color='rgba(255,255,255,0.4)'">Términos</a>
+          <span style="font-size:10px;color:rgba(255,255,255,0.2)">·</span>
+          <span style="font-size:10px;color:rgba(255,255,255,0.2)">© 2026</span>
+        </div>
       </div>`;
 
     /* Restaurar la posición del menú y mantenerla persistida */
