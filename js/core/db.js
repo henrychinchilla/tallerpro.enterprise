@@ -1636,5 +1636,27 @@ const DB = {
       .slice(0, 5);
 
     return { meses, porEstado, ingresosDiarios, topClientes };
+  },
+
+  /* ── HISTORIAL BETO IA (CRUD) ─────────────────── */
+  async getBetoHistorial(limite = 10) {
+    const uid = window.Auth?.user?.id;
+    let q = getSB().from('ai_conversaciones')
+      .select('id, modo, pregunta, respuesta, created_at')
+      .eq('tenant_id', getTID())
+      .order('created_at', { ascending: false })
+      .limit(limite);
+    if (uid) q = q.eq('usuario_id', uid);
+    const { data, error } = await q;
+    if (error) throw error;
+    return data || [];
+  },
+
+  async deleteBetoConversacion(id) {
+    const { error } = await getSB().from('ai_conversaciones')
+      .delete()
+      .eq('id', id)
+      .eq('tenant_id', getTID());
+    if (error) throw error;
   }
 };
