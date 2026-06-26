@@ -2,7 +2,6 @@
   "name": "tallerpro-enterprise",
   "compatibility_date": "2026-05-09",
   "assets": {
-    "directory": ".",
-    "exclude": ["*.pdf"]
+    "directory": "."
   }
 }
