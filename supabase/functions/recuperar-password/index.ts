@@ -32,12 +32,26 @@ async function sha256(s: string): Promise<string> {
 }
 
 async function enviarEmail(apiKey: string, from: string, to: string, subject: string, html: string): Promise<boolean> {
-  const r = await fetch("https://api.resend.com/emails", {
-    method: "POST",
-    headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ from, to, subject, html }),
-  });
-  return r.ok;
+  const tryFrom = async (sender: string) => {
+    const r = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ from: sender, to, subject, html }),
+    });
+    if (!r.ok) {
+      const body = await r.text().catch(() => "");
+      console.error(`Resend error [${r.status}] from=${sender}:`, body);
+    }
+    return r.ok;
+  };
+
+  if (await tryFrom(from)) return true;
+  // Fallback: si el dominio configurado no está verificado en Resend, usar el dominio test
+  if (from !== "TallerPro <onboarding@resend.dev>") {
+    console.warn("Reintentando con onboarding@resend.dev como fallback...");
+    return tryFrom("TallerPro <onboarding@resend.dev>");
+  }
+  return false;
 }
 
 Deno.serve(async (req) => {

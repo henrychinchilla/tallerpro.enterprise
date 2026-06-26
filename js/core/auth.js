@@ -20,7 +20,7 @@ const Auth = {
     if (m.includes('rate limit') ||
         m.includes('too many requests'))         return 'Demasiados intentos. Espera un momento e inténtalo de nuevo';
     if (m.includes('network') || m.includes('fetch')) return 'Sin conexión. Revisa tu internet';
-    if (m.includes('for security purposes'))     return 'Por seguridad, espera unos segundos antes de reintentar';
+    if (m.includes('for security purposes'))     return 'Supabase requiere esperar 60 segundos entre solicitudes de link. Usa el código de 6 dígitos o espera 1 minuto e intenta de nuevo';
     return msg || 'Ocurrió un error inesperado';
   },
 
