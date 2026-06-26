@@ -380,19 +380,16 @@ Modulos.contabilidad = {
       const emi = importados.filter(x=>x.naturaleza==='emitida');
       el.innerHTML = `
         <div class="card" style="max-width:720px;margin-bottom:16px">
-          <div class="card-sub mb-3">⬆️ Importar reporte FEL de SAT (CSV)</div>
+          <div class="card-sub mb-3">⬆️ Importar reporte FEL de SAT (XLS / CSV)</div>
           <div style="font-size:12px;color:var(--text2);margin-bottom:12px">
-            Descarga el reporte desde el portal SAT (Agencia Virtual → <b>Consulta FEL</b> → exportar CSV)
-            de tus facturas <b>recibidas</b> (para el IVA crédito) o <b>emitidas</b> (para verificar el débito) y cárgalo aquí.
+            Descarga los reportes desde la <b>Agencia Virtual SAT → Consulta FEL</b> → exportar XLS (o CSV).
+            Puedes subir <b>varios archivos a la vez</b> (recibidas y emitidas de distintos meses).
+            El tipo se detecta automáticamente si el nombre incluye "Recibid" o "Emitid".
           </div>
-          <div class="form-row">
-            <div class="form-group"><label class="form-label">Tipo de reporte</label>
-              <select class="form-select" id="fel-nat">
-                <option value="recibida">📥 Facturas RECIBIDAS (compras → IVA crédito)</option>
-                <option value="emitida">📤 Facturas EMITIDAS (ventas → verificación)</option>
-              </select></div>
-            <div class="form-group"><label class="form-label">Archivo CSV</label>
-              <input class="form-input" type="file" id="fel-file" accept=".csv,text/csv" onchange="Modulos.contabilidad._leerFel(this)"></div>
+          <div class="form-group">
+            <label class="form-label">Archivos XLS / CSV (uno o varios)</label>
+            <input class="form-input" type="file" id="fel-file" accept=".csv,.xls,.xlsx,text/csv"
+              multiple onchange="Modulos.contabilidad._leerFel(this)">
           </div>
           <div id="fel-preview"></div>
         </div>
@@ -408,13 +405,17 @@ Modulos.contabilidad = {
           </div>
           <div style="font-size:12px;color:var(--text2);margin-bottom:8px">
             📥 Recibidas: <b>${rec.length}</b> DTE · IVA crédito <b>${UI.q(rec.reduce((s,x)=>s+(Number(x.iva)||Math.round((Number(x.gran_total)||0)/1.12*0.12*100)/100),0))}</b>
+            ${rec.some(x=>x.es_combustible)?`· ⛽ combustible <b>${UI.q(rec.filter(x=>x.es_combustible).reduce((s,x)=>s+(Number(x.gran_total)||0),0))}</b>`:''}
             &nbsp;·&nbsp; 📤 Emitidas: <b>${emi.length}</b> DTE · total <b>${UI.q(emi.reduce((s,x)=>s+(Number(x.gran_total)||0),0))}</b>
           </div>
           <div class="table-wrap"><table class="data-table">
             <thead><tr><th>Fecha</th><th>Tipo</th><th>Serie/No.</th><th>Contraparte</th><th>Total</th><th>IVA</th><th></th></tr></thead>
             <tbody>${importados.slice(0,60).map(x=>`<tr style="${/anulad/i.test(x.estado||'')?'opacity:.5':''}">
               <td class="mono-sm">${UI.fecha(x.fecha)}</td>
-              <td><span class="badge badge-${x.naturaleza==='emitida'?'green':'cyan'}" style="font-size:9px">${x.naturaleza==='emitida'?'📤':'📥'} ${x.tipo_doc||'DTE'}</span></td>
+              <td>
+                <span class="badge badge-${x.naturaleza==='emitida'?'green':'cyan'}" style="font-size:9px">${x.naturaleza==='emitida'?'📤':'📥'} ${x.tipo_doc||'DTE'}</span>
+                ${x.es_combustible?'<span class="badge badge-amber" style="font-size:9px;margin-left:3px">⛽</span>':''}
+              </td>
               <td class="mono-sm">${x.serie||''} ${x.numero_dte||''}</td>
               <td>${x.nombre_emisor||'—'}<div style="font-size:10px;color:var(--text3)">${x.nit_emisor||''}</div></td>
               <td class="mono-sm"><b>${UI.q(x.gran_total)}</b></td>
@@ -613,18 +614,56 @@ Modulos.contabilidad = {
      Tolerante: detecta delimitador (,;) y mapea columnas por
      palabras clave del encabezado (varían entre descargas). */
   _leerFel(input) {
-    const f = input.files?.[0];
-    if (!f) return;
-    const reader = new FileReader();
-    reader.onload = ev => {
-      try { this._procesarFel(String(ev.target.result)); }
-      catch(e) { UI.toast('No se pudo leer el CSV: '+(e.message||''),'error'); }
-    };
-    reader.readAsText(f, 'utf-8');
+    const files = Array.from(input.files || []);
+    if (!files.length) return;
+    const prev = document.getElementById('fel-preview');
+    if (prev) prev.innerHTML = '<div style="font-size:12px;color:var(--text3)">Leyendo archivos…</div>';
+    this._felParse = null;
+
+    const readFile = (f) => new Promise((resolve, reject) => {
+      const ext = f.name.split('.').pop().toLowerCase();
+      if (ext === 'xls' || ext === 'xlsx') {
+        const r = new FileReader();
+        r.onload = ev => {
+          try {
+            const wb = XLSX.read(new Uint8Array(ev.target.result), { type:'array' });
+            const ws = wb.Sheets[wb.SheetNames[0]];
+            const rows = XLSX.utils.sheet_to_array(ws);
+            resolve({ rows, name: f.name });
+          } catch(e) { reject(e); }
+        };
+        r.readAsArrayBuffer(f);
+      } else {
+        const r = new FileReader();
+        r.onload = ev => {
+          try {
+            const rows = this._csvParse(String(ev.target.result));
+            resolve({ rows, name: f.name });
+          } catch(e) { reject(e); }
+        };
+        r.readAsText(f, 'utf-8');
+      }
+    });
+
+    Promise.all(files.map(f => readFile(f).catch(e => ({ error: e.message, name: f.name }))))
+      .then(results => {
+        const allDocs = [];
+        const resumen = [];
+        results.forEach(({ rows, name, error }) => {
+          if (error) { resumen.push({ name, error }); return; }
+          const nat = /emiti/i.test(name) ? 'emitida' : /recib/i.test(name) ? 'recibida' : 'recibida';
+          const docs = this._procesarFelRows(rows, nat);
+          if (docs.length) { allDocs.push(...docs); resumen.push({ name, nat, count: docs.length }); }
+          else resumen.push({ name, error: 'Sin documentos válidos' });
+        });
+        if (!allDocs.length) { UI.toast('No se encontraron documentos válidos','error'); return; }
+        this._felParse = allDocs;
+        this._mostrarPreviewFel(allDocs, resumen);
+      });
   },
 
   _csvParse(texto) {
-    const lineas = texto.replace(/^\u{FEFF}/,'').split(/\r?\n/).filter(l=>l.trim());
+    const lineas = texto.replace(/^\u{FEFF}/u,'').split(/\r?\n/).filter(l=>l.trim());
     if (!lineas.length) return [];
     const delim = (lineas[0].match(/;/g)||[]).length > (lineas[0].match(/,/g)||[]).length ? ';' : ',';
     const parseLinea = l => {
@@ -642,25 +681,28 @@ Modulos.contabilidad = {
     return lineas.map(parseLinea);
   },
 
-  _procesarFel(texto) {
-    const filas = this._csvParse(texto);
-    if (filas.length < 2) { UI.toast('El CSV no tiene datos','error'); return; }
-    const head = filas[0].map(h=>h.toLowerCase());
+  _procesarFelRows(filas, naturaleza) {
+    if (filas.length < 2) return [];
+    const norm = h => String(h||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
+    const head = filas[0].map(norm);
     const idx = re => head.findIndex(h=>re.test(h));
     const col = {
-      fecha: idx(/fecha/),
-      tipo: idx(/tipo.*(dte|doc)/),
-      serie: idx(/serie/),
-      numero: idx(/n[uú]mero|numero/),
-      nitEmisor: idx(/nit.*emisor/),
-      nomEmisor: idx(/(nombre|raz[oó]n).*emisor/),
-      nitReceptor: idx(/nit.*receptor/),
-      nomReceptor: idx(/(nombre|raz[oó]n).*receptor/),
-      total: idx(/gran.?total|monto.*total/) >= 0 ? idx(/gran.?total|monto.*total/) : idx(/total/),
-      iva: idx(/iva/),
-      estado: idx(/estado|anulad|vigen/)
+      fecha:        idx(/fecha/),
+      uuid:         idx(/autorizaci[ao]n/),
+      tipo:         idx(/tipo.*(dte|doc)/),
+      serie:        idx(/serie/),
+      numero:       idx(/n[uú]mero|numero/),
+      nitEmisor:    idx(/nit.*emisor/),
+      nomEmisor:    idx(/(nombre|razon).*emisor/),
+      nitReceptor:  idx(/nit.*receptor/),
+      nomReceptor:  idx(/(nombre|razon).*receptor/),
+      total:        idx(/gran.?total|monto.*total/) >= 0 ? idx(/gran.?total|monto.*total/) : idx(/total/),
+      iva:          idx(/iva/),
+      estado:       idx(/estado/),
+      anulado:      idx(/marca.*anulad/),
+      petroleo:     idx(/petr[oa]leo/)
     };
-    if (col.fecha < 0 || col.total < 0) { UI.toast('No reconozco las columnas Fecha/Total del CSV. ¿Es el export de Consulta FEL?','error'); return; }
+    if (col.fecha < 0 || col.total < 0) return [];
 
     const num = v => { const x = parseFloat(String(v||'').replace(/[Qq\s,]/g,'')); return isNaN(x)?0:x; };
     const fecha = v => {
@@ -670,40 +712,61 @@ Modulos.contabilidad = {
       m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
       return m ? s : null;
     };
-    const naturaleza = document.getElementById('fel-nat')?.value || 'recibida';
-    const g = (r,i) => i>=0 ? r[i] : '';
+    const g = (r,i) => i>=0 ? (r[i] ?? '') : '';
+    const esAnulado = r => /anulad/i.test(g(r,col.estado)) || /s[ií]/i.test(g(r,col.anulado));
 
-    const docs = filas.slice(1).map(r => ({
-      naturaleza,
-      fecha: fecha(g(r,col.fecha)),
-      tipo_doc: g(r,col.tipo)||'FACT',
-      serie: g(r,col.serie)||null,
-      numero_dte: g(r,col.numero)||null,
-      /* contraparte: emisor si son recibidas; receptor si son emitidas */
-      nit_emisor: naturaleza==='recibida' ? (g(r,col.nitEmisor)||null) : (g(r,col.nitReceptor)||g(r,col.nitEmisor)||null),
-      nombre_emisor: naturaleza==='recibida' ? (g(r,col.nomEmisor)||null) : (g(r,col.nomReceptor)||g(r,col.nomEmisor)||null),
-      gran_total: num(g(r,col.total)),
-      iva: col.iva>=0 ? num(g(r,col.iva)) : null,
-      estado: /anulad/i.test(g(r,col.estado)) ? 'ANULADO' : 'VIGENTE'
-    })).filter(d => d.fecha && d.gran_total > 0);
+    return filas.slice(1).map(r => {
+      const petro = col.petroleo >= 0 ? num(g(r,col.petroleo)) : 0;
+      return {
+        naturaleza,
+        fecha:                fecha(g(r,col.fecha)),
+        numero_autorizacion:  col.uuid >= 0 ? String(g(r,col.uuid)).trim()||null : null,
+        tipo_doc:             g(r,col.tipo)||'FACT',
+        serie:                g(r,col.serie)||null,
+        numero_dte:           g(r,col.numero)||null,
+        nit_emisor:           naturaleza==='recibida' ? (g(r,col.nitEmisor)||null) : (g(r,col.nitReceptor)||g(r,col.nitEmisor)||null),
+        nombre_emisor:        naturaleza==='recibida' ? (g(r,col.nomEmisor)||null) : (g(r,col.nomReceptor)||g(r,col.nomEmisor)||null),
+        gran_total:           num(g(r,col.total)),
+        iva:                  col.iva>=0 ? num(g(r,col.iva)) : null,
+        petroleo:             petro,
+        es_combustible:       petro > 0,
+        estado:               esAnulado(r) ? 'ANULADO' : 'VIGENTE'
+      };
+    }).filter(d => d.fecha && d.gran_total > 0);
+  },
 
+  _procesarFel(texto) {
+    const rows = this._csvParse(texto);
+    const nat = 'recibida';
+    const docs = this._procesarFelRows(rows, nat);
     if (!docs.length) { UI.toast('No se encontraron documentos válidos en el CSV','error'); return; }
     this._felParse = docs;
+    this._mostrarPreviewFel(docs, [{ name: 'archivo.csv', nat, count: docs.length }]);
+  },
+
+  _mostrarPreviewFel(docs, resumen) {
     const fechas = docs.map(d=>d.fecha).sort();
     const totIva = docs.reduce((s,d)=>s+(d.iva||Math.round(d.gran_total/1.12*0.12*100)/100),0);
+    const totCombustible = docs.filter(d=>d.es_combustible).reduce((s,d)=>s+d.gran_total,0);
     const prev = document.getElementById('fel-preview');
-    if (prev) prev.innerHTML = `
+    if (!prev) return;
+    prev.innerHTML = `
       <div class="alert alert-green" style="margin-top:8px">
         <div class="alert-icon">✓</div>
         <div class="alert-body" style="font-size:12px">
-          <b>${docs.length} documentos</b> (${naturaleza}s) del ${UI.fecha(fechas[0])} al ${UI.fecha(fechas[fechas.length-1])} ·
-          Total ${UI.q(docs.reduce((s,d)=>s+d.gran_total,0))} · IVA ${UI.q(totIva)}
-          ${col.iva<0?'<br>⚠️ El CSV no trae columna IVA — se estimará como total/1.12×12%.':''}
+          ${resumen.map(r=>r.error
+            ? `<div>⚠️ <b>${r.name}</b>: ${r.error}</div>`
+            : `<div>✓ <b>${r.name}</b> — ${r.count} ${r.nat}s</div>`
+          ).join('')}
+          <hr style="margin:6px 0;opacity:.3">
+          <b>${docs.length} documentos</b> del ${UI.fecha(fechas[0])} al ${UI.fecha(fechas[fechas.length-1])} ·
+          Total <b>${UI.q(docs.reduce((s,d)=>s+d.gran_total,0))}</b> · IVA <b>${UI.q(totIva)}</b>
+          ${totCombustible > 0 ? ` · ⛽ Combustible <b>${UI.q(totCombustible)}</b>` : ''}
         </div>
       </div>
       <label style="display:flex;align-items:center;gap:8px;font-size:12px;margin:8px 0;cursor:pointer">
         <input type="checkbox" id="fel-reemplazar" checked>
-        Reemplazar lo ya importado (${naturaleza}s) en ese rango de fechas
+        Reemplazar lo ya importado en ese rango de fechas (por tipo)
       </label>
       <button class="btn btn-amber" onclick="Modulos.contabilidad.importarFel()">⬆️ Importar ${docs.length} documentos</button>`;
   },
@@ -713,8 +776,10 @@ Modulos.contabilidad = {
     if (!docs?.length) return;
     UI.toast('Importando...','info');
     const fechas = docs.map(d=>d.fecha).sort();
+    const ini = fechas[0], fin = fechas[fechas.length-1];
     if (document.getElementById('fel-reemplazar')?.checked) {
-      await DB.deleteFelPeriodo(fechas[0], fechas[fechas.length-1], docs[0].naturaleza);
+      const naturalezas = [...new Set(docs.map(d=>d.naturaleza))];
+      for (const nat of naturalezas) await DB.deleteFelPeriodo(ini, fin, nat);
     }
     let total = 0, errores = 0;
     for (let i = 0; i < docs.length; i += 200) {
@@ -723,8 +788,10 @@ Modulos.contabilidad = {
       total += count;
     }
     this._felParse = null;
+    const comb = docs.filter(d=>d.es_combustible).reduce((s,d)=>s+d.gran_total,0);
+    const msg = comb > 0 ? `✓ ${total} DTE importados · ⛽ combustible ${UI.q(comb)}` : `✓ ${total} documentos FEL importados`;
     if (errores) UI.toast(`Importados ${total} con errores — revisa la consola`,'error');
-    else UI.toast(`✓ ${total} documentos FEL importados`);
+    else UI.toast(msg);
     this._renderTab();
   },
 
