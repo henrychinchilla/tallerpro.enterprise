@@ -1,0 +1,73 @@
+{
+  "name": "tallerpro-enterprise",
+  "version": "3.0.0",
+  "description": "TallerPro Enterprise — Sistema de gestión para talleres",
+  "main": "main.js",
+  "author": "CM Telecom Guatemala",
+  "license": "UNLICENSED",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder --win --publish never",
+    "build-publish": "electron-builder --win --publish always"
+  },
+  "devDependencies": {
+    "electron": "^31.0.0",
+    "electron-builder": "^24.13.3",
+    "png-to-ico": "^3.0.1"
+  },
+  "build": {
+    "appId": "com.cmtelecommgt.tallerpro",
+    "productName": "TallerPro Enterprise",
+    "copyright": "© 2026 CM Telecom Guatemala",
+    "directories": {
+      "buildResources": "../icons",
+      "output": "dist"
+    },
+    "files": [
+      "main.js"
+    ],
+    "extraResources": [
+      {
+        "from": "../icons",
+        "to": "icons",
+        "filter": [
+          "icon-512.png",
+          "icon-256.png",
+          "icon-128.png"
+        ]
+      }
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "../icons/icon.ico",
+      "requestedExecutionLevel": "asInvoker"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "TallerPro Enterprise",
+      "installerIcon": "../icons/icon.ico",
+      "uninstallerIcon": "../icons/icon.ico",
+      "installerHeaderIcon": "../icons/icon.ico",
+      "license": null,
+      "artifactName": "TallerPro-Setup-${version}.exe"
+    },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "henrychinchilla",
+        "repo": "tallerpro.enterprise"
+      }
+    ]
+  }
+}
