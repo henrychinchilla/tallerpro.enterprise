@@ -1606,15 +1606,15 @@ const DB = {
       getSB().from('clientes').select('*',{count:'exact',head:true}).eq('tenant_id',tid),
       getSB().from('ordenes').select('*',{count:'exact',head:true}).eq('tenant_id',tid).not('estado','in','("entregado","cancelado")'),
       getSB().from('ingresos').select('monto').eq('tenant_id',tid).gte('fecha',ini).lte('fecha',fin),
-      getSB().from('inventario').select('id,nombre,stock,min_stock').eq('tenant_id',tid).filter('stock','lte','min_stock')
+      getSB().from('inventario').select('id,nombre,stock,min_stock').eq('tenant_id',tid).limit(500)
     ]);
-    // Las facturas ya se registran como ingreso 'Ventas', así que ingresos cubre todo
     const ingDir  = (ingresos||[]).reduce((s,i)=>s+(i.monto||0),0);
+    const invBajoFiltrado = (invBajo||[]).filter(i => (i.stock ?? 0) <= (i.min_stock ?? 0));
     return {
       clientes:   clientes||0,
       otsActivas: otsActivas||0,
       ingresos:   ingDir,
-      invBajo:    invBajo||[],
+      invBajo:    invBajoFiltrado,
       mesIni:     ini,
       mesFin:     fin
     };
