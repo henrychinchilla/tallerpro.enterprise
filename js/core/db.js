@@ -621,7 +621,10 @@ const DB = {
     const fecha = cabecera.fecha || new Date().toISOString().slice(0,10);
     const { data: compra, error } = await getSB().from('compras').insert({
       tenant_id:tid, num, proveedor_id:cabecera.proveedor_id||null, proveedor_nombre:cabecera.proveedor_nombre||null,
-      num_factura:cabecera.num_factura||null, fecha, subtotal, iva, total, estado:'recibida', notas:cabecera.notas||null
+      num_factura:cabecera.num_factura||null, fecha, subtotal, iva, total, estado:'recibida', notas:cabecera.notas||null,
+      num_dua:cabecera.num_dua||null, cif_valor:cabecera.cif_valor||0,
+      dai_monto:cabecera.dai_monto||0, iva_frontera:cabecera.iva_frontera||0,
+      es_importacion:!!cabecera.es_importacion
     }).select().single();
     if (error || !compra) return { error };
     const rows = items.map(i=>({ tenant_id:tid, compra_id:compra.id, inventario_id:i.inventario_id||null,
