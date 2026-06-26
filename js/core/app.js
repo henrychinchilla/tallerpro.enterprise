@@ -126,6 +126,16 @@ const App = {
     };
 
     const itemHtml = m => {
+      /* Módulos con enlace externo (ej. POS) abren en nueva pestaña */
+      if (m.href) {
+        return `
+        <li class="nav-item" style="list-style:none">
+          <a class="nav-link" href="${m.href}" target="_blank" rel="noopener"
+             style="display:flex;align-items:center;gap:10px;padding:10px 16px;text-decoration:none;color:inherit;border-radius:8px;transition:background .15s"
+             onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background=''"
+          ><span class="nav-icon">${m.icon}</span><span class="nav-label">${m.label}</span></a>
+        </li>`;
+      }
       const activo = App.paginaActual === m.id;
       /* Submenú interno (solo visible cuando el módulo está activo) */
       const subnav = (m.subnav || []).filter(s => !s.roles || s.roles.includes(rol));
@@ -174,13 +184,6 @@ const App = {
         </button>
       </div>`;
 
-    /* Acceso al POS (pantalla aparte) para roles de venta/gestión */
-    const posBtn = ['superadmin','admin','gerente_tal','gerente_fin','recepcionista','vendedor'].includes(rol)
-      && (rol === 'superadmin' || moduloEnPlan('pos')) ? `
-      <div style="padding:0 12px 10px">
-        <a class="btn btn-ghost btn-sm" style="width:100%;text-align:center;display:block" href="/pos.html" target="_blank" rel="noopener">🛒 Punto de Venta</a>
-      </div>` : '';
-
     sidebar.innerHTML = `
       <div class="sidebar-brand">
         <div class="sidebar-brand-name">TALLERPRO</div>
@@ -191,7 +194,6 @@ const App = {
         <div class="sidebar-tenant-name" title="${Auth.tenant?.name || ''}">${Auth.tenant?.name || 'TallerPro'}</div>
       </div>
       <nav class="sidebar-nav"><ul>${nav}</ul></nav>
-      ${posBtn}
       ${iaBtn}
       <div class="sidebar-user" id="sidebar-user" onclick="TEMAS.picker()" title="Cambiar tema">
         <span class="sidebar-user-avatar">${Auth.user?.avatar || '👤'}</span>
