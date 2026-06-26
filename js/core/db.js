@@ -1512,7 +1512,7 @@ const DB = {
 
   async getComprasPeriodo(ini, fin) {
     const { data } = await getSB().from('compras')
-      .select('id,num,proveedor_nombre,num_factura,fecha,subtotal,iva,total,estado')
+      .select('id,num,proveedor_nombre,num_factura,fecha,subtotal,iva,total,estado,es_importacion,num_dua,cif_valor,dai_monto,iva_frontera')
       .eq('tenant_id', getTID()).gte('fecha', ini).lte('fecha', fin).order('fecha');
     return data || [];
   },

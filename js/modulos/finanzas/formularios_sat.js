@@ -405,8 +405,15 @@ Modulos.contabilidad.sat = {
         valores_originales.ingresos = salesTotal;
         valores_originales.retenciones_recibidas = sufIVA;
       } else if (tipo === 'SAT-2237') {
+        /* Importaciones del período: base = CIF + DAI; crédito = IVA frontera (12%) */
+        const importaciones = comprasValidas.filter(c => c.es_importacion && (Number(c.cif_valor)||0) > 0);
+        const impMundoBase = importaciones.reduce((s,c) => s + (Number(c.cif_valor)||0) + (Number(c.dai_monto)||0), 0);
+        const impMundoCre  = importaciones.reduce((s,c) => s + (Number(c.iva_frontera)||0), 0);
+        /* Compras locales = total compras − importaciones (para no duplicar crédito) */
+        const comprasLocalesBase = Math.max(0, purchasesTotal - importaciones.reduce((s,c)=>s+(Number(c.total)||0),0));
         valores_originales.ventas_base = salesTotal;
-        valores_originales.compras_base = purchasesTotal;
+        valores_originales.compras_base = comprasLocalesBase;
+        valores_originales.imp_mundo_base = Math.round(impMundoBase * 100) / 100;
         valores_originales.retenciones_recibidas = sufIVA;
       } else if (tipo === 'SAT-1311') {
         valores_originales.rentas = salesTotal;
@@ -781,8 +788,8 @@ Modulos.contabilidad.sat = {
               <td><input type="text" id="f-2237-fyduca-cre" class="form-control form-control-sm text-right bg-light" value="${datos.fyduca_cre || 0}" readonly /></td>
             </tr>
             <tr>
-              <td style="padding:6px;">Importaciones del resto del mundo</td>
-              <td><input type="number" step="0.01" id="f-2237-imp-mundo-base" class="form-control form-control-sm text-right" value="${datos.imp_mundo_base || 0}" oninput="Modulos.contabilidad.sat.recalc2237()" /></td>
+              <td style="padding:6px;">Importaciones del resto del mundo <span style="font-size:10px;color:#0e7490;font-weight:600">(auto-prefill desde DUA)</span></td>
+              <td><input type="number" step="0.01" id="f-2237-imp-mundo-base" class="form-control form-control-sm text-right" value="${datos.imp_mundo_base || 0}" data-original="${datos.valores_originales?.imp_mundo_base ?? 0}" oninput="Modulos.contabilidad.sat.recalc2237()" /></td>
               <td><input type="text" id="f-2237-imp-mundo-cre" class="form-control form-control-sm text-right bg-light" value="${datos.imp_mundo_cre || 0}" readonly /></td>
             </tr>
             <tr>
