@@ -58,19 +58,46 @@ Modulos.configuracion = {
             </div>
             <div class="card card-cyan">
               <div class="card-sub mb-3">🔗 Integraciones</div>
-              <div style="display:flex;flex-direction:column;gap:8px">
-                <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border)">
-                  <span style="font-size:13px">🧾 INFILE FEL</span>
-                  <span class="badge badge-green">Activo</span>
+              <div style="display:flex;flex-direction:column;gap:0">
+                ${(()=>{
+                  const infile  = t.config_infile || { modo: 'tallerpro' };
+                  const smtpOk  = !!(t.config_smtp && t.config_smtp.host);
+                  const waOk    = !!(t.whatsapp_tel);
+                  const felLabel = infile.modo === 'propio'
+                    ? '<span class="badge badge-blue">Credenciales propias</span>'
+                    : '<span class="badge badge-green">TallerPro gestiona</span>';
+                  return `
+                <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--border)">
+                  <div>
+                    <div style="font-size:13px;font-weight:600">🧾 INFILE FEL</div>
+                    <div style="font-size:11px;color:var(--text3)">${infile.modo==='propio'?(infile.nit_emisor||'NIT no configurado'):'Servicio gestionado por TallerPro'}</div>
+                  </div>
+                  <div style="display:flex;align-items:center;gap:8px">
+                    ${felLabel}
+                    <button class="btn btn-sm btn-ghost" onclick="Modulos.comunicaciones._tab='config';App.navegarA('comunicaciones')">Editar</button>
+                  </div>
                 </div>
-                <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border)">
-                  <span style="font-size:13px">💬 WhatsApp</span>
-                  <button class="btn btn-sm btn-ghost" onclick="App.navegarA('comunicaciones')">Configurar</button>
+                <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--border)">
+                  <div>
+                    <div style="font-size:13px;font-weight:600">💬 WhatsApp</div>
+                    <div style="font-size:11px;color:var(--text3)">${waOk ? 'wa.me/+' + t.whatsapp_tel + ' (sin API)' : 'Número no configurado'}</div>
+                  </div>
+                  <div style="display:flex;align-items:center;gap:8px">
+                    ${waOk ? '<span class="badge badge-green">Activo</span>' : '<span class="badge badge-gray">Sin configurar</span>'}
+                    <button class="btn btn-sm btn-ghost" onclick="Modulos.comunicaciones._tab='config';App.navegarA('comunicaciones')">Editar</button>
+                  </div>
                 </div>
-                <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0">
-                  <span style="font-size:13px">📧 Email SMTP</span>
-                  <button class="btn btn-sm btn-ghost" onclick="App.navegarA('comunicaciones')">Configurar</button>
-                </div>
+                <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0">
+                  <div>
+                    <div style="font-size:13px;font-weight:600">📧 Email SMTP</div>
+                    <div style="font-size:11px;color:var(--text3)">${smtpOk ? t.config_smtp.host + ' · ' + (t.config_smtp.from_email||'') : 'Usando cliente de correo (mailto:)'}</div>
+                  </div>
+                  <div style="display:flex;align-items:center;gap:8px">
+                    ${smtpOk ? '<span class="badge badge-green">SMTP propio</span>' : '<span class="badge badge-gray">mailto</span>'}
+                    <button class="btn btn-sm btn-ghost" onclick="Modulos.comunicaciones._tab='config';App.navegarA('comunicaciones')">Editar</button>
+                  </div>
+                </div>`;
+                })()}
               </div>
             </div>
           </div>
