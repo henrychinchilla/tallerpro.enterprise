@@ -286,9 +286,25 @@ Modulos.contabilidad.sat = {
         valores_originales.rentas = salesTotal;
         valores_originales.gastos = purchasesTotal;
       } else if (tipo === 'SAT-1608') {
-        valores_originales.ingresos_ventas = salesTotal;
+        // Secciones 3 y 5 del ISO usan datos del AÑO ANTERIOR completo, no del trimestre actual
+        let prevYearSales = 0, prevYearPurchases = 0;
+        try {
+          const prevAnioStr = String(Number(anio) - 1);
+          const [factsAnt, comprasAnt, egresosAnt] = await Promise.all([
+            DB.getFacturasPeriodo(`${prevAnioStr}-01-01`, `${prevAnioStr}-12-31`),
+            DB.getComprasPeriodo(`${prevAnioStr}-01-01`, `${prevAnioStr}-12-31`),
+            DB.getEgresosIvaPeriodo(`${prevAnioStr}-01-01`, `${prevAnioStr}-12-31`)
+          ]);
+          prevYearSales = (factsAnt || []).filter(f => !/anulad/i.test(f.estado || '')).reduce((s, f) => s + (Number(f.total) || 0), 0);
+          prevYearPurchases = (comprasAnt || []).filter(c => !/anulad/i.test(c.estado || '')).reduce((s, c) => s + (Number(c.total) || 0), 0)
+            + (egresosAnt || []).reduce((s, e) => s + (Number(e.monto) || 0), 0);
+        } catch (e) {
+          console.error('SAT-1608 prefill año anterior:', e);
+        }
+        valores_originales.ingresos_ventas = prevYearSales;
         valores_originales.ingresos_servicios = 0;
-        valores_originales.costo_ventas = purchasesTotal;
+        valores_originales.costo_ventas = prevYearPurchases;
+        valores_originales.ingresos_anual = prevYearSales;
       } else if (tipo === 'SAT-1331') {
         valores_originales.monto_lucrativas = purchasesTotal;
         valores_originales.impuesto_lucrativas = efeISR;
@@ -436,7 +452,7 @@ Modulos.contabilidad.sat = {
         <table style="width:100%; border-collapse:collapse; margin-top:10px; font-size:12px; color:#000;" border="1" bordercolor="#ccc">
           <tbody>
             <tr>
-              <td style="padding:6px; width:70%;">Número de formulario SAT-204 que se rectifica</td>
+              <td style="padding:6px; width:70%;">Número de formulario SAT-2046 que se rectifica</td>
               <td style="padding:6px;"><input type="text" id="f-2046-rect-numero" class="form-control text-right" value="${datos.rect_numero || ''}" oninput="Modulos.contabilidad.sat.recalc2046()" /></td>
             </tr>
             <tr style="background:#f9f9f9;">

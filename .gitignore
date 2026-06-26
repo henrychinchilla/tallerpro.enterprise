@@ -33,3 +33,6 @@ Desktop.ini
 .wrangler/
 supabase/.temp/
 dashboard.jpg
+
+# Documentos SAT (no subir PDFs al repositorio)
+*.pdf
