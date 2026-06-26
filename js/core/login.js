@@ -126,7 +126,7 @@ function renderLogin(vista='login') {
       <div class="login-card">
         <div class="login-logo">
           <h1 style="font-size:28px">🔑 Recuperar acceso</h1>
-          <p>Por enlace o con un código de 6 dígitos</p>
+          <p>Te enviaremos un enlace a tu correo</p>
         </div>
         <div class="form-group">
           <label class="form-label">Correo Electrónico</label>
@@ -136,44 +136,8 @@ function renderLogin(vista='login') {
         <button class="btn btn-amber" style="width:100%" onclick="loginRecuperarPass()">
           📧 Enviar enlace de recuperación →
         </button>
-        <button class="btn btn-cyan" style="width:100%;margin-top:8px" onclick="loginSolicitarOTP()">
-          🔢 Enviarme un código de 6 dígitos
-        </button>
         <button class="btn btn-ghost" style="width:100%;margin-top:8px" onclick="renderLogin('login')">
           ← Volver al login
-        </button>
-      </div>`,
-
-    'recovery-otp': `
-      <div class="login-card">
-        <div class="login-logo">
-          <div style="font-size:40px;margin-bottom:8px">🔢</div>
-          <h1 style="font-size:24px;color:var(--amber)">Código de recuperación</h1>
-          <p>Revisa tu correo — vence en 15 minutos</p>
-        </div>
-        <div class="form-group">
-          <label class="form-label">Código (6 dígitos)</label>
-          <input class="form-input mono-sm" id="ro-codigo" inputmode="numeric" maxlength="6" placeholder="000000"
-                 style="font-size:22px;letter-spacing:8px;text-align:center">
-        </div>
-        <div class="form-group">
-          <label class="form-label">Nueva Contraseña *</label>
-          <div style="position:relative">
-            <input class="form-input" id="ro-pass1" type="password" placeholder="Mínimo 8 caracteres" style="padding-right:44px">
-            <button type="button" onclick="UI.togglePass('ro-pass1',this)"
-              style="position:absolute;right:12px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;font-size:16px;color:var(--text3)">👁</button>
-          </div>
-        </div>
-        <div class="form-group">
-          <label class="form-label">Confirmar Contraseña *</label>
-          <input class="form-input" id="ro-pass2" type="password" placeholder="Repetir contraseña"
-                 onkeydown="if(event.key==='Enter')loginVerificarOTP()">
-        </div>
-        <button class="btn btn-amber" style="width:100%" onclick="loginVerificarOTP()">
-          Cambiar contraseña →
-        </button>
-        <button class="btn btn-ghost" style="width:100%;margin-top:8px" onclick="renderLogin('recovery')">
-          ← Pedir otro código
         </button>
       </div>`,
 
@@ -349,50 +313,16 @@ async function loginRegistrarTaller() {
     </div>`);
 }
 
-/* ── RECUPERACIÓN POR CÓDIGO OTP ──────────────────── */
-let _otpEmail = null;
-async function loginSolicitarOTP() {
+async function loginRecuperarPass() {
   const email = document.getElementById('rc-email')?.value.trim();
   if (!email) { UI.toast('Ingresa tu correo','error'); return; }
-  UI.toast('TallerPro está enviando tu código...','info');
+  UI.toast('TallerPro está enviando el enlace a tu correo...','info');
   const { data, error } = await getSB().functions.invoke('recuperar-password', {
     body: { op:'solicitar', email }
   });
   let msg = data?.error || null;
   if (error) { try { const j = await error.context.json(); msg = j?.error || error.message; } catch(_) { msg = error.message; } }
   if (msg) { UI.toast(msg,'error'); return; }
-  _otpEmail = email;
-  UI.toast('TallerPro te enviará el código a tu correo ✓');
-  renderLogin('recovery-otp');
-}
-
-async function loginVerificarOTP() {
-  const codigo = document.getElementById('ro-codigo')?.value.trim();
-  const p1 = document.getElementById('ro-pass1')?.value;
-  const p2 = document.getElementById('ro-pass2')?.value;
-  if (!/^\d{6}$/.test(codigo||'')) { UI.toast('Ingresa el código de 6 dígitos','error'); return; }
-  if (!p1 || p1.length < 8) { UI.toast('Mínimo 8 caracteres','error'); return; }
-  if (p1 !== p2) { UI.toast('Las contraseñas no coinciden','error'); return; }
-  if (!_otpEmail) { renderLogin('recovery'); return; }
-
-  UI.toast('Verificando...','info');
-  const { data, error } = await getSB().functions.invoke('recuperar-password', {
-    body: { op:'verificar', email:_otpEmail, codigo, password:p1 }
-  });
-  let msg = data?.error || null;
-  if (error) { try { const j = await error.context.json(); msg = j?.error || error.message; } catch(_) { msg = error.message; } }
-  if (msg) { UI.toast(msg,'error'); return; }
-  UI.toast('¡Contraseña actualizada! Inicia sesión 🎉');
-  _otpEmail = null;
-  renderLogin('login');
-}
-
-async function loginRecuperarPass() {
-  const email = document.getElementById('rc-email')?.value.trim();
-  if (!email) { UI.toast('Ingresa tu correo','error'); return; }
-  UI.toast('TallerPro está enviando el enlace a tu correo...','info');
-  const r = await Auth.recuperarPassword(email);
-  if (!r.ok) { UI.toast(r.error,'error'); return; }
   UI.toast('TallerPro te enviará el enlace de recuperación a tu correo ✓');
   setTimeout(() => renderLogin('login'), 2500);
 }
