@@ -430,7 +430,32 @@ Modulos.contabilidad = {
     else if (this._tab === 'obligaciones') {
       const obligaciones = await DB.getObligaciones(anio);
       const hoy = new Date().toISOString().slice(0,10);
+      const utilidades = (Number(this._fiscal?.tasa_isr)||0.05) >= 0.2;
+      const pequeno    = (this._fiscal?.regimen_iva||'general').toLowerCase().startsWith('peque');
+      /* ISR anual: vence 31 de marzo del año siguiente */
+      const venceAnual = `${anio+1}-03-31`;
+      const alertaAnual = utilidades && hoy >= `${anio}-10-01`; /* aviso desde oct */
+      const yaHayAnual  = obligaciones.some(o=>o.tipo==='ISR-ANUAL' && o.periodo===`${anio}-ANUAL`);
       el.innerHTML = `
+        ${alertaAnual && !yaHayAnual ? `
+        <div class="alert alert-amber" style="margin-bottom:14px">
+          <div class="alert-icon">⚠️</div>
+          <div class="alert-body">
+            <b>ISR Anual ${anio} (SAT-1411)</b> — vence el <b>31 de marzo de ${anio+1}</b><br>
+            <span style="font-size:12px">Como Régimen Sobre Utilidades, debes presentar la declaración anual en Declaraguate. Usa el formulario SAT-1411 de la pestaña Formularios SAT.</span>
+            <div style="margin-top:8px">
+              <button class="btn btn-sm btn-amber" onclick="Modulos.contabilidad.registrarObligacionAnual(${anio})">📅 Registrar obligación ISR-ANUAL ${anio}</button>
+              <button class="btn btn-sm btn-ghost" style="margin-left:6px" onclick="Modulos.contabilidad._ir('formularios_sat')">📋 Ir a Formularios SAT</button>
+            </div>
+          </div>
+        </div>` : ''}
+        ${!pequeno && !utilidades ? `
+        <div class="alert" style="margin-bottom:14px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:12px">
+          <div class="alert-icon">ℹ️</div>
+          <div class="alert-body" style="font-size:12px">
+            <b>Régimen Opcional Simplificado:</b> el ISR se paga mensualmente (SAT-1311). No hay declaración anual de ISR separada. El acumulado del año queda cubierto con los pagos mensuales.
+          </div>
+        </div>` : ''}
         <div class="table-wrap"><table class="data-table">
           <thead><tr><th>Impuesto</th><th>Periodo</th><th>Calculado</th><th>Pagado</th><th>Vence</th><th>Estado</th><th>Acciones</th></tr></thead>
           <tbody>${obligaciones.map(o=>{
@@ -496,6 +521,19 @@ Modulos.contabilidad = {
     if (error) { UI.toast('Error: '+error.message,'error'); return; }
     UI.toast(`Obligación ${tipo} T${t} registrada ✓ (${UI.q(monto)})`);
     this._ir('obligaciones');
+  },
+
+  async registrarObligacionAnual(anio) {
+    anio = anio || this._rango().anio;
+    const vence = `${Number(anio)+1}-03-31`;
+    const { error } = await DB.upsertObligacion({
+      tipo: 'ISR-ANUAL', periodo: `${anio}-ANUAL`,
+      monto_calculado: 0, fecha_vencimiento: vence,
+      estado: 'pendiente', notas: `SAT-1411 ISR Anual Sobre Utilidades — liquidar en Declaraguate`
+    });
+    if (error) { UI.toast('Error: '+error.message,'error'); return; }
+    UI.toast(`Obligación ISR-ANUAL ${anio} registrada ✓ — vence ${UI.fecha(vence)}`, 'success', 5000);
+    this._renderTab();
   },
 
   async marcarPagada(id) {

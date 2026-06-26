@@ -5,13 +5,16 @@
 Modulos.compras = {
   _inv: [], _prov: [], _ri: 0,
 
+  _fiscal: null,
+
   async render() {
     const el = document.getElementById('page-content');
     UI.loading(el);
     const anio = new Date().getFullYear();
     let compras = [], presCompras = 0;
-    [this._inv, this._prov, compras, presCompras] = await Promise.all([
-      DB.getInventario(), DB.getProveedores(), DB.getCompras(), DB.getPresupuestoCompras(anio).catch(()=>0)
+    [this._inv, this._prov, compras, presCompras, this._fiscal] = await Promise.all([
+      DB.getInventario(), DB.getProveedores(), DB.getCompras(), DB.getPresupuestoCompras(anio).catch(()=>0),
+      DB.getConfigFiscal().catch(()=>({}))
     ]);
     const mesIni = `${anio}-${String(new Date().getMonth()+1).padStart(2,'0')}-01`;
     const vivas = compras.filter(c => c.estado !== 'anulada');
@@ -72,6 +75,7 @@ Modulos.compras = {
 
   modalCompra() {
     this._ri = 0;
+    const esImportadora = !!this._fiscal?.es_importadora;
     UI.modal('🛒 Nueva Compra', `
       <div class="form-row">
         <div class="form-group"><label class="form-label">Proveedor</label>
@@ -79,11 +83,28 @@ Modulos.compras = {
             <option value="">Sin proveedor</option>
             ${this._prov.map(p=>`<option value="${p.id}" data-nombre="${(p.nombre||'').replace(/"/g,'&quot;')}">${p.nombre}</option>`).join('')}
           </select></div>
-        <div class="form-group"><label class="form-label">No. de factura</label>
-          <input class="form-input" id="cmp-factura" placeholder="Serie-Número"></div>
+        <div class="form-group"><label class="form-label">No. de factura / DUA</label>
+          <input class="form-input" id="cmp-factura" placeholder="${esImportadora?'DUA o Serie-Número':'Serie-Número'}"></div>
       </div>
       <div class="form-group"><label class="form-label">Fecha</label>
         <input class="form-input" id="cmp-fecha" type="date" value="${new Date().toISOString().slice(0,10)}" style="max-width:200px"></div>
+      ${esImportadora ? `
+      <div style="border:1px solid var(--cyan,#0e7490);border-radius:8px;padding:12px 14px;margin-bottom:12px;background:var(--cyan-dim,#083344)">
+        <div style="font-weight:800;font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--cyan,#22d3ee);margin-bottom:8px">📦 Importación — campos DUA/DAI</div>
+        <div class="form-row">
+          <div class="form-group"><label class="form-label">No. DUA</label>
+            <input class="form-input" id="cmp-dua" placeholder="00000-000-0000-000"></div>
+          <div class="form-group"><label class="form-label">Valor CIF (Q)</label>
+            <input class="form-input" id="cmp-cif" type="number" step="0.01" placeholder="0.00" oninput="Modulos.compras._calcImport()"></div>
+        </div>
+        <div class="form-row">
+          <div class="form-group"><label class="form-label">DAI — Derecho Arancelario (Q)</label>
+            <input class="form-input" id="cmp-dai" type="number" step="0.01" placeholder="0.00" oninput="Modulos.compras._calcImport()"></div>
+          <div class="form-group"><label class="form-label">IVA en frontera (Q)</label>
+            <input class="form-input" id="cmp-iva-frontera" type="number" step="0.01" placeholder="0.00" oninput="Modulos.compras._calcImport()"></div>
+        </div>
+        <div style="font-size:11px;color:var(--text3)">El IVA en frontera es crédito fiscal. El DAI va al costo de los artículos. Ambos aparecerán en el Libro de Compras.</div>
+      </div>` : ''}
       <label class="form-label">Artículos comprados</label>
       <div class="table-wrap" style="max-height:280px;overflow-y:auto">
         <table class="data-table" style="font-size:12px">
@@ -102,6 +123,16 @@ Modulos.compras = {
         <button class="btn btn-amber" onclick="Modulos.compras.guardarCompra()">Registrar Compra</button>
       </div>`, '760px');
     this.addFila(); this.addFila();
+  },
+
+  _calcImport() {
+    const cif = parseFloat(document.getElementById('cmp-cif')?.value)||0;
+    const dai = parseFloat(document.getElementById('cmp-dai')?.value)||0;
+    /* IVA frontera = 12% × (CIF + DAI) si no fue llenado manualmente */
+    const ivaEl = document.getElementById('cmp-iva-frontera');
+    if (ivaEl && !ivaEl.dataset.manual && (cif > 0 || dai > 0)) {
+      ivaEl.value = ((cif + dai) * 0.12).toFixed(2);
+    }
   },
 
   addFila() {
@@ -161,7 +192,12 @@ Modulos.compras = {
         proveedor_id: provSel?.value||null,
         proveedor_nombre: provSel?.value ? (provOpt?.dataset.nombre||null) : null,
         num_factura: document.getElementById('cmp-factura')?.value.trim()||null,
-        fecha: document.getElementById('cmp-fecha')?.value||null
+        fecha: document.getElementById('cmp-fecha')?.value||null,
+        num_dua: document.getElementById('cmp-dua')?.value.trim()||null,
+        cif_valor: parseFloat(document.getElementById('cmp-cif')?.value)||0,
+        dai_monto: parseFloat(document.getElementById('cmp-dai')?.value)||0,
+        iva_frontera: parseFloat(document.getElementById('cmp-iva-frontera')?.value)||0,
+        es_importacion: !!(document.getElementById('cmp-dua')?.value.trim())
       }, items
     });
     if (error || !data) { UI.toast('Error: '+(error?.message||''),'error'); return; }

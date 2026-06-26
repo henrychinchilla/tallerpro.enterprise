@@ -21,7 +21,8 @@ Modulos.contabilidad.sat = {
     'SAT-1608': 'IMPUESTO DE SOLIDARIDAD (ISO)',
     'SAT-1331': 'ISR RETENCIONES EN COMPRAS',
     'SAT-2085': 'IVA FACTURAS ESPECIALES',
-    'SAT-1431': 'ISR RETENCIONES POR TRABAJO'
+    'SAT-1431': 'ISR RETENCIONES POR TRABAJO',
+    'SAT-1411': 'ISR ANUAL ACTIVIDADES LUCRATIVAS'
   },
 
   /* Formularios aplicables según régimen fiscal (LAT Decreto 10-2012 + IVA 27-92).
@@ -42,6 +43,7 @@ Modulos.contabilidad.sat = {
         { id:'SAT-2237', label:'IVA General Régimen General (SAT-2237)', obligatorio:true },
         { id:'SAT-1361', label:'ISR Trimestral Actividades Lucrativas (SAT-1361)', obligatorio:true },
         { id:'SAT-1608', label:'Impuesto de Solidaridad ISO Trimestral (SAT-1608)', obligatorio:true },
+        { id:'SAT-1411', label:'ISR Anual Actividades Lucrativas (SAT-1411) ⚠️ cierre dic', obligatorio:true },
         { id:'SAT-1331', label:'ISR Retenciones sobre Facturas (SAT-1331)', obligatorio:false },
         { id:'SAT-2085', label:'IVA Facturas Especiales (SAT-2085)', obligatorio:false },
         { id:'SAT-1431', label:'ISR Retenciones Relación Dependencia (SAT-1431)', obligatorio:false },
@@ -192,6 +194,8 @@ Modulos.contabilidad.sat = {
     let mes = null;
     if (tipo === 'SAT-1361' || tipo === 'SAT-1608') {
       mes = document.getElementById("m-form-trimestre").value;
+    } else if (tipo === 'SAT-1411') {
+      mes = 'ANUAL';  // período anual — sin mes ni trimestre
     } else {
       mes = document.getElementById("m-form-mes").value;
     }
@@ -253,6 +257,16 @@ Modulos.contabilidad.sat = {
           <option value="0.05" ${pequeno?'selected':''}>5% (Pequeño Contribuyente)</option>
         </select>
       </div>
+      <div class="form-group" style="margin-top:12px">
+        <label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:13px;font-weight:700">
+          <input type="checkbox" id="cfr-importadora" ${fiscal.es_importadora?'checked':''} style="width:18px;height:18px">
+          📦 Empresa importadora (habilita campos DUA/DAI en compras)
+        </label>
+        <div style="font-size:11px;color:var(--text3);margin-top:4px;margin-left:28px">
+          Activa la sección de importación en el módulo de Compras: No. DUA, Derecho Arancelario (DAI), IVA en frontera y valor CIF.
+          Requerido si la empresa importa repuestos, equipos o mercancía del exterior.
+        </div>
+      </div>
       <div class="alert" style="background:var(--surface3,#1e1e1e);border:1px solid var(--border);border-radius:8px;padding:10px;font-size:11px;color:var(--text3);margin-top:4px">
         Este campo actualiza la configuración de cálculo en TallerPro. <b>Usted es responsable de notificar a la SAT y hacer el cambio oficial en Declaraguate/SAT en línea.</b>
       </div>
@@ -264,11 +278,12 @@ Modulos.contabilidad.sat = {
   },
 
   async _guardarRegimen() {
-    const regimen_iva = document.getElementById('cfr-iva')?.value || 'general';
-    const tasa_isr    = parseFloat(document.getElementById('cfr-isr')?.value) || 0.05;
-    const tasa_iva    = parseFloat(document.getElementById('cfr-tiva')?.value) || 0.12;
+    const regimen_iva    = document.getElementById('cfr-iva')?.value || 'general';
+    const tasa_isr       = parseFloat(document.getElementById('cfr-isr')?.value) || 0.05;
+    const tasa_iva       = parseFloat(document.getElementById('cfr-tiva')?.value) || 0.12;
+    const es_importadora = document.getElementById('cfr-importadora')?.checked || false;
     const fiscal = Modulos.contabilidad._fiscal || {};
-    const nuevo = { ...fiscal, regimen_iva, tasa_isr, tasa_iva };
+    const nuevo = { ...fiscal, regimen_iva, tasa_isr, tasa_iva, es_importadora };
     const ok = await DB.saveConfigFiscal(nuevo);
     if (!ok) { UI.toast('Error al guardar la configuración fiscal','error'); return; }
     Modulos.contabilidad._fiscal = nuevo;
@@ -281,7 +296,10 @@ Modulos.contabilidad.sat = {
   togglePeriodoFields(tipo) {
     const mesGroup = document.getElementById("m-form-mes-group");
     const trimGroup = document.getElementById("m-form-trimestre-group");
-    if (tipo === 'SAT-1361' || tipo === 'SAT-1608') {
+    if (tipo === 'SAT-1411') {
+      mesGroup.style.display = 'none';
+      trimGroup.style.display = 'none';
+    } else if (tipo === 'SAT-1361' || tipo === 'SAT-1608') {
       mesGroup.style.display = 'none';
       trimGroup.style.display = 'block';
     } else {
@@ -423,6 +441,31 @@ Modulos.contabilidad.sat = {
         valores_originales.monto = purchasesTotal;
       } else if (tipo === 'SAT-1431') {
         valores_originales.sueldos = 0;
+      } else if (tipo === 'SAT-1411') {
+        /* ISR Anual: prefill con datos del año completo (año = anio) */
+        try {
+          const [factsAnual, comprasAnual, egresosAnual, retsAnual] = await Promise.all([
+            DB.getFacturasPeriodo(`${anio}-01-01`, `${anio}-12-31`),
+            DB.getComprasPeriodo(`${anio}-01-01`, `${anio}-12-31`),
+            DB.getEgresosIvaPeriodo(`${anio}-01-01`, `${anio}-12-31`),
+            DB.getRetencionesPeriodo(`${anio}-01-01`, `${anio}-12-31`)
+          ]);
+          const rentaBruta = (factsAnual||[]).filter(f=>!/anulad/i.test(f.estado||'')).reduce((s,f)=>s+(Number(f.subtotal)||Math.round((Number(f.total)||0)/1.12*100)/100),0);
+          const costos = (comprasAnual||[]).filter(c=>!/anulad/i.test(c.estado||'')).reduce((s,c)=>s+(Number(c.subtotal)||0),0) + (egresosAnual||[]).reduce((s,e)=>s+(Number(e.monto)||0),0);
+          const retIsrAnual = (retsAnual||[]).filter(r=>r.tipo==='ISR'&&r.naturaleza==='recibida').reduce((s,r)=>s+(Number(r.monto)||0),0);
+          /* Acreditar ISR trimestrales y ISO del año */
+          const [forms1361, forms1608] = await Promise.all([
+            DB.getFormulariosTributarios(),
+            DB.getFormulariosTributarios()
+          ]);
+          const impTrim = (allForms||[]).filter(f=>f.tipo_formulario==='SAT-1361'&&f.nit===nit&&f.periodo_anio===String(anio)).reduce((s,f)=>s+(Number((f.datos_formulario||{}).total_pagar)||0),0);
+          const isoAcred = (allForms||[]).filter(f=>f.tipo_formulario==='SAT-1608'&&f.nit===nit&&f.periodo_anio===String(anio)).reduce((s,f)=>s+(Number((f.datos_formulario||{}).total_pagar)||0),0);
+          valores_originales.renta_bruta = Math.round(rentaBruta*100)/100;
+          valores_originales.costos_gastos = Math.round(costos*100)/100;
+          valores_originales.ret_isr = Math.round(retIsrAnual*100)/100;
+          valores_originales.imp_trimestrales = Math.round(impTrim*100)/100;
+          valores_originales.iso_acreditado = Math.round(isoAcred*100)/100;
+        } catch(e) { console.error('SAT-1411 prefill:', e); }
       }
 
       datos.valores_originales = valores_originales;
@@ -1990,6 +2033,93 @@ Modulos.contabilidad.sat = {
           </tbody>
         </table>
       `;
+    } else if (tipo === 'SAT-1411') {
+      subFormHtml = `
+        <div style="background:#f4f4f4; padding:8px 12px; font-weight:bold; border-bottom:2px solid #ccc; font-size:13px; margin-top:20px;">3. RENTA BRUTA DEL PERÍODO</div>
+        <table style="width:100%; border-collapse:collapse; margin-top:10px; font-size:12px; color:#000;" border="1" bordercolor="#ccc">
+          <tbody>
+            <tr>
+              <td style="padding:6px; width:70%;">Ingresos netos del período (ventas sin IVA)</td>
+              <td style="padding:6px;"><input type="number" step="0.01" id="f-1411-renta-bruta" class="form-control text-right" value="${datos.renta_bruta || 0}" data-original="${datos.valores_originales?.renta_bruta ?? 0}" oninput="Modulos.contabilidad.sat.recalc1411()" /></td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div style="background:#f4f4f4; padding:8px 12px; font-weight:bold; border-bottom:2px solid #ccc; font-size:13px; margin-top:20px;">4. COSTOS Y GASTOS DEDUCIBLES (Art. 21 LAT)</div>
+        <table style="width:100%; border-collapse:collapse; margin-top:10px; font-size:12px; color:#000;" border="1" bordercolor="#ccc">
+          <tbody>
+            <tr>
+              <td style="padding:6px; width:70%;">Costo de producción y ventas (compras + inventario)</td>
+              <td style="padding:6px;"><input type="number" step="0.01" id="f-1411-costos-gastos" class="form-control text-right" value="${datos.costos_gastos || 0}" data-original="${datos.valores_originales?.costos_gastos ?? 0}" oninput="Modulos.contabilidad.sat.recalc1411()" /></td>
+            </tr>
+            <tr style="background:#f9f9f9;">
+              <td style="padding:6px;">Sueldos y salarios del año</td>
+              <td style="padding:6px;"><input type="number" step="0.01" id="f-1411-sueldos" class="form-control text-right" value="${datos.sueldos_anuales || 0}" oninput="Modulos.contabilidad.sat.recalc1411()" /></td>
+            </tr>
+            <tr>
+              <td style="padding:6px;">Depreciaciones del año (activos fijos)</td>
+              <td style="padding:6px;"><input type="number" step="0.01" id="f-1411-depreciaciones" class="form-control text-right" value="${datos.depreciaciones || 0}" oninput="Modulos.contabilidad.sat.recalc1411()" /></td>
+            </tr>
+            <tr style="background:#f9f9f9;">
+              <td style="padding:6px;">Otros gastos deducibles (renta local, servicios, etc.)</td>
+              <td style="padding:6px;"><input type="number" step="0.01" id="f-1411-otros-gastos" class="form-control text-right" value="${datos.otros_gastos || 0}" oninput="Modulos.contabilidad.sat.recalc1411()" /></td>
+            </tr>
+            <tr style="background:#e9ecef; font-weight:bold;">
+              <td style="padding:6px;">Total Costos y Gastos Deducibles</td>
+              <td style="padding:6px;"><input type="text" id="f-1411-total-costos" class="form-control text-right bg-light" value="${datos.total_costos || 0}" readonly /></td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div style="background:#f4f4f4; padding:8px 12px; font-weight:bold; border-bottom:2px solid #ccc; font-size:13px; margin-top:20px;">5. RENTA IMPONIBLE E IMPUESTO DETERMINADO</div>
+        <table style="width:100%; border-collapse:collapse; margin-top:10px; font-size:12px; color:#000;" border="1" bordercolor="#ccc">
+          <tbody>
+            <tr style="background:#f9f9f9;">
+              <td style="padding:6px; width:70%;">Renta Imponible (Renta Bruta − Costos y Gastos)</td>
+              <td style="padding:6px;"><input type="text" id="f-1411-renta-imponible" class="form-control text-right bg-light" value="${datos.renta_imponible || 0}" readonly /></td>
+            </tr>
+            <tr style="background:#e9f0fa; font-weight:bold;">
+              <td style="padding:6px; color:#1a365d;">Impuesto determinado (25% sobre Renta Imponible)</td>
+              <td style="padding:6px;"><input type="text" id="f-1411-imp-determinado" class="form-control text-right bg-light font-weight-bold" style="color:#1a365d;" value="${datos.imp_determinado || 0}" readonly /></td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div style="background:#f4f4f4; padding:8px 12px; font-weight:bold; border-bottom:2px solid #ccc; font-size:13px; margin-top:20px;">6. LIQUIDACIÓN — CRÉDITOS A DEDUCIR</div>
+        <table style="width:100%; border-collapse:collapse; margin-top:10px; font-size:12px; color:#000;" border="1" bordercolor="#ccc">
+          <tbody>
+            <tr>
+              <td style="padding:6px; width:70%;">(−) Impuesto pagado en cuotas trimestrales SAT-1361 del año</td>
+              <td style="padding:6px;"><input type="number" step="0.01" id="f-1411-imp-trimestrales" class="form-control text-right" value="${datos.imp_trimestrales || 0}" data-original="${datos.valores_originales?.imp_trimestrales ?? 0}" oninput="Modulos.contabilidad.sat.recalc1411()" /></td>
+            </tr>
+            <tr style="background:#f9f9f9;">
+              <td style="padding:6px;">(−) ISO acreditado pagado (SAT-1608) del año</td>
+              <td style="padding:6px;"><input type="number" step="0.01" id="f-1411-iso-acreditado" class="form-control text-right" value="${datos.iso_acreditado || 0}" data-original="${datos.valores_originales?.iso_acreditado ?? 0}" oninput="Modulos.contabilidad.sat.recalc1411()" /></td>
+            </tr>
+            <tr>
+              <td style="padding:6px;">(−) Retenciones de ISR que me efectuaron en el año</td>
+              <td style="padding:6px;"><input type="number" step="0.01" id="f-1411-ret-isr" class="form-control text-right" value="${datos.ret_isr || 0}" data-original="${datos.valores_originales?.ret_isr ?? 0}" oninput="Modulos.contabilidad.sat.recalc1411()" /></td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div style="background:#f4f4f4; padding:8px 12px; font-weight:bold; border-bottom:2px solid #ccc; font-size:13px; margin-top:20px;">7. ACCESORIOS</div>
+        <table style="width:100%; border-collapse:collapse; margin-top:10px; font-size:12px; color:#000;" border="1" bordercolor="#ccc">
+          <tbody>
+            <tr>
+              <td style="padding:6px; width:70%;">(+) Multas</td>
+              <td style="padding:6px;"><input type="number" step="0.01" id="f-1411-multas" class="form-control text-right" value="${datos.multas || 0}" oninput="Modulos.contabilidad.sat.recalc1411()" /></td>
+            </tr>
+            <tr style="background:#f9f9f9;">
+              <td style="padding:6px;">(+) Mora</td>
+              <td style="padding:6px;"><input type="number" step="0.01" id="f-1411-mora" class="form-control text-right" value="${datos.mora || 0}" oninput="Modulos.contabilidad.sat.recalc1411()" /></td>
+            </tr>
+          </tbody>
+        </table>
+        <div style="font-size:11px;color:#666;margin-top:8px;padding:6px;background:#fffde7;border-left:3px solid #f9a825">
+          📅 Plazo de presentación: dentro de los <b>3 meses</b> siguientes al cierre del ejercicio fiscal (31 de diciembre) — normalmente <b>hasta el 31 de marzo</b> del año siguiente. (LAT Decreto 10-2012 Art. 38)
+        </div>
+      `;
     }
 
     const headerHtml = `
@@ -2087,6 +2217,7 @@ Modulos.contabilidad.sat = {
     else if (tipo === 'SAT-1331') this.recalc1331();
     else if (tipo === 'SAT-2085') this.recalc2085();
     else if (tipo === 'SAT-1431') this.recalc1431();
+    else if (tipo === 'SAT-1411') this.recalc1411();
   },
 
   recalc2046() {
@@ -3145,7 +3276,38 @@ Modulos.contabilidad.sat = {
       console.error(e);
       UI.toast("Error al preparar la impresión.", "error");
     }
-  }
+  },
+
+  /* ── SAT-1411 ISR Anual Sobre Utilidades ──────── */
+  recalc1411() {
+    const v = id => parseFloat(document.getElementById(id)?.value)||0;
+    const set = (id, val) => { const el=document.getElementById(id); if(el) el.value=val.toFixed(2); };
+
+    const rentaBruta     = v('f-1411-renta-bruta');
+    const costosGastos   = v('f-1411-costos-gastos');
+    const sueldos        = v('f-1411-sueldos');
+    const depreciaciones = v('f-1411-depreciaciones');
+    const otrosGastos    = v('f-1411-otros-gastos');
+    const totalCostos    = costosGastos + sueldos + depreciaciones + otrosGastos;
+    set('f-1411-total-costos', totalCostos);
+
+    const rentaImponible = Math.max(0, rentaBruta - totalCostos);
+    set('f-1411-renta-imponible', rentaImponible);
+
+    const impDeterminado = Math.round(rentaImponible * 0.25 * 100) / 100;
+    set('f-1411-imp-determinado', impDeterminado);
+
+    const impTrim      = v('f-1411-imp-trimestrales');
+    const isoAcred     = v('f-1411-iso-acreditado');
+    const retIsr       = v('f-1411-ret-isr');
+    const multas       = v('f-1411-multas');
+    const mora         = v('f-1411-mora');
+    const totalDeduc   = impTrim + isoAcred + retIsr;
+    const totalPagar   = Math.max(0, impDeterminado - totalDeduc + multas + mora);
+
+    const tpEl = document.getElementById('f-total-pagar');
+    if (tpEl) tpEl.value = totalPagar.toFixed(2);
+  },
 };
 
 
