@@ -60,7 +60,7 @@ Modulos.contabilidad = {
     this._renderTab();
   },
 
-  _ir(t){ this._tab=t; App._subActivo=t; App._guardarRuta(); App.renderSidebar(); this._renderTab(); },
+  _ir(t){ this._tab=t; App._subActivo=t; App._guardarRuta(); App.renderSidebar(); App.marcarTabActivo(t); this._renderTab(); },
 
   /* ── Datos del MES seleccionado (libros) ── */
   async _datos() {

@@ -25,7 +25,7 @@ Modulos.admin = {
     await this._renderTab();
   },
 
-  _ir(t){ this._tab=t; App._subActivo=t; App._guardarRuta(); App.renderSidebar(); this._renderTab(); },
+  _ir(t){ this._tab=t; App._subActivo=t; App._guardarRuta(); App.renderSidebar(); App.marcarTabActivo(t); this._renderTab(); },
 
   async _renderTab() {
     const el = document.getElementById('admin-content');

@@ -35,7 +35,7 @@ Modulos.finanzas = {
     await this._renderTab();
   },
 
-  _ir(t){ this._tab=t; App._subActivo=t; App._guardarRuta(); App.renderSidebar(); this._renderTab(); },
+  _ir(t){ this._tab=t; App._subActivo=t; App._guardarRuta(); App.renderSidebar(); App.marcarTabActivo(t); this._renderTab(); },
 
   /* Fija el periodo a un mes completo (YYYY-MM) y re-dibuja */
   _setMes(ym) {

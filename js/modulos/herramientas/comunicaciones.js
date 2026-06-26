@@ -20,7 +20,7 @@ Modulos.comunicaciones = {
     this._renderTab();
   },
 
-  _ir(t){ this._tab=t; App._subActivo=t; App._guardarRuta(); App.renderSidebar(); this._renderTab(); },
+  _ir(t){ this._tab=t; App._subActivo=t; App._guardarRuta(); App.renderSidebar(); App.marcarTabActivo(t); this._renderTab(); },
 
   _renderTab() {
     const el = document.getElementById('com-content');

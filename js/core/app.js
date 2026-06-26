@@ -295,17 +295,24 @@ const App = {
       App._guardarRuta();
       App.renderSidebar();
       if (modulo._renderTab) {
-        /* _renderTab() solo redibuja el contenido; la barra de pestañas
-           (.tabs) quedó fija desde el render() inicial, así que hay que
-           actualizar a mano cuál botón luce "activo" */
-        document.querySelectorAll('#page-content .tabs .tab-btn').forEach(btn => {
-          btn.classList.toggle('active', (btn.getAttribute('onclick') || '').includes(`,'${tab}')`));
-        });
+        App.marcarTabActivo(tab);
         modulo._renderTab();
       } else {
         modulo.render?.();
       }
     }
+  },
+
+  /* Marca visualmente el tab-btn activo dentro del módulo actual.
+     Se llama tanto desde navegarSub() (sidebar) como desde _ir() de cada módulo. */
+  marcarTabActivo(tab) {
+    document.querySelectorAll('#page-content .tabs .tab-btn').forEach(btn => {
+      /* La cadena del onclick puede ser '_ir(\'iva\')', '_ir("iva")', etc.
+         Buscamos la forma entrecomillada del tab para evitar falsos positivos. */
+      const oc = btn.getAttribute('onclick') || '';
+      const activo = oc.includes(`'${tab}'`) || oc.includes(`"${tab}"`);
+      btn.classList.toggle('active', activo);
+    });
   },
 
   /* ── RUTA PERSISTENTE (#modulo/pestaña) ───────────

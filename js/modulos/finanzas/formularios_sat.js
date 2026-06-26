@@ -24,6 +24,39 @@ Modulos.contabilidad.sat = {
     'SAT-1431': 'ISR RETENCIONES POR TRABAJO'
   },
 
+  /* Formularios aplicables según régimen fiscal (LAT Decreto 10-2012 + IVA 27-92).
+     Siempre incluidos: SAT-1331, SAT-2085, SAT-1431 (aplican a todos los regímenes). */
+  _formsParaRegimen(fiscal) {
+    const pequeno   = (fiscal?.regimen_iva||'general').toLowerCase().startsWith('peque');
+    const utilidades= (Number(fiscal?.tasa_isr)||0.05) >= 0.2;
+    if (pequeno) {
+      return [
+        { id:'SAT-2046', label:'IVA Pequeño Contribuyente (SAT-2046)', obligatorio:true },
+        { id:'SAT-1331', label:'ISR Retenciones sobre Facturas (SAT-1331)', obligatorio:false },
+        { id:'SAT-2085', label:'IVA Facturas Especiales (SAT-2085)', obligatorio:false },
+        { id:'SAT-1431', label:'ISR Retenciones Relación Dependencia (SAT-1431)', obligatorio:false },
+      ];
+    }
+    if (utilidades) {
+      return [
+        { id:'SAT-2237', label:'IVA General Régimen General (SAT-2237)', obligatorio:true },
+        { id:'SAT-1361', label:'ISR Trimestral Actividades Lucrativas (SAT-1361)', obligatorio:true },
+        { id:'SAT-1608', label:'Impuesto de Solidaridad ISO Trimestral (SAT-1608)', obligatorio:true },
+        { id:'SAT-1331', label:'ISR Retenciones sobre Facturas (SAT-1331)', obligatorio:false },
+        { id:'SAT-2085', label:'IVA Facturas Especiales (SAT-2085)', obligatorio:false },
+        { id:'SAT-1431', label:'ISR Retenciones Relación Dependencia (SAT-1431)', obligatorio:false },
+      ];
+    }
+    /* Régimen General + ISR Opcional Simplificado (default) */
+    return [
+      { id:'SAT-2237', label:'IVA General Régimen General (SAT-2237)', obligatorio:true },
+      { id:'SAT-1311', label:'ISR Opcional Mensual (SAT-1311)', obligatorio:true },
+      { id:'SAT-1331', label:'ISR Retenciones sobre Facturas (SAT-1331)', obligatorio:false },
+      { id:'SAT-2085', label:'IVA Facturas Especiales (SAT-2085)', obligatorio:false },
+      { id:'SAT-1431', label:'ISR Retenciones Relación Dependencia (SAT-1431)', obligatorio:false },
+    ];
+  },
+
   /* ── LISTA ──────────────────────────────────────────────────── */
   async renderLista(parent) {
     const el = document.getElementById('cont-content');
@@ -89,18 +122,30 @@ Modulos.contabilidad.sat = {
   /* ── MODAL NUEVA DECLARACIÓN ────────────────────────────────── */
   async modalNuevoFormulario() {
     let tenant = {};
-    try {
-      tenant = await DB.getTenant() || {};
-    } catch (err) {
-      console.error(err);
-    }
+    try { tenant = await DB.getTenant() || {}; } catch(e) {}
+    const fiscal = Modulos.contabilidad._fiscal || await DB.getConfigFiscalFresh().catch(()=>({})) || {};
+    const pequeno    = (fiscal.regimen_iva||'general').toLowerCase().startsWith('peque');
+    const utilidades = (Number(fiscal.tasa_isr)||0.05) >= 0.2;
+    const regimenLabel = pequeno ? 'Pequeño Contribuyente (IVA 5%)' : utilidades ? 'Régimen Sobre Utilidades (ISR 25%)' : 'Régimen Opcional Simplificado (ISR 5%/7%)';
 
     const now = new Date();
     const currentYear = now.getFullYear();
     const currentMonth = String(now.getMonth() + 1).padStart(2, '0');
+    const forms = this._formsParaRegimen(fiscal);
 
     UI.modal("＋ Nueva Declaración SAT", `
       <form id="modal-nuevo-formulario-form" style="text-align:left;">
+        <!-- Bloque régimen fiscal -->
+        <div style="border:1px solid var(--border);border-radius:8px;padding:12px 14px;margin-bottom:16px;background:var(--surface2)">
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap">
+            <div>
+              <div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:2px">Régimen fiscal activo</div>
+              <div style="font-weight:800;font-size:14px">${regimenLabel}</div>
+            </div>
+            <button type="button" class="btn btn-sm btn-ghost" onclick="Modulos.contabilidad.sat.modalCambiarRegimen()">⚙️ Cambiar régimen</button>
+          </div>
+          <div style="font-size:11px;color:var(--text3);margin-top:6px">Solo se muestran los formularios que corresponden a su régimen actual. Los demás quedan ocultos.</div>
+        </div>
         <div class="form-group">
           <label class="form-label">NIT del Contribuyente *</label>
           <input type="text" id="m-form-nit" class="form-control" value="${tenant.nit || 'CF'}" required />
@@ -108,14 +153,7 @@ Modulos.contabilidad.sat = {
         <div class="form-group">
           <label class="form-label">Tipo de Formulario SAT *</label>
           <select id="m-form-tipo" class="form-control" onchange="Modulos.contabilidad.sat.togglePeriodoFields(this.value)">
-            <option value="SAT-2046">IVA Pequeño Contribuyente (SAT-2046)</option>
-            <option value="SAT-2237">IVA General Régimen General (SAT-2237)</option>
-            <option value="SAT-1311">ISR Opcional Mensual (SAT-1311)</option>
-            <option value="SAT-1361">ISR Trimestral Actividades Lucrativas (SAT-1361)</option>
-            <option value="SAT-1608">Impuesto de Solidaridad ISO Trimestral (SAT-1608)</option>
-            <option value="SAT-1331">ISR Retenciones sobre Facturas (SAT-1331)</option>
-            <option value="SAT-2085">IVA Facturas Especiales (SAT-2085)</option>
-            <option value="SAT-1431">ISR Retenciones Relación Dependencia (SAT-1431)</option>
+            ${forms.map((f,i)=>`<option value="${f.id}" ${i===0?'selected':''}>${f.label}${f.obligatorio?' ✅':' (según aplique)'}</option>`).join('')}
           </select>
         </div>
         <div class="form-group">
@@ -165,6 +203,79 @@ Modulos.contabilidad.sat = {
 
     UI.cerrarModal();
     await Modulos.contabilidad.sat.abrirEditorFormulario(null, tipo, nit, mes, anio);
+  },
+
+  /* ── CAMBIO DE RÉGIMEN FISCAL con aviso legal ── */
+  async modalCambiarRegimen() {
+    const fiscal = Modulos.contabilidad._fiscal || await DB.getConfigFiscalFresh().catch(()=>({})) || {};
+    const pequeno    = (fiscal.regimen_iva||'general').toLowerCase().startsWith('peque');
+    const utilidades = (Number(fiscal.tasa_isr)||0.05) >= 0.2;
+    const regimenActual = pequeno ? 'Pequeño Contribuyente' : utilidades ? 'Sobre Utilidades (25%)' : 'Opcional Simplificado (5%/7%)';
+
+    UI.modal('⚠️ Cambio de Régimen Fiscal', `
+      <div class="alert alert-amber" style="margin-bottom:16px">
+        <div class="alert-icon">⚠️</div>
+        <div class="alert-body">
+          <b>Restricción legal — Decreto 10-2012 (LAT) Art. 69 y 70</b><br>
+          <div style="font-size:12px;margin-top:4px;line-height:1.5">
+            Conforme a la Ley de Actualización Tributaria (LAT):
+            <ul style="margin:8px 0 0 14px;padding:0">
+              <li>El cambio de régimen ISR solo puede hacerse <b>una vez al año</b>, con efecto a partir del 1 de enero del año siguiente.</li>
+              <li>Debe notificarse a la SAT por escrito con al menos <b>30 días hábiles de anticipación</b> antes del 31 de diciembre.</li>
+              <li>Una vez inscrito como Pequeño Contribuyente, el regreso al Régimen General requiere habilitación previa en la SAT y puede implicar auditoría del periodo anterior.</li>
+              <li>El cambio <b>no aplica retroactivamente</b> a periodos ya declarados.</li>
+            </ul>
+            <b>Recomendación:</b> consulte a su contador antes de realizar este cambio.
+          </div>
+        </div>
+      </div>
+      <div style="font-size:13px;margin-bottom:14px">Régimen actual: <b>${regimenActual}</b></div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Régimen IVA</label>
+          <select class="form-select" id="cfr-iva">
+            <option value="general" ${!pequeno?'selected':''}>General (IVA 12%)</option>
+            <option value="pequeno" ${pequeno?'selected':''}>Pequeño Contribuyente (IVA 5% plano)</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Régimen ISR</label>
+          <select class="form-select" id="cfr-isr">
+            <option value="0.05" ${!utilidades?'selected':''}>Opcional Simplificado (5% hasta Q30,000 · 7% excedente)</option>
+            <option value="0.25" ${utilidades?'selected':''}>Sobre Utilidades / Actividades Lucrativas (25%)</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Tasa IVA</label>
+        <select class="form-select" id="cfr-tiva">
+          <option value="0.12" ${!pequeno?'selected':''}>12% (Régimen General)</option>
+          <option value="0.05" ${pequeno?'selected':''}>5% (Pequeño Contribuyente)</option>
+        </select>
+      </div>
+      <div class="alert" style="background:var(--surface3,#1e1e1e);border:1px solid var(--border);border-radius:8px;padding:10px;font-size:11px;color:var(--text3);margin-top:4px">
+        Este campo actualiza la configuración de cálculo en TallerPro. <b>Usted es responsable de notificar a la SAT y hacer el cambio oficial en Declaraguate/SAT en línea.</b>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" onclick="UI.cerrarModal()">Cancelar</button>
+        <button class="btn btn-amber" onclick="Modulos.contabilidad.sat._guardarRegimen()">Confirmar cambio (entiendo el riesgo)</button>
+      </div>
+    `, '560px');
+  },
+
+  async _guardarRegimen() {
+    const regimen_iva = document.getElementById('cfr-iva')?.value || 'general';
+    const tasa_isr    = parseFloat(document.getElementById('cfr-isr')?.value) || 0.05;
+    const tasa_iva    = parseFloat(document.getElementById('cfr-tiva')?.value) || 0.12;
+    const fiscal = Modulos.contabilidad._fiscal || {};
+    const nuevo = { ...fiscal, regimen_iva, tasa_isr, tasa_iva };
+    const ok = await DB.saveConfigFiscal(nuevo);
+    if (!ok) { UI.toast('Error al guardar la configuración fiscal','error'); return; }
+    Modulos.contabilidad._fiscal = nuevo;
+    UI.cerrarModal();
+    UI.toast('Régimen fiscal actualizado en TallerPro ✓ — recuerde notificar a la SAT', 'success', 6000);
+    /* Recarga el módulo para reflejar el nuevo régimen en los cálculos */
+    await Modulos.contabilidad.render();
   },
 
   togglePeriodoFields(tipo) {
