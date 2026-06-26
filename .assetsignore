@@ -18,3 +18,5 @@ yarn.lock
 wrangler.jsonc
 schema_v3.sql
 *.md
+.playwright-mcp/
+screenshots/*.html
