@@ -68,8 +68,7 @@ const DB = {
   },
 
   async buscarTalleres(q) {
-    const { data } = await getSB().from('tenants')
-      .select('id,slug,name,nit').or(`name.ilike.%${q}%,nit.ilike.%${q}%`).limit(8);
+    const { data } = await getSB().rpc('buscar_talleres', { q });
     return data || [];
   },
 
