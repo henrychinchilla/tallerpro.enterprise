@@ -94,9 +94,10 @@ Deno.serve(async (req) => {
     return json({ error: "El teléfono es obligatorio y debe ser válido (mínimo 8 dígitos)" }, 400);
   }
 
-  // El tenant destino es el del admin; superadmin puede especificar otro.
-  const tenantDestino = esSuperadmin && tenant_id ? tenant_id : perfil?.tenant_id;
-  if (!tenantDestino) return json({ error: "Sin tenant asociado" }, 400);
+  // El tenant destino: superadmin puede especificarlo; si no, usa el tenant del perfil del admin.
+  // Superadmin operando desde dentro de un tenant envía el tenant_id activo como fallback.
+  const tenantDestino = (esSuperadmin && tenant_id) ? tenant_id : (perfil?.tenant_id ?? tenant_id);
+  if (!tenantDestino) return json({ error: "No se pudo determinar el taller de destino. Recarga e intenta de nuevo." }, 400);
 
   // Un admin no puede crear superadmins
   if (rol === "superadmin" && !esSuperadmin) {
