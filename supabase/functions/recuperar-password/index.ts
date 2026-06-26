@@ -31,27 +31,27 @@ async function sha256(s: string): Promise<string> {
   return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, "0")).join("");
 }
 
-async function enviarEmail(apiKey: string, from: string, to: string, subject: string, html: string): Promise<boolean> {
+async function enviarEmail(apiKey: string, from: string, to: string, subject: string, html: string): Promise<{ ok: boolean; resendError?: string }> {
   const tryFrom = async (sender: string) => {
     const r = await fetch("https://api.resend.com/emails", {
       method: "POST",
       headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" },
       body: JSON.stringify({ from: sender, to, subject, html }),
     });
-    if (!r.ok) {
-      const body = await r.text().catch(() => "");
-      console.error(`Resend error [${r.status}] from=${sender}:`, body);
-    }
-    return r.ok;
+    const body = await r.text().catch(() => "");
+    if (!r.ok) console.error(`Resend [${r.status}] from=${sender}:`, body);
+    return { ok: r.ok, status: r.status, body };
   };
 
-  if (await tryFrom(from)) return true;
-  // Fallback: si el dominio configurado no está verificado en Resend, usar el dominio test
+  const r1 = await tryFrom(from);
+  if (r1.ok) return { ok: true };
+
   if (from !== "TallerPro <onboarding@resend.dev>") {
-    console.warn("Reintentando con onboarding@resend.dev como fallback...");
-    return tryFrom("TallerPro <onboarding@resend.dev>");
+    const r2 = await tryFrom("TallerPro <onboarding@resend.dev>");
+    if (r2.ok) return { ok: true };
+    return { ok: false, resendError: `[${r2.status}] ${r2.body}` };
   }
-  return false;
+  return { ok: false, resendError: `[${r1.status}] ${r1.body}` };
 }
 
 Deno.serve(async (req) => {
@@ -88,7 +88,7 @@ Deno.serve(async (req) => {
         recovery_exp:  exp,
       }).eq("id", usuario.id);
 
-      const ok = await enviarEmail(API_KEY, FROM, email,
+      const { ok, resendError } = await enviarEmail(API_KEY, FROM, email,
         `🔐 Tu código de recuperación TallerPro: ${codigo}`,
         `<div style="font-family:sans-serif;max-width:480px;margin:0 auto">
           <h2 style="color:#1d4ed8">TallerPro — Recuperar contraseña</h2>
@@ -104,7 +104,10 @@ Deno.serve(async (req) => {
           <p style="font-size:12px;color:#94a3b8">TallerPro Enterprise · ${APP_URL}</p>
         </div>`
       );
-      if (!ok) return json({ error: "No se pudo enviar el código. Intenta de nuevo." }, 502);
+      if (!ok) {
+        console.error("OTP send failed:", resendError);
+        return json({ error: "No se pudo enviar el código. Contacta al administrador." }, 502);
+      }
       return json(NEUTRO);
     }
 
@@ -127,7 +130,7 @@ Deno.serve(async (req) => {
       const link = linkData.properties.action_link;
       const nombre = (authUser.user_metadata?.nombre as string) ?? authUser.email ?? "";
 
-      const ok = await enviarEmail(API_KEY, FROM, email,
+      const { ok, resendError } = await enviarEmail(API_KEY, FROM, email,
         "🔐 Recupera tu contraseña de TallerPro",
         `<div style="font-family:sans-serif;max-width:480px;margin:0 auto">
           <h2 style="color:#1d4ed8">TallerPro — Recuperar contraseña</h2>
@@ -147,7 +150,10 @@ Deno.serve(async (req) => {
           <p style="font-size:12px;color:#94a3b8">TallerPro Enterprise · ${APP_URL}</p>
         </div>`
       );
-      if (!ok) return json({ error: "No se pudo enviar el correo. Intenta de nuevo." }, 502);
+      if (!ok) {
+        console.error("Magic link send failed:", resendError);
+        return json({ error: "No se pudo enviar el enlace. Contacta al administrador." }, 502);
+      }
       return json(NEUTRO);
     }
 
