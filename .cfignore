@@ -1,2 +1,6 @@
 # Documentos SAT — no publicar en el CDN de Cloudflare
 *.pdf
+*.xls
+*.xlsx
+electron/dist/
+electron/node_modules/
