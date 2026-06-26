@@ -1,6 +1,8 @@
 /* TallerPro v3.0 — especializados/electronica.js
    Módulo vertical: Reparaciones Electrónicas (celulares, tablets, laptops,
-   TVs, consolas, audio, electrodomésticos...). */
+   TVs, consolas, audio, electrodomésticos...).
+   OT se genera cuando el cliente aprueba el diagnóstico (→ en_reparacion).
+   Anticipo 50% con comprobante imprimible. */
 Modulos.electronica = {
   _data: [], _clientes: [], _empleados: [], _filtroEstado: '',
 
@@ -42,33 +44,69 @@ Modulos.electronica = {
           ${Object.entries(this._ESTADOS).map(([k,l])=>`<button class="btn btn-sm ${filtroEstado===k?'btn-cyan':'btn-ghost'}" onclick="Modulos.electronica.render('${k}')">${l}</button>`).join('')}
         </div>
         <div class="table-wrap"><table class="data-table">
-          <thead><tr><th>No.</th><th>Cliente</th><th>Equipo</th><th>Falla</th><th>Recibido</th><th>Total</th><th>Saldo</th><th>Estado</th><th>Acciones</th></tr></thead>
+          <thead><tr><th>No.</th><th>Cliente</th><th>Equipo</th><th>Falla</th><th>Total</th><th>Anticipo</th><th>Saldo</th><th>OT</th><th>Estado</th><th>Acciones</th></tr></thead>
           <tbody>
             ${this._data.map(r=>`<tr>
-              <td class="mono-sm">${r.num||'—'}</td>
+              <td class="mono-sm"><b>${r.num||'—'}</b></td>
               <td>${r.clientes?.nombre||'—'}</td>
               <td><span class="badge badge-gray">${this._TIPOS[r.tipo_equipo]||r.tipo_equipo}</span><div style="font-size:11px;color:var(--text3)">${[r.marca,r.modelo].filter(Boolean).join(' ')}</div></td>
-              <td style="font-size:12px;max-width:200px">${(r.falla_reportada||'').slice(0,60)}${(r.falla_reportada||'').length>60?'…':''}</td>
-              <td class="mono-sm">${UI.fecha(r.fecha_recibido)}</td>
+              <td style="font-size:12px;max-width:180px">${(r.falla_reportada||'').slice(0,60)}${(r.falla_reportada||'').length>60?'…':''}</td>
               <td class="mono-sm">${UI.q(r.precio_total)}</td>
+              <td class="mono-sm ${r.anticipo>0?'text-green':''}">${UI.q(r.anticipo)}</td>
               <td class="mono-sm ${r.saldo>0?'text-red':'text-green'}">${UI.q(r.saldo)}</td>
+              <td>${Modulos._especialOT.btnOT(r,'electronica')}</td>
               <td><span class="badge badge-${this._colorEstado(r.estado)}">${this._ESTADOS[r.estado]||r.estado}</span></td>
-              <td><div style="display:flex;gap:4px">
+              <td><div style="display:flex;gap:4px;flex-wrap:wrap">
+                ${Modulos.btnAccion('ver', `Modulos.electronica.verDetalle('${r.id}')`)}
                 ${Modulos.btnAccion('editar', `Modulos.electronica.modalForm('${r.id}')`)}
+                <button class="btn btn-sm btn-cyan" onclick="Modulos.electronica._accionAnticipo('${r.id}')" title="Registrar anticipo">💰</button>
                 ${Modulos.btnAccion('eliminar', `Modulos.eliminarRegistro('reparaciones_electronicas','${r.id}','la orden ${r.num||''}',()=>Modulos.electronica.render(Modulos.electronica._filtroEstado))`)}
               </div></td>
-            </tr>`).join('')||'<tr><td colspan="9" style="text-align:center;padding:24px;color:var(--text3)">Sin equipos registrados. Recíbelo con "＋ Nuevo Equipo".</td></tr>'}
+            </tr>`).join('')||'<tr><td colspan="10" style="text-align:center;padding:24px;color:var(--text3)">Sin equipos registrados. Recíbelo con "＋ Nuevo Equipo".</td></tr>'}
           </tbody>
         </table></div>
       </div>`;
   },
 
+  async verDetalle(id) {
+    const r = this._data.find(x=>x.id===id); if (!r) return;
+    UI.modal(`🔌 ${r.num||'Equipo'} — ${r.clientes?.nombre||''}`, `
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px">
+        <div><div style="font-size:11px;color:var(--text3)">Equipo</div><div style="font-weight:700">${this._TIPOS[r.tipo_equipo]||r.tipo_equipo} · ${[r.marca,r.modelo].filter(Boolean).join(' ')||'—'}</div></div>
+        <div><div style="font-size:11px;color:var(--text3)">Serie / IMEI</div><div class="mono-sm">${r.numero_serie||'—'}</div></div>
+        <div><div style="font-size:11px;color:var(--text3)">Estado</div><div><span class="badge badge-${this._colorEstado(r.estado)}">${this._ESTADOS[r.estado]||r.estado}</span></div></div>
+        <div><div style="font-size:11px;color:var(--text3)">Técnico</div><div>${this._empleados.find(e=>e.id===r.tecnico_id)?.nombre||'—'}</div></div>
+        <div><div style="font-size:11px;color:var(--text3)">Recibido</div><div>${r.fecha_recibido?UI.fecha(r.fecha_recibido):'—'}</div></div>
+        <div><div style="font-size:11px;color:var(--text3)">Accesorios</div><div style="font-size:12px">${r.accesorios_recibidos||'—'}</div></div>
+      </div>
+      ${r.falla_reportada?`<div style="margin-bottom:8px"><div style="font-size:11px;color:var(--text3)">Falla reportada</div><div style="background:var(--card2);padding:8px 12px;border-radius:6px;font-size:13px">${r.falla_reportada}</div></div>`:''}
+      ${r.diagnostico?`<div style="margin-bottom:8px"><div style="font-size:11px;color:var(--text3)">Diagnóstico</div><div style="background:var(--card2);padding:8px 12px;border-radius:6px;font-size:13px">${r.diagnostico}</div></div>`:''}
+      <div class="kpi-grid" style="margin-bottom:14px">
+        ${UI.kpiCard({icon:'🏷️',clase:'gray',label:'Total',value:r.precio_total,money:true})}
+        ${UI.kpiCard({icon:'💰',clase:'green',label:'Anticipo',value:r.anticipo,money:true})}
+        ${UI.kpiCard({icon:'⚠️',clase:r.saldo>0?'red':'green',label:'Saldo',value:r.saldo,money:true})}
+      </div>
+      ${r.orden_id?`<div style="background:var(--card2);padding:10px;border-radius:6px;display:flex;align-items:center;gap:10px;margin-bottom:10px">
+        <span style="font-size:20px">🔧</span>
+        <div><div style="font-size:11px;color:var(--text3)">OT vinculada</div><div style="font-weight:700;color:var(--cyan)">${r.ot_num||r.orden_id}</div></div>
+      </div>`:`<div style="color:var(--text3);font-size:12px;margin-bottom:10px">Sin OT. Se genera cuando el cliente aprueba la reparación (estado: En Reparación).</div>`}
+      <div class="modal-footer">
+        <button class="btn btn-ghost" onclick="UI.cerrarModal()">Cerrar</button>
+        ${!r.orden_id&&['esperando_aprobacion','en_reparacion','listo'].includes(r.estado)?`<button class="btn btn-cyan" onclick="UI.cerrarModal();Modulos.electronica._accionGenerarOT('${r.id}')">🔧 Generar OT</button>`:''}
+        <button class="btn btn-ghost" onclick="UI.cerrarModal();Modulos.electronica._accionAnticipo('${r.id}')">💰 Anticipo</button>
+        <button class="btn btn-amber" onclick="UI.cerrarModal();Modulos.electronica.modalForm('${r.id}')">✏️ Editar</button>
+      </div>`, '640px');
+  },
+
   async modalForm(id=null) {
-    const r = id ? this._data.find(x=>x.id===id) : {};
+    const r = id ? this._data.find(x=>x.id===id)||{} : {};
     if (!this._clientes.length) this._clientes = await DB.getClientes();
     const esEdicion = !!id;
 
     UI.modal(`${esEdicion?'✏️ Editar':'＋ Nuevo'} Equipo`, `
+      ${r.orden_id?`<div style="background:var(--card2);padding:8px 12px;border-radius:6px;margin-bottom:12px;display:flex;align-items:center;gap:8px">
+        <span style="color:var(--cyan);font-weight:700">🔧 OT: ${r.ot_num||r.orden_id}</span>
+        <span style="font-size:11px;color:var(--text3)">OT activa para esta reparación</span></div>`:''}
       <div class="form-row">
         <div class="form-group"><label class="form-label">Cliente *</label>
           <select class="form-select" id="ele-cliente">
@@ -144,6 +182,8 @@ Modulos.electronica = {
     if (!falla) { UI.toast('Describe la falla reportada','error'); return; }
     const precio = parseFloat(document.getElementById('ele-precio')?.value)||0;
     const anticipo = parseFloat(document.getElementById('ele-anticipo')?.value)||0;
+    const estadoPrev = id ? (this._data.find(x=>x.id===id)?.estado||'recibido') : 'recibido';
+    const prevOrdenId = id ? this._data.find(x=>x.id===id)?.orden_id : null;
     const fields = {
       cliente_id: clienteId,
       tipo_equipo: document.getElementById('ele-tipo')?.value||'otro',
@@ -163,12 +203,45 @@ Modulos.electronica = {
       costo_repuestos: parseFloat(document.getElementById('ele-costo-rep')?.value)||0,
       costo_mano_obra: parseFloat(document.getElementById('ele-costo-mo')?.value)||0,
       precio_total: precio, anticipo, saldo: Math.max(0, precio-anticipo),
-      notas: document.getElementById('ele-notas')?.value||null
+      notas: document.getElementById('ele-notas')?.value||null,
     };
     if (id) fields.id = id;
-    const { error } = await DB.upsertReparacionElectronica(fields);
+    const { data: saved, error } = await DB.upsertReparacionElectronica(fields);
     if (error) { UI.toast('Error: '+error.message,'error'); return; }
     UI.cerrarModal(); UI.toast(id?'Equipo actualizado ✓':'Equipo registrado ✓');
+
+    const estadoNuevo = fields.estado;
+    /* OT se genera cuando cliente aprueba diagnóstico → en_reparacion */
+    const debeOT = !prevOrdenId && (
+      (estadoPrev === 'esperando_aprobacion' && estadoNuevo === 'en_reparacion') ||
+      estadoNuevo === 'en_reparacion'
+    );
+    if (debeOT) {
+      const proyecto = { ...fields, id: saved?.id||id, clientes: { nombre: this._clientes.find(c=>c.id===clienteId)?.nombre||'' }, orden_id: null };
+      const ot = await Modulos._especialOT.generarOT(
+        'reparaciones_electronicas', proyecto, 'precio_total', 'electronica',
+        r => `ELEC ${r.num||''}: ${this._TIPOS[r.tipo_equipo]||r.tipo_equipo} ${r.marca||''} ${r.modelo||''} — ${r.falla_reportada||''}`.slice(0,200)
+      );
+      if (ot) await Modulos._especialOT.modalAnticipo('reparaciones_electronicas', { ...proyecto, orden_id: ot.id }, 'precio_total', 'electronica', 'electronica', ot.num);
+    }
     this.render(this._filtroEstado);
-  }
+  },
+
+  async _accionGenerarOT(id) {
+    const r = this._data.find(x=>x.id===id); if (!r) return;
+    const ot = await Modulos._especialOT.generarOT(
+      'reparaciones_electronicas', r, 'precio_total', 'electronica',
+      rec => `ELEC ${rec.num||''}: ${this._TIPOS[rec.tipo_equipo]||rec.tipo_equipo} ${rec.marca||''} — ${rec.falla_reportada||''}`.slice(0,200)
+    );
+    if (ot) {
+      await getSB().from('reparaciones_electronicas').update({ estado:'en_reparacion' }).eq('id',id);
+      await Modulos._especialOT.modalAnticipo('reparaciones_electronicas', { ...r, orden_id: ot.id }, 'precio_total', 'electronica', 'electronica', ot.num);
+    }
+    this.render(this._filtroEstado);
+  },
+
+  async _accionAnticipo(id) {
+    const r = this._data.find(x=>x.id===id); if (!r) return;
+    await Modulos._especialOT.modalAnticipo('reparaciones_electronicas', r, 'precio_total', 'electronica', 'electronica', r.ot_num||'');
+  },
 };

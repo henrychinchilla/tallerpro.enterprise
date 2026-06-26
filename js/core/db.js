@@ -386,11 +386,11 @@ const DB = {
 
   /* ── HERRERÍA INDUSTRIAL Y VENTANERÍA PVC/ALUMINIO ───── */
   async getHerreriaProyectos(filtros={}) {
-    let q = getSB().from('herreria_proyectos').select('*, clientes(nombre,tel,email)')
+    let q = getSB().from('herreria_proyectos').select('*, clientes(nombre,tel,email), ordenes(num)')
       .eq('tenant_id', getTID()).order('created_at',{ascending:false});
     if (filtros.estado) q = q.eq('estado', filtros.estado);
     const { data } = await q;
-    return data || [];
+    return (data||[]).map(r=>({ ...r, ot_num: r.ordenes?.num||null }));
   },
 
   async upsertHerreriaProyecto(fields) {
@@ -407,11 +407,11 @@ const DB = {
 
   /* ── PELETERÍA ────────────────────────────────────────── */
   async getPeleteriaPedidos(filtros={}) {
-    let q = getSB().from('peleteria_pedidos').select('*, clientes(nombre,tel,email)')
+    let q = getSB().from('peleteria_pedidos').select('*, clientes(nombre,tel,email), ordenes(num)')
       .eq('tenant_id', getTID()).order('created_at',{ascending:false});
     if (filtros.estado) q = q.eq('estado', filtros.estado);
     const { data } = await q;
-    return data || [];
+    return (data||[]).map(r=>({ ...r, ot_num: r.ordenes?.num||null }));
   },
 
   async upsertPeleteriaPedido(fields) {
@@ -428,11 +428,11 @@ const DB = {
 
   /* ── REPARACIONES ELECTRÓNICAS ───────────────────────── */
   async getReparacionesElectronicas(filtros={}) {
-    let q = getSB().from('reparaciones_electronicas').select('*, clientes(nombre,tel,email)')
+    let q = getSB().from('reparaciones_electronicas').select('*, clientes(nombre,tel,email), ordenes(num)')
       .eq('tenant_id', getTID()).order('created_at',{ascending:false});
     if (filtros.estado) q = q.eq('estado', filtros.estado);
     const { data } = await q;
-    return data || [];
+    return (data||[]).map(r=>({ ...r, ot_num: r.ordenes?.num||null }));
   },
 
   async upsertReparacionElectronica(fields) {
@@ -449,11 +449,11 @@ const DB = {
 
   /* ── REPARACIÓN DE REFRIGERACIÓN Y A/C (vehicular/domiciliar/industrial) ── */
   async getRefrigeracionServicios(filtros={}) {
-    let q = getSB().from('refrigeracion_servicios').select('*, clientes(nombre,tel,email), vehiculos(placa,marca,modelo)')
+    let q = getSB().from('refrigeracion_servicios').select('*, clientes(nombre,tel,email), vehiculos(placa,marca,modelo), ordenes(num)')
       .eq('tenant_id', getTID()).order('created_at',{ascending:false});
     if (filtros.estado) q = q.eq('estado', filtros.estado);
     const { data } = await q;
-    return data || [];
+    return (data||[]).map(r=>({ ...r, ot_num: r.ordenes?.num||null }));
   },
 
   async upsertRefrigeracionServicio(fields) {

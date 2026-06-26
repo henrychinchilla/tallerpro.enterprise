@@ -2,7 +2,8 @@
 Modulos.facturacion = {
   _data: [], _clientes: [], _ordenes: [], _cotizaciones: [],
   _ini: null, _fin: null,
-  _itemsImportados: [],   // líneas de detalle traídas de una OT o cotización (para guardar al emitir)
+  _itemsImportados: [],   // líneas de detalle traídas de OT/cotización O agregadas manualmente
+  _inventario: [],        // cache de inventario para el picker de productos
 
   async render() {
     const el = document.getElementById('page-content');
@@ -12,8 +13,9 @@ Modulos.facturacion = {
       this._ini = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0,10);
       this._fin = new Date(now.getFullYear(), now.getMonth()+1, 0).toISOString().slice(0,10);
     }
-    [this._data, this._clientes, this._ordenes, this._cotizaciones] = await Promise.all([
-      DB.getFacturas(this._ini, this._fin), DB.getClientes(), DB.getOrdenes(), DB.getCotizaciones({estado:'aprobada'})
+    [this._data, this._clientes, this._ordenes, this._cotizaciones, this._inventario] = await Promise.all([
+      DB.getFacturas(this._ini, this._fin), DB.getClientes(), DB.getOrdenes(),
+      DB.getCotizaciones({estado:'aprobada'}), DB.getInventario()
     ]);
 
     const totalFEL = this._data.reduce((s,f)=>s+(f.total||0), 0);
@@ -65,8 +67,10 @@ Modulos.facturacion = {
     const f = id ? this._data.find(x=>x.id===id) : {};
     const esEdicion = !!id;
     const iva = Auth.tenant?.tasa_iva || 0.12;
-    if (!id) this._itemsImportados = [];   // factura nueva: limpiar desglose previo
+    if (!id) this._itemsImportados = [];
     const itemsExistentes = id ? await DB.getFacturaItems(id) : [];
+    if (itemsExistentes.length) this._itemsImportados = itemsExistentes.map(i=>({ ...i }));
+    if (!this._inventario.length) this._inventario = await DB.getInventario().catch(()=>[]);
 
     UI.modal(`${esEdicion?'🧾 Ver':'＋ Nueva'} Factura`, `
       ${esEdicion?'<div class="alert alert-amber" style="margin-bottom:12px"><div class="alert-icon">⚠️</div><div class="alert-body" style="font-size:11px">Los cambios reemplazarán la información actual de la factura.</div></div>':''}
@@ -76,39 +80,52 @@ Modulos.facturacion = {
             <option value="">Consumidor Final (CF)</option>
             ${this._clientes.map(c=>`<option value="${c.id}" ${f.cliente_id===c.id?'selected':''}>${c.nombre} — ${c.nit||'CF'}</option>`).join('')}
           </select></div>
-        <div class="form-group"><label class="form-label">Orden de Trabajo</label>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">📋 Importar de OT <span style="font-size:10px;color:var(--text3)">(trae ítems automáticamente)</span></label>
           <select class="form-select" id="fel-ot" onchange="Modulos.facturacion._importarDeOT(this.value)">
-            <option value="">Sin OT</option>
-            ${this._ordenes.filter(o=>o.estado!=='cancelado').map(o=>`<option value="${o.id}" ${(f.ot_id||f.orden_id)===o.id?'selected':''}>${o.num} — ${UI.q(o.total)}</option>`).join('')}
+            <option value="">— Sin OT —</option>
+            ${this._ordenes.filter(o=>o.estado!=='cancelado').map(o=>`<option value="${o.id}" ${(f.ot_id||f.orden_id)===o.id?'selected':''}>${o.num} · ${o.clientes?.nombre||''} · ${UI.q(o.total)}${o.anticipo>0?` (anticipo: ${UI.q(o.anticipo)})`:''}</option>`).join('')}
           </select></div>
-        <div class="form-group"><label class="form-label">Cotización aprobada</label>
+        <div class="form-group"><label class="form-label">📋 Importar de Cotización aprobada</label>
           <select class="form-select" id="fel-cot" onchange="Modulos.facturacion._importarDeCotizacion(this.value)">
-            <option value="">Sin cotización</option>
-            ${this._cotizaciones.map(c=>`<option value="${c.id}" ${f.cotizacion_id===c.id?'selected':''}>${c.num||'—'} — ${c.clientes?.nombre||''} — ${UI.q(c.total)}</option>`).join('')}
+            <option value="">— Sin cotización —</option>
+            ${this._cotizaciones.map(c=>`<option value="${c.id}" ${f.cotizacion_id===c.id?'selected':''}>${c.num||'—'} · ${c.clientes?.nombre||''} · ${UI.q(c.total)}</option>`).join('')}
           </select></div>
       </div>
-      <div style="font-size:11px;color:var(--text3);margin:-8px 0 12px">Al elegir una OT o una cotización aprobada se importan cliente, montos e ítems a cobrar.</div>
-      <div id="fel-items-box">${this._renderItemsBox(itemsExistentes)}</div>
+
+      <!-- Editor de ítems manual -->
+      <div class="form-group">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+          <label class="form-label" style="margin:0">🛒 Ítems a cobrar</label>
+          <div style="display:flex;gap:6px">
+            <button class="btn btn-sm btn-ghost" onclick="Modulos.facturacion._agregarServicio()">＋ Servicio</button>
+            <button class="btn btn-sm btn-cyan" onclick="Modulos.facturacion._agregarProducto()">＋ Producto de inventario</button>
+          </div>
+        </div>
+        <div id="fel-items-editor">${this._renderItemsEditor()}</div>
+      </div>
+
       <div class="form-row">
         <div class="form-group"><label class="form-label">Serie FEL (opcional)</label>
           <input class="form-input" id="fel-serie" value="${f.fel_serie||''}" maxlength="10" placeholder="Serie autorizada FEL"></div>
         <div class="form-group"><label class="form-label">Fecha *</label>
           <input class="form-input" id="fel-fecha" type="date" value="${f.fecha||new Date().toISOString().slice(0,10)}"></div>
+        <div class="form-group"><label class="form-label">Método de Pago</label>
+          <select class="form-select" id="fel-metodo">
+            ${['Efectivo','Tarjeta','Transferencia','Cheque','Depósito','Crédito'].map(m=>`<option ${(f.metodo_pago||'Efectivo')===m?'selected':''}>${m}</option>`).join('')}
+          </select></div>
       </div>
-      <div class="form-row">
+      <div class="form-row" style="align-items:end">
         <div class="form-group"><label class="form-label">Subtotal (Q) *</label>
           <input class="form-input" id="fel-sub" type="number" value="${f.subtotal||''}" step="0.01"
-                 oninput="const s=parseFloat(this.value)||0;document.getElementById('fel-iva').value=(s*${iva}).toFixed(2);document.getElementById('fel-total').value=(s*(1+${iva})).toFixed(2)"></div>
-        <div class="form-group"><label class="form-label">IVA ${Math.round(iva*100)}% (Q)</label>
+                 oninput="Modulos.facturacion._recalcularDesdeSubtotal(this.value)"></div>
+        <div class="form-group"><label class="form-label">IVA ${Math.round(iva*100)}%</label>
           <input class="form-input" id="fel-iva" type="number" value="${f.iva||''}" step="0.01" readonly></div>
+        <div class="form-group"><label class="form-label" style="font-size:14px;font-weight:800;color:var(--amber)">TOTAL (Q)</label>
+          <input class="form-input" id="fel-total" type="number" value="${f.total||''}" step="0.01" readonly
+                 style="font-size:20px;font-weight:800;color:var(--amber)"></div>
       </div>
-      <div class="form-group"><label class="form-label">Total (Q)</label>
-        <input class="form-input" id="fel-total" type="number" value="${f.total||''}" step="0.01" readonly
-               style="font-size:18px;font-weight:800;color:var(--amber)"></div>
-      <div class="form-group"><label class="form-label">Método de Pago</label>
-        <select class="form-select" id="fel-metodo">
-          ${['Efectivo','Tarjeta','Transferencia','Cheque','Depósito','Crédito'].map(m=>`<option ${(f.metodo_pago||'Efectivo')===m?'selected':''}>${m}</option>`).join('')}
-        </select></div>
       ${esEdicion?`<div class="form-group"><label class="form-label">Estado</label>
         <select class="form-select" id="fel-estado">
           ${['borrador','pendiente','certificada','anulada'].map(s=>`<option ${f.estado===s?'selected':''}>${s}</option>`).join('')}
@@ -120,20 +137,159 @@ Modulos.facturacion = {
         <button class="btn btn-amber" onclick="Modulos.facturacion.guardar('${id||''}')">
           ${esEdicion?'Guardar Cambios':'Emitir Factura'}
         </button>
-      </div>`,'580px');
+      </div>`,'700px');
+
     if (!id && cotizacionId) await this._importarDeCotizacion(cotizacionId);
+    else if (this._itemsImportados.length) this._refrescarEditor();
   },
 
-  /* Abre Facturación con una cotización aprobada lista para emitir
-     (entrada rápida desde el módulo de Cotizaciones). */
+  /* Abre Facturación con una cotización aprobada lista para emitir */
   async facturarCotizacion(cotizacionId) {
     App.navegarA('facturacion');
-    if (App.paginaActual !== 'facturacion') return;   // sin acceso (navegarA ya mostró el aviso)
+    if (App.paginaActual !== 'facturacion') return;
     await this.render();
     await this.modalFactura(null, cotizacionId);
   },
 
-  /* Tabla de desglose (una línea por ítem cobrado) */
+  /* ── Editor de ítems (manual + importados) ── */
+  _renderItemsEditor() {
+    if (!this._itemsImportados.length) {
+      return `<div id="fel-items-vacio" style="text-align:center;padding:16px;color:var(--text3);font-size:13px;border:1px dashed var(--border);border-radius:8px">
+        Sin ítems. Agrega servicios o productos, o importa desde una OT / cotización.
+      </div>`;
+    }
+    return `<div class="table-wrap"><table class="data-table" style="font-size:12px">
+      <thead><tr><th>Descripción</th><th style="text-align:right;width:70px">Cant.</th><th style="text-align:right;width:90px">P. Unit.</th><th style="text-align:right;width:90px">Total</th><th style="width:36px"></th></tr></thead>
+      <tbody id="fel-items-tbody">
+        ${this._itemsImportados.map((it,i)=>`<tr>
+          <td><input class="form-input" style="font-size:12px;padding:4px 8px" value="${(it.descripcion||'').replace(/"/g,'&quot;')}"
+               onchange="Modulos.facturacion._itemCambio(${i},'descripcion',this.value)"></td>
+          <td><input class="form-input mono-sm" style="font-size:12px;padding:4px;text-align:right;width:60px" type="number" min="0.001" step="0.001" value="${it.cantidad||1}"
+               onchange="Modulos.facturacion._itemCambio(${i},'cantidad',parseFloat(this.value)||1)"></td>
+          <td><input class="form-input mono-sm" style="font-size:12px;padding:4px;text-align:right;width:80px" type="number" min="0" step="0.01" value="${it.precio_unit||0}"
+               onchange="Modulos.facturacion._itemCambio(${i},'precio_unit',parseFloat(this.value)||0)"></td>
+          <td class="mono-sm text-amber" style="text-align:right">${UI.q(it.total||0)}</td>
+          <td><button class="btn btn-sm" style="padding:2px 6px;color:var(--red)" onclick="Modulos.facturacion._itemQuitar(${i})">✕</button></td>
+        </tr>`).join('')}
+      </tbody>
+    </table></div>`;
+  },
+
+  _itemCambio(i, campo, valor) {
+    if (!this._itemsImportados[i]) return;
+    this._itemsImportados[i][campo] = valor;
+    if (campo === 'cantidad' || campo === 'precio_unit') {
+      this._itemsImportados[i].total = Math.round(
+        (Number(this._itemsImportados[i].cantidad)||1) *
+        (Number(this._itemsImportados[i].precio_unit)||0) * 100
+      ) / 100;
+    }
+    this._refrescarEditor();
+  },
+
+  _itemQuitar(i) {
+    this._itemsImportados.splice(i,1);
+    this._refrescarEditor();
+  },
+
+  _refrescarEditor() {
+    const box = document.getElementById('fel-items-editor');
+    if (box) box.innerHTML = this._renderItemsEditor();
+    this._recalcularDesdeItems();
+  },
+
+  _recalcularDesdeItems() {
+    const totalConIva = this._itemsImportados.reduce((s,i)=>s+(Number(i.total)||0),0);
+    this._setTotales(totalConIva);
+  },
+
+  _recalcularDesdeSubtotal(val) {
+    const iva = Auth.tenant?.tasa_iva || 0.12;
+    const s = parseFloat(val)||0;
+    const ivaM = Math.round(s*iva*100)/100;
+    const tot  = Math.round((s + ivaM)*100)/100;
+    const ivaEl = document.getElementById('fel-iva');
+    const totEl = document.getElementById('fel-total');
+    if (ivaEl) ivaEl.value = ivaM.toFixed(2);
+    if (totEl) totEl.value = tot.toFixed(2);
+  },
+
+  _setTotales(totalConIva) {
+    const iva = Auth.tenant?.tasa_iva || 0.12;
+    const sub = Math.round(totalConIva/(1+iva)*100)/100;
+    const ivaM = Math.round((totalConIva - sub)*100)/100;
+    const subEl = document.getElementById('fel-sub');
+    const ivaEl = document.getElementById('fel-iva');
+    const totEl = document.getElementById('fel-total');
+    if (subEl) subEl.value = sub.toFixed(2);
+    if (ivaEl) ivaEl.value = ivaM.toFixed(2);
+    if (totEl) totEl.value = totalConIva.toFixed(2);
+  },
+
+  /* Agrega una línea de servicio (texto libre) */
+  _agregarServicio() {
+    this._itemsImportados.push({ descripcion:'Servicio', cantidad:1, precio_unit:0, total:0 });
+    this._refrescarEditor();
+    /* Scroll al final y enfocar la descripción del nuevo ítem */
+    setTimeout(()=>{
+      const rows = document.querySelectorAll('#fel-items-tbody tr');
+      if (rows.length) { const inp = rows[rows.length-1].querySelector('input'); inp?.focus(); inp?.select(); }
+    }, 50);
+  },
+
+  /* Abre selector de inventario para agregar producto */
+  _agregarProducto() {
+    const cats = [...new Set(this._inventario.map(p=>p.categoria).filter(Boolean))].sort();
+    UI.modal('📦 Agregar producto de inventario', `
+      <div style="display:flex;gap:8px;margin-bottom:12px">
+        <input class="form-input" style="flex:1" placeholder="🔍 Buscar..." id="inv-busca" oninput="Modulos.facturacion._filtrarInv(this.value)">
+        <select class="form-select" style="width:170px" id="inv-cat" onchange="Modulos.facturacion._filtrarInv(document.getElementById('inv-busca').value)">
+          <option value="">Todas las categorías</option>
+          ${cats.map(c=>`<option>${c}</option>`).join('')}
+        </select>
+      </div>
+      <div id="inv-lista" style="max-height:340px;overflow-y:auto">
+        ${this._renderListaInv(this._inventario)}
+      </div>`, '560px');
+  },
+
+  _filtrarInv(busca='') {
+    const cat = document.getElementById('inv-cat')?.value||'';
+    const b = busca.toLowerCase();
+    const filtrados = this._inventario.filter(p=>{
+      if (cat && p.categoria !== cat) return false;
+      if (!b) return true;
+      return (p.nombre||'').toLowerCase().includes(b) || (p.codigo||'').toLowerCase().includes(b);
+    });
+    const el = document.getElementById('inv-lista');
+    if (el) el.innerHTML = this._renderListaInv(filtrados);
+  },
+
+  _renderListaInv(items) {
+    if (!items.length) return `<div style="text-align:center;padding:16px;color:var(--text3)">Sin productos</div>`;
+    return items.map(p=>`
+      <div onclick="Modulos.facturacion._seleccionarProducto('${p.id}');UI.cerrarModal()"
+           onmouseenter="this.style.background='var(--surface2)'" onmouseleave="this.style.background=''"
+           style="display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:6px;cursor:pointer;border-bottom:1px solid var(--border)">
+        <div style="flex:1">
+          <div style="font-weight:700;font-size:13px">${p.nombre}</div>
+          <div style="font-size:11px;color:var(--text3)">${p.categoria||''} · ${p.codigo||''}${p.stock!=null?` · Stock: ${p.stock}`:''}</div>
+        </div>
+        <div style="font-weight:800;color:var(--amber);font-size:14px">${UI.q(p.precio_venta)}</div>
+      </div>`).join('');
+  },
+
+  _seleccionarProducto(id) {
+    const p = this._inventario.find(x=>x.id===id); if (!p) return;
+    const precio = Number(p.precio_venta)||0;
+    this._itemsImportados.push({
+      descripcion: p.nombre, cantidad: 1, precio_unit: precio, total: precio,
+      inventario_id: p.id
+    });
+    this._refrescarEditor();
+  },
+
+  /* Tabla de desglose (legado, solo lectura - se sigue usando para impresión) */
   _renderItemsBox(items) {
     if (!items || !items.length) return '';
     return `<div class="form-group"><label class="form-label">Detalle a cobrar (desglose)</label>
@@ -209,53 +365,56 @@ Modulos.facturacion = {
     this.render();
   },
 
-  /* Importa de una OT todo lo cobrable: cliente, montos (IVA incluido en la
-     OT → se desglosa) y el detalle de ítems hacia las notas. */
+  /* Importa de una OT: cliente, ítems y montos. Si hay anticipo, solo cobra el saldo. */
   async _importarDeOT(otId) {
     if (!otId) return;
     const cotSel = document.getElementById('fel-cot');
-    if (cotSel) cotSel.value = '';   // una factura solo puede traer su detalle de un origen
+    if (cotSel) cotSel.value = '';
     const iva = Auth.tenant?.tasa_iva || 0.12;
     const orden = this._ordenes.find(o => o.id === otId);
 
-    /* Cliente desde la OT */
     if (orden?.cliente_id) {
       const cliSel = document.getElementById('fel-cli');
       if (cliSel) cliSel.value = orden.cliente_id;
     }
 
-    /* Ítems a cobrar */
     const { data: items } = await getSB().from('ot_items').select('*')
       .eq('orden_id', otId).order('orden_pos');
     const itemsList = items || [];
-    const totalConIva = itemsList.reduce((s,i)=>s+(i.total||0), 0) || orden?.total || 0;
-    if (totalConIva <= 0) { UI.toast('La OT no tiene monto a cobrar','info'); return; }
+    const totalBruto = itemsList.reduce((s,i)=>s+(i.total||0), 0) || orden?.total || 0;
+    const anticipo   = Number(orden?.anticipo)||0;
+    /* Cobrar solo el saldo pendiente (total menos lo ya abonado) */
+    const totalACobrar = Math.max(0, totalBruto - anticipo);
+    if (totalACobrar <= 0 && totalBruto > 0) {
+      UI.toast('Esta OT ya fue totalmente cubierta por el anticipo ✓','info');
+    }
+    if (totalBruto <= 0) { UI.toast('La OT no tiene monto a cobrar','info'); return; }
 
-    /* Guardar el desglose (una línea por ítem) para persistirlo al emitir */
     this._itemsImportados = itemsList.map(i=>({
       descripcion: i.descripcion, cantidad: i.cantidad,
       precio_unit: i.precio_unit, total: i.total,
       inventario_id: i.inventario_id || null
     }));
-    const box = document.getElementById('fel-items-box');
-    if (box) box.innerHTML = this._renderItemsBox(this._itemsImportados);
 
-    const sub      = Math.round(totalConIva/(1+iva)*100)/100;
-    const ivaMonto = Math.round((totalConIva - sub)*100)/100;
+    /* Si hay anticipo, añadir una línea negativa que lo descuente */
+    if (anticipo > 0) {
+      this._itemsImportados.push({
+        descripcion: `Anticipo recibido previo (${orden?.num||'OT'})`,
+        cantidad: 1, precio_unit: -anticipo, total: -anticipo
+      });
+    }
 
-    const subEl = document.getElementById('fel-sub');
-    const ivaEl = document.getElementById('fel-iva');
-    const totEl = document.getElementById('fel-total');
-    if (subEl) subEl.value = sub.toFixed(2);
-    if (ivaEl) ivaEl.value = ivaMonto.toFixed(2);
-    if (totEl) totEl.value = totalConIva.toFixed(2);
+    const box = document.getElementById('fel-items-editor');
+    if (box) box.innerHTML = this._renderItemsEditor();
+    this._setTotales(totalACobrar);
 
-    /* Detalle de ítems en notas (lo que se debe cobrar) */
-    const desc = itemsList.map(i=>`${i.descripcion} (${i.cantidad} x ${UI.q(i.precio_unit)})`).join(' | ');
     const notasEl = document.getElementById('fel-notas');
-    if (notasEl && desc) notasEl.value = desc.slice(0,500);
+    if (notasEl && !notasEl.value) notasEl.value = `Importado de ${orden?.num||'OT'}`.slice(0,500);
 
-    UI.toast(`Importado de ${orden?.num||'OT'}: ${itemsList.length} ítem(s) · ${UI.q(totalConIva)} ✓`);
+    const msg = anticipo > 0
+      ? `Importado de ${orden?.num||'OT'} · Total: ${UI.q(totalBruto)} · Anticipo descontado: ${UI.q(anticipo)} · A cobrar: ${UI.q(totalACobrar)} ✓`
+      : `Importado de ${orden?.num||'OT'}: ${itemsList.length} ítem(s) · ${UI.q(totalACobrar)} ✓`;
+    UI.toast(msg, 'success', 5000);
   },
 
   /* Importa de una cotización APROBADA todo lo cobrable: cliente, ítems y
@@ -277,15 +436,19 @@ Modulos.facturacion = {
       precio_unit: i.precio_unit, total: i.total
     }));
     this._itemsImportados = itemsList;
-    const box = document.getElementById('fel-items-box');
-    if (box) box.innerHTML = this._renderItemsBox(itemsList);
+    const box = document.getElementById('fel-items-editor');
+    if (box) box.innerHTML = this._renderItemsEditor();
 
-    const subEl = document.getElementById('fel-sub');
-    const ivaEl = document.getElementById('fel-iva');
-    const totEl = document.getElementById('fel-total');
-    if (subEl) subEl.value = (Number(cot.subtotal)||0).toFixed(2);
-    if (ivaEl) ivaEl.value = (Number(cot.iva)||0).toFixed(2);
-    if (totEl) totEl.value = (Number(cot.total)||0).toFixed(2);
+    if (itemsList.length) {
+      this._setTotales(Number(cot.total)||0);
+    } else {
+      const subEl = document.getElementById('fel-sub');
+      const ivaEl = document.getElementById('fel-iva');
+      const totEl = document.getElementById('fel-total');
+      if (subEl) subEl.value = (Number(cot.subtotal)||0).toFixed(2);
+      if (ivaEl) ivaEl.value = (Number(cot.iva)||0).toFixed(2);
+      if (totEl) totEl.value = (Number(cot.total)||0).toFixed(2);
+    }
 
     const notasEl = document.getElementById('fel-notas');
     if (notasEl && !notasEl.value) notasEl.value = `Generado desde cotización ${cot.num||''}`.trim();
