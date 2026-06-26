@@ -100,7 +100,16 @@ Modulos.proveedores = {
       <div class="form-row">
         <div class="form-group"><label class="form-label">Categoría</label>
           <select class="form-select" id="prov-cat">
-            ${['Repuestos','Aceites y Lubricantes','Herramientas','Equipo','Servicios','Otro'].map(c=>`<option ${p.categoria===c?'selected':''}>${c}</option>`).join('')}
+            ${[
+              'Repuestos Automotriz','Aceites y Lubricantes',
+              'Refrigerantes y Gases','Compresores y Partes A/C',
+              'Componentes Electrónicos','Celulares y Accesorios','Electrodomésticos y Partes',
+              'Materiales Herrería','Material PVC y Aluminio','Vidrio y Cancel',
+              'Materiales Peletería','Cuero y Telas',
+              'Herramientas y Equipos','Pinturas y Acabados','Soldadura',
+              'Ferretería','Servicios Externos','Distribuidora General',
+              'Courier / Transporte','Otro',
+            ].map(c=>`<option ${p.categoria===c?'selected':''}>${c}</option>`).join('')}
           </select></div>
         <div class="form-group"><label class="form-label">Persona de Contacto</label>
           <input class="form-input" id="prov-contacto" value="${p.contacto||''}"></div>

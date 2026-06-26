@@ -4,19 +4,37 @@ Modulos.vehiculos = {
   _clientes: [],
 
   /* Catálogos sugeridos (editables: el usuario puede escribir uno nuevo) */
-  _tipos: ['Liviano', 'SUV', 'Pesado', 'Motocicleta', 'ATV', 'Motor de lancha', 'Motogenerador'],
+  _tipos: [
+    'Liviano','Pickup / Camioneta','SUV / Crossover','Van / Minivan',
+    'Microbús','Bus / Autobús','Camión de reparto','Pesado / Tráiler',
+    'Motocicleta','Scooter / Motojet','Motocarro / Tuk-tuk',
+    'ATV / Cuatrimoto','Motor de lancha','Motogenerador',
+    'Maquinaria Agrícola','Montacargas / Industrial',
+  ],
   _marcasPorTipo: {
     'Liviano': ['Toyota','Honda','Nissan','Hyundai','Kia','Mazda','Chevrolet','Volkswagen','Mitsubishi','Suzuki','Ford','Renault','Peugeot','Geely','BYD','Changan'],
-    'SUV': ['Toyota','Honda','Hyundai','Kia','Mazda','Nissan','Mitsubishi','Suzuki','Chevrolet','Ford','Jeep','Subaru','Land Rover','BMW','Mercedes-Benz','Volkswagen','BYD'],
-    'Pesado': ['Hino','Isuzu','Freightliner','International','Volvo','Mercedes-Benz','Scania','Mack','Kenworth','Foton','JAC','Dongfeng','UD Trucks','Iveco'],
+    'Pickup / Camioneta': ['Toyota','Mitsubishi','Nissan','Ford','Chevrolet','Isuzu','Mazda','Suzuki','JAC','Foton','Dongfeng','Faw','RAM','Volkswagen'],
+    'SUV / Crossover': ['Toyota','Honda','Hyundai','Kia','Mazda','Nissan','Mitsubishi','Suzuki','Chevrolet','Ford','Jeep','Subaru','Land Rover','BMW','Mercedes-Benz','Volkswagen','BYD'],
+    'Van / Minivan': ['Toyota','Honda','Kia','Hyundai','Nissan','Mercedes-Benz','Ford','Volkswagen','Chevrolet','Mitsubishi','JAC','Foton'],
+    'Microbús': ['Toyota','Mitsubishi','Isuzu','Hino','Mercedes-Benz','JAC','Yutong','King Long','Golden Dragon','Foton'],
+    'Bus / Autobús': ['Hino','Isuzu','Mercedes-Benz','Volvo','Scania','Marcopolo','King Long','Yutong','Golden Dragon','Zhongtong'],
+    'Camión de reparto': ['Hino','Isuzu','Foton','JAC','Dongfeng','Mercedes-Benz','Volkswagen','Chevrolet','Ford','Faw'],
+    'Pesado / Tráiler': ['Hino','Isuzu','Freightliner','International','Volvo','Mercedes-Benz','Scania','Mack','Kenworth','Foton','JAC','Dongfeng','UD Trucks','Iveco'],
     'Motocicleta': ['Honda','Yamaha','Suzuki','Kawasaki','BMW','Ducati','Aprilia','KTM','Triumph','Harley-Davidson','Husqvarna','Royal Enfield','Benelli','CFMoto','Vespa','Bajaj','TVS','Italika','Hero','Genesis','Freedom','Serpento','Daytona','Vento','Zontes','Voge'],
-    'ATV': ['Honda','Yamaha','Suzuki','Kawasaki','Polaris','Can-Am','CFMoto','Kymco','Hisun','Linhai','TGB','Segway','Bombardier'],
+    'Scooter / Motojet': ['Honda','Yamaha','Suzuki','Vespa','Piaggio','Kymco','SYM','TVS','Italika','Vento','Jialing'],
+    'Motocarro / Tuk-tuk': ['Bajaj','TVS','Piaggio','Hero','Italika','Wuzheng','Qingqi'],
+    'ATV / Cuatrimoto': ['Honda','Yamaha','Suzuki','Kawasaki','Polaris','Can-Am','CFMoto','Kymco','Hisun','Linhai','TGB','Segway','Bombardier'],
     'Motor de lancha': ['Yamaha','Mercury','Suzuki','Honda','Tohatsu','Evinrude','Johnson','Mariner','Parsun','Selva'],
-    'Motogenerador': ['Cummins','Caterpillar','Perkins','Kohler','Generac','Honda','Yamaha','Toyama','Firman','Hyundai','Pramac','FG Wilson','Power Value','Champion']
+    'Motogenerador': ['Cummins','Caterpillar','Perkins','Kohler','Generac','Honda','Yamaha','Toyama','Firman','Hyundai','Pramac','FG Wilson','Power Value','Champion'],
+    'Maquinaria Agrícola': ['John Deere','Kubota','Yanmar','Massey Ferguson','New Holland','Case IH','Claas','Agco','Stihl','Honda'],
+    'Montacargas / Industrial': ['Toyota','Crown','Hyster','Yale','Caterpillar','Jungheinrich','Linde','Komatsu','Nissan','Mitsubishi'],
   },
 
   /* Unidad de control de mantenimiento por tipo (km o horas de uso) */
-  _unidadPorTipo: { 'Motor de lancha': 'h', 'Motogenerador': 'h' },
+  _unidadPorTipo: {
+    'Motor de lancha': 'h', 'Motogenerador': 'h',
+    'Maquinaria Agrícola': 'h', 'Montacargas / Industrial': 'h',
+  },
 
   /* Modelos específicos por tipo+marca (evita mezclar con autos/motos) */
   _modelosEspeciales: {

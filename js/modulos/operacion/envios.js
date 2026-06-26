@@ -7,10 +7,14 @@ Modulos.envios = {
   _data: [], _ordenes: [], _tab: 'activos',
 
   _TIPOS: {
-    interno:   ['cyan',  '🏠 Interno'],
-    externo:   ['amber', '🚚 Flete externo'],
-    proveedor: ['purple','🏭 A proveedor'],
-    courier:   ['green', '📦 Courier'],
+    interno:    ['cyan',   '🏠 Interno (propio)'],
+    domicilio:  ['green',  '🏘️ Entrega a domicilio'],
+    recogida:   ['blue',   '🔄 Recogida en taller'],
+    externo:    ['amber',  '🚚 Flete externo'],
+    courier:    ['purple', '📦 Courier / mensajería'],
+    proveedor:  ['orange', '🏭 A proveedor / torno'],
+    traslado:   ['gray',   '↔️ Traslado inter-bodega'],
+    devolucion: ['red',    '↩️ Devolución'],
   },
   _ESTADOS: {
     programado:  ['gray',  'Programado'],
@@ -103,11 +107,13 @@ Modulos.envios = {
           <select class="form-select" id="env-tipo" onchange="Modulos.envios._onTipo()">
             ${Object.entries(this._TIPOS).map(([k,v])=>`<option value="${k}" ${e.tipo===k?'selected':''}>${v[1]}</option>`).join('')}
           </select></div>
-        <div class="form-group"><label class="form-label">Orden de trabajo (opcional)</label>
-          <select class="form-select" id="env-ot">
-            <option value="">Sin OT</option>
+        <div class="form-group"><label class="form-label">Referencia (OT / Cotización / Factura)</label>
+          <select class="form-select" id="env-ot" style="margin-bottom:4px">
+            <option value="">— Sin OT vinculada —</option>
             ${this._ordenes.map(o=>`<option value="${o.id}" ${e.orden_id===o.id?'selected':''}>${o.num} — ${o.vehiculos?.placa||''}</option>`).join('')}
-          </select></div>
+          </select>
+          <input class="form-input" id="env-ref-libre" value="${(e.referencias_extra||'').replace(/"/g,'&quot;')}"
+            placeholder="COT-0001 / FAC-0042 / # pedido / referencia libre..." style="font-size:12px"></div>
       </div>
       <div class="form-group"><label class="form-label">Descripción de lo enviado *</label>
         <input class="form-input" id="env-desc" value="${(e.descripcion||'').replace(/"/g,'&quot;')}" placeholder="Discos de freno / repuestos a Bodega Norte"></div>
@@ -209,6 +215,7 @@ Modulos.envios = {
       direccion: document.getElementById('env-dir')?.value.trim()||null,
       municipio: document.getElementById('env-muni')?.value.trim()||null,
       referencias: document.getElementById('env-refs')?.value.trim()||null,
+      referencias_extra: document.getElementById('env-ref-libre')?.value.trim()||null,
       orden_id: document.getElementById('env-ot')?.value||null,
       trabajo_externo_id: document.getElementById('env-te')?.value||null,
       empresa_transporte: tipo==='interno' ? null : (document.getElementById('env-empresa')?.value.trim()||null),

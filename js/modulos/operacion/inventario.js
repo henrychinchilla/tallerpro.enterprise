@@ -95,7 +95,16 @@ Modulos.inventario = {
       <div class="form-row">
         <div class="form-group"><label class="form-label">Categoría</label>
           <select class="form-select" id="inv-cat">
-            ${['Filtros','Aceites','Frenos','Motor','Eléctrico','Carrocería','Herramientas','Consumibles','Otro'].map(c=>`<option ${item.categoria===c?'selected':''}>${c}</option>`).join('')}
+            ${[
+              'Filtros','Aceites y Lubricantes','Frenos','Motor y Transmisión',
+              'Sistema Eléctrico','Suspensión y Dirección','Escape y Admisión','Carrocería y Pintura',
+              'Refrigerantes y Gases','Compresores y Partes A/C',
+              'Componentes Electrónicos','Pantallas y Repuestos','Baterías y Cargadores','Cables y Conectores',
+              'Perfiles y Tubería','Láminas y Planchas','Soldadura','Material PVC y Aluminio',
+              'Cuero y Materiales Peletería','Hilos y Pegamentos','Herrajes y Cierres',
+              'Herramientas y Equipos','Pinturas y Acabados','Químicos y Limpieza',
+              'Ferretería General','Insumos y Consumibles','Otro',
+            ].map(c=>`<option ${item.categoria===c?'selected':''}>${c}</option>`).join('')}
           </select></div>
         <div class="form-group"><label class="form-label">Proveedor</label>
           <select class="form-select" id="inv-prov">
