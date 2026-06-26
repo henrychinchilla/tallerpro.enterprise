@@ -39,7 +39,7 @@ Deno.serve(async (req) => {
   const serviceKey = Deno.env.get("SERVICE_ROLE_KEY") ?? Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
   const API_KEY    = Deno.env.get("RESEND_API_KEY");
   const FROM       = Deno.env.get("EMAIL_FROM") ?? "TallerPro <onboarding@resend.dev>";
-  const APP_URL    = Deno.env.get("APP_URL") ?? "https://tallerpro.telecommgt.com";
+  const APP_URL    = Deno.env.get("APP_URL") ?? "https://tallerpro.cmtelecommgt.com";
   const admin      = createClient(supaUrl, serviceKey);
 
   let body: any;

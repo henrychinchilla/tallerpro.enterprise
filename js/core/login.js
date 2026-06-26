@@ -5,9 +5,26 @@
 
 let _tenantLogin = null;
 
+const _svgGoogle = `<svg width="18" height="18" viewBox="0 0 18 18" style="flex-shrink:0"><path fill="#4285F4" d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.717v2.258h2.908c1.702-1.567 2.684-3.875 2.684-6.615z"/><path fill="#34A853" d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332C2.438 15.983 5.482 18 9 18z"/><path fill="#FBBC05" d="M3.964 10.71c-.18-.54-.282-1.117-.282-1.71s.102-1.17.282-1.71V4.958H.957C.347 6.173 0 7.548 0 9s.348 2.827.957 4.042l3.007-2.332z"/><path fill="#EA4335" d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0 5.482 0 2.438 2.017.957 4.958L3.964 6.29C4.672 4.163 6.656 3.58 9 3.58z"/></svg>`;
+
 function renderLogin(vista='login') {
   const screen = document.getElementById('login-screen');
   if (!screen) return;
+
+  const div_ = (txt='o') => `
+    <div style="display:flex;align-items:center;margin:14px 0 10px;gap:8px">
+      <hr style="flex:1;border:none;border-top:1px solid var(--border)">
+      <span style="font-size:12px;color:var(--text3)">${txt}</span>
+      <hr style="flex:1;border:none;border-top:1px solid var(--border)">
+    </div>`;
+
+  const btnGoogle = (intent, label) => `
+    <button onclick="loginConGoogle('${intent}')"
+      style="width:100%;padding:11px;border:1.5px solid var(--border);border-radius:8px;
+             background:var(--card);cursor:pointer;font-size:14px;font-weight:600;
+             display:flex;align-items:center;justify-content:center;gap:10px;color:var(--text1)">
+      ${_svgGoogle} ${label}
+    </button>`;
 
   const vistas = {
 
@@ -49,6 +66,9 @@ function renderLogin(vista='login') {
         <button class="btn btn-amber" style="width:100%;margin-top:8px" onclick="doLogin()">
           Iniciar Sesión →
         </button>
+
+        ${div_()}
+        ${btnGoogle('login', 'Continuar con Google')}
 
         <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
           <button class="btn btn-ghost btn-sm" style="flex:1" onclick="renderLogin('recovery')">
@@ -105,6 +125,10 @@ function renderLogin(vista='login') {
                      background:none;border:none;cursor:pointer;font-size:16px;color:var(--text3)">👁</button>
           </div>
         </div>
+        <div class="form-group">
+          <label class="form-label">Confirmar Contraseña *</label>
+          <input class="form-input" id="nt-pass2" type="password" placeholder="Repetir contraseña">
+        </div>
 
         <div id="nt-turnstile" style="margin-bottom:12px"></div>
 
@@ -117,6 +141,10 @@ function renderLogin(vista='login') {
         <button class="btn btn-amber" style="width:100%" onclick="loginRegistrarTaller()">
           Crear Mi Taller →
         </button>
+
+        ${div_('o regístrate con')}
+        ${btnGoogle('nuevo-taller', 'Continuar con Google')}
+
         <button class="btn btn-ghost" style="width:100%;margin-top:8px" onclick="renderLogin('login')">
           ← Volver
         </button>
@@ -168,6 +196,47 @@ function renderLogin(vista='login') {
         </button>
       </div>`,
 
+    'nuevo-taller-google': `
+      <div class="login-card">
+        <div class="login-logo">
+          <h1 style="font-size:28px">🏪 Crear tu Taller</h1>
+          <p>Completa los datos para activar tu cuenta</p>
+        </div>
+        <div id="ntg-userinfo"
+          style="background:var(--surface);border-radius:8px;padding:10px 14px;
+                 margin-bottom:16px;font-size:13px;color:var(--text2);border:1px solid var(--border)">
+          Cargando datos de Google...
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Nombre del Taller *</label>
+            <input class="form-input" id="ntg-nombre" placeholder="Auto Centro García">
+          </div>
+          <div class="form-group">
+            <label class="form-label">NIT</label>
+            <input class="form-input" id="ntg-nit" placeholder="1234567-8">
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Teléfono de contacto *</label>
+          <input class="form-input" id="ntg-tel" type="tel" placeholder="5555-5555">
+        </div>
+
+        <div class="alert alert-amber" style="margin-bottom:12px">
+          <div class="alert-icon">💡</div>
+          <div class="alert-body" style="font-size:11px">30 días de prueba gratuita · Sin tarjeta de crédito.
+          Tu taller se activa tras una breve revisión (te avisamos por correo).</div>
+        </div>
+
+        <button class="btn btn-amber" style="width:100%" onclick="loginRegistrarTallerGoogle()">
+          Crear Mi Taller →
+        </button>
+        <button class="btn btn-ghost" style="width:100%;margin-top:8px"
+          onclick="getSB().auth.signOut().then(()=>renderLogin('login'))">
+          ← Cancelar
+        </button>
+      </div>`,
+
     'cambiar-pass': `
       <div class="login-card">
         <div class="login-logo">
@@ -199,13 +268,13 @@ function renderLogin(vista='login') {
 
   screen.innerHTML = vistas[vista] || vistas.login;
 
-  /* Captcha Turnstile en el registro de talleres (si hay site key) */
   if (vista === 'nuevo-taller' && typeof TURNSTILE_SITE_KEY !== 'undefined' && TURNSTILE_SITE_KEY) {
     _cargarTurnstile();
   }
+  if (vista === 'nuevo-taller-google') _cargarInfoGoogle();
 }
 
-/* ── TURNSTILE (anti-bots) ────────────────────────── */
+/* ── TURNSTILE ────────────────────────────────────── */
 let _turnstileWidget = null;
 function _cargarTurnstile() {
   const render = () => {
@@ -217,12 +286,26 @@ function _cargarTurnstile() {
   if (window.turnstile) { render(); return; }
   const s = document.createElement('script');
   s.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
-  s.async = true;
-  s.onload = render;
+  s.async = true; s.onload = render;
   document.head.appendChild(s);
 }
 
-/* ── FUNCIONES DE LOGIN ───────────────────────────── */
+async function _cargarInfoGoogle() {
+  const el = document.getElementById('ntg-userinfo');
+  if (!el) return;
+  try {
+    const { data: { session } } = await getSB().auth.getSession();
+    if (!session?.user) return;
+    const { email, user_metadata } = session.user;
+    const nombre = user_metadata?.full_name ?? user_metadata?.name ?? email;
+    el.innerHTML = `${_svgGoogle} &nbsp;<b>${nombre}</b> <span style="color:var(--text3)">· ${email}</span>`;
+    el.style.display = 'flex';
+    el.style.alignItems = 'center';
+    el.style.gap = '8px';
+  } catch(_) {}
+}
+
+/* ── LOGIN ────────────────────────────────────────── */
 async function loginBuscarTaller() {
   const q = document.getElementById('l-taller')?.value.trim();
   if (!q) return;
@@ -239,7 +322,7 @@ async function loginBuscarTaller() {
 }
 
 function _seleccionarTaller(id, nombre, slug) {
-  _tenantLogin = { id, name:nombre, slug };
+  _tenantLogin = { id, name: nombre, slug };
   const el = document.getElementById('l-taller-result');
   if (el) el.innerHTML = `<span style="color:var(--green)">✓ ${nombre}</span>`;
   const inp = document.getElementById('l-taller');
@@ -249,42 +332,109 @@ function _seleccionarTaller(id, nombre, slug) {
 async function doLogin() {
   const email = document.getElementById('l-email')?.value.trim();
   const pass  = document.getElementById('l-pass')?.value;
-  if (!email) { UI.toast('Ingresa tu correo','error'); return; }
-  if (!pass)  { UI.toast('Ingresa tu contraseña','error'); return; }
+  if (!email) { UI.toast('Ingresa tu correo', 'error'); return; }
+  if (!pass)  { UI.toast('Ingresa tu contraseña', 'error'); return; }
 
-  UI.toast('Iniciando sesión...','info');
+  UI.toast('Iniciando sesión...', 'info');
   const r = await Auth.login(email, pass, _tenantLogin?.slug || null);
 
   if (r.ok) {
     if (r.debe_cambiar) { renderLogin('cambiar-pass'); return; }
     App.iniciar();
   } else {
-    UI.toast(r.error || 'Correo o contraseña incorrectos','error');
+    UI.toast(r.error || 'Correo o contraseña incorrectos', 'error');
   }
 }
 
+/* ── GOOGLE OAUTH ─────────────────────────────────── */
+async function loginConGoogle(intent = 'login') {
+  localStorage.setItem('google_intent', intent);
+  const { error } = await getSB().auth.signInWithOAuth({
+    provider: 'google',
+    options: { redirectTo: window.location.origin }
+  });
+  if (error) UI.toast('Error al conectar con Google: ' + error.message, 'error');
+}
+
+async function loginRegistrarTallerGoogle() {
+  const nombre = document.getElementById('ntg-nombre')?.value.trim();
+  const tel    = document.getElementById('ntg-tel')?.value.trim();
+  const nit    = document.getElementById('ntg-nit')?.value.trim();
+
+  if (!nombre) { UI.toast('Ingresa el nombre del taller', 'error'); return; }
+  if (!tel || !/^\+?[\d\s-]{8,15}$/.test(tel)) {
+    UI.toast('Ingresa un teléfono válido (mínimo 8 dígitos)', 'error'); return;
+  }
+
+  const { data: { session } } = await getSB().auth.getSession();
+  if (!session?.user) { renderLogin('login'); return; }
+
+  const email       = session.user.email;
+  const adminNombre = session.user.user_metadata?.full_name
+                   ?? session.user.user_metadata?.name
+                   ?? email.split('@')[0];
+
+  UI.toast('Registrando tu taller...', 'info');
+  const { data: rpcTenant, error: rpcErr } = await getSB().rpc('registrar_taller', {
+    p_nombre_taller: nombre,
+    p_nit:           nit || null,
+    p_email:         email,
+    p_nombre:        adminNombre,
+  });
+
+  if (rpcErr) { UI.toast('Error: ' + rpcErr.message, 'error'); return; }
+
+  /* Guardar teléfono — RPC no lo incluye en su firma original */
+  getSB().from('usuarios').update({ telefono: tel }).eq('email', email).then(() => {});
+
+  Auth.supaUser = session.user;
+  Auth.tenant   = rpcTenant;
+  Auth.user     = {
+    id: session.user.id, nombre: adminNombre, email,
+    rol: 'admin', activo: true, avatar: '👑', tenant_id: rpcTenant?.id
+  };
+  window._cachedTenantId = rpcTenant?.id || null;
+
+  renderLogin('login');
+  UI.modal('🎉 ¡Taller registrado!', `
+    <div style="text-align:center;padding:8px 4px">
+      <div style="font-size:44px;margin-bottom:10px">🏪</div>
+      <div style="font-weight:800;font-size:16px;margin-bottom:8px">${nombre}</div>
+      <p style="font-size:13px;color:var(--text2);line-height:1.6">
+        Tu registro fue recibido y tu taller está en <b>revisión de activación</b>
+        (normalmente en horas). Te avisaremos a <b>${email}</b> cuando esté listo
+        para iniciar tus <b>30 días de prueba gratis</b>.
+      </p>
+      <div class="modal-footer" style="justify-content:center">
+        <button class="btn btn-amber" onclick="UI.cerrarModal()">Entendido</button>
+      </div>
+    </div>`);
+}
+
+/* ── REGISTRO NUEVO TALLER (email/password) ────────── */
 async function loginRegistrarTaller() {
   const nombre = document.getElementById('nt-nombre')?.value.trim();
   const admin  = document.getElementById('nt-admin')?.value.trim();
   const email  = document.getElementById('nt-email')?.value.trim();
   const tel    = document.getElementById('nt-tel')?.value.trim();
   const pass   = document.getElementById('nt-pass')?.value;
+  const pass2  = document.getElementById('nt-pass2')?.value;
   const nit    = document.getElementById('nt-nit')?.value.trim();
 
-  if (!nombre||!admin||!email||!tel||!pass) { UI.toast('Completa todos los campos','error'); return; }
-  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { UI.toast('El correo no es válido','error'); return; }
-  if (!/^\+?[\d\s-]{8,15}$/.test(tel)) { UI.toast('El teléfono no es válido (mínimo 8 dígitos)','error'); return; }
-  if (pass.length < 8) { UI.toast('Contraseña mínimo 8 caracteres','error'); return; }
-  if (email === 'henry.chinchilla@gmail.com') { UI.toast('Correo reservado','error'); return; }
+  if (!nombre||!admin||!email||!tel||!pass) { UI.toast('Completa todos los campos', 'error'); return; }
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { UI.toast('El correo no es válido', 'error'); return; }
+  if (!/^\+?[\d\s-]{8,15}$/.test(tel)) { UI.toast('El teléfono no es válido (mínimo 8 dígitos)', 'error'); return; }
+  if (pass.length < 8) { UI.toast('Contraseña mínimo 8 caracteres', 'error'); return; }
+  if (pass !== pass2)  { UI.toast('Las contraseñas no coinciden', 'error'); return; }
+  if (email === 'henry.chinchilla@gmail.com') { UI.toast('Correo reservado', 'error'); return; }
 
-  /* Token del captcha (si Turnstile está activo) */
   let turnstile_token = null;
   if (typeof TURNSTILE_SITE_KEY !== 'undefined' && TURNSTILE_SITE_KEY && window.turnstile) {
     turnstile_token = window.turnstile.getResponse(_turnstileWidget);
-    if (!turnstile_token) { UI.toast('Completa la verificación de seguridad','error'); return; }
+    if (!turnstile_token) { UI.toast('Completa la verificación de seguridad', 'error'); return; }
   }
 
-  UI.toast('Registrando tu taller...','info');
+  UI.toast('Registrando tu taller...', 'info');
   const { data, error } = await getSB().functions.invoke('registrar-taller', {
     body: { nombre_taller: nombre, nit, nombre_admin: admin, email, telefono: tel, password: pass, turnstile_token }
   });
@@ -292,7 +442,7 @@ async function loginRegistrarTaller() {
   let msg = data?.error || null;
   if (error) { try { const j = await error.context.json(); msg = j?.error || error.message; } catch(_) { msg = error.message; } }
   if (msg) {
-    UI.toast(msg,'error');
+    UI.toast(msg, 'error');
     if (window.turnstile && _turnstileWidget !== null) window.turnstile.reset(_turnstileWidget);
     return;
   }
@@ -313,16 +463,17 @@ async function loginRegistrarTaller() {
     </div>`);
 }
 
+/* ── RECUPERACIÓN DE CONTRASEÑA ───────────────────── */
 async function loginRecuperarPass() {
   const email = document.getElementById('rc-email')?.value.trim();
-  if (!email) { UI.toast('Ingresa tu correo','error'); return; }
-  UI.toast('TallerPro está enviando el enlace a tu correo...','info');
+  if (!email) { UI.toast('Ingresa tu correo', 'error'); return; }
+  UI.toast('TallerPro está enviando el enlace a tu correo...', 'info');
   const { data, error } = await getSB().functions.invoke('recuperar-password', {
-    body: { op:'solicitar', email }
+    body: { op: 'solicitar', email }
   });
   let msg = data?.error || null;
   if (error) { try { const j = await error.context.json(); msg = j?.error || error.message; } catch(_) { msg = error.message; } }
-  if (msg) { UI.toast(msg,'error'); return; }
+  if (msg) { UI.toast(msg, 'error'); return; }
   UI.toast('TallerPro te enviará el enlace de recuperación a tu correo ✓');
   setTimeout(() => renderLogin('login'), 2500);
 }
@@ -330,11 +481,10 @@ async function loginRecuperarPass() {
 async function loginResetPass() {
   const p1 = document.getElementById('rs-pass1')?.value;
   const p2 = document.getElementById('rs-pass2')?.value;
-  if (!p1 || p1.length < 8) { UI.toast('Mínimo 8 caracteres','error'); return; }
-  if (p1 !== p2) { UI.toast('Las contraseñas no coinciden','error'); return; }
+  if (!p1 || p1.length < 8) { UI.toast('Mínimo 8 caracteres', 'error'); return; }
+  if (p1 !== p2) { UI.toast('Las contraseñas no coinciden', 'error'); return; }
   const r = await Auth.cambiarPassword(p1);
-  if (!r.ok) { UI.toast(r.error,'error'); return; }
-  /* Limpiar el hash del enlace de recuperación de la URL */
+  if (!r.ok) { UI.toast(r.error, 'error'); return; }
   history.replaceState(null, '', window.location.pathname);
   UI.toast('¡Contraseña actualizada! 🎉');
   setTimeout(() => App.iniciar(), 800);
@@ -343,18 +493,15 @@ async function loginResetPass() {
 async function loginCambiarPass() {
   const p1 = document.getElementById('cp-pass1')?.value;
   const p2 = document.getElementById('cp-pass2')?.value;
-  if (!p1||p1.length<8) { UI.toast('Mínimo 8 caracteres','error'); return; }
-  if (p1 !== p2) { UI.toast('Las contraseñas no coinciden','error'); return; }
+  if (!p1 || p1.length < 8) { UI.toast('Mínimo 8 caracteres', 'error'); return; }
+  if (p1 !== p2) { UI.toast('Las contraseñas no coinciden', 'error'); return; }
   const r = await Auth.cambiarPassword(p1);
-  if (!r.ok) { UI.toast('Error: '+r.error,'error'); return; }
+  if (!r.ok) { UI.toast('Error: ' + r.error, 'error'); return; }
   UI.toast('¡Contraseña guardada! ✓');
   setTimeout(() => App.iniciar(), 800);
 }
 
-
-/* Enlace de recuperación: Supabase emite el evento PASSWORD_RECOVERY
-   cuando el usuario regresa desde el correo. Mostramos el form de
-   nueva contraseña en vez de iniciar la app. */
+/* PASSWORD_RECOVERY event de Supabase */
 getSB().auth.onAuthStateChange((event) => {
   if (event === 'PASSWORD_RECOVERY') renderLogin('reset');
 });
@@ -362,7 +509,6 @@ getSB().auth.onAuthStateChange((event) => {
 window.addEventListener('load', async () => {
   TEMAS.aplicar(localStorage.getItem('tp_tema') || 'dark');
 
-  /* Si venimos de un enlace de recuperación, ir directo al reset */
   if (window.location.hash.includes('type=recovery')) {
     renderLogin('reset');
     return;
@@ -371,16 +517,26 @@ window.addEventListener('load', async () => {
   try {
     const { data: { session } } = await getSB().auth.getSession();
     if (session?.user) {
+      const intent = localStorage.getItem('google_intent');
+      localStorage.removeItem('google_intent');
+
       await Auth._cargarPerfil(session.user.id, session.user.email);
       Auth.supaUser = session.user;
       if (Auth.tenant?.id) window._cachedTenantId = Auth.tenant.id;
+
+      /* Google sin taller aún → completar registro */
+      if (!Auth.tenant && Auth.user?.rol !== 'superadmin') {
+        renderLogin('nuevo-taller-google');
+        return;
+      }
+
+      if (Auth.user?.debe_cambiar_password) { renderLogin('cambiar-pass'); return; }
       App.iniciar(); return;
     }
   } catch(e) { console.warn('Session:', e.message); }
+
   renderLogin('login');
 
-  /* Avisar el motivo si la sesión anterior se cerró por inactividad
-     o expiración (la dejó App._resetIdle / Supabase al expirar). */
   const reason = localStorage.getItem('tp_logout_reason');
   if (reason) {
     localStorage.removeItem('tp_logout_reason');
