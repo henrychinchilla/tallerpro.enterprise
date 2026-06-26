@@ -2,6 +2,9 @@
    Página de descarga de la app: PWA, Android, Windows, iOS */
 Modulos.descarga = {
 
+  _WIN_URL: 'https://github.com/henrychinchilla/tallerpro.enterprise/releases/download/v3.0.0-win/TallerPro-Setup-3.0.0.exe',
+  _APP_URL: 'https://tallerpro.cmtelecommgt.com',
+
   async render() {
     const el = document.getElementById('page-content');
 
@@ -75,29 +78,25 @@ Modulos.descarga = {
           </div>
 
           <!-- ── Windows ── -->
-          <div class="card" style="border:2px solid ${esWindows?'var(--cyan)':'var(--border)'}">
+          <div class="card" style="border:2px solid ${esWindows?'var(--amber)':'var(--border)'}">
             <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">
               <div style="font-size:36px">🖥️</div>
               <div>
                 <div style="font-weight:800;font-size:15px">Windows</div>
-                <div style="font-size:11px;color:var(--text3)">Windows 10 / 11</div>
+                <div style="font-size:11px;color:var(--text3)">Windows 10 / 11 (64-bit)</div>
               </div>
-              <span class="badge badge-cyan" style="margin-left:auto">PWA</span>
+              <span class="badge badge-green" style="margin-left:auto">Instalador</span>
             </div>
             <p style="font-size:12px;color:var(--text3);margin-bottom:14px">
-              En Windows se instala como Aplicación Web Progresiva (PWA) a través de Edge o Chrome. Aparece en el menú Inicio como cualquier programa.
+              Aplicación nativa para Windows. Instala desde el asistente, crea acceso directo en el Escritorio y el Menú Inicio, y aparece en Programas instalados.
             </p>
-            ${tienePrompt && esWindows ? `
-            <button class="btn btn-cyan" style="width:100%" onclick="App.instalarApp()">
-              🖥️ Instalar en Windows
-            </button>` : `
-            <div style="font-size:12px;color:var(--text3)">
-              <ol style="padding-left:18px;margin:0;line-height:2">
-                <li>Abre esta página en <b>Microsoft Edge</b> o <b>Google Chrome</b></li>
-                <li>Haz clic en el ícono <b>⊕</b> en la barra de direcciones</li>
-                <li>Selecciona <b>"Instalar TallerPro"</b></li>
-              </ol>
-            </div>`}
+            <a class="btn btn-amber" style="width:100%;display:block;text-align:center;text-decoration:none;margin-bottom:10px"
+               href="${this._WIN_URL}">
+              ⬇️ Descargar TallerPro-Setup-3.0.0.exe (~76 MB)
+            </a>
+            <div style="font-size:11px;color:var(--text3);background:var(--surface2);border-radius:8px;padding:8px 10px">
+              <b>ℹ️ SmartScreen:</b> Si Windows muestra "aplicación no reconocida", haz clic en <i>"Más información"</i> → <i>"Ejecutar de todas formas"</i>. Es normal para apps nuevas sin firma digital de Microsoft.
+            </div>
           </div>
 
           <!-- ── iOS ── -->
@@ -139,8 +138,8 @@ Modulos.descarga = {
             <div id="qr-descarga" style="background:#fff;padding:12px;border-radius:12px;display:inline-block"></div>
             <div style="text-align:left">
               <div style="font-size:13px;font-weight:700;margin-bottom:6px">URL de acceso:</div>
-              <code style="font-size:12px;background:var(--surface2);padding:6px 12px;border-radius:6px;display:block;margin-bottom:10px">tallerpro-enterprise.henry-chinchilla.workers.dev</code>
-              <button class="btn btn-ghost btn-sm" onclick="navigator.clipboard.writeText('https://tallerpro-enterprise.henry-chinchilla.workers.dev').then(()=>UI.toast('URL copiada ✓','success'))">
+              <code style="font-size:12px;background:var(--surface2);padding:6px 12px;border-radius:6px;display:block;margin-bottom:10px">tallerpro.cmtelecommgt.com</code>
+              <button class="btn btn-ghost btn-sm" onclick="navigator.clipboard.writeText('https://tallerpro.cmtelecommgt.com').then(()=>UI.toast('URL copiada ✓','success'))">
                 📋 Copiar URL
               </button>
             </div>
@@ -156,13 +155,11 @@ Modulos.descarga = {
   _generarQR() {
     const el = document.getElementById('qr-descarga');
     if (!el) return;
-    const url = 'https://tallerpro-enterprise.henry-chinchilla.workers.dev';
-    /* QR simple SVG sin dependencia externa */
-    el.innerHTML = `<a href="${url}" target="_blank" style="display:block;font-size:10px;color:#333;text-decoration:none;word-break:break-all;max-width:120px;text-align:center">
+    const url = this._APP_URL;
+    el.innerHTML = `<a href="${url}" target="_blank" style="display:block;font-size:10px;color:var(--text3);text-decoration:none;word-break:break-all;max-width:140px;text-align:center">
       <div style="font-size:48px;margin-bottom:4px">🔗</div>
-      tallerpro-enterprise<br>.henry-chinchilla<br>.workers.dev
+      tallerpro.cmtelecommgt.com
     </a>`;
-    /* Si hay librería QRCode disponible, reemplazar con QR real */
     if (typeof QRCode !== 'undefined') {
       el.innerHTML = '';
       new QRCode(el, { text: url, width: 120, height: 120, colorDark:'#000', colorLight:'#fff', correctLevel: QRCode.CorrectLevel.M });

@@ -8,7 +8,7 @@ const APP = {
   nombre:   'TallerPro Enterprise',
   version:  '3.1.0',
   build:    '20260610',
-  url:      'https://app.cmtelecommgt.com'
+  url:      'https://tallerpro.cmtelecommgt.com'
 };
 
 /* Site key pública de Cloudflare Turnstile (anti-bots en "Crear nuevo taller").
