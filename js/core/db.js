@@ -1076,6 +1076,56 @@ const DB = {
     return data || [];
   },
 
+  /* ── KPI MECÁNICOS — HORA-HOMBRE ─────────────────── */
+  async getOtHoras(ordenId) {
+    const { data } = await getSB().from('ot_horas')
+      .select('*, empleados(nombre,cargo)')
+      .eq('orden_id', ordenId)
+      .eq('tenant_id', getTID())
+      .order('fecha', { ascending: false });
+    return data || [];
+  },
+
+  async upsertOtHoras({ orden_id, mecanico_id, fecha, horas, notas }) {
+    const payload = { tenant_id: getTID(), orden_id, mecanico_id, fecha, horas, notas,
+                      updated_at: new Date().toISOString() };
+    const { data, error } = await getSB().from('ot_horas')
+      .upsert(payload, { onConflict: 'tenant_id,orden_id,mecanico_id,fecha' })
+      .select().single();
+    return { data, error };
+  },
+
+  async deleteOtHoras(id) {
+    const { error } = await getSB().from('ot_horas').delete()
+      .eq('id', id).eq('tenant_id', getTID());
+    return !error;
+  },
+
+  async getKpiMecanicos(ini, fin) {
+    /* Horas por mecánico + OTs en el período */
+    const [{ data: horas }, { data: ots }] = await Promise.all([
+      getSB().from('ot_horas')
+        .select('mecanico_id, horas, orden_id, fecha')
+        .eq('tenant_id', getTID())
+        .gte('fecha', ini).lte('fecha', fin),
+      getSB().from('ordenes')
+        .select('id, mecanico_id, estado, total, fecha_ingreso, fecha_estimada, fecha_entrega, es_garantia')
+        .eq('tenant_id', getTID())
+        .gte('fecha_ingreso', ini).lte('fecha_ingreso', fin)
+    ]);
+    return { horas: horas || [], ots: ots || [] };
+  },
+
+  async getOtHorasMecanicoDia(mecanicoId, fecha) {
+    /* Horas que ya tiene un mecánico registradas en un día — para sugerir distribución */
+    const { data } = await getSB().from('ot_horas')
+      .select('horas, orden_id')
+      .eq('tenant_id', getTID())
+      .eq('mecanico_id', mecanicoId)
+      .eq('fecha', fecha);
+    return data || [];
+  },
+
   /* Historial de scores/bonos para la tendencia del dashboard de KPIs */
   async getKpiHistorial() {
     const { data } = await getSB().from('kpi_empleado')

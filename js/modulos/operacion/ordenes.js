@@ -32,11 +32,15 @@ Modulos.ordenes = {
         </div>
       </div>
       <div class="page-body">
-        ${this._tab==='kanban' ? this._renderKanban() : this._renderLista()}
+        ${this._tab==='kpi' ? '' : (this._tab==='kanban' ? this._renderKanban() : this._renderLista())}
       </div>`;
   },
 
-  _ir(t){ this._tab=t; App._subActivo=t; App._guardarRuta(); App.renderSidebar(); this.render(); },
+  _ir(t){
+    this._tab=t; App._subActivo=t; App._guardarRuta(); App.renderSidebar();
+    if (t === 'kpi') { Modulos.kpi_mecanicos.render(); return; }
+    this.render();
+  },
 
   _filtrarTabla(busca) {
     const rows = document.querySelectorAll('#ot-tbody tr');

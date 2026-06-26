@@ -51,8 +51,9 @@ const MODULOS = [
   { id:'vehiculos',      icon:'🚗', label:'Vehículos',         grupo:'operacion'  },
   { id:'ordenes',        icon:'📋', label:'Órdenes de Trabajo', grupo:'operacion',
     subnav:[
-      { tab:'lista',  icon:'☰', label:'Lista'   },
-      { tab:'kanban', icon:'⬛', label:'Kanban'  }
+      { tab:'lista',  icon:'☰',  label:'Lista'          },
+      { tab:'kanban', icon:'⬛', label:'Kanban'          },
+      { tab:'kpi',    icon:'📊', label:'KPI Mecánicos'  }
     ] },
   { id:'cotizaciones',   icon:'📝', label:'Cotizaciones',      grupo:'operacion'  },
   { id:'inventario',     icon:'📦', label:'Inventario',        grupo:'operacion'  },
