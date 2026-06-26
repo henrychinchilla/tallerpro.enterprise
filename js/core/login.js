@@ -354,7 +354,7 @@ let _otpEmail = null;
 async function loginSolicitarOTP() {
   const email = document.getElementById('rc-email')?.value.trim();
   if (!email) { UI.toast('Ingresa tu correo','error'); return; }
-  UI.toast('Enviando código...','info');
+  UI.toast('TallerPro está enviando tu código...','info');
   const { data, error } = await getSB().functions.invoke('recuperar-password', {
     body: { op:'solicitar', email }
   });
@@ -362,7 +362,7 @@ async function loginSolicitarOTP() {
   if (error) { try { const j = await error.context.json(); msg = j?.error || error.message; } catch(_) { msg = error.message; } }
   if (msg) { UI.toast(msg,'error'); return; }
   _otpEmail = email;
-  UI.toast('Si el correo existe, recibirás un código de 6 dígitos ✓');
+  UI.toast('TallerPro te enviará el código a tu correo ✓');
   renderLogin('recovery-otp');
 }
 
@@ -390,11 +390,10 @@ async function loginVerificarOTP() {
 async function loginRecuperarPass() {
   const email = document.getElementById('rc-email')?.value.trim();
   if (!email) { UI.toast('Ingresa tu correo','error'); return; }
-  UI.toast('Enviando enlace...','info');
+  UI.toast('TallerPro está enviando el enlace a tu correo...','info');
   const r = await Auth.recuperarPassword(email);
   if (!r.ok) { UI.toast(r.error,'error'); return; }
-  /* Mensaje neutro: no revelar si el correo existe o no */
-  UI.toast('Si el correo existe, recibirás un enlace de recuperación ✓');
+  UI.toast('TallerPro te enviará el enlace de recuperación a tu correo ✓');
   setTimeout(() => renderLogin('login'), 2500);
 }
 
