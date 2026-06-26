@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body {
+  width:1080px; height:1920px; overflow:hidden;
+  font-family:'Segoe UI',system-ui,sans-serif;
+  background:linear-gradient(160deg,#0a0e1a 0%,#0f1729 60%,#111827 100%);
+  color:#fff;
+}
+.status-bar {
+  display:flex; justify-content:space-between; align-items:center;
+  padding:20px 40px 10px; font-size:28px; font-weight:700;
+}
+.header {
+  padding:20px 40px 30px;
+  background:linear-gradient(135deg,#0f1e3d,#1a3a6b);
+}
+.header h1 { font-size:48px; font-weight:900; }
+.header p { font-size:24px; opacity:.6; margin-top:8px; }
+
+.section { padding:30px 40px 0; }
+.section-lbl {
+  font-size:24px; font-weight:800; color:rgba(255,255,255,0.45);
+  text-transform:uppercase; letter-spacing:1.5px; margin-bottom:18px;
+}
+
+.mod-grid { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+.mod-card {
+  border-radius:20px; padding:28px; position:relative; overflow:hidden;
+}
+.mod-card .icon { font-size:44px; margin-bottom:14px; }
+.mod-card h3 { font-size:28px; font-weight:800; margin-bottom:6px; }
+.mod-card p { font-size:21px; opacity:.65; }
+.mod-card .tag {
+  position:absolute; top:16px; right:16px;
+  background:rgba(255,255,255,0.1); border-radius:30px;
+  padding:5px 14px; font-size:18px; font-weight:700;
+}
+
+.card-mec { background:linear-gradient(135deg,rgba(59,130,246,.2),rgba(29,78,216,.15)); border:1px solid rgba(59,130,246,.3); }
+.card-elec { background:linear-gradient(135deg,rgba(168,85,247,.2),rgba(109,40,217,.15)); border:1px solid rgba(168,85,247,.3); }
+.card-refri { background:linear-gradient(135deg,rgba(6,182,212,.2),rgba(8,145,178,.15)); border:1px solid rgba(6,182,212,.3); }
+.card-herr { background:linear-gradient(135deg,rgba(249,115,22,.2),rgba(194,65,12,.15)); border:1px solid rgba(249,115,22,.3); }
+.card-pel { background:linear-gradient(135deg,rgba(234,179,8,.2),rgba(161,98,7,.15)); border:1px solid rgba(234,179,8,.3); }
+.card-cot { background:linear-gradient(135deg,rgba(34,197,94,.2),rgba(21,128,61,.15)); border:1px solid rgba(34,197,94,.3); }
+
+.features { padding:24px 40px 0; display:flex; flex-direction:column; gap:12px; }
+.feat {
+  display:flex; align-items:center; gap:16px;
+  background:rgba(255,255,255,0.04);
+  border:1px solid rgba(255,255,255,0.07);
+  border-radius:14px; padding:22px 24px;
+}
+.feat .ic { font-size:34px; width:50px; text-align:center; flex-shrink:0; }
+.feat .txt h4 { font-size:26px; font-weight:700; margin-bottom:4px; }
+.feat .txt p { font-size:21px; opacity:.55; }
+
+.bottom-cta {
+  position:absolute; bottom:50px; left:40px; right:40px;
+  background:linear-gradient(135deg,#1d4ed8,#3b82f6);
+  border-radius:20px; padding:30px; text-align:center;
+}
+.bottom-cta h2 { font-size:34px; font-weight:900; margin-bottom:8px; }
+.bottom-cta p { font-size:22px; opacity:.8; }
+</style>
+</head>
+<body>
+
+<div class="status-bar"><span>9:41</span><span>● ● ●</span></div>
+
+<div class="header">
+  <h1>TallerPro Enterprise</h1>
+  <p>Plataforma multi-negocio · Módulos a la medida</p>
+</div>
+
+<div class="section">
+  <div class="section-lbl">Módulos Especializados</div>
+  <div class="mod-grid">
+    <div class="mod-card card-mec">
+      <div class="icon">🔧</div>
+      <h3>Mecánica</h3>
+      <p>Vehículos, OTs, diagnóstico</p>
+      <div class="tag">Core</div>
+    </div>
+    <div class="mod-card card-elec">
+      <div class="icon">🔌</div>
+      <h3>Electrónica</h3>
+      <p>Celulares, TVs, electrodomésticos</p>
+    </div>
+    <div class="mod-card card-refri">
+      <div class="icon">❄️</div>
+      <h3>Refrigeración</h3>
+      <p>Cuartos fríos, chillers, A/C</p>
+    </div>
+    <div class="mod-card card-herr">
+      <div class="icon">⚒️</div>
+      <h3>Herrería</h3>
+      <p>Trabajos metálicos, puertas</p>
+    </div>
+    <div class="mod-card card-pel">
+      <div class="icon">🎒</div>
+      <h3>Peletería</h3>
+      <p>Calzado, marroquinería</p>
+    </div>
+    <div class="mod-card card-cot">
+      <div class="icon">📋</div>
+      <h3>Cotizaciones</h3>
+      <p>Presupuestos → Facturas</p>
+    </div>
+  </div>
+</div>
+
+<div class="features">
+  <div class="feat">
+    <div class="ic">🧾</div>
+    <div class="txt">
+      <h4>Factura FEL · SAT Guatemala</h4>
+      <p>Emisión electrónica certificada en segundos</p>
+    </div>
+  </div>
+  <div class="feat">
+    <div class="ic">👥</div>
+    <div class="txt">
+      <h4>RRHH Completo</h4>
+      <p>Planillas, IGSS/IRTRA, asistencia digital</p>
+    </div>
+  </div>
+  <div class="feat">
+    <div class="ic">🤖</div>
+    <div class="txt">
+      <h4>Beto IA — Asistente Técnico</h4>
+      <p>Diagnósticos y asesoría por inteligencia artificial</p>
+    </div>
+  </div>
+</div>
+
+<div class="bottom-cta">
+  <h2>Un sistema, todos tus negocios</h2>
+  <p>Configura solo los módulos que necesitas · tallerpro.telecommgt.com</p>
+</div>
+
+</body>
+</html>

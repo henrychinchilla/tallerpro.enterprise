@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body {
+  width:1080px; height:1920px; overflow:hidden;
+  font-family:'Segoe UI',system-ui,sans-serif;
+  background:#0f1729; color:#fff;
+}
+.status-bar {
+  display:flex; justify-content:space-between; align-items:center;
+  padding:20px 40px 10px; font-size:28px; font-weight:700;
+  color:rgba(255,255,255,0.9);
+  background:linear-gradient(180deg,#0f1729,transparent);
+}
+.header {
+  padding:16px 40px 24px;
+  background:linear-gradient(135deg,#0f1e3d,#1a3a6b);
+}
+.header .back { font-size:26px; opacity:.6; margin-bottom:12px; }
+.header h1 { font-size:52px; font-weight:900; }
+.header p { font-size:24px; opacity:.6; margin-top:6px; }
+
+.search-bar {
+  margin:24px 40px 0;
+  background:rgba(255,255,255,0.08);
+  border:1px solid rgba(255,255,255,0.15);
+  border-radius:16px; padding:20px 28px;
+  display:flex; gap:16px; align-items:center;
+  font-size:26px; color:rgba(255,255,255,0.5);
+}
+.tabs {
+  display:flex; gap:0; margin:24px 40px 0;
+  background:rgba(255,255,255,0.05);
+  border-radius:14px; padding:6px; overflow:hidden;
+}
+.tab {
+  flex:1; text-align:center; padding:18px;
+  border-radius:10px; font-size:24px; font-weight:700;
+  color:rgba(255,255,255,0.4);
+}
+.tab.active {
+  background:linear-gradient(135deg,#1d4ed8,#3b82f6);
+  color:#fff;
+}
+
+.list { padding:24px 40px 0; }
+.ot-card {
+  background:rgba(255,255,255,0.06);
+  border:1px solid rgba(255,255,255,0.09);
+  border-radius:20px; padding:28px; margin-bottom:16px;
+  position:relative; overflow:hidden;
+}
+.ot-card::before {
+  content:''; position:absolute; left:0; top:0; bottom:0;
+  width:6px; border-radius:3px 0 0 3px;
+}
+.ot-card.pend::before { background:#fbbf24; }
+.ot-card.prog::before { background:#3b82f6; }
+.ot-card.diag::before { background:#a855f7; }
+.ot-card.list::before { background:#22c55e; }
+
+.ot-top { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:10px; }
+.ot-num { font-size:28px; font-weight:900; color:#60a5fa; }
+.ot-badge {
+  padding:8px 18px; border-radius:30px; font-size:20px; font-weight:700;
+}
+.pend .ot-badge { background:rgba(251,191,36,0.15); color:#fbbf24; border:1px solid #fbbf24; }
+.prog .ot-badge { background:rgba(59,130,246,0.15); color:#60a5fa; border:1px solid #3b82f6; }
+.diag .ot-badge { background:rgba(168,85,247,0.15); color:#c084fc; border:1px solid #a855f7; }
+.list .ot-badge { background:rgba(34,197,94,0.15); color:#4ade80; border:1px solid #22c55e; }
+
+.ot-title { font-size:30px; font-weight:800; margin-bottom:8px; }
+.ot-sub { font-size:23px; opacity:.6; margin-bottom:14px; }
+.ot-footer { display:flex; justify-content:space-between; align-items:center; }
+.ot-client { font-size:22px; opacity:.65; }
+.ot-price { font-size:28px; font-weight:800; color:#4ade80; }
+.ot-mec { font-size:21px; opacity:.5; }
+
+.fab {
+  position:absolute; bottom:100px; right:40px;
+  width:100px; height:100px; border-radius:50%;
+  background:linear-gradient(135deg,#3b82f6,#1d4ed8);
+  display:flex; align-items:center; justify-content:center;
+  font-size:50px; box-shadow:0 8px 32px rgba(59,130,246,0.5);
+}
+</style>
+</head>
+<body>
+
+<div class="status-bar"><span>9:41</span><span>● ● ●</span></div>
+
+<div class="header">
+  <div class="back">← Menú</div>
+  <h1>Órdenes de Trabajo</h1>
+  <p>24 activas · Junio 2026</p>
+</div>
+
+<div class="search-bar">🔍 Buscar por cliente, placa o número…</div>
+
+<div class="tabs">
+  <div class="tab active">Todas</div>
+  <div class="tab">Hoy</div>
+  <div class="tab">Pendiente</div>
+  <div class="tab">Entregadas</div>
+</div>
+
+<div class="list">
+  <div class="ot-card prog">
+    <div class="ot-top">
+      <div class="ot-num">OT-0892</div>
+      <div class="ot-badge">En Proceso</div>
+    </div>
+    <div class="ot-title">Toyota Hilux 2021 · P 123 ABC</div>
+    <div class="ot-sub">Cambio de frenos delanteros + alineación</div>
+    <div class="ot-footer">
+      <div>
+        <div class="ot-client">👤 Carlos Monterroso</div>
+        <div class="ot-mec">🔧 Mecánico: José R.</div>
+      </div>
+      <div class="ot-price">Q 1,850</div>
+    </div>
+  </div>
+
+  <div class="ot-card pend">
+    <div class="ot-top">
+      <div class="ot-num">OT-0891</div>
+      <div class="ot-badge">Pendiente</div>
+    </div>
+    <div class="ot-title">Refrigeradora LG 18 pies</div>
+    <div class="ot-sub">No enfría — posible fuga de refrigerante</div>
+    <div class="ot-footer">
+      <div>
+        <div class="ot-client">👤 Ana Gómez de Paz</div>
+        <div class="ot-mec">🔌 Módulo: Electrónica</div>
+      </div>
+      <div class="ot-price">Q 650</div>
+    </div>
+  </div>
+
+  <div class="ot-card diag">
+    <div class="ot-top">
+      <div class="ot-num">OT-0890</div>
+      <div class="ot-badge">Diagnóstico</div>
+    </div>
+    <div class="ot-title">Samsung Galaxy S22 · Pantalla</div>
+    <div class="ot-sub">Pantalla rota — cotización pendiente de aprobación</div>
+    <div class="ot-footer">
+      <div>
+        <div class="ot-client">👤 Luis Fernando Ajú</div>
+        <div class="ot-mec">📱 Módulo: Electrónica</div>
+      </div>
+      <div class="ot-price">Q 420</div>
+    </div>
+  </div>
+
+  <div class="ot-card list">
+    <div class="ot-top">
+      <div class="ot-num">OT-0889</div>
+      <div class="ot-badge">Listo</div>
+    </div>
+    <div class="ot-title">Puerta de herrería — Colonia Las Flores</div>
+    <div class="ot-sub">Puerta corrediza 3m × 2m con motor automático</div>
+    <div class="ot-footer">
+      <div>
+        <div class="ot-client">👤 Constructora APEX</div>
+        <div class="ot-mec">🔨 Módulo: Herrería</div>
+      </div>
+      <div class="ot-price">Q 8,200</div>
+    </div>
+  </div>
+</div>
+
+<div class="fab">+</div>
+
+</body>
+</html>

@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body {
+  width:1080px; height:1920px; overflow:hidden;
+  font-family:'Segoe UI',system-ui,sans-serif;
+  background:linear-gradient(160deg,#0a0f1e 0%,#0f1729 50%,#111827 100%);
+  color:#fff;
+}
+.status-bar {
+  display:flex; justify-content:space-between; align-items:center;
+  padding:20px 40px 10px; font-size:28px; font-weight:700;
+}
+.header {
+  padding:20px 40px 24px;
+  display:flex; align-items:center; gap:20px;
+  background:linear-gradient(135deg,#0f1e3d,#1a2d50);
+  border-bottom:1px solid rgba(255,255,255,0.08);
+}
+.beto-avatar {
+  width:80px; height:80px; border-radius:50%;
+  background:linear-gradient(135deg,#7c3aed,#4f46e5,#3b82f6);
+  display:flex; align-items:center; justify-content:center;
+  font-size:36px;
+  box-shadow:0 0 30px rgba(124,58,237,0.4);
+}
+.beto-info h2 { font-size:34px; font-weight:900; }
+.beto-info p { font-size:22px; opacity:.6; margin-top:4px; }
+.online-dot {
+  width:16px; height:16px; border-radius:50%;
+  background:#22c55e; margin-left:auto;
+  box-shadow:0 0 10px #22c55e;
+}
+
+.chat { padding:30px 40px; display:flex; flex-direction:column; gap:20px; }
+
+.msg { display:flex; gap:16px; max-width:85%; }
+.msg.beto { align-self:flex-start; }
+.msg.user { align-self:flex-end; flex-direction:row-reverse; }
+
+.msg .av {
+  width:52px; height:52px; border-radius:50%;
+  background:linear-gradient(135deg,#7c3aed,#3b82f6);
+  display:flex; align-items:center; justify-content:center;
+  font-size:22px; flex-shrink:0; align-self:flex-end;
+}
+.msg.user .av {
+  background:linear-gradient(135deg,#1d4ed8,#3b82f6);
+}
+
+.bubble {
+  padding:22px 26px; border-radius:20px; font-size:24px; line-height:1.55;
+}
+.msg.beto .bubble {
+  background:rgba(124,58,237,0.15);
+  border:1px solid rgba(124,58,237,0.3);
+  border-bottom-left-radius:6px;
+}
+.msg.user .bubble {
+  background:linear-gradient(135deg,#1d4ed8,#3b82f6);
+  border-bottom-right-radius:6px;
+}
+
+.bubble strong { color:#a78bfa; }
+.bubble .highlight {
+  background:rgba(124,58,237,0.2);
+  border-left:4px solid #7c3aed;
+  padding:12px 16px; border-radius:8px;
+  margin-top:12px; font-size:22px;
+  font-weight:700;
+}
+
+.typing {
+  display:flex; gap:16px; align-items:center;
+  padding:0 40px;
+}
+.typing .av {
+  width:52px; height:52px; border-radius:50%;
+  background:linear-gradient(135deg,#7c3aed,#3b82f6);
+  display:flex; align-items:center; justify-content:center;
+  font-size:22px;
+}
+.dots {
+  background:rgba(124,58,237,0.15); border:1px solid rgba(124,58,237,0.3);
+  border-radius:16px; padding:20px 26px;
+  display:flex; gap:10px; align-items:center;
+}
+.dot { width:14px; height:14px; border-radius:50%; background:#7c3aed; opacity:.6; }
+
+.input-area {
+  position:absolute; bottom:0; left:0; right:0;
+  background:rgba(10,15,30,0.97); border-top:1px solid rgba(255,255,255,0.08);
+  padding:24px 40px 50px; display:flex; gap:16px; align-items:center;
+}
+.input-box {
+  flex:1; background:rgba(255,255,255,0.07);
+  border:1px solid rgba(255,255,255,0.15);
+  border-radius:50px; padding:22px 32px;
+  font-size:26px; color:rgba(255,255,255,0.5);
+}
+.send-btn {
+  width:80px; height:80px; border-radius:50%;
+  background:linear-gradient(135deg,#7c3aed,#4f46e5);
+  display:flex; align-items:center; justify-content:center;
+  font-size:32px;
+}
+</style>
+</head>
+<body>
+
+<div class="status-bar"><span>9:41</span><span>● ● ●</span></div>
+
+<div class="header">
+  <div class="beto-avatar">🤖</div>
+  <div class="beto-info">
+    <h2>Beto IA</h2>
+    <p>Asistente técnico especializado</p>
+  </div>
+  <div class="online-dot"></div>
+</div>
+
+<div class="chat">
+  <div class="msg beto">
+    <div class="av">🤖</div>
+    <div class="bubble">
+      ¡Hola! Soy <strong>Beto</strong>, tu asistente técnico. Puedo ayudarte con diagnósticos de vehículos, electrónica, electrodomésticos, refrigeración y más. ¿En qué te ayudo hoy?
+    </div>
+  </div>
+
+  <div class="msg user">
+    <div class="av">👤</div>
+    <div class="bubble">
+      Tengo una refrigeradora que enciende pero no enfría. Se escucha el compresor trabajando pero también un sonido como agua corriendo.
+    </div>
+  </div>
+
+  <div class="msg beto">
+    <div class="av">🤖</div>
+    <div class="bubble">
+      Eso es una <strong>fuga de refrigerante</strong>, casi seguro. Los síntomas son clásicos:
+      <div class="highlight">
+        🔍 Compresor activo + sonido de agua + sin enfriamiento = gas refrigerante escapado
+      </div>
+      El líquido sobrante circula por los capilares sin presión suficiente.<br><br>
+      <strong>Pasos a seguir:</strong><br>
+      1. Conectar manifold de presión — R134a debe marcar 70-100 PSI en reposo<br>
+      2. Buscar fuga con agua jabonosa en las uniones<br>
+      3. Si el evaporador está corroído: cambio de pieza<br>
+      4. Vacío 30 min + recarga según placa (80-120 g)
+    </div>
+  </div>
+</div>
+
+<div class="typing">
+  <div class="av">🤖</div>
+  <div class="dots">
+    <div class="dot"></div>
+    <div class="dot"></div>
+    <div class="dot"></div>
+  </div>
+</div>
+
+<div class="input-area">
+  <div class="input-box">Escribe tu consulta técnica…</div>
+  <div class="send-btn">➤</div>
+</div>
+
+</body>
+</html>

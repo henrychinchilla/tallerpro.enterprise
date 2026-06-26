@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body {
+  width:1080px; height:1920px; overflow:hidden;
+  font-family:'Segoe UI',system-ui,sans-serif;
+  background:#0d1117; color:#fff;
+}
+.status-bar {
+  display:flex; justify-content:space-between; align-items:center;
+  padding:20px 40px 10px; font-size:28px; font-weight:700;
+}
+.header {
+  padding:20px 40px 24px;
+  background:linear-gradient(135deg,#0f1e3d,#1a3a6b);
+}
+.header .back { font-size:26px; opacity:.6; margin-bottom:10px; }
+.header h1 { font-size:48px; font-weight:900; }
+.header p { font-size:22px; opacity:.6; margin-top:6px; }
+
+.fel-badge {
+  display:inline-flex; align-items:center; gap:10px;
+  background:linear-gradient(135deg,rgba(34,197,94,.15),rgba(34,197,94,.05));
+  border:1px solid #22c55e; border-radius:10px;
+  padding:10px 20px; font-size:22px; font-weight:700; color:#4ade80;
+  margin:20px 40px 0;
+}
+
+.card {
+  background:rgba(255,255,255,0.05);
+  border:1px solid rgba(255,255,255,0.09);
+  border-radius:20px; margin:20px 40px 0; padding:30px;
+}
+.card-title {
+  font-size:24px; font-weight:800; color:rgba(255,255,255,0.5);
+  text-transform:uppercase; letter-spacing:1px; margin-bottom:16px;
+}
+.field { margin-bottom:14px; }
+.field label { display:block; font-size:21px; opacity:.55; margin-bottom:6px; }
+.field .val { font-size:28px; font-weight:700; }
+
+.items-table { width:100%; }
+.items-table th {
+  font-size:21px; font-weight:700; opacity:.5; text-align:left;
+  padding:0 0 12px; border-bottom:1px solid rgba(255,255,255,0.1);
+}
+.items-table td {
+  padding:14px 0; font-size:24px;
+  border-bottom:1px solid rgba(255,255,255,0.05);
+}
+.items-table td.price { text-align:right; color:#60a5fa; font-weight:700; }
+
+.totals { margin:20px 40px 0; }
+.total-row {
+  display:flex; justify-content:space-between;
+  padding:16px 0; border-bottom:1px solid rgba(255,255,255,0.06);
+  font-size:26px;
+}
+.total-row .lbl { opacity:.6; }
+.total-row.grand {
+  border-bottom:none; padding-top:20px;
+  font-size:36px; font-weight:900;
+}
+.total-row.grand .amount { color:#4ade80; }
+
+.actions { display:flex; gap:16px; padding:24px 40px; }
+.btn-main {
+  flex:2; background:linear-gradient(135deg,#16a34a,#22c55e);
+  color:#fff; border:none; border-radius:16px;
+  padding:28px; font-size:28px; font-weight:800; text-align:center;
+}
+.btn-sec {
+  flex:1; background:rgba(255,255,255,0.07);
+  border:1px solid rgba(255,255,255,0.15);
+  border-radius:16px; padding:28px;
+  font-size:28px; font-weight:800; text-align:center;
+}
+
+.sat-note {
+  margin:0 40px; padding:20px 24px;
+  background:rgba(34,197,94,0.08); border:1px solid rgba(34,197,94,0.2);
+  border-radius:14px; font-size:22px; color:#4ade80;
+  display:flex; gap:12px; align-items:center;
+}
+</style>
+</head>
+<body>
+
+<div class="status-bar"><span>9:41</span><span>● ● ●</span></div>
+
+<div class="header">
+  <div class="back">← OT-0892</div>
+  <h1>Nueva Factura FEL</h1>
+  <p>Facturación electrónica · SAT Guatemala</p>
+</div>
+
+<div class="fel-badge">✓ Conectado a SAT · FEL Activo</div>
+
+<div class="card">
+  <div class="card-title">Cliente</div>
+  <div class="field">
+    <label>Nombre</label>
+    <div class="val">Carlos Monterroso García</div>
+  </div>
+  <div class="field">
+    <label>NIT</label>
+    <div class="val">8234567-K</div>
+  </div>
+  <div class="field">
+    <label>Dirección</label>
+    <div class="val">Zona 10, Guatemala City</div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-title">Detalle de Servicios</div>
+  <table class="items-table">
+    <thead>
+      <tr>
+        <th>Descripción</th>
+        <th style="text-align:right">Total</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Cambio de pastillas de freno delanteras<br><small style="opacity:.5">2 unidades · Marca Bosch</small></td>
+        <td class="price">Q 680.00</td>
+      </tr>
+      <tr>
+        <td>Alineación y balanceo 4 ruedas</td>
+        <td class="price">Q 320.00</td>
+      </tr>
+      <tr>
+        <td>Mano de obra mecánica<br><small style="opacity:.5">2.5 horas × Q 340</small></td>
+        <td class="price">Q 850.00</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<div class="totals">
+  <div class="total-row">
+    <span class="lbl">Subtotal</span>
+    <span>Q 1,666.67</span>
+  </div>
+  <div class="total-row">
+    <span class="lbl">IVA (12%)</span>
+    <span>Q 183.33</span>
+  </div>
+  <div class="total-row grand">
+    <span>TOTAL</span>
+    <span class="amount">Q 1,850.00</span>
+  </div>
+</div>
+
+<div class="sat-note">
+  📄 Se emitirá Factura Electrónica FEL certificada por la SAT automáticamente
+</div>
+
+<div class="actions">
+  <div class="btn-main">⚡ Emitir Factura FEL</div>
+  <div class="btn-sec">🖨️ PDF</div>
+</div>
+
+</body>
+</html>
