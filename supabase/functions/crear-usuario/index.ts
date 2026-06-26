@@ -86,7 +86,6 @@ Deno.serve(async (req) => {
   if (!email || !password || !nombre || !rol) {
     return json({ error: "Faltan campos: email, password, nombre, rol" }, 400);
   }
-  // Todo usuario debe tener email y teléfono VÁLIDOS (recuperación/OTP)
   if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
     return json({ error: "El correo no es válido" }, 400);
   }
@@ -95,7 +94,6 @@ Deno.serve(async (req) => {
   }
 
   // El tenant destino: superadmin puede especificarlo; si no, usa el tenant del perfil del admin.
-  // Superadmin operando desde dentro de un tenant envía el tenant_id activo como fallback.
   const tenantDestino = (esSuperadmin && tenant_id) ? tenant_id : (perfil?.tenant_id ?? tenant_id);
   if (!tenantDestino) return json({ error: "No se pudo determinar el taller de destino. Recarga e intenta de nuevo." }, 400);
 
@@ -104,7 +102,14 @@ Deno.serve(async (req) => {
     return json({ error: "No puedes crear superadministradores" }, 403);
   }
 
-  // ── 4. Crear auth user ──
+  // ── 4. Verificar que el email no esté ya en uso ──
+  const { data: emailExiste } = await admin.from("usuarios")
+    .select("id, tenant_id").eq("email", email).maybeSingle();
+  if (emailExiste) {
+    return json({ error: "El correo ya está registrado en el sistema." }, 400);
+  }
+
+  // ── 5. Crear auth user ──
   const { data: created, error: createErr } = await admin.auth.admin.createUser({
     email,
     password,
@@ -112,11 +117,15 @@ Deno.serve(async (req) => {
     user_metadata: { nombre, rol },
   });
   if (createErr || !created?.user) {
-    return json({ error: createErr?.message ?? "No se pudo crear el auth user" }, 400);
+    const msg = createErr?.message ?? "";
+    if (msg.toLowerCase().includes("already") || msg.toLowerCase().includes("existe")) {
+      return json({ error: "El correo ya está registrado en el sistema." }, 400);
+    }
+    return json({ error: msg || "No se pudo crear el usuario" }, 400);
   }
 
-  // ── 5. Insertar perfil en el tenant ──
-  const { error: insErr } = await admin.from("usuarios").insert({
+  // ── 6. Insertar perfil en el tenant (upsert por seguridad) ──
+  const { error: insErr } = await admin.from("usuarios").upsert({
     id: created.user.id,
     tenant_id: tenantDestino,
     nombre,
@@ -126,12 +135,11 @@ Deno.serve(async (req) => {
     avatar: avatar ?? "👤",
     activo: true,
     debe_cambiar_password: true,
-  });
+  }, { onConflict: "id" });
 
   if (insErr) {
-    // rollback del auth user para no dejar huérfanos
     await admin.auth.admin.deleteUser(created.user.id);
-    return json({ error: "No se pudo crear el perfil: " + insErr.message }, 400);
+    return json({ error: "No se pudo guardar el perfil: " + insErr.message }, 400);
   }
 
   return json({ ok: true, id: created.user.id });
