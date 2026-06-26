@@ -27,12 +27,23 @@ Modulos.admin = {
 
   _ir(t){ this._tab=t; App._subActivo=t; App._guardarRuta(); App.renderSidebar(); App.marcarTabActivo(t); this._renderTab(); },
 
+  async _toggleImportadora(val) {
+    const fiscal = await DB.getConfigFiscal().catch(()=>({}));
+    const { error } = await DB.saveConfigFiscal({ ...fiscal, es_importadora: !!val });
+    if (error) { UI.toast('Error: '+error.message,'error'); return; }
+    const lbl = document.querySelector('#adm-importadora + span');
+    if (lbl) lbl.textContent = val ? 'Sí — activa' : 'No';
+    UI.toast(val ? '📦 Empresa importadora activada — DUA/DAI disponibles en Compras' : 'Modo importadora desactivado', 'success', 4000);
+  },
+
   async _renderTab() {
     const el = document.getElementById('admin-content');
     if (!el) return;
 
     if (this._tab==='overview') {
-      const counts = await this._getCounts();
+      const [counts, fiscal] = await Promise.all([this._getCounts(), DB.getConfigFiscal().catch(()=>({}))]);
+      const regimenLabel = fiscal?.regimen_iva === 'pequeno' ? 'Pequeño Contribuyente (5%)' : fiscal?.regimen_iva === 'general' ? 'General (IVA 12%)' : (fiscal?.regimen_iva||'No configurado');
+      const isrLabel = fiscal?.tasa_isr >= 0.25 ? 'Sobre Utilidades (25%)' : fiscal?.tasa_isr >= 0.07 ? 'Opcional Simplificado (7%)' : fiscal?.tasa_isr >= 0.05 ? 'Opcional Simplificado (5%)' : '—';
       el.innerHTML = `
         <div class="grid-2" style="margin-bottom:20px">
           <div class="card card-cyan">
@@ -57,6 +68,27 @@ Modulos.admin = {
               Los planes, módulos y pagos se gestionan con tu proveedor de TallerPro.
             </div>
           </div>
+        </div>
+        <div class="card" style="margin-bottom:20px">
+          <div class="card-sub mb-3">⚙️ Configuración Fiscal</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;margin-bottom:14px">
+            <div>
+              <div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">Régimen IVA</div>
+              <div style="font-weight:700;font-size:13px">${regimenLabel}</div>
+            </div>
+            <div>
+              <div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">Régimen ISR</div>
+              <div style="font-weight:700;font-size:13px">${isrLabel}</div>
+            </div>
+            <div>
+              <div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">Empresa importadora</div>
+              <label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-top:2px">
+                <input type="checkbox" id="adm-importadora" ${fiscal?.es_importadora?'checked':''} style="width:16px;height:16px" onchange="Modulos.admin._toggleImportadora(this.checked)">
+                <span style="font-size:13px;font-weight:700">${fiscal?.es_importadora?'Sí — activa':'No'}</span>
+              </label>
+            </div>
+          </div>
+          <div style="font-size:11px;color:var(--text3)">El régimen fiscal se cambia desde <b>Contabilidad → Formularios SAT → Cambiar régimen</b>. El campo "Importadora" activa campos DUA/DAI en el módulo de Compras.</div>
         </div>
         <div class="card">
           <div class="card-sub mb-3">📊 Registros en Base de Datos</div>
