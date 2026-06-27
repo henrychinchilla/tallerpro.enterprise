@@ -131,9 +131,30 @@
 <script>
   /* Iniciar aplicación — login.js maneja la sesión */
 
-  /* Service Worker */
+  /* Service Worker — con auto-recarga al detectar versión nueva tras un deploy.
+     Así el usuario nunca queda con código viejo cacheado. */
   if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('/sw.js').catch(() => {});
+    let _swRecargando = false;
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (_swRecargando) return;
+      _swRecargando = true;
+      location.reload();
+    });
+    navigator.serviceWorker.register('/sw.js').then(reg => {
+      /* Si entra un SW nuevo, pedirle que active de inmediato */
+      reg.addEventListener('updatefound', () => {
+        const sw = reg.installing;
+        if (!sw) return;
+        sw.addEventListener('statechange', () => {
+          if (sw.state === 'installed' && navigator.serviceWorker.controller) {
+            sw.postMessage('skipWaiting');
+          }
+        });
+      });
+      /* Revisar updates al cargar y al volver a la pestaña */
+      reg.update();
+      document.addEventListener('visibilitychange', () => { if (!document.hidden) reg.update(); });
+    }).catch(() => {});
   }
 
   /* Keyboard shortcuts */
