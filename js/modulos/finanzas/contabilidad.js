@@ -248,7 +248,9 @@ Modulos.contabilidad = {
         const cat = c.categoria_gasto||'por_clasificar';
         const ded = c.deducible, cred = c.credito_iva;
         return `<tr style="${/anulad/i.test(c.estado||'')?'opacity:.5':''}${cat==='por_clasificar'?'background:var(--amber-dim,#3a2f0a)':''}">
-        <td class="mono-sm">${UI.fecha(c.fecha)}</td><td>${c.proveedor_nombre||'—'}</td>
+        <td class="mono-sm">${UI.fecha(c.fecha)}</td>
+        <td class="mono-sm">${c.nit_proveedor||'—'}</td>
+        <td>${c.proveedor_nombre||'—'}</td>
         <td class="mono-sm">${c.num_factura||c.num||'—'}</td>
         <td class="mono-sm">${UI.q(c.subtotal)}</td>
         <td class="mono-sm ${cred?'text-cyan':'text-gray'}" title="${cred?'genera crédito IVA':'sin crédito IVA'}">${cred?UI.q(c.iva):'—'}</td>
@@ -262,7 +264,9 @@ Modulos.contabilidad = {
         </td></tr>`;
       });
       const filasE = d.egresosIva.map(e=>`<tr>
-        <td class="mono-sm">${UI.fecha(e.fecha)}</td><td>${e.proveedor||e.concepto||'—'}</td>
+        <td class="mono-sm">${UI.fecha(e.fecha)}</td>
+        <td class="mono-sm">—</td>
+        <td>${e.proveedor||e.concepto||'—'}</td>
         <td class="mono-sm">${e.num_factura||'—'}</td>
         <td class="mono-sm">${UI.q((Number(e.monto)||0)-(Number(e.iva_credito)||0))}</td>
         <td class="mono-sm text-cyan">${UI.q(e.iva_credito)}</td>
@@ -296,8 +300,8 @@ Modulos.contabilidad = {
           </div>
         </div>
         <div class="table-wrap"><table class="data-table">
-          <thead><tr><th>Fecha</th><th>Proveedor</th><th>Factura</th><th>Base</th><th>IVA crédito</th><th>Total</th><th>Clasificación fiscal</th></tr></thead>
-          <tbody>${[...filasC,...filasE].join('')||'<tr><td colspan="7" style="text-align:center;padding:24px;color:var(--text3)">Sin compras/gastos con IVA en el periodo</td></tr>'}</tbody>
+          <thead><tr><th>Fecha</th><th>NIT</th><th>Proveedor</th><th>Factura</th><th>Base</th><th>IVA crédito</th><th>Total</th><th>Clasificación fiscal</th></tr></thead>
+          <tbody>${[...filasC,...filasE].join('')||'<tr><td colspan="8" style="text-align:center;padding:24px;color:var(--text3)">Sin compras/gastos con IVA en el periodo</td></tr>'}</tbody>
         </table></div>`;
     }
 
@@ -719,10 +723,12 @@ Modulos.contabilidad = {
       uuid:         idx(/autorizaci/),
       tipo:         idx(/tipo/),
       serie:        idx(/serie/),
-      numero:       idx(/numero|dten/),
+      /* "Número del DTE", NO "Número de autorización" (que matchea /numero/ primero) */
+      numero:       idx(/del dte|del documento|correlativo/) >= 0 ? idx(/del dte|del documento|correlativo/) : idx(/numero(?!.*autoriz)/),
       nitEmisor:    idx(/nit.*emisor/),
       nomEmisor:    idx(/nombre.*emisor|razon.*emisor/),
-      nitReceptor:  idx(/nit.*receptor/),
+      /* El receptor puede venir como "ID del receptor" o "NIT del receptor" */
+      nitReceptor:  idx(/(nit|id).*receptor/),
       nomReceptor:  idx(/nombre.*receptor|razon.*receptor/),
       total:        idx(/grantotal|monto.*total|total/),
       iva:          idx(/\biva\b/),
