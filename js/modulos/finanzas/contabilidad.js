@@ -682,27 +682,39 @@ Modulos.contabilidad = {
   },
 
   _procesarFelRows(filas, naturaleza) {
-    if (filas.length < 2) return [];
-    const norm = h => String(h||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
+    if (filas.length < 2) { console.warn('FEL: < 2 filas', filas.length); return []; }
+    const norm = h => {
+      let s = String(h||'').toLowerCase()
+        .replace(/[áàâäã]/g,'a').replace(/[éèêë]/g,'e')
+        .replace(/[íìîï]/g,'i').replace(/[óòôöõ]/g,'o')
+        .replace(/[úùû]/g,'u').replace(/ñ/g,'n').replace(/ç/g,'c')
+        .replace(/[^a-z0-9\s_]/g,'');
+      return s;
+    };
     const head = filas[0].map(norm);
+    console.log('FEL headers normalizados:', head);
     const idx = re => head.findIndex(h=>re.test(h));
     const col = {
       fecha:        idx(/fecha/),
-      uuid:         idx(/autorizaci[ao]n/),
-      tipo:         idx(/tipo.*(dte|doc)/),
+      uuid:         idx(/autorizaci/),
+      tipo:         idx(/tipo/),
       serie:        idx(/serie/),
-      numero:       idx(/n[uú]mero|numero/),
+      numero:       idx(/numero|dten/),
       nitEmisor:    idx(/nit.*emisor/),
-      nomEmisor:    idx(/(nombre|razon).*emisor/),
+      nomEmisor:    idx(/nombre.*emisor|razon.*emisor/),
       nitReceptor:  idx(/nit.*receptor/),
-      nomReceptor:  idx(/(nombre|razon).*receptor/),
-      total:        idx(/gran.?total|monto.*total/) >= 0 ? idx(/gran.?total|monto.*total/) : idx(/total/),
-      iva:          idx(/iva/),
+      nomReceptor:  idx(/nombre.*receptor|razon.*receptor/),
+      total:        idx(/grantotal|monto.*total|total/),
+      iva:          idx(/\biva\b/),
       estado:       idx(/estado/),
       anulado:      idx(/marca.*anulad/),
-      petroleo:     idx(/petr[oa]leo/)
+      petroleo:     idx(/petroleo|petrol/)
     };
-    if (col.fecha < 0 || col.total < 0) return [];
+    console.log('FEL columnas detectadas:', col);
+    if (col.fecha < 0 || col.total < 0) {
+      console.warn('FEL: no encontró Fecha o Total', { fecha: col.fecha, total: col.total });
+      return [];
+    }
 
     const num = v => { const x = parseFloat(String(v||'').replace(/[Qq\s,]/g,'')); return isNaN(x)?0:x; };
     const fecha = v => {
