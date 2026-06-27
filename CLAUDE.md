@@ -24,6 +24,9 @@ Al terminar cambios OK: commit + push a `main` y `npm run deploy`, automáticame
 - Trabajar en el worktree, mergear a `main`, push, deploy.
 - Deploy: `git pull origin main && npm run deploy` (Cloudflare Workers).
 - URL producción: `https://tallerpro.cmtelecommgt.com`
+- **SIEMPRE subir `CACHE_VERSION` en `sw.js` cuando se cambian JS/CSS/HTML.** Si no,
+  el Service Worker sirve código viejo y "no se ven los cambios". El index ya tiene
+  auto-recarga al detectar SW nuevo, pero depende de que `CACHE_VERSION` cambie.
 
 ## 5. Migraciones de BD
 - Archivos en `db/migrations/NNN_*.sql` con número correlativo.
