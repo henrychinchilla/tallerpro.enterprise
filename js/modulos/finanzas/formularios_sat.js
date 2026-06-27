@@ -336,6 +336,8 @@ Modulos.contabilidad.sat = {
             } else if (tipo === 'SAT-2237') {
               valores_originales.ventas_base = datos.ventas_base ?? 0;
               valores_originales.compras_base = datos.compras_base ?? 0;
+              valores_originales.comb_base = datos.comb_base ?? 0;
+              valores_originales.imp_mundo_base = datos.imp_mundo_base ?? 0;
               valores_originales.retenciones_recibidas = datos.retenciones_recibidas ?? 0;
             } else if (tipo === 'SAT-1311') {
               valores_originales.rentas = datos.rentas ?? 0;
@@ -405,15 +407,29 @@ Modulos.contabilidad.sat = {
         valores_originales.ingresos = salesTotal;
         valores_originales.retenciones_recibidas = sufIVA;
       } else if (tipo === 'SAT-2237') {
-        /* Importaciones del período: base = CIF + DAI; crédito = IVA frontera (12%) */
+        /* El formulario calcula crédito/débito = base × 12%, por lo que las
+           bases deben ir NETAS (sin IVA). neto(doc) = subtotal o total/1.12 */
+        const neto = d => Number(d.subtotal) || Math.round((Number(d.total)||0)/1.12*100)/100;
+        const round2 = n => Math.round(n*100)/100;
+
+        /* Débito: ventas netas (facturas emitidas) */
+        const ventasBase = facturasValidas.reduce((s,f)=>s+neto(f), 0);
+
+        /* Crédito, separado por tipo de compra: */
         const importaciones = comprasValidas.filter(c => c.es_importacion && (Number(c.cif_valor)||0) > 0);
+        const combustibles  = comprasValidas.filter(c => c.es_combustible && !c.es_importacion);
+        const localesResto  = comprasValidas.filter(c => !c.es_combustible && !c.es_importacion);
+
         const impMundoBase = importaciones.reduce((s,c) => s + (Number(c.cif_valor)||0) + (Number(c.dai_monto)||0), 0);
-        const impMundoCre  = importaciones.reduce((s,c) => s + (Number(c.iva_frontera)||0), 0);
-        /* Compras locales = total compras − importaciones (para no duplicar crédito) */
-        const comprasLocalesBase = Math.max(0, purchasesTotal - importaciones.reduce((s,c)=>s+(Number(c.total)||0),0));
-        valores_originales.ventas_base = salesTotal;
-        valores_originales.compras_base = comprasLocalesBase;
-        valores_originales.imp_mundo_base = Math.round(impMundoBase * 100) / 100;
+        const combBase     = combustibles.reduce((s,c)=>s+neto(c), 0);
+        /* Compras locales (resto) + egresos con IVA crédito, netos */
+        const comprasLocalesBase = localesResto.reduce((s,c)=>s+neto(c), 0)
+          + egresosIva.reduce((s,e)=> s + ((Number(e.monto)||0) - (Number(e.iva_credito)||0)), 0);
+
+        valores_originales.ventas_base   = round2(ventasBase);
+        valores_originales.compras_base  = round2(comprasLocalesBase);
+        valores_originales.comb_base     = round2(combBase);
+        valores_originales.imp_mundo_base = round2(impMundoBase);
         valores_originales.retenciones_recibidas = sufIVA;
       } else if (tipo === 'SAT-1311') {
         valores_originales.rentas = salesTotal;
@@ -764,7 +780,7 @@ Modulos.contabilidad.sat = {
             </tr>
             <tr>
               <td style="padding:6px;">Compras de combustibles</td>
-              <td><input type="number" step="0.01" id="f-2237-comb-base" class="form-control form-control-sm text-right" value="${datos.comb_base || 0}" oninput="Modulos.contabilidad.sat.recalc2237()" /></td>
+              <td><input type="number" step="0.01" id="f-2237-comb-base" class="form-control form-control-sm text-right" value="${datos.comb_base || 0}" data-original="${datos.valores_originales?.comb_base ?? 0}" oninput="Modulos.contabilidad.sat.recalc2237()" /></td>
               <td><input type="text" id="f-2237-comb-cre" class="form-control form-control-sm text-right bg-light" value="${datos.comb_cre || 0}" readonly /></td>
             </tr>
             <tr>
