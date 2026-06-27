@@ -250,9 +250,10 @@ Modulos.compras = {
 
     UI.toast('Importando compras desde FEL...','info');
     const felIds = felSinImportar.map(f => f.id);
-    const { count, errors } = await DB.crearComprasDesdeFeL(felIds);
+    const { count, omitidas, errors } = await DB.crearComprasDesdeFeL(felIds);
     if (errors) UI.toast(`Se crearon ${count} compras (${errors} errores)`, 'error');
-    else UI.toast(`✓ ${count} compras creadas desde FEL`);
+    else if (count === 0) UI.toast('Todas las facturas ya estaban registradas','info');
+    else UI.toast(`✓ ${count} compras creadas${omitidas>0?` · ${omitidas} ya existían`:''}`);
     this.render();
   }
 };

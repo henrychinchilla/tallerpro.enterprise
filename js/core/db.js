@@ -1512,7 +1512,7 @@ const DB = {
 
   async getComprasPeriodo(ini, fin) {
     const { data } = await getSB().from('compras')
-      .select('id,num,proveedor_nombre,num_factura,fecha,subtotal,iva,total,estado,es_importacion,num_dua,cif_valor,dai_monto,iva_frontera')
+      .select('id,num,proveedor_nombre,num_factura,fecha,subtotal,iva,total,estado,es_importacion,num_dua,cif_valor,dai_monto,iva_frontera,es_combustible,petroleo')
       .eq('tenant_id', getTID()).gte('fecha', ini).lte('fecha', fin).order('fecha');
     return data || [];
   },
@@ -1550,8 +1550,12 @@ const DB = {
 
   async insertFelImportados(rows) {
     const tid = getTID();
+    /* upsert idempotente: inserta solo los DTE nuevos, ignora los ya cargados
+       (clave única tenant_id, serie, numero_dte). ignoreDuplicates evita duplicar. */
     const { data, error } = await getSB().from('fel_importados')
-      .insert(rows.map(r => ({ ...r, tenant_id: tid }))).select('id');
+      .upsert(rows.map(r => ({ ...r, tenant_id: tid })),
+              { onConflict: 'tenant_id,serie,numero_dte', ignoreDuplicates: true })
+      .select('id');
     return { count: data?.length||0, error };
   },
 
@@ -1731,46 +1735,43 @@ const DB = {
     return (felResp.data||[]).filter(f => !importadosSet.has(f.id));
   },
 
-  async crearCompraDesdeFeL(felId) {
-    const { data: fel, error: felErr } = await getSB().from('fel_importados')
-      .select('*')
-      .eq('id', felId)
-      .eq('tenant_id', getTID())
-      .single();
-    if (felErr || !fel) throw new Error('FEL no encontrado');
-
-    const compra = {
-      tenant_id: getTID(),
-      fel_importado_id: felId,
+  _felACompra(fel, tid) {
+    return {
+      tenant_id: tid,
+      fel_importado_id: fel.id,
       proveedor_nombre: fel.nombre_emisor,
       num_factura: `${fel.serie||''} ${fel.numero_dte||''}`.trim(),
       fecha: fel.fecha,
       subtotal: Math.round((fel.gran_total - (fel.iva||0)) * 100) / 100,
       iva: Math.round((fel.iva||0) * 100) / 100,
       total: fel.gran_total,
-      estado: 'recibida',
+      estado: /anulad/i.test(fel.estado||'') ? 'anulada' : 'recibida',
       es_importacion: false,
+      es_combustible: !!fel.es_combustible,
+      petroleo: Number(fel.petroleo)||0,
       notas: `Importada desde FEL del SAT - ${fel.numero_autorizacion||''}`
     };
-
-    const { data, error } = await getSB().from('compras')
-      .insert([compra])
-      .select('id');
-    if (error) throw error;
-    return data?.[0]?.id;
   },
 
+  /* Crea compras desde una lista de FEL ids — idempotente (upsert ignora duplicados).
+     Devuelve { count: nuevas creadas, omitidas: ya existían, errors }. */
   async crearComprasDesdeFeL(felIds) {
+    const tid = getTID();
+    if (!felIds?.length) return { count: 0, omitidas: 0, errors: 0 };
+    const { data: fels, error: felErr } = await getSB().from('fel_importados')
+      .select('*').eq('tenant_id', tid).in('id', felIds);
+    if (felErr) { console.error('crearComprasDesdeFeL:', felErr); return { count: 0, omitidas: 0, errors: 1 }; }
+
+    const compras = (fels||[]).map(f => this._felACompra(f, tid));
     let count = 0, errors = 0;
-    for (const felId of felIds) {
-      try {
-        await this.crearCompraDesdeFeL(felId);
-        count++;
-      } catch (e) {
-        console.error('Crear compra desde FEL:', e);
-        errors++;
-      }
+    for (let i = 0; i < compras.length; i += 200) {
+      const { data, error } = await getSB().from('compras')
+        .upsert(compras.slice(i, i+200),
+                { onConflict: 'tenant_id,fel_importado_id', ignoreDuplicates: true })
+        .select('id');
+      if (error) { errors++; console.error('crearComprasDesdeFeL upsert:', error.message); }
+      count += data?.length || 0;
     }
-    return { count, errors };
+    return { count, omitidas: compras.length - count, errors };
   }
 };

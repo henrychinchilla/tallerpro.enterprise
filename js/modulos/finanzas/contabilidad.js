@@ -789,10 +789,9 @@ Modulos.contabilidad = {
           ${totCombustible > 0 ? ` · ⛽ Combustible <b>${UI.q(totCombustible)}</b>` : ''}
         </div>
       </div>
-      <label style="display:flex;align-items:center;gap:8px;font-size:12px;margin:8px 0;cursor:pointer">
-        <input type="checkbox" id="fel-reemplazar" checked>
-        Reemplazar lo ya importado en ese rango de fechas (por tipo)
-      </label>
+      <div style="font-size:11px;color:var(--text3);margin:8px 0;display:flex;align-items:center;gap:6px">
+        <span>🛡️</span> Los DTE que ya estén cargados se omiten automáticamente — no se duplican.
+      </div>
       <button class="btn btn-amber" onclick="Modulos.contabilidad.importarFel()">⬆️ Importar ${docs.length} documentos</button>`;
   },
 
@@ -800,22 +799,27 @@ Modulos.contabilidad = {
     const docs = this._felParse;
     if (!docs?.length) return;
     UI.toast('Importando...','info');
-    const fechas = docs.map(d=>d.fecha).sort();
-    const ini = fechas[0], fin = fechas[fechas.length-1];
-    if (document.getElementById('fel-reemplazar')?.checked) {
-      const naturalezas = [...new Set(docs.map(d=>d.naturaleza))];
-      for (const nat of naturalezas) await DB.deleteFelPeriodo(ini, fin, nat);
-    }
-    let total = 0, errores = 0;
+    /* Importación idempotente (upsert): los DTE ya cargados se ignoran,
+       solo entran los nuevos. No se borra nada. */
+    let nuevos = 0, errores = 0;
     for (let i = 0; i < docs.length; i += 200) {
       const { count, error } = await DB.insertFelImportados(docs.slice(i, i+200));
-      total += count;
+      if (error) { errores++; console.error('importarFel:', error.message); }
+      nuevos += count;
     }
+    const yaExistian = docs.length - nuevos;
     this._felParse = null;
     const comb = docs.filter(d=>d.es_combustible).reduce((s,d)=>s+d.gran_total,0);
-    const msg = comb > 0 ? `✓ ${total} DTE importados · ⛽ combustible ${UI.q(comb)}` : `✓ ${total} documentos FEL importados`;
-    if (errores) UI.toast(`Importados ${total} con errores — revisa la consola`,'error');
-    else UI.toast(msg);
+    if (errores) {
+      UI.toast(`Importados ${nuevos} con errores — revisa la consola`,'error');
+    } else if (nuevos === 0) {
+      UI.toast(`Todos los ${docs.length} DTE ya estaban cargados — nada nuevo que importar`,'info');
+    } else {
+      let msg = `✓ ${nuevos} DTE nuevos importados`;
+      if (yaExistian > 0) msg += ` · ${yaExistian} ya existían (omitidos)`;
+      if (comb > 0) msg += ` · ⛽ combustible ${UI.q(comb)}`;
+      UI.toast(msg);
+    }
     this._renderTab();
   },
 
