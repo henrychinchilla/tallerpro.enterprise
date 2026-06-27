@@ -1544,7 +1544,7 @@ const DB = {
 
   async getComprasPeriodo(ini, fin) {
     const { data } = await getSB().from('compras')
-      .select('id,num,proveedor_id,proveedor_nombre,num_factura,fecha,subtotal,iva,total,estado,es_importacion,num_dua,cif_valor,dai_monto,iva_frontera,es_combustible,petroleo,categoria_gasto,deducible,credito_iva,fel_importado_id')
+      .select('id,num,proveedor_id,proveedor_nombre,nit_proveedor,num_factura,fecha,subtotal,iva,total,estado,es_importacion,num_dua,cif_valor,dai_monto,iva_frontera,es_combustible,petroleo,categoria_gasto,deducible,credito_iva,fel_importado_id')
       .eq('tenant_id', getTID()).gte('fecha', ini).lte('fecha', fin).order('fecha');
     return data || [];
   },
@@ -1873,6 +1873,7 @@ const DB = {
       tenant_id: tid,
       fel_importado_id: fel.id,
       proveedor_nombre: fel.nombre_emisor,
+      nit_proveedor: fel.nit_emisor || null,
       num_factura: `${fel.serie||''} ${fel.numero_dte||''}`.trim(),
       fecha: fel.fecha,
       subtotal: Math.round((fel.gran_total - (fel.iva||0)) * 100) / 100,
