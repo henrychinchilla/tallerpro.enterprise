@@ -676,7 +676,7 @@ const DB = {
     /* Egreso (categoría Compras) → cuenta de egresos + Finanzas */
     const eg = await this.upsertEgreso({
       concepto:`Compra ${num}${cabecera.proveedor_nombre?` — ${cabecera.proveedor_nombre}`:''}`,
-      categoria:'Compras', monto:total, fecha, referencia:cabecera.num_factura||num
+      categoria:'compra_inventario', monto:total, fecha, referencia:cabecera.num_factura||num
     });
     if (eg?.data?.id) await getSB().from('compras').update({ egreso_id: eg.data.id }).eq('id', compra.id);
     return { data: compra };
@@ -1808,17 +1808,28 @@ const DB = {
       .select('*').eq('tenant_id', tid).in('id', felIds);
     if (felErr) { console.error('crearComprasDesdeFeL:', felErr); return { count: 0, omitidas: 0, errors: 1 }; }
 
-    const compras = (fels||[]).map(f => this._felACompra(f, tid));
-    let count = 0, errors = 0;
-    for (let i = 0; i < compras.length; i += 200) {
-      const { data, error } = await getSB().from('compras')
-        .upsert(compras.slice(i, i+200),
-                { onConflict: 'tenant_id,fel_importado_id', ignoreDuplicates: true })
-        .select('id');
-      if (error) { errors++; console.error('crearComprasDesdeFeL upsert:', error.message); }
-      count += data?.length || 0;
+    /* Evitar duplicados: excluir FEL ya vinculados a una compra */
+    const { data: yaImp } = await getSB().from('compras')
+      .select('fel_importado_id').eq('tenant_id', tid).not('fel_importado_id','is',null);
+    const impSet = new Set((yaImp||[]).map(c => c.fel_importado_id));
+    const pendientes = (fels||[]).filter(f => !impSet.has(f.id));
+
+    let count = 0, omitidas = (fels||[]).length - pendientes.length, errors = 0;
+    for (const fel of pendientes) {
+      const compra = this._felACompra(fel, tid);
+      const { data, error } = await getSB().from('compras').insert(compra).select('id').single();
+      if (error) { errors++; console.error('crearComprasDesdeFeL insert:', error.message); continue; }
+      count++;
+      /* Egreso de caja (sin IVA crédito: el crédito ya lo lleva la compra, evita doble conteo) */
+      await getSB().from('egresos').insert({
+        tenant_id: tid, categoria: fel.es_combustible ? 'combustible' : 'compra_inventario',
+        concepto: `Compra ${compra.num_factura||''} ${fel.nombre_emisor||''}`.trim(),
+        monto: compra.total, iva_credito: 0, fecha: compra.fecha,
+        proveedor: fel.nombre_emisor||null, num_factura: compra.num_factura||null,
+        referencia: 'FEL-SAT', notas: 'Importado desde FEL del SAT'
+      }).select('id').single().then(()=>{}, e=>console.error('egreso FEL:', e?.message));
     }
-    return { count, omitidas: compras.length - count, errors };
+    return { count, omitidas, errors };
   },
 
   _felAFactura(fel, tid) {
@@ -1850,16 +1861,26 @@ const DB = {
       .select('*').eq('tenant_id', tid).in('id', felIds);
     if (felErr) { console.error('crearFacturasDesdeFeL:', felErr); return { count: 0, omitidas: 0, errors: 1 }; }
 
-    const facturas = (fels||[]).map(f => this._felAFactura(f, tid));
-    let count = 0, errors = 0;
-    for (let i = 0; i < facturas.length; i += 200) {
-      const { data, error } = await getSB().from('facturas')
-        .upsert(facturas.slice(i, i+200),
-                { onConflict: 'tenant_id,fel_importado_id', ignoreDuplicates: true })
-        .select('id');
-      if (error) { errors++; console.error('crearFacturasDesdeFeL upsert:', error.message); }
-      count += data?.length || 0;
+    /* Evitar duplicados: excluir FEL ya vinculados a una factura */
+    const { data: yaImp } = await getSB().from('facturas')
+      .select('fel_importado_id').eq('tenant_id', tid).not('fel_importado_id','is',null);
+    const impSet = new Set((yaImp||[]).map(c => c.fel_importado_id));
+    const pendientes = (fels||[]).filter(f => !impSet.has(f.id));
+
+    let count = 0, omitidas = (fels||[]).length - pendientes.length, errors = 0;
+    for (const fel of pendientes) {
+      const fac = this._felAFactura(fel, tid);
+      const { data, error } = await getSB().from('facturas').insert(fac).select('id').single();
+      if (error) { errors++; console.error('crearFacturasDesdeFeL insert:', error.message); continue; }
+      count++;
+      /* Ingreso (categoría Ventas) para que aparezca en Finanzas / Estado de Resultados */
+      await getSB().from('ingresos').insert({
+        tenant_id: tid, categoria: 'Ventas', tipo: 'otro',
+        concepto: `Venta ${fac.num||''} ${fel.nombre_emisor||''}`.trim(),
+        monto: fac.total, iva: fac.iva, fecha: fac.fecha,
+        factura_id: data.id, referencia: 'FEL-SAT', notas: 'Importado desde FEL del SAT'
+      }).select('id').single().then(()=>{}, e=>console.error('ingreso FEL:', e?.message));
     }
-    return { count, omitidas: facturas.length - count, errors };
+    return { count, omitidas, errors };
   }
 };
