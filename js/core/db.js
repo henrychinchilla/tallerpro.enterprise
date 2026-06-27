@@ -1550,13 +1550,26 @@ const DB = {
 
   async insertFelImportados(rows) {
     const tid = getTID();
-    /* upsert idempotente: inserta solo los DTE nuevos, ignora los ya cargados
-       (clave única tenant_id, serie, numero_dte). ignoreDuplicates evita duplicar. */
+    /* Upsert que COMPLETA datos: inserta los DTE nuevos y refresca los
+       existentes con los valores del archivo del SAT (autoridad), sin duplicar.
+       Reporta cuántos eran nuevos vs cuántos ya existían (actualizados). */
+    const claves = rows.map(r => `${r.serie||''}|${r.numero_dte||''}`);
+    let existentes = new Set();
+    /* Buscar cuáles ya existen (por serie+numero_dte) para reportar nuevos vs actualizados */
+    const series = [...new Set(rows.map(r => r.serie).filter(Boolean))];
+    if (series.length) {
+      const { data: prev } = await getSB().from('fel_importados')
+        .select('serie,numero_dte').eq('tenant_id', tid).in('serie', series);
+      existentes = new Set((prev||[]).map(p => `${p.serie||''}|${p.numero_dte||''}`));
+    }
+    const nuevosCount = claves.filter(k => !existentes.has(k)).length;
+
     const { data, error } = await getSB().from('fel_importados')
       .upsert(rows.map(r => ({ ...r, tenant_id: tid })),
-              { onConflict: 'tenant_id,serie,numero_dte', ignoreDuplicates: true })
+              { onConflict: 'tenant_id,serie,numero_dte', ignoreDuplicates: false })
       .select('id');
-    return { count: data?.length||0, error };
+    const afectados = data?.length || 0;
+    return { count: nuevosCount, actualizados: Math.max(0, afectados - nuevosCount), error };
   },
 
   async deleteFelPeriodo(ini, fin, naturaleza) {
