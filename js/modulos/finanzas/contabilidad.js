@@ -14,7 +14,7 @@
    cada casilla para que el contador solo transcriba.
 ═══════════════════════════════════════════════════════ */
 Modulos.contabilidad = {
-  _tab: 'iva',
+  _tab: 'formularios_sat',
   _mes: null, _anio: null,
   _fiscal: null,
   _fuenteCredito: 'sistema',   // 'sistema' (compras+gastos) | 'fel' (CSV de SAT)
@@ -52,7 +52,7 @@ Modulos.contabilidad = {
       </div>
       <div class="page-body">
         <div class="tabs">
-          ${[['iva','🧾 IVA del mes'],['trimestre','🏢 Trimestral / ISO'],['ventas','📤 Libro de Ventas'],['compras','📥 Libro de Compras'],['isr','🏛️ ISR mensual'],['fel','⬆️ Importar FEL'],['obligaciones','📅 Obligaciones'],['formularios_sat','📋 Formularios SAT']]
+          ${[['formularios_sat','📋 Formularios SAT'],['fel','⬆️ Importar FEL'],['ventas','📤 Libro de Ventas'],['compras','📥 Libro de Compras'],['obligaciones','📅 Obligaciones']]
             .map(([t,l])=>`<button class="tab-btn ${this._tab===t?'active':''}" onclick="Modulos.contabilidad._ir('${t}')">${l}</button>`).join('')}
         </div>
         <div id="cont-content"></div>
@@ -160,6 +160,9 @@ Modulos.contabilidad = {
   async _renderTab() {
     const el = document.getElementById('cont-content');
     if (!el) return;
+    /* Tabs calculadora eliminados (IVA/ISR/Trimestral) → ahora viven en Formularios SAT.
+       Redirige rutas guardadas con el tab viejo. */
+    if (['iva','isr','trimestre'].includes(this._tab)) { this._tab = 'formularios_sat'; }
     UI.loading(el);
     const { mes, anio, periodo } = this._rango();
     const nombreMes = new Date(anio, mes-1, 1).toLocaleDateString('es-GT',{month:'long',year:'numeric'});
@@ -799,24 +802,23 @@ Modulos.contabilidad = {
     const docs = this._felParse;
     if (!docs?.length) return;
     UI.toast('Importando...','info');
-    /* Importación idempotente (upsert): los DTE ya cargados se ignoran,
-       solo entran los nuevos. No se borra nada. */
-    let nuevos = 0, errores = 0;
+    /* Importación idempotente que COMPLETA datos: inserta nuevos y refresca
+       existentes con el archivo del SAT, sin duplicar. */
+    let nuevos = 0, actualizados = 0, errores = 0;
     for (let i = 0; i < docs.length; i += 200) {
-      const { count, error } = await DB.insertFelImportados(docs.slice(i, i+200));
+      const { count, actualizados: act, error } = await DB.insertFelImportados(docs.slice(i, i+200));
       if (error) { errores++; console.error('importarFel:', error.message); }
-      nuevos += count;
+      nuevos += count; actualizados += (act||0);
     }
-    const yaExistian = docs.length - nuevos;
     this._felParse = null;
     const comb = docs.filter(d=>d.es_combustible).reduce((s,d)=>s+d.gran_total,0);
     if (errores) {
       UI.toast(`Importados ${nuevos} con errores — revisa la consola`,'error');
-    } else if (nuevos === 0) {
-      UI.toast(`Todos los ${docs.length} DTE ya estaban cargados — nada nuevo que importar`,'info');
+    } else if (nuevos === 0 && actualizados > 0) {
+      UI.toast(`Sin DTE nuevos · ${actualizados} ya existentes se actualizaron con el archivo`,'info');
     } else {
-      let msg = `✓ ${nuevos} DTE nuevos importados`;
-      if (yaExistian > 0) msg += ` · ${yaExistian} ya existían (omitidos)`;
+      let msg = `✓ ${nuevos} DTE nuevos`;
+      if (actualizados > 0) msg += ` · ${actualizados} actualizados`;
       if (comb > 0) msg += ` · ⛽ combustible ${UI.q(comb)}`;
       UI.toast(msg);
     }
