@@ -20,6 +20,34 @@ Modulos.contabilidad = {
   _fuenteCredito: 'sistema',   // 'sistema' (compras+gastos) | 'fel' (CSV de SAT)
   _felParse: null,             // resultado del CSV pendiente de importar
 
+  /* Categorías de gasto con sus banderas fiscales por defecto (ded=ISR, cred=IVA) */
+  _CATS: {
+    por_clasificar:        { label:'⏳ Por clasificar',            ded:false, cred:false },
+    materia_prima:         { label:'🔩 Materia prima',             ded:true,  cred:true  },
+    insumos_servicio:      { label:'🧰 Insumos para servicios',    ded:true,  cred:true  },
+    combustible:           { label:'⛽ Combustible',               ded:true,  cred:true  },
+    servicios:             { label:'💡 Servicios (luz/agua/tel)',  ded:true,  cred:true  },
+    gastos_admin:          { label:'🏢 Gastos administrativos',    ded:true,  cred:true  },
+    alimentos:             { label:'🍽️ Alimentos',                ded:false, cred:false },
+    personal_no_deducible: { label:'🚫 Personal / no deducible',   ded:false, cred:false },
+    otros:                 { label:'📦 Otros',                     ded:true,  cred:true  },
+  },
+
+  async _clasificarCompra(id, categoria, proveedor) {
+    const c = this._CATS[categoria] || this._CATS.otros;
+    const campos = { categoria_gasto: categoria, deducible: c.ded, credito_iva: c.cred };
+    /* Clasifica esta compra + recuerda la regla del proveedor */
+    await DB.clasificarCompras([id], campos, true);
+    let extra = 0;
+    /* Aplica la misma clasificación al resto de compras 'por clasificar' del mismo proveedor */
+    if (proveedor) {
+      const r = await DB.clasificarPorProveedor(proveedor, campos);
+      extra = Math.max(0, (r.count||0) - 0);
+    }
+    UI.toast(`${c.label}${c.ded?'':' · no deducible'}${extra>1?` · aplicado a ${extra} de ${proveedor}`:''}`);
+    this._renderTab();
+  },
+
   _rango() {
     const now = new Date();
     const mes  = this._mes  || (now.getMonth()+1);
@@ -200,27 +228,49 @@ Modulos.contabilidad = {
     /* ── LIBRO DE COMPRAS ────────────────────────── */
     else if (this._tab === 'compras') {
       const d = await this._datos();
-      const filasC = d.compras.map(c=>`<tr style="${/anulad/i.test(c.estado||'')?'opacity:.5':''}">
+      const opts = (sel) => Object.entries(this._CATS).map(([k,v])=>`<option value="${k}" ${sel===k?'selected':''}>${v.label}</option>`).join('');
+      const porClasificar = d.compras.filter(c=>!/anulad/i.test(c.estado||'') && (c.categoria_gasto||'por_clasificar')==='por_clasificar');
+      const filasC = d.compras.map(c=>{
+        const cat = c.categoria_gasto||'por_clasificar';
+        const ded = c.deducible, cred = c.credito_iva;
+        return `<tr style="${/anulad/i.test(c.estado||'')?'opacity:.5':''}${cat==='por_clasificar'?'background:var(--amber-dim,#3a2f0a)':''}">
         <td class="mono-sm">${UI.fecha(c.fecha)}</td><td>${c.proveedor_nombre||'—'}</td>
         <td class="mono-sm">${c.num_factura||c.num||'—'}</td>
-        <td class="mono-sm">${UI.q(c.subtotal)}</td><td class="mono-sm text-cyan">${UI.q(c.iva)}</td>
-        <td class="mono-sm"><b>${UI.q(c.total)}</b></td><td><span class="badge badge-gray">compra</span></td></tr>`);
+        <td class="mono-sm">${UI.q(c.subtotal)}</td>
+        <td class="mono-sm ${cred?'text-cyan':'text-gray'}" title="${cred?'genera crédito IVA':'sin crédito IVA'}">${cred?UI.q(c.iva):'—'}</td>
+        <td class="mono-sm"><b>${UI.q(c.total)}</b></td>
+        <td>
+          <select class="form-select" style="font-size:11px;padding:3px 6px;min-width:150px" onchange="Modulos.contabilidad._clasificarCompra('${c.id}', this.value, this.dataset.prov)" data-prov="${(c.proveedor_nombre||'').replace(/"/g,'&quot;')}">${opts(cat)}</select>
+          ${cat!=='por_clasificar'?`<div style="font-size:9px;margin-top:2px">${ded?'<span class="badge badge-green" style="font-size:8px">deducible</span>':'<span class="badge badge-red" style="font-size:8px">no deducible</span>'}</div>`:''}
+        </td></tr>`;
+      });
       const filasE = d.egresosIva.map(e=>`<tr>
         <td class="mono-sm">${UI.fecha(e.fecha)}</td><td>${e.proveedor||e.concepto||'—'}</td>
         <td class="mono-sm">${e.num_factura||'—'}</td>
         <td class="mono-sm">${UI.q((Number(e.monto)||0)-(Number(e.iva_credito)||0))}</td>
         <td class="mono-sm text-cyan">${UI.q(e.iva_credito)}</td>
-        <td class="mono-sm"><b>${UI.q(e.monto)}</b></td><td><span class="badge badge-gray">gasto</span></td></tr>`);
+        <td class="mono-sm"><b>${UI.q(e.monto)}</b></td><td><span class="badge badge-gray">gasto manual</span></td></tr>`);
+      const totDed = d.compras.filter(c=>c.deducible && !/anulad/i.test(c.estado||'')).reduce((s,c)=>s+(Number(c.total)||0),0);
+      const totNoDed = d.compras.filter(c=>!c.deducible && (c.categoria_gasto||'por_clasificar')!=='por_clasificar' && !/anulad/i.test(c.estado||'')).reduce((s,c)=>s+(Number(c.total)||0),0);
       el.innerHTML = `
-        <div style="display:flex;justify-content:flex-end;gap:6px;margin-bottom:12px">
-          <button class="btn btn-green" onclick="Modulos.finanzas.exportExcelContador('${this._rango().ini}','${this._rango().fin}')">⬇️ Excel para contador</button>
-          <button class="btn btn-cyan" onclick="Modulos.contabilidad.exportarCompras()">⬇️ Exportar CSV</button>
+        ${porClasificar.length>0?`
+        <div class="alert alert-amber" style="margin-bottom:12px">
+          <div class="alert-icon">⏳</div>
+          <div class="alert-body" style="font-size:12px">
+            <b>${porClasificar.length} compras sin clasificar</b> (${UI.q(porClasificar.reduce((s,c)=>s+(Number(c.total)||0),0))}). Mientras estén "Por clasificar" <b>NO cuentan</b> como costo deducible ni crédito de IVA — así protegemos el Estado de Resultados y la fiscalización. Asigná la categoría en cada fila; el proveedor se recuerda para próximas importaciones.
+          </div>
+        </div>`:''}
+        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px;margin-bottom:12px">
+          <div style="font-size:12px;color:var(--text2)">✅ Deducible: <b class="text-green">${UI.q(totDed)}</b> · 🚫 No deducible: <b class="text-red">${UI.q(totNoDed)}</b></div>
+          <div style="display:flex;gap:6px">
+            <button class="btn btn-green btn-sm" onclick="Modulos.finanzas.exportExcelContador('${this._rango().ini}','${this._rango().fin}')">⬇️ Excel contador</button>
+            <button class="btn btn-cyan btn-sm" onclick="Modulos.contabilidad.exportarCompras()">⬇️ CSV</button>
+          </div>
         </div>
         <div class="table-wrap"><table class="data-table">
-          <thead><tr><th>Fecha</th><th>Proveedor</th><th>Factura</th><th>Base</th><th>IVA crédito</th><th>Total</th><th>Origen</th></tr></thead>
+          <thead><tr><th>Fecha</th><th>Proveedor</th><th>Factura</th><th>Base</th><th>IVA crédito</th><th>Total</th><th>Clasificación fiscal</th></tr></thead>
           <tbody>${[...filasC,...filasE].join('')||'<tr><td colspan="7" style="text-align:center;padding:24px;color:var(--text3)">Sin compras/gastos con IVA en el periodo</td></tr>'}</tbody>
-        </table></div>
-        <div style="margin-top:10px;font-size:12px;color:var(--text3)">Crédito fiscal del periodo (sistema): <b>${UI.q(d.credito)}</b> · FEL importado: <b>${UI.q(d.creditoFel)}</b></div>`;
+        </table></div>`;
     }
 
 

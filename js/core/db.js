@@ -1544,9 +1544,79 @@ const DB = {
 
   async getComprasPeriodo(ini, fin) {
     const { data } = await getSB().from('compras')
-      .select('id,num,proveedor_nombre,num_factura,fecha,subtotal,iva,total,estado,es_importacion,num_dua,cif_valor,dai_monto,iva_frontera,es_combustible,petroleo')
+      .select('id,num,proveedor_id,proveedor_nombre,num_factura,fecha,subtotal,iva,total,estado,es_importacion,num_dua,cif_valor,dai_monto,iva_frontera,es_combustible,petroleo,categoria_gasto,deducible,credito_iva,fel_importado_id')
       .eq('tenant_id', getTID()).gte('fecha', ini).lte('fecha', fin).order('fecha');
     return data || [];
+  },
+
+  /* ── Clasificación fiscal de compras / reglas por proveedor ── */
+  async getProveedorReglas() {
+    const { data } = await getSB().from('proveedor_reglas')
+      .select('*').eq('tenant_id', getTID());
+    const map = {};
+    (data||[]).forEach(r => { if (r.nit) map[String(r.nit).trim()] = r; });
+    return map;
+  },
+
+  async upsertProveedorRegla(nit, nombre, categoria_gasto, deducible, credito_iva) {
+    if (!nit) return { error: null };
+    const { error } = await getSB().from('proveedor_reglas')
+      .upsert({ tenant_id: getTID(), nit: String(nit).trim(), nombre, categoria_gasto, deducible, credito_iva },
+              { onConflict: 'tenant_id,nit' });
+    return { error };
+  },
+
+  /* Clasifica TODAS las compras 'por_clasificar' de un proveedor (por nombre) y
+     guarda la regla. Devuelve cuántas afectó. Acelera el onboarding masivo. */
+  async clasificarPorProveedor(proveedorNombre, { categoria_gasto, deducible, credito_iva }) {
+    const tid = getTID();
+    const { data: rows } = await getSB().from('compras')
+      .select('id,fel_importado_id').eq('tenant_id', tid)
+      .eq('proveedor_nombre', proveedorNombre).eq('categoria_gasto','por_clasificar');
+    const ids = (rows||[]).map(r=>r.id);
+    if (ids.length) {
+      await getSB().from('compras')
+        .update({ categoria_gasto, deducible: !!deducible, credito_iva: !!credito_iva })
+        .in('id', ids).eq('tenant_id', tid);
+    }
+    /* Guardar regla por NIT (del FEL vinculado, si existe) */
+    const felId = (rows||[]).map(r=>r.fel_importado_id).find(Boolean);
+    if (felId) {
+      const { data: f } = await getSB().from('fel_importados').select('nit_emisor,nombre_emisor').eq('id', felId).maybeSingle();
+      if (f?.nit_emisor) await this.upsertProveedorRegla(f.nit_emisor, f.nombre_emisor||proveedorNombre, categoria_gasto, deducible, credito_iva);
+    }
+    return { count: ids.length };
+  },
+
+  /* Clasifica varias compras a la vez. recordar=true guarda la regla por proveedor. */
+  async clasificarCompras(ids, { categoria_gasto, deducible, credito_iva }, recordar=false) {
+    const tid = getTID();
+    if (!ids?.length) return { count: 0 };
+    const { error } = await getSB().from('compras')
+      .update({ categoria_gasto, deducible: !!deducible, credito_iva: !!credito_iva })
+      .in('id', ids).eq('tenant_id', tid);
+    if (error) return { count: 0, error };
+    if (recordar) {
+      const { data: rows } = await getSB().from('compras')
+        .select('proveedor_nombre,num_factura,fel_importado_id').in('id', ids).eq('tenant_id', tid);
+      /* Tomar el NIT del FEL vinculado para recordar la regla */
+      const felIds = (rows||[]).map(r=>r.fel_importado_id).filter(Boolean);
+      let nitPorFel = {};
+      if (felIds.length) {
+        const { data: fels } = await getSB().from('fel_importados').select('id,nit_emisor,nombre_emisor').in('id', felIds);
+        (fels||[]).forEach(f => { nitPorFel[f.id] = { nit: f.nit_emisor, nombre: f.nombre_emisor }; });
+      }
+      const vistos = new Set();
+      for (const r of (rows||[])) {
+        const info = nitPorFel[r.fel_importado_id];
+        const nit = info?.nit;
+        if (nit && !vistos.has(nit)) {
+          vistos.add(nit);
+          await this.upsertProveedorRegla(nit, info.nombre||r.proveedor_nombre, categoria_gasto, deducible, credito_iva);
+        }
+      }
+    }
+    return { count: ids.length };
   },
 
   async getEgresosIvaPeriodo(ini, fin) {
@@ -1781,7 +1851,12 @@ const DB = {
     return (felResp.data||[]).filter(f => !importadosSet.has(f.id));
   },
 
-  _felACompra(fel, tid) {
+  _felACompra(fel, tid, regla=null) {
+    /* Clasificación: combustible automático; si hay regla por proveedor, se aplica;
+       si no, queda 'por_clasificar' sin computar (deducible/crédito en false). */
+    let categoria = 'por_clasificar', deducible = false, credito = false;
+    if (fel.es_combustible) { categoria='combustible'; deducible=true; credito=true; }
+    else if (regla) { categoria=regla.categoria_gasto; deducible=!!regla.deducible; credito=!!regla.credito_iva; }
     return {
       tenant_id: tid,
       fel_importado_id: fel.id,
@@ -1795,6 +1870,7 @@ const DB = {
       es_importacion: false,
       es_combustible: !!fel.es_combustible,
       petroleo: Number(fel.petroleo)||0,
+      categoria_gasto: categoria, deducible, credito_iva: credito,
       notas: `Importada desde FEL del SAT - ${fel.numero_autorizacion||''}`
     };
   },
@@ -1814,9 +1890,13 @@ const DB = {
     const impSet = new Set((yaImp||[]).map(c => c.fel_importado_id));
     const pendientes = (fels||[]).filter(f => !impSet.has(f.id));
 
+    /* Reglas por proveedor para clasificar automáticamente al importar */
+    const reglas = await this.getProveedorReglas();
+
     let count = 0, omitidas = (fels||[]).length - pendientes.length, errors = 0;
     for (const fel of pendientes) {
-      const compra = this._felACompra(fel, tid);
+      const regla = fel.nit_emisor ? reglas[String(fel.nit_emisor).trim()] : null;
+      const compra = this._felACompra(fel, tid, regla);
       const { data, error } = await getSB().from('compras').insert(compra).select('id').single();
       if (error) { errors++; console.error('crearComprasDesdeFeL insert:', error.message); continue; }
       count++;
