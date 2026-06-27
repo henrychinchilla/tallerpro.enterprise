@@ -61,7 +61,6 @@ const MODULOS = [
   { id:'inventario',     icon:'📦', label:'Inventario',        grupo:'operacion'  },
   { id:'bodegas',        icon:'🏭', label:'Bodegas',           grupo:'operacion'  },
   { id:'proveedores',    icon:'🏪', label:'Proveedores',       grupo:'operacion'  },
-  { id:'compras',        icon:'🛒', label:'Compras',           grupo:'operacion'  },
   { id:'activos',        icon:'🛠️', label:'Herramientas y Activos', grupo:'operacion',
     subnav:[
       { tab:'activos',      icon:'🛠️', label:'Inventario de Activos' },

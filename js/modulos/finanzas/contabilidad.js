@@ -241,6 +241,7 @@ Modulos.contabilidad = {
     /* ── LIBRO DE COMPRAS ────────────────────────── */
     else if (this._tab === 'compras') {
       const d = await this._datos();
+      const felRecSinImp = await DB.getFelSinImportar('recibida').catch(()=>[]);
       const opts = (sel) => Object.entries(this._CATS).map(([k,v])=>`<option value="${k}" ${sel===k?'selected':''}>${v.label}</option>`).join('');
       const porClasificar = d.compras.filter(c=>!/anulad/i.test(c.estado||'') && (c.categoria_gasto||'por_clasificar')==='por_clasificar');
       const filasC = d.compras.map(c=>{
@@ -269,6 +270,16 @@ Modulos.contabilidad = {
       const totDed = d.compras.filter(c=>c.deducible && !/anulad/i.test(c.estado||'')).reduce((s,c)=>s+(Number(c.total)||0),0);
       const totNoDed = d.compras.filter(c=>!c.deducible && (c.categoria_gasto||'por_clasificar')!=='por_clasificar' && !/anulad/i.test(c.estado||'')).reduce((s,c)=>s+(Number(c.total)||0),0);
       el.innerHTML = `
+        ${felRecSinImp.length>0?`
+        <div class="card" style="background:linear-gradient(135deg,var(--cyan)15 0%,var(--blue)15 100%);margin-bottom:12px;border-left:4px solid var(--cyan)">
+          <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px">
+            <div>
+              <div class="card-sub" style="margin:0;color:var(--cyan)">📥 Importar compras desde FEL del SAT</div>
+              <p style="font-size:12px;color:var(--text2);margin:6px 0 0 0"><b>${felRecSinImp.length} facturas recibidas</b> del FEL para registrar. Total: <b>${UI.q(felRecSinImp.reduce((s,f)=>s+(Number(f.gran_total)||0),0))}</b></p>
+            </div>
+            <button class="btn btn-cyan" onclick="Modulos.compras._importarFel()">⬆️ Importar todo (${felRecSinImp.length})</button>
+          </div>
+        </div>`:''}
         ${porClasificar.length>0?`
         <div class="alert alert-amber" style="margin-bottom:12px">
           <div class="alert-icon">⏳</div>
@@ -279,6 +290,7 @@ Modulos.contabilidad = {
         <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px;margin-bottom:12px">
           <div style="font-size:12px;color:var(--text2)">✅ Deducible: <b class="text-green">${UI.q(totDed)}</b> · 🚫 No deducible: <b class="text-red">${UI.q(totNoDed)}</b></div>
           <div style="display:flex;gap:6px">
+            <button class="btn btn-amber btn-sm" onclick="Modulos.compras.modalCompra()">＋ Nueva Compra</button>
             <button class="btn btn-green btn-sm" onclick="Modulos.finanzas.exportExcelContador('${this._rango().ini}','${this._rango().fin}')">⬇️ Excel contador</button>
             <button class="btn btn-cyan btn-sm" onclick="Modulos.contabilidad.exportarCompras()">⬇️ CSV</button>
           </div>
