@@ -1710,5 +1710,60 @@ const DB = {
       .eq('id', id)
       .eq('tenant_id', getTID());
     if (error) throw error;
+  },
+
+  /* ── Sincronizar FEL con Compras ──────────────────────────── */
+  async getFelSinImportar(naturaleza = 'recibida') {
+    const { data, error } = await getSB().from('fel_importados')
+      .select('*')
+      .eq('tenant_id', getTID())
+      .eq('naturaleza', naturaleza)
+      .is('id', `NOT.in(SELECT fel_importado_id FROM compras WHERE fel_importado_id IS NOT NULL AND tenant_id = '${getTID()}')`)
+      .order('fecha', { ascending: false });
+    if (error) throw error;
+    return data || [];
+  },
+
+  async crearCompraDesdeFeL(felId) {
+    const { data: fel, error: felErr } = await getSB().from('fel_importados')
+      .select('*')
+      .eq('id', felId)
+      .eq('tenant_id', getTID())
+      .single();
+    if (felErr || !fel) throw new Error('FEL no encontrado');
+
+    const compra = {
+      tenant_id: getTID(),
+      fel_importado_id: felId,
+      proveedor_nombre: fel.nombre_emisor,
+      num_factura: `${fel.serie||''} ${fel.numero_dte||''}`.trim(),
+      fecha: fel.fecha,
+      subtotal: Math.round((fel.gran_total - (fel.iva||0)) * 100) / 100,
+      iva: Math.round((fel.iva||0) * 100) / 100,
+      total: fel.gran_total,
+      estado: 'recibida',
+      es_importacion: false,
+      notas: `Importada desde FEL del SAT - ${fel.numero_autorizacion||''}`
+    };
+
+    const { data, error } = await getSB().from('compras')
+      .insert([compra])
+      .select('id');
+    if (error) throw error;
+    return data?.[0]?.id;
+  },
+
+  async crearComprasDesdeFeL(felIds) {
+    let count = 0, errors = 0;
+    for (const felId of felIds) {
+      try {
+        await this.crearCompraDesdeFeL(felId);
+        count++;
+      } catch (e) {
+        console.error('Crear compra desde FEL:', e);
+        errors++;
+      }
+    }
+    return { count, errors };
   }
 };

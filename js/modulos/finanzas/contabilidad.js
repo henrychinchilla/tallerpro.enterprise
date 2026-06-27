@@ -621,26 +621,20 @@ Modulos.contabilidad = {
     this._felParse = null;
 
     const readFile = (f) => new Promise((resolve, reject) => {
-      console.log('FEL: Leyendo', f.name, f.size, 'bytes');
       const ext = f.name.split('.').pop().toLowerCase();
       if (ext === 'xls' || ext === 'xlsx') {
         const r = new FileReader();
         r.onload = ev => {
           try {
-            console.log('FEL: Buffer leído', f.name, ev.target.result.byteLength, 'bytes');
             const wb = XLSX.read(new Uint8Array(ev.target.result), { type:'array' });
-            console.log('FEL: Workbook parseado, sheets:', wb.SheetNames);
             const ws = wb.Sheets[wb.SheetNames[0]];
             const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
-            console.log('FEL: Rows convertidas a array:', rows.length, 'filas');
             resolve({ rows, name: f.name });
           } catch(e) {
-            console.error('FEL: Error parseando XLS', f.name, e);
             reject(e);
           }
         };
         r.onerror = e => {
-          console.error('FEL: Error leyendo archivo', f.name, e);
           reject(e);
         };
         r.readAsArrayBuffer(f);
@@ -649,10 +643,8 @@ Modulos.contabilidad = {
         r.onload = ev => {
           try {
             const rows = this._csvParse(String(ev.target.result));
-            console.log('FEL: CSV parseado, rows:', rows.length);
             resolve({ rows, name: f.name });
           } catch(e) {
-            console.error('FEL: Error parseando CSV', f.name, e);
             reject(e);
           }
         };
@@ -661,27 +653,21 @@ Modulos.contabilidad = {
     });
 
     Promise.all(files.map(f => readFile(f).catch(e => {
-      console.error('FEL Promise catch:', f.name, e.message || e);
       return { error: e.message || String(e), name: f.name };
     })))
       .then(results => {
-        console.log('FEL: Todos los archivos leídos, resultados:', results.length);
         const allDocs = [];
         const resumen = [];
         results.forEach(({ rows, name, error }) => {
           if (error) {
-            console.warn('FEL: Error en', name, ':', error);
             resumen.push({ name, error });
             return;
           }
-          console.log('FEL: Procesando', name, rows ? rows.length : '?', 'filas');
           const nat = /emiti/i.test(name) ? 'emitida' : /recib/i.test(name) ? 'recibida' : 'recibida';
           const docs = this._procesarFelRows(rows, nat);
-          console.log('FEL:', name, 'resultó en', docs.length, 'documentos');
           if (docs.length) { allDocs.push(...docs); resumen.push({ name, nat, count: docs.length }); }
           else resumen.push({ name, error: 'Sin documentos válidos' });
         });
-        console.log('FEL: Total documentos:', allDocs.length);
         if (!allDocs.length) { UI.toast('No se encontraron documentos válidos','error'); return; }
         this._felParse = allDocs;
         this._mostrarPreviewFel(allDocs, resumen);
@@ -708,7 +694,6 @@ Modulos.contabilidad = {
   },
 
   _procesarFelRows(filas, naturaleza) {
-    if (filas.length < 2) { console.warn('FEL: < 2 filas', filas.length); return []; }
     const norm = h => {
       let s = String(h||'').toLowerCase()
         .replace(/[áàâäã]/g,'a').replace(/[éèêë]/g,'e')
@@ -718,7 +703,6 @@ Modulos.contabilidad = {
       return s;
     };
     const head = filas[0].map(norm);
-    console.log('FEL headers normalizados:', head);
     const idx = re => head.findIndex(h=>re.test(h));
     const col = {
       fecha:        idx(/fecha/),
@@ -736,9 +720,7 @@ Modulos.contabilidad = {
       anulado:      idx(/marca.*anulad/),
       petroleo:     idx(/petroleo|petrol/)
     };
-    console.log('FEL columnas detectadas:', col);
     if (col.fecha < 0 || col.total < 0) {
-      console.warn('FEL: no encontró Fecha o Total', { fecha: col.fecha, total: col.total });
       return [];
     }
 
@@ -771,13 +753,10 @@ Modulos.contabilidad = {
         estado:               esAnulado(r) ? 'anulada' : 'activa'
       };
     });
-    console.log('FEL: Procesados', docs.length, 'documentos (brutos)');
     const filtered = docs.filter(d => {
       const valid = d.fecha && d.gran_total > 0;
-      if (!valid && docs.length < 10) console.log('FEL: Descartado:', { fecha: d.fecha, total: d.gran_total });
       return valid;
     });
-    console.log('FEL: Después del filtro:', filtered.length, 'documentos válidos');
     return filtered;
   },
 
@@ -830,7 +809,6 @@ Modulos.contabilidad = {
     let total = 0, errores = 0;
     for (let i = 0; i < docs.length; i += 200) {
       const { count, error } = await DB.insertFelImportados(docs.slice(i, i+200));
-      if (error) { errores++; console.error('importarFel:', error.message); }
       total += count;
     }
     this._felParse = null;
