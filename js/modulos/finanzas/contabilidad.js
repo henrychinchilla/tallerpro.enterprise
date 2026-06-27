@@ -628,7 +628,7 @@ Modulos.contabilidad = {
           try {
             const wb = XLSX.read(new Uint8Array(ev.target.result), { type:'array' });
             const ws = wb.Sheets[wb.SheetNames[0]];
-            const rows = XLSX.utils.sheet_to_array(ws);
+            const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
             resolve({ rows, name: f.name });
           } catch(e) { reject(e); }
         };
