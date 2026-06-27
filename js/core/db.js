@@ -602,6 +602,38 @@ const DB = {
     const { data } = await getSB().from('compra_items').select('*').eq('compra_id', compraId);
     return data || [];
   },
+  /* Editar cabecera de una compra (proveedor, factura, fecha, estado). */
+  async actualizarCompraCabecera(id, fields) {
+    const { error } = await getSB().from('compras')
+      .update(fields).eq('id', id).eq('tenant_id', getTID());
+    return { error };
+  },
+  /* Eliminar una compra revirtiendo sus efectos: baja el stock que sumó,
+     borra el egreso vinculado y los items (cascade), luego la compra. */
+  async eliminarCompra(id) {
+    const tid = getTID();
+    const { data: compra } = await getSB().from('compras')
+      .select('id,egreso_id').eq('id', id).eq('tenant_id', tid).maybeSingle();
+    if (!compra) return { error: { message: 'Compra no encontrada' } };
+    /* Revertir inventario de cada item con artículo vinculado */
+    const items = await this.getCompraItems(id);
+    for (const i of items) {
+      if (!i.inventario_id || !(Number(i.cantidad) > 0)) continue;
+      const { data: inv } = await getSB().from('inventario').select('stock').eq('id', i.inventario_id).maybeSingle();
+      if (!inv) continue;
+      await getSB().from('inventario').update({
+        stock: Math.max(0, (Number(inv.stock)||0) - Number(i.cantidad)), updated_at: new Date().toISOString()
+      }).eq('id', i.inventario_id);
+    }
+    /* Borrar egreso vinculado (si existe) */
+    if (compra.egreso_id) {
+      await getSB().from('egresos').delete().eq('id', compra.egreso_id).eq('tenant_id', tid);
+    }
+    /* Borrar items y la compra */
+    await getSB().from('compra_items').delete().eq('compra_id', id);
+    const { error } = await getSB().from('compras').delete().eq('id', id).eq('tenant_id', tid);
+    return { error };
+  },
   /* Presupuesto planificado de compras del año (categorías de insumos) */
   async getPresupuestoCompras(anio) {
     const { data } = await getSB().from('presupuesto').select('categoria,monto_plan,tipo')
