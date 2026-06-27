@@ -6,6 +6,19 @@
 const App = {
   paginaActual: 'dashboard',
   _subActivo: null,   // sub-sección activa del módulo actual (para el submenú lateral)
+  _unsavedGuard: null, // función () => bool; si devuelve false, se cancela la salida
+
+  /* Guard de cambios sin guardar. Un módulo (ej. formulario SAT) registra
+     App._unsavedGuard mientras edita; al intentar navegar fuera se consulta.
+     Devuelve true si se puede salir (y limpia el guard). */
+  puedeSalir() {
+    if (typeof App._unsavedGuard === 'function') {
+      const ok = App._unsavedGuard();
+      if (ok) { App._unsavedGuard = null; window.onbeforeunload = null; }
+      return ok;
+    }
+    return true;
+  },
 
   /* ── INICIAR APP ──────────────────────────────── */
   async iniciar() {
@@ -233,6 +246,7 @@ const App = {
   /* ── NAVEGACIÓN ───────────────────────────────── */
   navegarA(pagina) {
     if (!Auth.user) return;
+    if (pagina !== App.paginaActual && !App.puedeSalir()) return;
     const rol = Auth.user.rol;
 
     /* Click sobre el módulo ya activo: contraer/expandir sus pestañas
@@ -281,6 +295,7 @@ const App = {
 
   /* ── NAVEGACIÓN A SUB-SECCIÓN (submenú lateral) ── */
   navegarSub(pagina, tab) {
+    if ((pagina !== App.paginaActual || tab !== App._subActivo) && !App.puedeSalir()) return;
     const modulo = window.Modulos?.[pagina];
     App._subActivo = tab;
     if (App.paginaActual !== pagina) {

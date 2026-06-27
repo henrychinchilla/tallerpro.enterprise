@@ -63,6 +63,10 @@ Modulos.contabilidad.sat = {
   async renderLista(parent) {
     const el = document.getElementById('cont-content');
     if (!el) return;
+    /* Sin editor abierto → liberar guardia de salida */
+    this._editorDirty = false;
+    App._unsavedGuard = null;
+    window.onbeforeunload = null;
 
     let list = [];
     try {
@@ -2241,6 +2245,22 @@ Modulos.contabilidad.sat = {
     else if (tipo === 'SAT-2085') this.recalc2085();
     else if (tipo === 'SAT-1431') this.recalc1431();
     else if (tipo === 'SAT-1411') this.recalc1411();
+
+    /* ── Guardia de cambios sin guardar (solo en el editor real) ── */
+    if (!targetContainer) {
+      this._editorDirty = false;
+      const marcar = () => { Modulos.contabilidad.sat._editorDirty = true; };
+      container.addEventListener('input', marcar);
+      container.addEventListener('change', marcar);
+      /* Salida dentro de la app (cambiar módulo/pestaña) */
+      App._unsavedGuard = () => !Modulos.contabilidad.sat._editorDirty ||
+        window.confirm('⚠️ Tenés cambios sin guardar en la declaración.\n\n¿Salir sin guardar? (Aceptar = salir · Cancelar = quedarme)');
+      /* Recargar / cerrar pestaña del navegador */
+      window.onbeforeunload = (e) => {
+        if (!Modulos.contabilidad.sat._editorDirty) return undefined;
+        e.preventDefault(); e.returnValue = ''; return '';
+      };
+    }
   },
 
   recalc2046() {
@@ -3041,7 +3061,11 @@ Modulos.contabilidad.sat = {
 
     const { error } = await DB.upsertFormularioTributario(payload);
     if (error) { UI.toast('Error: ' + error.message, 'error'); return; }
-    UI.toast('Declaración guardada exitosamente ✓');
+    /* Cambios ya guardados → liberar el guardia de salida */
+    this._editorDirty = false;
+    App._unsavedGuard = null;
+    window.onbeforeunload = null;
+    UI.toast(estado==='preparacion' ? 'Borrador guardado ✓' : estado==='presentado' ? 'Declaración validada y congelada ✓' : 'Declaración guardada ✓');
     await Modulos.contabilidad._renderTab();
   },
 
