@@ -1588,6 +1588,18 @@ const DB = {
     return { count: ids.length };
   },
 
+  /* Ajusta banderas fiscales individuales de una compra (deducible / credito_iva)
+     sin cambiar la categoría — para casos como viático deducible pero sin crédito IVA
+     (factura a CF o a otro NIT). */
+  async setFlagsCompra(id, flags) {
+    const limpio = {};
+    if ('deducible' in flags) limpio.deducible = !!flags.deducible;
+    if ('credito_iva' in flags) limpio.credito_iva = !!flags.credito_iva;
+    const { error } = await getSB().from('compras')
+      .update(limpio).eq('id', id).eq('tenant_id', getTID());
+    return { error };
+  },
+
   /* Clasifica varias compras a la vez. recordar=true guarda la regla por proveedor. */
   async clasificarCompras(ids, { categoria_gasto, deducible, credito_iva }, recordar=false) {
     const tid = getTID();
