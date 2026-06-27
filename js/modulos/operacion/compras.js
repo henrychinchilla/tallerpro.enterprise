@@ -8,6 +8,21 @@ Modulos.compras = {
   _compras: [],
   _mes: null, _anio: null,   // periodo activo (null = inicializa al mes actual)
 
+  /* El módulo Compras se consolidó en Contabilidad → Libro de Compras.
+     Estos helpers permiten reusar el modal/CRUD desde ahí. */
+  async _ensureData() {
+    if (!this._prov?.length) {
+      [this._inv, this._prov, this._fiscal] = await Promise.all([
+        DB.getInventario(), DB.getProveedores(), DB.getConfigFiscal().catch(()=>({}))
+      ]);
+    } else if (!this._fiscal) {
+      this._fiscal = await DB.getConfigFiscal().catch(()=>({}));
+    }
+  },
+  _refrescar() {
+    if (window.Modulos?.contabilidad?._renderTab) Modulos.contabilidad._renderTab();
+  },
+
   async render() {
     const el = document.getElementById('page-content');
     UI.loading(el);
@@ -128,7 +143,8 @@ Modulos.compras = {
     </tr>`;
   },
 
-  modalCompra() {
+  async modalCompra() {
+    await this._ensureData();
     this._ri = 0;
     const esImportadora = !!this._fiscal?.es_importadora;
     UI.modal('🛒 Nueva Compra', `
@@ -258,7 +274,7 @@ Modulos.compras = {
     if (error || !data) { UI.toast('Error: '+(error?.message||''),'error'); return; }
     UI.cerrarModal();
     UI.toast(`Compra ${data.num} registrada ✓ — inventario y egreso actualizados`);
-    this.render();
+    this._refrescar();
   },
 
   async verCompra(id) {
@@ -326,7 +342,7 @@ Modulos.compras = {
     if (error) { UI.toast('Error: '+(error.message||''),'error'); return; }
     UI.cerrarModal();
     UI.toast('Compra actualizada ✓');
-    this.render();
+    this._refrescar();
   },
 
   /* ── ELIMINAR (revierte inventario + egreso) ── */
@@ -340,7 +356,7 @@ Modulos.compras = {
     const { error } = await DB.eliminarCompra(id);
     if (error) { UI.toast('No se pudo eliminar: '+(error.message||''),'error'); return; }
     UI.toast('Compra eliminada ✓');
-    this.render();
+    this._refrescar();
   },
 
   async _importarFel() {
@@ -357,6 +373,6 @@ Modulos.compras = {
     if (errors) UI.toast(`Se crearon ${count} compras (${errors} errores)`, 'error');
     else if (count === 0) UI.toast('Todas las facturas ya estaban registradas','info');
     else UI.toast(`✓ ${count} compras creadas${omitidas>0?` · ${omitidas} ya existían`:''}`);
-    this.render();
+    this._refrescar();
   }
 };
