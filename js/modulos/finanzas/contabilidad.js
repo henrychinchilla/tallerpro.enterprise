@@ -20,17 +20,24 @@ Modulos.contabilidad = {
   _fuenteCredito: 'sistema',   // 'sistema' (compras+gastos) | 'fel' (CSV de SAT)
   _felParse: null,             // resultado del CSV pendiente de importar
 
-  /* Categorías de gasto con sus banderas fiscales por defecto (ded=ISR, cred=IVA) */
+  /* Categorías de gasto con sus banderas fiscales por defecto (ded=ISR, cred=IVA).
+     Viáticos comprobables (alimentos, hospedaje, transporte), herramientas, equipo
+     y útiles son DEDUCIBLES si son para el negocio (Art. 21 Dto. 10-2012). */
   _CATS: {
-    por_clasificar:        { label:'⏳ Por clasificar',            ded:false, cred:false },
-    materia_prima:         { label:'🔩 Materia prima',             ded:true,  cred:true  },
-    insumos_servicio:      { label:'🧰 Insumos para servicios',    ded:true,  cred:true  },
-    combustible:           { label:'⛽ Combustible',               ded:true,  cred:true  },
-    servicios:             { label:'💡 Servicios (luz/agua/tel)',  ded:true,  cred:true  },
-    gastos_admin:          { label:'🏢 Gastos administrativos',    ded:true,  cred:true  },
-    alimentos:             { label:'🍽️ Alimentos',                ded:false, cred:false },
-    personal_no_deducible: { label:'🚫 Personal / no deducible',   ded:false, cred:false },
-    otros:                 { label:'📦 Otros',                     ded:true,  cred:true  },
+    por_clasificar:        { label:'⏳ Por clasificar',                ded:false, cred:false },
+    materia_prima:         { label:'🔩 Materia prima',                 ded:true,  cred:true  },
+    insumos_servicio:      { label:'🧰 Insumos para servicios',        ded:true,  cred:true  },
+    combustible:           { label:'⛽ Combustible',                   ded:true,  cred:true  },
+    herramientas:          { label:'🛠️ Herramientas',                 ded:true,  cred:true  },
+    electrodomesticos:     { label:'🔌 Electrodomésticos / equipo',    ded:true,  cred:true  },
+    viaticos_alimentos:    { label:'🍽️ Viáticos — alimentos',         ded:true,  cred:true  },
+    viaticos_hospedaje:    { label:'🏨 Viáticos — hospedaje',          ded:true,  cred:true  },
+    viaticos_transporte:   { label:'🚕 Viáticos — transporte/taxi',    ded:true,  cred:true  },
+    utiles_papeleria:      { label:'✏️ Útiles / papelería',           ded:true,  cred:true  },
+    servicios:             { label:'💡 Servicios (luz/agua/tel)',      ded:true,  cred:true  },
+    gastos_admin:          { label:'🏢 Gastos administrativos',        ded:true,  cred:true  },
+    otros:                 { label:'📦 Otros (deducible)',             ded:true,  cred:true  },
+    personal_no_deducible: { label:'🚫 Personal / no deducible',       ded:false, cred:false },
   },
 
   async _clasificarCompra(id, categoria, proveedor) {
