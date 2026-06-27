@@ -1714,14 +1714,21 @@ const DB = {
 
   /* ── Sincronizar FEL con Compras ──────────────────────────── */
   async getFelSinImportar(naturaleza = 'recibida') {
-    const { data, error } = await getSB().from('fel_importados')
-      .select('*')
-      .eq('tenant_id', getTID())
-      .eq('naturaleza', naturaleza)
-      .is('id', `NOT.in(SELECT fel_importado_id FROM compras WHERE fel_importado_id IS NOT NULL AND tenant_id = '${getTID()}')`)
-      .order('fecha', { ascending: false });
-    if (error) throw error;
-    return data || [];
+    const tid = getTID();
+    const [felResp, importResp] = await Promise.all([
+      getSB().from('fel_importados')
+        .select('*')
+        .eq('tenant_id', tid)
+        .eq('naturaleza', naturaleza)
+        .order('fecha', { ascending: false }),
+      getSB().from('compras')
+        .select('fel_importado_id')
+        .eq('tenant_id', tid)
+        .not('fel_importado_id', 'is', null)
+    ]);
+    if (felResp.error) throw felResp.error;
+    const importadosSet = new Set((importResp.data||[]).map(c => c.fel_importado_id));
+    return (felResp.data||[]).filter(f => !importadosSet.has(f.id));
   },
 
   async crearCompraDesdeFeL(felId) {
