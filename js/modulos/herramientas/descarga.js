@@ -156,13 +156,19 @@ Modulos.descarga = {
     const el = document.getElementById('qr-descarga');
     if (!el) return;
     const url = this._APP_URL;
-    el.innerHTML = `<a href="${url}" target="_blank" style="display:block;font-size:10px;color:var(--text3);text-decoration:none;word-break:break-all;max-width:140px;text-align:center">
-      <div style="font-size:48px;margin-bottom:4px">🔗</div>
-      tallerpro.cmtelecommgt.com
-    </a>`;
+    /* QR como imagen (sin depender de librería). Si falla la imagen, queda el enlace. */
+    const api = `https://api.qrserver.com/v1/create-qr-code/?size=160x160&margin=0&data=${encodeURIComponent(url)}`;
+    el.innerHTML = `
+      <img src="${api}" alt="QR para abrir TallerPro" width="160" height="160"
+        style="display:block;border-radius:8px"
+        onerror="this.style.display='none';this.nextElementSibling.style.display='block'">
+      <a href="${url}" target="_blank" style="display:none;font-size:10px;color:var(--text3);text-decoration:none;word-break:break-all;max-width:160px;text-align:center">
+        <div style="font-size:48px;margin-bottom:4px">🔗</div>tallerpro.cmtelecommgt.com
+      </a>`;
+    /* Si la librería QRCode está disponible, generarlo localmente (mejor calidad/offline) */
     if (typeof QRCode !== 'undefined') {
       el.innerHTML = '';
-      new QRCode(el, { text: url, width: 120, height: 120, colorDark:'#000', colorLight:'#fff', correctLevel: QRCode.CorrectLevel.M });
+      new QRCode(el, { text: url, width: 160, height: 160, colorDark:'#000', colorLight:'#fff', correctLevel: QRCode.CorrectLevel.M });
     }
   }
 };
