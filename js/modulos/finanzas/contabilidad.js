@@ -768,7 +768,7 @@ Modulos.contabilidad = {
         iva:                  col.iva>=0 ? num(g(r,col.iva)) : null,
         petroleo:             petro,
         es_combustible:       petro > 0,
-        estado:               esAnulado(r) ? 'anulado' : 'vigente'
+        estado:               esAnulado(r) ? 'anulada' : 'activa'
       };
     });
     console.log('FEL: Procesados', docs.length, 'documentos (brutos)');
