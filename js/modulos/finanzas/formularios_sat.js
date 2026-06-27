@@ -375,13 +375,14 @@ Modulos.contabilidad.sat = {
         endDate = `${anio}-${mes}-${String(lastDay).padStart(2, '0')}`;
       }
 
-      let facturas = [], compras = [], egresosIva = [], retenciones = [], allForms = [];
+      let facturas = [], compras = [], egresosIva = [], retenciones = [], allForms = [], felPeriodo = [];
       try {
         facturas = await DB.getFacturasPeriodo(startDate, endDate) || [];
         compras = await DB.getComprasPeriodo(startDate, endDate) || [];
         egresosIva = await DB.getEgresosIvaPeriodo(startDate, endDate) || [];
         retenciones = await DB.getRetencionesPeriodo(startDate, endDate) || [];
         allForms = await DB.getFormulariosTributarios() || [];
+        felPeriodo = await DB.getFelImportados(startDate, endDate) || [];
       } catch (e) {
         console.error(e);
       }
@@ -389,8 +390,19 @@ Modulos.contabilidad.sat = {
       const facturasValidas = facturas.filter(f => !/anulad/i.test(f.estado || ''));
       const comprasValidas = compras.filter(c => !/anulad/i.test(c.estado || ''));
 
-      const salesTotal = facturasValidas.reduce((sum, f) => sum + (Number(f.total) || 0), 0);
-      const purchasesTotal = comprasValidas.reduce((sum, c) => sum + (Number(c.total) || 0), 0)
+      /* FEL del periodo = fuente autoritativa del SAT. Para no duplicar:
+         - usamos las compras MANUALES (sin fel_importado_id) + el FEL recibido directo
+         - las ventas = facturas del sistema + FEL emitido (no se importan a 'facturas') */
+      const felVal = felPeriodo.filter(f => !/anulad/i.test(f.estado || ''));
+      const felEmi = felVal.filter(f => f.naturaleza === 'emitida');
+      const felRec = felVal.filter(f => f.naturaleza !== 'emitida');
+      const felNeto = f => { const t = Number(f.gran_total)||0, i = Number(f.iva)||0; return i>0 ? Math.round((t-i)*100)/100 : Math.round(t/1.12*100)/100; };
+      const comprasManual = comprasValidas.filter(c => !c.fel_importado_id);
+
+      const salesTotal = facturasValidas.reduce((sum, f) => sum + (Number(f.total) || 0), 0)
+        + felEmi.reduce((s, f) => s + (Number(f.gran_total) || 0), 0);
+      const purchasesTotal = comprasManual.reduce((sum, c) => sum + (Number(c.total) || 0), 0)
+        + felRec.reduce((s, f) => s + (Number(f.gran_total) || 0), 0)
         + egresosIva.reduce((sum, e) => sum + (Number(e.monto) || 0), 0);
 
       const sufISR = retenciones.filter(r => r.tipo === 'ISR' && r.naturaleza === 'recibida').reduce((s, r) => s + (Number(r.monto) || 0), 0);
@@ -408,22 +420,26 @@ Modulos.contabilidad.sat = {
         valores_originales.retenciones_recibidas = sufIVA;
       } else if (tipo === 'SAT-2237') {
         /* El formulario calcula crédito/débito = base × 12%, por lo que las
-           bases deben ir NETAS (sin IVA). neto(doc) = subtotal o total/1.12 */
+           bases van NETAS (sin IVA). Fuente: FEL directo + compras manuales,
+           sin duplicar las compras importadas del propio FEL. */
         const neto = d => Number(d.subtotal) || Math.round((Number(d.total)||0)/1.12*100)/100;
         const round2 = n => Math.round(n*100)/100;
 
-        /* Débito: ventas netas (facturas emitidas) */
-        const ventasBase = facturasValidas.reduce((s,f)=>s+neto(f), 0);
+        /* Débito: ventas netas = facturas del sistema + FEL emitido */
+        const ventasBase = facturasValidas.reduce((s,f)=>s+(Number(f.subtotal)||Math.round((Number(f.total)||0)/1.12*100)/100),0)
+          + felEmi.reduce((s,f)=>s+felNeto(f),0);
 
-        /* Crédito, separado por tipo de compra: */
-        const importaciones = comprasValidas.filter(c => c.es_importacion && (Number(c.cif_valor)||0) > 0);
-        const combustibles  = comprasValidas.filter(c => c.es_combustible && !c.es_importacion);
-        const localesResto  = comprasValidas.filter(c => !c.es_combustible && !c.es_importacion);
+        /* Crédito separado. Importaciones solo vienen de compras manuales (DUA/CIF). */
+        const importaciones = comprasManual.filter(c => c.es_importacion && (Number(c.cif_valor)||0) > 0);
+        const impMundoBase  = importaciones.reduce((s,c) => s + (Number(c.cif_valor)||0) + (Number(c.dai_monto)||0), 0);
 
-        const impMundoBase = importaciones.reduce((s,c) => s + (Number(c.cif_valor)||0) + (Number(c.dai_monto)||0), 0);
-        const combBase     = combustibles.reduce((s,c)=>s+neto(c), 0);
-        /* Compras locales (resto) + egresos con IVA crédito, netos */
-        const comprasLocalesBase = localesResto.reduce((s,c)=>s+neto(c), 0)
+        /* Combustible: FEL recibido (es_combustible) + compras manuales combustible */
+        const combBase = felRec.filter(f=>f.es_combustible).reduce((s,f)=>s+felNeto(f),0)
+          + comprasManual.filter(c=>c.es_combustible && !c.es_importacion).reduce((s,c)=>s+neto(c),0);
+
+        /* Compras locales (resto): FEL recibido no-combustible + compras manuales locales + egresos */
+        const comprasLocalesBase = felRec.filter(f=>!f.es_combustible).reduce((s,f)=>s+felNeto(f),0)
+          + comprasManual.filter(c=>!c.es_combustible && !c.es_importacion).reduce((s,c)=>s+neto(c),0)
           + egresosIva.reduce((s,e)=> s + ((Number(e.monto)||0) - (Number(e.iva_credito)||0)), 0);
 
         valores_originales.ventas_base   = round2(ventasBase);

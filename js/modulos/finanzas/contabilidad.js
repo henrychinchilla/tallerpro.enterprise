@@ -146,17 +146,6 @@ Modulos.contabilidad = {
     return b <= 30000 ? b*0.05 : (30000*0.05 + (b-30000)*0.07);
   },
 
-  _fila(label, valor, opts={}) {
-    return `<div style="display:flex;justify-content:space-between;gap:10px;padding:7px 0;border-bottom:1px dashed var(--border);font-size:13px">
-      <span style="color:var(--text2)">${label}</span>
-      <b class="mono-sm" style="color:var(--${opts.color||'text'})">${UI.q(valor)}</b></div>`;
-  },
-
-  _totalFila(label, valor, color) {
-    return `<div style="display:flex;justify-content:space-between;gap:10px;padding:12px 0 4px;font-size:15px">
-      <b>${label}</b><b class="mono-sm" style="font-size:18px;color:var(--${color})">${UI.q(valor)}</b></div>`;
-  },
-
   async _renderTab() {
     const el = document.getElementById('cont-content');
     if (!el) return;
@@ -169,132 +158,10 @@ Modulos.contabilidad = {
     const pequeno = (this._fiscal?.regimen_iva||'general').toLowerCase().startsWith('peque');
     const utilidades = (Number(this._fiscal?.tasa_isr)||0.05) >= 0.2;
 
-    /* ── IVA (con arrastre y fuente de crédito) ──── */
-    if (this._tab === 'iva') {
-      const d = await this._ivaConArrastre();
-      const saldo = d.saldo;
-      const difDeb = Math.round((d.debitoFel - d.debito)*100)/100;
 
-      el.innerHTML = `
-        <div class="kpi-grid" style="margin-bottom:16px">
-          ${UI.kpiCard({ icon:'🧾', clase:'amber', label:'Débito fiscal', value: d.debito, money:true, trend:`${d.ventas.length} facturas del sistema` })}
-          ${UI.kpiCard({ icon:'💳', clase:'cyan', label:`Crédito fiscal (${this._fuenteCredito==='fel'?'FEL SAT':'sistema'})`, value: d.creditoUsado, money:true, trend: this._fuenteCredito==='fel'?d.felRec+' DTE recibidos':'compras + gastos' })}
-          ${UI.kpiCard({ icon:'🔄', clase:'purple', label:'Remanente anterior', value: d.remanenteAnterior, money:true, trend:`arrastre desde enero ${anio}` })}
-          ${UI.kpiCard({ icon:'⚖️', clase: saldo>=0?'red':'green', label: saldo>=0?'IVA a pagar':'Remanente', value: Math.abs(saldo), money:true, trend: nombreMes })}
-        </div>
-
-        <div class="card" style="max-width:680px;margin-bottom:14px">
-          <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px">
-            <div class="card-sub" style="margin:0">🧾 ${pequeno?'Pequeño Contribuyente (SAT-2046)':'Hoja de trabajo — IVA General (SAT-2237)'} · ${nombreMes}</div>
-            <div class="view-toggle">
-              <button class="view-btn ${this._fuenteCredito==='sistema'?'active':''}" style="font-size:11px;padding:6px 10px" title="Crédito desde Compras y Gastos del sistema" onclick="Modulos.contabilidad._fuenteCredito='sistema';Modulos.contabilidad._renderTab()">Sistema</button>
-              <button class="view-btn ${this._fuenteCredito==='fel'?'active':''}" style="font-size:11px;padding:6px 10px" title="Crédito desde el CSV de la Consulta FEL de SAT" onclick="Modulos.contabilidad._fuenteCredito='fel';Modulos.contabilidad._renderTab()">FEL SAT</button>
-            </div>
-          </div>
-          ${pequeno ? `
-            ${this._fila('Total facturado del mes (IVA incluido)', d.ventasTotal)}
-            ${this._totalFila('IVA A PAGAR (5% del facturado)', Math.round(d.ventasTotal*0.05*100)/100, 'red')}
-            <div style="font-size:11px;color:var(--text3)">Pequeño Contribuyente: 5% sobre ingresos brutos, sin crédito fiscal (SAT-2046).</div>
-          ` : `
-            ${this._fila('Ventas y servicios gravados (base imponible)', d.ventasNetas)}
-            ${this._fila('DÉBITO fiscal (12% de ventas)', d.debito, {color:'amber'})}
-            ${this._fila(`CRÉDITO fiscal — fuente ${this._fuenteCredito==='fel'?'FEL importado de SAT':'compras + gastos del sistema'}`, d.creditoUsado, {color:'cyan'})}
-            ${this._fila('(−) Retenciones de IVA que te efectuaron', d.retIva, {color:'purple'})}
-            ${this._fila('(−) Remanente de crédito del periodo anterior', d.remanenteAnterior, {color:'purple'})}
-            ${this._totalFila(saldo>=0?'IVA A PAGAR del periodo':'REMANENTE para el próximo periodo', Math.abs(saldo), saldo>=0?'red':'green')}
-            <div style="font-size:11px;color:var(--text3);margin-top:6px">
-              El remanente se arrastra automáticamente mes a mes desde enero ${anio}.
-              ${d.felEmi?`Verificación débito: FEL emitidas de SAT suman <b>${UI.q(d.debitoFel)}</b> (${difDeb===0?'✓ cuadra con el sistema':`diferencia ${UI.q(Math.abs(difDeb))} vs sistema`}).`:''}
-            </div>
-          `}
-        </div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap">
-          <button class="btn btn-amber" onclick="Modulos.contabilidad.registrarObligacion('IVA')">📅 Registrar obligación IVA ${periodo}</button>
-          <button class="btn btn-ghost" onclick="Modulos.contabilidad.modalRetencion('IVA')">➕ Retención de IVA</button>
-          ${!d.felRec && !pequeno ? `<button class="btn btn-cyan" onclick="Modulos.contabilidad._ir('fel')">⬆️ Importar FEL de SAT para el crédito</button>`:''}
-        </div>`;
-    }
-
-    /* ── TRIMESTRAL: ISR SAT-1361 + ISO SAT-1608 ── */
-    else if (this._tab === 'trimestre') {
-      if (!utilidades) {
-        el.innerHTML = `<div class="alert alert-cyan" style="max-width:640px"><div class="alert-icon">ℹ️</div>
-          <div class="alert-body" style="font-size:13px">Este taller está en <b>régimen opcional simplificado</b> (ISR mensual 5%/7%, pestaña "ISR mensual") y por ley está <b>exento de ISO</b>. La pestaña Trimestral aplica al régimen sobre utilidades (25%) — se configura con tasa ISR 0.25 en la configuración fiscal.</div></div>`;
-        return;
-      }
-      const t = Math.ceil(mes/3);
-      const tIniMes = (t-1)*3+1, tFinMes = t*3;
-      const tIni = `${anio}-${String(tIniMes).padStart(2,'0')}-01`;
-      const tFin = new Date(anio, tFinMes, 0).toISOString().slice(0,10);
-      const enCurso = (new Date().toISOString().slice(0,10)) < tFin;
-
-      const [facturas, egresos, retenciones, activos, factAnt, obligaciones] = await Promise.all([
-        DB.getFacturasPeriodo(tIni, tFin),
-        DB.getEgresos(tIni, tFin),
-        DB.getRetencionesPeriodo(tIni, tFin),
-        DB.getActivos().catch(()=>[]),
-        DB.getFacturasPeriodo(`${anio-1}-01-01`, `${anio-1}-12-31`),
-        DB.getObligaciones(anio)
-      ]);
-      const d = this._agregar(facturas, [], [], retenciones, []);
-      const n = v => Number(v)||0;
-      const gastos = Math.round(egresos.reduce((s,e)=>s+(n(e.monto)-n(e.iva_credito)),0)*100)/100;
-      const dep = Math.round(activos.reduce((s,a)=>s+depEnRango(a, tIni, tFin),0)*100)/100;
-      const utilidad = Math.round((d.ventasNetas - gastos - dep)*100)/100;
-      const isrTrim = Math.max(0, Math.round(utilidad*0.25*100)/100);
-      const isoPagado = obligaciones.filter(o=>o.tipo==='ISO'&&o.estado==='pagado').reduce((s,o)=>s+n(o.monto_pagado),0);
-      const isrAPagar = Math.max(0, Math.round((isrTrim - d.retIsr - isoPagado)*100)/100);
-
-      /* ISO: 1% anual sobre el MAYOR entre activo neto e ingresos brutos
-         del periodo anterior; se paga la cuarta parte por trimestre. */
-      const ingresosAnt = Math.round(factAnt.filter(f=>!/anulad/i.test(f.estado||'')).reduce((s,f)=>s+n(f.total),0)*100)/100;
-      const activoNeto = this._isoActivoNeto ?? '';
-      const baseIso = Math.max(Number(activoNeto)||0, ingresosAnt);
-      const isoTrim = Math.round(baseIso*0.01/4*100)/100;
-
-      el.innerHTML = `
-        ${enCurso?`<div class="alert alert-amber" style="margin-bottom:14px;max-width:680px"><div class="alert-icon">⏳</div><div class="alert-body" style="font-size:12px">El trimestre T${t} aún está en curso — las cifras se actualizan conforme registres operaciones.</div></div>`:''}
-        <div class="kpi-grid" style="margin-bottom:16px">
-          ${UI.kpiCard({ icon:'📈', clase:'green', label:`Ingresos T${t} (sin IVA)`, value: d.ventasNetas, money:true })}
-          ${UI.kpiCard({ icon:'📉', clase:'red', label:'Gastos + Depreciación', value: gastos+dep, money:true, trend:`dep: ${UI.q(dep)}` })}
-          ${UI.kpiCard({ icon:'💹', clase: utilidad>=0?'cyan':'red', label:'Utilidad del trimestre', value: utilidad, money:true })}
-          ${UI.kpiCard({ icon:'🏛️', clase:'amber', label:'ISR trimestral a pagar', value: isrAPagar, money:true })}
-        </div>
-
-        <div class="grid-2" style="align-items:start">
-          <div class="card">
-            <div class="card-sub mb-3">🏢 ISR Trimestral (SAT-1361) · T${t} ${anio} — cierre parcial</div>
-            ${this._fila('Renta bruta del trimestre (sin IVA)', d.ventasNetas)}
-            ${this._fila('(−) Costos y gastos deducibles (sin IVA)', gastos, {color:'red'})}
-            ${this._fila('(−) Depreciación de activos (línea recta)', dep, {color:'red'})}
-            ${this._fila('Renta imponible (utilidad)', Math.max(0,utilidad))}
-            ${this._fila('ISR 25% sobre la utilidad', isrTrim, {color:'amber'})}
-            ${this._fila('(−) Retenciones ISR del trimestre', d.retIsr, {color:'purple'})}
-            ${this._fila('(−) ISO pagado acreditable (del año)', isoPagado, {color:'purple'})}
-            ${this._totalFila('ISR TRIMESTRAL A PAGAR', isrAPagar, 'red')}
-            <div style="font-size:11px;color:var(--text3);margin-top:6px">SAT-1361: se presenta dentro de los 10 días siguientes al cierre del trimestre. Método: cierre parcial. El acreditamiento del ISO mostrado es simplificado — confírmalo con tu contador.</div>
-            <div style="margin-top:10px"><button class="btn btn-amber btn-sm" onclick="Modulos.contabilidad.registrarObligacionTrimestre('ISR', ${t}, ${isrAPagar})">📅 Registrar ISR T${t}</button></div>
-          </div>
-
-          <div class="card">
-            <div class="card-sub mb-3">🏛️ ISO (SAT-1608) · T${t} ${anio}</div>
-            ${this._fila(`Ingresos brutos ${anio-1} (facturado)`, ingresosAnt)}
-            <div style="display:flex;justify-content:space-between;gap:10px;padding:7px 0;border-bottom:1px dashed var(--border);font-size:13px;align-items:center">
-              <span style="color:var(--text2)">Activo neto al cierre ${anio-1} (editable)</span>
-              <input class="form-input mono-sm" style="width:130px;text-align:right" type="number" value="${activoNeto}"
-                placeholder="${ingresosAnt}" onchange="Modulos.contabilidad._isoActivoNeto=parseFloat(this.value)||null;Modulos.contabilidad._renderTab()">
-            </div>
-            ${this._fila('Base ISO (el MAYOR de los dos)', baseIso)}
-            ${this._fila('ISO anual (1% de la base)', Math.round(baseIso*0.01*100)/100, {color:'amber'})}
-            ${this._totalFila(`ISO DEL TRIMESTRE (¼ parte)`, isoTrim, 'red')}
-            <div style="font-size:11px;color:var(--text3);margin-top:6px">SAT-1608: vence dentro del mes siguiente al trimestre. El ISO pagado se acredita al ISR (o viceversa, según la opción elegida ante SAT). Exentos: los primeros 4 trimestres de operación y el régimen simplificado.</div>
-            <div style="margin-top:10px"><button class="btn btn-amber btn-sm" onclick="Modulos.contabilidad.registrarObligacionTrimestre('ISO', ${t}, ${isoTrim})">📅 Registrar ISO T${t}</button></div>
-          </div>
-        </div>`;
-    }
 
     /* ── LIBRO DE VENTAS ─────────────────────────── */
-    else if (this._tab === 'ventas') {
+    if (this._tab === 'ventas') {
       const d = await this._datos();
       el.innerHTML = `
         <div style="display:flex;justify-content:flex-end;margin-bottom:12px">
@@ -341,39 +208,6 @@ Modulos.contabilidad = {
         <div style="margin-top:10px;font-size:12px;color:var(--text3)">Crédito fiscal del periodo (sistema): <b>${UI.q(d.credito)}</b> · FEL importado: <b>${UI.q(d.creditoFel)}</b></div>`;
     }
 
-    /* ── ISR MENSUAL (simplificado) ──────────────── */
-    else if (this._tab === 'isr') {
-      const d = await this._datos();
-      if (utilidades) {
-        el.innerHTML = `<div class="alert alert-amber" style="max-width:640px"><div class="alert-icon">🏢</div>
-          <div class="alert-body" style="font-size:13px">Este taller está en <b>régimen sobre utilidades (25%)</b>: su ISR se calcula <b>trimestralmente</b>. Usa la pestaña <b>Trimestral / ISO</b> — ahí está la hoja SAT-1361 con la utilidad y la depreciación ya integradas.</div></div>
-          <button class="btn btn-amber" style="margin-top:12px" onclick="Modulos.contabilidad._ir('trimestre')">🏢 Ir a Trimestral / ISO</button>`;
-        return;
-      }
-      const base = d.ventasNetas;
-      const isr = Math.round(this._isrSimplificado(base)*100)/100;
-      const aPagar = Math.max(0, Math.round((isr - d.retIsr)*100)/100);
-      el.innerHTML = `
-        <div class="kpi-grid" style="margin-bottom:16px">
-          ${UI.kpiCard({ icon:'💵', clase:'cyan', label:'Renta del mes (sin IVA)', value: base, money:true })}
-          ${UI.kpiCard({ icon:'🏛️', clase:'amber', label:'ISR calculado (5%/7%)', value: isr, money:true })}
-          ${UI.kpiCard({ icon:'🧾', clase:'purple', label:'Retenciones ISR', value: d.retIsr, money:true })}
-          ${UI.kpiCard({ icon:'⚖️', clase:'red', label:'ISR a pagar', value: aPagar, money:true })}
-        </div>
-        <div class="card" style="max-width:640px">
-          <div class="card-sub mb-3">🏛️ Hoja de trabajo — ISR Opcional Simplificado (SAT-1311) · ${nombreMes}</div>
-          ${this._fila('Renta bruta del periodo (facturado sin IVA)', base)}
-          ${this._fila('ISR 5% sobre primeros Q30,000', Math.round(Math.min(base,30000)*0.05*100)/100, {color:'amber'})}
-          ${base>30000?this._fila('ISR 7% sobre excedente de Q30,000', Math.round((base-30000)*0.07*100)/100, {color:'amber'}):''}
-          ${this._fila('(−) Retenciones ISR que te efectuaron', d.retIsr, {color:'purple'})}
-          ${this._totalFila('ISR A PAGAR del periodo', aPagar, 'red')}
-          <div style="font-size:11px;color:var(--text3);margin-top:6px">Transcribe al SAT-1311 en Declaraguate. Se presenta dentro de los primeros 10 días hábiles del mes siguiente.</div>
-        </div>
-        <div style="margin-top:14px;display:flex;gap:8px">
-          <button class="btn btn-amber" onclick="Modulos.contabilidad.registrarObligacion('ISR')">📅 Registrar obligación ISR ${periodo}</button>
-          <button class="btn btn-ghost" onclick="Modulos.contabilidad.modalRetencion('ISR')">➕ Retención de ISR</button>
-        </div>`;
-    }
 
     /* ── IMPORTAR FEL (CSV de la Consulta FEL de SAT) ── */
     else if (this._tab === 'fel') {
