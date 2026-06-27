@@ -621,16 +621,27 @@ Modulos.contabilidad = {
     this._felParse = null;
 
     const readFile = (f) => new Promise((resolve, reject) => {
+      console.log('FEL: Leyendo', f.name, f.size, 'bytes');
       const ext = f.name.split('.').pop().toLowerCase();
       if (ext === 'xls' || ext === 'xlsx') {
         const r = new FileReader();
         r.onload = ev => {
           try {
+            console.log('FEL: Buffer leído', f.name, ev.target.result.byteLength, 'bytes');
             const wb = XLSX.read(new Uint8Array(ev.target.result), { type:'array' });
+            console.log('FEL: Workbook parseado, sheets:', wb.SheetNames);
             const ws = wb.Sheets[wb.SheetNames[0]];
             const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+            console.log('FEL: Rows convertidas a array:', rows.length, 'filas');
             resolve({ rows, name: f.name });
-          } catch(e) { reject(e); }
+          } catch(e) {
+            console.error('FEL: Error parseando XLS', f.name, e);
+            reject(e);
+          }
+        };
+        r.onerror = e => {
+          console.error('FEL: Error leyendo archivo', f.name, e);
+          reject(e);
         };
         r.readAsArrayBuffer(f);
       } else {
@@ -638,24 +649,39 @@ Modulos.contabilidad = {
         r.onload = ev => {
           try {
             const rows = this._csvParse(String(ev.target.result));
+            console.log('FEL: CSV parseado, rows:', rows.length);
             resolve({ rows, name: f.name });
-          } catch(e) { reject(e); }
+          } catch(e) {
+            console.error('FEL: Error parseando CSV', f.name, e);
+            reject(e);
+          }
         };
         r.readAsText(f, 'utf-8');
       }
     });
 
-    Promise.all(files.map(f => readFile(f).catch(e => ({ error: e.message, name: f.name }))))
+    Promise.all(files.map(f => readFile(f).catch(e => {
+      console.error('FEL Promise catch:', f.name, e.message || e);
+      return { error: e.message || String(e), name: f.name };
+    })))
       .then(results => {
+        console.log('FEL: Todos los archivos leídos, resultados:', results.length);
         const allDocs = [];
         const resumen = [];
         results.forEach(({ rows, name, error }) => {
-          if (error) { resumen.push({ name, error }); return; }
+          if (error) {
+            console.warn('FEL: Error en', name, ':', error);
+            resumen.push({ name, error });
+            return;
+          }
+          console.log('FEL: Procesando', name, rows ? rows.length : '?', 'filas');
           const nat = /emiti/i.test(name) ? 'emitida' : /recib/i.test(name) ? 'recibida' : 'recibida';
           const docs = this._procesarFelRows(rows, nat);
+          console.log('FEL:', name, 'resultó en', docs.length, 'documentos');
           if (docs.length) { allDocs.push(...docs); resumen.push({ name, nat, count: docs.length }); }
           else resumen.push({ name, error: 'Sin documentos válidos' });
         });
+        console.log('FEL: Total documentos:', allDocs.length);
         if (!allDocs.length) { UI.toast('No se encontraron documentos válidos','error'); return; }
         this._felParse = allDocs;
         this._mostrarPreviewFel(allDocs, resumen);
@@ -727,7 +753,7 @@ Modulos.contabilidad = {
     const g = (r,i) => i>=0 ? (r[i] ?? '') : '';
     const esAnulado = r => /anulad/i.test(g(r,col.estado)) || /s[ií]/i.test(g(r,col.anulado));
 
-    return filas.slice(1).map(r => {
+    const docs = filas.slice(1).map(r => {
       const petro = col.petroleo >= 0 ? num(g(r,col.petroleo)) : 0;
       return {
         naturaleza,
@@ -744,7 +770,15 @@ Modulos.contabilidad = {
         es_combustible:       petro > 0,
         estado:               esAnulado(r) ? 'ANULADO' : 'VIGENTE'
       };
-    }).filter(d => d.fecha && d.gran_total > 0);
+    });
+    console.log('FEL: Procesados', docs.length, 'documentos (brutos)');
+    const filtered = docs.filter(d => {
+      const valid = d.fecha && d.gran_total > 0;
+      if (!valid && docs.length < 10) console.log('FEL: Descartado:', { fecha: d.fecha, total: d.gran_total });
+      return valid;
+    });
+    console.log('FEL: Después del filtro:', filtered.length, 'documentos válidos');
+    return filtered;
   },
 
   _procesarFel(texto) {
