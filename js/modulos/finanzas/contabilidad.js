@@ -40,6 +40,12 @@ Modulos.contabilidad = {
     personal_no_deducible: { label:'🚫 Personal / no deducible',       ded:false, cred:false },
   },
 
+  async _toggleFlag(id, campo, val) {
+    await DB.setFlagsCompra(id, { [campo]: val });
+    UI.toast(campo==='credito_iva' ? (val?'Crédito IVA activado':'Sin crédito IVA') : (val?'Deducible ISR':'No deducible ISR'));
+    this._renderTab();
+  },
+
   async _clasificarCompra(id, categoria, proveedor) {
     const c = this._CATS[categoria] || this._CATS.otros;
     const campos = { categoria_gasto: categoria, deducible: c.ded, credito_iva: c.cred };
@@ -248,7 +254,10 @@ Modulos.contabilidad = {
         <td class="mono-sm"><b>${UI.q(c.total)}</b></td>
         <td>
           <select class="form-select" style="font-size:11px;padding:3px 6px;min-width:150px" onchange="Modulos.contabilidad._clasificarCompra('${c.id}', this.value, this.dataset.prov)" data-prov="${(c.proveedor_nombre||'').replace(/"/g,'&quot;')}">${opts(cat)}</select>
-          ${cat!=='por_clasificar'?`<div style="font-size:9px;margin-top:2px">${ded?'<span class="badge badge-green" style="font-size:8px">deducible</span>':'<span class="badge badge-red" style="font-size:8px">no deducible</span>'}</div>`:''}
+          ${cat!=='por_clasificar'?`<div style="font-size:9px;margin-top:3px;display:flex;gap:4px;align-items:center">
+            <span class="badge badge-${ded?'green':'red'}" style="font-size:8px;cursor:pointer" title="Clic para cambiar: deducible de ISR" onclick="Modulos.contabilidad._toggleFlag('${c.id}','deducible',${!ded})">ISR ${ded?'✓':'✗'}</span>
+            <span class="badge badge-${cred?'cyan':'gray'}" style="font-size:8px;cursor:pointer" title="Crédito IVA solo si la factura está a nombre del taller (NIT). Clic para cambiar." onclick="Modulos.contabilidad._toggleFlag('${c.id}','credito_iva',${!cred})">IVA ${cred?'✓':'✗'}</span>
+          </div>`:''}
         </td></tr>`;
       });
       const filasE = d.egresosIva.map(e=>`<tr>
