@@ -52,7 +52,7 @@ Modulos.contabilidad = {
       </div>
       <div class="page-body">
         <div class="tabs">
-          ${[['formularios_sat','📋 Formularios SAT'],['fel','⬆️ Importar FEL'],['ventas','📤 Libro de Ventas'],['compras','📥 Libro de Compras'],['obligaciones','📅 Obligaciones']]
+          ${[['formularios_sat','📋 Formularios SAT'],['fel','⬆️ Importar FEL'],['ventas','📤 Libro de Ventas'],['compras','📥 Libro de Compras'],['retenciones','🧾 Retenciones'],['obligaciones','📅 Obligaciones']]
             .map(([t,l])=>`<button class="tab-btn ${this._tab===t?'active':''}" onclick="Modulos.contabilidad._ir('${t}')">${l}</button>`).join('')}
         </div>
         <div id="cont-content"></div>
@@ -198,7 +198,8 @@ Modulos.contabilidad = {
         <td class="mono-sm text-cyan">${UI.q(e.iva_credito)}</td>
         <td class="mono-sm"><b>${UI.q(e.monto)}</b></td><td><span class="badge badge-gray">gasto</span></td></tr>`);
       el.innerHTML = `
-        <div style="display:flex;justify-content:flex-end;margin-bottom:12px">
+        <div style="display:flex;justify-content:flex-end;gap:6px;margin-bottom:12px">
+          <button class="btn btn-green" onclick="Modulos.finanzas.exportExcelContador('${this._rango().ini}','${this._rango().fin}')">⬇️ Excel para contador</button>
           <button class="btn btn-cyan" onclick="Modulos.contabilidad.exportarCompras()">⬇️ Exportar CSV</button>
         </div>
         <div class="table-wrap"><table class="data-table">
@@ -262,6 +263,50 @@ Modulos.contabilidad = {
           </table></div>
           ${importados.length>60?`<div style="font-size:11px;color:var(--text3);margin-top:6px">Mostrando 60 de ${importados.length}.</div>`:''}
         </div>`:''}`;
+    }
+
+    /* ── RETENCIONES (IVA/ISR) — CRUD ───────────────── */
+    else if (this._tab === 'retenciones') {
+      const { ini, fin } = this._rango();
+      const rets = await DB.getRetencionesPeriodo(ini, fin);
+      const n = v => Number(v)||0;
+      const sum = (tp,nat) => rets.filter(r=>r.tipo===tp && (r.naturaleza||'recibida')===nat).reduce((s,r)=>s+n(r.monto),0);
+      const sufISR = sum('ISR','recibida'), sufIVA = sum('IVA','recibida');
+      const efeISR = sum('ISR','emitida'),  efeIVA = sum('IVA','emitida');
+      const natBadge = nat => nat==='emitida'
+        ? '<span class="badge badge-amber">Efectuada (yo retuve)</span>'
+        : '<span class="badge badge-cyan">Sufrida (me retuvieron)</span>';
+      el.innerHTML = `
+        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:14px">
+          <div class="card-sub" style="margin:0">🧾 Retenciones · ${nombreMes}</div>
+          <button class="btn btn-amber btn-sm" onclick="Modulos.contabilidad.modalRetencion()">＋ Nueva Retención</button>
+        </div>
+        <div class="kpi-grid" style="margin-bottom:14px">
+          ${UI.kpiCard({ icon:'🧾', clase:'green', label:'ISR sufrido (acreditable)', value: sufISR, money:true })}
+          ${UI.kpiCard({ icon:'💳', clase:'cyan', label:'IVA sufrido (crédito)', value: sufIVA, money:true })}
+          ${UI.kpiCard({ icon:'📤', clase:'amber', label:'Efectuadas por enterar a SAT', value: efeISR+efeIVA, money:true, trend:`ISR ${UI.q(efeISR)} · IVA ${UI.q(efeIVA)}` })}
+        </div>
+        <div class="table-wrap"><table class="data-table" style="font-size:12px">
+          <thead><tr><th>Fecha</th><th>Tipo</th><th>Naturaleza</th><th>Documento</th><th>Contraparte</th><th style="text-align:right">Base</th><th style="text-align:right">%</th><th style="text-align:right">Monto</th><th style="text-align:right">Acciones</th></tr></thead>
+          <tbody>
+            ${rets.map(r=>`<tr>
+              <td class="mono-sm">${UI.fecha(r.fecha)}</td>
+              <td><span class="badge badge-${r.tipo==='ISR'?'purple':'cyan'}">${r.tipo}</span></td>
+              <td>${natBadge(r.naturaleza||'recibida')}</td>
+              <td class="mono-sm">${r.documento||'—'}</td>
+              <td>${r.contraparte||'—'}</td>
+              <td class="mono-sm" style="text-align:right">${UI.q(r.base)}</td>
+              <td class="mono-sm" style="text-align:right">${n(r.porcentaje)}%</td>
+              <td class="mono-sm text-amber" style="text-align:right"><b>${UI.q(r.monto)}</b></td>
+              <td style="text-align:right;white-space:nowrap">
+                ${Modulos.btnAccion('editar', `Modulos.contabilidad.editarRetencion('${r.id}')`)}
+                ${Modulos.btnAccion('eliminar', `Modulos.eliminarRegistro('retenciones','${r.id}','esta retención',()=>Modulos.contabilidad._renderTab())`)}
+              </td>
+            </tr>`).join('')||'<tr><td colspan="9" style="text-align:center;padding:20px;color:var(--text3)">Sin retenciones en este mes. Registrá la primera con “＋ Nueva Retención”.</td></tr>'}
+          </tbody>
+        </table></div>
+        <div class="alert alert-cyan" style="margin-top:12px"><div class="alert-icon">ℹ️</div>
+          <div class="alert-body" style="font-size:11px"><b>Sufridas</b>: te las retuvo un cliente/agente (acreditan tu ISR/IVA). <b>Efectuadas</b>: vos retuviste y debés enterarlas a la SAT.</div></div>`;
     }
 
     /* ── OBLIGACIONES ────────────────────────────── */
@@ -385,36 +430,39 @@ Modulos.contabilidad = {
     this._renderTab();
   },
 
-  /* ── Retención rápida (IVA/ISR, recibida o emitida) ── */
-  modalRetencion(tipoDefault='IVA') {
-    UI.modal('➕ Registrar retención', `
+  /* ── Retención (IVA/ISR, recibida o emitida) — crear o editar ── */
+  modalRetencion(tipoDefault='IVA', ret=null) {
+    const r = ret || {};
+    const tipo = r.tipo || tipoDefault;
+    UI.modal(ret ? '✏️ Editar retención' : '➕ Registrar retención', `
+      <input type="hidden" id="ret-id" value="${r.id||''}">
       <div class="form-row">
         <div class="form-group"><label class="form-label">Impuesto *</label>
           <select class="form-select" id="ret-tipo">
-            <option ${tipoDefault==='IVA'?'selected':''}>IVA</option>
-            <option ${tipoDefault==='ISR'?'selected':''}>ISR</option>
+            <option ${tipo==='IVA'?'selected':''}>IVA</option>
+            <option ${tipo==='ISR'?'selected':''}>ISR</option>
           </select></div>
         <div class="form-group"><label class="form-label">Naturaleza *</label>
           <select class="form-select" id="ret-nat">
-            <option value="recibida">Me la efectuaron (resta de mi impuesto)</option>
-            <option value="emitida">Yo la efectué (agente de retención)</option>
+            <option value="recibida" ${(r.naturaleza||'recibida')==='recibida'?'selected':''}>Me la efectuaron (resta de mi impuesto)</option>
+            <option value="emitida" ${r.naturaleza==='emitida'?'selected':''}>Yo la efectué (agente de retención)</option>
           </select></div>
       </div>
       <div class="form-row">
         <div class="form-group"><label class="form-label">Fecha *</label>
-          <input class="form-input" id="ret-fecha" type="date" value="${new Date().toISOString().slice(0,10)}"></div>
+          <input class="form-input" id="ret-fecha" type="date" value="${r.fecha||new Date().toISOString().slice(0,10)}"></div>
         <div class="form-group"><label class="form-label">Documento / constancia</label>
-          <input class="form-input" id="ret-doc" placeholder="No. de constancia o factura"></div>
+          <input class="form-input" id="ret-doc" placeholder="No. de constancia o factura" value="${(r.documento||'').replace(/"/g,'&quot;')}"></div>
       </div>
       <div class="form-group"><label class="form-label">Contraparte</label>
-        <input class="form-input" id="ret-contra" placeholder="Cliente o proveedor que retiene/retuvo"></div>
+        <input class="form-input" id="ret-contra" placeholder="Cliente o proveedor que retiene/retuvo" value="${(r.contraparte||'').replace(/"/g,'&quot;')}"></div>
       <div class="form-row">
         <div class="form-group"><label class="form-label">Base (Q)</label>
-          <input class="form-input" id="ret-base" type="number" min="0" step="0.01" oninput="Modulos.contabilidad._calcRet()"></div>
+          <input class="form-input" id="ret-base" type="number" min="0" step="0.01" value="${r.base??''}" oninput="Modulos.contabilidad._calcRet()"></div>
         <div class="form-group"><label class="form-label">% retención</label>
-          <input class="form-input" id="ret-pct" type="number" min="0" step="0.01" value="15" oninput="Modulos.contabilidad._calcRet()"></div>
+          <input class="form-input" id="ret-pct" type="number" min="0" step="0.01" value="${r.porcentaje??15}" oninput="Modulos.contabilidad._calcRet()"></div>
         <div class="form-group"><label class="form-label">Monto retenido (Q) *</label>
-          <input class="form-input" id="ret-monto" type="number" min="0" step="0.01"></div>
+          <input class="form-input" id="ret-monto" type="number" min="0" step="0.01" value="${r.monto??''}"></div>
       </div>
       <div class="modal-footer">
         <button class="btn btn-ghost" onclick="UI.cerrarModal()">Cancelar</button>
@@ -432,7 +480,8 @@ Modulos.contabilidad = {
   async guardarRetencion() {
     const monto = parseFloat(document.getElementById('ret-monto')?.value)||0;
     if (monto<=0) { UI.toast('El monto retenido es obligatorio','error'); return; }
-    const { error } = await DB.upsertRetencion({
+    const id = document.getElementById('ret-id')?.value || null;
+    const payload = {
       tipo: document.getElementById('ret-tipo')?.value||'IVA',
       naturaleza: document.getElementById('ret-nat')?.value||'recibida',
       fecha: document.getElementById('ret-fecha')?.value||new Date().toISOString().slice(0,10),
@@ -441,10 +490,20 @@ Modulos.contabilidad = {
       base: parseFloat(document.getElementById('ret-base')?.value)||null,
       porcentaje: parseFloat(document.getElementById('ret-pct')?.value)||null,
       monto
-    });
+    };
+    if (id) payload.id = id;
+    const { error } = await DB.upsertRetencion(payload);
     if (error) { UI.toast('Error: '+error.message,'error'); return; }
-    UI.cerrarModal(); UI.toast('Retención registrada ✓');
+    UI.cerrarModal(); UI.toast(id ? 'Retención actualizada ✓' : 'Retención registrada ✓');
     this._renderTab();
+  },
+
+  async editarRetencion(id) {
+    const { ini, fin } = this._rango();
+    const rets = await DB.getRetencionesPeriodo(ini, fin);
+    const r = rets.find(x=>x.id===id);
+    if (!r) { UI.toast('Retención no encontrada','error'); return; }
+    this.modalRetencion(r.tipo, r);
   },
 
   /* ── Parser del CSV de la Consulta FEL de SAT ──────

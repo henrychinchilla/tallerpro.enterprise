@@ -26,9 +26,6 @@ Modulos.finanzas = {
           <button class="tab-btn ${this._tab==='viaticos'?'active':''}" onclick="Modulos.finanzas._ir('viaticos')">🚗 Viáticos</button>
           <button class="tab-btn ${this._tab==='recurrentes'?'active':''}" onclick="Modulos.finanzas._ir('recurrentes')">🔁 Recurrentes</button>
           <button class="tab-btn ${this._tab==='balance'?'active':''}" onclick="Modulos.finanzas._ir('balance')">📋 Estado de Resultados</button>
-          <button class="tab-btn ${this._tab==='libros'?'active':''}" onclick="Modulos.finanzas._ir('libros')">📚 Libro IVA</button>
-          <button class="tab-btn ${this._tab==='retenciones'?'active':''}" onclick="Modulos.finanzas._ir('retenciones')">🧾 Retenciones / ISR</button>
-          <button class="tab-btn ${this._tab==='fiscal'?'active':''}" onclick="Modulos.finanzas._ir('fiscal')">🏛️ Fiscal SAT</button>
         </div>
         <div id="fin-content"><div class="empty-state">⏳ Cargando...</div></div>
       </div>`;
@@ -74,6 +71,9 @@ Modulos.finanzas = {
   async _renderTab() {
     const el = document.getElementById('fin-content');
     if (!el) return;
+    /* Tabs fiscales movidos a Contabilidad (Libro IVA, Retenciones, Fiscal SAT).
+       Redirige rutas guardadas con el tab viejo. */
+    if (['libros','retenciones','fiscal'].includes(this._tab)) { this._tab = 'dashboard'; }
     const { ingresos, egresos, totalIng, totalEgr, utilidad, totalFact, facturas } = await this._getData();
 
     const agrupar = (items,campo) => {
@@ -344,258 +344,6 @@ Modulos.finanzas = {
         </div>`;
     }
 
-    else if (this._tab==='libros') {
-      const compras = (await DB.getCompras())
-        .filter(c => c.estado !== 'anulada' && (c.fecha||'') >= this._ini && (c.fecha||'') <= this._fin);
-      const ivaDebito  = facturas.reduce((s,f)=>s+(Number(f.iva)||0),0);
-      const baseVentas = facturas.reduce((s,f)=>s+(Number(f.subtotal)||0),0);
-      const ivaCredito = compras.reduce((s,c)=>s+(Number(c.iva)||0),0);
-      const baseCompras= compras.reduce((s,c)=>s+(Number(c.subtotal)||0),0);
-      const regimen = localStorage.getItem('tp_regimen') || 'general';
-      const esPequeno = regimen === 'pequeno';
-      const ivaPagar = esPequeno ? totalFact * 0.05 : (ivaDebito - ivaCredito);
-
-      el.innerHTML = `
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
-          <div><span class="badge badge-cyan">${UI.fecha(this._ini)} — ${UI.fecha(this._fin)}</span>
-            <span style="font-size:12px;color:var(--text3);margin-left:8px">Régimen: <b>${esPequeno?'Pequeño Contribuyente (5%)':'General (débito − crédito)'}</b></span></div>
-          <div style="display:flex;gap:6px;flex-wrap:wrap">
-            <button class="btn btn-green" onclick="Modulos.finanzas.exportExcelContador()">⬇ Excel (contador)</button>
-            <button class="btn btn-ghost" onclick="Modulos.finanzas.exportLibro('ventas')">Ventas CSV</button>
-            <button class="btn btn-ghost" onclick="Modulos.finanzas.exportLibro('compras')">Compras CSV</button>
-            <button class="btn btn-ghost" onclick="window.print()">🖨️</button>
-          </div>
-        </div>
-        <div class="kpi-grid" style="margin-bottom:18px">
-          ${UI.kpiCard({ icon:'🧾', clase:'green', label:'IVA Débito (ventas)', value: ivaDebito, money:true, trend:`base ${UI.q(baseVentas)}` })}
-          ${esPequeno?'':UI.kpiCard({ icon:'💳', clase:'cyan', label:'IVA Crédito (compras)', value: ivaCredito, money:true, trend:`base ${UI.q(baseCompras)}` })}
-          ${UI.kpiCard({ icon:'⚖️', clase: ivaPagar>=0?'red':'green', label:'IVA a pagar del mes', value: ivaPagar, money:true, trend: esPequeno?'5% sobre ventas':'débito − crédito' })}
-        </div>
-
-        <div class="card-sub mb-3">🧾 Libro de Ventas (facturación del mes)</div>
-        <div class="table-wrap" style="margin-bottom:20px"><table class="data-table" style="font-size:12px">
-          <thead><tr><th>Fecha</th><th>Documento</th><th>NIT</th><th>Cliente</th><th style="text-align:right">Base</th><th style="text-align:right">IVA</th><th style="text-align:right">Total</th></tr></thead>
-          <tbody>
-            ${facturas.map(f=>`<tr>
-              <td class="mono-sm">${UI.fecha(f.fecha)}</td>
-              <td class="mono-sm">${f.num||(f.fel_serie?`${f.fel_serie}-${f.fel_numero||''}`:'—')}</td>
-              <td class="mono-sm">${f.nit||'CF'}</td>
-              <td>${f.nombre_receptor||f.clientes?.nombre||'CF'}</td>
-              <td class="mono-sm" style="text-align:right">${UI.q(f.subtotal)}</td>
-              <td class="mono-sm" style="text-align:right">${UI.q(f.iva)}</td>
-              <td class="mono-sm text-green" style="text-align:right"><b>${UI.q(f.total)}</b></td>
-            </tr>`).join('')||'<tr><td colspan="7" style="text-align:center;padding:18px;color:var(--text3)">Sin ventas en el mes</td></tr>'}
-          </tbody>
-          ${facturas.length?`<tfoot><tr style="font-weight:800;border-top:2px solid var(--border)"><td colspan="4">TOTALES</td><td class="mono-sm" style="text-align:right">${UI.q(baseVentas)}</td><td class="mono-sm" style="text-align:right">${UI.q(ivaDebito)}</td><td class="mono-sm text-green" style="text-align:right">${UI.q(totalFact)}</td></tr></tfoot>`:''}
-        </table></div>
-
-        <div class="card-sub mb-3">🛒 Libro de Compras (del mes)</div>
-        <div class="table-wrap"><table class="data-table" style="font-size:12px">
-          <thead><tr><th>Fecha</th><th>Factura</th><th>Proveedor</th><th style="text-align:right">Base</th><th style="text-align:right">IVA</th><th style="text-align:right">Total</th></tr></thead>
-          <tbody>
-            ${compras.map(c=>`<tr>
-              <td class="mono-sm">${UI.fecha(c.fecha)}</td>
-              <td class="mono-sm">${c.num_factura||c.num||'—'}</td>
-              <td>${c.proveedor_nombre||'—'}</td>
-              <td class="mono-sm" style="text-align:right">${UI.q(c.subtotal)}</td>
-              <td class="mono-sm" style="text-align:right">${UI.q(c.iva)}</td>
-              <td class="mono-sm text-red" style="text-align:right"><b>${UI.q(c.total)}</b></td>
-            </tr>`).join('')||'<tr><td colspan="6" style="text-align:center;padding:18px;color:var(--text3)">Sin compras en el mes</td></tr>'}
-          </tbody>
-          ${compras.length?`<tfoot><tr style="font-weight:800;border-top:2px solid var(--border)"><td colspan="3">TOTALES</td><td class="mono-sm" style="text-align:right">${UI.q(baseCompras)}</td><td class="mono-sm" style="text-align:right">${UI.q(ivaCredito)}</td><td class="mono-sm text-red" style="text-align:right">${UI.q(compras.reduce((s,c)=>s+(Number(c.total)||0),0))}</td></tr></tfoot>`:''}
-        </table></div>
-
-        <div class="alert alert-cyan" style="margin-top:14px"><div class="alert-icon">ℹ️</div>
-          <div class="alert-body" style="font-size:11px">${esPequeno
-            ? 'Como <b>Pequeño Contribuyente</b>, el IVA es el <b>5% sobre las ventas</b> del mes (no se acredita el IVA de compras). Cambia el régimen en la pestaña Fiscal SAT.'
-            : 'IVA a pagar = <b>IVA débito (ventas) − IVA crédito (compras)</b> del mes. Las compras alimentan el crédito desde el módulo Compras. Cambia el régimen en Fiscal SAT.'}</div></div>`;
-    }
-
-    else if (this._tab==='retenciones') {
-      const rets = await DB.getRetenciones(this._ini, this._fin);
-      const sum = (tipo,nat) => rets.filter(r=>r.tipo===tipo && r.naturaleza===nat).reduce((s,r)=>s+(Number(r.monto)||0),0);
-      const sufISR = sum('ISR','sufrida'), sufIVA = sum('IVA','sufrida');
-      const efeISR = sum('ISR','efectuada'), efeIVA = sum('IVA','efectuada');
-      const regimen = localStorage.getItem('tp_regimen') || 'general';
-      let isrMes = 0, isrNota = '';
-      if (regimen === 'simplificado') { isrMes = totalIng<=30000 ? totalIng*0.05 : 30000*0.05+(totalIng-30000)*0.07; isrNota = '5% hasta Q30k · 7% excedente'; }
-      else if (regimen === 'utilidades') { isrMes = Math.max(0,utilidad)*0.25; isrNota = '25% sobre utilidad'; }
-      else { isrMes = 0; isrNota = regimen==='pequeno' ? 'Pequeño Contribuyente: sin ISR' : 'Régimen general: sin ISR sobre utilidades'; }
-      const isrNeto = Math.max(0, isrMes - sufISR);
-      const natBadge = n => n==='sufrida' ? '<span class="badge badge-cyan">Sufrida (nos retuvieron)</span>' : '<span class="badge badge-amber">Efectuada (retuvimos)</span>';
-
-      el.innerHTML = `
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:8px">
-          <span class="badge badge-cyan">${UI.fecha(this._ini)} — ${UI.fecha(this._fin)}</span>
-          <div style="display:flex;gap:6px;flex-wrap:wrap">
-            <button class="btn btn-ghost" onclick="Modulos.finanzas.exportRetenciones()">⬇ CSV</button>
-            <button class="btn btn-amber" onclick="Modulos.finanzas.modalRetencion()">＋ Nueva Retención</button>
-          </div>
-        </div>
-        <div class="kpi-grid" style="margin-bottom:8px">
-          ${UI.kpiCard({ icon:'🏛️', clase:'amber', label:'ISR del mes (estimado)', value: isrMes, money:true, trend: isrNota })}
-          ${UI.kpiCard({ icon:'🧾', clase:'green', label:'ISR retenido (sufrido)', value: sufISR, money:true, trend:'acreditable' })}
-          ${UI.kpiCard({ icon:'⚖️', clase:'red', label:'ISR neto a pagar', value: isrNeto, money:true, trend:'ISR − retenciones' })}
-          ${UI.kpiCard({ icon:'💳', clase:'cyan', label:'IVA retenido (sufrido)', value: sufIVA, money:true, trend:'crédito de IVA' })}
-        </div>
-        ${(efeISR>0||efeIVA>0)?`<div class="alert alert-amber" style="margin-bottom:12px"><div class="alert-icon">⚠️</div><div class="alert-body" style="font-size:12px">Retenciones <b>efectuadas</b> por enterar a la SAT: ISR ${UI.q(efeISR)} · IVA ${UI.q(efeIVA)}.</div></div>`:''}
-        <div class="table-wrap"><table class="data-table" style="font-size:12px">
-          <thead><tr><th>Fecha</th><th>Tipo</th><th>Naturaleza</th><th>Documento</th><th>Contraparte</th><th style="text-align:right">Base</th><th style="text-align:right">%</th><th style="text-align:right">Monto</th><th>Acciones</th></tr></thead>
-          <tbody>
-            ${rets.map(r=>`<tr>
-              <td class="mono-sm">${UI.fecha(r.fecha)}</td>
-              <td><span class="badge badge-${r.tipo==='ISR'?'purple':'cyan'}">${r.tipo}</span></td>
-              <td>${natBadge(r.naturaleza)}</td>
-              <td class="mono-sm">${r.documento||'—'}</td>
-              <td>${r.contraparte||'—'}</td>
-              <td class="mono-sm" style="text-align:right">${UI.q(r.base)}</td>
-              <td class="mono-sm" style="text-align:right">${r.porcentaje||0}%</td>
-              <td class="mono-sm text-amber" style="text-align:right"><b>${UI.q(r.monto)}</b></td>
-              <td><div style="display:flex;gap:4px">
-                ${Modulos.btnAccion('editar', `Modulos.finanzas.modalRetencion('${r.id}')`)}
-                ${Modulos.btnAccion('eliminar', `Modulos.eliminarRegistro('retenciones','${r.id}','esta retención',()=>Modulos.finanzas._renderTab())`)}
-              </div></td>
-            </tr>`).join('')||'<tr><td colspan="9" style="text-align:center;padding:18px;color:var(--text3)">Sin retenciones en el mes</td></tr>'}
-          </tbody>
-        </table></div>
-        <div class="alert alert-cyan" style="margin-top:12px"><div class="alert-icon">ℹ️</div>
-          <div class="alert-body" style="font-size:11px"><b>Sufridas</b>: te las retuvo un cliente/agente retenedor (se acreditan a tu ISR/IVA). <b>Efectuadas</b>: tú las retuviste y debes enterarlas a la SAT. El ISR del mes depende del régimen (cámbialo en Fiscal SAT).</div></div>`;
-    }
-
-    else if (this._tab==='fiscal') {
-      const regimen = localStorage.getItem('tp_regimen') || 'pequeno';
-      const _calcImpuesto = (reg, ing, util) => {
-        switch(reg) {
-          case 'pequeno':   return { iva: ing*0.05, isr: 0,         total: ing*0.05 };
-          case 'general':   return { iva: ing*0.12, isr: 0,         total: ing*0.12 };
-          case 'simplificado': {
-            const b1 = Math.min(ing*12, 30000*12);
-            const b2 = Math.max(ing*12-30000*12, 0);
-            const isr = (b1*0.05 + b2*0.07)/12;
-            return { iva: ing*0.12, isr, total: ing*0.12+isr };
-          }
-          case 'utilidades': {
-            const isr = Math.max(util,0)*0.25;
-            return { iva: ing*0.12, isr: isr/4, total: ing*0.12+isr/4 };
-          }
-          default: return { iva:0, isr:0, total:0 };
-        }
-      };
-
-      const REGIMENES = [
-        { id:'pequeno',      label:'Pequeño Contribuyente',          desc:'IVA 5% mensual · Sin ISR · Ingresos ≤ Q150,000/año', color:'green'  },
-        { id:'general',      label:'Régimen General IVA',            desc:'IVA 12% mensual · Sin ISR sobre utilidades',          color:'cyan'   },
-        { id:'simplificado', label:'Régimen Simplificado Opcional',  desc:'ISR 5% hasta Q30k/mes · 7% sobre el excedente',       color:'amber'  },
-        { id:'utilidades',   label:'Régimen Sobre las Utilidades',   desc:'ISR 25% sobre utilidades · Declaración trimestral',    color:'purple' }
-      ];
-
-      /* La depreciación reduce la utilidad imponible (régimen sobre utilidades) */
-      const activosFis  = await DB.getActivos();
-      const depFiscal   = activosFis.reduce((s,a)=>s+depEnRango(a, this._ini, this._fin),0);
-
-      /* Planilla / IGSS — sobre empleados activos (mensual) */
-      const empleadosFis = (await DB.getEmpleados()).filter(e=>e.activo!==false);
-      const plSalarios = empleadosFis.reduce((s,e)=>s+(Number(e.salario_base)||0),0);
-      const plBonif    = empleadosFis.reduce((s,e)=>s+(Number(e.bonificacion)||0),0);
-      const IGSS_LAB = 0.0483, IGSS_PAT = 0.1267;   // patronal: 10.67% IGSS + 1% IRTRA + 1% INTECAP
-      const plIgssLab = plSalarios*IGSS_LAB;
-      const plIgssPat = plSalarios*IGSS_PAT;
-      const plLiquido = plSalarios + plBonif - plIgssLab;
-      const plCostoPatronal = plSalarios + plBonif + plIgssPat;
-      const utilFiscal  = utilidad - depFiscal;
-      const calc = _calcImpuesto(regimen, totalIng, utilFiscal);
-
-      el.innerHTML = `
-        <div class="grid-2" style="margin-bottom:20px">
-          ${REGIMENES.map(r=>`
-            <div class="card ${r.id===regimen?'card-'+r.color:''}" style="cursor:pointer;border:2px solid ${r.id===regimen?'var(--'+r.color+')':'var(--border)'}"
-                 onclick="localStorage.setItem('tp_regimen','${r.id}');Modulos.finanzas._renderTab()">
-              <div style="display:flex;justify-content:space-between;align-items:flex-start">
-                <div>
-                  <div style="font-weight:800;font-size:13px;color:var(--${r.color})">${r.label}</div>
-                  <div style="font-size:11px;color:var(--text3);margin-top:4px">${r.desc}</div>
-                </div>
-                ${r.id===regimen?'<span class="badge badge-'+r.color+'">✓ Activo</span>':''}
-              </div>
-            </div>`).join('')}
-        </div>
-
-        <div class="card" style="max-width:600px">
-          <div class="card-sub mb-3">📋 Estimado de Impuestos — ${REGIMENES.find(r=>r.id===regimen)?.label}</div>
-          <div style="font-size:13px;color:var(--text3);margin-bottom:16px">
-            Período: ${UI.fecha(this._ini)} al ${UI.fecha(this._fin)}
-          </div>
-
-          <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);font-size:13px">
-            <span>Ingresos del período</span><span>${UI.q(totalIng)}</span>
-          </div>
-          <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);font-size:13px">
-            <span>Egresos del período</span><span class="text-red">(${UI.q(totalEgr)})</span>
-          </div>
-          ${depFiscal>0?`<div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);font-size:13px">
-            <span>Depreciación de activos</span><span class="text-red">(${UI.q(depFiscal)})</span>
-          </div>`:''}
-          <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);font-size:13px">
-            <span>Utilidad imponible</span><span class="${utilFiscal>=0?'text-green':'text-red'}">${UI.q(utilFiscal)}</span>
-          </div>
-          <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);font-size:13px">
-            <span>IVA estimado</span><span class="text-red">${UI.q(calc.iva)}</span>
-          </div>
-          ${calc.isr>0?`<div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);font-size:13px">
-            <span>ISR estimado</span><span class="text-red">${UI.q(calc.isr)}</span>
-          </div>`:''}
-          <div style="display:flex;justify-content:space-between;padding:12px 0;font-weight:800;font-size:16px;border-top:2px solid var(--border);margin-top:4px">
-            <span>Total Impuestos Estimados</span><span class="text-red">${UI.q(calc.total)}</span>
-          </div>
-          <div style="display:flex;justify-content:space-between;padding:12px;font-weight:800;font-size:18px;background:var(--amber-dim);border-radius:8px;margin-top:8px">
-            <span>Utilidad después de impuestos</span><span class="${(utilFiscal-calc.total)>=0?'text-amber':'text-red'}">${UI.q(utilFiscal-calc.total)}</span>
-          </div>
-
-          <div class="alert alert-cyan" style="margin-top:16px">
-            <div class="alert-icon">ℹ️</div>
-            <div class="alert-body" style="font-size:11px">
-              Este es un estimado orientativo. Consulta a un contador autorizado para declaraciones oficiales ante la SAT de Guatemala.
-              Régimen actual seleccionado: <b>${REGIMENES.find(r=>r.id===regimen)?.label}</b>
-            </div>
-          </div>
-        </div>
-
-        <div class="card" style="max-width:600px;margin-top:20px">
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
-            <div class="card-sub">👷 Planilla / IGSS — mensual</div>
-            <button class="btn btn-sm btn-ghost" onclick="Modulos.finanzas.exportPlanilla()">⬇️ Excel</button>
-          </div>
-          <div style="font-size:13px;color:var(--text3);margin-bottom:16px">
-            ${empleadosFis.length} empleado(s) activo(s) · Cuota laboral ${(IGSS_LAB*100).toFixed(2)}% · patronal ${(IGSS_PAT*100).toFixed(2)}%
-          </div>
-          ${!empleadosFis.length?`<div style="text-align:center;padding:16px;color:var(--text3)">Sin empleados activos registrados</div>`:`
-          <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);font-size:13px">
-            <span>Salarios base (afecto a IGSS)</span><span>${UI.q(plSalarios)}</span>
-          </div>
-          <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);font-size:13px">
-            <span>Bonificación incentivo (no afecto)</span><span>${UI.q(plBonif)}</span>
-          </div>
-          <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);font-size:13px">
-            <span>IGSS laboral (descuento al empleado)</span><span class="text-red">(${UI.q(plIgssLab)})</span>
-          </div>
-          <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);font-size:13px;font-weight:700">
-            <span>Líquido a pagar a empleados</span><span class="text-green">${UI.q(plLiquido)}</span>
-          </div>
-          <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);font-size:13px">
-            <span>IGSS patronal (cuota del taller)</span><span class="text-red">(${UI.q(plIgssPat)})</span>
-          </div>
-          <div style="display:flex;justify-content:space-between;padding:12px;font-weight:800;font-size:16px;background:var(--amber-dim);border-radius:8px;margin-top:8px">
-            <span>Costo patronal total</span><span class="text-amber">${UI.q(plCostoPatronal)}</span>
-          </div>`}
-          <div class="alert alert-cyan" style="margin-top:16px">
-            <div class="alert-icon">ℹ️</div>
-            <div class="alert-body" style="font-size:11px">
-              IGSS laboral 4.83% y patronal 12.67% (incluye 1% IRTRA + 1% INTECAP) sobre el salario base.
-              La bonificación incentivo (Q250) no es afecta a IGSS. Estimado mensual orientativo.
-            </div>
-          </div>
-        </div>`;
-    }
   },
 
   async exportPlanilla() {
@@ -739,13 +487,14 @@ Modulos.finanzas = {
   },
 
   /* Exporta un Excel real con hojas Ventas, Compras y Retenciones */
-  async exportExcelContador() {
+  async exportExcelContador(ini, fin) {
+    ini = ini || this._ini; fin = fin || this._fin;
     UI.toast('Generando Excel...','info');
     const [facturasRaw, comprasRaw, rets] = await Promise.all([
-      DB.getFacturas(this._ini, this._fin), DB.getCompras(), DB.getRetenciones(this._ini, this._fin)
+      DB.getFacturas(ini, fin), DB.getCompras(), DB.getRetenciones(ini, fin)
     ]);
     const facturas = facturasRaw.filter(f=>f.estado!=='anulada');
-    const compras = comprasRaw.filter(c=>c.estado!=='anulada' && (c.fecha||'')>=this._ini && (c.fecha||'')<=this._fin);
+    const compras = comprasRaw.filter(c=>c.estado!=='anulada' && (c.fecha||'')>=ini && (c.fecha||'')<=fin);
     const ventasRows = [['Fecha','Documento','NIT','Cliente','Base','IVA','Total']];
     facturas.forEach(f => ventasRows.push([f.fecha, f.num||(f.fel_serie?`${f.fel_serie}-${f.fel_numero||''}`:''), f.nit||'CF', f.nombre_receptor||f.clientes?.nombre||'CF', Number(f.subtotal)||0, Number(f.iva)||0, Number(f.total)||0]));
     const comprasRows = [['Fecha','Factura','Proveedor','Base','IVA','Total']];
@@ -756,7 +505,7 @@ Modulos.finanzas = {
       { nombre:'Libro Ventas', rows: ventasRows },
       { nombre:'Libro Compras', rows: comprasRows },
       { nombre:'Retenciones', rows: retRows }
-    ], `libros-${this._ini.slice(0,7)}.xlsx`);
+    ], `libros-${ini.slice(0,7)}.xlsx`);
     UI.toast('Excel generado ✓');
   },
 
