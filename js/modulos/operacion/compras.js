@@ -11,10 +11,10 @@ Modulos.compras = {
     const el = document.getElementById('page-content');
     UI.loading(el);
     const anio = new Date().getFullYear();
-    let compras = [], presCompras = 0;
-    [this._inv, this._prov, compras, presCompras, this._fiscal] = await Promise.all([
+    let compras = [], presCompras = 0, felSinImportar = [];
+    [this._inv, this._prov, compras, presCompras, this._fiscal, felSinImportar] = await Promise.all([
       DB.getInventario(), DB.getProveedores(), DB.getCompras(), DB.getPresupuestoCompras(anio).catch(()=>0),
-      DB.getConfigFiscal().catch(()=>({}))
+      DB.getConfigFiscal().catch(()=>({})), DB.getFelSinImportar('recibida').catch(()=>[])
     ]);
     const mesIni = `${anio}-${String(new Date().getMonth()+1).padStart(2,'0')}-01`;
     const vivas = compras.filter(c => c.estado !== 'anulada');
@@ -31,6 +31,21 @@ Modulos.compras = {
         </div>
       </div>
       <div class="page-body">
+        ${felSinImportar.length > 0 ? `
+        <div class="card" style="background:linear-gradient(135deg,var(--cyan)15 0%,var(--blue)15 100%);margin-bottom:16px;border-left:4px solid var(--cyan)">
+          <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px">
+            <div>
+              <div class="card-sub" style="margin:0;color:var(--cyan)">📥 Importar desde FEL del SAT</div>
+              <p style="font-size:12px;color:var(--text2);margin:6px 0 0 0">
+                <b>${felSinImportar.length} facturas recibidas</b> del FEL disponibles para importar como compras.
+                Total: <b>${UI.q(felSinImportar.reduce((s,f)=>s+(Number(f.gran_total)||0),0))}</b>
+              </p>
+            </div>
+            <button class="btn btn-cyan" onclick="Modulos.compras._importarFel()">
+              ⬆️ Importar todo (${felSinImportar.length})
+            </button>
+          </div>
+        </div>` : ''}
         <div class="kpi-grid" style="margin-bottom:16px">
           ${UI.kpiCard({ icon:'🛒', clase:'red', label:'Compras del mes', value: totalMes, money:true })}
           ${UI.kpiCard({ icon:'📦', clase:'amber', label:'Compras del año', value: totalAnio, money:true })}
@@ -223,5 +238,21 @@ Modulos.compras = {
         <span>Total</span><span class="text-amber">${UI.q(c.total)}</span>
       </div>
       <div class="modal-footer"><button class="btn btn-ghost" onclick="UI.cerrarModal()">Cerrar</button></div>`, '600px');
+  },
+
+  async _importarFel() {
+    const felSinImportar = await DB.getFelSinImportar('recibida').catch(()=>[]);
+    if (!felSinImportar.length) { UI.toast('No hay facturas disponibles para importar','info'); return; }
+
+    const ok = await UI.confirmar(`¿Crear ${felSinImportar.length} compras desde el FEL del SAT?<br>
+      <span style="font-size:12px;color:var(--text2)">Total: <b>${UI.q(felSinImportar.reduce((s,f)=>s+(Number(f.gran_total)||0),0))}</b></span>`, 'Importar');
+    if (!ok) return;
+
+    UI.toast('Importando compras desde FEL...','info');
+    const felIds = felSinImportar.map(f => f.id);
+    const { count, errors } = await DB.crearComprasDesdeFeL(felIds);
+    if (errors) UI.toast(`Se crearon ${count} compras (${errors} errores)`, 'error');
+    else UI.toast(`✓ ${count} compras creadas desde FEL`);
+    this.render();
   }
 };
