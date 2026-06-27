@@ -4,28 +4,50 @@
    Finanzas) y guarda el historial. Se compara contra el presupuesto. */
 Modulos.compras = {
   _inv: [], _prov: [], _ri: 0,
-
   _fiscal: null,
+  _compras: [],
+  _mes: null, _anio: null,   // periodo activo (null = inicializa al mes actual)
 
   async render() {
     const el = document.getElementById('page-content');
     UI.loading(el);
-    const anio = new Date().getFullYear();
+    const hoy = new Date();
+    if (this._mes === null) this._mes = hoy.getMonth() + 1;   // 0 = "todo el año"
+    if (this._anio === null) this._anio = hoy.getFullYear();
+    const anioActual = hoy.getFullYear();
+
     let compras = [], presCompras = 0, felSinImportar = [];
     [this._inv, this._prov, compras, presCompras, this._fiscal, felSinImportar] = await Promise.all([
-      DB.getInventario(), DB.getProveedores(), DB.getCompras(), DB.getPresupuestoCompras(anio).catch(()=>0),
+      DB.getInventario(), DB.getProveedores(), DB.getCompras(), DB.getPresupuestoCompras(this._anio).catch(()=>0),
       DB.getConfigFiscal().catch(()=>({})), DB.getFelSinImportar('recibida').catch(()=>[])
     ]);
-    const mesIni = `${anio}-${String(new Date().getMonth()+1).padStart(2,'0')}-01`;
+    this._compras = compras;
+
+    /* KPIs del año/mes actual (referencia global, no del filtro) */
+    const mesIniAct = `${anioActual}-${String(hoy.getMonth()+1).padStart(2,'0')}-01`;
     const vivas = compras.filter(c => c.estado !== 'anulada');
-    const totalAnio = vivas.filter(c => (c.fecha||'') >= `${anio}-01-01`).reduce((s,c)=>s+(Number(c.total)||0),0);
-    const totalMes  = vivas.filter(c => (c.fecha||'') >= mesIni).reduce((s,c)=>s+(Number(c.total)||0),0);
+    const totalAnio = vivas.filter(c => (c.fecha||'') >= `${anioActual}-01-01`).reduce((s,c)=>s+(Number(c.total)||0),0);
+    const totalMes  = vivas.filter(c => (c.fecha||'') >= mesIniAct).reduce((s,c)=>s+(Number(c.total)||0),0);
     const pct = presCompras > 0 ? Math.round(totalAnio/presCompras*100) : 0;
+
+    /* Filtro por periodo activo (mes/año) — historial on-demand vía selector */
+    const filtradas = compras.filter(c => {
+      const f = c.fecha || '';
+      if (f.slice(0,4) !== String(this._anio)) return false;
+      if (this._mes === 0) return true;                       // todo el año
+      return f.slice(5,7) === String(this._mes).padStart(2,'0');
+    });
+    const totalFiltrado = filtradas.filter(c=>c.estado!=='anulada').reduce((s,c)=>s+(Number(c.total)||0),0);
+
+    const meses = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+    const anios = [];
+    for (let a = anioActual; a >= anioActual-4; a--) anios.push(a);
+    const etiquetaPeriodo = this._mes === 0 ? `Año ${this._anio}` : `${meses[this._mes-1]} ${this._anio}`;
 
     el.innerHTML = `
       <div class="page-header">
         <div><h1 class="page-title">🛒 Compras</h1>
-        <p class="page-subtitle">// ${vivas.length} compras registradas</p></div>
+        <p class="page-subtitle">// ${vivas.length} compras registradas en total</p></div>
         <div class="page-actions">
           <button class="btn btn-amber" onclick="Modulos.compras.modalCompra()">＋ Nueva Compra</button>
         </div>
@@ -49,23 +71,41 @@ Modulos.compras = {
         <div class="kpi-grid" style="margin-bottom:16px">
           ${UI.kpiCard({ icon:'🛒', clase:'red', label:'Compras del mes', value: totalMes, money:true })}
           ${UI.kpiCard({ icon:'📦', clase:'amber', label:'Compras del año', value: totalAnio, money:true })}
-          ${UI.kpiCard({ icon:'🎯', clase:'cyan', label:`Presupuesto compras ${anio}`, value: presCompras>0?UI.q(presCompras):'—',
+          ${UI.kpiCard({ icon:'🎯', clase:'cyan', label:`Presupuesto compras ${anioActual}`, value: presCompras>0?UI.q(presCompras):'—',
             trend: presCompras>0?`<span style="color:${pct>100?'var(--red)':'var(--green)'}">${pct}% ejecutado</span>`:'Define metas en Presupuesto' })}
         </div>
         ${presCompras>0?`<div style="height:8px;background:var(--surface2);border-radius:4px;overflow:hidden;margin-bottom:16px">
           <div style="height:100%;width:${Math.min(100,pct)}%;background:var(--${pct>100?'red':pct>85?'amber':'green'})"></div></div>`:''}
+
+        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:10px">
+          <div style="display:flex;align-items:center;gap:8px">
+            <select class="form-select" style="width:auto" onchange="Modulos.compras._mes=parseInt(this.value);Modulos.compras.render()">
+              <option value="0" ${this._mes===0?'selected':''}>Todo el año</option>
+              ${meses.map((m,i)=>`<option value="${i+1}" ${this._mes===i+1?'selected':''}>${m}</option>`).join('')}
+            </select>
+            <select class="form-select" style="width:auto" onchange="Modulos.compras._anio=parseInt(this.value);Modulos.compras.render()">
+              ${anios.map(a=>`<option value="${a}" ${this._anio===a?'selected':''}>${a}</option>`).join('')}
+            </select>
+          </div>
+          <div style="font-size:13px;color:var(--text2)">${etiquetaPeriodo}: <b>${filtradas.length}</b> compras · <b class="text-amber">${UI.q(totalFiltrado)}</b></div>
+        </div>
+
         <div class="table-wrap"><table class="data-table">
-          <thead><tr><th>No.</th><th>Fecha</th><th>Proveedor</th><th>No. Factura</th><th>Total</th><th>Estado</th><th>Acciones</th></tr></thead>
+          <thead><tr><th>No.</th><th>Fecha</th><th>Proveedor</th><th>No. Factura</th><th>Total</th><th>Estado</th><th style="text-align:right">Acciones</th></tr></thead>
           <tbody>
-            ${compras.map(c=>`<tr style="cursor:pointer;${c.estado==='anulada'?'opacity:.5':''}" onclick="Modulos.compras.verCompra('${c.id}')">
-              <td class="mono-sm"><b class="text-amber">${c.num||''}</b></td>
+            ${filtradas.map(c=>`<tr style="cursor:pointer;${c.estado==='anulada'?'opacity:.5':''}" onclick="Modulos.compras.verCompra('${c.id}')">
+              <td class="mono-sm"><b class="text-amber">${c.num||''}</b>${c.fel_importado_id?' <span class="badge badge-cyan" style="font-size:9px">FEL</span>':''}</td>
               <td class="mono-sm">${UI.fecha(c.fecha)}</td>
               <td>${c.proveedor_nombre||'—'}</td>
               <td class="mono-sm">${c.num_factura||'—'}</td>
               <td class="mono-sm text-red"><b>${UI.q(c.total)}</b></td>
               <td><span class="badge badge-${c.estado==='recibida'?'green':c.estado==='anulada'?'red':'amber'}">${c.estado}</span></td>
-              <td onclick="event.stopPropagation()"><button class="btn btn-sm btn-cyan" onclick="Modulos.compras.verCompra('${c.id}')">👁 Ver</button></td>
-            </tr>`).join('')||'<tr><td colspan="7" style="text-align:center;padding:24px;color:var(--text3)">Sin compras. Registra la primera con “＋ Nueva Compra”.</td></tr>'}
+              <td onclick="event.stopPropagation()" style="text-align:right;white-space:nowrap">
+                ${Modulos.btnAccion('ver', `Modulos.compras.verCompra('${c.id}')`)}
+                ${Modulos.btnAccion('editar', `Modulos.compras.editarCompra('${c.id}')`)}
+                ${Modulos.btnAccion('eliminar', `Modulos.compras.eliminarCompra('${c.id}')`)}
+              </td>
+            </tr>`).join('')||`<tr><td colspan="7" style="text-align:center;padding:24px;color:var(--text3)">Sin compras en ${etiquetaPeriodo}. ${this._mes!==0?'Probá "Todo el año" o cambiá el periodo.':'Registrá la primera con “＋ Nueva Compra”.'}</td></tr>`}
           </tbody>
         </table></div>
       </div>`;
@@ -237,7 +277,70 @@ Modulos.compras = {
       <div style="display:flex;justify-content:space-between;font-weight:800;margin-top:10px;border-top:2px solid var(--border);padding-top:8px">
         <span>Total</span><span class="text-amber">${UI.q(c.total)}</span>
       </div>
-      <div class="modal-footer"><button class="btn btn-ghost" onclick="UI.cerrarModal()">Cerrar</button></div>`, '600px');
+      <div class="modal-footer">
+        <button class="btn btn-ghost" onclick="UI.cerrarModal()">Cerrar</button>
+        ${Modulos.btnAccion('editar', `UI.cerrarModal();Modulos.compras.editarCompra('${c.id}')`, {stop:false})}
+      </div>`, '600px');
+  },
+
+  /* ── EDITAR (cabecera: proveedor, factura, fecha, estado) ── */
+  async editarCompra(id) {
+    const c = (this._compras||[]).find(x=>x.id===id) || (await DB.getCompras()).find(x=>x.id===id);
+    if (!c) { UI.toast('Compra no encontrada','error'); return; }
+    UI.modal(`✏️ Editar compra ${c.num||''}`, `
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Proveedor</label>
+          <select class="form-select" id="ec-prov">
+            <option value="">Sin proveedor</option>
+            ${this._prov.map(p=>`<option value="${p.id}" data-nombre="${(p.nombre||'').replace(/"/g,'&quot;')}" ${c.proveedor_id===p.id?'selected':''}>${p.nombre}</option>`).join('')}
+          </select></div>
+        <div class="form-group"><label class="form-label">No. de factura</label>
+          <input class="form-input" id="ec-factura" value="${(c.num_factura||'').replace(/"/g,'&quot;')}"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Fecha</label>
+          <input class="form-input" id="ec-fecha" type="date" value="${c.fecha||''}"></div>
+        <div class="form-group"><label class="form-label">Estado</label>
+          <select class="form-select" id="ec-estado">
+            ${['recibida','pendiente','anulada'].map(e=>`<option value="${e}" ${c.estado===e?'selected':''}>${e}</option>`).join('')}
+          </select></div>
+      </div>
+      <div style="font-size:11px;color:var(--text3);margin-top:4px">Para cambiar los artículos/montos, eliminá la compra y registrala de nuevo (afecta inventario).</div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" onclick="UI.cerrarModal()">Cancelar</button>
+        <button class="btn btn-amber" onclick="Modulos.compras.guardarEdicionCompra('${c.id}')">Guardar cambios</button>
+      </div>`, '560px');
+  },
+
+  async guardarEdicionCompra(id) {
+    const provSel = document.getElementById('ec-prov');
+    const provOpt = provSel?.options[provSel.selectedIndex];
+    const fields = {
+      proveedor_id: provSel?.value || null,
+      proveedor_nombre: provSel?.value ? (provOpt?.dataset.nombre||null) : null,
+      num_factura: document.getElementById('ec-factura')?.value.trim() || null,
+      fecha: document.getElementById('ec-fecha')?.value || null,
+      estado: document.getElementById('ec-estado')?.value || 'recibida'
+    };
+    const { error } = await DB.actualizarCompraCabecera(id, fields);
+    if (error) { UI.toast('Error: '+(error.message||''),'error'); return; }
+    UI.cerrarModal();
+    UI.toast('Compra actualizada ✓');
+    this.render();
+  },
+
+  /* ── ELIMINAR (revierte inventario + egreso) ── */
+  async eliminarCompra(id) {
+    const c = (this._compras||[]).find(x=>x.id===id);
+    const ok = await UI.confirmar(
+      `¿Eliminar la compra <b>${c?.num||''}</b>${c?.proveedor_nombre?` de ${c.proveedor_nombre}`:''}?<br>
+       <span style="font-size:12px;color:var(--text2)">Se revierte el stock que sumó y se borra su egreso. No se puede deshacer.</span>`,
+      'Eliminar');
+    if (!ok) return;
+    const { error } = await DB.eliminarCompra(id);
+    if (error) { UI.toast('No se pudo eliminar: '+(error.message||''),'error'); return; }
+    UI.toast('Compra eliminada ✓');
+    this.render();
   },
 
   async _importarFel() {
