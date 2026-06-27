@@ -163,7 +163,21 @@ Modulos.contabilidad = {
     /* ── LIBRO DE VENTAS ─────────────────────────── */
     if (this._tab === 'ventas') {
       const d = await this._datos();
+      const felEmiSinImp = await DB.getFelSinImportar('emitida').catch(()=>[]);
       el.innerHTML = `
+        ${felEmiSinImp.length > 0 ? `
+        <div class="card" style="background:linear-gradient(135deg,var(--green)15 0%,var(--cyan)15 100%);margin-bottom:14px;border-left:4px solid var(--green)">
+          <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px">
+            <div>
+              <div class="card-sub" style="margin:0;color:var(--green)">📥 Importar ventas desde FEL del SAT</div>
+              <p style="font-size:12px;color:var(--text2);margin:6px 0 0 0">
+                <b>${felEmiSinImp.length} facturas emitidas</b> del FEL para registrar como ventas/ingresos.
+                Total: <b>${UI.q(felEmiSinImp.reduce((s,f)=>s+(Number(f.gran_total)||0),0))}</b>
+              </p>
+            </div>
+            <button class="btn btn-green" onclick="Modulos.contabilidad._importarFelVentas()">⬆️ Importar todo (${felEmiSinImp.length})</button>
+          </div>
+        </div>` : ''}
         <div style="display:flex;justify-content:flex-end;margin-bottom:12px">
           <button class="btn btn-cyan" onclick="Modulos.contabilidad.exportarVentas()">⬇️ Exportar CSV</button>
         </div>
@@ -320,6 +334,13 @@ Modulos.contabilidad = {
       const alertaAnual = utilidades && hoy >= `${anio}-10-01`; /* aviso desde oct */
       const yaHayAnual  = obligaciones.some(o=>o.tipo==='ISR-ANUAL' && o.periodo===`${anio}-ANUAL`);
       el.innerHTML = `
+        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:14px">
+          <div class="card-sub" style="margin:0">📅 Obligaciones fiscales · ${anio}</div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap">
+            <button class="btn btn-sm btn-amber" onclick="Modulos.contabilidad.registrarObligacion('IVA')">＋ IVA del mes (${nombreMes})</button>
+            ${!utilidades ? `<button class="btn btn-sm btn-amber" onclick="Modulos.contabilidad.registrarObligacion('ISR')">＋ ISR del mes</button>` : ''}
+          </div>
+        </div>
         ${alertaAnual && !yaHayAnual ? `
         <div class="alert alert-amber" style="margin-bottom:14px">
           <div class="alert-icon">⚠️</div>
@@ -354,7 +375,7 @@ Modulos.contabilidad = {
                 ${o.estado==='pagado'?'':`<button class="btn btn-sm btn-green" onclick="Modulos.contabilidad.marcarPagada('${o.id}')">💵 Pagada</button>`}
                 ${Modulos.btnAccion('eliminar', `Modulos.eliminarRegistro('obligaciones_fiscales','${o.id}','la obligación ${o.tipo} ${o.periodo}',()=>Modulos.contabilidad._renderTab())`)}
               </div></td>
-            </tr>`;}).join('')||'<tr><td colspan="7" style="text-align:center;padding:24px;color:var(--text3)">Sin obligaciones registradas este año. Genera la del mes desde las pestañas IVA, ISR o Trimestral.</td></tr>'}</tbody>
+            </tr>`;}).join('')||'<tr><td colspan="7" style="text-align:center;padding:24px;color:var(--text3)">Sin obligaciones registradas este año. Usá los botones “＋ IVA/ISR del mes” de arriba para generarlas.</td></tr>'}</tbody>
         </table></div>
         <div class="alert alert-cyan" style="margin-top:14px">
           <div class="alert-icon">📅</div>
@@ -504,6 +525,21 @@ Modulos.contabilidad = {
     const r = rets.find(x=>x.id===id);
     if (!r) { UI.toast('Retención no encontrada','error'); return; }
     this.modalRetencion(r.tipo, r);
+  },
+
+  /* Importar facturas EMITIDAS del FEL → tabla facturas (ventas/ingresos) */
+  async _importarFelVentas() {
+    const sinImp = await DB.getFelSinImportar('emitida').catch(()=>[]);
+    if (!sinImp.length) { UI.toast('No hay facturas emitidas pendientes de importar','info'); return; }
+    const ok = await UI.confirmar(`¿Registrar ${sinImp.length} ventas desde el FEL del SAT?<br>
+      <span style="font-size:12px;color:var(--text2)">Total: <b>${UI.q(sinImp.reduce((s,f)=>s+(Number(f.gran_total)||0),0))}</b> — aparecerán en Libro de Ventas e ingresos.</span>`, 'Importar');
+    if (!ok) return;
+    UI.toast('Importando ventas desde FEL...','info');
+    const { count, omitidas, errors } = await DB.crearFacturasDesdeFeL(sinImp.map(f=>f.id));
+    if (errors) UI.toast(`Se crearon ${count} ventas (${errors} errores)`,'error');
+    else if (count === 0) UI.toast('Todas las ventas ya estaban registradas','info');
+    else UI.toast(`✓ ${count} ventas registradas${omitidas>0?` · ${omitidas} ya existían`:''}`);
+    this._renderTab();
   },
 
   /* ── Parser del CSV de la Consulta FEL de SAT ──────

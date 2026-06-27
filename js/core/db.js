@@ -1537,7 +1537,7 @@ const DB = {
      libros de compras y ventas. */
   async getFacturasPeriodo(ini, fin) {
     const { data } = await getSB().from('facturas')
-      .select('id,num,fel_serie,fel_numero,fecha,nit,nombre_receptor,subtotal,iva,total,estado')
+      .select('id,num,fel_serie,fel_numero,fecha,nit,nombre_receptor,subtotal,iva,total,estado,fel_importado_id')
       .eq('tenant_id', getTID()).gte('fecha', ini).lte('fecha', fin).order('fecha');
     return data || [];
   },
@@ -1761,16 +1761,17 @@ const DB = {
     if (error) throw error;
   },
 
-  /* ── Sincronizar FEL con Compras ──────────────────────────── */
+  /* ── Sincronizar FEL con Compras (recibidas) y Facturas (emitidas) ── */
   async getFelSinImportar(naturaleza = 'recibida') {
     const tid = getTID();
+    const tabla = naturaleza === 'emitida' ? 'facturas' : 'compras';
     const [felResp, importResp] = await Promise.all([
       getSB().from('fel_importados')
         .select('*')
         .eq('tenant_id', tid)
         .eq('naturaleza', naturaleza)
         .order('fecha', { ascending: false }),
-      getSB().from('compras')
+      getSB().from(tabla)
         .select('fel_importado_id')
         .eq('tenant_id', tid)
         .not('fel_importado_id', 'is', null)
@@ -1818,5 +1819,47 @@ const DB = {
       count += data?.length || 0;
     }
     return { count, omitidas: compras.length - count, errors };
+  },
+
+  _felAFactura(fel, tid) {
+    return {
+      tenant_id: tid,
+      fel_importado_id: fel.id,
+      num: `${fel.serie||''}-${fel.numero_dte||''}`.replace(/^-|-$/g,''),
+      nit: fel.nit_emisor || 'CF',
+      nombre_receptor: fel.nombre_emisor || 'Consumidor Final',
+      tipo_cliente: (fel.nit_emisor && fel.nit_emisor.toUpperCase() !== 'CF') ? 'NIT' : 'CF',
+      fecha: fel.fecha,
+      subtotal: Math.round((fel.gran_total - (fel.iva||0)) * 100) / 100,
+      iva: Math.round((fel.iva||0) * 100) / 100,
+      total: fel.gran_total,
+      estado: /anulad/i.test(fel.estado||'') ? 'anulada' : 'certificada',
+      fel_uuid: fel.numero_autorizacion || null,
+      fel_serie: fel.serie || null,
+      fel_numero: fel.numero_dte || null,
+      notas: `Importada desde FEL del SAT`
+    };
+  },
+
+  /* Crea facturas (ventas) desde FEL emitido — idempotente.
+     Devuelve { count, omitidas, errors }. */
+  async crearFacturasDesdeFeL(felIds) {
+    const tid = getTID();
+    if (!felIds?.length) return { count: 0, omitidas: 0, errors: 0 };
+    const { data: fels, error: felErr } = await getSB().from('fel_importados')
+      .select('*').eq('tenant_id', tid).in('id', felIds);
+    if (felErr) { console.error('crearFacturasDesdeFeL:', felErr); return { count: 0, omitidas: 0, errors: 1 }; }
+
+    const facturas = (fels||[]).map(f => this._felAFactura(f, tid));
+    let count = 0, errors = 0;
+    for (let i = 0; i < facturas.length; i += 200) {
+      const { data, error } = await getSB().from('facturas')
+        .upsert(facturas.slice(i, i+200),
+                { onConflict: 'tenant_id,fel_importado_id', ignoreDuplicates: true })
+        .select('id');
+      if (error) { errors++; console.error('crearFacturasDesdeFeL upsert:', error.message); }
+      count += data?.length || 0;
+    }
+    return { count, omitidas: facturas.length - count, errors };
   }
 };

@@ -398,8 +398,9 @@ Modulos.contabilidad.sat = {
       const felRec = felVal.filter(f => f.naturaleza !== 'emitida');
       const felNeto = f => { const t = Number(f.gran_total)||0, i = Number(f.iva)||0; return i>0 ? Math.round((t-i)*100)/100 : Math.round(t/1.12*100)/100; };
       const comprasManual = comprasValidas.filter(c => !c.fel_importado_id);
+      const facturasManual = facturasValidas.filter(f => !f.fel_importado_id);
 
-      const salesTotal = facturasValidas.reduce((sum, f) => sum + (Number(f.total) || 0), 0)
+      const salesTotal = facturasManual.reduce((sum, f) => sum + (Number(f.total) || 0), 0)
         + felEmi.reduce((s, f) => s + (Number(f.gran_total) || 0), 0);
       const purchasesTotal = comprasManual.reduce((sum, c) => sum + (Number(c.total) || 0), 0)
         + felRec.reduce((s, f) => s + (Number(f.gran_total) || 0), 0)
@@ -425,8 +426,9 @@ Modulos.contabilidad.sat = {
         const neto = d => Number(d.subtotal) || Math.round((Number(d.total)||0)/1.12*100)/100;
         const round2 = n => Math.round(n*100)/100;
 
-        /* Débito: ventas netas = facturas del sistema + FEL emitido */
-        const ventasBase = facturasValidas.reduce((s,f)=>s+(Number(f.subtotal)||Math.round((Number(f.total)||0)/1.12*100)/100),0)
+        /* Débito: ventas netas = facturas manuales del sistema + FEL emitido
+           (facturasManual excluye las ya importadas del FEL para no duplicar) */
+        const ventasBase = facturasManual.reduce((s,f)=>s+(Number(f.subtotal)||Math.round((Number(f.total)||0)/1.12*100)/100),0)
           + felEmi.reduce((s,f)=>s+felNeto(f),0);
 
         /* Crédito separado. Importaciones solo vienen de compras manuales (DUA/CIF). */
