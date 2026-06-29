@@ -824,4 +824,89 @@
   border-radius: 3px;
   background: linear-gradient(90deg, var(--amber) 0%, var(--primary) 100%);
   transition: width 0.3s ease;
-}
+}
+
+/* ── POS PREMIUM REDESIGN ────────────────────────── */
+.pos-cat-slider {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 4px 4px 12px;
+  margin-bottom: 12px;
+  scrollbar-width: none;
+}
+.pos-cat-slider::-webkit-scrollbar {
+  display: none;
+}
+.pos-cat-pill {
+  flex-shrink: 0;
+  padding: 8px 16px;
+  border-radius: 99px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  color: var(--text2);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  user-select: none;
+}
+.pos-cat-pill:hover {
+  border-color: var(--amber-border);
+  background: var(--surface3);
+}
+.pos-cat-pill.active {
+  background: var(--amber);
+  color: #fff;
+  border-color: var(--amber);
+  box-shadow: 0 4px 12px rgba(217,119,6,0.2);
+}
+
+.pos-prod-card {
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  overflow: hidden;
+  background: var(--surface);
+  transition: transform 0.22s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.22s ease, border-color 0.22s ease;
+  cursor: pointer;
+}
+.pos-prod-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.04);
+  border-color: color-mix(in srgb, var(--amber) 40%, var(--border));
+}
+
+.pos-pay-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(80px, 1fr));
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.pos-pay-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 10px 6px;
+  border-radius: 12px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  color: var(--text2);
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  user-select: none;
+}
+.pos-pay-btn:hover {
+  background: var(--surface3);
+  border-color: var(--amber-border);
+}
+.pos-pay-btn.selected {
+  background: color-mix(in srgb, var(--amber) 10%, var(--surface));
+  border-color: var(--amber);
+  color: var(--amber);
+  box-shadow: 0 0 0 1px var(--amber), 0 4px 12px rgba(217,119,6,0.06);
+}
+

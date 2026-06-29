@@ -166,38 +166,50 @@ const POS = {
     const root = document.getElementById('pos-root');
     root.innerHTML = `
       <div style="display:flex;flex-direction:column;height:100vh">
-        <header style="display:flex;align-items:center;gap:12px;padding:10px 16px;background:var(--surface);border-bottom:1px solid var(--border)">
-          <div style="font-family:'Bebas Neue',sans-serif;font-size:22px;letter-spacing:1px">🛒 POS</div>
-          <div style="font-size:12px;color:var(--text3)">${Auth.tenant?.name||''}</div>
-          <div style="margin-left:auto;display:flex;gap:6px;flex-wrap:wrap">
-            <button class="btn btn-ghost btn-sm" onclick="POS.corteDiario()">🧾 Corte diario</button>
+        <header style="display:flex;align-items:center;gap:12px;padding:12px 18px;background:linear-gradient(90deg, var(--surface) 0%, var(--surface2) 100%);border-bottom:1px solid var(--border)">
+          <div style="font-family:\'Outfit\',\'Bebas Neue\',sans-serif;font-size:24px;font-weight:900;letter-spacing:-0.5px;color:var(--amber)">🛒 POS</div>
+          <div style="font-size:12px;color:var(--text3);background:var(--surface3);padding:4px 10px;border-radius:6px;font-weight:700">${Auth.tenant?.name||''}</div>
+          <div style="margin-left:auto;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+            <button class="btn btn-ghost btn-sm" onclick="POS.corteDiario()">🧾 Corte Diario</button>
             <button class="btn btn-ghost btn-sm" onclick="POS.reportes()">📊 Reportes</button>
-            <span style="font-size:12px;color:var(--text3);align-self:center">${Auth.user?.avatar||'👤'} ${Auth.user?.nombre||Auth.user?.email||''}</span>
+            <span style="font-size:12px;color:var(--text2);font-weight:700;display:flex;align-items:center;gap:6px">${Auth.user?.avatar||'👤'} ${Auth.user?.nombre||Auth.user?.email||''}</span>
             <button class="btn btn-ghost btn-sm" onclick="POS.confirmarSalida()">⏻ Salir</button>
           </div>
         </header>
         <div style="flex:1;display:grid;grid-template-columns:1fr 480px;gap:0;overflow:hidden">
           <!-- Catálogo -->
-          <div style="padding:14px;overflow-y:auto">
-            <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
-              <input class="form-input" style="flex:1;min-width:180px" placeholder="🔍 Buscar producto o código..."
-                     value="${this._busca}" oninput="POS._busca=this.value;POS._pintarGrid()">
-              <select class="form-select" style="width:160px" onchange="POS._cat=this.value;POS._pintarGrid()">
-                <option value="">Todas las categorías</option>
-                ${this._cats().map(c=>`<option value="${c}" ${this._cat===c?'selected':''}>${c}</option>`).join('')}
-              </select>
+          <div style="padding:18px;overflow-y:auto;display:flex;flex-direction:column;gap:14px">
+            <div style="display:flex;gap:12px;align-items:center">
+              <div style="position:relative;flex:1">
+                <span style="position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--text3)">🔍</span>
+                <input class="form-input" style="width:100%;padding-left:36px" placeholder="Buscar producto o código..."
+                       value="${this._busca}" oninput="POS._busca=this.value;POS._pintarGrid()">
+              </div>
             </div>
-            <div id="pos-grid"></div>
+            <!-- Categorías Horizontal Slider -->
+            <div class="pos-cat-slider">
+              <div class="pos-cat-pill ${!this._cat ? 'active' : ''}" onclick="POS._cat='';POS._onCatChange(this)">📦 Todo</div>
+              ${this._cats().map(c=>`
+                <div class="pos-cat-pill ${this._cat===c?'active':''}" onclick="POS._cat='${c}';POS._onCatChange(this)">${c}</div>
+              `).join('')}
+            </div>
+            <div id="pos-grid" style="flex:1"></div>
           </div>
           <!-- Carrito -->
           <div style="border-left:1px solid var(--border);background:var(--surface);display:flex;flex-direction:column">
-            <div id="pos-cart" style="flex:1;overflow-y:auto;padding:14px"></div>
-            <div id="pos-totales" style="border-top:1px solid var(--border);padding:14px"></div>
+            <div id="pos-cart" style="flex:1;overflow-y:auto;padding:16px"></div>
+            <div id="pos-totales" style="border-top:1px solid var(--border);padding:16px"></div>
           </div>
         </div>
       </div>`;
     this._pintarGrid();
     this._pintarCart();
+  },
+
+  _onCatChange(el) {
+    document.querySelectorAll('.pos-cat-pill').forEach(p=>p.classList.remove('active'));
+    el.classList.add('active');
+    this._pintarGrid();
   },
 
   _filtrados() {
@@ -215,24 +227,29 @@ const POS = {
     const cont = document.getElementById('pos-grid');
     if (!cont) return;
     const items = this._filtrados();
-    cont.innerHTML = `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:9px">
+    cont.innerHTML = `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:12px">
       ${items.map(p=>{
         const sinStock = (p.stock||0) <= 0;
+        const stockBajo = !sinStock && (p.stock||0) <= 5;
         const thumb = p.imagen_url
-          ? `<img src="${p.imagen_url}" alt="" style="width:100%;height:90px;object-fit:cover;border-radius:8px 8px 0 0">`
-          : `<div style="width:100%;height:90px;background:var(--surface2);display:flex;align-items:center;justify-content:center;font-size:30px;border-radius:8px 8px 0 0">📦</div>`;
-        return `<div onclick="${sinStock?'':`POS.addToCart('${p.id}')`}"
-          style="border:1px solid var(--border);border-radius:8px;cursor:${sinStock?'not-allowed':'pointer'};opacity:${sinStock?.5:1};overflow:hidden;background:var(--surface2)">
-          ${thumb}
-          <div style="padding:8px">
-            <div style="font-weight:700;font-size:12px;line-height:1.2;height:30px;overflow:hidden">${p.nombre}</div>
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-top:4px">
-              <span class="text-amber" style="font-weight:800;font-size:13px">${UI.q(p.precio_venta)}</span>
-              <span style="font-size:10px;color:${sinStock?'var(--red)':'var(--text3)'}">${sinStock?'Sin stock':`${p.stock} ${p.unidad_medida||''}`}</span>
+          ? `<img src="${p.imagen_url}" alt="" style="width:100%;height:100px;object-fit:cover;border-radius:12px 12px 0 0">`
+          : `<div style="width:100%;height:100px;background:var(--surface2);display:flex;align-items:center;justify-content:center;font-size:32px;border-radius:12px 12px 0 0">📦</div>`;
+        return `
+        <div class="pos-prod-card" onclick="${sinStock?'':'POS.addToCart(\''+p.id+'\')'}" style="opacity:${sinStock?0.55:1}">
+          <div style="position:relative">
+            ${thumb}
+            ${sinStock?`<span style="position:absolute;top:8px;right:8px;background:var(--red);color:#fff;font-size:9px;font-weight:900;padding:2px 6px;border-radius:4px">AGOTADO</span>`:
+              (stockBajo?`<span style="position:absolute;top:8px;right:8px;background:var(--amber);color:#fff;font-size:9px;font-weight:900;padding:2px 6px;border-radius:4px">¡ÚLTIMOS ${p.stock}!</span>`:'')}
+          </div>
+          <div style="padding:10px">
+            <div style="font-weight:800;font-size:12px;line-height:1.3;height:32px;overflow:hidden;color:var(--text);margin-bottom:6px">${p.nombre}</div>
+            <div style="display:flex;justify-content:space-between;align-items:center">
+              <span style="font-weight:900;font-size:14px;color:var(--amber);font-family:\'Outfit\',sans-serif">${UI.q(p.precio_venta)}</span>
+              <span style="font-size:10px;color:var(--text3);font-weight:700">${sinStock?'Sin stock':`${p.stock} ${p.unidad_medida||''}`}</span>
             </div>
           </div>
         </div>`;
-      }).join('')||'<div class="text-muted" style="padding:24px">Sin productos</div>'}
+      }).join('')||'<div class="text-muted" style="padding:24px;text-align:center">Sin productos encontrados</div>'}
     </div>`;
   },
 
@@ -275,59 +292,100 @@ const POS = {
     const tot  = document.getElementById('pos-totales');
     if (!cont || !tot) return;
     cont.innerHTML = `
-      <div style="font-weight:800;font-size:13px;text-transform:uppercase;letter-spacing:.08em;color:var(--amber);margin-bottom:10px">🧾 Venta actual</div>
+      <div style="font-weight:800;font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:var(--amber);margin-bottom:12px">🧾 Detalle de la Venta</div>
       ${this._cart.length ? this._cart.map(l=>`
-        <div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--border)">
-          ${l.imagen_url?`<img src="${l.imagen_url}" style="width:38px;height:38px;border-radius:6px;object-fit:cover;flex-shrink:0">`:'<div style="width:38px;height:38px;border-radius:6px;background:var(--surface3,#222);display:flex;align-items:center;justify-content:center;flex-shrink:0">📦</div>'}
+        <div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border)">
+          ${l.imagen_url?`<img src="${l.imagen_url}" style="width:40px;height:40px;border-radius:8px;object-fit:cover;flex-shrink:0">`:'<div style="width:40px;height:40px;border-radius:8px;background:var(--surface3);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:18px">📦</div>'}
           <div style="flex:1;min-width:0">
-            <div style="font-size:14px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${l.nombre}</div>
-            <div style="font-size:12.5px;color:var(--text3)">${UI.q(l.precio)} c/u</div>
+            <div style="font-size:13.5px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--text)">${l.nombre}</div>
+            <div style="font-size:11.5px;color:var(--text3);margin-top:2px">${UI.q(l.precio)} c/u</div>
           </div>
           <div style="display:flex;align-items:center;gap:6px">
-            <button class="btn btn-ghost btn-sm" style="padding:4px 11px;font-size:17px;line-height:1" onclick="POS.cambiarCant('${l.id}',-1)">−</button>
-            <span style="min-width:28px;text-align:center;font-weight:800;font-size:16px">${l.cant}</span>
-            <button class="btn btn-ghost btn-sm" style="padding:4px 11px;font-size:17px;line-height:1" onclick="POS.cambiarCant('${l.id}',1)">+</button>
+            <button class="btn btn-ghost" style="width:26px;height:26px;border-radius:50%;padding:0;display:flex;align-items:center;justify-content:center;font-size:16px;line-height:1;border:1px solid var(--border)" onclick="POS.cambiarCant('${l.id}',-1)">−</button>
+            <span style="min-width:24px;text-align:center;font-weight:900;font-size:14px">${l.cant}</span>
+            <button class="btn btn-ghost" style="width:26px;height:26px;border-radius:50%;padding:0;display:flex;align-items:center;justify-content:center;font-size:16px;line-height:1;border:1px solid var(--border)" onclick="POS.cambiarCant('${l.id}',1)">+</button>
           </div>
-          <div style="width:92px;text-align:right;font-weight:800;font-size:15px" class="text-amber">${UI.q(l.cant*l.precio)}</div>
-          <button class="btn btn-ghost btn-sm" style="padding:4px 7px" onclick="POS.quitar('${l.id}')">🗑️</button>
-        </div>`).join('') : '<div class="text-muted" style="padding:20px;text-align:center;font-size:13px">Toca un producto para agregarlo</div>'}`;
+          <div style="width:84px;text-align:right;font-weight:900;font-size:14px" class="text-amber">${UI.q(l.cant*l.precio)}</div>
+          <button class="btn btn-ghost" style="padding:4px 6px;color:var(--text3)" onclick="POS.quitar('${l.id}')" title="Eliminar">🗑️</button>
+        </div>`).join('') : '<div class="text-muted" style="padding:40px 20px;text-align:center;font-size:13px">Selecciona productos a la izquierda para agregarlos al carrito</div>'}`;
 
     const t = this._totales();
     const cli = this._cliente;
     const puntosCli = cli?.programa_puntos ? (Number(cli.puntos_saldo)||0) : null;
     tot.innerHTML = `
-      <div style="margin-bottom:10px">
-        <button class="btn btn-ghost" style="width:100%;text-align:left;font-size:14px;padding:10px 12px" onclick="POS.modalCliente()">
-          👤 ${cli ? cli.nombre : 'Consumidor Final (CF)'}${puntosCli!==null?` · ${puntosCli} pts`:''}
+      <!-- Cliente Selector -->
+      <div style="margin-bottom:12px">
+        <button class="btn btn-ghost" style="width:100%;text-align:left;font-size:13.5px;padding:10px 12px;border:1px solid var(--border);border-radius:10px;background:var(--surface2)" onclick="POS.modalCliente()">
+          👤 ${cli ? `<b>${cli.nombre}</b>` : 'Consumidor Final (CF)'}${puntosCli!==null?` · <span style="color:var(--amber);font-weight:800">${puntosCli} pts</span>`:''}
         </button>
       </div>
+
+      <!-- Canjear Puntos -->
       ${puntosCli!==null && puntosCli>=(Number(fidelizacionCfg().puntos_por_q1_canje)||10) ? (()=>{ const tasa=Number(fidelizacionCfg().puntos_por_q1_canje)||10; return `
-      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;font-size:14px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;font-size:13px;background:var(--surface2);padding:10px 12px;border-radius:10px;border:1px solid var(--border)">
         <span>Canjear puntos:</span>
-        <input class="form-input" style="width:110px;padding:8px 10px;font-size:15px" type="number" min="0" step="${tasa}" max="${Math.min(puntosCli, Math.floor(t.bruto*tasa))}"
-               value="${this._canje}" onchange="POS.setCanje(this.value)">
-        <span class="text-muted">= ${UI.q(this._canje/tasa)}</span>
+        <div style="display:flex;align-items:center;gap:6px">
+          <input class="form-input" style="width:80px;padding:6px 8px;font-size:13px" type="number" min="0" step="${tasa}" max="${Math.min(puntosCli, Math.floor(t.bruto*tasa))}"
+                 value="${this._canje}" onchange="POS.setCanje(this.value)">
+          <span class="text-muted" style="font-weight:700">= Q${(this._canje/tasa).toFixed(2)}</span>
+        </div>
       </div>`; })():''}
-      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;font-size:14px">
-        <span>Descuento Q:</span>
-        <input class="form-input" style="width:110px;padding:8px 10px;font-size:15px" type="number" min="0" step="0.01"
-               value="${this._descuento}" onchange="POS.setDescuento(this.value)">
-        <select class="form-select" style="flex:1;padding:8px 10px;font-size:15px" onchange="POS._metodo=this.value">
-          ${['Efectivo','Tarjeta','Transferencia','Cheque','Depósito'].map(m=>`<option ${this._metodo===m?'selected':''}>${m}</option>`).join('')}
-        </select>
+
+      <!-- Descuento y Metodo -->
+      <div style="display:flex;gap:8px;margin-bottom:14px;align-items:center;justify-content:space-between;font-size:13px">
+        <span>Descuento Manual:</span>
+        <div style="display:flex;align-items:center;gap:4px">
+          <span style="font-weight:700">Q</span>
+          <input class="form-input" style="width:80px;padding:6px 8px;font-size:13px" type="number" min="0" step="0.01"
+                 value="${this._descuento}" onchange="POS.setDescuento(this.value)">
+        </div>
       </div>
-      <label style="display:flex;align-items:center;gap:8px;font-size:14px;margin-bottom:10px;cursor:pointer">
-        <input type="checkbox" id="pos-envio-on" style="width:17px;height:17px" ${this._envioData?'checked':''} onchange="POS._toggleEnvio(this.checked)"> 🚚 Programar envío al cliente
+
+      <!-- Selector de Pago Segmentado -->
+      <div style="font-size:11px;font-weight:800;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">Método de Pago</div>
+      <div class="pos-pay-grid">
+        ${[
+          { id:'Efectivo', label:'Efectivo', icon:'💵' },
+          { id:'Tarjeta', label:'Tarjeta', icon:'💳' },
+          { id:'Transferencia', label:'Transfer', icon:'🏦' },
+          { id:'Cheque', label:'Cheque', icon:'✍️' }
+        ].map(m=>`
+          <div class="pos-pay-btn ${this._metodo===m.id?'selected':''}" onclick="POS._setMetodoPago('${m.id}', this)">
+            <span style="font-size:18px">${m.icon}</span>
+            <span>${m.label}</span>
+          </div>
+        `).join('')}
+      </div>
+
+      <!-- Programar Envio -->
+      <label style="display:flex;align-items:center;gap:8px;font-size:13px;margin:12px 0;cursor:pointer;user-select:none">
+        <input type="checkbox" id="pos-envio-on" style="width:16px;height:16px" ${this._envioData?'checked':''} onchange="POS._toggleEnvio(this.checked)"> 🚚 Programar envío al cliente
       </label>
-      ${this._envioData?`<div style="font-size:12px;color:var(--cyan);background:var(--surface2);border-radius:8px;padding:8px 10px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center">
+      ${this._envioData?`<div style="font-size:11.5px;color:var(--cyan);background:var(--surface2);border-radius:8px;padding:8px 10px;margin-bottom:12px;display:flex;justify-content:space-between;align-items:center;border:1px solid var(--border)">
         <span>📦 ${this._envioData.destinatario||'Cliente'} · ${(this._envioData.direccion||'').slice(0,40)}</span>
         <button class="btn btn-sm btn-ghost" style="padding:2px 8px" onclick="POS.modalEnvio()">✏️</button>
       </div>`:''}
-      ${t.desc>0?`<div style="display:flex;justify-content:space-between;font-size:14px;color:var(--text3);padding:2px 0"><span>Descuento</span><span>− ${UI.q(t.desc)}</span></div>`:''}
-      <div style="display:flex;justify-content:space-between;font-size:15px;color:var(--text2);padding:3px 0"><span>Subtotal</span><span>${UI.q(t.subtotal)}</span></div>
-      <div style="display:flex;justify-content:space-between;font-size:15px;color:var(--text2);padding:3px 0"><span>IVA (12%)</span><span>${UI.q(t.iva)}</span></div>
-      <div style="display:flex;justify-content:space-between;font-size:30px;font-weight:800;margin:8px 0 12px"><span>Total</span><span class="text-amber">${UI.q(t.total)}</span></div>
-      <button class="btn btn-amber" style="width:100%;font-size:19px;padding:16px;font-weight:800" onclick="POS.cobrar()" ${this._cart.length?'':'disabled'}>💵 Cobrar ${UI.q(t.total)}</button>`;
+
+      <!-- Totales Breakdown -->
+      <div style="background:var(--surface2);border-radius:12px;padding:12px;border:1px solid var(--border)">
+        ${t.desc>0?`<div style="display:flex;justify-content:space-between;font-size:13px;color:var(--text3);padding:2px 0"><span>Descuento</span><span style="color:var(--red);font-weight:700">− ${UI.q(t.desc)}</span></div>`:''}
+        <div style="display:flex;justify-content:space-between;font-size:13px;color:var(--text2);padding:2px 0"><span>Subtotal</span><span>${UI.q(t.subtotal)}</span></div>
+        <div style="display:flex;justify-content:space-between;font-size:13px;color:var(--text3);padding:2px 0"><span>IVA (12%)</span><span>${UI.q(t.iva)}</span></div>
+        <div style="display:flex;justify-content:space-between;font-size:24px;font-weight:900;margin-top:8px;padding-top:8px;border-top:1px solid var(--border);font-family:\'Outfit\',sans-serif">
+          <span>Total</span>
+          <span style="color:var(--green)">${UI.q(t.total)}</span>
+        </div>
+      </div>
+
+      <button class="btn btn-amber" style="width:100%;font-size:17px;padding:15px;font-weight:900;border-radius:10px;margin-top:14px;box-shadow:0 6px 18px rgba(217,119,6,0.2)" onclick="POS.cobrar()" ${this._cart.length?'':'disabled'}>
+        💵 Cobrar ${UI.q(t.total)}
+      </button>`;
+  },
+
+  _setMetodoPago(metodo, el) {
+    this._metodo = metodo;
+    document.querySelectorAll('.pos-pay-btn').forEach(b=>b.classList.remove('selected'));
+    el.classList.add('selected');
   },
 
   setDescuento(v) { this._descuento = Math.max(0, parseFloat(v)||0); this._pintarCart(); },
@@ -534,17 +592,38 @@ const POS = {
     if (!f) return;
     const win = window.open('','_blank');
     win.document.write(`<html><head><title>Recibo ${f.num||''}</title>
-      <style>body{font-family:monospace;padding:16px;max-width:320px}h3{text-align:center;margin:4px 0}.r{display:flex;justify-content:space-between}hr{border:none;border-top:1px dashed #000}</style></head>
-      <body><h3>${Auth.tenant?.name||'TallerPro'}</h3>
-      <div style="text-align:center;font-size:11px">NIT: ${Auth.tenant?.nit||'—'}</div><hr>
-      <div class="r"><span>${f.num||''}</span><span>${UI.fecha(f.fecha)}</span></div>
-      <div>Cliente: ${f.nombre_receptor||'CF'} (${f.nit||'CF'})</div><hr>
-      ${items.map(i=>`<div class="r"><span>${i.cantidad} x ${i.descripcion}</span><span>${Number(i.total).toFixed(2)}</span></div>`).join('')}
-      <hr><div class="r"><span>Subtotal</span><span>${Number(f.subtotal).toFixed(2)}</span></div>
-      <div class="r"><span>IVA</span><span>${Number(f.iva).toFixed(2)}</span></div>
-      <div class="r" style="font-weight:bold;font-size:15px"><span>TOTAL</span><span>Q${Number(f.total).toFixed(2)}</span></div>
-      <div>Pago: ${f.metodo_pago||''}</div><hr>
-      <div style="text-align:center;font-size:11px">¡Gracias por su compra!</div>
+      <style>
+        body { font-family: 'DM Mono', 'Courier New', monospace; padding: 12px; max-width: 290px; color: #000; font-size: 12px; line-height: 1.4; }
+        .center { text-align: center; }
+        .bold { font-weight: bold; }
+        .r { display: flex; justify-content: space-between; }
+        .hr { border-top: 1px dashed #000; margin: 8px 0; }
+        .title { font-size: 16px; font-weight: bold; margin-bottom: 2px; }
+      </style></head>
+      <body>
+      <div class="center title">${Auth.tenant?.name||'TallerPro'}</div>
+      <div class="center" style="font-size:10px">NIT: ${Auth.tenant?.nit||'—'}</div>
+      <div class="center" style="font-size:10px">${Auth.tenant?.direccion||'Guatemala'}</div>
+      <div class="hr"></div>
+      <div class="r"><span>No. Ticket: <b>${f.num||''}</b></span><span>${UI.fecha(f.fecha)}</span></div>
+      <div>Cliente: ${f.nombre_receptor||'CF'}</div>
+      <div>NIT/DPI: ${f.nit||'CF'}</div>
+      <div class="hr"></div>
+      ${items.map(i=>`
+        <div style="margin-bottom: 4px">
+          <div>${i.descripcion}</div>
+          <div class="r"><span style="padding-left:10px;color:#555">${i.cantidad} x ${UI.q(i.precio_unit)}</span><span>${UI.q(i.total)}</span></div>
+        </div>
+      `).join('')}
+      <div class="hr"></div>
+      <div class="r"><span>Subtotal</span><span>${UI.q(f.subtotal)}</span></div>
+      <div class="r"><span>IVA (12%)</span><span>${UI.q(f.iva)}</span></div>
+      <div class="r bold" style="font-size:14px"><span>TOTAL</span><span>${UI.q(f.total)}</span></div>
+      <div class="hr"></div>
+      <div class="r"><span>Método Pago:</span><span>${f.metodo_pago||'Efectivo'}</span></div>
+      <div class="hr"></div>
+      <div class="center bold" style="margin-top:12px;font-size:11px">¡GRACIAS POR SU COMPRA!</div>
+      <div class="center" style="font-size:9px;color:#444">TallerPro POS · Powered by Gemini</div>
       <script>window.print()</script></body></html>`);
     win.document.close();
   },
