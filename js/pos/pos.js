@@ -165,6 +165,48 @@ const POS = {
   _pintar() {
     const root = document.getElementById('pos-root');
     root.innerHTML = `
+      <style>
+        .pos-cat-slider {
+          display: flex !important;
+          gap: 8px !important;
+          overflow-x: auto !important;
+          padding: 4px 4px 12px !important;
+          margin-bottom: 12px !important;
+          scrollbar-width: none !important;
+          -webkit-overflow-scrolling: touch;
+        }
+        .pos-cat-slider::-webkit-scrollbar {
+          display: none !important;
+        }
+        .pos-cat-pill {
+          flex-shrink: 0 !important;
+          display: inline-flex !important;
+          align-items: center !important;
+          justify-content: center !important;
+          height: 38px !important;
+          padding: 0 18px !important;
+          border-radius: 99px !important;
+          background: var(--surface2) !important;
+          border: 1px solid var(--border) !important;
+          color: var(--text) !important;
+          font-size: 13px !important;
+          font-weight: 700 !important;
+          cursor: pointer !important;
+          transition: all 0.2s ease !important;
+          user-select: none !important;
+          line-height: 1 !important;
+        }
+        .pos-cat-pill:hover {
+          border-color: var(--amber-border) !important;
+          background: var(--surface3) !important;
+        }
+        .pos-cat-pill.active {
+          background: var(--amber) !important;
+          color: #fff !important;
+          border-color: var(--amber) !important;
+          box-shadow: 0 4px 12px rgba(217,119,6,0.2) !important;
+        }
+      </style>
       <div style="display:flex;flex-direction:column;height:100vh">
         <header style="display:flex;align-items:center;gap:12px;padding:12px 18px;background:linear-gradient(90deg, var(--surface) 0%, var(--surface2) 100%);border-bottom:1px solid var(--border)">
           <div style="font-family:\'Outfit\',\'Bebas Neue\',sans-serif;font-size:24px;font-weight:900;letter-spacing:-0.5px;color:var(--amber)">🛒 POS</div>
