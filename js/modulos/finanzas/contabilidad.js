@@ -219,11 +219,12 @@ Modulos.contabilidad = {
             <button class="btn btn-green" onclick="Modulos.contabilidad._importarFelVentas()">⬆️ Importar todo (${felEmiSinImp.length})</button>
           </div>
         </div>` : ''}
-        <div style="display:flex;justify-content:flex-end;margin-bottom:12px">
-          <button class="btn btn-cyan" onclick="Modulos.contabilidad.exportarVentas()">⬇️ Exportar CSV</button>
+        <div style="display:flex;justify-content:flex-end;gap:6px;margin-bottom:12px">
+          <button class="btn btn-amber btn-sm" onclick="Modulos.facturacion.modalFactura()">＋ Registrar Venta Manual</button>
+          <button class="btn btn-cyan btn-sm" onclick="Modulos.contabilidad.exportarVentas()">⬇️ Exportar CSV</button>
         </div>
         <div class="table-wrap"><table class="data-table">
-          <thead><tr><th>Fecha</th><th>Serie/No.</th><th>NIT</th><th>Cliente</th><th>Base</th><th>IVA</th><th>Total</th><th>Estado</th></tr></thead>
+          <thead><tr><th>Fecha</th><th>Serie/No.</th><th>NIT</th><th>Cliente</th><th>Base</th><th>IVA</th><th>Total</th><th>Estado</th><th>Acciones</th></tr></thead>
           <tbody>${d.facturas.map(f=>`<tr style="${/anulad/i.test(f.estado||'')?'opacity:.5;text-decoration:line-through':''}">
             <td class="mono-sm">${UI.fecha(f.fecha)}</td>
             <td class="mono-sm">${f.fel_serie||''} ${f.fel_numero||f.num||'—'}</td>
@@ -233,7 +234,13 @@ Modulos.contabilidad = {
             <td class="mono-sm text-amber">${UI.q(f.iva)}</td>
             <td class="mono-sm text-green"><b>${UI.q(f.total)}</b></td>
             <td><span class="badge badge-${/anulad/i.test(f.estado||'')?'red':'green'}">${f.estado||'vigente'}</span></td>
-          </tr>`).join('')||'<tr><td colspan="8" style="text-align:center;padding:24px;color:var(--text3)">Sin facturas en el periodo</td></tr>'}</tbody>
+            <td>
+              <div style="display:flex;gap:4px">
+                <button class="btn btn-sm btn-ghost" onclick="Modulos.facturacion.modalFactura('${f.id}')" title="Ver/Editar">✏️ Editar</button>
+                <button class="btn btn-sm btn-ghost text-red" onclick="Modulos.finanzas.eliminar('facturas','${f.id}')" title="Eliminar">🗑️</button>
+              </div>
+            </td>
+          </tr>`).join('')||'<tr><td colspan="9" style="text-align:center;padding:24px;color:var(--text3)">Sin facturas en el periodo</td></tr>'}</tbody>
         </table></div>
         <div style="margin-top:10px;font-size:12px;color:var(--text3)">Total facturado vigente: <b>${UI.q(d.ventasTotal)}</b> · Débito fiscal: <b>${UI.q(d.debito)}</b></div>`;
     }
@@ -261,6 +268,12 @@ Modulos.contabilidad = {
             <span class="badge badge-${ded?'green':'red'}" style="font-size:8px;cursor:pointer" title="Clic para cambiar: deducible de ISR" onclick="Modulos.contabilidad._toggleFlag('${c.id}','deducible',${!ded})">ISR ${ded?'✓':'✗'}</span>
             <span class="badge badge-${cred?'cyan':'gray'}" style="font-size:8px;cursor:pointer" title="Crédito IVA solo si la factura está a nombre del taller (NIT). Clic para cambiar." onclick="Modulos.contabilidad._toggleFlag('${c.id}','credito_iva',${!cred})">IVA ${cred?'✓':'✗'}</span>
           </div>`:''}
+        </td>
+        <td>
+          <div style="display:flex;gap:4px">
+            <button class="btn btn-xs btn-ghost" onclick="Modulos.compras.verCompra('${c.id}')" title="Ver detalle">👁️ Ver</button>
+            <button class="btn btn-xs btn-ghost text-red" onclick="Modulos.compras.eliminarCompra('${c.id}')" title="Eliminar">🗑️</button>
+          </div>
         </td></tr>`;
       });
       const filasE = d.egresosIva.map(e=>`<tr>
@@ -270,7 +283,14 @@ Modulos.contabilidad = {
         <td class="mono-sm">${e.num_factura||'—'}</td>
         <td class="mono-sm">${UI.q((Number(e.monto)||0)-(Number(e.iva_credito)||0))}</td>
         <td class="mono-sm text-cyan">${UI.q(e.iva_credito)}</td>
-        <td class="mono-sm"><b>${UI.q(e.monto)}</b></td><td><span class="badge badge-gray">gasto manual</span></td></tr>`);
+        <td class="mono-sm"><b>${UI.q(e.monto)}</b></td>
+        <td><span class="badge badge-gray">gasto manual</span></td>
+        <td>
+          <div style="display:flex;gap:4px">
+            <button class="btn btn-xs btn-ghost" onclick="Modulos.finanzas.modalEgreso('${e.id}')" title="Editar">✏️ Editar</button>
+            <button class="btn btn-xs btn-ghost text-red" onclick="Modulos.finanzas.eliminar('egresos','${e.id}')" title="Eliminar">🗑️</button>
+          </div>
+        </td></tr>`);
       const totDed = d.compras.filter(c=>c.deducible && !/anulad/i.test(c.estado||'')).reduce((s,c)=>s+(Number(c.total)||0),0);
       const totNoDed = d.compras.filter(c=>!c.deducible && (c.categoria_gasto||'por_clasificar')!=='por_clasificar' && !/anulad/i.test(c.estado||'')).reduce((s,c)=>s+(Number(c.total)||0),0);
       el.innerHTML = `
@@ -300,8 +320,8 @@ Modulos.contabilidad = {
           </div>
         </div>
         <div class="table-wrap"><table class="data-table">
-          <thead><tr><th>Fecha</th><th>NIT</th><th>Proveedor</th><th>Factura</th><th>Base</th><th>IVA crédito</th><th>Total</th><th>Clasificación fiscal</th></tr></thead>
-          <tbody>${[...filasC,...filasE].join('')||'<tr><td colspan="8" style="text-align:center;padding:24px;color:var(--text3)">Sin compras/gastos con IVA en el periodo</td></tr>'}</tbody>
+          <thead><tr><th>Fecha</th><th>NIT</th><th>Proveedor</th><th>Factura</th><th>Base</th><th>IVA crédito</th><th>Total</th><th>Clasificación fiscal</th><th>Acciones</th></tr></thead>
+          <tbody>${[...filasC,...filasE].join('')||'<tr><td colspan="9" style="text-align:center;padding:24px;color:var(--text3)">Sin compras/gastos con IVA en el periodo</td></tr>'}</tbody>
         </table></div>`;
     }
 
@@ -325,7 +345,10 @@ Modulos.contabilidad = {
             <input class="form-input" type="file" id="fel-file" accept=".csv,.xls,.xlsx,text/csv"
               multiple onchange="Modulos.contabilidad._leerFel(this)">
           </div>
-          <div id="fel-preview"></div>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-top:10px;flex-wrap:wrap;gap:8px">
+            <div id="fel-preview"></div>
+            <button class="btn btn-amber btn-sm" onclick="Modulos.contabilidad.modalFelImportado()">＋ Registrar DTE Manual</button>
+          </div>
         </div>
 
         ${importados.length?`
@@ -333,6 +356,7 @@ Modulos.contabilidad = {
           <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:8px">
             <div class="card-sub" style="margin:0">📚 FEL importado · ${nombreMes}</div>
             <div style="display:flex;gap:6px">
+              <button class="btn btn-sm btn-amber" onclick="Modulos.contabilidad.modalFelImportado()">＋ Registrar DTE Manual</button>
               ${rec.length?`<button class="btn btn-sm btn-danger" onclick="Modulos.contabilidad.eliminarFelPeriodo('recibida')">🗑️ Recibidas (${rec.length})</button>`:''}
               ${emi.length?`<button class="btn btn-sm btn-danger" onclick="Modulos.contabilidad.eliminarFelPeriodo('emitida')">🗑️ Emitidas (${emi.length})</button>`:''}
             </div>
@@ -343,7 +367,7 @@ Modulos.contabilidad = {
             &nbsp;·&nbsp; 📤 Emitidas: <b>${emi.length}</b> DTE · total <b>${UI.q(emi.reduce((s,x)=>s+(Number(x.gran_total)||0),0))}</b>
           </div>
           <div class="table-wrap"><table class="data-table">
-            <thead><tr><th>Fecha</th><th>Tipo</th><th>Serie/No.</th><th>Contraparte</th><th>Total</th><th>IVA</th><th></th></tr></thead>
+            <thead><tr><th>Fecha</th><th>Tipo</th><th>Serie/No.</th><th>Contraparte</th><th>Total</th><th>IVA</th><th>Acciones</th></tr></thead>
             <tbody>${importados.slice(0,60).map(x=>`<tr style="${/anulad/i.test(x.estado||'')?'opacity:.5':''}">
               <td class="mono-sm">${UI.fecha(x.fecha)}</td>
               <td>
@@ -354,7 +378,12 @@ Modulos.contabilidad = {
               <td>${x.nombre_emisor||'—'}<div style="font-size:10px;color:var(--text3)">${x.nit_emisor||''}</div></td>
               <td class="mono-sm"><b>${UI.q(x.gran_total)}</b></td>
               <td class="mono-sm text-cyan">${x.iva?UI.q(x.iva):'—'}</td>
-              <td>${Modulos.btnAccion('eliminar', `Modulos.eliminarRegistro('fel_importados','${x.id}','este DTE',()=>Modulos.contabilidad._renderTab())`)}</td>
+              <td>
+                <div style="display:flex;gap:4px">
+                  <button class="btn btn-xs btn-ghost" onclick="Modulos.contabilidad.modalFelImportado('${x.id}')" title="Editar DTE">✏️ Editar</button>
+                  <button class="btn btn-xs btn-ghost text-red" onclick="Modulos.eliminarRegistro('fel_importados','${x.id}','este DTE',()=>Modulos.contabilidad._renderTab())" title="Eliminar">🗑️</button>
+                </div>
+              </td>
             </tr>`).join('')}</tbody>
           </table></div>
           ${importados.length>60?`<div style="font-size:11px;color:var(--text3);margin-top:6px">Mostrando 60 de ${importados.length}.</div>`:''}
@@ -419,6 +448,7 @@ Modulos.contabilidad = {
         <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:14px">
           <div class="card-sub" style="margin:0">📅 Obligaciones fiscales · ${anio}</div>
           <div style="display:flex;gap:6px;flex-wrap:wrap">
+            <button class="btn btn-sm btn-amber" onclick="Modulos.contabilidad.modalObligacion()">＋ Registrar Obligación</button>
             <button class="btn btn-sm btn-amber" onclick="Modulos.contabilidad.registrarObligacion('IVA')">＋ IVA del mes (${nombreMes})</button>
             ${!utilidades ? `<button class="btn btn-sm btn-amber" onclick="Modulos.contabilidad.registrarObligacion('ISR')">＋ ISR del mes</button>` : ''}
           </div>
@@ -455,6 +485,7 @@ Modulos.contabilidad = {
               <td><span class="badge badge-${o.estado==='pagado'?'green':(vencida?'red':'amber')}">${o.estado==='pagado'?'Pagado':(vencida?'Vencida':'Pendiente')}</span></td>
               <td><div style="display:flex;gap:4px">
                 ${o.estado==='pagado'?'':`<button class="btn btn-sm btn-green" onclick="Modulos.contabilidad.marcarPagada('${o.id}')">💵 Pagada</button>`}
+                <button class="btn btn-sm btn-ghost" onclick="Modulos.contabilidad.modalObligacion('${o.id}')" title="Editar">✏️ Editar</button>
                 ${Modulos.btnAccion('eliminar', `Modulos.eliminarRegistro('obligaciones_fiscales','${o.id}','la obligación ${o.tipo} ${o.periodo}',()=>Modulos.contabilidad._renderTab())`)}
               </div></td>
             </tr>`;}).join('')||'<tr><td colspan="7" style="text-align:center;padding:24px;color:var(--text3)">Sin obligaciones registradas este año. Usá los botones “＋ IVA/ISR del mes” de arriba para generarlas.</td></tr>'}</tbody>
@@ -530,6 +561,201 @@ Modulos.contabilidad = {
     const { error } = await DB.upsertObligacion({ id, estado:'pagado', monto_pagado:o.monto_calculado, fecha_pago: new Date().toISOString().slice(0,10) });
     if (error) { UI.toast('Error: '+error.message,'error'); return; }
     UI.toast('Obligación pagada ✓');
+    this._renderTab();
+  },
+
+  async modalFelImportado(id=null) {
+    let f = {};
+    if (id) {
+      const { ini, fin } = this._rango();
+      const importados = await DB.getFelImportados(ini, fin);
+      f = importados.find(x=>x.id===id) || {};
+    }
+    const nat = f.naturaleza || 'recibida';
+    const tipo = f.tipo_doc || 'FCAM';
+    const estado = f.estado || 'vigente';
+    
+    UI.modal(id ? '✏️ Editar DTE Importado' : '＋ Nuevo DTE Manual', `
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Naturaleza *</label>
+          <select class="form-select" id="fel-import-nat">
+            <option value="recibida" ${nat==='recibida'?'selected':''}>📥 Recibida (Compra)</option>
+            <option value="emitida" ${nat==='emitida'?'selected':''}>📤 Emitida (Venta)</option>
+          </select></div>
+        <div class="form-group"><label class="form-label">Tipo Documento *</label>
+          <select class="form-select" id="fel-import-tipo">
+            <option value="FCAM" ${tipo==='FCAM'?'selected':''}>Factura (DTE)</option>
+            <option value="FPEST" ${tipo==='FPEST'?'selected':''}>Factura Especial</option>
+            <option value="NCRE" ${tipo==='NCRE'?'selected':''}>Nota de Crédito</option>
+            <option value="NDEB" ${tipo==='NDEB'?'selected':''}>Nota de Débito</option>
+          </select></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Fecha *</label>
+          <input class="form-input" type="date" id="fel-import-fecha" value="${f.fecha || new Date().toISOString().slice(0,10)}"></div>
+        <div class="form-group"><label class="form-label">Estado *</label>
+          <select class="form-select" id="fel-import-estado">
+            <option value="vigente" ${estado==='vigente'?'selected':''}>Vigente</option>
+            <option value="anulado" ${estado==='anulado'?'selected':''}>Anulado</option>
+          </select></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Serie *</label>
+          <input class="form-input" id="fel-import-serie" value="${f.serie||''}" placeholder="e.g. 5385F551"></div>
+        <div class="form-group"><label class="form-label">Número DTE *</label>
+          <input class="form-input" id="fel-import-numero" value="${f.numero_dte||''}" placeholder="e.g. 123456789"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">NIT Contraparte *</label>
+          <input class="form-input" id="fel-import-nit" value="${f.nit_emisor||''}" placeholder="e.g. 883921-2"></div>
+        <div class="form-group"><label class="form-label">Nombre Contraparte *</label>
+          <input class="form-input" id="fel-import-nombre" value="${f.nombre_emisor||''}" placeholder="e.g. Repuestos El Amigo"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Total (Q) *</label>
+          <input class="form-input" type="number" step="0.01" id="fel-import-total" value="${f.gran_total||''}" placeholder="0.00" oninput="Modulos.contabilidad._autoCalcIva()"></div>
+        <div class="form-group"><label class="form-label">IVA (Q)</label>
+          <input class="form-input" type="number" step="0.01" id="fel-import-iva" value="${f.iva||''}" placeholder="Auto-calculado si queda vacío"></div>
+      </div>
+      <div class="form-group" id="fel-import-combustible-box">
+        <label class="form-label" style="display:flex;align-items:center;gap:6px">
+          <input type="checkbox" id="fel-import-combustible" ${f.es_combustible?'checked':''}> Es combustible (para IDP/IVA crédito especial)
+        </label>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" onclick="UI.cerrarModal()">Cancelar</button>
+        <button class="btn btn-amber" onclick="Modulos.contabilidad.guardarFelImportado('${id||''}')">${id?'Guardar Cambios':'Crear DTE'}</button>
+      </div>
+    `, '580px');
+  },
+
+  _autoCalcIva() {
+    const tot = parseFloat(document.getElementById('fel-import-total')?.value)||0;
+    const ivaEl = document.getElementById('fel-import-iva');
+    if (ivaEl && !ivaEl.value && tot > 0) {
+      ivaEl.placeholder = (tot - (tot / 1.12)).toFixed(2);
+    }
+  },
+
+  async guardarFelImportado(id=null) {
+    const nat = document.getElementById('fel-import-nat')?.value;
+    const tipo = document.getElementById('fel-import-tipo')?.value;
+    const fecha = document.getElementById('fel-import-fecha')?.value;
+    const estado = document.getElementById('fel-import-estado')?.value;
+    const serie = document.getElementById('fel-import-serie')?.value.trim();
+    const numero = document.getElementById('fel-import-numero')?.value.trim();
+    const nit = document.getElementById('fel-import-nit')?.value.trim();
+    const nombre = document.getElementById('fel-import-nombre')?.value.trim();
+    const total = parseFloat(document.getElementById('fel-import-total')?.value)||0;
+    let iva = parseFloat(document.getElementById('fel-import-iva')?.value);
+    if (isNaN(iva)) {
+      iva = total - (total / 1.12);
+    }
+    const esCombustible = document.getElementById('fel-import-combustible')?.checked || false;
+
+    if (!fecha || !serie || !numero || !nit || !nombre || total <= 0) {
+      UI.toast('Por favor completa todos los campos requeridos y con valores válidos','error');
+      return;
+    }
+
+    const fields = {
+      naturaleza: nat,
+      tipo_doc: tipo,
+      fecha,
+      estado,
+      serie,
+      numero_dte: numero,
+      nit_emisor: nit,
+      nombre_emisor: nombre,
+      gran_total: total,
+      iva,
+      es_combustible: esCombustible
+    };
+    if (id) fields.id = id;
+
+    UI.toast('Guardando registro FEL...','info');
+    const { error } = await DB.upsertFelImportado(fields);
+    if (error) { UI.toast('Error: '+error.message,'error'); return; }
+    UI.cerrarModal();
+    UI.toast('DTE guardado exitosamente ✓');
+    this._renderTab();
+  },
+
+  async modalObligacion(id=null) {
+    let o = {};
+    if (id) {
+      const obligaciones = await DB.getObligaciones(this._rango().anio);
+      o = obligaciones.find(x=>x.id===id) || {};
+    }
+    const tipo = o.tipo || 'IVA';
+    const estado = o.estado || 'pendiente';
+    UI.modal(id ? '✏️ Editar Obligación Fiscal' : '＋ Registrar Obligación Fiscal', `
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Impuesto *</label>
+          <select class="form-select" id="ob-tipo">
+            ${['IVA','ISR','ISO','ISR-ANUAL','Retenciones'].map(t=>`<option value="${t}" ${tipo===t?'selected':''}>${t}</option>`).join('')}
+          </select></div>
+        <div class="form-group"><label class="form-label">Periodo *</label>
+          <input class="form-input mono-sm" id="ob-periodo" value="${o.periodo || `${this._rango().anio}-${String(this._rango().mes).padStart(2,'0')}`}" placeholder="e.g. 2026-06 o 2026-ANUAL"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Monto Calculado (Q) *</label>
+          <input class="form-input" type="number" step="0.01" id="ob-monto-calc" value="${o.monto_calculado||0}"></div>
+        <div class="form-group"><label class="form-label">Monto Pagado (Q)</label>
+          <input class="form-input" type="number" step="0.01" id="ob-monto-pag" value="${o.monto_pagado||''}" placeholder="Q0.00"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Fecha Vencimiento *</label>
+          <input class="form-input" type="date" id="ob-fecha-venc" value="${o.fecha_vencimiento || ''}"></div>
+        <div class="form-group"><label class="form-label">Estado *</label>
+          <select class="form-select" id="ob-estado">
+            <option value="pendiente" ${estado==='pendiente'?'selected':''}>Pendiente</option>
+            <option value="pagado" ${estado==='pagado'?'selected':''}>Pagado</option>
+          </select></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Fecha de Pago</label>
+          <input class="form-input" type="date" id="ob-fecha-pago" value="${o.fecha_pago || ''}"></div>
+        <div class="form-group"><label class="form-label">Notas / Formulario</label>
+          <input class="form-input" id="ob-notas" value="${o.notas||''}" placeholder="SAT-2237 IVA General"></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" onclick="UI.cerrarModal()">Cancelar</button>
+        <button class="btn btn-amber" onclick="Modulos.contabilidad.guardarObligacion('${id||''}')">${id?'Guardar Cambios':'Registrar Obligación'}</button>
+      </div>
+    `, '540px');
+  },
+
+  async guardarObligacion(id=null) {
+    const tipo = document.getElementById('ob-tipo')?.value;
+    const periodo = document.getElementById('ob-periodo')?.value.trim();
+    const mCalc = parseFloat(document.getElementById('ob-monto-calc')?.value)||0;
+    const mPag = parseFloat(document.getElementById('ob-monto-pag')?.value)||0;
+    const venc = document.getElementById('ob-fecha-venc')?.value;
+    const estado = document.getElementById('ob-estado')?.value;
+    const fPago = document.getElementById('ob-fecha-pago')?.value || null;
+    const notas = document.getElementById('ob-notas')?.value.trim();
+
+    if (!periodo || !venc) {
+      UI.toast('Por favor completa el Periodo y la Fecha de Vencimiento','error');
+      return;
+    }
+
+    const fields = {
+      tipo, periodo,
+      monto_calculado: mCalc,
+      monto_pagado: mPag || (estado==='pagado' ? mCalc : 0),
+      fecha_vencimiento: venc,
+      estado,
+      fecha_pago: fPago || (estado==='pagado' ? new Date().toISOString().slice(0,10) : null),
+      notas
+    };
+    if (id) fields.id = id;
+
+    const { error } = await DB.upsertObligacion(fields);
+    if (error) { UI.toast('Error: '+error.message,'error'); return; }
+    UI.cerrarModal();
+    UI.toast('Obligación guardada exitosamente ✓');
     this._renderTab();
   },
 

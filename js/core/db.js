@@ -1693,6 +1693,19 @@ const DB = {
     return { error };
   },
 
+  async upsertFelImportado(fields) {
+    const payload = { ...fields, tenant_id: getTID() };
+    if (payload.id) {
+      const { id, ...resto } = payload;
+      const { data, error } = await getSB().from('fel_importados')
+        .update(resto).eq('id', id).select().single();
+      return { data, error };
+    }
+    const { data, error } = await getSB().from('fel_importados')
+      .insert(payload).select().single();
+    return { data, error };
+  },
+
   async upsertObligacion(fields) {
     const payload = { ...fields, tenant_id: getTID() };
     if (payload.id) {

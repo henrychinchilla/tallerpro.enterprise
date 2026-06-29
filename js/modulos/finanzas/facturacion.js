@@ -398,7 +398,11 @@ Modulos.facturacion = {
     UI.cerrarModal();
     UI.toast(id ? 'Factura actualizada ✓'
                 : `Factura emitida ✓${descontados ? ` · ${descontados} repuesto(s) descontado(s) de inventario` : ''}`);
-    this.render();
+    if (window.App && App.paginaActual === 'contabilidad') {
+      if (window.Modulos?.contabilidad?._renderTab) await Modulos.contabilidad._renderTab();
+    } else {
+      this.render();
+    }
   },
 
   /* Importa de una OT: cliente, ítems y montos. Si hay anticipo, solo cobra el saldo. */

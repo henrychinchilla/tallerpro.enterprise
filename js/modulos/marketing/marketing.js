@@ -32,28 +32,27 @@ Modulos.marketing = {
           <button class="btn btn-amber" onclick="Modulos.marketing.modalCombo()">＋ Nuevo Combo</button>
         </div>
         <div class="grid-3">
-          ${this._combos.map(c=>`
-            <div class="card card-amber">
-              <div style="display:flex;justify-content:space-between;margin-bottom:8px">
+          ${this._combos.map(c=>{
+            const descPct = c.precio_regular>0 ? Math.round((1-c.precio_combo/c.precio_regular)*100) : 0;
+            return `
+            <div class="combo-card">
+              ${descPct>0?`<div style="position:absolute;top:12px;right:12px;background:var(--red);color:#fff;font-size:10px;font-weight:900;padding:4px 8px;border-radius:99px;box-shadow:0 4px 10px rgba(239,68,68,0.2)">-${descPct}% OFF</div>`:''}
+              <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
                 <span class="badge badge-${c.tipo==='servicios'?'cyan':'amber'}">${c.tipo}</span>
                 <span class="badge badge-${c.activo?'green':'gray'}">${c.activo?'Activo':'Inactivo'}</span>
               </div>
-              <div style="font-weight:800;font-size:15px;margin-bottom:4px">${c.nombre}</div>
-              <div style="font-size:12px;color:var(--text2);margin-bottom:10px">${c.descripcion||''}</div>
-              <div style="display:flex;justify-content:space-between;align-items:center">
-                <div>
-                  <div style="font-size:11px;color:var(--text3);text-decoration:line-through">${UI.q(c.precio_regular)}</div>
-                  <div style="font-size:18px;font-weight:800;color:var(--amber)">${UI.q(c.precio_combo)}</div>
-                </div>
-                <div style="font-size:13px;color:var(--green);font-weight:700">
-                  ${c.precio_regular>0?Math.round((1-c.precio_combo/c.precio_regular)*100)+'% OFF':''}
-                </div>
+              <div style="font-weight:900;font-size:18px;letter-spacing:-0.4px;line-height:1.2;margin-bottom:6px;font-family:'Outfit','Inter',sans-serif">${c.nombre}</div>
+              <div style="font-size:12px;color:var(--text2);margin-bottom:16px;min-height:36px">${c.descripcion||'Sin descripción.'}</div>
+              <div style="background:var(--surface2);border-radius:12px;padding:12px;margin-bottom:16px">
+                <div style="font-size:11px;color:var(--text3);text-decoration:line-through;margin-bottom:2px">Precio Regular: ${UI.q(c.precio_regular)}</div>
+                <div style="font-size:22px;font-weight:900;color:var(--amber);font-family:'Outfit','Inter',sans-serif">${UI.q(c.precio_combo)}</div>
               </div>
-              <div style="display:flex;gap:4px;margin-top:10px">
+              <div style="display:flex;gap:4px">
                 ${Modulos.btnAccion('editar', `Modulos.marketing.modalCombo('${c.id}')`)}
                 ${Modulos.btnAccion('eliminar', `Modulos.eliminarRegistro('combos','${c.id}','${(c.nombre||'').replace(/'/g,"\\'")}',()=>Modulos.marketing._renderTab())`)}
               </div>
-            </div>`).join('')||'<div class="text-muted">Sin combos creados</div>'}
+            </div>`;
+          }).join('')||'<div class="text-muted">Sin combos creados</div>'}
         </div>`;
     }
 
@@ -64,52 +63,87 @@ Modulos.marketing = {
         <div style="display:flex;justify-content:flex-end;margin-bottom:16px">
           <button class="btn btn-amber" onclick="Modulos.marketing.modalPromo()">＋ Nueva Promoción</button>
         </div>
-        <div class="table-wrap">
-          <table class="data-table">
-            <thead><tr><th>Promoción</th><th>Descuento</th><th>Inicio</th><th>Fin</th><th>Estado</th><th>Acciones</th></tr></thead>
-            <tbody>
-              ${this._promos.map(p=>{
-                const vigente = p.activa && p.fecha_inicio<=hoy && (!p.fecha_fin||p.fecha_fin>=hoy);
-                return `<tr>
-                  <td><b>${p.nombre}</b><br><small>${p.descripcion||''}</small></td>
-                  <td><span class="badge badge-amber">${p.descuento_pct}% OFF</span></td>
-                  <td>${UI.fecha(p.fecha_inicio)}</td>
-                  <td>${UI.fecha(p.fecha_fin)||'Sin límite'}</td>
-                  <td><span class="badge badge-${vigente?'green':'gray'}">${vigente?'Vigente':'Inactiva'}</span></td>
-                  <td><div style="display:flex;gap:4px">
-                    ${Modulos.btnAccion('editar', `Modulos.marketing.modalPromo('${p.id}')`)}
-                    ${Modulos.btnAccion('eliminar', `Modulos.eliminarRegistro('promociones','${p.id}','${(p.nombre||'').replace(/'/g,"\\'")}',()=>Modulos.marketing._renderTab())`)}
-                  </div></td>
-                </tr>`;
-              }).join('')||'<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--text3)">Sin promociones</td></tr>'}
-            </tbody>
-          </table>
+        <div class="coupon-grid">
+          ${this._promos.map(p=>{
+            const vigente = p.activa && p.fecha_inicio<=hoy && (!p.fecha_fin||p.fecha_fin>=hoy);
+            return `
+            <div class="coupon-card">
+              <div style="display:flex;height:100%;align-items:center">
+                <!-- Left portion -->
+                <div style="width:30%;text-align:center;padding-right:16px;border-right:1px dashed var(--border);display:flex;flex-direction:column;justify-content:center">
+                  <div style="font-size:32px;font-weight:900;color:var(--amber);font-family:'Outfit',sans-serif;line-height:1">${p.descuento_pct}%</div>
+                  <div style="font-size:9px;font-weight:800;letter-spacing:1px;text-transform:uppercase;color:var(--text3);margin-top:4px">OFF</div>
+                </div>
+                <!-- Right portion -->
+                <div style="width:70%;padding-left:20px;display:flex;flex-direction:column;justify-content:space-between">
+                  <div>
+                    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:4px;margin-bottom:4px">
+                      <div style="font-weight:900;font-size:15px;color:var(--text);line-height:1.2;font-family:'Outfit',sans-serif">${p.nombre}</div>
+                      <span class="badge badge-${vigente?'green':'gray'}" style="font-size:8px;padding:2px 6px">${vigente?'Vigente':'Inactiva'}</span>
+                    </div>
+                    <div style="font-size:11px;color:var(--text2);margin-bottom:12px">${p.descripcion||'Sin descripción.'}</div>
+                  </div>
+                  <div>
+                    <div style="font-size:9px;color:var(--text3);margin-bottom:8px">
+                      📅 ${UI.fecha(p.fecha_inicio)} al ${p.fecha_fin?UI.fecha(p.fecha_fin):'Sin límite'}
+                    </div>
+                    <div style="display:flex;gap:4px">
+                      ${Modulos.btnAccion('editar', `Modulos.marketing.modalPromo('${p.id}')`)}
+                      ${Modulos.btnAccion('eliminar', `Modulos.eliminarRegistro('promociones','${p.id}','${(p.nombre||'').replace(/'/g,"\\'")}',()=>Modulos.marketing._renderTab())`)}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>`;
+          }).join('')||'<div class="text-muted">Sin promociones creadas</div>'}
         </div>`;
     }
 
     else if (this._tab==='flyers') {
       el.innerHTML = `
-        <div class="card" style="max-width:600px;margin:0 auto">
-          <div class="card-sub mb-4">📄 Generador de Flyer para WhatsApp / Redes</div>
-          <div class="form-group"><label class="form-label">Título del Flyer *</label>
-            <input class="form-input" id="fl-titulo" placeholder="¡OFERTA ESPECIAL! Cambio de aceite"></div>
-          <div class="form-group"><label class="form-label">Descripción</label>
-            <textarea class="form-input" id="fl-desc" rows="3" placeholder="Incluye filtro + 4 litros de aceite sintético..."></textarea></div>
-          <div class="form-row">
-            <div class="form-group"><label class="form-label">Precio Regular (Q)</label>
-              <input class="form-input" id="fl-precio-reg" type="number" placeholder="350"></div>
-            <div class="form-group"><label class="form-label">Precio Especial (Q)</label>
-              <input class="form-input" id="fl-precio-esp" type="number" placeholder="249"></div>
+        <div class="mkt-split-view">
+          <!-- Form -->
+          <div class="card">
+            <div class="card-sub mb-4">🎨 Configurar Contenido del Flyer</div>
+            <div class="form-group"><label class="form-label">Plantilla de Diseño</label>
+              <select class="form-select" id="fl-template">
+                <option value="neon">Cyber Neon (Negro / Neon)</option>
+                <option value="vintage">Retro Vintage (Oro / Madera)</option>
+                <option value="minimal">Minimal Clean (Limpio / Profesional)</option>
+              </select></div>
+            <div class="form-group"><label class="form-label">Título del Flyer *</label>
+              <input class="form-input" id="fl-titulo" placeholder="¡OFERTA ESPECIAL! Cambio de aceite" value="CAMBIO DE ACEITE PREMIUM"></div>
+            <div class="form-group"><label class="form-label">Descripción</label>
+              <textarea class="form-input" id="fl-desc" rows="3" placeholder="Incluye filtro + 4 litros de aceite sintético...">Incluye cambio de filtro, revisión de 15 puntos de seguridad y mano de obra calificada.</textarea></div>
+            <div class="form-row">
+              <div class="form-group"><label class="form-label">Precio Regular (Q)</label>
+                <input class="form-input" id="fl-precio-reg" type="number" placeholder="350" value="450"></div>
+              <div class="form-group"><label class="form-label">Precio Especial (Q)</label>
+                <input class="form-input" id="fl-precio-esp" type="number" placeholder="249" value="299"></div>
+            </div>
+            <div class="form-row">
+              <div class="form-group"><label class="form-label">Válido hasta</label>
+                <input class="form-input" id="fl-valido" type="date" value="${new Date(Date.now()+15*24*60*60*1000).toISOString().slice(0,10)}"></div>
+              <div class="form-group"><label class="form-label">Teléfono de contacto</label>
+                <input class="form-input" id="fl-tel" placeholder="5501-1234" value="${Auth.tenant?.tel || ''}"></div>
+            </div>
+            <div style="font-size:11px;color:var(--text3);margin-bottom:12px">Los cambios en el formulario se reflejan en tiempo real en la vista previa a la derecha.</div>
+            <button class="btn btn-amber" style="width:100%" onclick="window.print()">🖨️ Imprimir / Guardar PDF</button>
           </div>
-          <div class="form-row">
-            <div class="form-group"><label class="form-label">Válido hasta</label>
-              <input class="form-input" id="fl-valido" type="date"></div>
-            <div class="form-group"><label class="form-label">Teléfono de contacto</label>
-              <input class="form-input" id="fl-tel" placeholder="5501-1234"></div>
+          <!-- Live Preview -->
+          <div style="position:sticky;top:10px">
+            <div class="card-sub mb-3" style="text-align:center">📱 Vista Previa en Vivo</div>
+            <div id="flyer-preview" style="display:flex;justify-content:center;align-items:center;min-height:380px;background:var(--surface2);border-radius:16px;border:1px dashed var(--border);padding:10px"></div>
           </div>
-          <button class="btn btn-amber" style="width:100%" onclick="Modulos.marketing.generarFlyer()">🎨 Generar Flyer</button>
-        </div>
-        <div id="flyer-preview" style="margin-top:20px"></div>`;
+        </div>`;
+      
+      setTimeout(() => {
+        ['fl-template','fl-titulo','fl-desc','fl-precio-reg','fl-precio-esp','fl-valido','fl-tel'].forEach(id => {
+          document.getElementById(id)?.addEventListener('input', () => Modulos.marketing.generarFlyer());
+          document.getElementById(id)?.addEventListener('change', () => Modulos.marketing.generarFlyer());
+        });
+        Modulos.marketing.generarFlyer();
+      }, 50);
     }
 
     else if (this._tab==='fidelizacion') {
@@ -118,6 +152,21 @@ Modulos.marketing = {
       const tasa = Number(fid.puntos_por_q1_canje)||10;
       const inscritos = clientes.filter(c=>c.programa_puntos).sort((a,b)=>(b.puntos_saldo||0)-(a.puntos_saldo||0));
       const totalPts = inscritos.reduce((s,c)=>s+(Number(c.puntos_saldo)||0),0);
+
+      const tierBadge = pts => {
+        if (pts >= 5000) return '<span class="badge" style="background:linear-gradient(135deg,#c084fc,#818cf8);color:#fff;font-weight:800">💎 PLATINO</span>';
+        if (pts >= 2000) return '<span class="badge" style="background:linear-gradient(135deg,#fbbf24,#f59e0b);color:#fff;font-weight:800">👑 ORO</span>';
+        if (pts >= 500) return '<span class="badge" style="background:linear-gradient(135deg,#9ca3af,#4b5563);color:#fff;font-weight:800">🥈 PLATA</span>';
+        return '<span class="badge" style="background:linear-gradient(135deg,#b45309,#78350f);color:#fff;font-weight:800">🟫 BRONCE</span>';
+      };
+      
+      const nextTierInfo = pts => {
+        if (pts >= 5000) return { name:'Max Nivel', ptsNeeded: 0, pct: 100 };
+        if (pts >= 2000) return { name:'Platino', ptsNeeded: 5000 - pts, pct: Math.round(((pts - 2000)/3000)*100) };
+        if (pts >= 500) return { name:'Oro', ptsNeeded: 2000 - pts, pct: Math.round(((pts - 500)/1500)*100) };
+        return { name:'Plata', ptsNeeded: 500 - pts, pct: Math.round((pts/500)*100) };
+      };
+
       el.innerHTML = `
         <div class="alert alert-cyan" style="margin-bottom:16px;display:flex;align-items:flex-start;gap:12px"><div class="alert-icon">⭐</div>
           <div class="alert-body" style="font-size:12px;flex:1">Política del taller:
@@ -132,13 +181,26 @@ Modulos.marketing = {
           ${UI.kpiCard({ icon:'⭐', clase:'amber', label:'Puntos en circulación', value: totalPts, trend:`≈ ${UI.q(totalPts/tasa)} en canjes` })}
         </div>
         <div class="table-wrap"><table class="data-table">
-          <thead><tr><th>Cliente</th><th>Teléfono</th><th>Saldo</th><th>Equivale a</th><th>Movimientos</th></tr></thead>
-          <tbody>${inscritos.map(c=>`<tr>
+          <thead><tr><th>Cliente</th><th>Teléfono</th><th>Saldo</th><th>Equivale a</th><th>Nivel de Fidelidad</th><th>Movimientos</th></tr></thead>
+          <tbody>${inscritos.map(c=>{
+            const tier = nextTierInfo(c.puntos_saldo||0);
+            return `<tr>
             <td><b>${c.nombre}</b></td><td class="mono-sm">${c.tel||'—'}</td>
             <td class="mono-sm text-amber"><b>${(c.puntos_saldo||0).toLocaleString()}</b> pts</td>
             <td class="mono-sm text-green">${UI.q((c.puntos_saldo||0)/tasa)}</td>
-            <td><button class="btn btn-sm btn-ghost" onclick="Modulos.marketing.verPuntos('${c.id}','${(c.nombre||'').replace(/'/g,"\\'")}')">📜 Ver</button></td>
-          </tr>`).join('')||'<tr><td colspan="5" style="text-align:center;padding:24px;color:var(--text3)">Aún no hay clientes inscritos. Actívalo en la ficha del cliente.</td></tr>'}</tbody>
+            <td>
+              <div style="display:flex;flex-direction:column;gap:4px;min-width:160px">
+                <div style="display:flex;justify-content:space-between;align-items:center">
+                  ${tierBadge(c.puntos_saldo||0)}
+                  <span style="font-size:9px;color:var(--text3)">${tier.ptsNeeded > 0 ? `Faltan ${tier.ptsNeeded} pts` : 'Max Nivel'}</span>
+                </div>
+                <div class="fid-progress-bar" title="${tier.pct}% para subir de rango">
+                  <div class="fid-progress-fill" style="width:${tier.pct}%"></div>
+                </div>
+              </div>
+            </td>
+            <td><button class="btn btn-sm btn-ghost" onclick="Modulos.marketing.verPuntos('${c.id}','${(c.nombre||').replace(/'/g,"\\'")}')">📜 Ver</button></td>
+          </tr>`;}).join('')||'<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--text3)">Aún no hay clientes inscritos. Actívalo en la ficha del cliente.</td></tr>'}</tbody>
         </table></div>`;
     }
 
@@ -146,6 +208,7 @@ Modulos.marketing = {
       const fb = await DB.getFeedback();
       const tid = Auth.tenant?.id || '';
       const url = `${location.origin}/feedback.html?t=${encodeURIComponent(tid)}`;
+      const taller = Auth.tenant?.name || 'TallerPro';
       const ASP = [['rating_servicio','Servicio'],['rating_instalaciones','Instalaciones'],['rating_limpieza','Limpieza personal'],['rating_entrega','Condiciones de entrega'],['rating_documentos','Documentos']];
       const avg = a => a.length ? Math.round(a.reduce((x,y)=>x+y,0)/a.length*10)/10 : 0;
       const ratings = [];
@@ -155,28 +218,45 @@ Modulos.marketing = {
       const promAsp = ASP.map(([k,l]) => [l, avg(fb.map(f=>f[k]).filter(Boolean))]);
       const mesAct = new Date().toISOString().slice(0,7);
       const esteMes = fb.filter(f=>(f.created_at||'').slice(0,7)===mesAct).length;
+      
       el.innerHTML = `
-        <div class="grid-2" style="margin-bottom:16px">
+        <div class="mkt-split-view" style="margin-bottom:20px">
+          <!-- Left Column: Poster / QR -->
           <div class="card" style="text-align:center">
-            <div class="card-sub mb-3">📱 QR de feedback</div>
-            <div id="qrbox" style="display:flex;justify-content:center;align-items:center;min-height:170px;background:#fff;border-radius:10px;padding:10px">Generando QR...</div>
-            <div style="font-size:11px;color:var(--text3);word-break:break-all;margin-top:8px">${url}</div>
-            <div style="display:flex;gap:6px;justify-content:center;margin-top:10px">
-              <button class="btn btn-ghost btn-sm" onclick="Modulos.marketing.imprimirQR()">🖨️ Imprimir</button>
-              <button class="btn btn-ghost btn-sm" onclick="Modulos.marketing.modalEncuestaEmail()">✉️ Enviar por correo</button>
+            <div class="card-sub mb-3">📱 Poster Oficial de Feedback</div>
+            <div style="background:linear-gradient(135deg,var(--surface2) 0%,var(--border) 100%);border-radius:12px;padding:24px;border:1px solid var(--border);box-shadow:0 8px 20px rgba(0,0,0,0.02)">
+              <div style="font-weight:900;font-size:16px;color:var(--amber);margin-bottom:6px;font-family:Outfit,sans-serif">${taller.toUpperCase()}</div>
+              <div style="font-size:13px;font-weight:800;margin-bottom:14px;color:var(--text)">¡TU OPINIÓN NOS IMPORTA!</div>
+              <div id="qrbox" style="display:inline-flex;justify-content:center;align-items:center;background:#fff;border-radius:10px;padding:12px;box-shadow:0 4px 12px rgba(0,0,0,0.05)">Generando QR...</div>
+              <div style="font-size:10px;color:var(--text3);margin-top:12px;word-break:break-all">${url}</div>
+              ${fidelizacionCfg().bono_feedback>0?`<div style="margin-top:12px;background:color-mix(in srgb,var(--amber)12%,var(--surface2));color:var(--amber);font-size:11px;font-weight:800;padding:6px 10px;border-radius:6px;display:inline-block">🎁 ¡Obtén ${fidelizacionCfg().bono_feedback} puntos de regalo!</div>`:''}
+            </div>
+            <div style="display:flex;gap:6px;justify-content:center;margin-top:14px">
+              <button class="btn btn-ghost btn-sm" onclick="Modulos.marketing.imprimirQR()">🖨️ Imprimir Poster</button>
+              <button class="btn btn-ghost btn-sm" onclick="Modulos.marketing.modalEncuestaEmail()">✉️ Enviar por Correo</button>
             </div>
           </div>
+          <!-- Right Column: KPIs & aspect satisfaction -->
           <div class="card">
-            <div class="card-sub mb-3">📊 KPIs de mejora</div>
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+            <div class="card-sub mb-3">📊 Métricas de Satisfacción</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">
               ${UI.kpiCard({ icon:'💬', clase:'cyan', label:'Respuestas', value: fb.length, trend:`${esteMes} este mes` })}
-              ${UI.kpiCard({ icon:'😊', clase: satis>=80?'green':satis>=60?'amber':'red', label:'Satisfacción', value: `${satis}%`, trend:'califican 4–5★' })}
+              ${UI.kpiCard({ icon:'😊', clase: satis>=80?'green':satis>=60?'amber':'red', label:'Satisfacción', value: `${satis}%`, trend:'Califican 4–5★' })}
             </div>
             <div style="margin-top:10px">
-              <div style="font-size:11px;color:var(--text3);font-weight:700;text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">Promedio por aspecto</div>
-              ${promAsp.map(([l,v])=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px solid var(--border);font-size:12px"><span>${l}</span><span class="text-amber" style="font-weight:700">${v||'—'} / 5</span></div>`).join('')}
+              <div style="font-size:11px;color:var(--text3);font-weight:700;text-transform:uppercase;letter-spacing:.05em;margin-bottom:12px">Promedio por Aspecto</div>
+              ${promAsp.map(([l,v])=>`
+                <div style="margin-bottom:10px">
+                  <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px">
+                    <span>${l}</span>
+                    <span class="text-amber" style="font-weight:700">${v||'—'} / 5</span>
+                  </div>
+                  <div style="height:6px;background:var(--border);border-radius:3px;overflow:hidden">
+                    <div style="height:100%;border-radius:3px;width:${v?v*20:0}%;background:var(--${v>=4?'green':v>=3?'amber':'red'})"></div>
+                  </div>
+                </div>`).join('')}
             </div>
-            ${aMejorar>0?`<div class="alert alert-red" style="margin-top:10px"><div class="alert-icon">⚠️</div><div class="alert-body" style="font-size:12px"><b>${aMejorar}</b> respuesta(s) con calificación baja (≤2★) — revisa los comentarios para tu estrategia de mejora.</div></div>`:''}
+            ${aMejorar>0?`<div class="alert alert-red" style="margin-top:14px"><div class="alert-icon">⚠️</div><div class="alert-body" style="font-size:11px"><b>${aMejorar}</b> respuesta(s) con calificación baja (≤2★) detectadas en la encuesta.</div></div>`:''}
           </div>
         </div>
         <div class="card-sub mb-3">💬 Respuestas recientes</div>
@@ -323,35 +403,66 @@ Modulos.marketing = {
   },
 
   generarFlyer() {
-    const titulo  = document.getElementById('fl-titulo')?.value.trim();
-    const desc    = document.getElementById('fl-desc')?.value.trim();
+    const titulo  = document.getElementById('fl-titulo')?.value.trim() || 'CAMBIO DE ACEITE PREMIUM';
+    const desc    = document.getElementById('fl-desc')?.value.trim() || '';
     const precReg = document.getElementById('fl-precio-reg')?.value;
     const precEsp = document.getElementById('fl-precio-esp')?.value;
     const valido  = document.getElementById('fl-valido')?.value;
     const tel     = document.getElementById('fl-tel')?.value;
     const taller  = Auth.tenant?.name || 'TallerPro';
-    if (!titulo) { UI.toast('El título es obligatorio','error'); return; }
+    const temp    = document.getElementById('fl-template')?.value || 'neon';
 
     const descPct = precReg&&precEsp ? Math.round((1-precEsp/precReg)*100) : 0;
 
-    document.getElementById('flyer-preview').innerHTML = `
-      <div id="flyer-card" style="max-width:500px;margin:0 auto;background:linear-gradient(135deg,#0A0E1A,#161E2E);border:2px solid var(--amber);border-radius:16px;padding:32px;text-align:center;font-family:'Manrope',sans-serif">
-        <div style="font-family:'Bebas Neue',sans-serif;font-size:14px;color:var(--text3);letter-spacing:3px;margin-bottom:8px">${taller.toUpperCase()}</div>
-        <div style="font-size:13px;color:var(--amber);margin-bottom:16px">🔧 TALLER MECÁNICO PROFESIONAL</div>
-        <div style="font-family:'Bebas Neue',sans-serif;font-size:32px;color:var(--amber);letter-spacing:2px;line-height:1.1;margin-bottom:12px">${titulo.toUpperCase()}</div>
-        ${desc?`<div style="font-size:13px;color:var(--text2);margin-bottom:16px;line-height:1.6">${desc}</div>`:''}
+    let style = '';
+    let headerStyle = '';
+    let titleStyle = '';
+    let textStyle = '';
+    let labelStyle = '';
+    let priceStyle = '';
+
+    if (temp === 'neon') {
+      style = 'background:linear-gradient(135deg,#0a0e1a,#161e2e); border:2px solid var(--amber); box-shadow:0 10px 30px rgba(217,119,6,0.15); color:#fff;';
+      headerStyle = 'color:var(--text3);letter-spacing:4px;font-weight:700;';
+      titleStyle = 'color:var(--amber);letter-spacing:1px;font-family:Outfit,sans-serif;font-weight:900;';
+      textStyle = 'color:#d1d5db;';
+      labelStyle = 'color:var(--cyan);font-weight:700;';
+      priceStyle = 'color:var(--green);font-family:Outfit,sans-serif;font-weight:900;';
+    } else if (temp === 'vintage') {
+      style = 'background:linear-gradient(135deg,#2e1e12,#4a321a); border:2px dashed #d97706; box-shadow:0 10px 25px rgba(0,0,0,0.3); color:#fef08a;';
+      headerStyle = 'color:#fbcfe8;letter-spacing:2px;font-family:Georgia,serif;font-style:italic;';
+      titleStyle = 'color:#fef08a;font-family:Georgia,serif;font-weight:700;text-transform:uppercase;';
+      textStyle = 'color:#fef08a;opacity:0.85;';
+      labelStyle = 'color:#fb923c;font-weight:700;';
+      priceStyle = 'color:#4ade80;font-family:Georgia,serif;font-weight:800;';
+    } else { // minimal
+      style = 'background:linear-gradient(135deg,#ffffff,#f9fafb); border:1px solid #e5e7eb; box-shadow:0 20px 40px rgba(0,0,0,0.06); color:#1f2937;';
+      headerStyle = 'color:#6b7280;letter-spacing:3px;font-weight:600;';
+      titleStyle = 'color:#111827;font-family:Outfit,sans-serif;font-weight:900;';
+      textStyle = 'color:#4b5563;';
+      labelStyle = 'color:#2563eb;font-weight:700;';
+      priceStyle = 'color:#059669;font-family:Outfit,sans-serif;font-weight:900;';
+    }
+
+    const previewEl = document.getElementById('flyer-preview');
+    if (!previewEl) return;
+    previewEl.innerHTML = `
+      <div id="flyer-card" style="width:100%;max-width:440px;margin:0 auto;border-radius:18px;padding:32px;text-align:center;font-family:\'Outfit\',\'Inter\',sans-serif;position:relative;overflow:hidden;box-sizing:border-box;${style}">
+        <div style="font-size:12px;font-weight:800;text-transform:uppercase;margin-bottom:6px;${headerStyle}">${taller}</div>
+        <div style="font-size:10px;text-transform:uppercase;letter-spacing:1px;margin-bottom:20px;opacity:0.75">🔧 SERVICIO MECÁNICO PREMIUM</div>
+        <div style="font-size:26px;line-height:1.2;margin-bottom:14px;${titleStyle}">${titulo.toUpperCase()}</div>
+        ${desc?`<div style="font-size:13px;margin-bottom:20px;line-height:1.6;${textStyle}">${desc}</div>`:''}
+        
         ${precReg&&precEsp?`
-        <div style="margin:20px 0">
-          ${descPct>0?`<div style="background:var(--red);color:#fff;border-radius:50%;width:60px;height:60px;display:inline-flex;align-items:center;justify-content:center;font-family:'Bebas Neue',sans-serif;font-size:18px;margin-bottom:12px">${descPct}%<br>OFF</div>`:''}
-          <div style="font-size:14px;color:var(--text3);text-decoration:line-through">Regular: Q${precReg}</div>
-          <div style="font-family:'Bebas Neue',sans-serif;font-size:48px;color:var(--green)">Q${precEsp}</div>
+        <div style="margin:24px 0;display:flex;flex-direction:column;align-items:center;justify-content:center">
+          ${descPct>0?`<div style="background:var(--red);color:#fff;border-radius:50%;width:58px;height:58px;display:flex;flex-direction:column;align-items:center;justify-content:center;font-weight:900;font-size:13px;margin-bottom:14px;box-shadow:0 6px 12px rgba(239,68,68,0.2)"><span>${descPct}%</span><span style="font-size:8px;font-weight:700">OFF</span></div>`:''}
+          <div style="font-size:13px;text-decoration:line-through;opacity:0.6;margin-bottom:2px">Regular: Q${precReg}</div>
+          <div style="font-size:42px;line-height:1;${priceStyle}">Q${precEsp}</div>
         </div>`:''}
-        ${valido?`<div style="font-size:12px;color:var(--text3);border:1px solid var(--border);border-radius:8px;padding:6px 12px;display:inline-block;margin-bottom:12px">📅 Válido hasta ${UI.fecha(valido)}</div>`:''}
-        ${tel?`<div style="font-size:16px;color:var(--cyan);font-weight:700;margin-top:8px">📞 ${tel}</div>`:''}
-        <div style="margin-top:16px;font-size:10px;color:var(--text3)">TallerPro Enterprise · ${new Date().getFullYear()}</div>
-      </div>
-      <div style="text-align:center;margin-top:12px">
-        <button class="btn btn-ghost" onclick="window.print()">🖨️ Imprimir / Guardar PDF</button>
+        
+        ${valido?`<div style="font-size:11px;border:1px solid var(--border);border-radius:8px;padding:6px 14px;display:inline-block;margin-bottom:16px;background:rgba(0,0,0,0.02)">📅 Válido hasta ${UI.fecha(valido)}</div>`:''}
+        ${tel?`<div style="font-size:16px;margin-top:10px;${labelStyle}">📞 ¡Haz tu cita hoy! ${tel}</div>`:''}
+        <div style="margin-top:24px;font-size:9px;opacity:0.5;letter-spacing:0.5px">TallerPro Enterprise · ${new Date().getFullYear()}</div>
       </div>`;
   },
 

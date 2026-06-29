@@ -757,3 +757,71 @@
   background: color-mix(in srgb, var(--amber, #d97706) 8%, var(--surface, #ffffff)) !important;
   box-shadow: 0 0 0 1px var(--amber, #d97706), 0 4px 10px rgba(0,0,0,0.06) !important;
 }
+
+/* ── MARKETING MODULE PREMIUM STYLES ───────────────── */
+.combo-card {
+  background: linear-gradient(135deg, var(--surface) 0%, var(--surface2) 100%);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 24px;
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.02);
+  transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.25s ease, border-color 0.25s ease;
+}
+.combo-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 16px 36px rgba(0,0,0,0.06);
+  border-color: color-mix(in srgb, var(--primary, #d97706) 50%, var(--border));
+}
+
+.coupon-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(330px, 1fr));
+  gap: 20px;
+}
+.coupon-card {
+  background: radial-gradient(circle at 0% 50%, transparent 10px, var(--surface) 11px),
+              radial-gradient(circle at 100% 50%, transparent 10px, var(--surface) 11px);
+  background-size: 50% 100%;
+  background-position: left, right;
+  background-repeat: no-repeat;
+  border: 1px dashed var(--border);
+  border-radius: 16px;
+  padding: 20px 24px;
+  position: relative;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.015);
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+}
+.coupon-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 24px rgba(0,0,0,0.04);
+  border-color: var(--primary, #d97706);
+}
+
+.mkt-split-view {
+  display: grid;
+  grid-template-columns: 1fr 1.2fr;
+  gap: 28px;
+  align-items: start;
+}
+@media (max-width: 900px) {
+  .mkt-split-view {
+    grid-template-columns: 1fr;
+  }
+}
+
+.fid-progress-bar {
+  height: 6px;
+  background: var(--border);
+  border-radius: 3px;
+  overflow: hidden;
+  margin-top: 4px;
+  width: 100%;
+}
+.fid-progress-fill {
+  height: 100%;
+  border-radius: 3px;
+  background: linear-gradient(90deg, var(--amber) 0%, var(--primary) 100%);
+  transition: width 0.3s ease;
+}

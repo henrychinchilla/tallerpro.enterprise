@@ -452,15 +452,25 @@ Modulos.finanzas = {
     const {error} = await DB.upsertEgreso(fields);
     if (error) { UI.toast('Error: '+error.message,'error'); return; }
     UI.cerrarModal(); UI.toast(id?'Actualizado ✓':'Registrado ✓');
-    this._tab='egresos'; this._renderTab();
+    if (window.App && App.paginaActual === 'contabilidad') {
+      if (window.Modulos?.contabilidad?._renderTab) await Modulos.contabilidad._renderTab();
+    } else {
+      this._tab='egresos'; this._renderTab();
+    }
   },
 
   async eliminar(tabla, id) {
     const ok = await UI.confirmar('¿Eliminar este registro? Esta acción no se puede deshacer.','Eliminar');
     if (!ok) return;
     const r = await DB.deleteRegistro(tabla, id);
-    if (r) { UI.toast('Eliminado ✓'); this._renderTab(); }
-    else UI.toast('Error al eliminar','error');
+    if (r) {
+      UI.toast('Eliminado ✓');
+      if (window.App && App.paginaActual === 'contabilidad') {
+        if (window.Modulos?.contabilidad?._renderTab) await Modulos.contabilidad._renderTab();
+      } else {
+        this._renderTab();
+      }
+    } else UI.toast('Error al eliminar','error');
   },
 
   /* ── EXPORTACIÓN DE LIBROS (CSV para el contador) ── */
