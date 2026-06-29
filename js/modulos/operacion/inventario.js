@@ -1,23 +1,27 @@
 /* TallerPro v3.0 — inventario/index.js */
 Modulos.inventario = {
   _data: [], _bodegas: [], _proveedores: [], _img: '',
-
   async render(busca='') {
     const el = document.getElementById('page-content');
     UI.loading(el);
     [this._data, this._bodegas, this._proveedores] = await Promise.all([
-      DB.getInventario(busca||null), DB.getBodegas(), DB.getProveedores().catch(()=>[])
+      DB.getInventario(null), DB.getBodegas(), DB.getProveedores().catch(()=>[])
     ]);
     const bajoStock = this._data.filter(i=>i.stock<=i.min_stock);
     const verCosto = puedeVerCosto();
+    const cats = [...new Set(this._data.map(i=>i.categoria).filter(Boolean))].sort();
 
     el.innerHTML = `
       <div class="page-header">
         <div><h1 class="page-title">📦 Inventario</h1>
         <p class="page-subtitle">// ${this._data.length} artículos${bajoStock.length>0?` · <span class="text-red">⚠️ ${bajoStock.length} bajo mínimo</span>`:''}</p></div>
-        <div class="page-actions">
-          <select class="form-select" style="width:130px" onchange="Modulos.inventario.render(document.getElementById('inv-busca')?.value,this.value)">
-            <option value="">Todas</option>
+        <div class="page-actions" style="display:flex;gap:8px;flex-wrap:wrap">
+          <select class="form-select" id="inv-filtro-cat" style="width:170px" onchange="Modulos.inventario._filtrarLocal()">
+            <option value="">Todas las categorías</option>
+            ${cats.map(c=>`<option value="${c}">${c}</option>`).join('')}
+          </select>
+          <select class="form-select" id="inv-filtro-stock" style="width:130px" onchange="Modulos.inventario._filtrarLocal()">
+            <option value="">Todos los stocks</option>
             <option value="bajo">Stock Bajo</option>
             <option value="ok">Stock OK</option>
           </select>
@@ -29,8 +33,8 @@ Modulos.inventario = {
         </div>
       </div>
       <div class="page-body">
-        <input class="form-input" id="inv-busca" style="margin-bottom:16px" placeholder="🔍 Buscar nombre o código..."
-               value="${busca}" oninput="Modulos.inventario.render(this.value)">
+        <input class="form-input" id="inv-busca" style="margin-bottom:16px" placeholder="🔍 Buscar nombre, código o marca..."
+               value="${busca}" oninput="Modulos.inventario._filtrarLocal()">
         <div class="table-wrap">
           <table class="data-table">
             <thead><tr><th>Código</th><th>Artículo</th><th>Categoría</th><th>Stock</th><th>Mín.</th>${verCosto?'<th>Costo</th>':''}<th>Venta</th><th>Acciones</th></tr></thead>
@@ -40,7 +44,7 @@ Modulos.inventario = {
                 const thumb = i.imagen_url
                   ? `<img src="${i.imagen_url}" alt="" onclick="event.stopPropagation();Modulos.inventario._lightbox('${i.id}')" style="width:34px;height:34px;border-radius:6px;object-fit:cover;border:1px solid var(--border);cursor:zoom-in;flex-shrink:0">`
                   : `<div style="width:34px;height:34px;border-radius:6px;background:var(--surface2);display:flex;align-items:center;justify-content:center;color:var(--text3);flex-shrink:0">📦</div>`;
-                return `<tr style="${bajo?'background:var(--red-dim)':''}">
+                return `<tr data-categoria="${i.categoria||'General'}" data-bajo="${bajo}" style="${bajo?'background:var(--red-dim)':''}">
                   <td class="mono-sm">${i.codigo||'—'}</td>
                   <td><div style="display:flex;align-items:center;gap:8px">${thumb}<div><b>${i.nombre}</b>${i.descripcion?`<br><small class="text-muted">${i.descripcion}</small>`:''}</div></div></td>
                   <td><span class="badge badge-gray">${i.categoria||'General'}</span></td>
@@ -59,12 +63,15 @@ Modulos.inventario = {
           </table>
         </div>
       </div>`;
+    this._filtrarLocal();
   },
 
   modalForm(id=null) {
     const item = id ? this._data.find(x=>x.id===id) : {};
     const esEdicion = !!id;
     this._img = item.imagen_url || '';
+    const cats = [...new Set(this._data.map(i=>i.categoria).filter(Boolean))].sort();
+
     UI.modal(`${esEdicion?'✏️ Editar':'＋ Nuevo'} Artículo`, `
       ${esEdicion?'<div class="alert alert-amber" style="margin-bottom:12px"><div class="alert-icon">⚠️</div><div class="alert-body" style="font-size:11px">Los cambios reemplazarán la información actual del artículo.</div></div>':''}
 
@@ -94,18 +101,11 @@ Modulos.inventario = {
       </div>
       <div class="form-row">
         <div class="form-group"><label class="form-label">Categoría</label>
-          <select class="form-select" id="inv-cat">
-            ${[
-              'Filtros','Aceites y Lubricantes','Frenos','Motor y Transmisión',
-              'Sistema Eléctrico','Suspensión y Dirección','Escape y Admisión','Carrocería y Pintura',
-              'Refrigerantes y Gases','Compresores y Partes A/C',
-              'Componentes Electrónicos','Pantallas y Repuestos','Baterías y Cargadores','Cables y Conectores',
-              'Perfiles y Tubería','Láminas y Planchas','Soldadura','Material PVC y Aluminio',
-              'Cuero y Materiales Peletería','Hilos y Pegamentos','Herrajes y Cierres',
-              'Herramientas y Equipos','Pinturas y Acabados','Químicos y Limpieza',
-              'Ferretería General','Insumos y Consumibles','Otro',
-            ].map(c=>`<option ${item.categoria===c?'selected':''}>${c}</option>`).join('')}
-          </select></div>
+          <input class="form-input" id="inv-cat" list="inv-cats-form-list" value="${item.categoria||''}" placeholder="Escribe o selecciona categoría...">
+          <datalist id="inv-cats-form-list">
+            ${cats.map(c=>`<option value="${c}">`).join('')}
+          </datalist>
+        </div>
         <div class="form-group"><label class="form-label">Proveedor</label>
           <select class="form-select" id="inv-prov">
             <option value="">Sin proveedor</option>
@@ -436,5 +436,38 @@ Modulos.inventario = {
       UI.toast(`Importación: ${ok} creados${err?`, ${err} con error`:''} ✓`);
       this.render();
     });
+  },
+
+  _filtrarLocal() {
+    const busca = (document.getElementById('inv-busca')?.value||'').trim().toLowerCase();
+    const cat = document.getElementById('inv-filtro-cat')?.value||'';
+    const stock = document.getElementById('inv-filtro-stock')?.value||'';
+
+    const rows = document.querySelectorAll('.data-table tbody tr');
+    let totalVisibles = 0;
+    let bajoVisibles = 0;
+
+    rows.forEach(row => {
+      const rowCat = row.getAttribute('data-categoria') || '';
+      const rowBajo = row.getAttribute('data-bajo') === 'true';
+      const text = row.innerText.toLowerCase();
+
+      const matchBusca = !busca || text.includes(busca);
+      const matchCat = !cat || rowCat === cat;
+      const matchStock = !stock || (stock === 'bajo' && rowBajo) || (stock === 'ok' && !rowBajo);
+
+      if (matchBusca && matchCat && matchStock) {
+        row.style.display = '';
+        totalVisibles++;
+        if (rowBajo) bajoVisibles++;
+      } else {
+        row.style.display = 'none';
+      }
+    });
+
+    const subtitle = document.querySelector('.page-subtitle');
+    if (subtitle) {
+      subtitle.innerHTML = `// ${totalVisibles} filtrados${bajoVisibles > 0 ? ` · <span class="text-red">⚠️ ${bajoVisibles} bajo mínimo</span>` : ''}`;
+    }
   }
 };

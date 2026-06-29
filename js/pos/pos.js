@@ -144,22 +144,8 @@ const POS = {
     this._pintar();
   },
 
-  _CATS: [
-    'Filtros','Aceites y Lubricantes','Frenos','Motor y Transmisión',
-    'Sistema Eléctrico','Suspensión y Dirección','Escape y Admisión','Carrocería y Pintura',
-    'Refrigerantes y Gases','Compresores y Partes A/C',
-    'Componentes Electrónicos','Pantallas y Repuestos','Baterías y Cargadores','Cables y Conectores',
-    'Perfiles y Tubería','Láminas y Planchas','Soldadura','Material PVC y Aluminio',
-    'Cuero y Materiales Peletería','Hilos y Pegamentos','Herrajes y Cierres',
-    'Herramientas y Equipos','Pinturas y Acabados','Químicos y Limpieza',
-    'Ferretería General','Insumos y Consumibles','Otro',
-  ],
-
   _cats() {
-    const enUso = new Set(this._prod.map(p=>p.categoria).filter(Boolean));
-    const predefinidas = this._CATS.filter(c=>enUso.has(c));
-    const extra = [...enUso].filter(c=>!this._CATS.includes(c)).sort();
-    return [...predefinidas, ...extra];
+    return [...new Set(this._prod.map(p=>p.categoria).filter(Boolean))].sort();
   },
 
   _pintar() {
