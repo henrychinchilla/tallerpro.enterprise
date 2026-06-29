@@ -75,10 +75,18 @@ Modulos.facturacion = {
       ${esEdicion?'<div class="alert alert-amber" style="margin-bottom:12px"><div class="alert-icon">⚠️</div><div class="alert-body" style="font-size:11px">Los cambios reemplazarán la información actual de la factura.</div></div>':''}
       <div class="form-row">
         <div class="form-group"><label class="form-label">Cliente *</label>
-          <select class="form-select" id="fel-cli">
+          <select class="form-select" id="fel-cli" onchange="Modulos.facturacion._clienteCambio(this.value)">
             <option value="">Consumidor Final (CF)</option>
             ${this._clientes.map(c=>`<option value="${c.id}" ${f.cliente_id===c.id?'selected':''}>${c.nombre} — ${c.nit||'CF'}</option>`).join('')}
           </select></div>
+      </div>
+      <div class="form-row" id="fel-receptor-row">
+        <div class="form-group"><label class="form-label">Nombre del Receptor (para la factura)</label>
+          <input class="form-input" id="fel-nombre-receptor" value="${f.nombre_receptor || 'Consumidor Final'}" 
+            ${f.cliente_id ? 'readonly style="background:var(--surface2)"' : ''}></div>
+        <div class="form-group"><label class="form-label">NIT Receptor</label>
+          <input class="form-input mono-sm" id="fel-nit-receptor" value="${f.nit || 'CF'}" 
+            ${f.cliente_id ? 'readonly style="background:var(--surface2)"' : ''}></div>
       </div>
       <div class="form-row">
         <div class="form-group"><label class="form-label">📋 Importar de OT <span style="font-size:10px;color:var(--text3)">(trae ítems automáticamente)</span></label>
@@ -281,6 +289,28 @@ Modulos.facturacion = {
       </div>`).join('');
   },
 
+  _clienteCambio(cliId) {
+    const cli = cliId ? this._clientes.find(c=>c.id===cliId) : null;
+    const nombreEl = document.getElementById('fel-nombre-receptor');
+    const nitEl = document.getElementById('fel-nit-receptor');
+    if (!nombreEl || !nitEl) return;
+    if (cli) {
+      nombreEl.value = cli.nombre;
+      nombreEl.readOnly = true;
+      nombreEl.style.background = 'var(--surface2)';
+      nitEl.value = cli.nit || 'CF';
+      nitEl.readOnly = true;
+      nitEl.style.background = 'var(--surface2)';
+    } else {
+      nombreEl.value = 'Consumidor Final';
+      nombreEl.readOnly = false;
+      nombreEl.style.background = '';
+      nitEl.value = 'CF';
+      nitEl.readOnly = false;
+      nitEl.style.background = '';
+    }
+  },
+
   _seleccionarProducto(id) {
     const p = this._inventario.find(x=>x.id===id); if (!p) return;
     const precio = Number(p.precio_venta)||0;
@@ -313,16 +343,20 @@ Modulos.facturacion = {
     const total = parseFloat(document.getElementById('fel-total')?.value)||0;
     const cliId = document.getElementById('fel-cli')?.value||null;
     const cli   = cliId ? this._clientes.find(c=>c.id===cliId) : null;
-    if (cli?.nit && !NIT.validarLocal(cli.nit).valido) {
-      UI.toast('Aviso: el NIT del cliente tiene dígito verificador inválido','warn');
+    const customNombre = document.getElementById('fel-nombre-receptor')?.value?.trim() || 'Consumidor Final';
+    const customNit = document.getElementById('fel-nit-receptor')?.value?.trim() || 'CF';
+
+    const finalNit = cli?.nit?.trim() || customNit;
+    if (finalNit && finalNit.toUpperCase() !== 'CF' && !NIT.validarLocal(finalNit).valido) {
+      UI.toast('Aviso: el NIT del receptor tiene dígito verificador inválido','warn');
     }
     const fields = {
       cliente_id: cliId,
       ot_id:      document.getElementById('fel-ot')?.value||null,
       cotizacion_id: document.getElementById('fel-cot')?.value||null,
-      nit:        cli?.nit?.trim() || 'CF',
-      nombre_receptor: cli?.nombre || 'Consumidor Final',
-      tipo_cliente: (cli?.nit && cli.nit.toUpperCase()!=='CF') ? 'NIT' : 'CF',
+      nit:        finalNit,
+      nombre_receptor: cli?.nombre || customNombre,
+      tipo_cliente: (finalNit && finalNit.toUpperCase()!=='CF') ? 'NIT' : 'CF',
       fel_serie:  document.getElementById('fel-serie')?.value?.trim()||null,
       fecha:      document.getElementById('fel-fecha')?.value,
       metodo_pago: document.getElementById('fel-metodo')?.value||'Efectivo',
@@ -377,7 +411,10 @@ Modulos.facturacion = {
 
     if (orden?.cliente_id) {
       const cliSel = document.getElementById('fel-cli');
-      if (cliSel) cliSel.value = orden.cliente_id;
+      if (cliSel) {
+        cliSel.value = orden.cliente_id;
+        this._clienteCambio(orden.cliente_id);
+      }
     }
 
     const { data: items } = await getSB().from('ot_items').select('*')
@@ -430,7 +467,10 @@ Modulos.facturacion = {
 
     if (cot.cliente_id) {
       const cliSel = document.getElementById('fel-cli');
-      if (cliSel) cliSel.value = cot.cliente_id;
+      if (cliSel) {
+        cliSel.value = cot.cliente_id;
+        this._clienteCambio(cot.cliente_id);
+      }
     }
 
     const itemsList = (cot.cotizacion_items||[]).map(i=>({
