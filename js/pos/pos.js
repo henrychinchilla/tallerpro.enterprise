@@ -169,21 +169,21 @@ const POS = {
         }
         .pos-cat-pill {
           flex-shrink: 0 !important;
-          display: inline-flex !important;
-          align-items: center !important;
-          justify-content: center !important;
+          display: inline-block !important;
+          text-align: center !important;
           height: 36px !important;
+          line-height: 34px !important;
           padding: 0 16px !important;
           border-radius: 99px !important;
           background: var(--surface2) !important;
           border: 1px solid var(--border) !important;
-          color: var(--text) !important;
+          color: #ffffff !important;
           font-size: 13px !important;
           font-weight: 700 !important;
           cursor: pointer !important;
           transition: all 0.2s ease !important;
           user-select: none !important;
-          line-height: 1 !important;
+          white-space: nowrap !important;
         }
         .pos-cat-pill:hover {
           border-color: var(--amber-border) !important;
