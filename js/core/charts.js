@@ -30,8 +30,15 @@ const Charts = {
     });
     const line = pts.map(([x, y], i) => `${i === 0 ? 'M' : 'L'}${x.toFixed(1)},${y.toFixed(1)}`).join(' ');
     const area = `${line} L${pts[n-1][0].toFixed(1)},${H} L${pts[0][0].toFixed(1)},${H} Z`;
+    const gradId = `spark-grad-${colorVar}-${Math.floor(Math.random()*10000)}`;
     return `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">
-      <path d="${area}" style="fill:var(--${colorVar})" opacity=".12"/>
+      <defs>
+        <linearGradient id="${gradId}" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="var(--${colorVar})" stop-opacity="0.22"/>
+          <stop offset="100%" stop-color="var(--${colorVar})" stop-opacity="0.00"/>
+        </linearGradient>
+      </defs>
+      <path d="${area}" fill="url(#${gradId})"/>
       <path d="${line}" fill="none" style="stroke:var(--${colorVar})" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
     </svg>`;
   },
@@ -47,17 +54,24 @@ const Charts = {
     const y = v => pT + plotH * (1 - v / max);
     const base = pT + plotH;
 
+    const defs = series.map((s, idx) => `
+      <linearGradient id="chart-grad-${s.colorVar}-${idx}" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="var(--${s.colorVar})" stop-opacity="0.25"/>
+        <stop offset="100%" stop-color="var(--${s.colorVar})" stop-opacity="0.00"/>
+      </linearGradient>
+    `).join('');
+
     const grid = [0, .25, .5, .75, 1].map(t => {
       const gy = pT + plotH * t, val = max * (1 - t);
-      return `<line x1="${pL}" y1="${gy}" x2="${W - pR}" y2="${gy}" style="stroke:var(--border)" stroke-width="1"/>
-        <text x="${pL - 6}" y="${gy + 3}" text-anchor="end" style="fill:var(--text3)" font-size="9">${Charts._qCorto(val)}</text>`;
+      return `<line x1="${pL}" y1="${gy}" x2="${W - pR}" y2="${gy}" style="stroke:var(--border)" stroke-width="1" stroke-dasharray="2 2"/>
+        <text x="${pL - 6}" y="${gy + 3}" text-anchor="end" style="fill:var(--text3)" font-size="9" font-family="Outfit, Inter, sans-serif">${Charts._qCorto(val)}</text>`;
     }).join('');
 
-    const dibujo = series.map(s => {
+    const dibujo = series.map((s, idx) => {
       const pts = s.valores.map((v, i) => `${x(i).toFixed(1)},${y(v).toFixed(1)}`);
       const area = s.area
         ? `<polygon points="${x(0).toFixed(1)},${base} ${pts.join(' ')} ${x(n - 1).toFixed(1)},${base}"
-             style="fill:var(--${s.colorVar})" fill-opacity="0.13"/>` : '';
+             fill="url(#chart-grad-${s.colorVar}-${idx})" />` : '';
       const line = `<polyline points="${pts.join(' ')}" fill="none"
           style="stroke:var(--${s.colorVar})" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>`;
       const dots = s.valores.map((v, i) =>
@@ -69,15 +83,16 @@ const Charts = {
     const step = Math.max(1, Math.ceil(n / 8));
     const xl = labels.map((l, i) =>
       (n <= 12 || i % step === 0 || i === n - 1)
-        ? `<text x="${x(i).toFixed(1)}" y="${H - 9}" text-anchor="middle" style="fill:var(--text3)" font-size="10">${l}</text>`
+        ? `<text x="${x(i).toFixed(1)}" y="${H - 9}" text-anchor="middle" style="fill:var(--text3)" font-size="10" font-family="Outfit, Inter, sans-serif">${l}</text>`
         : '').join('');
 
     const legend = series.map(s =>
-      `<span style="display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--text2);font-weight:600">
+      `<span style="display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--text2);font-weight:600;font-family:Outfit, Inter, sans-serif">
         <span style="width:11px;height:11px;border-radius:3px;background:var(--${s.colorVar})"></span>${s.nombre}</span>`).join('');
 
     return `<div style="display:flex;gap:16px;margin-bottom:8px">${legend}</div>
       <svg viewBox="0 0 ${W} ${H}" width="100%" preserveAspectRatio="xMidYMid meet" style="display:block;overflow:visible">
+        <defs>${defs}</defs>
         ${grid}${dibujo}${xl}
       </svg>`;
   },

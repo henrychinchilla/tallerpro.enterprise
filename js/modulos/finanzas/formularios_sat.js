@@ -25,6 +25,77 @@ Modulos.contabilidad.sat = {
     'SAT-1411': 'ISR ANUAL ACTIVIDADES LUCRATIVAS'
   },
 
+  FORM_META: {
+    'SAT-2046': { icon: '🧾', desc: 'IVA Pequeño Contribuyente. Pago mensual del 5% sobre ventas brutas.' },
+    'SAT-2237': { icon: '🏛️', desc: 'IVA General. Declaración mensual para determinar débitos y créditos del IVA.' },
+    'SAT-1311': { icon: '💼', desc: 'ISR Opcional Mensual. Declaración mensual para retención/pago directo del 5%/7%.' },
+    'SAT-1361': { icon: '📈', desc: 'ISR Trimestral. Declaración y pago trimestral sobre utilidades (tasa del 25%).' },
+    'SAT-1608': { icon: '🤝', desc: 'Impuesto de Solidaridad (ISO). Declaración trimestral acreditable al ISR.' },
+    'SAT-1331': { icon: '🧾', desc: 'ISR Retenciones sobre Facturas. Liquidación de retenciones realizadas a proveedores.' },
+    'SAT-2085': { icon: '🏷️', desc: 'IVA Facturas Especiales. Enterar el IVA retenido por emitir facturas especiales.' },
+    'SAT-1431': { icon: '👥', desc: 'ISR Retenciones Trabajo. Declaración de retenciones en relación de dependencia.' },
+    'SAT-1411': { icon: '📅', desc: 'ISR Anual Utilidades. Declaración jurada anual de liquidación y balance general.' }
+  },
+
+  seleccionarFormCard(elem, id) {
+    const hidden = document.getElementById("m-form-tipo");
+    if (hidden) hidden.value = id;
+    document.querySelectorAll(".sat-selector-card").forEach(el => {
+      el.classList.remove("selected");
+    });
+    elem.classList.add("selected");
+    this.togglePeriodoFields(id);
+  },
+
+  async confirmarSalirEditor(id, tipo, nit, mes, anio, accNum, formNum) {
+    UI.modal("⚠️ Guardar Estado de Declaración", `
+      <div style="padding: 10px 0; text-align: left; font-size: 13.5px; line-height: 1.5; color: var(--text);">
+        <p style="margin-bottom: 16px; font-weight: 500;">Para salir de la declaración tributaria, debes definir su estado actual o confirmar si deseas descartar los cambios:</p>
+        
+        <div style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 20px;">
+          <button class="btn btn-success" style="justify-content: flex-start; padding: 12px 16px; text-align: left; display: flex; align-items: center; gap: 12px; width: 100%; font-size: 13px;" 
+            onclick="UI.cerrarModal(); Modulos.contabilidad.sat.guardarDeclaracion('${id}', '${tipo}', '${nit}', '${mes}', '${anio}', '${accNum}', '${formNum}', 'preparacion')">
+            <span style="font-size: 20px;">💾</span>
+            <div>
+              <div style="font-weight: 700;">Guardar como Borrador</div>
+              <div style="font-size: 11px; opacity: 0.85; font-weight: normal; margin-top: 2px;">Guarda el formulario en preparación para editarlo después.</div>
+            </div>
+          </button>
+          
+          <button class="btn btn-info" style="justify-content: flex-start; padding: 12px 16px; text-align: left; display: flex; align-items: center; gap: 12px; width: 100%; font-size: 13px;" 
+            onclick="UI.cerrarModal(); Modulos.contabilidad.sat.guardarDeclaracion('${id}', '${tipo}', '${nit}', '${mes}', '${anio}', '${accNum}', '${formNum}', 'presentado')">
+            <span style="font-size: 20px;">🔒</span>
+            <div>
+              <div style="font-weight: 700;">Validar y Congelar (Presentado)</div>
+              <div style="font-size: 11px; opacity: 0.85; font-weight: normal; margin-top: 2px;">Marca el formulario como presentado ante la SAT (congelado).</div>
+            </div>
+          </button>
+          
+          <button class="btn btn-primary" style="justify-content: flex-start; padding: 12px 16px; text-align: left; display: flex; align-items: center; gap: 12px; width: 100%; font-size: 13px;" 
+            onclick="UI.cerrarModal(); Modulos.contabilidad.sat.guardarDeclaracion('${id}', '${tipo}', '${nit}', '${mes}', '${anio}', '${accNum}', '${formNum}', 'pagado')">
+            <span style="font-size: 20px;">💵</span>
+            <div>
+              <div style="font-weight: 700;">Marcar como Pagado</div>
+              <div style="font-size: 11px; opacity: 0.85; font-weight: normal; margin-top: 2px;">Registra que el impuesto correspondiente ya fue pagado.</div>
+            </div>
+          </button>
+        </div>
+        
+        <hr style="border: 0; border-top: 1px solid var(--border); margin: 16px 0;" />
+        
+        <div style="display: flex; justify-content: space-between; gap: 10px; align-items: center;">
+          <button class="btn btn-red" style="background: var(--red, #ef4444); color: white; border: none; font-size: 12px; padding: 8px 16px;" 
+            onclick="UI.cerrarModal(); Modulos.contabilidad.sat._editorDirty = false; Modulos.contabilidad._renderTab();">
+            🗑️ Descartar Cambios
+          </button>
+          <button class="btn btn-ghost" style="font-size: 12px; padding: 8px 16px;" onclick="UI.cerrarModal()">
+            Permanecer Aquí
+          </button>
+        </div>
+      </div>
+    `, '500px');
+  },
+
   /* Formularios aplicables según régimen fiscal (LAT Decreto 10-2012 + IVA 27-92).
      Siempre incluidos: SAT-1331, SAT-2085, SAT-1431 (aplican a todos los regímenes). */
   _formsParaRegimen(fiscal) {
@@ -157,10 +228,24 @@ Modulos.contabilidad.sat = {
           <input type="text" id="m-form-nit" class="form-control" value="${tenant.nit || 'CF'}" required />
         </div>
         <div class="form-group">
-          <label class="form-label">Tipo de Formulario SAT *</label>
-          <select id="m-form-tipo" class="form-control" onchange="Modulos.contabilidad.sat.togglePeriodoFields(this.value)">
-            ${forms.map((f,i)=>`<option value="${f.id}" ${i===0?'selected':''}>${f.label}${f.obligatorio?' ✅':' (según aplique)'}</option>`).join('')}
-          </select>
+          <label class="form-label" style="font-weight:700;margin-bottom:8px">Seleccione el Formulario SAT *</label>
+          <input type="hidden" id="m-form-tipo" value="${forms[0]?.id || ''}">
+          <div class="sat-cards-grid" style="display:grid;grid-template-columns:repeat(auto-fill, minmax(240px, 1fr));gap:12px;max-height:280px;overflow-y:auto;padding:4px;margin-bottom:12px;">
+            ${forms.map((f,i)=>{
+              const meta = Modulos.contabilidad.sat.FORM_META[f.id] || { icon:'📋', desc:'Declaración de impuestos SAT.' };
+              return `
+                <div class="sat-selector-card ${i===0?'selected':''}" data-id="${f.id}" onclick="Modulos.contabilidad.sat.seleccionarFormCard(this, '${f.id}')" style="cursor:pointer;border:2px solid ${i===0?'var(--amber, #d97706)':'var(--border, #e2e8f0)'};border-radius:10px;padding:12px;background:${i===0?'color-mix(in srgb, var(--amber, #d97706) 8%, var(--surface, #ffffff))':'var(--surface, #ffffff)'};transition:all .2s ease;display:flex;flex-direction:column;gap:6px;position:relative;box-shadow:0 2px 4px rgba(0,0,0,0.04);">
+                  <div style="display:flex;justify-content:space-between;align-items:center;">
+                    <span style="font-size:20px;">${meta.icon}</span>
+                    <span class="badge ${f.obligatorio?'badge-amber':'badge-gray'}" style="font-size:9px;padding:2px 6px;">${f.obligatorio?'Obligatorio':'Opcional'}</span>
+                  </div>
+                  <div style="font-weight:800;font-size:13px;color:var(--text, #1e293b);">${f.id}</div>
+                  <div style="font-weight:600;font-size:12px;color:var(--text2, #475569);margin-top:-2px;">${Modulos.contabilidad.sat.FORM_LABELS[f.id]}</div>
+                  <div style="font-size:10.5px;color:var(--text3, #64748b);line-height:1.3;margin-top:2px;">${meta.desc}</div>
+                </div>
+              `;
+            }).join('')}
+          </div>
         </div>
         <div class="form-group">
           <label class="form-label">Año Fiscal *</label>
@@ -434,9 +519,12 @@ Modulos.contabilidad.sat = {
         valores_originales.comb_base     = round2(combBase);
         valores_originales.imp_mundo_base = round2(impMundoBase);
         valores_originales.retenciones_recibidas = sufIVA;
+        valores_originales.op_emitidas_fact = facturas.length;
+        valores_originales.op_recibidas_fact = compras.length;
       } else if (tipo === 'SAT-1311') {
         valores_originales.rentas = salesTotal;
         valores_originales.retenciones = sufISR;
+        valores_originales.cant_facturas = facturas.length;
       } else if (tipo === 'SAT-1361') {
         valores_originales.rentas = salesTotal;
         valores_originales.gastos = purchasesTotal;
@@ -2152,7 +2240,7 @@ Modulos.contabilidad.sat = {
     const headerHtml = `
       <div class="no-print" style="background:var(--bg-secondary); padding:12px; display:flex; gap:10px; border:1px dashed var(--border-color); border-radius:var(--radius-md); justify-content:space-between; align-items:center; margin-bottom:20px; flex-wrap:wrap;">
         <div style="display:flex; gap:8px;">
-          <button class="btn btn-secondary" onclick="Modulos.contabilidad._renderTab()">← Volver</button>
+          <button class="btn btn-secondary" onclick="Modulos.contabilidad.sat.confirmarSalirEditor('${id || ''}', '${tipo}', '${nit}', '${mes}', '${anio}', '${accNum}', '${formNum}')">← Volver</button>
           <button class="btn btn-success" onclick="Modulos.contabilidad.sat.guardarDeclaracion('${id || ''}', '${tipo}', '${nit}', '${mes}', '${anio}', '${accNum}', '${formNum}', 'preparacion')">💾 Guardar Borrador</button>
           <button class="btn btn-info" onclick="Modulos.contabilidad.sat.guardarDeclaracion('${id || ''}', '${tipo}', '${nit}', '${mes}', '${anio}', '${accNum}', '${formNum}', 'presentado')">🔒 Validar y Congelar</button>
           <button class="btn btn-primary" onclick="Modulos.contabilidad.sat.guardarDeclaracion('${id || ''}', '${tipo}', '${nit}', '${mes}', '${anio}', '${accNum}', '${formNum}', 'pagado')">💵 Pagar Impuesto</button>

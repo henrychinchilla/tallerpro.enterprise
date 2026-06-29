@@ -1,4 +1,4 @@
-﻿/* TallerPro Enterprise v3.0 — components.css */
+/* TallerPro Enterprise v3.0 — components.css */
 
 /* ── BOTONES ─────────────────────────────────────── */
 .btn {
@@ -37,8 +37,12 @@
   border: 1px solid var(--border);
   border-radius: 12px;
   padding: 18px;
-  box-shadow: 0 1px 3px rgba(0,0,0,.05);
-  transition: box-shadow .2s ease;
+  box-shadow: 0 4px 12px rgba(0,0,0,.03);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+.card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 25px rgba(0,0,0,.06);
 }
 .card-amber  { border-color: var(--amber-border); background: var(--amber-dim); }
 .card-cyan   { border-color: var(--cyan-border);  background: var(--cyan-dim);  }
@@ -513,21 +517,23 @@
   align-items: center;
   gap: 8px;
   padding: 10px 16px;
-  background: var(--surface2);
+  background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 10px;
-  font-family: 'Manrope', sans-serif;
+  font-family: 'Outfit', 'Inter', sans-serif;
   font-size: 13px;
   font-weight: 700;
   color: var(--text2);
   cursor: pointer;
-  transition: all .15s;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.02);
+  transition: all .2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 .quick-btn:hover {
-  border-color: var(--amber-border);
-  color: var(--amber);
-  transform: translateY(-2px);
-  box-shadow: 0 6px 16px rgba(0,0,0,.08);
+  border-color: var(--amber, #d97706) !important;
+  color: var(--text) !important;
+  background: color-mix(in srgb, var(--amber, #d97706) 4%, var(--surface)) !important;
+  transform: translateY(-2px) scale(1.02);
+  box-shadow: 0 6px 16px rgba(217, 119, 6, 0.08) !important;
 }
 .quick-ico { font-size: 16px; }
 .kpi-card[style*="cursor:pointer"]:hover,
@@ -625,20 +631,21 @@
   align-items: center;
   justify-content: space-between;
   gap: 24px;
-  background: linear-gradient(135deg, var(--surface) 0%, var(--surface2) 100%);
-  border: 1px solid var(--border);
+  background: linear-gradient(135deg, color-mix(in srgb, var(--primary, #d97706) 6%, var(--surface)) 0%, color-mix(in srgb, var(--purple, #a855f7) 4%, var(--surface2)) 100%);
+  border: 1px solid color-mix(in srgb, var(--primary, #d97706) 12%, var(--border));
   border-radius: 16px;
   padding: 28px 32px;
   margin-bottom: 20px;
   position: relative;
   overflow: hidden;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.03), inset 0 1px 0 0 rgba(255,255,255,0.05);
 }
 .dash-hero::before {
   content: '';
   position: absolute;
   top: -80px; right: -60px;
   width: 240px; height: 240px;
-  background: radial-gradient(circle, color-mix(in srgb, var(--amber) 14%, transparent) 0%, transparent 70%);
+  background: radial-gradient(circle, color-mix(in srgb, var(--amber, #d97706) 18%, transparent) 0%, transparent 70%);
   pointer-events: none;
 }
 .dash-hero::after {
@@ -646,7 +653,7 @@
   position: absolute;
   bottom: -60px; left: 25%;
   width: 180px; height: 180px;
-  background: radial-gradient(circle, color-mix(in srgb, var(--cyan) 10%, transparent) 0%, transparent 70%);
+  background: radial-gradient(circle, color-mix(in srgb, var(--cyan, #06b6d4) 15%, transparent) 0%, transparent 70%);
   pointer-events: none;
 }
 .dash-hero-left {
@@ -656,12 +663,15 @@
   z-index: 1;
 }
 .dash-hero-saludo {
-  font-family: 'Bebas Neue', sans-serif;
-  font-size: 34px;
-  letter-spacing: 2px;
-  line-height: 1;
-  margin-bottom: 4px;
-  color: var(--text);
+  font-family: 'Outfit', 'Inter', sans-serif;
+  font-size: 36px;
+  font-weight: 900;
+  letter-spacing: -0.5px;
+  line-height: 1.1;
+  margin-bottom: 6px;
+  background: linear-gradient(120deg, var(--text) 30%, color-mix(in srgb, var(--primary, #d97706) 80%, var(--text)) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
 }
 .dash-hero-fecha {
   font-size: 12px;
@@ -682,10 +692,11 @@
 }
 .dash-hero-stat:first-child { padding-left: 0; }
 .dash-hero-stat-val {
-  font-size: 20px;
-  font-weight: 800;
+  font-family: 'Outfit', 'Inter', sans-serif;
+  font-size: 22px;
+  font-weight: 900;
   line-height: 1.1;
-  letter-spacing: -.3px;
+  letter-spacing: -.5px;
 }
 .dash-hero-stat-label {
   font-size: 10px;
@@ -693,7 +704,7 @@
   color: var(--text3);
   text-transform: uppercase;
   letter-spacing: .08em;
-  margin-top: 3px;
+  margin-top: 4px;
 }
 .dash-hero-sep {
   width: 1px;
@@ -729,4 +740,20 @@
   .dash-hero { flex-direction: column; padding: 16px 18px; }
   .dash-hero-fecha { margin-bottom: 14px; }
   .dash-hero-stat { padding: 0 12px; }
+}
+
+/* ── INTERACTIVE SAT CARDS SELECTOR ───────────────── */
+.sat-selector-card {
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+.sat-selector-card:hover {
+  transform: translateY(-2px);
+  border-color: var(--amber, #d97706) !important;
+  box-shadow: 0 6px 12px rgba(0,0,0,0.06), 0 2px 4px rgba(0,0,0,0.02) !important;
+  background: color-mix(in srgb, var(--amber, #d97706) 3%, var(--surface, #ffffff)) !important;
+}
+.sat-selector-card.selected {
+  border-color: var(--amber, #d97706) !important;
+  background: color-mix(in srgb, var(--amber, #d97706) 8%, var(--surface, #ffffff)) !important;
+  box-shadow: 0 0 0 1px var(--amber, #d97706), 0 4px 10px rgba(0,0,0,0.06) !important;
 }

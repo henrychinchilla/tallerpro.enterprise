@@ -67,9 +67,8 @@ Modulos.facturacion = {
     const f = id ? this._data.find(x=>x.id===id) : {};
     const esEdicion = !!id;
     const iva = Auth.tenant?.tasa_iva || 0.12;
-    if (!id) this._itemsImportados = [];
     const itemsExistentes = id ? await DB.getFacturaItems(id) : [];
-    if (itemsExistentes.length) this._itemsImportados = itemsExistentes.map(i=>({ ...i }));
+    this._itemsImportados = itemsExistentes.map(i=>({ ...i }));
     if (!this._inventario.length) this._inventario = await DB.getInventario().catch(()=>[]);
 
     UI.modal(`${esEdicion?'🧾 Ver':'＋ Nueva'} Factura`, `
@@ -140,7 +139,10 @@ Modulos.facturacion = {
       </div>`,'700px');
 
     if (!id && cotizacionId) await this._importarDeCotizacion(cotizacionId);
-    else if (this._itemsImportados.length) this._refrescarEditor();
+    else if (this._itemsImportados.length) {
+      const box = document.getElementById('fel-items-editor');
+      if (box) box.innerHTML = this._renderItemsEditor();
+    }
   },
 
   /* Abre Facturación con una cotización aprobada lista para emitir */
