@@ -840,16 +840,21 @@
 }
 .pos-cat-pill {
   flex-shrink: 0;
-  padding: 8px 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 38px;
+  padding: 0 18px;
   border-radius: 99px;
   background: var(--surface2);
   border: 1px solid var(--border);
-  color: var(--text2);
+  color: var(--text);
   font-size: 13px;
   font-weight: 700;
   cursor: pointer;
   transition: all 0.2s ease;
   user-select: none;
+  line-height: 1;
 }
 .pos-cat-pill:hover {
   border-color: var(--amber-border);
@@ -857,7 +862,7 @@
 }
 .pos-cat-pill.active {
   background: var(--amber);
-  color: #fff;
+  color: #fff !important;
   border-color: var(--amber);
   box-shadow: 0 4px 12px rgba(217,119,6,0.2);
 }
