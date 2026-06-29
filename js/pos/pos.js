@@ -170,7 +170,10 @@ const POS = {
           display: flex !important;
           gap: 8px !important;
           overflow-x: auto !important;
-          padding: 4px 4px 12px !important;
+          overflow-y: hidden !important;
+          height: 52px !important;
+          align-items: center !important;
+          padding: 0 4px !important;
           margin-bottom: 12px !important;
           scrollbar-width: none !important;
           -webkit-overflow-scrolling: touch;
@@ -183,8 +186,8 @@ const POS = {
           display: inline-flex !important;
           align-items: center !important;
           justify-content: center !important;
-          height: 38px !important;
-          padding: 0 18px !important;
+          height: 36px !important;
+          padding: 0 16px !important;
           border-radius: 99px !important;
           background: var(--surface2) !important;
           border: 1px solid var(--border) !important;
@@ -202,7 +205,7 @@ const POS = {
         }
         .pos-cat-pill.active {
           background: var(--amber) !important;
-          color: #fff !important;
+          color: #ffffff !important;
           border-color: var(--amber) !important;
           box-shadow: 0 4px 12px rgba(217,119,6,0.2) !important;
         }
