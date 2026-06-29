@@ -467,6 +467,8 @@ Modulos.finanzas = {
       UI.toast('Eliminado ✓');
       if (window.App && App.paginaActual === 'contabilidad') {
         if (window.Modulos?.contabilidad?._renderTab) await Modulos.contabilidad._renderTab();
+      } else if (window.App && App.paginaActual === 'facturacion') {
+        if (window.Modulos?.facturacion?.render) await Modulos.facturacion.render();
       } else {
         this._renderTab();
       }

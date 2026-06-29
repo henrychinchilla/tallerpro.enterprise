@@ -54,7 +54,8 @@ Modulos.facturacion = {
                 <td><div style="display:flex;gap:4px">
                   <button class="btn btn-sm btn-cyan" onclick="Modulos.facturacion.modalFactura('${f.id}')">Ver</button>
                   <button class="btn btn-sm btn-ghost" onclick="Modulos.facturacion.enviarEmail('${f.id}')" title="Enviar por email">📧</button>
-                  <button class="btn btn-sm btn-ghost" onclick="Modulos.facturacion.imprimir('${f.id}')">🖨</button>
+                  <button class="btn btn-sm btn-ghost" onclick="Modulos.facturacion.imprimir('${f.id}')">🖨️</button>
+                  ${Modulos.btnAccion('eliminar', `Modulos.finanzas.eliminar('facturas','${f.id}')`)}
                 </div></td>
               </tr>`).join('')||'<tr><td colspan="10" style="text-align:center;padding:24px;color:var(--text3)">Sin facturas en este período</td></tr>'}
             </tbody>
@@ -140,6 +141,7 @@ Modulos.facturacion = {
       <div class="form-group"><label class="form-label">Notas</label>
         <textarea class="form-input" id="fel-notas" rows="2">${f.notas||''}</textarea></div>
       <div class="modal-footer">
+        ${esEdicion?`<button class="btn btn-red" onclick="UI.cerrarModal();Modulos.finanzas.eliminar('facturas','${id}')" style="margin-right:auto">🗑️ Eliminar Factura</button>`:''}
         <button class="btn btn-ghost" onclick="UI.cerrarModal()">Cancelar</button>
         <button class="btn btn-amber" onclick="Modulos.facturacion.guardar('${id||''}')">
           ${esEdicion?'Guardar Cambios':'Emitir Factura'}
