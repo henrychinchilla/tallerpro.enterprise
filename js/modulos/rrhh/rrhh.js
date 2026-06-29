@@ -68,9 +68,12 @@ Modulos.rrhh = {
       const mes = now.getMonth()+1, anio = now.getFullYear();
       const pagos = await DB.getPagosNomina(mes, anio);
       el.innerHTML = `
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;gap:8px;flex-wrap:wrap">
           <div style="font-weight:700">${now.toLocaleDateString('es-GT',{month:'long',year:'numeric'})}</div>
-          <button class="btn btn-amber" onclick="Modulos.rrhh.calcularNomina(${mes},${anio})">🔄 Calcular Nómina</button>
+          <div style="display:flex;gap:6px">
+            <button class="btn btn-amber" onclick="Modulos.rrhh.modalNomina()">＋ Registrar Pago Manual</button>
+            <button class="btn btn-amber" onclick="Modulos.rrhh.calcularNomina(${mes},${anio})">🔄 Calcular Nómina</button>
+          </div>
         </div>
         ${pagos.length?`
         <div class="kpi-grid" style="margin-bottom:16px">
@@ -92,11 +95,13 @@ Modulos.rrhh = {
                 <td class="mono-sm text-cyan">${p.extra_feriado?'+'+UI.q(p.extra_feriado):'—'}</td>
                 <td class="mono-sm text-green"><b>${UI.q(p.liquido)}</b></td>
                 <td><span class="badge badge-${p.pagado?'green':'amber'}">${p.pagado?'Pagado':'Pendiente'}</span></td>
-                <td>
+                <td><div style="display:flex;gap:4px">
                   ${p.pagado ? '' : `<button class="btn btn-sm btn-green" onclick="Modulos.rrhh.pagarNomina('${p.id}')">💵 Pagar</button>`}
-                </td>
+                  <button class="btn btn-sm btn-ghost" onclick="Modulos.rrhh.modalNomina('${p.id}')" title="Editar">✏️ Editar</button>
+                  ${Modulos.btnAccion('eliminar', `Modulos.eliminarRegistro('pagos_nomina','${p.id}','el pago de nómina de ${(p.empleados?.nombre||'').replace(/'/g,"\\'")}',()=>Modulos.rrhh._renderTab())`)}
+                </div></td>
               </tr>`).join('')||`<tr><td colspan="9" style="text-align:center;padding:24px;color:var(--text3)">
-                Presiona "Calcular Nómina" para generar los pagos del mes actual
+                Presiona "Calcular Nómina" para generar los pagos del mes actual o "Registrar Pago Manual"
               </td></tr>`}
             </tbody>
           </table>
@@ -354,6 +359,129 @@ Modulos.rrhh = {
     } else {
       UI.toast(`Nómina calculada ✓ (${activos.length} empleados)`);
     }
+    this._renderTab();
+  },
+
+  async modalNomina(id=null) {
+    let p = {};
+    if (id) {
+      const now = new Date();
+      const mes = now.getMonth()+1, anio = now.getFullYear();
+      const pagos = await DB.getPagosNomina(this._igssMes || mes, this._igssAnio || anio);
+      p = pagos.find(x=>x.id===id) || {};
+    }
+    const esEdicion = !!id;
+    const activos = this._empleados.filter(x=>x.activo);
+    
+    UI.modal(id ? '✏️ Editar Pago de Nómina' : '＋ Registrar Pago de Nómina Manual', `
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Empleado *</label>
+          ${esEdicion ? `<input class="form-input" value="${p.empleados?.nombre || ''}" readonly>` : `
+          <select class="form-select" id="nom-empleado-id" onchange="Modulos.rrhh._onNomEmpleadoCambio(this.value)">
+            <option value="">— Seleccionar Empleado —</option>
+            ${activos.map(e=>`<option value="${e.id}">${e.nombre}</option>`).join('')}
+          </select>`}
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Año *</label>
+          <input class="form-input mono-sm" type="number" id="nom-anio" value="${p.periodo_anio || this._igssAnio || new Date().getFullYear()}" ${esEdicion?'readonly':''}></div>
+        <div class="form-group"><label class="form-label">Mes (1-12) *</label>
+          <input class="form-input mono-sm" type="number" id="nom-mes" min="1" max="12" value="${p.periodo_mes || this._igssMes || (new Date().getMonth()+1)}" ${esEdicion?'readonly':''}></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Salario Base (Q) *</label>
+          <input class="form-input" type="number" step="0.01" id="nom-salario" value="${p.salario_base||0}" oninput="Modulos.rrhh._recalcularNominaModal()"></div>
+        <div class="form-group"><label class="form-label">Bonificación (Q) *</label>
+          <input class="form-input" type="number" step="0.01" id="nom-bono" value="${p.bonificacion||250}" oninput="Modulos.rrhh._recalcularNominaModal()"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">IGSS Laboral (Q) *</label>
+          <input class="form-input" type="number" step="0.01" id="nom-igss" value="${p.igss_laboral||0}"></div>
+        <div class="form-group"><label class="form-label">ISR (Q)</label>
+          <input class="form-input" type="number" step="0.01" id="nom-isr" value="${p.isr||0}"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Extra / Feriado (Q)</label>
+          <input class="form-input" type="number" step="0.01" id="nom-extra" value="${p.extra_feriado||0}" oninput="Modulos.rrhh._recalcularNominaModal()"></div>
+        <div class="form-group"><label class="form-label">Líquido a Recibir (Q)</label>
+          <input class="form-input text-amber" type="number" step="0.01" id="nom-liquido" value="${p.liquido||0}" readonly style="font-weight:800;font-size:16px"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Estado *</label>
+          <select class="form-select" id="nom-pagado">
+            <option value="false" ${p.pagado?'':'selected'}>Pendiente</option>
+            <option value="true" ${p.pagado?'selected':''}>Pagado</option>
+          </select></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" onclick="UI.cerrarModal()">Cancelar</button>
+        <button class="btn btn-amber" onclick="Modulos.rrhh.guardarNomina('${id||''}')">${id?'Guardar Cambios':'Registrar Pago'}</button>
+      </div>
+    `, '540px');
+  },
+
+  _onNomEmpleadoCambio(empId) {
+    const e = this._empleados.find(x=>x.id===empId);
+    if (!e) return;
+    const sal = e.salario_base || 0;
+    const bono = e.bonificacion || 250;
+    document.getElementById('nom-salario').value = sal;
+    document.getElementById('nom-bono').value = bono;
+    this._recalcularNominaModal();
+  },
+
+  _recalcularNominaModal() {
+    const sal = parseFloat(document.getElementById('nom-salario').value)||0;
+    const bono = parseFloat(document.getElementById('nom-bono').value)||0;
+    const extra = parseFloat(document.getElementById('nom-extra').value)||0;
+    
+    // Auto calculate IGSS (4.83%) and ISR
+    const igss = Math.round(sal * 0.0483 * 100) / 100;
+    const isr = Math.round(calcularISR(sal) * 100) / 100;
+    const liq = Math.round((sal + bono - igss - isr + extra) * 100) / 100;
+    
+    document.getElementById('nom-igss').value = igss;
+    document.getElementById('nom-isr').value = isr;
+    document.getElementById('nom-liquido').value = liq;
+  },
+
+  async guardarNomina(id=null) {
+    const empId = id ? null : document.getElementById('nom-empleado-id')?.value;
+    const mes = parseInt(document.getElementById('nom-mes')?.value)||0;
+    const anio = parseInt(document.getElementById('nom-anio')?.value)||0;
+    const sal = parseFloat(document.getElementById('nom-salario')?.value)||0;
+    const bono = parseFloat(document.getElementById('nom-bono')?.value)||0;
+    const igss = parseFloat(document.getElementById('nom-igss')?.value)||0;
+    const isr = parseFloat(document.getElementById('nom-isr')?.value)||0;
+    const extra = parseFloat(document.getElementById('nom-extra')?.value)||0;
+    const liq = parseFloat(document.getElementById('nom-liquido')?.value)||0;
+    const pagado = document.getElementById('nom-pagado')?.value === 'true';
+
+    if (!id && !empId) { UI.toast('Por favor selecciona un empleado','error'); return; }
+    if (mes < 1 || mes > 12 || anio < 2000) { UI.toast('Año o mes inválidos','error'); return; }
+
+    const fields = {
+      salario_base: sal,
+      bonificacion: bono,
+      igss_laboral: igss,
+      isr,
+      extra_feriado: extra,
+      liquido: liq,
+      pagado,
+      periodo_mes: mes,
+      periodo_anio: anio
+    };
+    if (id) {
+      fields.id = id;
+    } else {
+      fields.empleado_id = empId;
+    }
+
+    const { error } = await DB.upsertPagoNomina(fields);
+    if (error) { UI.toast('Error: '+error.message,'error'); return; }
+    UI.cerrarModal();
+    UI.toast('Pago de nómina guardado ✓');
     this._renderTab();
   },
 
