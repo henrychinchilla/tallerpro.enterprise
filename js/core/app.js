@@ -22,6 +22,23 @@ const App = {
 
   /* ── INICIAR APP ──────────────────────────────── */
   async iniciar() {
+    // Check MFA status first!
+    if (typeof Auth !== 'undefined' && Auth.getMFAStatus) {
+      const mfa = await Auth.getMFAStatus();
+      if (mfa.nextLevel === 'aal2' && mfa.currentLevel === 'aal1') {
+        document.getElementById('app')?.classList.remove('visible');
+        document.getElementById('login-screen')?.style.removeProperty('display');
+        if (typeof renderLogin === 'function') renderLogin('mfa-challenge');
+        return;
+      }
+      if (mfa.currentLevel === 'aal1') {
+        document.getElementById('app')?.classList.remove('visible');
+        document.getElementById('login-screen')?.style.removeProperty('display');
+        if (typeof renderLogin === 'function') renderLogin('mfa-enroll');
+        return;
+      }
+    }
+
     document.getElementById('login-screen')?.style.setProperty('display','none');
     const appEl = document.getElementById('app');
     if (appEl) appEl.classList.add('visible');

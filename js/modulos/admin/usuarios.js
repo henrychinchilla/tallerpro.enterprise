@@ -83,7 +83,121 @@ Modulos.usuarios = {
             </table>
           </div>
         </div>
+
+        <!-- Tarjeta de mi 2FA -->
+        <div class="card" style="margin-top:20px; border-left: 4px solid var(--amber)">
+          <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px">
+            <div>
+              <div style="font-weight:800;font-size:14px;color:var(--amber)">🔐 Tu Autenticación de Dos Factores (2FA / MFA)</div>
+              <p style="font-size:12px;color:var(--text2);margin-top:4px">
+                NexusPro exige la verificación por segundo factor para asegurar las operaciones.
+              </p>
+            </div>
+            <div id="mi-2fa-status-container">Cargando estado de tu 2FA...</div>
+          </div>
+        </div>
       </div>`;
+    
+    setTimeout(() => this._cargarMi2FAStatus(), 100);
+  },
+
+  async _cargarMi2FAStatus() {
+    const container = document.getElementById('mi-2fa-status-container');
+    if (!container) return;
+    try {
+      const factors = await Auth.listMFAFactors();
+      const activeFactor = factors.find(f => f.status === 'verified');
+      if (activeFactor) {
+        container.innerHTML = `
+          <div style="display:flex;align-items:center;gap:12px">
+            <span class="badge badge-green">✓ Activo (TOTP)</span>
+            <button class="btn btn-danger btn-xs" onclick="Modulos.usuarios._desactivarMi2FA('${activeFactor.id}')">Desactivar 2FA</button>
+          </div>`;
+      } else {
+        container.innerHTML = `
+          <div style="display:flex;align-items:center;gap:12px">
+            <span class="badge badge-red">Inactivo</span>
+            <button class="btn btn-amber btn-xs" onclick="Modulos.usuarios._activarMi2FA()">Configurar 2FA</button>
+          </div>`;
+      }
+    } catch(e) {
+      container.innerText = 'Error al consultar 2FA';
+    }
+  },
+
+  async _activarMi2FA() {
+    UI.modal('🔒 Enrolar Autenticador 2FA', `
+      <div style="text-align:center;padding:12px">
+        <p style="font-size:13px;color:var(--text2);margin-bottom:16px;line-height:1.5">
+          Escanea el código QR con tu aplicación de autenticación para activar el doble factor de seguridad:
+        </p>
+        <div id="modal-mfa-qr-container" style="display:flex;justify-content:center;background:#ffffff;padding:8px;border-radius:6px;width:150px;height:150px;margin:0 auto 12px">
+          <span style="font-size:11px;color:#000000;display:flex;align-items:center">Generando QR...</span>
+        </div>
+        <div style="font-size:11px;color:var(--text3);margin-bottom:4px">Clave secreta manual:</div>
+        <code id="modal-mfa-secret-text" class="mono-sm" style="background:var(--surface2);padding:4px 8px;border-radius:4px;display:inline-block;word-break:break-all;color:var(--amber)">Generando...</code>
+        
+        <div class="form-group" style="text-align:left;margin-top:16px">
+          <label class="form-label">Código de Verificación (6 dígitos) *</label>
+          <input class="form-input" id="modal-mfa-code" type="text" placeholder="Ej. 123456" maxLength="6"
+                 style="font-size:18px;text-align:center;letter-spacing:6px;font-family:monospace"
+                 oninput="this.value=this.value.replace(/\\D/g,'')">
+        </div>
+        <button class="btn btn-amber" style="width:100%" onclick="Modulos.usuarios._confirmarActivacion2FA()">Activar 2FA</button>
+      </div>`, '420px');
+
+    const res = await Auth.enrollTOTP();
+    if (res.error) {
+      UI.toast('Error al iniciar 2FA: ' + res.error, 'error');
+      UI.cerrarModal();
+      return;
+    }
+    
+    this._tempEnrollId = res.id;
+    
+    const qrContainer = document.getElementById('modal-mfa-qr-container');
+    const secretText = document.getElementById('modal-mfa-secret-text');
+    if (res.totp) {
+      if (qrContainer) qrContainer.innerHTML = `<img src="${res.totp.qr_code}" style="width:134px;height:134px;object-fit:contain" alt="QR">`;
+      if (secretText) secretText.innerText = res.totp.secret;
+    }
+
+    const chal = await Auth.createMFAChallenge(res.id);
+    this._tempChallengeId = chal?.id || null;
+  },
+
+  async _confirmarActivacion2FA() {
+    const code = document.getElementById('modal-mfa-code')?.value.trim();
+    if (!code || code.length !== 6) {
+      UI.toast('Ingresa el código de 6 dígitos', 'error');
+      return;
+    }
+    if (!this._tempEnrollId || !this._tempChallengeId) {
+      UI.toast('Falta sesión de enrolamiento. Intenta de nuevo.', 'error');
+      return;
+    }
+    UI.toast('Verificando...', 'info');
+    const res = await Auth.verifyMFAFactor(this._tempEnrollId, this._tempChallengeId, code);
+    if (res.ok) {
+      UI.toast('¡2FA Activado con éxito! ✓', 'success');
+      UI.cerrarModal();
+      this._cargarMi2FAStatus();
+    } else {
+      UI.toast('Código incorrecto: ' + res.error, 'error');
+    }
+  },
+
+  async _desactivarMi2FA(factorId) {
+    const ok = await UI.confirmar('¿Seguro que deseas desactivar tu autenticación de dos factores? Esto reducirá la seguridad de tu cuenta.', 'Desactivar');
+    if (!ok) return;
+    UI.toast('Desactivando 2FA...', 'info');
+    const res = await Auth.unenrollMFAFactor(factorId);
+    if (res.ok) {
+      UI.toast('2FA Desactivado ✓', 'success');
+      this._cargarMi2FAStatus();
+    } else {
+      UI.toast('Error: ' + res.error, 'error');
+    }
   },
 
   modalNuevo() {

@@ -27,6 +27,66 @@ function renderLogin(vista='login') {
     </button>`;
 
   const vistas = {
+    'mfa-challenge': `
+      <div class="login-card" style="text-align:center">
+        <div class="login-logo">
+          <div style="font-size:44px;margin-bottom:8px">🔐</div>
+          <h1 style="font-size:24px;color:var(--amber)">Verificación 2FA</h1>
+          <p>Tu cuenta requiere verificación de dos factores para continuar.</p>
+        </div>
+        
+        <div class="form-group" style="text-align:left">
+          <label class="form-label">Código del Autenticador *</label>
+          <input class="form-input" id="mfa-code" type="text" placeholder="Ej. 123456" maxLength="6"
+                 style="font-size:20px;text-align:center;letter-spacing:8px;font-family:monospace"
+                 oninput="this.value=this.value.replace(/\\D/g,'')"
+                 onkeydown="if(event.key==='Enter')loginVerificarRetoMFA()">
+        </div>
+
+        <button class="btn btn-amber" style="width:100%;margin-bottom:12px" onclick="loginVerificarRetoMFA()">
+          Verificar Código →
+        </button>
+
+        <button class="btn btn-ghost" style="width:100%" onclick="getSB().auth.signOut().then(()=>renderLogin('login'))">
+          ← Cancelar y salir
+        </button>
+      </div>`,
+
+    'mfa-enroll': `
+      <div class="login-card" style="text-align:center">
+        <div class="login-logo">
+          <div style="font-size:44px;margin-bottom:8px">🔒</div>
+          <h1 style="font-size:22px;color:var(--amber)">Configura tu 2FA</h1>
+          <p>La autenticación de doble factor es obligatoria para ingresar.</p>
+        </div>
+
+        <div style="background:var(--surface2);border-radius:10px;padding:16px;margin-bottom:16px;text-align:center;border:1px solid var(--border)">
+          <p style="font-size:12px;color:var(--text2);margin-bottom:12px;line-height:1.5">
+            Escanea este código QR con tu app de autenticación (Google Authenticator, Microsoft, etc.):
+          </p>
+          <div id="mfa-qr-container" style="display:flex;justify-content:center;background:#ffffff;padding:8px;border-radius:6px;width:160px;height:160px;margin:0 auto 12px">
+            <span style="font-size:11px;color:#000000;display:flex;align-items:center">Cargando código QR...</span>
+          </div>
+          <div style="font-size:11px;color:var(--text3);margin-bottom:4px">O ingresa la clave manualmente:</div>
+          <code id="mfa-secret-text" class="mono-sm" style="background:var(--surface);padding:4px 8px;border-radius:4px;display:inline-block;word-break:break-all;color:var(--amber)">Cargando...</code>
+        </div>
+
+        <div class="form-group" style="text-align:left">
+          <label class="form-label">Código de Verificación *</label>
+          <input class="form-input" id="mfa-enroll-code" type="text" placeholder="Ej. 123456" maxLength="6"
+                 style="font-size:20px;text-align:center;letter-spacing:8px;font-family:monospace"
+                 oninput="this.value=this.value.replace(/\\D/g,'')"
+                 onkeydown="if(event.key==='Enter')loginActivarTOTPMFA()">
+        </div>
+
+        <button class="btn btn-amber" style="width:100%" onclick="loginActivarTOTPMFA()">
+          Confirmar y Activar 2FA →
+        </button>
+
+        <button class="btn btn-ghost" style="width:100%;margin-top:8px" onclick="getSB().auth.signOut().then(()=>renderLogin('login'))">
+          ← Cancelar y salir
+        </button>
+      </div>`,
 
     login: `
       <div class="login-card">
@@ -386,6 +446,8 @@ function renderLogin(vista='login') {
     _cargarTurnstile();
   }
   if (vista === 'nuevo-taller-google') _cargarInfoGoogle();
+  if (vista === 'mfa-enroll') _iniciarMfaEnroll();
+  if (vista === 'mfa-challenge') _iniciarMfaChallenge();
 }
 
 /* ── TURNSTILE ────────────────────────────────────── */
@@ -454,7 +516,7 @@ async function doLogin() {
 
   if (r.ok) {
     if (r.debe_cambiar) { renderLogin('cambiar-pass'); return; }
-    App.iniciar();
+    loginVerificarMFAYContinuar();
   } else {
     UI.toast(r.error || 'Correo o contraseña incorrectos', 'error');
   }
@@ -624,7 +686,7 @@ async function loginResetPass() {
   if (!r.ok) { UI.toast(r.error, 'error'); return; }
   history.replaceState(null, '', window.location.pathname);
   UI.toast('¡Contraseña actualizada! 🎉');
-  setTimeout(() => App.iniciar(), 800);
+  setTimeout(() => loginVerificarMFAYContinuar(), 800);
 }
 
 async function loginCambiarPass() {
@@ -635,7 +697,7 @@ async function loginCambiarPass() {
   const r = await Auth.cambiarPassword(p1);
   if (!r.ok) { UI.toast('Error: ' + r.error, 'error'); return; }
   UI.toast('¡Contraseña guardada! ✓');
-  setTimeout(() => App.iniciar(), 800);
+  setTimeout(() => loginVerificarMFAYContinuar(), 800);
 }
 
 async function loginGuardarTipoNegocio() {
@@ -662,7 +724,7 @@ async function loginGuardarTipoNegocio() {
     UI.toast('✓ Configuración guardada', 'success');
     setTimeout(() => {
       Auth.tenant.modulos_activos = modulos_activos;
-      App.iniciar();
+      loginVerificarMFAYContinuar();
     }, 600);
   } else {
     UI.toast('Error al guardar configuración', 'error');
@@ -673,6 +735,119 @@ async function loginGuardarTipoNegocio() {
 getSB().auth.onAuthStateChange((event) => {
   if (event === 'PASSWORD_RECOVERY') renderLogin('reset');
 });
+
+/* ── CONTROLES Y RUTEADOR DE 2FA / MFA ──────────────── */
+let _mfaFactorId = null;
+let _mfaChallengeId = null;
+let _mfaEnrollFactorId = null;
+let _mfaEnrollChallengeId = null;
+
+async function loginVerificarMFAYContinuar() {
+  const mfa = await Auth.getMFAStatus();
+  if (mfa.nextLevel === 'aal2' && mfa.currentLevel === 'aal1') {
+    renderLogin('mfa-challenge');
+    return;
+  }
+  if (mfa.currentLevel === 'aal1') {
+    renderLogin('mfa-enroll');
+    return;
+  }
+  App.iniciar();
+}
+
+async function _iniciarMfaEnroll() {
+  const qrContainer = document.getElementById('mfa-qr-container');
+  const secretText = document.getElementById('mfa-secret-text');
+  
+  UI.toast('Generando código de seguridad...', 'info');
+  const res = await Auth.enrollTOTP();
+  if (res.error) {
+    UI.toast('Error al iniciar 2FA: ' + res.error, 'error');
+    return;
+  }
+  
+  _mfaEnrollFactorId = res.id;
+  
+  if (res.totp) {
+    if (qrContainer) {
+      qrContainer.innerHTML = `<img src="${res.totp.qr_code}" style="width:144px;height:144px;object-fit:contain" alt="Código QR">`;
+    }
+    if (secretText) {
+      secretText.innerText = res.totp.secret;
+    }
+  }
+  
+  // Create challenge for verifying the enroll
+  const chal = await Auth.createMFAChallenge(_mfaEnrollFactorId);
+  _mfaEnrollChallengeId = chal?.id || null;
+}
+
+async function loginActivarTOTPMFA() {
+  const code = document.getElementById('mfa-enroll-code')?.value.trim();
+  if (!code || code.length !== 6) {
+    UI.toast('Ingresa el código de 6 dígitos', 'error');
+    return;
+  }
+  
+  if (!_mfaEnrollFactorId || !_mfaEnrollChallengeId) {
+    UI.toast('Falta sesión de enrolamiento. Intenta de nuevo.', 'error');
+    return;
+  }
+  
+  UI.toast('Verificando código...', 'info');
+  const res = await Auth.verifyMFAFactor(_mfaEnrollFactorId, _mfaEnrollChallengeId, code);
+  if (res.ok) {
+    UI.toast('¡2FA Activado con éxito! ✓', 'success');
+    loginVerificarMFAYContinuar();
+  } else {
+    UI.toast('Código incorrecto: ' + res.error, 'error');
+  }
+}
+
+async function _iniciarMfaChallenge() {
+  try {
+    const factors = await Auth.listMFAFactors();
+    const factor = factors.find(f => f.status === 'verified');
+    if (!factor) {
+      UI.toast('No tienes un factor 2FA verificado.', 'error');
+      renderLogin('login');
+      return;
+    }
+    
+    _mfaFactorId = factor.id;
+    const chal = await Auth.createMFAChallenge(_mfaFactorId);
+    if (chal.error) {
+      UI.toast('Error al solicitar reto de seguridad: ' + chal.error, 'error');
+      return;
+    }
+    _mfaChallengeId = chal.id;
+  } catch(e) {
+    UI.toast('Error: ' + e.message, 'error');
+  }
+}
+
+async function loginVerificarRetoMFA() {
+  const code = document.getElementById('mfa-code')?.value.trim();
+  if (!code || code.length !== 6) {
+    UI.toast('Ingresa el código de 6 dígitos', 'error');
+    return;
+  }
+  
+  if (!_mfaFactorId || !_mfaChallengeId) {
+    UI.toast('Falta sesión de verificación. Intenta de nuevo.', 'error');
+    return;
+  }
+  
+  UI.toast('Verificando...', 'info');
+  const res = await Auth.verifyMFAFactor(_mfaFactorId, _mfaChallengeId, code);
+  if (res.ok) {
+    UI.toast('Código verificado ✓', 'success');
+    loginVerificarMFAYContinuar();
+  } else {
+    UI.toast('Código incorrecto o vencido', 'error');
+  }
+}
+
 
 window.addEventListener('load', async () => {
   TEMAS.aplicar(localStorage.getItem('tp_tema') || 'dark');
@@ -699,7 +874,7 @@ window.addEventListener('load', async () => {
       }
 
       if (Auth.user?.debe_cambiar_password) { renderLogin('cambiar-pass'); return; }
-      App.iniciar(); return;
+      loginVerificarMFAYContinuar(); return;
     }
   } catch(e) { console.warn('Session:', e.message); }
 
