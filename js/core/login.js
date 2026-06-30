@@ -170,6 +170,18 @@ function renderLogin(vista='login') {
 
         <div id="nt-turnstile" style="margin-bottom:12px"></div>
 
+        <div class="legal-disclaimer-box" style="background:rgba(255, 193, 7, 0.05);border:1px solid rgba(255, 193, 7, 0.25);border-radius:8px;padding:12px;margin-bottom:12px;font-size:11.5px;line-height:1.6;color:var(--text2);text-align:left">
+          <div style="font-weight:700;color:var(--amber);margin-bottom:6px;display:flex;align-items:center;gap:6px">
+            🛡️ Blindaje de Protección Legal y Privacidad
+          </div>
+          Al crear tu cuenta en NexusPro, confirmas tu consentimiento explícito sobre nuestros términos. Esto incluye la <b>política de cero reembolsos</b> ante suscripciones activas y la <b>suspensión inmediata de cuenta</b> ante disputas bancarias o contracargos falsos. Así mismo, aceptas las condiciones internacionales de <b>protección de código fuente</b>, marcas y propiedad intelectual de la aplicación.
+        </div>
+
+        <label style="display:flex;align-items:flex-start;gap:8px;font-size:12px;margin:12px 0;cursor:pointer;line-height:1.5;color:var(--text);text-align:left">
+          <input type="checkbox" id="nt-consentimiento" required style="margin-top:3px;cursor:pointer">
+          <span>He leído y acepto los <a href="/terminos.html" target="_blank" style="color:var(--cyan);text-decoration:underline">Términos de Uso</a>, la <a href="/privacidad.html" target="_blank" style="color:var(--cyan);text-decoration:underline">Política de Privacidad</a> y Reembolsos. *</span>
+        </label>
+
         <div class="alert alert-amber" style="margin-bottom:12px">
           <div class="alert-icon">💡</div>
           <div class="alert-body" style="font-size:11px">30 días de prueba gratuita · Sin tarjeta de crédito.
@@ -312,6 +324,18 @@ function renderLogin(vista='login') {
           <input class="form-input" id="ntg-tel" type="tel" placeholder="5555-5555">
         </div>
 
+        <div class="legal-disclaimer-box" style="background:rgba(255, 193, 7, 0.05);border:1px solid rgba(255, 193, 7, 0.25);border-radius:8px;padding:12px;margin-bottom:12px;font-size:11.5px;line-height:1.6;color:var(--text2);text-align:left">
+          <div style="font-weight:700;color:var(--amber);margin-bottom:6px;display:flex;align-items:center;gap:6px">
+            🛡️ Blindaje de Protección Legal y Privacidad
+          </div>
+          Al crear tu cuenta en NexusPro, confirmas tu consentimiento explícito sobre nuestros términos. Esto incluye la <b>política de cero reembolsos</b> ante suscripciones activas y la <b>suspensión inmediata de cuenta</b> ante disputas bancarias o contracargos falsos. Así mismo, aceptas las condiciones internacionales de <b>protección de código fuente</b>, marcas y propiedad intelectual de la aplicación.
+        </div>
+
+        <label style="display:flex;align-items:flex-start;gap:8px;font-size:12px;margin:12px 0;cursor:pointer;line-height:1.5;color:var(--text);text-align:left">
+          <input type="checkbox" id="ntg-consentimiento" required style="margin-top:3px;cursor:pointer">
+          <span>He leído y acepto los <a href="/terminos.html" target="_blank" style="color:var(--cyan);text-decoration:underline">Términos de Uso</a>, la <a href="/privacidad.html" target="_blank" style="color:var(--cyan);text-decoration:underline">Política de Privacidad</a> y Reembolsos. *</span>
+        </label>
+
         <div class="alert alert-amber" style="margin-bottom:12px">
           <div class="alert-icon">💡</div>
           <div class="alert-body" style="font-size:11px">30 días de prueba gratuita · Sin tarjeta de crédito.
@@ -447,6 +471,9 @@ async function loginConGoogle(intent = 'login') {
 }
 
 async function loginRegistrarTallerGoogle() {
+  const consent = document.getElementById('ntg-consentimiento')?.checked;
+  if (!consent) { UI.toast('Debes aceptar los Términos de Uso, Política de Privacidad y Reembolsos para registrarte', 'error'); return; }
+
   const nombre = document.getElementById('ntg-nombre')?.value.trim();
   const tel    = document.getElementById('ntg-tel')?.value.trim();
   const nit    = document.getElementById('ntg-nit')?.value.trim();
@@ -503,6 +530,9 @@ async function loginRegistrarTallerGoogle() {
 
 /* ── REGISTRO NUEVO TALLER (email/password) ────────── */
 async function loginRegistrarTaller() {
+  const consent = document.getElementById('nt-consentimiento')?.checked;
+  if (!consent) { UI.toast('Debes aceptar los Términos de Uso, Política de Privacidad y Reembolsos para registrarte', 'error'); return; }
+
   const nombre = document.getElementById('nt-nombre')?.value.trim();
   const admin  = document.getElementById('nt-admin')?.value.trim();
   const email  = document.getElementById('nt-email')?.value.trim();

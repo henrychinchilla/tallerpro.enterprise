@@ -193,7 +193,7 @@ const App = {
       <div class="sidebar-ia">
         <button class="btn-ia" onclick="IA.abrirChat()">
           <span class="btn-ia-icon">🔧</span>
-          <span>Beto — Asistente</span>
+          <span>Nexus — Asistente IA</span>
         </button>
       </div>`;
 

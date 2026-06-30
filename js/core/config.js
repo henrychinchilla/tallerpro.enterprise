@@ -191,7 +191,7 @@ const PLANES = {
   },
   empresarial: {
     label: 'Empresarial', precio: 999, color: 'green',
-    desc: 'Todo lo Pro + RRHH/Nómina y Beto, tu asistente IA experto. Solución completa.',
+    desc: 'Todo lo Pro + RRHH/Nómina y Nexus, tu asistente IA experto. Solución completa.',
     modulos: ['clientes','vehiculos','ordenes','inventario','pos',
               'proveedores','compras','bodegas','activos','envios',
               'facturacion','bancos','finanzas','presupuesto','contabilidad','marketing','comunicaciones','rrhh','ia']
@@ -217,7 +217,7 @@ const MODULOS_PRECIOS = {
 };
 
 /* Lista de módulos que se pueden vender/activar a la carta (para el panel SA).
-   'ia' (Beto) viene incluido en Empresarial y es add-on para Básico/Pro.
+   'ia' (Nexus) viene incluido en Empresarial y es add-on para Básico/Pro.
    Los 5 últimos son módulos VERTICALES: se activan a demanda según el tipo
    de negocio del taller (herrería, peletería, electrónica, refrigeración) y
    no vienen incluidos en ningún plan por defecto — el superadmin los prende
@@ -233,7 +233,7 @@ const MODULOS_VENDIBLES = [
 /* Etiqueta legible de un módulo (los que no tienen página propia en MODULOS) */
 function labelModulo(id) {
   return (typeof MODULOS !== 'undefined' && MODULOS.find(x => x.id === id)?.label)
-    || ({ ia: '🤖 Beto (Asistente IA)' })[id] || id;
+    || ({ ia: '🤖 Nexus (Asistente IA)' })[id] || id;
 }
 
 /* Módulos activos del taller en sesión (override del tenant o, si no, su plan). */

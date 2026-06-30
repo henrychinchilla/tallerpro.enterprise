@@ -443,7 +443,7 @@ Modulos.vehiculos = {
           ${this._renderTarjetaBox()}
         </div>
         <div id="veh-tarjeta-loading" style="display:none;font-size:12px;margin-top:8px;color:var(--amber);font-weight:700">
-          ⏳ Analizando tarjeta con Beto AI...
+          ⏳ Analizando tarjeta con Nexus AI...
         </div>
       </div>
 
@@ -653,9 +653,9 @@ Modulos.vehiculos = {
       <div style="border-top:1px solid var(--border);margin-top:14px;padding-top:12px">
         <div style="font-weight:700;font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px">🤖 Recomendaciones específicas del fabricante</div>
         <div id="mant-ia" style="font-size:13px;color:var(--text2);white-space:pre-wrap;background:var(--surface2);border-radius:8px;padding:12px;min-height:48px;line-height:1.5">
-          Consulta a Beto recomendaciones específicas para tu <b>${v.marca} ${v.modelo}${v.anio?` ${v.anio}`:''}</b> (aceites, torques, particularidades del fabricante).
+          Consulta a Nexus recomendaciones específicas para tu <b>${v.marca} ${v.modelo}${v.anio?` ${v.anio}`:''}</b> (aceites, torques, particularidades del fabricante).
         </div>
-        <button class="btn btn-amber btn-sm" style="margin-top:10px" onclick="Modulos.vehiculos.consultarBeto('${id}')">🔧 Consultar a Beto (IA)</button>
+        <button class="btn btn-amber btn-sm" style="margin-top:10px" onclick="Modulos.vehiculos.consultarNexus('${id}')">🔧 Consultar a Nexus (IA)</button>
       </div>
 
       <div class="modal-footer">
@@ -718,8 +718,8 @@ Modulos.vehiculos = {
     setTimeout(()=>Modulos.ordenes?.verDetalle(ordenId), 400);
   },
 
-  /* Consulta a la IA (Beto) recomendaciones del fabricante para este vehículo */
-  async consultarBeto(id) {
+  /* Consulta a la IA (Nexus) recomendaciones del fabricante para este vehículo */
+  async consultarNexus(id) {
     const v = this._data.find(x=>x.id===id);
     if (!v) return;
     const cont = document.getElementById('mant-ia');

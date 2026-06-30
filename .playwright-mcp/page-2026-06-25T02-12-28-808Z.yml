@@ -1,0 +1,23 @@
+- generic [ref=e3]:
+  - generic [ref=e4]:
+    - generic [ref=e5]: 🔧
+    - heading "TALLERPRO" [level=1] [ref=e6]
+    - paragraph [ref=e7]: Enterprise v3.1.0
+  - generic [ref=e8]:
+    - generic [ref=e9]: Nombre o NIT del Taller
+    - generic [ref=e10]:
+      - textbox "CM Multiservicios..." [ref=e11]
+      - button "Buscar" [ref=e12] [cursor=pointer]
+  - generic [ref=e13]:
+    - generic [ref=e14]: Correo Electrónico
+    - textbox "usuario@empresa.gt" [ref=e15]
+  - generic [ref=e16]:
+    - generic [ref=e17]: Contraseña
+    - generic [ref=e18]:
+      - textbox "••••••••" [ref=e19]
+      - button "👁" [ref=e20] [cursor=pointer]
+  - button "Iniciar Sesión →" [ref=e21] [cursor=pointer]
+  - generic [ref=e22]:
+    - button "🔑 Olvidé mi contraseña" [ref=e23] [cursor=pointer]
+    - button "🏪 Crear nuevo taller" [ref=e24] [cursor=pointer]
+  - generic [ref=e25]: ¿Primera vez? Crea tu taller y estrena 30 días de prueba gratis.

@@ -137,7 +137,7 @@ Modulos.superadmin = {
           Usuarios, Administración, Respaldos) están siempre incluidos.
         </div></div>
         <div class="alert alert-amber" style="margin-top:12px"><div class="alert-icon">🤖</div><div class="alert-body" style="font-size:12px">
-          <b>Beto (Asistente IA)</b> viene incluido en <b>Empresarial</b> y se vende como <b>add-on de Q99/mes</b>
+          <b>Nexus (Asistente IA)</b> viene incluido en <b>Empresarial</b> y se vende como <b>add-on de Q99/mes</b>
           para Básico y Pro (actívalo a la carta en ⚙️ y suma Q99 al precio). Todos los talleres tienen un
           <b>tope mensual de consultas</b> (default 300, ampliable por taller). Los talleres en prueba de 30 días
           lo traen activado para que lo conozcan.
@@ -374,7 +374,7 @@ Modulos.superadmin = {
         <div style="font-size:11px;color:var(--text3);margin-top:4px">Dashboard, Calendario, Configuración, Usuarios, Administración y Respaldos siempre están incluidos.</div>
       </div>
       <div class="form-row">
-        <div class="form-group"><label class="form-label">Límite Beto IA (consultas/mes)</label>
+        <div class="form-group"><label class="form-label">Límite Nexus IA (consultas/mes)</label>
           <input class="form-input" id="sa-ia-limite" type="number" min="0" step="50" value="${t.ai_limite_mes??300}">
           <div style="font-size:11px;color:var(--text3);margin-top:4px">Add-on sugerido: Q99/mes con 300 consultas (incluido en Empresarial).</div></div>
         <div class="form-group"><label class="form-label">Notas internas</label>

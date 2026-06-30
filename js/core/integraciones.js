@@ -131,19 +131,19 @@ const IA = {
     return _invocar('ai-assistant', { modo: 'tarjeta', imagen_base64: imagenBase64 });
   },
 
-  /* ── Chat flotante con Beto ────────────────────── */
+  /* ── Chat flotante con Nexus ────────────────────── */
   abrirChat() {
-    UI.modal('🔧 Beto — Asistente', `
+    UI.modal('🔧 Nexus — Asistente IA', `
       <div class="tabs" style="margin:-4px 0 14px">
-        <button class="tab-btn active" id="beto-tab-chat" onclick="IA._tabChat()">💬 Chat</button>
-        <button class="tab-btn" id="beto-tab-hist" onclick="IA._tabHistorial()">📋 Historial</button>
+        <button class="tab-btn active" id="nexus-tab-chat" onclick="IA._tabChat()">💬 Chat</button>
+        <button class="tab-btn" id="nexus-tab-hist" onclick="IA._tabHistorial()">📋 Historial</button>
       </div>
 
-      <div id="beto-panel-chat">
+      <div id="nexus-panel-chat">
         <div id="ia-historial" style="max-height:340px;overflow-y:auto;margin-bottom:12px;
              display:flex;flex-direction:column;gap:8px">
-          <div class="text-muted" style="font-size:12.5px;line-height:1.8" id="beto-welcome">
-            ¡Hola! Soy <b>Beto</b>, tu asistente de IA.<br>
+          <div class="text-muted" style="font-size:12.5px;line-height:1.8" id="nexus-welcome">
+            ¡Hola! Soy <b>Nexus</b>, tu asistente de IA.<br>
             🔧 <b>Mecánica:</b> DTC, diagnósticos, mantenimientos.<br>
             🏗️ <b>Especializados:</b> Herrería · Peletería · Electrónica · Refrigeración.<br>
             🌾 <b>Agropecuaria:</b> Agroservicio · Venta de Granos.<br>
@@ -163,45 +163,45 @@ const IA = {
         </div>
       </div>
 
-      <div id="beto-panel-hist" style="display:none">
-        <div id="beto-hist-lista" style="max-height:400px;overflow-y:auto;display:flex;flex-direction:column;gap:8px">
+      <div id="nexus-panel-hist" style="display:none">
+        <div id="nexus-hist-lista" style="max-height:400px;overflow-y:auto;display:flex;flex-direction:column;gap:8px">
           <div class="text-muted" style="padding:8px;font-size:13px">Cargando historial...</div>
         </div>
         <button class="btn btn-danger btn-sm" style="margin-top:10px;width:100%" onclick="IA._limpiarTodoHistorial()">🗑️ Limpiar todo el historial</button>
       </div>`, '700px');
     document.querySelector('#modal-box .modal-header')?.classList.add('modal-header-ia');
     // Inicializar conteo del historial en la pestaña
-    DB.getBetoHistorial(10).then(convs => {
-      const btn = document.getElementById('beto-tab-hist');
+    DB.getNexusHistorial(10).then(convs => {
+      const btn = document.getElementById('nexus-tab-hist');
       if (btn && convs.length) btn.textContent = `📋 Historial (${convs.length})`;
     }).catch(() => {});
   },
 
   _tabChat() {
-    document.getElementById('beto-tab-chat')?.classList.add('active');
-    document.getElementById('beto-tab-hist')?.classList.remove('active');
-    document.getElementById('beto-panel-chat').style.display = '';
-    document.getElementById('beto-panel-hist').style.display = 'none';
+    document.getElementById('nexus-tab-chat')?.classList.add('active');
+    document.getElementById('nexus-tab-hist')?.classList.remove('active');
+    document.getElementById('nexus-panel-chat').style.display = '';
+    document.getElementById('nexus-panel-hist').style.display = 'none';
   },
 
   _tabHistorial() {
-    document.getElementById('beto-tab-chat')?.classList.remove('active');
-    document.getElementById('beto-tab-hist')?.classList.add('active');
-    document.getElementById('beto-panel-chat').style.display = 'none';
-    document.getElementById('beto-panel-hist').style.display = '';
+    document.getElementById('nexus-tab-chat')?.classList.remove('active');
+    document.getElementById('nexus-tab-hist')?.classList.add('active');
+    document.getElementById('nexus-panel-chat').style.display = 'none';
+    document.getElementById('nexus-panel-hist').style.display = '';
     IA._cargarHistorial();
   },
 
   async _cargarHistorial() {
-    const cont = document.getElementById('beto-hist-lista');
+    const cont = document.getElementById('nexus-hist-lista');
     if (!cont) return;
     cont.innerHTML = '<div class="text-muted" style="padding:8px;font-size:13px">Cargando...</div>';
     try {
-      const convs = await DB.getBetoHistorial(10);
-      const btn = document.getElementById('beto-tab-hist');
+      const convs = await DB.getNexusHistorial(10);
+      const btn = document.getElementById('nexus-tab-hist');
       if (btn) btn.textContent = `📋 Historial${convs.length ? ' (' + convs.length + ')' : ''}`;
       if (!convs.length) {
-        cont.innerHTML = '<div class="empty-state"><div class="empty-state-icon">💬</div><div style="font-weight:700">Sin historial aún</div><div class="text-muted" style="font-size:12px">Las consultas a Beto aparecerán aquí</div></div>';
+        cont.innerHTML = '<div class="empty-state"><div class="empty-state-icon">💬</div><div style="font-weight:700">Sin historial aún</div><div class="text-muted" style="font-size:12px">Las consultas a Nexus aparecerán aquí</div></div>';
         return;
       }
       const modoColor = { chat:'amber', tecnico:'cyan', redaccion:'green', diagnostico:'purple', insights:'gray' };
@@ -228,7 +228,7 @@ const IA = {
 
   async _continuarDesde(id) {
     try {
-      const convs = await DB.getBetoHistorial(10);
+      const convs = await DB.getNexusHistorial(10);
       const conv = convs.find(c => c.id === id);
       if (!conv) return;
       // Cambiar al tab de chat
@@ -251,7 +251,7 @@ const IA = {
 
   async _eliminarConversacion(id) {
     try {
-      await DB.deleteBetoConversacion(id);
+      await DB.deleteNexusConversacion(id);
       await IA._cargarHistorial();
       UI.toast('Consulta eliminada del historial', 'success');
     } catch (e) {
@@ -260,11 +260,11 @@ const IA = {
   },
 
   async _limpiarTodoHistorial() {
-    const ok = await UI.confirmar('¿Eliminar todo el historial de consultas a Beto? Esta acción no se puede deshacer.', 'Limpiar todo');
+    const ok = await UI.confirmar('¿Eliminar todo el historial de consultas a Nexus? Esta acción no se puede deshacer.', 'Limpiar todo');
     if (!ok) return;
     try {
-      const convs = await DB.getBetoHistorial(100);
-      await Promise.all(convs.map(c => DB.deleteBetoConversacion(c.id)));
+      const convs = await DB.getNexusHistorial(100);
+      await Promise.all(convs.map(c => DB.deleteNexusConversacion(c.id)));
       await IA._cargarHistorial();
       UI.toast('Historial limpiado', 'success');
     } catch (e) {
@@ -311,8 +311,8 @@ const IA = {
     IA._actualizar(cargando, r.ok ? r.texto : '⚠️ ' + r.error);
     // Actualizar badge del historial tras cada respuesta
     if (r.ok) {
-      DB.getBetoHistorial(10).then(convs => {
-        const btn = document.getElementById('beto-tab-hist');
+      DB.getNexusHistorial(10).then(convs => {
+        const btn = document.getElementById('nexus-tab-hist');
         if (btn) btn.textContent = `📋 Historial${convs.length ? ' (' + convs.length + ')' : ''}`;
       }).catch(() => {});
     }
