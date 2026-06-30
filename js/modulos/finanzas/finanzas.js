@@ -475,29 +475,6 @@ Modulos.finanzas = {
     } else UI.toast('Error al eliminar','error');
   },
 
-  /* ── EXPORTACIÓN DE LIBROS (CSV para el contador) ── */
-  async exportLibro(tipo) {
-    if (tipo === 'ventas') {
-      const facturas = (await DB.getFacturas(this._ini, this._fin)).filter(f=>f.estado!=='anulada');
-      const rows = [['Fecha','Documento','NIT','Cliente','Base','IVA','Total']];
-      facturas.forEach(f => rows.push([
-        f.fecha, f.num || (f.fel_serie?`${f.fel_serie}-${f.fel_numero||''}`:''),
-        f.nit||'CF', f.nombre_receptor||f.clientes?.nombre||'CF',
-        Number(f.subtotal)||0, Number(f.iva)||0, Number(f.total)||0
-      ]));
-      Modulos._descargarCSV(rows, `libro-ventas-${this._ini}.csv`);
-    } else {
-      const compras = (await DB.getCompras()).filter(c=>c.estado!=='anulada' && (c.fecha||'')>=this._ini && (c.fecha||'')<=this._fin);
-      const rows = [['Fecha','Factura','Proveedor','Base','IVA','Total']];
-      compras.forEach(c => rows.push([
-        c.fecha, c.num_factura||c.num||'', c.proveedor_nombre||'',
-        Number(c.subtotal)||0, Number(c.iva)||0, Number(c.total)||0
-      ]));
-      Modulos._descargarCSV(rows, `libro-compras-${this._ini}.csv`);
-    }
-    UI.toast('Libro exportado ✓');
-  },
-
   /* Exporta un Excel real con hojas Ventas, Compras y Retenciones */
   async exportExcelContador(ini, fin) {
     ini = ini || this._ini; fin = fin || this._fin;
@@ -519,82 +496,6 @@ Modulos.finanzas = {
       { nombre:'Retenciones', rows: retRows }
     ], `libros-${ini.slice(0,7)}.xlsx`);
     UI.toast('Excel generado ✓');
-  },
-
-  async exportRetenciones() {
-    const rets = await DB.getRetenciones(this._ini, this._fin);
-    const rows = [['Fecha','Tipo','Naturaleza','Documento','Contraparte','Base','Porcentaje','Monto']];
-    rets.forEach(r => rows.push([r.fecha, r.tipo, r.naturaleza, r.documento||'', r.contraparte||'', Number(r.base)||0, Number(r.porcentaje)||0, Number(r.monto)||0]));
-    Modulos._descargarCSV(rows, `retenciones-${this._ini}.csv`);
-    UI.toast('Retenciones exportadas ✓');
-  },
-
-  /* ── RETENCIONES ──────────────────────────────── */
-  async modalRetencion(id=null) {
-    const r = id ? (await DB.getRetenciones('2000-01-01','2999-12-31')).find(x=>x.id===id)||{} : {};
-    UI.modal(`${id?'✏️ Editar':'＋ Nueva'} Retención`, `
-      <div class="form-row">
-        <div class="form-group"><label class="form-label">Impuesto *</label>
-          <select class="form-select" id="ret-tipo">${['ISR','IVA'].map(t=>`<option ${r.tipo===t?'selected':''}>${t}</option>`).join('')}</select></div>
-        <div class="form-group"><label class="form-label">Naturaleza *</label>
-          <select class="form-select" id="ret-nat">
-            <option value="sufrida" ${r.naturaleza==='sufrida'?'selected':''}>Sufrida (nos retuvieron)</option>
-            <option value="efectuada" ${r.naturaleza==='efectuada'?'selected':''}>Efectuada (retuvimos)</option>
-          </select></div>
-      </div>
-      <div class="form-row">
-        <div class="form-group"><label class="form-label">Fecha</label>
-          <input class="form-input" id="ret-fecha" type="date" value="${r.fecha||new Date().toISOString().slice(0,10)}"></div>
-        <div class="form-group"><label class="form-label">Documento / Constancia</label>
-          <input class="form-input" id="ret-doc" value="${r.documento||''}" placeholder="No. factura o constancia"></div>
-      </div>
-      <div class="form-group"><label class="form-label">Contraparte</label>
-        <input class="form-input" id="ret-contra" value="${(r.contraparte||'').replace(/"/g,'&quot;')}" placeholder="Cliente / proveedor / agente"></div>
-      <div class="form-row">
-        <div class="form-group"><label class="form-label">Base (Q)</label>
-          <input class="form-input" id="ret-base" type="number" min="0" step="0.01" value="${r.base||''}" oninput="Modulos.finanzas._calcRet()"></div>
-        <div class="form-group"><label class="form-label">Porcentaje %</label>
-          <input class="form-input" id="ret-pct" type="number" min="0" step="0.01" value="${r.porcentaje||''}" oninput="Modulos.finanzas._calcRet()"></div>
-      </div>
-      <div class="form-group"><label class="form-label">Monto retenido (Q) *</label>
-        <input class="form-input" id="ret-monto" type="number" min="0" step="0.01" value="${r.monto||''}" style="font-weight:800;color:var(--amber)"></div>
-      <div class="form-group"><label class="form-label">Notas</label>
-        <textarea class="form-input" id="ret-notas" rows="2">${r.notas||''}</textarea></div>
-      <div class="modal-footer">
-        <button class="btn btn-ghost" onclick="UI.cerrarModal()">Cancelar</button>
-        <button class="btn btn-amber" onclick="Modulos.finanzas.guardarRetencion('${id||''}')">${id?'Guardar':'Registrar'}</button>
-      </div>`);
-  },
-
-  _calcRet() {
-    const base = parseFloat(document.getElementById('ret-base')?.value)||0;
-    const pct  = parseFloat(document.getElementById('ret-pct')?.value)||0;
-    if (pct > 0) {
-      const m = document.getElementById('ret-monto');
-      if (m) m.value = (Math.round(base*pct/100*100)/100).toFixed(2);
-    }
-  },
-
-  async guardarRetencion(id='') {
-    const base = parseFloat(document.getElementById('ret-base')?.value)||0;
-    const pct  = parseFloat(document.getElementById('ret-pct')?.value)||0;
-    let monto  = parseFloat(document.getElementById('ret-monto')?.value)||0;
-    if (!monto && pct) monto = Math.round(base*pct/100*100)/100;
-    if (monto <= 0) { UI.toast('Ingresa el monto (o base y porcentaje)','error'); return; }
-    const fields = {
-      tipo:       document.getElementById('ret-tipo')?.value||'ISR',
-      naturaleza: document.getElementById('ret-nat')?.value||'sufrida',
-      fecha:      document.getElementById('ret-fecha')?.value,
-      documento:  document.getElementById('ret-doc')?.value||null,
-      contraparte:document.getElementById('ret-contra')?.value||null,
-      base, porcentaje: pct, monto,
-      notas:      document.getElementById('ret-notas')?.value||null
-    };
-    if (id) fields.id = id;
-    const { error } = await DB.upsertRetencion(fields);
-    if (error) { UI.toast('Error: '+error.message,'error'); return; }
-    UI.cerrarModal(); UI.toast(id?'Retención actualizada ✓':'Retención registrada ✓');
-    this._tab = 'retenciones'; this._renderTab();
   },
 
   /* ── VIÁTICOS ─────────────────────────────────── */
