@@ -6,7 +6,7 @@
 Modulos.electronica = {
   _data: [], _clientes: [], _empleados: [], _filtroEstado: '',
 
-  _TIPOS: { celular:'Celular', tablet:'Tablet', laptop:'Laptop', computadora:'Computadora', tv:'Televisor', consola:'Consola de videojuegos', audio:'Equipo de audio', electrodomestico:'Electrodoméstico', otro:'Otro' },
+  _TIPOS: { celular:'Celular', tablet:'Tablet', laptop:'Laptop', computadora:'Computadora', tv:'Televisor', consola:'Consola de videojuegos', audio:'Equipo de audio', smartwatch:'Smartwatch / Reloj inteligente', monitor:'Monitor / Pantalla', impresora:'Impresora / Escáner', proyector:'Proyector', gpu:'Tarjeta de video / GPU', motherboard:'Motherboard / Placa madre', fuente_poder:'Fuente de poder / UPS', camara:'Cámara Fotográfica / Video', instrumento_mus:'Instrumento Musical Electrónico', aspiradora_rob:'Aspiradora Robot', electrodomestico:'Electrodoméstico', otro:'Otro' },
   _ESTADOS: { recibido:'Recibido', diagnostico:'Diagnóstico', esperando_aprobacion:'Esperando Aprobación', en_reparacion:'En Reparación', listo:'Listo para Entregar', entregado:'Entregado', sin_reparacion:'Sin Reparación', garantia:'Garantía' },
   _colorEstado(e) { return { recibido:'gray', diagnostico:'cyan', esperando_aprobacion:'amber', en_reparacion:'amber', listo:'green', entregado:'green', sin_reparacion:'red', garantia:'purple' }[e]||'gray'; },
 

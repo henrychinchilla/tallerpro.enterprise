@@ -161,6 +161,10 @@ function renderLogin(vista='login') {
               <input type="radio" id="tipo-granos" name="tipo" value="venta_granos">
               <div><div style="font-weight:700;font-size:13px">🌽 Venta de Granos</div></div>
             </label>
+            <label style="display:flex;align-items:center;gap:8px;padding:10px;border:2px solid var(--border);border-radius:8px;cursor:pointer;transition:all .2s" onclick="document.getElementById('tipo-ferreteria').checked=true;this.parentElement.querySelectorAll('label').forEach(l=>l.style.background='');this.style.background='var(--cyan-alpha)'">
+              <input type="radio" id="tipo-ferreteria" name="tipo" value="ferreteria">
+              <div><div style="font-weight:700;font-size:13px">🔩 Ferretería</div></div>
+            </label>
           </div>
         </div>
 
@@ -219,6 +223,10 @@ function renderLogin(vista='login') {
           <label style="display:flex;align-items:center;gap:8px;padding:10px;border:2px solid var(--border);border-radius:8px;cursor:pointer;transition:all .2s" onclick="document.getElementById('tipo-granos').checked=true">
             <input type="radio" id="tipo-granos" name="tipo" value="venta_granos">
             <div><div style="font-weight:700">🌽 Venta de Granos</div><div style="font-size:11px;color:var(--text3)">Comercialización de granos</div></div>
+          </label>
+          <label style="display:flex;align-items:center;gap:8px;padding:10px;border:2px solid var(--border);border-radius:8px;cursor:pointer;transition:all .2s" onclick="document.getElementById('tipo-ferreteria').checked=true">
+            <input type="radio" id="tipo-ferreteria" name="tipo" value="ferreteria">
+            <div><div style="font-weight:700">🔩 Ferretería</div><div style="font-size:11px;color:var(--text3)">Herramientas, materiales, venta mostrador</div></div>
           </label>
           <label style="display:flex;align-items:center;gap:8px;padding:10px;border:2px solid var(--border);border-radius:8px;cursor:pointer;transition:all .2s" onclick="document.getElementById('tipo-otro').checked=true">
             <input type="radio" id="tipo-otro" name="tipo" value="otro">
@@ -540,6 +548,7 @@ async function loginRegistrarTaller() {
     electronica: [...modulos_base, 'electronica'],
     agroservicio: ['clientes','agroservicio','inventario','proveedores','compras'],
     venta_granos: ['clientes','venta_granos','inventario','facturacion','bancos'],
+    ferreteria: ['clientes','pos','inventario','bodegas','proveedores','compras','facturacion','bancos','contabilidad'],
     otro: modulos_base
   };
   const modulos_activos = modulos_map[tipo] || modulos_base;
@@ -612,6 +621,7 @@ async function loginGuardarTipoNegocio() {
     electronica: [...modulos_base, 'electronica'],
     agroservicio: ['clientes','agroservicio','inventario','proveedores','compras'],
     venta_granos: ['clientes','venta_granos','inventario','facturacion','bancos'],
+    ferreteria: ['clientes','pos','inventario','bodegas','proveedores','compras','facturacion','bancos','contabilidad'],
     otro: modulos_base
   };
 

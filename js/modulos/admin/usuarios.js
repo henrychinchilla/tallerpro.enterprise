@@ -27,7 +27,7 @@ Modulos.usuarios = {
                 const permsBase   = PERMISOS[u.rol] || {};
                 const permsCustom = u.permisos_custom || {};
                 const permsEfectivos = {...permsBase, ...permsCustom};
-                const modulosActivos = MODULOS.filter(m => m.id !== 'mi_ot' && permsEfectivos[m.id]).length;
+                const modulosActivos = MODULOS.filter(m => m.id !== 'mi_ot' && moduloEnPlan(m.id) && permsEfectivos[m.id]).length;
                 const tieneCustom    = Object.keys(permsCustom).length > 0;
                 return `<tr>
                   <td>
@@ -70,7 +70,7 @@ Modulos.usuarios = {
                 ${Object.entries(ROLES).filter(([k])=>k!=='superadmin').map(([k,v])=>`<th style="text-align:center">${v.icon} ${v.label}</th>`).join('')}
               </tr></thead>
               <tbody>
-                ${MODULOS.filter(m=>m.id!=='mi_ot').map(m=>`<tr>
+                ${MODULOS.filter(m=>m.id!=='mi_ot' && moduloEnPlan(m.id)).map(m=>`<tr>
                   <td>${m.icon} ${m.label}</td>
                   ${Object.keys(ROLES).filter(k=>k!=='superadmin').map(rol=>`
                     <td style="text-align:center">
@@ -129,7 +129,7 @@ Modulos.usuarios = {
           🔐 Módulos con acceso según el rol seleccionado
         </div>
         <div id="nu-permisos-preview" style="display:flex;flex-wrap:wrap;gap:6px">
-          ${MODULOS.filter(m=>m.id!=='mi_ot'&&PERMISOS.recepcionista?.[m.id]).map(m=>`
+          ${MODULOS.filter(m=>m.id!=='mi_ot'&&moduloEnPlan(m.id)&&PERMISOS.recepcionista?.[m.id]).map(m=>`
             <span class="badge badge-cyan">${m.icon} ${m.label}</span>`).join('')}
         </div>
         <div style="font-size:11px;color:var(--text3);margin-top:8px">Puedes personalizar los módulos desde la edición del usuario.</div>
@@ -145,7 +145,7 @@ Modulos.usuarios = {
     const el = document.getElementById('nu-permisos-preview');
     if (!el) return;
     const perms = PERMISOS[rol] || {};
-    el.innerHTML = MODULOS.filter(m=>m.id!=='mi_ot'&&perms[m.id]).map(m=>`
+    el.innerHTML = MODULOS.filter(m=>m.id!=='mi_ot'&&moduloEnPlan(m.id)&&perms[m.id]).map(m=>`
       <span class="badge badge-cyan">${m.icon} ${m.label}</span>`).join('') ||
       '<span style="color:var(--text3);font-size:12px">Sin módulos predefinidos para este rol</span>';
   },
@@ -222,7 +222,7 @@ Modulos.usuarios = {
           Los cambios en el rol actualizan los valores base pero conservan las personalizaciones.
         </div>
         <div id="eu-permisos" style="display:grid;grid-template-columns:repeat(2,1fr);gap:6px">
-          ${MODULOS.filter(m=>m.id!=='mi_ot').map(m=>{
+          ${MODULOS.filter(m=>m.id!=='mi_ot'&&moduloEnPlan(m.id)).map(m=>{
             const base   = permsBase[m.id] || false;
             const custom = permsCustom[m.id];
             const activo = custom !== undefined ? custom : base;
