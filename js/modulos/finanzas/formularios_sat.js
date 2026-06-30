@@ -519,15 +519,9 @@ Modulos.contabilidad.sat = {
         valores_originales.comb_base     = round2(combBase);
         valores_originales.imp_mundo_base = round2(impMundoBase);
         valores_originales.retenciones_recibidas = sufIVA;
-        // Contar facturas emitidas vs anuladas
-        const facturasAnuladas = facturas.filter(f => f.estado === 'anulada');
-        const facturasNoAnuladas = facturas.filter(f => f.estado !== 'anulada');
-        const comprasAnuladas = compras.filter(c => c.estado === 'anulada');
-        const comprasNoAnuladas = compras.filter(c => c.estado !== 'anulada');
-        valores_originales.op_emitidas_fact = facturasNoAnuladas.length;
-        valores_originales.op_emitidas_fact_anuladas = facturasAnuladas.length;
-        valores_originales.op_recibidas_fact = comprasNoAnuladas.length;
-        valores_originales.op_recibidas_fact_anuladas = comprasAnuladas.length;
+        // Contar facturas emitidas incluyendo anuladas (como dice el formato oficial)
+        valores_originales.op_emitidas_fact = facturas.length;
+        valores_originales.op_recibidas_fact = compras.length;
       } else if (tipo === 'SAT-1311') {
         valores_originales.rentas = salesTotal;
         valores_originales.retenciones = sufISR;
@@ -1021,14 +1015,9 @@ Modulos.contabilidad.sat = {
           </thead>
           <tbody>
             <tr>
-              <td style="padding:6px;"><b>Facturas emitidas</b></td>
+              <td style="padding:6px;">Facturas (incluir las anuladas)</td>
               <td><input type="number" id="f-2237-op-emitidas-fact" class="form-control form-control-sm text-right" value="${datos.op_emitidas_fact || 0}" /></td>
               <td><input type="number" id="f-2237-op-recibidas-fact" class="form-control form-control-sm text-right" value="${datos.op_recibidas_fact || 0}" /></td>
-            </tr>
-            <tr style="background:#f0f8ff">
-              <td style="padding:6px;"><span style="color:#0066cc">Facturas anuladas (emitidas)</span></td>
-              <td><input type="number" id="f-2237-op-emitidas-fact-anuladas" class="form-control form-control-sm text-right" value="${datos.op_emitidas_fact_anuladas || 0}" style="background:#e6f2ff" /></td>
-              <td><input type="number" id="f-2237-op-recibidas-fact-anuladas" class="form-control form-control-sm text-right" value="${datos.op_recibidas_fact_anuladas || 0}" style="background:#e6f2ff" /></td>
             </tr>
             <tr>
               <td style="padding:6px;">Factura y Declaracion Unica Centroamericana FYDUCA</td>
