@@ -142,11 +142,12 @@ const IA = {
       <div id="beto-panel-chat">
         <div id="ia-historial" style="max-height:340px;overflow-y:auto;margin-bottom:12px;
              display:flex;flex-direction:column;gap:8px">
-          <div class="text-muted" style="font-size:12.5px;line-height:1.8">
-            ¡Hola! Soy <b>Beto</b>, tu asistente.<br>
+          <div class="text-muted" style="font-size:12.5px;line-height:1.8" id="beto-welcome">
+            ¡Hola! Soy <b>Beto</b>, tu asistente de IA.<br>
             🔧 <b>Mecánica:</b> DTC, diagnósticos, mantenimientos.<br>
-            🏗️ <b>Herrería · Peletería · Electrónica · Refrigeración.</b><br>
-            📊 <b>Tu negocio:</b> facturación, órdenes, reportes.<br>
+            🏗️ <b>Especializados:</b> Herrería · Peletería · Electrónica · Refrigeración.<br>
+            🌾 <b>Agropecuaria:</b> Agroservicio · Venta de Granos.<br>
+            📊 <b>Tu negocio:</b> facturación, órdenes, reportes, precios.<br>
             Escribe tu consulta para comenzar.
           </div>
         </div>

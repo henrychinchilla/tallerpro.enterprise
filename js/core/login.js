@@ -150,6 +150,54 @@ function renderLogin(vista='login') {
         </button>
       </div>`,
 
+    'tipo-negocio': `
+      <div class="login-card">
+        <div class="login-logo">
+          <h1 style="font-size:28px">🏪 Tu Tipo de Negocio</h1>
+          <p>Elige los módulos que necesitas</p>
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px">
+          <label style="display:flex;align-items:center;gap:8px;padding:10px;border:2px solid var(--border);border-radius:8px;cursor:pointer;transition:all .2s" onclick="document.getElementById('tipo-taller').checked=true">
+            <input type="radio" id="tipo-taller" name="tipo" value="taller" checked>
+            <div><div style="font-weight:700">🔧 Taller Vehicular</div><div style="font-size:11px;color:var(--text3)">Autos, motos, reparación</div></div>
+          </label>
+          <label style="display:flex;align-items:center;gap:8px;padding:10px;border:2px solid var(--border);border-radius:8px;cursor:pointer;transition:all .2s" onclick="document.getElementById('tipo-refrigeracion').checked=true">
+            <input type="radio" id="tipo-refrigeracion" name="tipo" value="refrigeracion">
+            <div><div style="font-weight:700">❄️ Refrigeración</div><div style="font-size:11px;color:var(--text3)">A/C, equipos frigoríficos</div></div>
+          </label>
+          <label style="display:flex;align-items:center;gap:8px;padding:10px;border:2px solid var(--border);border-radius:8px;cursor:pointer;transition:all .2s" onclick="document.getElementById('tipo-herreria').checked=true">
+            <input type="radio" id="tipo-herreria" name="tipo" value="herreria">
+            <div><div style="font-weight:700">⚒️ Herrería</div><div style="font-size:11px;color:var(--text3)">Puertas, ventanas, estructuras</div></div>
+          </label>
+          <label style="display:flex;align-items:center;gap:8px;padding:10px;border:2px solid var(--border);border-radius:8px;cursor:pointer;transition:all .2s" onclick="document.getElementById('tipo-peleteria').checked=true">
+            <input type="radio" id="tipo-peleteria" name="tipo" value="peleteria">
+            <div><div style="font-weight:700">👜 Peletería</div><div style="font-size:11px;color:var(--text3)">Cuero, bolsos, accesorios</div></div>
+          </label>
+          <label style="display:flex;align-items:center;gap:8px;padding:10px;border:2px solid var(--border);border-radius:8px;cursor:pointer;transition:all .2s" onclick="document.getElementById('tipo-electronica').checked=true">
+            <input type="radio" id="tipo-electronica" name="tipo" value="electronica">
+            <div><div style="font-weight:700">🔌 Electrónica</div><div style="font-size:11px;color:var(--text3)">Reparación de aparatos</div></div>
+          </label>
+          <label style="display:flex;align-items:center;gap:8px;padding:10px;border:2px solid var(--border);border-radius:8px;cursor:pointer;transition:all .2s" onclick="document.getElementById('tipo-agro').checked=true">
+            <input type="radio" id="tipo-agro" name="tipo" value="agroservicio">
+            <div><div style="font-weight:700">🌾 Agroservicio</div><div style="font-size:11px;color:var(--text3)">Semillas, fertilizantes, asesoria</div></div>
+          </label>
+          <label style="display:flex;align-items:center;gap:8px;padding:10px;border:2px solid var(--border);border-radius:8px;cursor:pointer;transition:all .2s" onclick="document.getElementById('tipo-granos').checked=true">
+            <input type="radio" id="tipo-granos" name="tipo" value="venta_granos">
+            <div><div style="font-weight:700">🌽 Venta de Granos</div><div style="font-size:11px;color:var(--text3)">Comercialización de granos</div></div>
+          </label>
+          <label style="display:flex;align-items:center;gap:8px;padding:10px;border:2px solid var(--border);border-radius:8px;cursor:pointer;transition:all .2s" onclick="document.getElementById('tipo-otro').checked=true">
+            <input type="radio" id="tipo-otro" name="tipo" value="otro">
+            <div><div style="font-weight:700">⚙️ Personalizado</div><div style="font-size:11px;color:var(--text3)">Solicitar módulos específicos</div></div>
+          </label>
+        </div>
+
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-ghost" style="flex:1" onclick="renderLogin('login')">← Atrás</button>
+          <button class="btn btn-amber" style="flex:1" onclick="loginGuardarTipoNegocio()">Continuar →</button>
+        </div>
+      </div>`,
+
     recovery: `
       <div class="login-card">
         <div class="login-logo">
@@ -447,7 +495,6 @@ async function loginRegistrarTaller() {
     return;
   }
 
-  renderLogin('login');
   UI.modal('🎉 ¡Taller registrado!', `
     <div style="text-align:center;padding:8px 4px">
       <div style="font-size:44px;margin-bottom:10px">🏪</div>
@@ -458,7 +505,7 @@ async function loginRegistrarTaller() {
         para iniciar tus <b>30 días de prueba gratis</b>.
       </p>
       <div class="modal-footer" style="justify-content:center">
-        <button class="btn btn-amber" onclick="UI.cerrarModal()">Entendido</button>
+        <button class="btn btn-amber" onclick="UI.cerrarModal();renderLogin('tipo-negocio')">Elige tu tipo de negocio →</button>
       </div>
     </div>`);
 }
@@ -499,6 +546,36 @@ async function loginCambiarPass() {
   if (!r.ok) { UI.toast('Error: ' + r.error, 'error'); return; }
   UI.toast('¡Contraseña guardada! ✓');
   setTimeout(() => App.iniciar(), 800);
+}
+
+async function loginGuardarTipoNegocio() {
+  const tipo = document.querySelector('input[name="tipo"]:checked')?.value;
+  if (!tipo) { UI.toast('Selecciona un tipo de negocio', 'error'); return; }
+
+  const modulos_base = ['clientes','vehiculos','ordenes','inventario','pos'];
+  const modulos_map = {
+    taller: modulos_base,
+    refrigeracion: [...modulos_base, 'refrigeracion'],
+    herreria: [...modulos_base, 'herreria'],
+    peleteria: [...modulos_base, 'peleteria'],
+    electronica: [...modulos_base, 'electronica'],
+    agroservicio: ['clientes','agroservicio','inventario','proveedores','compras'],
+    venta_granos: ['clientes','venta_granos','inventario','facturacion','bancos'],
+    otro: modulos_base
+  };
+
+  const modulos_activos = modulos_map[tipo] || modulos_base;
+  const ok = await DB.actualizarModulosTenant(modulos_activos);
+
+  if (ok) {
+    UI.toast('✓ Configuración guardada', 'success');
+    setTimeout(() => {
+      Auth.tenant.modulos_activos = modulos_activos;
+      App.iniciar();
+    }, 600);
+  } else {
+    UI.toast('Error al guardar configuración', 'error');
+  }
 }
 
 /* PASSWORD_RECOVERY event de Supabase */

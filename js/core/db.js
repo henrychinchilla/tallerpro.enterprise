@@ -468,6 +468,86 @@ const DB = {
     return { data, error };
   },
 
+  /* ── AGROSERVICIO ────────────────────────────────── */
+  async getAgroservicioPedidos(filtros={}) {
+    let q = getSB().from('agroservicio_servicios').select('*, clientes(nombre,tel,email)')
+      .eq('tenant_id', getTID()).order('created_at',{ascending:false});
+    if (filtros.estado) q = q.eq('estado', filtros.estado);
+    const { data } = await q;
+    return data || [];
+  },
+
+  async crearAgroservicio(fields) {
+    const payload = { ...fields, tenant_id: getTID() };
+    const { data, error } = await getSB().from('agroservicio_servicios').insert(payload).select().single();
+    return data?.id || null;
+  },
+
+  async updateAgroservicio(id, fields) {
+    const payload = { ...fields, updated_at: new Date().toISOString() };
+    const { error } = await getSB().from('agroservicio_servicios').update(payload)
+      .eq('id', id).eq('tenant_id', getTID());
+    return !error;
+  },
+
+  async crearPagoAgroservicio(id, pago) {
+    return await getSB().from('pagos_agroservicio').insert({
+      tenant_id: getTID(), agroservicio_id: id, ...pago
+    });
+  },
+
+  /* ── VENTA DE GRANOS ─────────────────────────────── */
+  async getVentaGranos(filtros={}) {
+    let q = getSB().from('venta_granos').select('*, clientes(nombre), proveedores(nombre)')
+      .eq('tenant_id', getTID()).order('fecha',{ascending:false});
+    if (filtros.tipo_grano) q = q.eq('tipo_grano', filtros.tipo_grano);
+    const { data } = await q;
+    return data || [];
+  },
+
+  async crearVentaGranos(fields) {
+    const payload = { ...fields, tenant_id: getTID() };
+    const { data, error } = await getSB().from('venta_granos').insert(payload).select().single();
+    return data?.id || null;
+  },
+
+  async updateVentaGranos(id, fields) {
+    const payload = { ...fields, updated_at: new Date().toISOString() };
+    const { error } = await getSB().from('venta_granos').update(payload)
+      .eq('id', id).eq('tenant_id', getTID());
+    return !error;
+  },
+
+  async crearFacturaDesdeVentaGranos(id) {
+    const v = await getSB().from('venta_granos').select('*').eq('id',id).single();
+    if (!v.data) return null;
+    const { data: cliente } = await getSB().from('clientes').select('nit,nombre').eq('id', v.data.cliente_id).single();
+    const payload = {
+      tenant_id: getTID(),
+      cliente_id: v.data.cliente_id,
+      nit: cliente?.nit || 'CF',
+      serie_factura: 'GRANO',
+      numero: Math.floor(Math.random()*999999),
+      fecha: new Date().toISOString().slice(0,10),
+      subtotal: v.data.total,
+      descuentos: 0,
+      impuestos: v.data.total * 0.12,
+      total: v.data.total * 1.12,
+      estado: 'borrador',
+      referencia_compra: `VENTA-${v.data.num}`
+    };
+    const { data: f } = await getSB().from('facturas').insert(payload).select().single();
+    return f?.id || null;
+  },
+
+  async actualizarModulosTenant(modulos_activos) {
+    const { error } = await getSB().from('tenants').update({
+      modulos_activos: modulos_activos,
+      updated_at: new Date().toISOString()
+    }).eq('id', getTID());
+    return !error;
+  },
+
   /* ── FIDELIZACIÓN / PUNTOS ─────────────────────── */
   /* Registra un movimiento de puntos y actualiza el saldo del cliente.
      puntos: positivo = gana, negativo = canje. Devuelve el nuevo saldo. */
