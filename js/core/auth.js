@@ -141,6 +141,16 @@ const Auth = {
         const { data: t } = await getSB().from('tenants')
           .select('*').eq('id', perfil.tenant_id).maybeSingle();
         Auth.tenant = t; window._cachedTenantId = t?.id || null;
+
+        /* Aplicar módulos guardados si es primer login después del registro */
+        const nt_modulos = localStorage.getItem('nt_modulos_activos');
+        if (nt_modulos && !Auth.tenant?.modulos_activos) {
+          const modulos = JSON.parse(nt_modulos);
+          await getSB().from('tenants').update({ modulos_activos: modulos })
+            .eq('id', Auth.tenant.id);
+          Auth.tenant.modulos_activos = modulos;
+          localStorage.removeItem('nt_modulos_activos');
+        }
       }
       /* Actualizar último login */
       getSB().from('usuarios').update({ ultimo_login: new Date().toISOString() })

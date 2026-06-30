@@ -37,7 +37,7 @@ function renderLogin(vista='login') {
         </div>
 
         <div class="form-group">
-          <label class="form-label">Nombre o NIT del Taller</label>
+          <label class="form-label">Nombre o NIT de tu Negocio</label>
           <div style="display:flex;gap:8px">
             <input class="form-input" id="l-taller" placeholder="CM Multiservicios..."
                    onkeydown="if(event.key==='Enter')loginBuscarTaller()">
@@ -75,7 +75,7 @@ function renderLogin(vista='login') {
             🔑 Olvidé mi contraseña
           </button>
           <button class="btn btn-ghost btn-sm" style="flex:1" onclick="renderLogin('nuevo-taller')">
-            🏪 Crear nuevo taller
+            🏪 Crear Nuevo Negocio
           </button>
         </div>
 
@@ -87,13 +87,13 @@ function renderLogin(vista='login') {
     'nuevo-taller': `
       <div class="login-card">
         <div class="login-logo">
-          <h1 style="font-size:28px">🏪 Nuevo Taller</h1>
+          <h1 style="font-size:28px">🏪 Nuevo Negocio</h1>
           <p>Registro en TallerPro</p>
         </div>
 
         <div class="form-row">
           <div class="form-group">
-            <label class="form-label">Nombre del Taller *</label>
+            <label class="form-label">Nombre del Negocio *</label>
             <input class="form-input" id="nt-nombre" placeholder="Auto Centro García">
           </div>
           <div class="form-group">
@@ -130,6 +130,40 @@ function renderLogin(vista='login') {
           <input class="form-input" id="nt-pass2" type="password" placeholder="Repetir contraseña">
         </div>
 
+        <div class="form-group">
+          <label class="form-label">¿Qué tipo de negocio es? *</label>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+            <label style="display:flex;align-items:center;gap:8px;padding:10px;border:2px solid var(--border);border-radius:8px;cursor:pointer;transition:all .2s;background:var(--surface2)" onclick="document.getElementById('tipo-taller').checked=true;this.parentElement.querySelectorAll('label').forEach(l=>l.style.background='');this.style.background='var(--cyan-alpha)'">
+              <input type="radio" id="tipo-taller" name="tipo" value="taller" checked>
+              <div><div style="font-weight:700;font-size:13px">🔧 Taller Vehicular</div></div>
+            </label>
+            <label style="display:flex;align-items:center;gap:8px;padding:10px;border:2px solid var(--border);border-radius:8px;cursor:pointer;transition:all .2s" onclick="document.getElementById('tipo-refrigeracion').checked=true;this.parentElement.querySelectorAll('label').forEach(l=>l.style.background='');this.style.background='var(--cyan-alpha)'">
+              <input type="radio" id="tipo-refrigeracion" name="tipo" value="refrigeracion">
+              <div><div style="font-weight:700;font-size:13px">❄️ Refrigeración</div></div>
+            </label>
+            <label style="display:flex;align-items:center;gap:8px;padding:10px;border:2px solid var(--border);border-radius:8px;cursor:pointer;transition:all .2s" onclick="document.getElementById('tipo-herreria').checked=true;this.parentElement.querySelectorAll('label').forEach(l=>l.style.background='');this.style.background='var(--cyan-alpha)'">
+              <input type="radio" id="tipo-herreria" name="tipo" value="herreria">
+              <div><div style="font-weight:700;font-size:13px">⚒️ Herrería</div></div>
+            </label>
+            <label style="display:flex;align-items:center;gap:8px;padding:10px;border:2px solid var(--border);border-radius:8px;cursor:pointer;transition:all .2s" onclick="document.getElementById('tipo-peleteria').checked=true;this.parentElement.querySelectorAll('label').forEach(l=>l.style.background='');this.style.background='var(--cyan-alpha)'">
+              <input type="radio" id="tipo-peleteria" name="tipo" value="peleteria">
+              <div><div style="font-weight:700;font-size:13px">👜 Peletería</div></div>
+            </label>
+            <label style="display:flex;align-items:center;gap:8px;padding:10px;border:2px solid var(--border);border-radius:8px;cursor:pointer;transition:all .2s" onclick="document.getElementById('tipo-electronica').checked=true;this.parentElement.querySelectorAll('label').forEach(l=>l.style.background='');this.style.background='var(--cyan-alpha)'">
+              <input type="radio" id="tipo-electronica" name="tipo" value="electronica">
+              <div><div style="font-weight:700;font-size:13px">🔌 Electrónica</div></div>
+            </label>
+            <label style="display:flex;align-items:center;gap:8px;padding:10px;border:2px solid var(--border);border-radius:8px;cursor:pointer;transition:all .2s" onclick="document.getElementById('tipo-agro').checked=true;this.parentElement.querySelectorAll('label').forEach(l=>l.style.background='');this.style.background='var(--cyan-alpha)'">
+              <input type="radio" id="tipo-agro" name="tipo" value="agroservicio">
+              <div><div style="font-weight:700;font-size:13px">🌾 Agroservicio</div></div>
+            </label>
+            <label style="display:flex;align-items:center;gap:8px;padding:10px;border:2px solid var(--border);border-radius:8px;cursor:pointer;transition:all .2s" onclick="document.getElementById('tipo-granos').checked=true;this.parentElement.querySelectorAll('label').forEach(l=>l.style.background='');this.style.background='var(--cyan-alpha)'">
+              <input type="radio" id="tipo-granos" name="tipo" value="venta_granos">
+              <div><div style="font-weight:700;font-size:13px">🌽 Venta de Granos</div></div>
+            </label>
+          </div>
+        </div>
+
         <div id="nt-turnstile" style="margin-bottom:12px"></div>
 
         <div class="alert alert-amber" style="margin-bottom:12px">
@@ -139,7 +173,7 @@ function renderLogin(vista='login') {
         </div>
 
         <button class="btn btn-amber" style="width:100%" onclick="loginRegistrarTaller()">
-          Crear Mi Taller →
+          Crear mi Negocio →
         </button>
 
         ${div_('o regístrate con')}
@@ -495,17 +529,34 @@ async function loginRegistrarTaller() {
     return;
   }
 
-  UI.modal('🎉 ¡Taller registrado!', `
+  /* Guardar tipo de negocio seleccionado */
+  const tipo = document.querySelector('input[name="tipo"]:checked')?.value || 'taller';
+  const modulos_base = ['clientes','vehiculos','ordenes','inventario','pos'];
+  const modulos_map = {
+    taller: modulos_base,
+    refrigeracion: [...modulos_base, 'refrigeracion'],
+    herreria: [...modulos_base, 'herreria'],
+    peleteria: [...modulos_base, 'peleteria'],
+    electronica: [...modulos_base, 'electronica'],
+    agroservicio: ['clientes','agroservicio','inventario','proveedores','compras'],
+    venta_granos: ['clientes','venta_granos','inventario','facturacion','bancos'],
+    otro: modulos_base
+  };
+  const modulos_activos = modulos_map[tipo] || modulos_base;
+  localStorage.setItem('nt_modulos_activos', JSON.stringify(modulos_activos));
+
+  UI.modal('🎉 ¡Negocio Registrado!', `
     <div style="text-align:center;padding:8px 4px">
       <div style="font-size:44px;margin-bottom:10px">🏪</div>
       <div style="font-weight:800;font-size:16px;margin-bottom:8px">${nombre}</div>
       <p style="font-size:13px;color:var(--text2);line-height:1.6">
-        Tu registro fue recibido y tu taller está en <b>revisión de activación</b>
+        Tu negocio fue registrado exitosamente y está en <b>revisión de activación</b>
         (normalmente en horas). Te avisaremos a <b>${email}</b> cuando esté listo
-        para iniciar tus <b>30 días de prueba gratis</b>.
+        para iniciar tus <b>30 días de prueba gratis</b>.<br><br>
+        <b>Módulos configurados:</b> ${modulos_activos.map(m => m.replace('_',' ')).join(', ')}
       </p>
       <div class="modal-footer" style="justify-content:center">
-        <button class="btn btn-amber" onclick="UI.cerrarModal();renderLogin('tipo-negocio')">Elige tu tipo de negocio →</button>
+        <button class="btn btn-amber" onclick="UI.cerrarModal();renderLogin('login')">← Volver al Login</button>
       </div>
     </div>`);
 }
