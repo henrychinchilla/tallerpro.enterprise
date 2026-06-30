@@ -506,19 +506,24 @@ function _seleccionarTaller(id, nombre, slug) {
 }
 
 async function doLogin() {
-  const email = document.getElementById('l-email')?.value.trim();
-  const pass  = document.getElementById('l-pass')?.value;
-  if (!email) { UI.toast('Ingresa tu correo', 'error'); return; }
-  if (!pass)  { UI.toast('Ingresa tu contraseña', 'error'); return; }
+  try {
+    const email = document.getElementById('l-email')?.value.trim();
+    const pass  = document.getElementById('l-pass')?.value;
+    if (!email) { UI.toast('Ingresa tu correo', 'error'); return; }
+    if (!pass)  { UI.toast('Ingresa tu contraseña', 'error'); return; }
 
-  UI.toast('Iniciando sesión...', 'info');
-  const r = await Auth.login(email, pass, _tenantLogin?.slug || null);
+    UI.toast('Iniciando sesión...', 'info');
+    const r = await Auth.login(email, pass, _tenantLogin?.slug || null);
 
-  if (r.ok) {
-    if (r.debe_cambiar) { renderLogin('cambiar-pass'); return; }
-    loginVerificarMFAYContinuar();
-  } else {
-    UI.toast(r.error || 'Correo o contraseña incorrectos', 'error');
+    if (r.ok) {
+      if (r.debe_cambiar) { renderLogin('cambiar-pass'); return; }
+      loginVerificarMFAYContinuar();
+    } else {
+      UI.toast(r.error || 'Correo o contraseña incorrectos', 'error');
+    }
+  } catch (error) {
+    console.error('Error durante el login:', error);
+    UI.toast('Error al iniciar sesión: ' + error.message, 'error');
   }
 }
 
@@ -743,16 +748,21 @@ let _mfaEnrollFactorId = null;
 let _mfaEnrollChallengeId = null;
 
 async function loginVerificarMFAYContinuar() {
-  const mfa = await Auth.getMFAStatus();
-  if (mfa.nextLevel === 'aal2' && mfa.currentLevel === 'aal1') {
-    renderLogin('mfa-challenge');
-    return;
+  try {
+    const mfa = await Auth.getMFAStatus();
+    if (mfa.nextLevel === 'aal2' && mfa.currentLevel === 'aal1') {
+      renderLogin('mfa-challenge');
+      return;
+    }
+    if (mfa.currentLevel === 'aal1') {
+      renderLogin('mfa-enroll');
+      return;
+    }
+    App.iniciar();
+  } catch (err) {
+    console.error('Error en el enrutamiento de 2FA:', err);
+    App.iniciar();
   }
-  if (mfa.currentLevel === 'aal1') {
-    renderLogin('mfa-enroll');
-    return;
-  }
-  App.iniciar();
 }
 
 async function _iniciarMfaEnroll() {

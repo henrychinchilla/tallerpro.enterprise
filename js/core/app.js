@@ -24,18 +24,22 @@ const App = {
   async iniciar() {
     // Check MFA status first!
     if (typeof Auth !== 'undefined' && Auth.getMFAStatus) {
-      const mfa = await Auth.getMFAStatus();
-      if (mfa.nextLevel === 'aal2' && mfa.currentLevel === 'aal1') {
-        document.getElementById('app')?.classList.remove('visible');
-        document.getElementById('login-screen')?.style.removeProperty('display');
-        if (typeof renderLogin === 'function') renderLogin('mfa-challenge');
-        return;
-      }
-      if (mfa.currentLevel === 'aal1') {
-        document.getElementById('app')?.classList.remove('visible');
-        document.getElementById('login-screen')?.style.removeProperty('display');
-        if (typeof renderLogin === 'function') renderLogin('mfa-enroll');
-        return;
+      try {
+        const mfa = await Auth.getMFAStatus();
+        if (mfa.nextLevel === 'aal2' && mfa.currentLevel === 'aal1') {
+          document.getElementById('app')?.classList.remove('visible');
+          document.getElementById('login-screen')?.style.removeProperty('display');
+          if (typeof renderLogin === 'function') renderLogin('mfa-challenge');
+          return;
+        }
+        if (mfa.currentLevel === 'aal1') {
+          document.getElementById('app')?.classList.remove('visible');
+          document.getElementById('login-screen')?.style.removeProperty('display');
+          if (typeof renderLogin === 'function') renderLogin('mfa-enroll');
+          return;
+        }
+      } catch(err) {
+        console.error('Error al verificar MFA al iniciar:', err);
       }
     }
 

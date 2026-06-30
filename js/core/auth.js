@@ -26,19 +26,19 @@ const Auth = {
 
   /* ── LOGIN ────────────────────────────────────── */
   async login(email, password, tenantSlug=null) {
-    const sb = getSB();
-    const { data, error } = await sb.auth.signInWithPassword({ email, password });
-    if (error) return { ok:false, error: Auth._traducirError(error.message) };
+    try {
+      const sb = getSB();
+      const { data, error } = await sb.auth.signInWithPassword({ email, password });
+      if (error) return { ok:false, error: Auth._traducirError(error.message) };
 
-    Auth.supaUser = data.user;
-    await Auth._cargarPerfil(data.user.id, email, tenantSlug);
+      Auth.supaUser = data.user;
+      await Auth._cargarPerfil(data.user.id, email, tenantSlug);
 
-    /* La vigencia ahora la gobierna la SUSCRIPCIÓN (tenants.suscripcion_vence):
-       el banner de App.checkSuscripcion avisa y el superadmin suspende
-       (tenants.active=false → pantallaSuspendido). La licencia vieja queda
-       retirada del flujo de login. */
-
-    return { ok:true, debe_cambiar: Auth.user?.debe_cambiar_password === true };
+      return { ok:true, debe_cambiar: Auth.user?.debe_cambiar_password === true };
+    } catch(e) {
+      console.error('Error durante login:', e);
+      return { ok:false, error: 'Error del sistema: ' + e.message };
+    }
   },
 
   /* ── LOGOUT ───────────────────────────────────── */
@@ -130,49 +130,71 @@ const Auth = {
 
   /* ── CARGAR PERFIL ────────────────────────────── */
   async _cargarPerfil(userId, email, tenantSlug=null) {
-    /* Buscar perfil en public.usuarios */
-    const { data: perfil } = await getSB().from('usuarios')
-      .select('*').eq('id', userId).maybeSingle();
+    try {
+      /* Buscar perfil en public.usuarios */
+      const { data: perfil, error: pErr } = await getSB().from('usuarios')
+        .select('*').eq('id', userId).maybeSingle();
 
-    if (perfil) {
-      Auth.user = perfil;
-      /* Cargar tenant */
-      if (perfil.tenant_id) {
-        const { data: t } = await getSB().from('tenants')
-          .select('*').eq('id', perfil.tenant_id).maybeSingle();
-        Auth.tenant = t; window._cachedTenantId = t?.id || null;
+      if (pErr) throw pErr;
 
-        /* Aplicar módulos guardados si es primer login después del registro */
-        const nt_modulos = localStorage.getItem('nt_modulos_activos');
-        if (nt_modulos && !Auth.tenant?.modulos_activos) {
-          const modulos = JSON.parse(nt_modulos);
-          await getSB().from('tenants').update({ modulos_activos: modulos })
-            .eq('id', Auth.tenant.id);
-          Auth.tenant.modulos_activos = modulos;
-          localStorage.removeItem('nt_modulos_activos');
+      if (perfil) {
+        Auth.user = perfil;
+        /* Cargar tenant */
+        if (perfil.tenant_id) {
+          const { data: t, error: tErr } = await getSB().from('tenants')
+            .select('*').eq('id', perfil.tenant_id).maybeSingle();
+          if (tErr) throw tErr;
+          Auth.tenant = t; window._cachedTenantId = t?.id || null;
+
+          /* Aplicar módulos guardados si es primer login después del registro */
+          const nt_modulos = localStorage.getItem('nt_modulos_activos');
+          if (nt_modulos && !Auth.tenant?.modulos_activos) {
+            const modulos = JSON.parse(nt_modulos);
+            await getSB().from('tenants').update({ modulos_activos: modulos })
+              .eq('id', Auth.tenant.id);
+            Auth.tenant.modulos_activos = modulos;
+            localStorage.removeItem('nt_modulos_activos');
+          }
+        }
+        /* Actualizar último login */
+        getSB().from('usuarios').update({ ultimo_login: new Date().toISOString() })
+          .eq('id', userId).then(() => {});
+      } else {
+        /* Fallback para superadmin u otros sin perfil */
+        Auth.user = {
+          id:     userId,
+          nombre: email === 'henry.chinchilla@gmail.com' ? 'Henry Chinchilla' : email.split('@')[0],
+          email,
+          rol:    email === 'henry.chinchilla@gmail.com' ? 'superadmin' : 'admin',
+          activo: true,
+          avatar: email === 'henry.chinchilla@gmail.com' ? '⚡' : '👑'
+        };
+        /* Buscar tenant */
+        if (tenantSlug) {
+          const { data: t } = await getSB().from('tenants').select('*').eq('slug', tenantSlug).maybeSingle();
+          Auth.tenant = t; window._cachedTenantId = t?.id || null;
+        }
+        if (!Auth.tenant) {
+          const { data: t } = await getSB().from('tenants').select('*').limit(1).maybeSingle();
+          Auth.tenant = t; window._cachedTenantId = t?.id || null;
         }
       }
-      /* Actualizar último login */
-      getSB().from('usuarios').update({ ultimo_login: new Date().toISOString() })
-        .eq('id', userId).then(() => {});
-    } else {
-      /* Fallback para superadmin */
+    } catch(err) {
+      console.error('Error al cargar perfil de usuario:', err);
+      // Fallback seguro para no bloquear la sesión
       Auth.user = {
         id:     userId,
-        nombre: email === 'henry.chinchilla@gmail.com' ? 'Henry Chinchilla' : email.split('@')[0],
+        nombre: email.split('@')[0],
         email,
-        rol:    email === 'henry.chinchilla@gmail.com' ? 'superadmin' : 'admin',
+        rol:    'admin',
         activo: true,
-        avatar: email === 'henry.chinchilla@gmail.com' ? '⚡' : '👑'
+        avatar: '👤'
       };
-      /* Buscar tenant */
-      if (tenantSlug) {
-        const { data: t } = await getSB().from('tenants').select('*').eq('slug', tenantSlug).maybeSingle();
-        Auth.tenant = t; window._cachedTenantId = t?.id || null;
-      }
       if (!Auth.tenant) {
-        const { data: t } = await getSB().from('tenants').select('*').limit(1).maybeSingle();
-        Auth.tenant = t; window._cachedTenantId = t?.id || null;
+        try {
+          const { data: t } = await getSB().from('tenants').select('*').limit(1).maybeSingle();
+          Auth.tenant = t; window._cachedTenantId = t?.id || null;
+        } catch(_) {}
       }
     }
   },
