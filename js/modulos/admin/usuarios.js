@@ -147,23 +147,23 @@ Modulos.usuarios = {
       </div>`, '420px');
 
     const res = await Auth.enrollTOTP();
-    if (res.error) {
+    if (!res.ok) {
       UI.toast('Error al iniciar 2FA: ' + res.error, 'error');
       UI.cerrarModal();
       return;
     }
     
-    this._tempEnrollId = res.id;
+    this._tempEnrollId = res.data.id;
     
     const qrContainer = document.getElementById('modal-mfa-qr-container');
     const secretText = document.getElementById('modal-mfa-secret-text');
-    if (res.totp) {
-      if (qrContainer) qrContainer.innerHTML = `<img src="${res.totp.qr_code}" style="width:134px;height:134px;object-fit:contain" alt="QR">`;
-      if (secretText) secretText.innerText = res.totp.secret;
+    if (res.data.totp) {
+      if (qrContainer) qrContainer.innerHTML = `<img src="${res.data.totp.qr_code}" style="width:134px;height:134px;object-fit:contain" alt="QR">`;
+      if (secretText) secretText.innerText = res.data.totp.secret;
     }
 
-    const chal = await Auth.createMFAChallenge(res.id);
-    this._tempChallengeId = chal?.id || null;
+    const chal = await Auth.createMFAChallenge(res.data.id);
+    this._tempChallengeId = chal.ok ? chal.data.id : null;
   },
 
   async _confirmarActivacion2FA() {

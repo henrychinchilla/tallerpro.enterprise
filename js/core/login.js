@@ -761,25 +761,25 @@ async function _iniciarMfaEnroll() {
   
   UI.toast('Generando código de seguridad...', 'info');
   const res = await Auth.enrollTOTP();
-  if (res.error) {
+  if (!res.ok) {
     UI.toast('Error al iniciar 2FA: ' + res.error, 'error');
     return;
   }
   
-  _mfaEnrollFactorId = res.id;
+  _mfaEnrollFactorId = res.data.id;
   
-  if (res.totp) {
+  if (res.data.totp) {
     if (qrContainer) {
-      qrContainer.innerHTML = `<img src="${res.totp.qr_code}" style="width:144px;height:144px;object-fit:contain" alt="Código QR">`;
+      qrContainer.innerHTML = `<img src="${res.data.totp.qr_code}" style="width:144px;height:144px;object-fit:contain" alt="Código QR">`;
     }
     if (secretText) {
-      secretText.innerText = res.totp.secret;
+      secretText.innerText = res.data.totp.secret;
     }
   }
   
   // Create challenge for verifying the enroll
   const chal = await Auth.createMFAChallenge(_mfaEnrollFactorId);
-  _mfaEnrollChallengeId = chal?.id || null;
+  _mfaEnrollChallengeId = chal.ok ? chal.data.id : null;
 }
 
 async function loginActivarTOTPMFA() {
@@ -816,11 +816,11 @@ async function _iniciarMfaChallenge() {
     
     _mfaFactorId = factor.id;
     const chal = await Auth.createMFAChallenge(_mfaFactorId);
-    if (chal.error) {
+    if (!chal.ok) {
       UI.toast('Error al solicitar reto de seguridad: ' + chal.error, 'error');
       return;
     }
-    _mfaChallengeId = chal.id;
+    _mfaChallengeId = chal.data.id;
   } catch(e) {
     UI.toast('Error: ' + e.message, 'error');
   }

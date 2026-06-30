@@ -286,11 +286,17 @@ const Auth = {
   },
 
   async enrollTOTP() {
-    return getSB().auth.mfa.enroll({
-      factorType: 'totp',
-      issuer: 'NexusPro',
-      friendlyName: 'Nexus Authenticator'
-    });
+    try {
+      const { data, error } = await getSB().auth.mfa.enroll({
+        factorType: 'totp',
+        issuer: 'NexusPro',
+        friendlyName: 'Nexus Authenticator'
+      });
+      if (error) return { ok: false, error: error.message };
+      return { ok: true, data };
+    } catch(e) {
+      return { ok: false, error: e.message };
+    }
   },
 
   async verifyMFAFactor(factorId, challengeId, code) {
@@ -308,7 +314,13 @@ const Auth = {
   },
 
   async createMFAChallenge(factorId) {
-    return getSB().auth.mfa.challenge({ factorId });
+    try {
+      const { data, error } = await getSB().auth.mfa.challenge({ factorId });
+      if (error) return { ok: false, error: error.message };
+      return { ok: true, data };
+    } catch(e) {
+      return { ok: false, error: e.message };
+    }
   },
 
   async unenrollMFAFactor(factorId) {
