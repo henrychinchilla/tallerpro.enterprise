@@ -2295,6 +2295,10 @@ Modulos.contabilidad.sat = {
       `;
     };
 
+    // Guardar período para autoRellenarOperaciones2237()
+    this._periodoMes = mes;
+    this._periodoAnio = anio;
+
     container.innerHTML = `
       ${headerHtml}
       <div style="background:#fff; color:#000; border:1px solid #ccc; font-family:sans-serif; margin-top:20px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); border-radius: 4px; overflow:hidden; text-align:left; max-width:850px; margin-left:auto; margin-right:auto;">
@@ -2400,13 +2404,9 @@ Modulos.contabilidad.sat = {
   },
 
   async autoRellenarOperaciones2237() {
-    UI.loading(document.body);
     try {
-      // Obtener mes y año del formulario
-      const periodoMes = document.querySelector('[name="periodo_mes"]')?.value ||
-                         document.getElementById('m-form-mes')?.value;
-      const periodoAnio = document.querySelector('[name="periodo_anio"]')?.value ||
-                          document.getElementById('m-form-anio')?.value;
+      const periodoMes = this._periodoMes;
+      const periodoAnio = this._periodoAnio;
 
       if (!periodoMes || !periodoAnio) {
         UI.toast('Error: no se pudo determinar el período', 'error');
