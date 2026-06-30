@@ -1,7 +1,7 @@
 {
-  "name": "TallerPro Enterprise",
-  "short_name": "TallerPro",
-  "description": "Sistema de gestión para talleres mecánicos — Guatemala",
+  "name": "NexusPro",
+  "short_name": "NexusPro",
+  "description": "Tu negocio conectado — Ecosistema integral de gestión empresarial",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

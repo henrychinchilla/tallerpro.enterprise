@@ -1,14 +1,15 @@
 /* ═══════════════════════════════════════════════════════
-   TallerPro Enterprise v3.0
+   NexusPro v3.0
    js/core/config.js — Constantes globales
-   Multi-taller · Multi-usuario · PWA · Android · Windows
+   Tu negocio conectado · Ecosistema integral
 ═══════════════════════════════════════════════════════ */
 
 const APP = {
-  nombre:   'TallerPro Enterprise',
-  version:  '3.1.0',
-  build:    '20260610',
-  url:      'https://tallerpro.cmtelecommgt.com'
+  nombre:   'NexusPro',
+  slogan:   'Tu negocio conectado',
+  version:  '3.2.0',
+  build:    '20260630',
+  url:      'https://nexuspro.cmtelecommgt.com'
 };
 
 /* Site key pública de Cloudflare Turnstile (anti-bots en "Crear nuevo taller").
