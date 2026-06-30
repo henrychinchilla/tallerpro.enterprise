@@ -55,6 +55,7 @@ Modulos.facturacion = {
                   <button class="btn btn-sm btn-cyan" onclick="Modulos.facturacion.modalFactura('${f.id}')">Ver</button>
                   <button class="btn btn-sm btn-ghost" onclick="Modulos.facturacion.enviarEmail('${f.id}')" title="Enviar por email">📧</button>
                   <button class="btn btn-sm btn-ghost" onclick="Modulos.facturacion.imprimir('${f.id}')">🖨️</button>
+                  ${f.estado!=='anulada'?`<button class="btn btn-sm btn-ghost" onclick="Modulos.facturacion.anularFactura('${f.id}')" title="Anular factura">🔴</button>`:''}
                   ${Modulos.btnAccion('eliminar', `Modulos.finanzas.eliminar('facturas','${f.id}')`)}
                 </div></td>
               </tr>`).join('')||'<tr><td colspan="10" style="text-align:center;padding:24px;color:var(--text3)">Sin facturas en este período</td></tr>'}
@@ -561,5 +562,25 @@ Modulos.facturacion = {
       <hr><p style="text-align:center;font-size:10px">Documento tributario electrónico FEL</p>
       <script>window.print();</script></body></html>`);
     win.document.close();
+  },
+
+  async anularFactura(id) {
+    UI.modal('⚠️ Anular Factura', `
+      <div style="text-align:left;line-height:1.6">
+        <p>¿Anular esta factura? Esta acción es <b>irreversible</b> y se reportará en el formulario SAT-2237 como factura anulada.</p>
+        <div style="display:flex;gap:8px;margin-top:20px">
+          <button class="btn btn-red" onclick="Modulos.facturacion._confirmarAnular('${id}')">Anular Factura</button>
+          <button class="btn btn-ghost" onclick="UI.cerrarModal()">Cancelar</button>
+        </div>
+      </div>
+    `, '400px');
+  },
+
+  async _confirmarAnular(id) {
+    const { error } = await DB.anularFactura(id);
+    if (error) return UI.toast('Error al anular: '+error.message, 'error');
+    UI.toast('Factura anulada ✓', 'success');
+    UI.cerrarModal();
+    this.render();
   }
 };

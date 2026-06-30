@@ -1549,6 +1549,18 @@ const DB = {
     return data || [];
   },
 
+  async anularFactura(id) {
+    const { error } = await getSB().from('facturas')
+      .update({ estado: 'anulada' }).eq('id', id).eq('tenant_id', getTID());
+    return { error };
+  },
+
+  async anularCompra(id) {
+    const { error } = await getSB().from('compras')
+      .update({ estado: 'anulada' }).eq('id', id).eq('tenant_id', getTID());
+    return { error };
+  },
+
   /* ── Clasificación fiscal de compras / reglas por proveedor ── */
   async getProveedorReglas() {
     const { data } = await getSB().from('proveedor_reglas')

@@ -118,6 +118,7 @@ Modulos.compras = {
               <td onclick="event.stopPropagation()" style="text-align:right;white-space:nowrap">
                 ${Modulos.btnAccion('ver', `Modulos.compras.verCompra('${c.id}')`)}
                 ${Modulos.btnAccion('editar', `Modulos.compras.editarCompra('${c.id}')`)}
+                ${c.estado!=='anulada'?`<button class="btn btn-sm btn-ghost" onclick="Modulos.compras.anularCompra('${c.id}')" title="Anular compra">🔴</button>`:''}
                 ${Modulos.btnAccion('eliminar', `Modulos.compras.eliminarCompra('${c.id}')`)}
               </td>
             </tr>`).join('')||`<tr><td colspan="7" style="text-align:center;padding:24px;color:var(--text3)">Sin compras en ${etiquetaPeriodo}. ${this._mes!==0?'Probá "Todo el año" o cambiá el periodo.':'Registrá la primera con “＋ Nueva Compra”.'}</td></tr>`}
@@ -356,6 +357,19 @@ Modulos.compras = {
     const { error } = await DB.eliminarCompra(id);
     if (error) { UI.toast('No se pudo eliminar: '+(error.message||''),'error'); return; }
     UI.toast('Compra eliminada ✓');
+    this._refrescar();
+  },
+
+  async anularCompra(id) {
+    const c = (this._compras||[]).find(x=>x.id===id);
+    const ok = await UI.confirmar(
+      `¿Anular la compra <b>${c?.num||''}</b>${c?.proveedor_nombre?` de ${c.proveedor_nombre}`:''}?<br>
+       <span style="font-size:12px;color:var(--text2)">Se reportará como anulada en el formulario SAT-2237 (IVA).</span>`,
+      'Anular');
+    if (!ok) return;
+    const { error } = await DB.anularCompra(id);
+    if (error) { UI.toast('No se pudo anular: '+(error.message||''),'error'); return; }
+    UI.toast('Compra anulada ✓');
     this._refrescar();
   },
 
