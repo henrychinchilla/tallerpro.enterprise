@@ -76,26 +76,19 @@ const MODULOS = [
   { id:'finanzas',       icon:'💰', label:'Finanzas',          grupo:'finanzas',
     subnav:[
       { tab:'dashboard',   icon:'📊', label:'Resumen'              },
-      { tab:'ingresos',    icon:'📈', label:'Ingresos'             },
-      { tab:'egresos',     icon:'📉', label:'Egresos'              },
       { tab:'viaticos',    icon:'🚗', label:'Viáticos'             },
       { tab:'recurrentes', icon:'🔁', label:'Recurrentes'          },
-      { tab:'balance',     icon:'📋', label:'Estado de Resultados' },
-      { tab:'libros',      icon:'📚', label:'Libro IVA'            },
-      { tab:'retenciones', icon:'🧾', label:'Retenciones / ISR'    },
-      { tab:'fiscal',      icon:'🏛️', label:'Fiscal SAT'           }
+      { tab:'balance',     icon:'📋', label:'Estado de Resultados' }
     ] },
   { id:'presupuesto',    icon:'📊', label:'Presupuesto',       grupo:'finanzas'   },
   { id:'contabilidad',   icon:'🧮', label:'Contabilidad / SAT', grupo:'finanzas',
     subnav:[
-      { tab:'iva',          icon:'🧾', label:'IVA del mes'      },
-      { tab:'trimestre',    icon:'🏢', label:'Trimestral / ISO' },
+      { tab:'formularios_sat', icon:'📋', label:'Formularios SAT' },
+      { tab:'fel',          icon:'⬆️', label:'Importar FEL'     },
       { tab:'ventas',       icon:'📤', label:'Libro de Ventas'  },
       { tab:'compras',      icon:'📥', label:'Libro de Compras' },
-      { tab:'isr',          icon:'🏛️', label:'ISR mensual'      },
-      { tab:'fel',          icon:'⬆️', label:'Importar FEL'     },
-      { tab:'obligaciones', icon:'📅', label:'Obligaciones'     },
-      { tab:'formularios_sat', icon:'📋', label:'Formularios SAT' }
+      { tab:'retenciones',  icon:'🧾', label:'Retenciones'      },
+      { tab:'obligaciones', icon:'📅', label:'Obligaciones'     }
     ] },
   { id:'rrhh',           icon:'👤', label:'RRHH & Nómina',     grupo:'rrhh',
     subnav:[

@@ -21,8 +21,6 @@ Modulos.finanzas = {
       <div class="page-body">
         <div class="tabs">
           <button class="tab-btn ${this._tab==='dashboard'?'active':''}" onclick="Modulos.finanzas._ir('dashboard')">📊 Resumen</button>
-          <button class="tab-btn ${this._tab==='ingresos'?'active':''}" onclick="Modulos.finanzas._ir('ingresos')">📈 Ingresos</button>
-          <button class="tab-btn ${this._tab==='egresos'?'active':''}" onclick="Modulos.finanzas._ir('egresos')">📉 Egresos</button>
           <button class="tab-btn ${this._tab==='viaticos'?'active':''}" onclick="Modulos.finanzas._ir('viaticos')">🚗 Viáticos</button>
           <button class="tab-btn ${this._tab==='recurrentes'?'active':''}" onclick="Modulos.finanzas._ir('recurrentes')">🔁 Recurrentes</button>
           <button class="tab-btn ${this._tab==='balance'?'active':''}" onclick="Modulos.finanzas._ir('balance')">📋 Estado de Resultados</button>
@@ -71,9 +69,6 @@ Modulos.finanzas = {
   async _renderTab() {
     const el = document.getElementById('fin-content');
     if (!el) return;
-    /* Tabs fiscales movidos a Contabilidad (Libro IVA, Retenciones, Fiscal SAT).
-       Redirige rutas guardadas con el tab viejo. */
-    if (['libros','retenciones','fiscal'].includes(this._tab)) { this._tab = 'dashboard'; }
     const { ingresos, egresos, totalIng, totalEgr, utilidad, totalFact, facturas } = await this._getData();
 
     const agrupar = (items,campo) => {
@@ -118,51 +113,6 @@ Modulos.finanzas = {
               </div>`).join('')||'<div class="text-muted">Sin datos</div>'}
           </div>
         </div>`;
-    }
-
-    else if (this._tab==='ingresos') {
-      el.innerHTML = `
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
-          <div style="font-family:'Bebas Neue',sans-serif;font-size:28px;color:var(--green)">${UI.q(totalIng)}</div>
-          <button class="btn btn-green" onclick="Modulos.finanzas.modalIngreso()">＋ Nuevo Ingreso</button>
-        </div>
-        <div class="table-wrap"><table class="data-table">
-          <thead><tr><th>Fecha</th><th>Concepto</th><th>Categoría</th><th>Referencia</th><th>Monto</th><th>Acciones</th></tr></thead>
-          <tbody>
-            ${ingresos.map(i=>`<tr>
-            <td>${UI.fecha(i.fecha)}</td><td>${i.concepto}</td>
-            <td><span class="badge badge-green">${i.categoria||'General'}</span></td>
-            <td class="mono-sm">${i.referencia||'—'}</td>
-            <td class="mono-sm text-green"><b>${UI.q(i.monto)}</b></td>
-            <td><div style="display:flex;gap:4px">
-              <button class="btn btn-sm btn-cyan" onclick="Modulos.finanzas.modalIngreso('${i.id}')" title="Editar">✏️ Editar</button>
-              <button class="btn btn-sm btn-danger" onclick="Modulos.finanzas.eliminar('ingresos','${i.id}')" title="Eliminar">🗑️</button>
-            </div></td>
-          </tr>`).join('')}
-            ${(!ingresos.length)?'<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--text3)">Sin ingresos en este período</td></tr>':''}
-          </tbody>
-        </table></div>`;
-    }
-
-    else if (this._tab==='egresos') {
-      el.innerHTML = `
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
-          <div style="font-family:'Bebas Neue',sans-serif;font-size:28px;color:var(--red)">${UI.q(totalEgr)}</div>
-          <button class="btn btn-danger" onclick="Modulos.finanzas.modalEgreso()">＋ Nuevo Egreso</button>
-        </div>
-        <div class="table-wrap"><table class="data-table">
-          <thead><tr><th>Fecha</th><th>Concepto</th><th>Categoría</th><th>Referencia</th><th>Monto</th><th>Acciones</th></tr></thead>
-          <tbody>${egresos.map(e=>`<tr>
-            <td>${UI.fecha(e.fecha)}</td><td>${e.concepto}</td>
-            <td><span class="badge badge-red">${e.categoria||'General'}</span></td>
-            <td class="mono-sm">${e.referencia||'—'}</td>
-            <td class="mono-sm text-red"><b>${UI.q(e.monto)}</b></td>
-            <td><div style="display:flex;gap:4px">
-              <button class="btn btn-sm btn-cyan" onclick="Modulos.finanzas.modalEgreso('${e.id}')" title="Editar">✏️ Editar</button>
-              <button class="btn btn-sm btn-danger" onclick="Modulos.finanzas.eliminar('egresos','${e.id}')" title="Eliminar">🗑️</button>
-            </div></td>
-          </tr>`).join('')||'<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--text3)">Sin egresos</td></tr>'}</tbody>
-        </table></div>`;
     }
 
     else if (this._tab==='viaticos') {
@@ -363,52 +313,6 @@ Modulos.finanzas = {
     UI.toast('Planilla exportada ✓');
   },
 
-  modalIngreso(id=null) {
-    UI.modal(`${id?'✏️ Editar':'＋ Nuevo'} Ingreso`, `
-      ${id?'<div class="alert alert-amber" style="margin-bottom:12px"><div class="alert-icon">⚠️</div><div class="alert-body" style="font-size:11px">Los cambios reemplazarán el ingreso actual.</div></div>':''}
-      <div class="form-row">
-        <div class="form-group"><label class="form-label">Concepto *</label>
-          <input class="form-input" id="ing-concepto" placeholder="Servicio de mantenimiento"></div>
-        <div class="form-group"><label class="form-label">Categoría</label>
-          <select class="form-select" id="ing-cat">
-            ${['Servicio','Repuestos','Mantenimiento','Garantía','Otro'].map(c=>`<option>${c}</option>`).join('')}
-          </select></div>
-      </div>
-      <div class="form-row">
-        <div class="form-group"><label class="form-label">Monto (Q) *</label>
-          <input class="form-input" id="ing-monto" type="number" min="0" step="0.01"></div>
-        <div class="form-group"><label class="form-label">Fecha *</label>
-          <input class="form-input" id="ing-fecha" type="date" value="${new Date().toISOString().slice(0,10)}"></div>
-      </div>
-      <div class="form-group"><label class="form-label">Referencia</label>
-        <input class="form-input" id="ing-ref" placeholder="OT-2026-0001"></div>
-      <div class="form-group"><label class="form-label">Notas</label>
-        <textarea class="form-input" id="ing-notas" rows="2"></textarea></div>
-      <div class="modal-footer">
-        <button class="btn btn-ghost" onclick="UI.cerrarModal()">Cancelar</button>
-        <button class="btn btn-green" onclick="Modulos.finanzas.guardarIngreso('${id||''}')">
-          ${id?'Guardar Cambios':'Registrar Ingreso'}
-        </button>
-      </div>`);
-  },
-
-  async guardarIngreso(id='') {
-    const concepto = document.getElementById('ing-concepto')?.value.trim();
-    const monto    = parseFloat(document.getElementById('ing-monto')?.value)||0;
-    if (!concepto||monto<=0) { UI.toast('Concepto y monto son obligatorios','error'); return; }
-    const fields = { concepto, monto,
-      categoria:  document.getElementById('ing-cat')?.value,
-      fecha:      document.getElementById('ing-fecha')?.value,
-      referencia: document.getElementById('ing-ref')?.value||null,
-      notas:      document.getElementById('ing-notas')?.value||null
-    };
-    if (id) fields.id = id;
-    const {error} = await DB.upsertIngreso(fields);
-    if (error) { UI.toast('Error: '+error.message,'error'); return; }
-    UI.cerrarModal(); UI.toast(id?'Actualizado ✓':'Registrado ✓');
-    this._tab='ingresos'; this._renderTab();
-  },
-
   modalEgreso(id=null) {
     UI.modal(`${id?'✏️ Editar':'＋ Nuevo'} Egreso`, `
       ${id?'<div class="alert alert-amber" style="margin-bottom:12px"><div class="alert-icon">⚠️</div><div class="alert-body" style="font-size:11px">Los cambios reemplazarán el egreso actual.</div></div>':''}
@@ -455,7 +359,7 @@ Modulos.finanzas = {
     if (window.App && App.paginaActual === 'contabilidad') {
       if (window.Modulos?.contabilidad?._renderTab) await Modulos.contabilidad._renderTab();
     } else {
-      this._tab='egresos'; this._renderTab();
+      this._tab='dashboard'; this._renderTab();
     }
   },
 

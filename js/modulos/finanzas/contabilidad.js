@@ -190,9 +190,6 @@ Modulos.contabilidad = {
   async _renderTab() {
     const el = document.getElementById('cont-content');
     if (!el) return;
-    /* Tabs calculadora eliminados (IVA/ISR/Trimestral) → ahora viven en Formularios SAT.
-       Redirige rutas guardadas con el tab viejo. */
-    if (['iva','isr','trimestre'].includes(this._tab)) { this._tab = 'formularios_sat'; }
     UI.loading(el);
     const { mes, anio, periodo } = this._rango();
     const nombreMes = new Date(anio, mes-1, 1).toLocaleDateString('es-GT',{month:'long',year:'numeric'});
