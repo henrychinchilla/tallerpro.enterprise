@@ -1004,7 +1004,12 @@ Modulos.contabilidad.sat = {
           </tbody>
         </table>
 
-        <div style="background:#f4f4f4; padding:8px 12px; font-weight:bold; border-bottom:2px solid #ccc; font-size:12px; margin-top:20px;">9.1 CANTIDAD DE OPERACIONES REALIZADAS</div>
+        <div style="display:flex; justify-content:space-between; align-items:center; background:#f4f4f4; padding:8px 12px; border-bottom:2px solid #ccc; margin-top:20px;">
+          <div style="font-weight:bold; font-size:12px;">9.1 CANTIDAD DE OPERACIONES REALIZADAS</div>
+          <button class="btn btn-sm btn-info" onclick="Modulos.contabilidad.sat.autoRellenarOperaciones2237()" title="Llenar automáticamente con datos del período">
+            🔄 Auto-rellenar
+          </button>
+        </div>
         <table style="width:100%; border-collapse:collapse; margin-top:10px; font-size:11px; color:#000;" border="1" bordercolor="#ccc">
           <thead>
             <tr style="background:#eee; font-weight:bold;">
@@ -2392,6 +2397,35 @@ Modulos.contabilidad.sat = {
     const total = baseImpuesto + accTotal;
     document.getElementById("f-total-pagar").value = total.toFixed(2);
     this.verificarCambiosOperador();
+  },
+
+  async autoRellenarOperaciones2237() {
+    UI.loading(document.body);
+    try {
+      // Obtener mes y año del formulario
+      const periodoMes = document.querySelector('[name="periodo_mes"]')?.value ||
+                         document.getElementById('m-form-mes')?.value;
+      const periodoAnio = document.querySelector('[name="periodo_anio"]')?.value ||
+                          document.getElementById('m-form-anio')?.value;
+
+      if (!periodoMes || !periodoAnio) {
+        UI.toast('Error: no se pudo determinar el período', 'error');
+        return;
+      }
+
+      // Obtener conteo de facturas y compras
+      const datos = await DB.getConteoFacturasComprasPeriodo(periodoMes, periodoAnio);
+
+      // Llenar los campos
+      document.getElementById('f-2237-op-emitidas-fact').value = datos.facturas_emitidas;
+      document.getElementById('f-2237-op-recibidas-fact').value = datos.compras_recibidas;
+
+      UI.toast(`✓ Llenado automático: ${datos.facturas_emitidas} facturas emitidas, ${datos.compras_recibidas} recibidas`, 'success');
+      this._editorDirty = true;
+    } catch (error) {
+      UI.toast('Error al rellenar automáticamente: ' + error.message, 'error');
+      console.error(error);
+    }
   },
 
   recalc2237() {

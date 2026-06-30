@@ -1561,6 +1561,22 @@ const DB = {
     return { error };
   },
 
+  async getConteoFacturasComprasPeriodo(mes, anio) {
+    const startDate = `${anio}-${String(mes).padStart(2,'0')}-01`;
+    const lastDay = new Date(Number(anio), Number(mes), 0).getDate();
+    const endDate = `${anio}-${String(mes).padStart(2,'0')}-${String(lastDay).padStart(2,'0')}`;
+
+    const facturas = await this.getFacturasPeriodo(startDate, endDate);
+    const compras = await this.getComprasPeriodo(startDate, endDate);
+
+    return {
+      facturas_emitidas: facturas.length,
+      facturas_anuladas: facturas.filter(f => f.estado === 'anulada').length,
+      compras_recibidas: compras.length,
+      compras_anuladas: compras.filter(c => c.estado === 'anulada').length
+    };
+  },
+
   /* ── Clasificación fiscal de compras / reglas por proveedor ── */
   async getProveedorReglas() {
     const { data } = await getSB().from('proveedor_reglas')
