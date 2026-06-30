@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════════════
-   TallerPro Enterprise v3.0
+   NexusPro v3.0
    js/core/app.js — Navegación y aplicación principal
 ═══════════════════════════════════════════════════════ */
 
@@ -199,8 +199,8 @@ const App = {
 
     sidebar.innerHTML = `
       <div class="sidebar-brand">
-        <div class="sidebar-brand-name">TALLERPRO</div>
-        <div class="sidebar-brand-sub">Enterprise v${APP.version}</div>
+        <div class="sidebar-brand-name">NEXUSPRO</div>
+        <div class="sidebar-brand-sub">${APP.slogan}</div>
       </div>
       <div class="sidebar-tenant" onclick="App.toggleSidebar()" style="display:flex;align-items:center;gap:8px">
         ${Auth.tenant?.logo_base64 ? `<img src="${Auth.tenant.logo_base64}" alt="logo" style="width:28px;height:28px;border-radius:6px;object-fit:contain;background:var(--surface2);flex-shrink:0">` : ''}

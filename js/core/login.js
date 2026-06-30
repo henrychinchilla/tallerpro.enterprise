@@ -31,9 +31,9 @@ function renderLogin(vista='login') {
     login: `
       <div class="login-card">
         <div class="login-logo">
-          <div style="font-size:48px;margin-bottom:8px">🔧</div>
-          <h1>TALLERPRO</h1>
-          <p>Enterprise v${APP.version}</p>
+          <div style="font-size:48px;margin-bottom:8px">⚡</div>
+          <h1>NEXUSPRO</h1>
+          <p>${APP.slogan}</p>
         </div>
 
         <div class="form-group">
@@ -80,7 +80,7 @@ function renderLogin(vista='login') {
         </div>
 
         <div style="text-align:center;margin-top:16px;padding-top:16px;border-top:1px solid var(--border)">
-          <span style="font-size:12px;color:var(--text3)">¿Primera vez? Crea tu taller y estrena 30 días de prueba gratis.</span>
+          <span style="font-size:12px;color:var(--text3)">¿Primera vez? Crea tu negocio y estrena 30 días de prueba gratis.</span>
         </div>
       </div>`,
 
@@ -545,15 +545,15 @@ async function loginRegistrarTaller() {
   const modulos_activos = modulos_map[tipo] || modulos_base;
   localStorage.setItem('nt_modulos_activos', JSON.stringify(modulos_activos));
 
-  UI.modal('🎉 ¡Negocio Registrado!', `
+  UI.modal('🎉 ¡Bienvenido a NexusPro!', `
     <div style="text-align:center;padding:8px 4px">
-      <div style="font-size:44px;margin-bottom:10px">🏪</div>
+      <div style="font-size:44px;margin-bottom:10px">⚡</div>
       <div style="font-weight:800;font-size:16px;margin-bottom:8px">${nombre}</div>
       <p style="font-size:13px;color:var(--text2);line-height:1.6">
-        Tu negocio fue registrado exitosamente y está en <b>revisión de activación</b>
+        Tu negocio fue registrado exitosamente en <b>NexusPro</b> y está en <b>revisión de activación</b>
         (normalmente en horas). Te avisaremos a <b>${email}</b> cuando esté listo
         para iniciar tus <b>30 días de prueba gratis</b>.<br><br>
-        <b>Módulos configurados:</b> ${modulos_activos.map(m => m.replace('_',' ')).join(', ')}
+        <b>Tu ecosistema:</b> ${modulos_activos.map(m => m.replace('_',' ')).join(', ')}
       </p>
       <div class="modal-footer" style="justify-content:center">
         <button class="btn btn-amber" onclick="UI.cerrarModal();renderLogin('login')">← Volver al Login</button>
@@ -565,14 +565,14 @@ async function loginRegistrarTaller() {
 async function loginRecuperarPass() {
   const email = document.getElementById('rc-email')?.value.trim();
   if (!email) { UI.toast('Ingresa tu correo', 'error'); return; }
-  UI.toast('TallerPro está enviando el enlace a tu correo...', 'info');
+  UI.toast('NexusPro está enviando el enlace a tu correo...', 'info');
   const { data, error } = await getSB().functions.invoke('recuperar-password', {
     body: { op: 'solicitar', email }
   });
   let msg = data?.error || null;
   if (error) { try { const j = await error.context.json(); msg = j?.error || error.message; } catch(_) { msg = error.message; } }
   if (msg) { UI.toast(msg, 'error'); return; }
-  UI.toast('TallerPro te enviará el enlace de recuperación a tu correo ✓');
+  UI.toast('NexusPro te enviará el enlace de recuperación a tu correo ✓');
   setTimeout(() => renderLogin('login'), 2500);
 }
 
