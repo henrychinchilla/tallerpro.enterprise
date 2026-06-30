@@ -1006,7 +1006,7 @@ Modulos.contabilidad.sat = {
 
         <div style="display:flex; justify-content:space-between; align-items:center; background:#f4f4f4; padding:8px 12px; border-bottom:2px solid #ccc; margin-top:20px;">
           <div style="font-weight:bold; font-size:12px;">9.1 CANTIDAD DE OPERACIONES REALIZADAS</div>
-          <button class="btn btn-sm btn-info" onclick="Modulos.contabilidad.sat.autoRellenarOperaciones2237()" title="Llenar automáticamente con datos del período">
+          <button style="padding:6px 12px; background:#0ea5e9; color:white; border:none; border-radius:4px; font-size:12px; cursor:pointer; font-weight:600;" onclick="Modulos.contabilidad.sat.autoRellenarOperaciones2237()" title="Llenar automáticamente con datos del período">
             🔄 Auto-rellenar
           </button>
         </div>
