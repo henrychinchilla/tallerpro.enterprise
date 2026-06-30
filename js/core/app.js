@@ -22,6 +22,26 @@ const App = {
 
   /* ── INICIAR APP ──────────────────────────────── */
   async iniciar() {
+    // Check emergency bypass first!
+    if (localStorage.getItem('mfa_bypass') === 'true') {
+      document.getElementById('login-screen')?.style.setProperty('display','none');
+      const appEl = document.getElementById('app');
+      if (appEl) appEl.classList.add('visible');
+      TEMAS.aplicar(localStorage.getItem('tp_tema') || 'light');
+      if (Auth.user?.rol !== 'superadmin' && Auth.tenant?.active === false) {
+        return App.pantallaSuspendido();
+      }
+      App.renderSidebar();
+      App._initSidebarToggle();
+      App.navegarA(App._restaurarRuta());
+      await App._iniciarTrialSiAplica();
+      App.checkSuscripcion();
+      App.avisoSAT();
+      App.registrarSW();
+      App.iniciarInactividad(Auth.tenant?.session_timeout_minutes);
+      return;
+    }
+
     // Check MFA status first!
     if (typeof Auth !== 'undefined' && Auth.getMFAStatus) {
       try {

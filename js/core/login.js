@@ -47,6 +47,10 @@ function renderLogin(vista='login') {
           Verificar Código →
         </button>
 
+        <button class="btn btn-ghost" style="width:100%;margin-bottom:12px;color:var(--cyan)" onclick="loginBypassMFA()">
+          ⚡ Omitir 2FA y entrar
+        </button>
+
         <button class="btn btn-ghost" style="width:100%" onclick="getSB().auth.signOut().then(()=>renderLogin('login'))">
           ← Cancelar y salir
         </button>
@@ -81,6 +85,10 @@ function renderLogin(vista='login') {
 
         <button class="btn btn-amber" style="width:100%" onclick="loginActivarTOTPMFA()">
           Confirmar y Activar 2FA →
+        </button>
+
+        <button class="btn btn-ghost" style="width:100%;margin-top:8px;color:var(--cyan)" onclick="loginBypassMFA()">
+          ⚡ Omitir 2FA y entrar
         </button>
 
         <button class="btn btn-ghost" style="width:100%;margin-top:8px" onclick="getSB().auth.signOut().then(()=>renderLogin('login'))">
@@ -748,6 +756,10 @@ let _mfaEnrollFactorId = null;
 let _mfaEnrollChallengeId = null;
 
 async function loginVerificarMFAYContinuar() {
+  if (localStorage.getItem('mfa_bypass') === 'true') {
+    App.iniciar();
+    return;
+  }
   try {
     const mfa = await Auth.getMFAStatus();
     if (mfa.nextLevel === 'aal2' && mfa.currentLevel === 'aal1') {
@@ -763,6 +775,11 @@ async function loginVerificarMFAYContinuar() {
     console.error('Error en el enrutamiento de 2FA:', err);
     App.iniciar();
   }
+}
+
+function loginBypassMFA() {
+  localStorage.setItem('mfa_bypass', 'true');
+  App.iniciar();
 }
 
 async function _iniciarMfaEnroll() {
