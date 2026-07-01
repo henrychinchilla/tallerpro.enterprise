@@ -111,10 +111,9 @@ Modulos.superadmin = {
                 const estadoBadge = pend
                   ? '<span class="badge badge-amber">⏳ Por aprobar</span>'
                   : `<span class="badge badge-${susp?'red':'green'}">${susp?'Suspendido':'Activo'}</span>`;
-                const planBadgeBase = `<span class="badge badge-${PLANES[t.plan]?.color||'gray'}">${this._planLabel(t.plan)}</span>`;
                 const planBadge = esDemo
-                  ? `<span class="badge badge-purple">🎁 DEMO</span> ${planBadgeBase}`
-                  : planBadgeBase;
+                  ? `<span class="badge badge-purple">🎁 DEMO</span>`
+                  : `<span class="badge badge-${PLANES[t.plan]?.color||'gray'}">${this._planLabel(t.plan)}</span>`;
                 return `<tr style="${susp&&!pend?'opacity:.55':''}">
                   <td><b>${t.name||t.slug||'—'}</b><br><small class="text-muted">${t.nit||''} ${t.email?('· '+t.email):''}</small></td>
                   <td>${planBadge}</td>
