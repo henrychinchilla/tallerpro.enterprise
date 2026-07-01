@@ -157,9 +157,13 @@ Modulos.usuarios = {
     
     const qrContainer = document.getElementById('modal-mfa-qr-container');
     const secretText = document.getElementById('modal-mfa-secret-text');
-    if (res.data.totp) {
-      if (qrContainer) qrContainer.innerHTML = `<img src="${res.data.totp.qr_code}" style="width:134px;height:134px;object-fit:contain" alt="QR">`;
-      if (secretText) secretText.innerText = res.data.totp.secret;
+    const totp = res.data.totp || {};
+    if (secretText) secretText.innerText = totp.secret || '(no disponible)';
+    if (qrContainer && typeof pintarQrOTP === 'function') {
+      const ok = await pintarQrOTP(qrContainer, totp.uri, totp.qr_code, 134);
+      if (!ok) qrContainer.innerHTML = `<span style="font-size:11px;color:#000">Usa la clave manual 👇</span>`;
+    } else if (qrContainer && totp.qr_code) {
+      qrContainer.innerHTML = `<img src="${totp.qr_code}" style="width:134px;height:134px;object-fit:contain" alt="QR">`;
     }
 
     const chal = await Auth.createMFAChallenge(res.data.id);

@@ -794,19 +794,61 @@ async function _iniciarMfaEnroll() {
   }
   
   _mfaEnrollFactorId = res.data.id;
-  
-  if (res.data.totp) {
-    if (qrContainer) {
-      qrContainer.innerHTML = `<img src="${res.data.totp.qr_code}" style="width:144px;height:144px;object-fit:contain" alt="Código QR">`;
-    }
-    if (secretText) {
-      secretText.innerText = res.data.totp.secret;
-    }
+  const totp = res.data.totp || {};
+
+  if (secretText) secretText.innerText = totp.secret || '(no disponible)';
+  if (qrContainer) {
+    const ok = await pintarQrOTP(qrContainer, totp.uri, totp.qr_code, 144);
+    if (!ok) qrContainer.innerHTML =
+      `<span style="font-size:11px;color:#000;display:flex;align-items:center;text-align:center;line-height:1.4">No se pudo dibujar el QR.<br>Usa la clave manual de abajo 👇</span>`;
   }
-  
+
   // Create challenge for verifying the enroll
   const chal = await Auth.createMFAChallenge(_mfaEnrollFactorId);
   _mfaEnrollChallengeId = chal.ok ? chal.data.id : null;
+}
+
+/* Carga qrcode-generator (misma librería que usa Marketing) bajo demanda. */
+function cargarQrLib() {
+  if (window.qrcode) return Promise.resolve();
+  return new Promise((resolve, reject) => {
+    const s = document.createElement('script');
+    s.src = 'https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js';
+    s.onload = resolve; s.onerror = reject;
+    document.head.appendChild(s);
+  });
+}
+
+/* Pinta el QR de 2FA en `container`. Genera el código LOCALMENTE desde el
+   URI otpauth:// (no filtra el secreto a terceros); si la librería no carga,
+   cae al qr_code que devuelve Supabase (SVG inline o data URL). El campo
+   res.data.totp.qr_code de Supabase NO renderiza como <img src> directo
+   (por eso antes solo se veía la clave manual). Devuelve true si pintó algo. */
+async function pintarQrOTP(container, uri, qrCodeFallback, px = 140) {
+  if (uri) {
+    try {
+      await cargarQrLib();
+      if (window.qrcode) {
+        const qr = window.qrcode(0, 'M');
+        qr.addData(uri); qr.make();
+        container.innerHTML = qr.createImgTag(4, 0);
+        const img = container.querySelector('img');
+        if (img) { img.style.width = px + 'px'; img.style.height = px + 'px'; img.alt = 'Código QR 2FA'; }
+        return true;
+      }
+    } catch (_) { /* sin internet/CDN → probamos el fallback de Supabase */ }
+  }
+  if (qrCodeFallback && qrCodeFallback.includes('<svg')) {
+    container.innerHTML = qrCodeFallback.slice(qrCodeFallback.indexOf('<svg'));
+    const svg = container.querySelector('svg');
+    if (svg) { svg.style.width = px + 'px'; svg.style.height = px + 'px'; }
+    return true;
+  }
+  if (qrCodeFallback && qrCodeFallback.startsWith('data:')) {
+    container.innerHTML = `<img src="${qrCodeFallback}" style="width:${px}px;height:${px}px;object-fit:contain" alt="Código QR 2FA">`;
+    return true;
+  }
+  return false;
 }
 
 async function loginActivarTOTPMFA() {
