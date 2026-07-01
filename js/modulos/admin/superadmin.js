@@ -107,12 +107,17 @@ Modulos.superadmin = {
                 const venc = t.suscripcion_vence && t.suscripcion_vence < hoy;
                 const susp = t.active===false;
                 const pend = this._pendMap?.has(t.id);   // verificó correo, espera aprobación
+                const esDemo = (Number(t.precio_mensual)||0)===0 || /prueba/i.test(t.notas_admin||'');
                 const estadoBadge = pend
                   ? '<span class="badge badge-amber">⏳ Por aprobar</span>'
                   : `<span class="badge badge-${susp?'red':'green'}">${susp?'Suspendido':'Activo'}</span>`;
+                const planBadgeBase = `<span class="badge badge-${PLANES[t.plan]?.color||'gray'}">${this._planLabel(t.plan)}</span>`;
+                const planBadge = esDemo
+                  ? `<span class="badge badge-purple">🎁 DEMO</span> ${planBadgeBase}`
+                  : planBadgeBase;
                 return `<tr style="${susp&&!pend?'opacity:.55':''}">
                   <td><b>${t.name||t.slug||'—'}</b><br><small class="text-muted">${t.nit||''} ${t.email?('· '+t.email):''}</small></td>
-                  <td><span class="badge badge-${PLANES[t.plan]?.color||'gray'}">${this._planLabel(t.plan)}</span></td>
+                  <td>${planBadge}</td>
                   <td class="mono-sm">${UI.q(t.precio_mensual||0)}</td>
                   <td class="mono-sm ${venc?'text-red':''}">${t.suscripcion_vence?UI.fecha(t.suscripcion_vence):'—'}${venc?' ⚠️':''}</td>
                   <td>${estadoBadge}</td>
