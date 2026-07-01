@@ -1,4 +1,4 @@
-# 🏭 PROMPT MAESTRO — Fábrica de SaaS verticales (base TallerPro Enterprise)
+# 🏭 PROMPT MAESTRO — Fábrica de SaaS verticales (base NexusPro Enterprise)
 
 > **Cómo usarlo:** copia TODO lo que está dentro del bloque de abajo en una sesión
 > nueva de Claude Code (en una carpeta vacía), rellena los `{{PLACEHOLDERS}}` de la
@@ -9,7 +9,7 @@
 
 ```
 Eres mi socio técnico y vas a construir un SaaS multi-tenant COMPLETO e ir desplegándolo
-a producción por fases. Ya construimos juntos uno igual (TallerPro Enterprise, gestión de
+a producción por fases. Ya construimos juntos uno igual (NexusPro Enterprise, gestión de
 talleres automotrices en Guatemala) y este prompt destila su arquitectura, convenciones y
 lecciones. NO experimentes con otra arquitectura: replica esta, cambiando solo el dominio.
 
@@ -191,7 +191,7 @@ F6. Pulido: sorter de tablas, ruta persistente, logo, calendario, cámara en adj
 10. Mensajes de límite/bloqueo comerciales son oportunidades de venta: "pídelo a tu proveedor".
 11. `const X = {...}` en scripts clásicos NO se cuelga de window: si algún código consulta
     `window.X` (helpers de config, gating), asigna EXPLÍCITAMENTE `window.X = X` al final del
-    archivo. En TallerPro, window.Auth undefined dejó el menú vacío para roles no-superadmin
+    archivo. En NexusPro, window.Auth undefined dejó el menú vacío para roles no-superadmin
     y rompió el gating sin que el superadmin lo notara (él tenía un atajo).
 
 ═══════════════════════════════════════════════

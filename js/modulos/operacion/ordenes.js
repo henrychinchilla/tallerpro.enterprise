@@ -1,4 +1,4 @@
-/* TallerPro v3.0 — ordenes/index.js */
+/* NexusPro v3.0 — ordenes/index.js */
 Modulos.ordenes = {
   _data:[], _vehiculos:[], _clientes:[], _mecanicos:[],
   _tab:'lista', _fotos:[],
@@ -781,7 +781,7 @@ Modulos.ordenes = {
     const itemDesc = o.vehiculos 
       ? `Su vehículo *${o.vehiculos.placa} ${o.vehiculos.marca} ${o.vehiculos.modelo}*`
       : `Su servicio/proyecto *${o.diagnostico || 'Servicio contratado'}*`;
-    const msg   = `🔧 *TallerPro — ${Auth.tenant?.name}*\n\n`+
+    const msg   = `🔧 *NexusPro — ${Auth.tenant?.name}*\n\n`+
       `Estimado(a) *${o.clientes?.nombre||'cliente'}*,\n\n`+
       `${itemDesc} se encuentra en estado: *${est?.label||o.estado}*\n\n`+
       `OT: ${o.num}\n`+
@@ -832,7 +832,7 @@ Modulos.ordenes = {
         .pending{color:orange}
         @media print{button{display:none}}
       </style></head><body>
-      <h2>${Auth.tenant?.name||'TallerPro Enterprise'}</h2>
+      <h2>${Auth.tenant?.name||'NexusPro Enterprise'}</h2>
       <p style="text-align:center;color:#666;margin-top:-8px">NIT: ${Auth.tenant?.nit||'—'} · ${Auth.tenant?.tel||''}</p>
 
       <div class="header">

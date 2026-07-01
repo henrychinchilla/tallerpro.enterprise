@@ -1,4 +1,4 @@
-/* TallerPro v3.0 — proveedores/index.js */
+/* NexusPro v3.0 — proveedores/index.js */
 Modulos.proveedores = {
   _data: [],
   _busca: '',

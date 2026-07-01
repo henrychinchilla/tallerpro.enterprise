@@ -1,5 +1,5 @@
 -- ═══════════════════════════════════════════════════════════════
--- TallerPro Enterprise — Migración 007
+-- NexusPro Enterprise — Migración 007
 -- Vincular líneas de OT y de factura a inventario (descuento de stock)
 --
 -- APLICADA EN PRODUCCIÓN: 2026-06-07 (link_items_inventario)

@@ -1,4 +1,4 @@
-/* TallerPro v3.0 — usuarios/index.js */
+/* NexusPro v3.0 — usuarios/index.js */
 Modulos.usuarios = {
   _data: [],
 

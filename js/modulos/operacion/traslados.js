@@ -1,4 +1,4 @@
-/* TallerPro v3.0 — operacion/traslados.js
+/* NexusPro v3.0 — operacion/traslados.js
    Workflow de traslados con trazabilidad y firmas:
    solicitud → enviado (firma encargado + piloto) → recibido (firma).
    El stock sale del origen al ENVIAR y entra al destino al RECIBIR.

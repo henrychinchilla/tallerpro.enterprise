@@ -1,4 +1,4 @@
-/* TallerPro v3.0 — operacion/compras.js
+/* NexusPro v3.0 — operacion/compras.js
    Compras de insumos/repuestos/aceites: captura precios, actualiza el
    inventario (stock + costo), registra el egreso (cuenta de egresos /
    Finanzas) y guarda el historial. Se compara contra el presupuesto. */

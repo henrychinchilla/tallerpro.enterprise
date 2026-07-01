@@ -1,4 +1,4 @@
-/* TallerPro v3.0 — bodegas/index.js */
+/* NexusPro v3.0 — bodegas/index.js */
 Modulos.bodegas = {
   _bodegas: [],
   _bodegaActiva: null,

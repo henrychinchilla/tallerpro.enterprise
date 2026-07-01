@@ -1,9 +1,9 @@
-/* TallerPro v3.0 — herramientas/descarga.js
+/* NexusPro v3.0 — herramientas/descarga.js
    Página de descarga de la app: PWA, Android, Windows, iOS */
 Modulos.descarga = {
 
-  _WIN_URL: 'https://github.com/henrychinchilla/tallerpro.enterprise/releases/download/v3.0.0-win/TallerPro-Setup-3.0.0.exe',
-  _APP_URL: 'https://tallerpro.cmtelecommgt.com',
+  _WIN_URL: 'https://github.com/henrychinchilla/nexuspro.enterprise/releases/download/v3.0.0-win/NexusPro-Setup-3.0.0.exe',
+  _APP_URL: 'https://nexuspro.cmtelecommgt.com',
 
   async render() {
     const el = document.getElementById('page-content');
@@ -17,7 +17,7 @@ Modulos.descarga = {
     el.innerHTML = `
       <div class="page-header">
         <div>
-          <h1 class="page-title">📲 Descargar TallerPro</h1>
+          <h1 class="page-title">📲 Descargar NexusPro</h1>
           <p class="page-subtitle">// Instala la app en tu dispositivo para acceso offline y mejor experiencia</p>
         </div>
       </div>
@@ -26,7 +26,7 @@ Modulos.descarga = {
         ${esPWA ? `
         <div class="alert alert-green" style="margin-bottom:20px">
           <div class="alert-icon">✅</div>
-          <div class="alert-body"><b>Ya estás usando la app instalada</b> — TallerPro corre en modo aplicación en este dispositivo.</div>
+          <div class="alert-body"><b>Ya estás usando la app instalada</b> — NexusPro corre en modo aplicación en este dispositivo.</div>
         </div>` : ''}
 
         <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:20px">
@@ -42,7 +42,7 @@ Modulos.descarga = {
               <span class="badge badge-${tienePrompt?'cyan':'gray'}" style="margin-left:auto">${tienePrompt?'Listo':'Sin prompt'}</span>
             </div>
             <p style="font-size:12px;color:var(--text3);margin-bottom:14px">
-              Instala TallerPro directamente desde tu navegador. Funciona sin conexión y carga más rápido que la web.
+              Instala NexusPro directamente desde tu navegador. Funciona sin conexión y carga más rápido que la web.
             </p>
             ${tienePrompt ? `
             <button class="btn btn-cyan" style="width:100%" onclick="App.instalarApp();Modulos.descarga.render()">
@@ -69,7 +69,7 @@ Modulos.descarga = {
             <p style="font-size:12px;color:var(--text3);margin-bottom:14px">
               Descarga e instala el APK directamente. La publicación en Google Play está en trámite — cuando esté disponible este botón se actualizará con el enlace oficial.
             </p>
-            <a class="btn btn-green" style="width:100%;display:block;text-align:center;text-decoration:none" href="/tallerpro.apk" download="TallerPro.apk">
+            <a class="btn btn-green" style="width:100%;display:block;text-align:center;text-decoration:none" href="/nexuspro.apk" download="NexusPro.apk">
               ⬇️ Descargar APK (Android)
             </a>
             <div style="margin-top:10px;font-size:11px;color:var(--text3);background:var(--surface2);border-radius:8px;padding:8px 10px">
@@ -92,7 +92,7 @@ Modulos.descarga = {
             </p>
             <a class="btn btn-amber" style="width:100%;display:block;text-align:center;text-decoration:none;margin-bottom:10px"
                href="${this._WIN_URL}">
-              ⬇️ Descargar TallerPro-Setup-3.0.0.exe (~76 MB)
+              ⬇️ Descargar NexusPro-Setup-3.0.0.exe (~76 MB)
             </a>
             <div style="font-size:11px;color:var(--text3);background:var(--surface2);border-radius:8px;padding:8px 10px">
               <b>ℹ️ SmartScreen:</b> Si Windows muestra "aplicación no reconocida", haz clic en <i>"Más información"</i> → <i>"Ejecutar de todas formas"</i>. Es normal para apps nuevas sin firma digital de Microsoft.
@@ -110,7 +110,7 @@ Modulos.descarga = {
               <span class="badge badge-gray" style="margin-left:auto">Pendiente</span>
             </div>
             <p style="font-size:12px;color:var(--text3);margin-bottom:14px">
-              La publicación en App Store está pendiente de cuenta de desarrollador Apple. Por ahora puedes agregar TallerPro a tu pantalla de inicio desde Safari.
+              La publicación en App Store está pendiente de cuenta de desarrollador Apple. Por ahora puedes agregar NexusPro a tu pantalla de inicio desde Safari.
             </p>
             ${esIOS ? `
             <button class="btn btn-amber" style="width:100%" onclick="App.instalarApp()">
@@ -132,14 +132,14 @@ Modulos.descarga = {
         <div class="card" style="margin-top:20px;text-align:center">
           <div class="card-sub mb-3">📱 Acceder desde cualquier dispositivo</div>
           <p style="font-size:13px;color:var(--text3);margin-bottom:14px">
-            Escanea el QR o comparte este enlace con tu equipo para acceder a TallerPro desde cualquier dispositivo.
+            Escanea el QR o comparte este enlace con tu equipo para acceder a NexusPro desde cualquier dispositivo.
           </p>
           <div style="display:flex;gap:20px;justify-content:center;align-items:center;flex-wrap:wrap">
             <div id="qr-descarga" style="background:#fff;padding:12px;border-radius:12px;display:inline-block"></div>
             <div style="text-align:left">
               <div style="font-size:13px;font-weight:700;margin-bottom:6px">URL de acceso:</div>
-              <code style="font-size:12px;background:var(--surface2);padding:6px 12px;border-radius:6px;display:block;margin-bottom:10px">tallerpro.cmtelecommgt.com</code>
-              <button class="btn btn-ghost btn-sm" onclick="navigator.clipboard.writeText('https://tallerpro.cmtelecommgt.com').then(()=>UI.toast('URL copiada ✓','success'))">
+              <code style="font-size:12px;background:var(--surface2);padding:6px 12px;border-radius:6px;display:block;margin-bottom:10px">nexuspro.cmtelecommgt.com</code>
+              <button class="btn btn-ghost btn-sm" onclick="navigator.clipboard.writeText('https://nexuspro.cmtelecommgt.com').then(()=>UI.toast('URL copiada ✓','success'))">
                 📋 Copiar URL
               </button>
             </div>
@@ -159,11 +159,11 @@ Modulos.descarga = {
     /* QR como imagen (sin depender de librería). Si falla la imagen, queda el enlace. */
     const api = `https://api.qrserver.com/v1/create-qr-code/?size=160x160&margin=0&data=${encodeURIComponent(url)}`;
     el.innerHTML = `
-      <img src="${api}" alt="QR para abrir TallerPro" width="160" height="160"
+      <img src="${api}" alt="QR para abrir NexusPro" width="160" height="160"
         style="display:block;border-radius:8px"
         onerror="this.style.display='none';this.nextElementSibling.style.display='block'">
       <a href="${url}" target="_blank" style="display:none;font-size:10px;color:var(--text3);text-decoration:none;word-break:break-all;max-width:160px;text-align:center">
-        <div style="font-size:48px;margin-bottom:4px">🔗</div>tallerpro.cmtelecommgt.com
+        <div style="font-size:48px;margin-bottom:4px">🔗</div>nexuspro.cmtelecommgt.com
       </a>`;
     /* Si la librería QRCode está disponible, generarlo localmente (mejor calidad/offline) */
     if (typeof QRCode !== 'undefined') {

@@ -1,4 +1,4 @@
-/* TallerPro v3.0 — comunicaciones */
+/* NexusPro v3.0 — comunicaciones */
 Modulos.comunicaciones = {
   _tab: 'whatsapp',
 
@@ -136,7 +136,7 @@ Modulos.comunicaciones = {
 
     else if (this._tab === 'config') {
       const smtp   = t.config_smtp   || {};
-      const infile = t.config_infile || { modo: 'tallerpro' };
+      const infile = t.config_infile || { modo: 'nexuspro' };
       el.innerHTML = `
         <div style="display:flex;flex-direction:column;gap:20px;max-width:760px">
 
@@ -147,7 +147,7 @@ Modulos.comunicaciones = {
               <div class="alert-icon">✅</div>
               <div class="alert-body" style="font-size:12px">
                 <strong>No requiere API de Meta/Facebook.</strong><br>
-                TallerPro usa enlaces <code>wa.me</code> que abren WhatsApp directamente desde tu dispositivo.
+                NexusPro usa enlaces <code>wa.me</code> que abren WhatsApp directamente desde tu dispositivo.
                 Solo necesitas WhatsApp instalado. No hay costo adicional ni configuración de APIs.
               </div>
             </div>
@@ -215,17 +215,17 @@ Modulos.comunicaciones = {
               <label class="form-label">Modo de Facturación Electrónica (FEL)</label>
               <select class="form-select" id="cfg-infile-modo"
                       onchange="Modulos.comunicaciones._toggleInfileMode(this.value)">
-                <option value="tallerpro" ${infile.modo==='tallerpro'?'selected':''}>🏢 Gestionado por TallerPro (add-on — incluido en plan Empresarial)</option>
+                <option value="nexuspro" ${infile.modo==='nexuspro'?'selected':''}>🏢 Gestionado por NexusPro (add-on — incluido en plan Empresarial)</option>
                 <option value="propio"    ${infile.modo==='propio'   ?'selected':''}>🔑 Mis propias credenciales INFILE</option>
               </select>
             </div>
-            <div id="infile-info-tallerpro" ${infile.modo==='propio'?'style="display:none"':''}>
+            <div id="infile-info-nexuspro" ${infile.modo==='propio'?'style="display:none"':''}>
               <div class="alert alert-green">
                 <div class="alert-icon">✅</div>
                 <div class="alert-body" style="font-size:12px">
-                  <strong>TallerPro gestiona tu FEL.</strong><br>
-                  Las facturas se certifican automáticamente a través del contrato INFILE de TallerPro.
-                  No necesitas crear cuenta propia en INFILE. Para activar este servicio, comunícate con soporte TallerPro.
+                  <strong>NexusPro gestiona tu FEL.</strong><br>
+                  Las facturas se certifican automáticamente a través del contrato INFILE de NexusPro.
+                  No necesitas crear cuenta propia en INFILE. Para activar este servicio, comunícate con soporte NexusPro.
                 </div>
               </div>
             </div>
@@ -302,14 +302,14 @@ Modulos.comunicaciones = {
 
   /* ─── INFILE ─────────────────────────────────────────── */
   _toggleInfileMode(modo) {
-    const info   = document.getElementById('infile-info-tallerpro');
+    const info   = document.getElementById('infile-info-nexuspro');
     const campos = document.getElementById('infile-campos-propios');
     if (info)   info.style.display   = modo === 'propio' ? 'none' : '';
     if (campos) campos.style.display = modo === 'propio' ? '' : 'none';
   },
 
   async guardarInfile() {
-    const modo = document.getElementById('cfg-infile-modo')?.value || 'tallerpro';
+    const modo = document.getElementById('cfg-infile-modo')?.value || 'nexuspro';
     const cfg  = { modo };
     if (modo === 'propio') {
       cfg.usuario    = document.getElementById('cfg-infile-user')?.value.trim();

@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════════════
-   TallerPro Enterprise — Punto de Venta (POS)
+   NexusPro Enterprise — Punto de Venta (POS)
    Pantalla independiente (pos.html), comparte la misma base de datos.
    Solo para roles de venta/gestión. Factura, descuenta inventario,
    acumula/canjea puntos de fidelización, programa envíos y hace
@@ -42,7 +42,7 @@ const POS = {
       <div style="min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px">
         <div class="card" style="width:100%;max-width:380px">
           <div style="text-align:center;margin-bottom:18px">
-            <div style="font-family:'Bebas Neue',sans-serif;font-size:30px;letter-spacing:1px">TALLERPRO</div>
+            <div style="font-family:'Bebas Neue',sans-serif;font-size:30px;letter-spacing:1px">NEXUSPRO</div>
             <div style="color:var(--amber);font-weight:800;letter-spacing:.1em">PUNTO DE VENTA</div>
           </div>
           <div class="form-group"><label class="form-label">Correo</label>
@@ -111,7 +111,7 @@ const POS = {
     const total = vivas.reduce((s,f)=>s+(Number(f.total)||0),0);
     const porMetodo = {};
     vivas.forEach(f=>{ const m=f.metodo_pago||'Efectivo'; porMetodo[m]=(porMetodo[m]||0)+(Number(f.total)||0); });
-    const taller = Auth.tenant?.name || 'TallerPro';
+    const taller = Auth.tenant?.name || 'NexusPro';
     const dest = Auth.tenant?.email || Auth.user?.email;
     const html =
       `<div style="font-family:Arial,sans-serif;max-width:480px">`+
@@ -632,7 +632,7 @@ const POS = {
         .title { font-size: 16px; font-weight: bold; margin-bottom: 2px; }
       </style></head>
       <body>
-      <div class="center title">${Auth.tenant?.name||'TallerPro'}</div>
+      <div class="center title">${Auth.tenant?.name||'NexusPro'}</div>
       <div class="center" style="font-size:10px">NIT: ${Auth.tenant?.nit||'—'}</div>
       <div class="center" style="font-size:10px">${Auth.tenant?.direccion||'Guatemala'}</div>
       <div class="hr"></div>
@@ -654,7 +654,7 @@ const POS = {
       <div class="r"><span>Método Pago:</span><span>${f.metodo_pago||'Efectivo'}</span></div>
       <div class="hr"></div>
       <div class="center bold" style="margin-top:12px;font-size:11px">¡GRACIAS POR SU COMPRA!</div>
-      <div class="center" style="font-size:9px;color:#444">TallerPro POS · Powered by Gemini</div>
+      <div class="center" style="font-size:9px;color:#444">NexusPro POS · Powered by Gemini</div>
       <script>window.print()</script></body></html>`);
     win.document.close();
   },

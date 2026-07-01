@@ -1,4 +1,4 @@
-/* TallerPro v3.0 — calendario/index.js
+/* NexusPro v3.0 — calendario/index.js
    Vistas Día / Semana / Mes con número de semana ISO.
    Eventos: citas, pagos recurrentes, envíos y vencimientos SAT. */
 Modulos.calendario = {

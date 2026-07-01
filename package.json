@@ -1,7 +1,7 @@
 {
-  "name": "tallerpro-enterprise",
+  "name": "nexuspro-enterprise",
   "version": "3.0.0",
-  "description": "TallerPro Enterprise — Sistema de gestión para talleres mecánicos (Guatemala). PWA multi-taller con Supabase, desplegable en Cloudflare y empaquetable con Electron.",
+  "description": "NexusPro Enterprise — Sistema de gestión para talleres mecánicos (Guatemala). PWA multi-taller con Supabase, desplegable en Cloudflare y empaquetable con Electron.",
   "private": true,
   "type": "commonjs",
   "scripts": {

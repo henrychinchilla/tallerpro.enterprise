@@ -1,4 +1,4 @@
-/* TallerPro v3.0 — operacion/cotizaciones.js
+/* NexusPro v3.0 — operacion/cotizaciones.js
    Cotización de Servicios: módulo UNIVERSAL, aplica a cualquier vertical
    del taller (mecánica, herrería, peletería, electrónica, refrigeración...).
    Flujo: pendiente → aprobada/rechazada → (aprobada) se puede convertir en

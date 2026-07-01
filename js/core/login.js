@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════════════
-   TallerPro Enterprise v3.0
+   NexusPro Enterprise v3.0
    js/core/login.js — Pantalla de login
 ═══════════════════════════════════════════════════════ */
 
@@ -156,7 +156,7 @@ function renderLogin(vista='login') {
       <div class="login-card">
         <div class="login-logo">
           <h1 style="font-size:28px">🏪 Nuevo Negocio</h1>
-          <p>Registro en TallerPro</p>
+          <p>Registro en NexusPro</p>
         </div>
 
         <div class="form-row">

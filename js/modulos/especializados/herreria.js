@@ -134,7 +134,7 @@ Modulos._especialOT = {
     </style></head><body>
     <div class="header">
       <div class="badge">COMPROBANTE DE ANTICIPO / ABONO</div>
-      <h2>TallerPro — ${labelProyecto} ${proyecto.num || ''}</h2>
+      <h2>NexusPro — ${labelProyecto} ${proyecto.num || ''}</h2>
       <p>Fecha: ${hoy}</p>
     </div>
     <table>
@@ -151,7 +151,7 @@ Modulos._especialOT = {
       <tr><td>SALDO PENDIENTE</td><td class="${saldo > 0 ? 'saldo' : 'monto'}">${UI.q(saldo)}</td></tr>
     </table>
     <p style="text-align:center;font-size:11px;color:#555">Este comprobante acredita el pago de anticipo. El saldo deberá cancelarse a la entrega.</p>
-    <div class="footer">Generado por TallerPro Enterprise · ${hoy} · Documento no fiscal</div>
+    <div class="footer">Generado por NexusPro Enterprise · ${hoy} · Documento no fiscal</div>
     </body></html>`;
 
     const w = window.open('', '_blank', 'width=500,height=600');
@@ -177,7 +177,7 @@ Modulos._especialOT = {
 };
 
 /* ═══════════════════════════════════════════════════════════════════════════
-   TallerPro v3.0 — especializados/herreria.js
+   NexusPro v3.0 — especializados/herreria.js
    Módulo vertical: Herrería Industrial y Ventanería PVC/Aluminio.
    Proyectos de fabricación e instalación (portones, barandas, estructuras
    metálicas, ventanería PVC/aluminio) con seguimiento de estado y cobro.

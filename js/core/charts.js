@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════════════
-   TallerPro Enterprise v3.0
+   NexusPro Enterprise v3.0
    js/core/charts.js — Gráficas SVG nativas (sin dependencias)
 
    Theme-aware: usan var(--color) en los estilos, así que cambian

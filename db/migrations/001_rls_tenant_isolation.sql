@@ -1,5 +1,5 @@
 -- ═══════════════════════════════════════════════════════════════
--- TallerPro Enterprise — Migración 001
+-- NexusPro Enterprise — Migración 001
 -- Aislamiento multi-tenant REAL con RLS (cobertura TOTAL)
 --
 -- APLICADA EN PRODUCCIÓN: 2026-06-07

@@ -1,7 +1,7 @@
 {
-  "name": "tallerpro-enterprise",
+  "name": "nexuspro-enterprise",
   "version": "3.0.0",
-  "description": "TallerPro Enterprise — Sistema de gestión para talleres",
+  "description": "NexusPro Enterprise — Sistema de gestión para talleres",
   "main": "main.js",
   "author": "CM Telecom Guatemala",
   "license": "UNLICENSED",
@@ -17,8 +17,8 @@
     "png-to-ico": "^3.0.1"
   },
   "build": {
-    "appId": "com.cmtelecommgt.tallerpro",
-    "productName": "TallerPro Enterprise",
+    "appId": "com.cmtelecommgt.nexuspro",
+    "productName": "NexusPro Enterprise",
     "copyright": "© 2026 CM Telecom Guatemala",
     "directories": {
       "buildResources": "../icons",
@@ -55,12 +55,12 @@
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "TallerPro Enterprise",
+      "shortcutName": "NexusPro Enterprise",
       "installerIcon": "../icons/icon.ico",
       "uninstallerIcon": "../icons/icon.ico",
       "installerHeaderIcon": "../icons/icon.ico",
       "license": null,
-      "artifactName": "TallerPro-Setup-${version}.exe"
+      "artifactName": "NexusPro-Setup-${version}.exe"
     },
     "publish": [
       {

@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════════════════════
-// Edge Function: ai-assistant — "Beto", asistente mecánico de TallerPro.
+// Edge Function: ai-assistant — "Beto", asistente mecánico de NexusPro.
 // Proxy seguro a la API de Claude. ANTHROPIC_API_KEY solo en el servidor.
 // 503 elegante si no está configurada.
 //
@@ -58,19 +58,19 @@ function buildBetoPersona(nombre: string, modulos: string[]): string {
 
   let identidad: string;
   if (!modulos.length) {
-    identidad = `Eres ${nombre}, el asistente de TallerPro. Eres experto en mecánica automotriz y en todos los servicios especializados de la plataforma.`;
+    identidad = `Eres ${nombre}, el asistente de NexusPro. Eres experto en mecánica automotriz y en todos los servicios especializados de la plataforma.`;
   } else if (tieneMec && nEspec === 0) {
-    identidad = `Eres ${nombre}, el asistente mecánico de TallerPro. Trato amable y directo, de mecánico a mecánico.`;
+    identidad = `Eres ${nombre}, el asistente mecánico de NexusPro. Trato amable y directo, de mecánico a mecánico.`;
   } else if (!tieneMec && tieneHer && nEspec === 1) {
-    identidad = `Eres ${nombre}, asistente experto en herrería y ventanería de TallerPro. Conoces portones, estructuras metálicas, PVC y aluminio a fondo.`;
+    identidad = `Eres ${nombre}, asistente experto en herrería y ventanería de NexusPro. Conoces portones, estructuras metálicas, PVC y aluminio a fondo.`;
   } else if (!tieneMec && tienePel && nEspec === 1) {
-    identidad = `Eres ${nombre}, asistente experto en peletería y talabartería de TallerPro. Conoces cuero, calzado, bolsos y artículos de piel.`;
+    identidad = `Eres ${nombre}, asistente experto en peletería y talabartería de NexusPro. Conoces cuero, calzado, bolsos y artículos de piel.`;
   } else if (!tieneMec && tieneElec && nEspec === 1) {
-    identidad = `Eres ${nombre}, asistente experto en reparación electrónica y electrodomésticos de TallerPro. Diagnosticas y asesoras en celulares, laptops, TVs, refrigeradoras, lavadoras y todo tipo de aparatos eléctricos.`;
+    identidad = `Eres ${nombre}, asistente experto en reparación electrónica y electrodomésticos de NexusPro. Diagnosticas y asesoras en celulares, laptops, TVs, refrigeradoras, lavadoras y todo tipo de aparatos eléctricos.`;
   } else if (!tieneMec && tieneRef && nEspec === 1) {
-    identidad = `Eres ${nombre}, asistente experto en refrigeración y aire acondicionado de TallerPro. Conoces gases refrigerantes, presiones, diagnóstico de fugas y sistemas A/C.`;
+    identidad = `Eres ${nombre}, asistente experto en refrigeración y aire acondicionado de NexusPro. Conoces gases refrigerantes, presiones, diagnóstico de fugas y sistemas A/C.`;
   } else {
-    identidad = `Eres ${nombre}, asistente de TallerPro para negocios de servicio en Guatemala. Eres experto en los servicios que maneja este negocio.`;
+    identidad = `Eres ${nombre}, asistente de NexusPro para negocios de servicio en Guatemala. Eres experto en los servicios que maneja este negocio.`;
   }
 
   const modsActivos = Object.keys(MOD_CONOCIMIENTO).filter(m => tiene(m));
@@ -276,7 +276,7 @@ Deno.serve(async (req) => {
     }
     if (!iaHabilitada) {
       return json({
-        error: `${NOMBRE} (Asistente IA) no está incluido en tu plan. Pídelo como módulo adicional a tu proveedor de TallerPro.`,
+        error: `${NOMBRE} (Asistente IA) no está incluido en tu plan. Pídelo como módulo adicional a tu proveedor de NexusPro.`,
       }, 403);
     }
 
@@ -288,7 +288,7 @@ Deno.serve(async (req) => {
       .eq("tenant_id", tenantId).gte("created_at", iniMes);
     if ((count ?? 0) >= limite) {
       return json({
-        error: `Alcanzaste el límite mensual de consultas de ${NOMBRE} (${limite}). Si necesitas más, pide una ampliación a tu proveedor de TallerPro.`,
+        error: `Alcanzaste el límite mensual de consultas de ${NOMBRE} (${limite}). Si necesitas más, pide una ampliación a tu proveedor de NexusPro.`,
       }, 429);
     }
   }

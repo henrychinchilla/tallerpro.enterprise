@@ -40,7 +40,7 @@ Deno.serve(async (req) => {
   if (req.method !== "POST") return json({ error: "Método no permitido" }, 405);
 
   const API_KEY = Deno.env.get("RESEND_API_KEY");
-  const FROM = Deno.env.get("EMAIL_FROM") ?? "TallerPro <onboarding@resend.dev>";
+  const FROM = Deno.env.get("EMAIL_FROM") ?? "NexusPro <onboarding@resend.dev>";
   if (!API_KEY) {
     return json({ error: "El correo aún no está configurado (falta la API key de Resend)." }, 503);
   }

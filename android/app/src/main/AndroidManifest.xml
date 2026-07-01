@@ -19,7 +19,7 @@
 
             <meta-data
                 android:name="android.support.customtabs.trusted.DEFAULT_URL"
-                android:value="https://app.cmtelecommgt.com" />
+                android:value="https://nexuspro.cmtelecommgt.com" />
             <meta-data
                 android:name="android.support.customtabs.trusted.STATUS_BAR_COLOR"
                 android:resource="@color/colorPrimary" />
@@ -36,7 +36,7 @@
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
-                <data android:scheme="https" android:host="app.cmtelecommgt.com" />
+                <data android:scheme="https" android:host="nexuspro.cmtelecommgt.com" />
             </intent-filter>
         </activity>
     </application>

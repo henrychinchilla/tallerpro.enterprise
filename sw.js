@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════════════
-   TallerPro Enterprise v3.0 — Service Worker
+   NexusPro Enterprise v3.0 — Service Worker
    Estrategias:
      · Navegación (HTML)      → network-first, fallback a shell cacheado (offline)
      · Assets propios (css/js)→ stale-while-revalidate
@@ -8,8 +8,8 @@
    Para forzar actualización: subir CACHE_VERSION.
 ═══════════════════════════════════════════════════════ */
 
-const CACHE_VERSION = 'v3.27.1-20260630o';
-const CACHE_NAME = `tallerpro-${CACHE_VERSION}`;
+const CACHE_VERSION = 'v3.44.0-20260701a';
+const CACHE_NAME = `nexuspro-${CACHE_VERSION}`;
 
 /* App shell — se precachea en install para que funcione offline */
 const PRECACHE = [

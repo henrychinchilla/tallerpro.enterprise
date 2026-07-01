@@ -1,4 +1,4 @@
-/* TallerPro v3.0 — finanzas/index.js */
+/* NexusPro v3.0 — finanzas/index.js */
 Modulos.finanzas = {
   _tab: 'dashboard', _ini: null, _fin: null, _empleados: [],
 
@@ -244,7 +244,7 @@ Modulos.finanzas = {
 
         <div class="card" style="max-width:700px">
           <div style="text-align:center;margin-bottom:20px">
-            <div style="font-family:'Bebas Neue',sans-serif;font-size:22px;color:var(--amber)">${Auth.tenant?.name||'TallerPro Enterprise'}</div>
+            <div style="font-family:'Bebas Neue',sans-serif;font-size:22px;color:var(--amber)">${Auth.tenant?.name||'NexusPro Enterprise'}</div>
             <div style="font-size:13px;color:var(--text3)">Estado de Resultados ${periodo}</div>
             <div style="font-size:12px;color:var(--text3)">${UI.fecha(this._ini)} al ${UI.fecha(this._fin)}</div>
           </div>

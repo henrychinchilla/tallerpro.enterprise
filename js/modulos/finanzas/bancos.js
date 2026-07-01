@@ -1,4 +1,4 @@
-/* TallerPro v3.0 — bancos/index.js */
+/* NexusPro v3.0 — bancos/index.js */
 Modulos.bancos = {
   _bancos: [], _bancoActivo: null,
 

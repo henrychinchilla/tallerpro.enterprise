@@ -1,4 +1,4 @@
-# TallerPro Enterprise — Reglas permanentes
+# NexusPro Enterprise — Reglas permanentes
 
 > Este archivo se carga automáticamente en CADA sesión. Son reglas que NO hay que volver a pedir.
 > Si Henry dice "ya te lo había dicho", revisar aquí y agregarlo si falta.
@@ -23,7 +23,7 @@ Mostrar por defecto el **mes activo** y dejar los meses/años anteriores como **
 Al terminar cambios OK: commit + push a `main` y `npm run deploy`, automáticamente.
 - Trabajar en el worktree, mergear a `main`, push, deploy.
 - Deploy: `git pull origin main && npm run deploy` (Cloudflare Workers).
-- URL producción: `https://tallerpro.cmtelecommgt.com`
+- URL producción: `https://nexuspro.cmtelecommgt.com`
 - **SIEMPRE subir `CACHE_VERSION` en `sw.js` cuando se cambian JS/CSS/HTML.** Si no,
   el Service Worker sirve código viejo y "no se ven los cambios". El index ya tiene
   auto-recarga al detectar SW nuevo, pero depende de que `CACHE_VERSION` cambie.

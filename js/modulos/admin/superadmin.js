@@ -18,7 +18,7 @@ Modulos.superadmin = {
     el.innerHTML = `
       <div class="page-header">
         <div><h1 class="page-title">⚡ Panel SaaS</h1>
-        <p class="page-subtitle">// gestión comercial de TallerPro</p></div>
+        <p class="page-subtitle">// gestión comercial de NexusPro</p></div>
         <div class="page-actions">
           <button class="btn btn-ghost" onclick="Modulos.superadmin.respaldarTodos()" title="Respaldo inmediato de todos los talleres a Storage">💾 Respaldar todos</button>
           <button class="btn btn-ghost" onclick="Modulos.superadmin.enviarRecordatorios()" title="Enviar recordatorios de cobro/vencimiento por email">📧 Recordatorios</button>

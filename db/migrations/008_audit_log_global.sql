@@ -1,5 +1,5 @@
 -- ═══════════════════════════════════════════════════════════════
--- TallerPro Enterprise — Migración 008
+-- NexusPro Enterprise — Migración 008
 -- Bitácora de auditoría GLOBAL (todas las acciones de la app)
 --
 -- APLICADA EN PRODUCCIÓN: 2026-06-07 (audit_log_global) — 39 triggers

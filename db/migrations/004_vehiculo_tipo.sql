@@ -1,5 +1,5 @@
 -- ═══════════════════════════════════════════════════════════════
--- TallerPro Enterprise — Migración 004
+-- NexusPro Enterprise — Migración 004
 -- Tipo de vehículo (Liviano / SUV / Pesado / Motocicleta)
 --
 -- APLICADA EN PRODUCCIÓN: 2026-06-07 (vehiculos_add_tipo)

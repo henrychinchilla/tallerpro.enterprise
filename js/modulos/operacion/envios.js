@@ -1,4 +1,4 @@
-/* TallerPro v3.0 — operacion/envios.js
+/* NexusPro v3.0 — operacion/envios.js
    Logística: traslados internos, fletes externos, envíos a proveedores
    (torno, rectificadora) y couriers (Cargo Expreso, Guatex, Forza,
    PedidosYa...). Con fecha de entrega estimada (seguimiento en calendario),

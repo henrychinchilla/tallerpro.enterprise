@@ -1,4 +1,4 @@
-# 📱 TallerPro — App Android nativa (sin Android Studio)
+# 📱 NexusPro — App Android nativa (sin Android Studio)
 
 App Android **real** (APK firmado, publicable en Play Store) construida 100% por
 línea de comandos. Es una **Trusted Web Activity**: un binario nativo cuyo motor
@@ -39,8 +39,8 @@ Para Play Store (bundle):
 
 ## Cómo funciona el vínculo dominio ↔ app
 1. La app declara confianza al sitio (`res/values/strings.xml → asset_statements`).
-2. El sitio declara confianza a la app (`https://app.cmtelecommgt.com/.well-known/assetlinks.json`
-   con el package id `com.cmtelecom.tallerpro` y la huella de arriba).
+2. El sitio declara confianza a la app (`https://nexuspro.cmtelecommgt.com/.well-known/assetlinks.json`
+   con el package id `com.cmtelecom.nexuspro` y la huella de arriba).
 3. Android verifica ambos al instalar → la app abre a pantalla completa.
    Si cambias de keystore o dominio, regenera ambos lados.
 

@@ -1,4 +1,4 @@
-/* TallerPro v3.0 — especializados/electronica.js
+/* NexusPro v3.0 — especializados/electronica.js
    Módulo vertical: Reparaciones Electrónicas (celulares, tablets, laptops,
    TVs, consolas, audio, electrodomésticos...).
    OT se genera cuando el cliente aprueba el diagnóstico (→ en_reparacion).

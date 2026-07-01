@@ -4,7 +4,7 @@ Las Edge Functions ya están **DESPLEGADAS** (`email-send`, `whatsapp-send`,
 `ai-assistant`, `crear-usuario`). Solo falta cargar sus **secrets** para
 activarlas; sin secrets responden `503` y la app sigue funcionando normal.
 
-> **Dónde cargar los secrets:** Supabase Dashboard → tu proyecto *tallerpro*
+> **Dónde cargar los secrets:** Supabase Dashboard → tu proyecto *nexuspro*
 > → **Project Settings → Edge Functions → Secrets** (o *Functions → Secrets*).
 > Agrega cada variable con su valor. No requiere re-desplegar: las funciones
 > leen los secrets en cada ejecución.
@@ -28,7 +28,7 @@ activarlas; sin secrets responden `503` y la app sigue funcionando normal.
    `onboarding@resend.dev`).
 4. Probar (logueado, consola del navegador):
    ```js
-   await Email.enviar('tucorreo@gmail.com', 'Prueba', { text: 'Hola desde TallerPro' })
+   await Email.enviar('tucorreo@gmail.com', 'Prueba', { text: 'Hola desde NexusPro' })
    ```
 
 ## 0.1) Verificación de NIT — `nit-sat`

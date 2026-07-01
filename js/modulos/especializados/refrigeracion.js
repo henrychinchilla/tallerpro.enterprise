@@ -1,4 +1,4 @@
-/* TallerPro v3.0 — especializados/refrigeracion.js
+/* NexusPro v3.0 — especializados/refrigeracion.js
    Módulo vertical: Reparación de Refrigeración y Aire Acondicionado —
    vehicular, domiciliar e industrial (incluye cámaras frías/congeladores).
    OT automática al crear servicio directo; anticipo 50% con comprobante. */

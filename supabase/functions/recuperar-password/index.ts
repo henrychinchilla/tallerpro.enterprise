@@ -38,8 +38,8 @@ Deno.serve(async (req) => {
   const supaUrl    = Deno.env.get("SUPABASE_URL")!;
   const serviceKey = Deno.env.get("SERVICE_ROLE_KEY") ?? Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
   const API_KEY    = Deno.env.get("RESEND_API_KEY");
-  const FROM       = Deno.env.get("EMAIL_FROM") ?? "TallerPro <onboarding@resend.dev>";
-  const APP_URL    = "https://tallerpro.cmtelecommgt.com";
+  const FROM       = Deno.env.get("EMAIL_FROM") ?? "NexusPro <onboarding@resend.dev>";
+  const APP_URL    = "https://nexuspro.cmtelecommgt.com";
   const admin      = createClient(supaUrl, serviceKey);
 
   let body: any;
@@ -69,9 +69,9 @@ Deno.serve(async (req) => {
   const nombre = perfil?.nombre ?? email.split("@")[0];
 
   const { ok, resendError } = await enviarEmail(API_KEY, FROM, email,
-    "🔑 Recupera tu contraseña de TallerPro",
+    "🔑 Recupera tu contraseña de NexusPro",
     `<div style="font-family:sans-serif;max-width:480px;margin:0 auto">
-      <h2 style="color:#1d4ed8">TallerPro — Recuperar contraseña</h2>
+      <h2 style="color:#1d4ed8">NexusPro — Recuperar contraseña</h2>
       <p>Hola <strong>${nombre}</strong> 👋</p>
       <p>Haz clic en el botón para restablecer tu contraseña:</p>
       <div style="text-align:center;margin:28px 0">
@@ -87,7 +87,7 @@ Deno.serve(async (req) => {
         <a href="${link}" style="color:#3b82f6;word-break:break-all">${link}</a>
       </p>
       <hr style="border:none;border-top:1px solid #e2e8f0;margin:24px 0">
-      <p style="font-size:12px;color:#94a3b8">TallerPro Enterprise · ${APP_URL}</p>
+      <p style="font-size:12px;color:#94a3b8">NexusPro Enterprise · ${APP_URL}</p>
     </div>`
   );
 

@@ -1,4 +1,4 @@
-/* TallerPro v3.0 — admin/index.js */
+/* NexusPro v3.0 — admin/index.js */
 Modulos.admin = {
   _tab: 'overview',
 
@@ -65,7 +65,7 @@ Modulos.admin = {
               ${Auth.tenant?.suscripcion_vence ? 'Vence: ' + UI.fecha(Auth.tenant.suscripcion_vence) : 'Sin fecha de vencimiento'}
             </div>
             <div style="font-size:11px;color:var(--text3);margin-top:6px">
-              Los planes, módulos y pagos se gestionan con tu proveedor de TallerPro.
+              Los planes, módulos y pagos se gestionan con tu proveedor de NexusPro.
             </div>
           </div>
         </div>
@@ -141,7 +141,7 @@ Modulos.admin = {
         <div class="alert alert-cyan" style="margin-bottom:16px">
           <div class="alert-icon">🔒</div>
           <div class="alert-body" style="font-size:12px">
-            Los archivos exportados están <b>encriptados con AES-256</b>. Solo pueden importarse en TallerPro.
+            Los archivos exportados están <b>encriptados con AES-256</b>. Solo pueden importarse en NexusPro.
             También puedes exportar como CSV plano para usar en Excel.
           </div>
         </div>
@@ -202,7 +202,7 @@ Modulos.admin = {
           <div class="alert-icon">✓</div>
           <div class="alert-body" style="font-size:12px">
             Base de datos vacía. Puedes importar datos libremente.
-            Solo se aceptan archivos <b>.tpro</b> (exportados desde TallerPro) o CSV por tabla.
+            Solo se aceptan archivos <b>.tpro</b> (exportados desde NexusPro) o CSV por tabla.
           </div>
         </div>` : ''}
 
@@ -210,7 +210,7 @@ Modulos.admin = {
           <div class="card card-cyan">
             <div class="card-sub mb-3">🔒 Importar Backup Encriptado (.tpro)</div>
             <p style="font-size:12px;color:var(--text2);margin-bottom:12px">
-              Restaura un backup completo generado por TallerPro. La licencia se restaura automáticamente.
+              Restaura un backup completo generado por NexusPro. La licencia se restaura automáticamente.
             </p>
             <label class="btn btn-cyan" style="width:100%;cursor:pointer;text-align:center;display:block">
               📂 Seleccionar archivo .tpro
@@ -481,11 +481,11 @@ Modulos.admin = {
   },
 
   /* ── ENCRIPTACIÓN AES-256-GCM ────────────── */
-  async _getKey(password='TallerPro-v3-2026') {
+  async _getKey(password='NexusPro-v3-2026') {
     const enc     = new TextEncoder();
     const keyMat  = await crypto.subtle.importKey('raw', enc.encode(password), 'PBKDF2', false, ['deriveKey']);
     return crypto.subtle.deriveKey(
-      { name:'PBKDF2', salt:enc.encode('tallerpro-salt-2026'), iterations:100000, hash:'SHA-256' },
+      { name:'PBKDF2', salt:enc.encode('nexuspro-salt-2026'), iterations:100000, hash:'SHA-256' },
       keyMat, { name:'AES-GCM', length:256 }, false, ['encrypt','decrypt']
     );
   },

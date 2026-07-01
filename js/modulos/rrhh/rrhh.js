@@ -1,4 +1,4 @@
-/* TallerPro v3.0 — rrhh/index.js */
+/* NexusPro v3.0 — rrhh/index.js */
 Modulos.rrhh = {
   _tab: 'empleados', _empleados: [],
   _cfgProd: null, _prodMes: null, _prodAnio: null,
@@ -631,7 +631,7 @@ Modulos.rrhh = {
           <input type="checkbox" id="emp-crear-usuario" onchange="Modulos.rrhh._toggleAcceso(this.checked)">
           <span class="form-label" style="margin:0">Crear acceso al sistema (usuario y contraseña)</span>
         </label>
-        <div style="font-size:11px;color:var(--text3);margin-bottom:8px">No todos los empleados necesitan acceso. Actívalo solo para quien usará TallerPro.</div>
+        <div style="font-size:11px;color:var(--text3);margin-bottom:8px">No todos los empleados necesitan acceso. Actívalo solo para quien usará NexusPro.</div>
         <div id="emp-acceso-box" style="display:none">
           <div class="form-row">
             <div class="form-group"><label class="form-label">Rol en el Sistema *</label>
@@ -1670,7 +1670,7 @@ Modulos.rrhh = {
 
       ${a.firma_fecha && a.firma_tipo==='digital' ? `
         <div class="dig">✍️ <b>Firmado digitalmente</b> por <b>${a.firma_nombre}</b>
-        el ${new Date(a.firma_fecha).toLocaleString('es-GT')} mediante su usuario de TallerPro.
+        el ${new Date(a.firma_fecha).toLocaleString('es-GT')} mediante su usuario de NexusPro.
         Esta firma electrónica registra fecha, hora e identidad del usuario.</div>
         <div class="firmas"><div class="firma">Entrega — ${t.name||''}</div></div>`
       : `<div class="firmas">
@@ -1860,7 +1860,7 @@ Modulos.rrhh = {
           </div>
           <div class="meta-grid">
             <div class="meta-item">
-              <strong>Patrono:</strong> ${Auth.tenant?.name || 'TallerPro'}<br>
+              <strong>Patrono:</strong> ${Auth.tenant?.name || 'NexusPro'}<br>
               <strong>NIT:</strong> ${nit}<br>
               <strong>No. Patronal IGSS:</strong> ${patronal}
             </div>
@@ -2072,7 +2072,7 @@ Modulos.rrhh = {
     const e = this._empleados.find(x => x.id === id);
     if (!e) { UI.toast('Empleado no encontrado', 'error'); return; }
 
-    const tenantName = Auth.tenant?.name || 'TallerPro';
+    const tenantName = Auth.tenant?.name || 'NexusPro';
     const fotoSrc = e.foto || '';
 
     const win = window.open('', '_blank');

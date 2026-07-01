@@ -1,14 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">TallerPro</string>
+    <string name="app_name">NexusPro</string>
     <!-- Declaración de confianza hacia el sitio (pareja del assetlinks.json
-         publicado en https://app.cmtelecommgt.com/.well-known/assetlinks.json) -->
+         publicado en https://nexuspro.cmtelecommgt.com/.well-known/assetlinks.json) -->
     <string name="asset_statements">
         [{
             \"relation\": [\"delegate_permission/common.handle_all_urls\"],
             \"target\": {
                 \"namespace\": \"web\",
-                \"site\": \"https://app.cmtelecommgt.com\"
+                \"site\": \"https://nexuspro.cmtelecommgt.com\"
             }
         }]
     </string>

@@ -1,7 +1,7 @@
-# TallerPro Enterprise — Google Play Store Listing
+# NexusPro Enterprise — Google Play Store Listing
 
 ## App Info
-- **Package name:** com.telecommgt.tallerpro  (sugerido)
+- **Package name:** com.telecommgt.nexuspro  (sugerido)
 - **Categoría:** Negocios (Business)
 - **Clasificación de contenido:** Para todos (Everyone)
 - **País destino:** Guatemala (+ toda Centroamérica)
@@ -11,13 +11,13 @@
 
 ## Título de la app (50 caracteres máx.)
 ```
-TallerPro Enterprise
+NexusPro Enterprise
 ```
 (20 caracteres ✅)
 
 ## Nombre corto para ícono (12 caracteres máx.)
 ```
-TallerPro
+NexusPro
 ```
 
 ---
@@ -37,7 +37,7 @@ Sistema de gestión para talleres y negocios de servicio · Guatemala
 ## Descripción larga (4000 caracteres máx.)
 
 ```
-TallerPro Enterprise es el sistema de gestión más completo para talleres mecánicos, negocios de reparación y empresas de servicios especializados en Guatemala y Centroamérica.
+NexusPro Enterprise es el sistema de gestión más completo para talleres mecánicos, negocios de reparación y empresas de servicios especializados en Guatemala y Centroamérica.
 
 🔧 GESTIÓN COMPLETA DE ÓRDENES DE TRABAJO
 Crea, asigna y da seguimiento a tus órdenes de trabajo desde cualquier dispositivo. Tus clientes pueden consultar el estado de su equipo en tiempo real desde el portal de clientes.
@@ -55,7 +55,7 @@ Control de stock con alertas de reorden. Sistema POS integrado para ventas direc
 Gestión de empleados, control de asistencia digital, planillas IGSS/IRTRA, carné digital, viáticos y actas. 13 perfiles de acceso configurables.
 
 🔌 MÓDULOS ESPECIALIZADOS PARA CADA NEGOCIO
-TallerPro no es solo para mecánica. Activa solo lo que necesitas:
+NexusPro no es solo para mecánica. Activa solo lo que necesitas:
 • Electrónica y Electrodomésticos (REP)
 • Refrigeración Comercial (REF)
 • Herrería y Metalmecánica (HER)
@@ -75,7 +75,7 @@ Datos cifrados, aislamiento total entre negocios (multi-tenant), respaldo autom�
 Accede desde tu teléfono, tablet o computadora. Instala como app o úsala directamente en el navegador.
 
 ---
-TallerPro Enterprise es una plataforma SaaS. Se requiere suscripción activa para usar el sistema. Visita tallerpro.telecommgt.com para conocer los planes disponibles.
+NexusPro Enterprise es una plataforma SaaS. Se requiere suscripción activa para usar el sistema. Visita nexuspro.telecommgt.com para conocer los planes disponibles.
 ```
 
 ---
@@ -95,22 +95,22 @@ taller mecánico, gestión taller, orden de trabajo, factura electrónica SAT, F
 | Screenshot 3 — Beto IA | ✅ | screenshots/play-screen3-beto.png |
 | Screenshot 4 — Facturación FEL | ✅ | screenshots/play-screen4-facturacion.png |
 | Screenshot 5 — Módulos | ✅ | screenshots/play-screen5-modulos.png |
-| APK / AAB | ✅ | tallerpro.apk |
-| Privacy Policy URL | ✅ | https://tallerpro.telecommgt.com/privacidad.html |
+| APK / AAB | ✅ | nexuspro.apk |
+| Privacy Policy URL | ✅ | https://nexuspro.telecommgt.com/privacidad.html |
 | Imagen destacada (Feature Graphic) 1024×500 | ❌ | pendiente |
 
 ---
 
 ## Feature Graphic (1024×500 px)
 Imagen horizontal que aparece en la parte superior de la ficha Play Store.
-Pendiente de crear — misma estética: fondo azul oscuro, logo TallerPro, tagline.
+Pendiente de crear — misma estética: fondo azul oscuro, logo NexusPro, tagline.
 
 ---
 
 ## Contacto para la ficha
 - **Email de soporte:** privacidad@telecommgt.com
-- **Sitio web:** https://tallerpro.telecommgt.com
-- **Política de privacidad:** https://tallerpro.telecommgt.com/privacidad.html
+- **Sitio web:** https://nexuspro.telecommgt.com
+- **Política de privacidad:** https://nexuspro.telecommgt.com/privacidad.html
 
 ---
 

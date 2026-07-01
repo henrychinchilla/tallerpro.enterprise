@@ -1,4 +1,4 @@
-/* TallerPro v3.0 — KPI Mecánicos & Hora-Hombre */
+/* NexusPro v3.0 — KPI Mecánicos & Hora-Hombre */
 Modulos.kpi_mecanicos = {
   _mes: null, _anio: null,
 

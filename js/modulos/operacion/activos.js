@@ -1,4 +1,4 @@
-/* TallerPro v3.0 — operacion/activos.js
+/* NexusPro v3.0 — operacion/activos.js
    Herramientas, maquinaria y equipo con depreciación (línea recta).
    Alimenta el estado de resultados y el cálculo trimestral de impuestos. */
 Modulos.activos = {

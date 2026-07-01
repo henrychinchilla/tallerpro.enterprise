@@ -1,5 +1,5 @@
 -- ═══════════════════════════════════════════════════════
--- TallerPro Enterprise — Migración 002
+-- NexusPro Enterprise — Migración 002
 -- Tablas de soporte para WhatsApp e IA, con aislamiento por tenant.
 --
 -- REQUISITO: la migración 001 debe estar aplicada (usa las funciones

@@ -1,12 +1,12 @@
 const { app, BrowserWindow, shell, Menu } = require('electron');
 const path = require('path');
-const APP_URL = 'https://tallerpro.cmtelecommgt.com';
+const APP_URL = 'https://nexuspro.cmtelecommgt.com';
 let mainWindow;
 
 function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1280, height: 800, minWidth: 900, minHeight: 600,
-    title: 'TallerPro Enterprise',
+    title: 'NexusPro Enterprise',
     icon: path.join(__dirname, '../icons/icon-512.png'),
     backgroundColor: '#0A0E1A',
     autoHideMenuBar: true,

@@ -1,5 +1,5 @@
 -- ═══════════════════════════════════════════════════════════════
--- TallerPro Enterprise — Migración 003
+-- NexusPro Enterprise — Migración 003
 -- Endurecer funciones SECURITY DEFINER (atacante secundario)
 --
 -- APLICADA EN PRODUCCIÓN: 2026-06-07

@@ -1,4 +1,4 @@
-/* TallerPro v3.0 — facturacion/index.js */
+/* NexusPro v3.0 — facturacion/index.js */
 Modulos.facturacion = {
   _data: [], _clientes: [], _ordenes: [], _cotizaciones: [],
   _ini: null, _fin: null,
@@ -511,7 +511,7 @@ Modulos.facturacion = {
     if (!f) return;
     const email = f.clientes?.email;
     if (!email) { UI.toast('El cliente no tiene email registrado','error'); return; }
-    const taller = Auth.tenant?.name || 'TallerPro';
+    const taller = Auth.tenant?.name || 'NexusPro';
     const nro = f.fel_serie ? `${f.fel_serie}-${f.fel_numero||''}` : (f.num||'—');
     const html =
       `<div style="font-family:Arial,sans-serif;max-width:560px;margin:auto">` +
@@ -549,7 +549,7 @@ Modulos.facturacion = {
     const nroDoc = f.fel_serie ? `${f.fel_serie}-${f.fel_numero||''}` : (f.num||'—');
     win.document.write(`<html><head><title>Factura ${nroDoc}</title>
       <style>body{font-family:monospace;padding:20px;max-width:400px}h2{text-align:center}.total{font-size:20px;font-weight:bold}table{margin:8px 0}th,td{padding:2px 0}</style></head>
-      <body><h2>${Auth.tenant?.name||'TallerPro'}</h2>
+      <body><h2>${Auth.tenant?.name||'NexusPro'}</h2>
       <p>NIT: ${Auth.tenant?.nit||'—'} | ${Auth.tenant?.tel||''}</p>
       <hr><p><b>Factura:</b> ${nroDoc}</p>
       <p><b>Fecha:</b> ${UI.fecha(f.fecha)}</p>

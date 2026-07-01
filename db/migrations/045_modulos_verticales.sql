@@ -1,5 +1,5 @@
 -- ═══════════════════════════════════════════════════════════════
--- TallerPro Enterprise — Migración 045
+-- NexusPro Enterprise — Migración 045
 -- Módulos verticales activables a la carta desde el Panel SaaS:
 --   1) Cotización de Servicios (universal, cualquier vertical)
 --   2) Herrería Industrial y Ventanería PVC/Aluminio

@@ -162,7 +162,7 @@ const App = {
           <div style="font-size:44px">⏸️</div>
           <h2 style="margin:8px 0">Cuenta suspendida</h2>
           <p style="color:var(--text2);font-size:14px">El acceso a <b>${Auth.tenant?.name||'tu taller'}</b> está temporalmente suspendido.
-          Ponte en contacto con soporte de TallerPro para reactivar tu suscripción.</p>
+          Ponte en contacto con soporte de NexusPro para reactivar tu suscripción.</p>
           <div style="margin-top:16px"><button class="btn btn-ghost" onclick="Auth.logout()">Cerrar sesión</button></div>
         </div>
       </div>`;
@@ -245,7 +245,7 @@ const App = {
       </div>
       <div class="sidebar-tenant" onclick="App.toggleSidebar()" style="display:flex;align-items:center;gap:8px">
         ${Auth.tenant?.logo_base64 ? `<img src="${Auth.tenant.logo_base64}" alt="logo" style="width:28px;height:28px;border-radius:6px;object-fit:contain;background:var(--surface2);flex-shrink:0">` : ''}
-        <div class="sidebar-tenant-name" title="${Auth.tenant?.name || ''}">${Auth.tenant?.name || 'TallerPro'}</div>
+        <div class="sidebar-tenant-name" title="${Auth.tenant?.name || ''}">${Auth.tenant?.name || 'NexusPro'}</div>
       </div>
       <nav class="sidebar-nav"><ul>${nav}</ul></nav>
       ${iaBtn}
@@ -501,14 +501,14 @@ const App = {
       window._pwaPrompt.prompt();
       const { outcome } = await window._pwaPrompt.userChoice.catch(()=>({outcome:'dismissed'}));
       if (outcome === 'accepted') {
-        UI.toast('¡Listo! Busca TallerPro en tu pantalla de inicio 📲', 'success', 5000);
+        UI.toast('¡Listo! Busca NexusPro en tu pantalla de inicio 📲', 'success', 5000);
         window._pwaPrompt = null;
         App.renderSidebar();
       }
       return;
     }
     /* iOS: instrucciones paso a paso */
-    UI.modal('📲 Instalar TallerPro', `
+    UI.modal('📲 Instalar NexusPro', `
       <div style="font-size:14px;line-height:1.8">
         <p style="margin-bottom:10px">En tu <b>iPhone o iPad</b> (con Safari):</p>
         <div style="display:flex;flex-direction:column;gap:10px">

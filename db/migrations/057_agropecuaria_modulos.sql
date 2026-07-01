@@ -1,4 +1,4 @@
--- TallerPro v3.0 — Migración 057
+-- NexusPro v3.0 — Migración 057
 -- Nuevos módulos: Agroservicio y Venta de Granos
 -- 2026-06-30
 

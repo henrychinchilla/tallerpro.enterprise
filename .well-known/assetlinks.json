@@ -2,7 +2,7 @@
   "relation": ["delegate_permission/common.handle_all_urls"],
   "target": {
     "namespace": "android_app",
-    "package_name": "com.cmtelecom.tallerpro",
+    "package_name": "com.cmtelecom.nexuspro",
     "sha256_cert_fingerprints": ["8B:D8:E8:84:CE:2C:CA:68:59:4D:90:70:AB:F2:75:E3:00:C7:9A:3A:00:5D:E2:45:75:6F:95:75:5C:F7:F8:75"]
   }
 }]

@@ -1,5 +1,5 @@
 -- ═══════════════════════════════════════════════════════════════
--- TallerPro Enterprise — Migración 046
+-- NexusPro Enterprise — Migración 046
 -- Permite facturar una cotización aprobada directamente (sin pasar
 -- por una Orden de Trabajo), análogo al flujo OT → Factura ya
 -- existente. Idempotente.

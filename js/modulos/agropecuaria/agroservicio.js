@@ -1,4 +1,4 @@
-/* TallerPro v3.0 — agropecuaria/agroservicio.js
+/* NexusPro v3.0 — agropecuaria/agroservicio.js
    Módulo vertical: Agroservicio. Venta y asesoramiento de semillas, fertilizantes,
    plaguicidas, herramientas agrícolas y servicios técnicos.
    OT automática al crear; anticipo 50% con comprobante imprimible. */

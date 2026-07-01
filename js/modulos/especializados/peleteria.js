@@ -1,4 +1,4 @@
-/* TallerPro v3.0 — especializados/peleteria.js
+/* NexusPro v3.0 — especializados/peleteria.js
    Módulo vertical: Peletería. Pedidos de cuero a la medida o reparación.
    OT automática al crear (directo) o al iniciar proceso (cotización);
    anticipo 50% con comprobante imprimible. */

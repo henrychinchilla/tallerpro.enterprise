@@ -65,30 +65,30 @@ function plantilla(tenant: any, dias: number): { subject: string; html: string }
   const taller = tenant.name ?? tenant.slug ?? "tu taller";
   const monto = Q(tenant.precio_mensual);
   const fecha = tenant.suscripcion_vence;
-  const pie = `<p style="color:#888;font-size:12px">TallerPro — sistema de gestión para talleres.<br>
+  const pie = `<p style="color:#888;font-size:12px">NexusPro — sistema de gestión para talleres.<br>
     Si ya realizaste tu pago, por favor ignora este mensaje.</p>`;
 
   if (dias > 0) {
     return {
-      subject: `⏰ Tu suscripción de TallerPro vence en ${dias} día${dias === 1 ? "" : "s"}`,
+      subject: `⏰ Tu suscripción de NexusPro vence en ${dias} día${dias === 1 ? "" : "s"}`,
       html: `<h2>Hola, ${taller} 👋</h2>
-        <p>Tu suscripción a <b>TallerPro</b> vence el <b>${fecha}</b> (en ${dias} día${dias === 1 ? "" : "s"}).</p>
+        <p>Tu suscripción a <b>NexusPro</b> vence el <b>${fecha}</b> (en ${dias} día${dias === 1 ? "" : "s"}).</p>
         <p>Monto mensual: <b>${monto}</b>.</p>
         <p>Para no perder acceso al sistema, realiza tu pago antes de la fecha de vencimiento.</p>${pie}`,
     };
   }
   if (dias === 0) {
     return {
-      subject: "📅 Tu suscripción de TallerPro vence HOY",
+      subject: "📅 Tu suscripción de NexusPro vence HOY",
       html: `<h2>Hola, ${taller} 👋</h2>
-        <p>Tu suscripción a <b>TallerPro</b> vence <b>hoy (${fecha})</b>.</p>
+        <p>Tu suscripción a <b>NexusPro</b> vence <b>hoy (${fecha})</b>.</p>
         <p>Monto mensual: <b>${monto}</b>. Realiza tu pago hoy para mantener tu acceso sin interrupciones.</p>${pie}`,
     };
   }
   return {
-    subject: `⚠️ Suscripción de TallerPro vencida hace ${-dias} día${dias === -1 ? "" : "s"}`,
+    subject: `⚠️ Suscripción de NexusPro vencida hace ${-dias} día${dias === -1 ? "" : "s"}`,
     html: `<h2>Hola, ${taller}</h2>
-      <p>Tu suscripción a <b>TallerPro</b> venció el <b>${fecha}</b>.</p>
+      <p>Tu suscripción a <b>NexusPro</b> venció el <b>${fecha}</b>.</p>
       <p>Monto pendiente: <b>${monto}</b>. Si no se regulariza el pago, tu cuenta podría ser suspendida.</p>${pie}`,
   };
 }
@@ -112,7 +112,7 @@ Deno.serve(async (req) => {
   const serviceKey = Deno.env.get("SERVICE_ROLE_KEY") ?? Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
   const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
   const API_KEY = Deno.env.get("RESEND_API_KEY");
-  const FROM = Deno.env.get("EMAIL_FROM") ?? "TallerPro <onboarding@resend.dev>";
+  const FROM = Deno.env.get("EMAIL_FROM") ?? "NexusPro <onboarding@resend.dev>";
   const ADMIN_EMAIL = Deno.env.get("SAAS_ADMIN_EMAIL") ?? SUPERADMIN_EMAIL;
 
   const admin = createClient(url, serviceKey);
@@ -175,7 +175,7 @@ Deno.serve(async (req) => {
          <th align="left" style="padding:4px 10px">Email</th></tr>${lista.map(fila).join("")}</table>` : "";
     try {
       await enviarEmail(API_KEY, FROM, ADMIN_EMAIL,
-        `📊 TallerPro SaaS: ${vencidos.length} vencido(s), ${porVencer.length} por vencer`,
+        `📊 NexusPro SaaS: ${vencidos.length} vencido(s), ${porVencer.length} por vencer`,
         `<h2>Resumen de suscripciones</h2>
          ${tabla("🔴 Vencidos", vencidos)}
          ${tabla("🟡 Por vencer (próximos 7 días)", porVencer)}

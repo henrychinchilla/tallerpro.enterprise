@@ -1,4 +1,4 @@
-/* TallerPro v3.0 — operacion/mi_ot.js
+/* NexusPro v3.0 — operacion/mi_ot.js
    Portal del cliente (rol 'cliente'): seguimiento de SUS órdenes.
    Regla: el cliente solo ve la OT mientras no haya sido recibida y pagada,
    es decir, mientras su estado no sea 'entregado' ni 'cancelado'. */

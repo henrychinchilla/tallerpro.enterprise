@@ -1,4 +1,4 @@
-/* TallerPro v3.0 — marketing/index.js */
+/* NexusPro v3.0 — marketing/index.js */
 Modulos.marketing = {
   _tab: 'combos', _combos: [], _promos: [],
 
@@ -208,7 +208,7 @@ Modulos.marketing = {
       const fb = await DB.getFeedback();
       const tid = Auth.tenant?.id || '';
       const url = `${location.origin}/feedback.html?t=${encodeURIComponent(tid)}`;
-      const taller = Auth.tenant?.name || 'TallerPro';
+      const taller = Auth.tenant?.name || 'NexusPro';
       const ASP = [['rating_servicio','Servicio'],['rating_instalaciones','Instalaciones'],['rating_limpieza','Limpieza personal'],['rating_entrega','Condiciones de entrega'],['rating_documentos','Documentos']];
       const avg = a => a.length ? Math.round(a.reduce((x,y)=>x+y,0)/a.length*10)/10 : 0;
       const ratings = [];
@@ -365,7 +365,7 @@ Modulos.marketing = {
     if (!window.qrcode || !this._qrUrl) { UI.toast('Espera a que cargue el QR','warn'); return; }
     const qr = qrcode(0, 'M'); qr.addData(this._qrUrl); qr.make();
     const img = qr.createImgTag(10, 12);
-    const taller = Auth.tenant?.name || 'TallerPro';
+    const taller = Auth.tenant?.name || 'NexusPro';
     const win = window.open('', '_blank');
     win.document.write(`<html><head><title>QR Feedback</title></head>
       <body style="text-align:center;font-family:Arial;padding:36px">
@@ -391,7 +391,7 @@ Modulos.marketing = {
     if (!email) { UI.toast('Ingresa un correo','error'); return; }
     const tid = Auth.tenant?.id || '';
     const url = `${location.origin}/feedback.html?t=${encodeURIComponent(tid)}&o=email`;
-    const taller = Auth.tenant?.name || 'TallerPro';
+    const taller = Auth.tenant?.name || 'NexusPro';
     const html = `<div style="font-family:Arial,sans-serif;max-width:480px"><h2 style="color:#d97706">🔧 ${taller}</h2>`+
       `<p>¡Tu opinión nos importa! Cuéntanos cómo te fue${fidelizacionCfg().bono_feedback>0?` y <b>gana ${fidelizacionCfg().bono_feedback} puntos</b> de fidelización`:''}.</p>`+
       `<p style="text-align:center;margin:18px 0"><a href="${url}" style="background:#d97706;color:#fff;padding:12px 22px;border-radius:8px;text-decoration:none;font-weight:700">Responder encuesta</a></p>`+
@@ -409,7 +409,7 @@ Modulos.marketing = {
     const precEsp = document.getElementById('fl-precio-esp')?.value;
     const valido  = document.getElementById('fl-valido')?.value;
     const tel     = document.getElementById('fl-tel')?.value;
-    const taller  = Auth.tenant?.name || 'TallerPro';
+    const taller  = Auth.tenant?.name || 'NexusPro';
     const temp    = document.getElementById('fl-template')?.value || 'neon';
 
     const descPct = precReg&&precEsp ? Math.round((1-precEsp/precReg)*100) : 0;
@@ -462,7 +462,7 @@ Modulos.marketing = {
         
         ${valido?`<div style="font-size:11px;border:1px solid var(--border);border-radius:8px;padding:6px 14px;display:inline-block;margin-bottom:16px;background:rgba(0,0,0,0.02)">📅 Válido hasta ${UI.fecha(valido)}</div>`:''}
         ${tel?`<div style="font-size:16px;margin-top:10px;${labelStyle}">📞 ¡Haz tu cita hoy! ${tel}</div>`:''}
-        <div style="margin-top:24px;font-size:9px;opacity:0.5;letter-spacing:0.5px">TallerPro Enterprise · ${new Date().getFullYear()}</div>
+        <div style="margin-top:24px;font-size:9px;opacity:0.5;letter-spacing:0.5px">NexusPro Enterprise · ${new Date().getFullYear()}</div>
       </div>`;
   },
 

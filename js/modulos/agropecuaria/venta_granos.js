@@ -1,4 +1,4 @@
-/* TallerPro v3.0 — agropecuaria/venta_granos.js
+/* NexusPro v3.0 — agropecuaria/venta_granos.js
    Módulo vertical: Venta de Granos. Comercialización de maíz, frijol, trigo,
    sorgo, cebada con inventario, cotizaciones, facturación FEL y análisis de precios. */
 Modulos.venta_granos = {

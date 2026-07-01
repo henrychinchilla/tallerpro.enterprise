@@ -1,5 +1,5 @@
 -- ═══════════════════════════════════════════════════════════════
--- TallerPro Enterprise — Migración 005
+-- NexusPro Enterprise — Migración 005
 -- Cadena de mando / organigrama (a quién reporta cada quien)
 --
 -- APLICADA EN PRODUCCIÓN: 2026-06-07 (cadena_de_mando_reporta_a)

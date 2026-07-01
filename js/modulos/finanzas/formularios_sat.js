@@ -357,7 +357,7 @@ Modulos.contabilidad.sat = {
         </div>
       </div>
       <div class="alert" style="background:var(--surface3,#1e1e1e);border:1px solid var(--border);border-radius:8px;padding:10px;font-size:11px;color:var(--text3);margin-top:4px">
-        Este campo actualiza la configuración de cálculo en TallerPro. <b>Usted es responsable de notificar a la SAT y hacer el cambio oficial en Declaraguate/SAT en línea.</b>
+        Este campo actualiza la configuración de cálculo en NexusPro. <b>Usted es responsable de notificar a la SAT y hacer el cambio oficial en Declaraguate/SAT en línea.</b>
       </div>
       <div class="modal-footer">
         <button class="btn btn-ghost" onclick="UI.cerrarModal()">Cancelar</button>
@@ -377,7 +377,7 @@ Modulos.contabilidad.sat = {
     if (!ok) { UI.toast('Error al guardar la configuración fiscal','error'); return; }
     Modulos.contabilidad._fiscal = nuevo;
     UI.cerrarModal();
-    UI.toast('Régimen fiscal actualizado en TallerPro ✓ — recuerde notificar a la SAT', 'success', 6000);
+    UI.toast('Régimen fiscal actualizado en NexusPro ✓ — recuerde notificar a la SAT', 'success', 6000);
     /* Recarga el módulo para reflejar el nuevo régimen en los cálculos */
     await Modulos.contabilidad.render();
   },

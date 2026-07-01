@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════════════
-   TallerPro Enterprise — Documentos firmados (firma en pantalla)
+   NexusPro Enterprise — Documentos firmados (firma en pantalla)
    Captura firma(s) en un <canvas> → genera PDF (jsPDF) → calcula
    SHA-256 → sube a Supabase Storage (bucket privado 'documentos') →
    registra en la tabla 'documentos'. Visible desde el historial.
@@ -103,7 +103,7 @@ const Docs = {
     const W = doc.internal.pageSize.getWidth();
     let y = 48;
     doc.setFont('helvetica','bold'); doc.setFontSize(15);
-    doc.text(Auth.tenant?.name || 'TallerPro Enterprise', 40, y);
+    doc.text(Auth.tenant?.name || 'NexusPro Enterprise', 40, y);
     doc.setFont('helvetica','normal'); doc.setFontSize(9);
     y += 14; doc.text(`NIT: ${Auth.tenant?.nit||'—'}   ${Auth.tenant?.tel||''}`, 40, y);
     doc.setDrawColor(245,158,11); doc.setLineWidth(2); doc.line(40, y+8, W-40, y+8);
@@ -141,7 +141,7 @@ const Docs = {
     });
     const fecha = new Date().toLocaleString('es-GT');
     doc.setFontSize(7.5); doc.setTextColor(120);
-    doc.text(`Generado ${fecha} · Documento con sello de integridad (SHA-256) en TallerPro`, 40, 815);
+    doc.text(`Generado ${fecha} · Documento con sello de integridad (SHA-256) en NexusPro`, 40, 815);
 
     const blob = doc.output('blob');
     const buf = await blob.arrayBuffer();

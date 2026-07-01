@@ -1,4 +1,4 @@
-/* TallerPro v3.0 — inventario/index.js */
+/* NexusPro v3.0 — inventario/index.js */
 Modulos.inventario = {
   _data: [], _bodegas: [], _proveedores: [], _img: '',
   async render(busca='') {

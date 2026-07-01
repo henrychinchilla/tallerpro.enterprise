@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════════════
-   TallerPro Enterprise v3.0
+   NexusPro Enterprise v3.0
    js/core/integraciones.js — WhatsApp e IA (cliente)
 
    Todo pasa por Edge Functions (claves del lado servidor).

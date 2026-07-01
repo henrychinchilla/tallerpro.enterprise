@@ -1,5 +1,5 @@
 -- ═══════════════════════════════════════════════════════
--- TallerPro Enterprise v3.0 — Schema completo Supabase
+-- NexusPro Enterprise v3.0 — Schema completo Supabase
 -- EJECUTAR EN: Supabase → SQL Editor → New Query → RUN
 -- ═══════════════════════════════════════════════════════
 
@@ -418,4 +418,4 @@ ALTER TABLE public.citas                 ENABLE ROW LEVEL SECURITY;
 -- Grants base (RLS hace el filtrado real por fila)
 GRANT ALL ON ALL TABLES IN SCHEMA public TO authenticated;
 
-SELECT 'TallerPro v3.0 Schema instalado ✓' AS resultado;
+SELECT 'NexusPro v3.0 Schema instalado ✓' AS resultado;

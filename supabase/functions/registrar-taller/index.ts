@@ -56,14 +56,14 @@ async function validarTurnstile(token: string | undefined, ip: string | null): P
 async function avisarSuperadmin(taller: string, email: string, telefono: string) {
   const API_KEY = Deno.env.get("RESEND_API_KEY");
   if (!API_KEY) return;
-  const FROM = Deno.env.get("EMAIL_FROM") ?? "TallerPro <onboarding@resend.dev>";
+  const FROM = Deno.env.get("EMAIL_FROM") ?? "NexusPro <onboarding@resend.dev>";
   await fetch("https://api.resend.com/emails", {
     method: "POST",
     headers: { "Authorization": `Bearer ${API_KEY}`, "Content-Type": "application/json" },
     body: JSON.stringify({
       from: FROM, to: SUPERADMIN_EMAIL,
       subject: `🆕 Nuevo taller pendiente de aprobación: ${taller}`,
-      html: `<h2>Nuevo registro en TallerPro</h2>
+      html: `<h2>Nuevo registro en NexusPro</h2>
         <p><b>Taller:</b> ${taller}<br><b>Email:</b> ${email}<br><b>Teléfono:</b> ${telefono}</p>
         <p>El taller quedó <b>suspendido</b> hasta tu aprobación. Actívalo desde el Panel SaaS (▶️).</p>`,
     }),
@@ -100,7 +100,7 @@ Deno.serve(async (req) => {
 
   // ── Anti-duplicados básicos ──
   const { data: yaExiste } = await admin.from("usuarios").select("id").eq("email", email).maybeSingle();
-  if (yaExiste) return json({ error: "Ese correo ya tiene una cuenta en TallerPro. Usa 'Olvidé mi contraseña'." }, 409);
+  if (yaExiste) return json({ error: "Ese correo ya tiene una cuenta en NexusPro. Usa 'Olvidé mi contraseña'." }, 409);
 
   // ── Crear auth user ──
   const { data: created, error: cErr } = await admin.auth.admin.createUser({

@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════════════
-   TallerPro Enterprise v3.0
+   NexusPro Enterprise v3.0
    js/core/ui.js — Utilidades de interfaz
 ═══════════════════════════════════════════════════════ */
 

@@ -1,5 +1,5 @@
 -- ═══════════════════════════════════════════════════════════════
--- TallerPro Enterprise — Migración 006
+-- NexusPro Enterprise — Migración 006
 -- Desglose de factura: una línea por ítem cobrado (factura_items)
 --
 -- APLICADA EN PRODUCCIÓN: 2026-06-07 (factura_items_desglose)

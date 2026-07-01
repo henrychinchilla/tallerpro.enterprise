@@ -1,4 +1,4 @@
-/* TallerPro v3.0 — finanzas/presupuesto.js
+/* NexusPro v3.0 — finanzas/presupuesto.js
    Budget / planeación anual. Se nutre de: consumo de insumos en OTs,
    gastos recurrentes, nómina cargada (hora-hombre) y depreciación de activos.
    Incluye plan de compras de herramientas/maquinaria (capex). */
