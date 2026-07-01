@@ -120,7 +120,7 @@ Deno.serve(async (req) => {
     ai_limite_mes: 50,
     modulos_activos: Array.isArray(sol.modulos_activos) ? sol.modulos_activos : null,
     active: false,
-    notas_admin: "Correo verificado — pendiente de aprobación (auto-registro). Prueba gratis 30 días.",
+    notas_admin: "Pendiente de aprobación (auto-registro, correo verificado). Prueba gratis 30 días.",
   }).select().single();
 
   if (tErr || !tenant) {

@@ -84,7 +84,44 @@ function plantillaFinDeMes(tenant: any): { subject: string; html: string } {
   };
 }
 
+// ¿Es un comercio en PRUEBA/DEMO? (precio 0 o notas con 'prueba')
+function esTrial(tenant: any): boolean {
+  return (Number(tenant.precio_mensual) || 0) === 0 ||
+    (tenant.notas_admin ?? "").toLowerCase().includes("prueba");
+}
+
+// Plantilla para comercios en PRUEBA GRATIS (no habla de pago mensual).
+function plantillaTrial(tenant: any, dias: number): { subject: string; html: string } {
+  const comercio = tenant.name ?? tenant.slug ?? "tu comercio";
+  const fecha = tenant.suscripcion_vence;
+  const pie = `<p style="color:#888;font-size:12px">NexusPro — sistema de gestión.<br>
+    ¿Dudas? Responde este correo y con gusto te ayudamos.</p>`;
+  if (dias > 0) {
+    return {
+      subject: `⏳ Tu prueba gratis de NexusPro vence en ${dias} día${dias === 1 ? "" : "s"}`,
+      html: `<h2>Hola, ${comercio} 👋</h2>
+        <p>Tu <b>prueba gratis</b> de NexusPro vence el <b>${fecha}</b> (en ${dias} día${dias === 1 ? "" : "s"}).</p>
+        <p>Para no perder tus datos y seguir usando el sistema, <b>contáctanos y activa tu plan</b>.</p>${pie}`,
+    };
+  }
+  if (dias === 0) {
+    return {
+      subject: "⏳ Tu prueba gratis de NexusPro vence HOY",
+      html: `<h2>Hola, ${comercio} 👋</h2>
+        <p>Tu <b>prueba gratis</b> de NexusPro vence <b>hoy (${fecha})</b>.</p>
+        <p>Contáctanos hoy para activar tu plan y mantener tu acceso sin interrupciones.</p>${pie}`,
+    };
+  }
+  return {
+    subject: `⚠️ Tu prueba gratis de NexusPro venció hace ${-dias} día${dias === -1 ? "" : "s"}`,
+    html: `<h2>Hola, ${comercio}</h2>
+      <p>Tu <b>prueba gratis</b> de NexusPro venció el <b>${fecha}</b>.</p>
+      <p>Aún puedes activar tu plan y recuperar el acceso completo. <b>Contáctanos</b> y lo activamos.</p>${pie}`,
+  };
+}
+
 function plantilla(tenant: any, dias: number): { subject: string; html: string } {
+  if (esTrial(tenant)) return plantillaTrial(tenant, dias);
   const taller = tenant.name ?? tenant.slug ?? "tu taller";
   const monto = Q(tenant.precio_mensual);
   const fecha = tenant.suscripcion_vence;
@@ -149,7 +186,7 @@ Deno.serve(async (req) => {
 
   const { data: tenants, error: tErr } = await admin
     .from("tenants")
-    .select("id, slug, name, email, active, precio_mensual, suscripcion_vence, ciclo_pago");
+    .select("id, slug, name, email, active, precio_mensual, suscripcion_vence, ciclo_pago, notas_admin");
   if (tErr) return json({ error: tErr.message }, 500);
 
   const activos = (tenants ?? []).filter((t: any) => t.active !== false);

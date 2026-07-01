@@ -561,44 +561,46 @@ async function loginRegistrarTallerGoogle() {
   const { data: { session } } = await getSB().auth.getSession();
   if (!session?.user) { renderLogin('login'); return; }
 
-  const email       = session.user.email;
-  const adminNombre = session.user.user_metadata?.full_name
-                   ?? session.user.user_metadata?.name
-                   ?? email.split('@')[0];
+  const email = session.user.email;
 
-  UI.toast('Registrando tu taller...', 'info');
-  const { data: rpcTenant, error: rpcErr } = await getSB().rpc('registrar_taller', {
-    p_nombre_taller: nombre,
-    p_nit:           nit || null,
-    p_email:         email,
-    p_nombre:        adminNombre,
+  /* Tipo de negocio + módulos (si el form los ofrece; por defecto base). */
+  const tipo = document.querySelector('input[name="tipo"]:checked')?.value || 'taller';
+  const modulos_base = ['clientes','vehiculos','ordenes','inventario','pos'];
+  const modulos_map = {
+    taller: modulos_base,
+    refrigeracion: [...modulos_base, 'refrigeracion'],
+    herreria: [...modulos_base, 'herreria'],
+    peleteria: [...modulos_base, 'peleteria'],
+    electronica: [...modulos_base, 'electronica'],
+    agroservicio: ['clientes','agroservicio','inventario','proveedores','compras'],
+    venta_granos: ['clientes','venta_granos','inventario','facturacion','bancos'],
+    ferreteria: ['clientes','pos','inventario','bodegas','proveedores','compras','facturacion','bancos','contabilidad'],
+    otro: modulos_base
+  };
+  const modulos_activos = modulos_map[tipo] || modulos_base;
+
+  UI.toast('Registrando tu comercio...', 'info');
+  const { data, error } = await getSB().functions.invoke('registrar-comercio-google', {
+    body: { nombre_comercio: nombre, nit, telefono: tel, tipo_negocio: tipo, modulos_activos }
   });
 
-  if (rpcErr) { UI.toast('Error: ' + rpcErr.message, 'error'); return; }
+  let msg = data?.error || null;
+  if (error) { try { const j = await error.context.json(); msg = j?.error || error.message; } catch(_) { msg = error.message; } }
+  if (msg) { UI.toast(msg, 'error'); return; }
 
-  /* Guardar teléfono — RPC no lo incluye en su firma original */
-  getSB().from('usuarios').update({ telefono: tel }).eq('email', email).then(() => {});
-
-  Auth.supaUser = session.user;
-  Auth.tenant   = rpcTenant;
-  Auth.user     = {
-    id: session.user.id, nombre: adminNombre, email,
-    rol: 'admin', activo: true, avatar: '👑', tenant_id: rpcTenant?.id
-  };
-  window._cachedTenantId = rpcTenant?.id || null;
-
-  renderLogin('login');
-  UI.modal('🎉 ¡Taller registrado!', `
+  /* El comercio nace suspendido (pendiente de aprobación). Recargamos para
+     que la app muestre la pantalla "Estamos activando tu comercio". */
+  UI.modal('🎉 ¡Comercio registrado!', `
     <div style="text-align:center;padding:8px 4px">
       <div style="font-size:44px;margin-bottom:10px">🏪</div>
       <div style="font-weight:800;font-size:16px;margin-bottom:8px">${nombre}</div>
       <p style="font-size:13px;color:var(--text2);line-height:1.6">
-        Tu registro fue recibido y tu taller está en <b>revisión de activación</b>
+        Tu registro fue recibido y tu comercio está en <b>revisión de activación</b>
         (normalmente en horas). Te avisaremos a <b>${email}</b> cuando esté listo
         para iniciar tus <b>30 días de prueba gratis</b>.
       </p>
       <div class="modal-footer" style="justify-content:center">
-        <button class="btn btn-amber" onclick="UI.cerrarModal()">Entendido</button>
+        <button class="btn btn-amber" onclick="location.reload()">Entendido</button>
       </div>
     </div>`);
 }

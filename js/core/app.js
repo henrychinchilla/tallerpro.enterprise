@@ -145,7 +145,7 @@ const App = {
   pantallaSuspendido() {
     const main = document.getElementById('page-content') || document.getElementById('app');
     const sb = document.getElementById('sidebar'); if (sb) sb.innerHTML = '';
-    const pendiente = (Auth.tenant?.notas_admin || '').includes('Pendiente de aprobación');
+    const pendiente = (Auth.tenant?.notas_admin || '').toLowerCase().includes('pendiente de aprobación');
     if (main) main.innerHTML = pendiente ? `
       <div style="min-height:90vh;display:flex;align-items:center;justify-content:center;padding:24px">
         <div class="card" style="max-width:480px;text-align:center">
