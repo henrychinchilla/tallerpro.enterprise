@@ -282,6 +282,30 @@ const Auth = {
   },
 
   /* Fallback: crea taller sin RPC (compatible con RLS abierto, pre-001) */
+  async _registrarTallerDirecto(fields, userId) {
+    const sb = getSB();
+    const slug = fields.nombre_taller.toLowerCase()
+      .replace(/[^a-z0-9]/g, '-').replace(/-+/g, '-').slice(0, 40)
+      + '-' + Date.now().toString(36);
+
+    const { data: tenant, error: tErr } = await sb.from('tenants').insert({
+      slug, name: fields.nombre_taller, nit: fields.nit || null, email: fields.email
+    }).select().single();
+    if (tErr) return null;
+
+    await sb.from('licencias').insert({
+      tenant_id: tenant.id, tipo: 'demo',
+      fecha_inicio: new Date().toISOString().slice(0, 10),
+      fecha_vencimiento: new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10)
+    });
+    await sb.from('config_fiscal').insert({
+      tenant_id: tenant.id, regimen_iva: 'general', tasa_iva: 0.12, tasa_isr: 0.05
+    });
+    await sb.from('usuarios').upsert({
+      id: userId, tenant_id: tenant.id, nombre: fields.nombre, email: fields.email,
+      rol: 'admin', activo: true, avatar: '👑'
+    }, { onConflict: 'id' });
+
     return tenant;
   },
 
