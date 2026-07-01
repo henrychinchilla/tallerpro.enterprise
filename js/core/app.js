@@ -28,7 +28,7 @@ const App = {
       const appEl = document.getElementById('app');
       if (appEl) appEl.classList.add('visible');
       TEMAS.aplicar(localStorage.getItem('tp_tema') || 'light');
-      if (Auth.user?.rol !== 'superadmin' && Auth.tenant?.active === false) {
+      if (App._bloqueadoPorSuscripcion()) {
         return App.pantallaSuspendido();
       }
       App.renderSidebar();
@@ -67,8 +67,8 @@ const App = {
     const appEl = document.getElementById('app');
     if (appEl) appEl.classList.add('visible');
     TEMAS.aplicar(localStorage.getItem('tp_tema') || 'light');
-    /* Bloqueo si la cuenta del taller está suspendida (no aplica al superadmin) */
-    if (Auth.user?.rol !== 'superadmin' && Auth.tenant?.active === false) {
+    /* Bloqueo si la cuenta está suspendida o su prueba gratis venció (no aplica al superadmin) */
+    if (App._bloqueadoPorSuscripcion()) {
       return App.pantallaSuspendido();
     }
     App.renderSidebar();
@@ -141,28 +141,59 @@ const App = {
     }
   },
 
-  /* Pantalla de cuenta suspendida (suscripción/cobro) o pendiente de activación */
+  /* ── SUSCRIPCIÓN / PRUEBA GRATIS ──────────────────
+     Un comercio en prueba (precio 0) o con notas que dicen 'prueba' se
+     considera demo. El demo vencido bloquea el acceso (auto-suspensión).
+     El auto-suspender real vive en el cron suspender_trials_vencidos (BD,
+     mig 065); esto es el bloqueo inmediato en el cliente para no depender
+     de que el cron ya haya corrido. */
+  _esTrial(t) {
+    return (Number(t?.precio_mensual) || 0) === 0 ||
+      (t?.notas_admin || '').toLowerCase().includes('prueba');
+  },
+  _trialVencido(t = Auth.tenant) {
+    if (!t?.suscripcion_vence) return false;
+    const hoy = new Date().toISOString().slice(0, 10);
+    return t.suscripcion_vence < hoy && App._esTrial(t);
+  },
+  _bloqueadoPorSuscripcion() {
+    if (Auth.user?.rol === 'superadmin') return false;
+    return Auth.tenant?.active === false || App._trialVencido();
+  },
+
+  /* Pantalla de cuenta suspendida / prueba vencida / pendiente de activación */
   pantallaSuspendido() {
     const main = document.getElementById('page-content') || document.getElementById('app');
     const sb = document.getElementById('sidebar'); if (sb) sb.innerHTML = '';
-    const pendiente = (Auth.tenant?.notas_admin || '').toLowerCase().includes('pendiente de aprobación');
-    if (main) main.innerHTML = pendiente ? `
+    const t = Auth.tenant;
+    const nombre = t?.name || 'tu comercio';
+    const notas = (t?.notas_admin || '').toLowerCase();
+    /* Pendiente = registrado pero aún no aprobado (no ha iniciado su prueba) */
+    const pendiente = t?.active === false && notas.includes('pendiente de aprobación') && !t?.suscripcion_vence;
+    const trialVencido = App._trialVencido(t);
+
+    let icon, titulo, cuerpo;
+    if (pendiente) {
+      icon = '⏳'; titulo = 'Estamos activando tu comercio';
+      cuerpo = `<b>${nombre}</b> fue registrado con éxito y está en revisión de activación
+        (normalmente toma unas horas). Te avisaremos a tu correo cuando puedas empezar tus
+        <b>30 días de prueba gratis</b>.`;
+    } else if (trialVencido) {
+      icon = '🔒'; titulo = 'Tu prueba gratis terminó';
+      cuerpo = `Tu prueba de 30 días de <b>${nombre}</b> venció el <b>${UI.fecha ? UI.fecha(t.suscripcion_vence) : t.suscripcion_vence}</b>.
+        Para seguir usando NexusPro y conservar tus datos, <b>contáctanos y activa tu plan</b>.`;
+    } else {
+      icon = '⏸️'; titulo = 'Cuenta suspendida';
+      cuerpo = `El acceso a <b>${nombre}</b> está temporalmente suspendido.
+        Ponte en contacto con soporte de NexusPro para reactivar tu suscripción.`;
+    }
+
+    if (main) main.innerHTML = `
       <div style="min-height:90vh;display:flex;align-items:center;justify-content:center;padding:24px">
         <div class="card" style="max-width:480px;text-align:center">
-          <div style="font-size:44px">⏳</div>
-          <h2 style="margin:8px 0">Estamos activando tu taller</h2>
-          <p style="color:var(--text2);font-size:14px"><b>${Auth.tenant?.name||'Tu taller'}</b> fue registrado con éxito
-          y está en revisión de activación (normalmente toma unas horas).
-          Te avisaremos a tu correo cuando puedas empezar tus <b>30 días de prueba gratis</b>.</p>
-          <div style="margin-top:16px"><button class="btn btn-ghost" onclick="Auth.logout()">Cerrar sesión</button></div>
-        </div>
-      </div>` : `
-      <div style="min-height:90vh;display:flex;align-items:center;justify-content:center;padding:24px">
-        <div class="card" style="max-width:480px;text-align:center">
-          <div style="font-size:44px">⏸️</div>
-          <h2 style="margin:8px 0">Cuenta suspendida</h2>
-          <p style="color:var(--text2);font-size:14px">El acceso a <b>${Auth.tenant?.name||'tu taller'}</b> está temporalmente suspendido.
-          Ponte en contacto con soporte de NexusPro para reactivar tu suscripción.</p>
+          <div style="font-size:44px">${icon}</div>
+          <h2 style="margin:8px 0">${titulo}</h2>
+          <p style="color:var(--text2);font-size:14px">${cuerpo}</p>
           <div style="margin-top:16px"><button class="btn btn-ghost" onclick="Auth.logout()">Cerrar sesión</button></div>
         </div>
       </div>`;

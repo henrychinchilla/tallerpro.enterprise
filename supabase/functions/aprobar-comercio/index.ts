@@ -83,7 +83,12 @@ Deno.serve(async (req) => {
     .select("id, name, slug, email").eq("id", tenantId).maybeSingle();
   if (tErr || !tenant) return json({ error: "Comercio no encontrado" }, 404);
 
-  const { error: uErr } = await admin.from("tenants").update({ active: true }).eq("id", tenantId);
+  // Al aprobar se limpia "Pendiente de aprobación" de las notas (se conserva
+  // el marcador de prueba) para que, si el demo se suspende luego, la app
+  // muestre la pantalla correcta y no "Estamos activando".
+  const { error: uErr } = await admin.from("tenants")
+    .update({ active: true, notas_admin: "Aprobado (auto-registro). Prueba gratis 30 días." })
+    .eq("id", tenantId);
   if (uErr) return json({ error: "No se pudo activar: " + uErr.message }, 400);
 
   await admin.from("solicitudes_comercio")
