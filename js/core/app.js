@@ -384,6 +384,9 @@ const App = {
 
   _restaurarRuta() {
     const [pagina, tab] = (location.hash || '').replace(/^#/, '').split('/');
+    /* El superadmin (dueño del SaaS) aterriza directo en el Panel SaaS al
+       entrar sin ruta previa: administra sin depender de un comercio. */
+    if (!pagina && Auth.user?.rol === 'superadmin' && window.Modulos?.superadmin) return 'superadmin';
     if (!pagina || pagina === 'dashboard') return 'dashboard';
     const def = MODULOS.find(m => m.id === pagina);
     if (!def || !window.Modulos?.[pagina]) return 'dashboard';

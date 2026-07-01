@@ -1,8 +1,8 @@
 /* Panel SaaS — solo superadmin (dueño del producto).
-   Gestiona talleres (planes, módulos, suscripción, suspensión),
+   Gestiona comercios (planes, módulos, suscripción, suspensión),
    cobros mensuales (MRR, pendientes) y supervisa respaldos. */
 Modulos.superadmin = {
-  _tab: 'talleres',
+  _tab: 'comercios',
   _tenants: [], _pagos: [],
   _dbTenantId: null, _dbBackups: [],
 
@@ -20,14 +20,14 @@ Modulos.superadmin = {
         <div><h1 class="page-title">⚡ Panel SaaS</h1>
         <p class="page-subtitle">// gestión comercial de NexusPro</p></div>
         <div class="page-actions">
-          <button class="btn btn-ghost" onclick="Modulos.superadmin.respaldarTodos()" title="Respaldo inmediato de todos los talleres a Storage">💾 Respaldar todos</button>
+          <button class="btn btn-ghost" onclick="Modulos.superadmin.respaldarTodos()" title="Respaldo inmediato de todos los comercios a Storage">💾 Respaldar todos</button>
           <button class="btn btn-ghost" onclick="Modulos.superadmin.enviarRecordatorios()" title="Enviar recordatorios de cobro/vencimiento por email">📧 Recordatorios</button>
-          <button class="btn btn-amber" onclick="Modulos.superadmin.modalNuevoTaller()">➕ Nuevo taller</button>
+          <button class="btn btn-amber" onclick="Modulos.superadmin.modalNuevoTaller()">➕ Nuevo comercio</button>
         </div>
       </div>
       <div class="page-body">
         <div class="tabs">
-          <button class="tab-btn ${this._tab==='talleres'?'active':''}" onclick="Modulos.superadmin._ir('talleres')">🏪 Talleres</button>
+          <button class="tab-btn ${this._tab==='comercios'?'active':''}" onclick="Modulos.superadmin._ir('comercios')">🏪 Comercios</button>
           <button class="tab-btn ${this._tab==='cobros'?'active':''}" onclick="Modulos.superadmin._ir('cobros')">💵 Cobros</button>
           <button class="tab-btn ${this._tab==='planes'?'active':''}" onclick="Modulos.superadmin._ir('planes')">🎚️ Planes</button>
           <button class="tab-btn ${this._tab==='basedatos'?'active':''}" onclick="Modulos.superadmin._ir('basedatos')">🗄️ Base de datos</button>
@@ -39,6 +39,43 @@ Modulos.superadmin = {
 
   _ir(t){ this._tab=t; App._subActivo=t; App._guardarRuta(); App.renderSidebar(); App.marcarTabActivo(t); this._renderTab(); },
 
+  /* ── SOPORTE: entrar a cualquier comercio ─────────────
+     El superadmin cambia su tenant activo al del comercio y entra a su
+     dashboard como si estuviera adentro. RLS lo permite (is_superadmin()),
+     y getTID() usa Auth.tenant.id, así que todos los módulos quedan
+     filtrados a ese comercio. Se guarda el tenant propio para volver. */
+  _soporteReturn: undefined,
+  async entrarComercio(id){
+    const t = this._tenants.find(x=>x.id===id);
+    if (!t) { UI.toast('Comercio no encontrado','error'); return; }
+    if (this._soporteReturn === undefined) this._soporteReturn = Auth.tenant || null;
+    Auth.tenant = t; window._cachedTenantId = t.id;
+    this._pintarBarraSoporte(t);
+    UI.toast(`Entraste a "${t.name||t.slug}" en modo soporte`, 'success');
+    App.paginaActual = 'dashboard'; App._subActivo = null; App._guardarRuta();
+    App.renderSidebar(); App.navegarA('dashboard');
+  },
+  salirSoporte(){
+    if (this._soporteReturn !== undefined) {
+      Auth.tenant = this._soporteReturn;
+      window._cachedTenantId = this._soporteReturn?.id || null;
+      this._soporteReturn = undefined;
+    }
+    document.getElementById('sa-soporte-bar')?.remove();
+    this._tab = 'comercios'; App.paginaActual = 'superadmin'; App._subActivo = 'comercios'; App._guardarRuta();
+    App.renderSidebar(); App.navegarA('superadmin');
+  },
+  _pintarBarraSoporte(t){
+    let bar = document.getElementById('sa-soporte-bar');
+    if (!bar) { bar = document.createElement('div'); bar.id='sa-soporte-bar'; document.body.appendChild(bar); }
+    bar.style.cssText = 'position:fixed;left:0;right:0;bottom:0;z-index:9999;background:#b45309;color:#fff;'
+      + 'padding:8px 14px;display:flex;align-items:center;justify-content:center;gap:12px;flex-wrap:wrap;'
+      + 'font-size:13px;box-shadow:0 -2px 10px rgba(0,0,0,.35)';
+    bar.innerHTML = `🛟 <span>Modo soporte — estás dentro de <b>${t.name||t.slug}</b></span>`
+      + `<button class="btn btn-sm" style="background:#fff;color:#b45309;font-weight:700" `
+      + `onclick="Modulos.superadmin.salirSoporte()">← Volver al Panel SaaS</button>`;
+  },
+
   _mesActual(){ const n=new Date(); return `${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,'0')}`; },
   _planLabel(p){ return (PLANES[p]?.label)||p||'—'; },
 
@@ -48,19 +85,19 @@ Modulos.superadmin = {
     const hoy = new Date().toISOString().slice(0,10);
     const activos = this._tenants.filter(t=>t.active!==false);
 
-    if (this._tab==='talleres') {
+    if (this._tab==='comercios') {
       const mrr = activos.reduce((s,t)=>s+(Number(t.precio_mensual)||0),0);
       const vencidos = this._tenants.filter(t=>t.suscripcion_vence && t.suscripcion_vence < hoy && t.active!==false);
       el.innerHTML = `
         <div class="kpi-grid" style="margin-bottom:20px">
-          ${UI.kpiCard({ icon:'🏢', clase:'amber', label:'Talleres totales', value: this._tenants.length })}
+          ${UI.kpiCard({ icon:'🏢', clase:'amber', label:'Comercios totales', value: this._tenants.length })}
           ${UI.kpiCard({ icon:'✅', clase:'green', label:'Activos', value: activos.length })}
           ${UI.kpiCard({ icon:'💰', clase:'cyan', label:'MRR (ingreso recurrente)', value: mrr, money:true, trend:'por mes' })}
           ${UI.kpiCard({ icon:'⚠️', clase: vencidos.length?'red':'gray', label:'Suscripciones vencidas', value: vencidos.length })}
         </div>
         <div class="table-wrap">
           <table class="data-table">
-            <thead><tr><th>Taller</th><th>Plan</th><th>Precio</th><th>Vence</th><th>Estado</th><th>Acciones</th></tr></thead>
+            <thead><tr><th>Comercio</th><th>Plan</th><th>Precio</th><th>Vence</th><th>Estado</th><th>Acciones</th></tr></thead>
             <tbody>
               ${this._tenants.map(t=>{
                 const venc = t.suscripcion_vence && t.suscripcion_vence < hoy;
@@ -72,11 +109,12 @@ Modulos.superadmin = {
                   <td class="mono-sm ${venc?'text-red':''}">${t.suscripcion_vence?UI.fecha(t.suscripcion_vence):'—'}${venc?' ⚠️':''}</td>
                   <td><span class="badge badge-${susp?'red':'green'}">${susp?'Suspendido':'Activo'}</span></td>
                   <td><div style="display:flex;gap:4px;flex-wrap:wrap">
+                    <button class="btn btn-sm btn-amber" onclick="Modulos.superadmin.entrarComercio('${t.id}')" title="Entrar a este comercio para dar soporte">🛟 Entrar</button>
                     <button class="btn btn-sm btn-cyan" onclick="Modulos.superadmin.modalTaller('${t.id}')" title="Plan y módulos">⚙️</button>
                     <button class="btn btn-sm btn-green" onclick="Modulos.superadmin.modalCobro('${t.id}')" title="Registrar cobro">💵</button>
                     <button class="btn btn-sm ${susp?'btn-green':'btn-danger'}" onclick="Modulos.superadmin.toggleActivo('${t.id}',${susp})" title="${susp?'Reactivar':'Suspender'}">${susp?'▶️':'⏸️'}</button>
                   </div></td>
-                </tr>`;}).join('')||'<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--text3)">Sin talleres registrados</td></tr>'}
+                </tr>`;}).join('')||'<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--text3)">Sin comercios registrados</td></tr>'}
             </tbody>
           </table>
         </div>`;
@@ -87,21 +125,21 @@ Modulos.superadmin = {
       const tnById = id => this._tenants.find(t=>t.id===id);
       const cobradoMes = this._pagos.filter(p=>p.periodo===mesAct && p.estado==='pagado').reduce((s,p)=>s+(Number(p.monto)||0),0);
       const pendienteMes = this._pagos.filter(p=>p.periodo===mesAct && p.estado==='pendiente').reduce((s,p)=>s+(Number(p.monto)||0),0);
-      /* Talleres activos sin pago registrado del mes */
+      /* Comercios activos sin pago registrado del mes */
       const conPago = new Set(this._pagos.filter(p=>p.periodo===mesAct).map(p=>p.tenant_id));
       const sinCobrar = activos.filter(t=>!conPago.has(t.id));
       el.innerHTML = `
         <div class="kpi-grid" style="margin-bottom:20px">
           ${UI.kpiCard({ icon:'💵', clase:'green', label:'Cobrado este mes', value: cobradoMes, money:true })}
           ${UI.kpiCard({ icon:'⏳', clase:'amber', label:'Pendiente este mes', value: pendienteMes, money:true })}
-          ${UI.kpiCard({ icon:'⚠️', clase: sinCobrar.length?'red':'gray', label:`Sin cobrar (${mesAct})`, value: sinCobrar.length, trend:'talleres activos' })}
+          ${UI.kpiCard({ icon:'⚠️', clase: sinCobrar.length?'red':'gray', label:`Sin cobrar (${mesAct})`, value: sinCobrar.length, trend:'comercios activos' })}
         </div>
         ${sinCobrar.length?`<div class="alert alert-amber" style="margin-bottom:16px"><div class="alert-icon">⏰</div><div class="alert-body" style="font-size:12px">
           Sin cobro de ${mesAct}: ${sinCobrar.map(t=>`<b>${t.name||t.slug}</b>`).join(', ')}.
         </div></div>`:''}
         <div class="table-wrap">
           <table class="data-table">
-            <thead><tr><th>Fecha</th><th>Taller</th><th>Periodo</th><th>Monto</th><th>Método</th><th>Estado</th><th></th></tr></thead>
+            <thead><tr><th>Fecha</th><th>Comercio</th><th>Periodo</th><th>Monto</th><th>Método</th><th>Estado</th><th></th></tr></thead>
             <tbody>
               ${this._pagos.map(p=>{ const t=tnById(p.tenant_id); return `<tr>
                 <td class="mono-sm">${UI.fecha(p.fecha)}</td>
@@ -132,14 +170,14 @@ Modulos.superadmin = {
             </div>`).join('')}
         </div>
         <div class="alert alert-cyan"><div class="alert-icon">💡</div><div class="alert-body" style="font-size:12px">
-          Estos son los paquetes por defecto. En cada taller (⚙️) puedes activar/desactivar módulos <b>a la carta</b>
+          Estos son los paquetes por defecto. En cada comercio (⚙️) puedes activar/desactivar módulos <b>a la carta</b>
           y fijar un precio propio, sin importar el plan. Los módulos de cuenta (Dashboard, Calendario, Configuración,
           Usuarios, Administración, Respaldos) están siempre incluidos.
         </div></div>
         <div class="alert alert-amber" style="margin-top:12px"><div class="alert-icon">🤖</div><div class="alert-body" style="font-size:12px">
           <b>Nexus (Asistente IA)</b> viene incluido en <b>Empresarial</b> y se vende como <b>add-on de Q99/mes</b>
-          para Básico y Pro (actívalo a la carta en ⚙️ y suma Q99 al precio). Todos los talleres tienen un
-          <b>tope mensual de consultas</b> (default 300, ampliable por taller). Los talleres en prueba de 30 días
+          para Básico y Pro (actívalo a la carta en ⚙️ y suma Q99 al precio). Todos los comercios tienen un
+          <b>tope mensual de consultas</b> (default 300, ampliable por comercio). Los comercios en prueba de 30 días
           lo traen activado para que lo conozcan.
         </div></div>`;
     }
@@ -150,14 +188,14 @@ Modulos.superadmin = {
           <div class="alert-icon">⚠️</div>
           <div class="alert-body" style="font-size:12px">
             Herramientas de <b>alto riesgo</b>, solo superadmin. Restaurar o borrar sobrescribe los datos
-            del taller seleccionado. Antes de restaurar o borrar se genera automáticamente un respaldo
+            del comercio seleccionado. Antes de restaurar o borrar se genera automáticamente un respaldo
             de seguridad silencioso.
           </div>
         </div>
         <div class="form-group" style="max-width:420px">
-          <label class="form-label">Taller</label>
+          <label class="form-label">Comercio</label>
           <select class="form-select" id="db-tenant" onchange="Modulos.superadmin._dbCargar(this.value)">
-            <option value="">— Selecciona un taller —</option>
+            <option value="">— Selecciona un comercio —</option>
             ${this._tenants.map(t=>`<option value="${t.id}" ${this._dbTenantId===t.id?'selected':''}>${t.name||t.slug}</option>`).join('')}
           </select>
         </div>
@@ -166,7 +204,7 @@ Modulos.superadmin = {
     }
   },
 
-  /* ── BASE DE DATOS (superadmin): respaldos por taller, restaurar, borrar ── */
+  /* ── BASE DE DATOS (superadmin): respaldos por comercio, restaurar, borrar ── */
   async _dbCargar(id) {
     this._dbTenantId = id || null;
     this._dbBackups = [];
@@ -196,21 +234,21 @@ Modulos.superadmin = {
                 ${b.url?`<a class="btn btn-sm btn-cyan" href="${b.url}" target="_blank">⬇️ Descargar</a>`:''}
                 <button class="btn btn-sm btn-amber" onclick="Modulos.superadmin._dbRestaurar('${b.nombre}')">♻️ Restaurar</button>
               </div></td>
-            </tr>`).join('')||'<tr><td colspan="3" style="text-align:center;padding:24px;color:var(--text3)">Sin respaldos para este taller</td></tr>'}
+            </tr>`).join('')||'<tr><td colspan="3" style="text-align:center;padding:24px;color:var(--text3)">Sin respaldos para este comercio</td></tr>'}
           </tbody>
         </table>
       </div>
       <div class="card" style="margin-top:20px;border:2px solid var(--red)">
         <div style="font-weight:800;color:var(--red);margin-bottom:6px">🗑️ Borrar datos de "${t?.name||t?.slug}"</div>
         <div style="font-size:12px;color:var(--text3);margin-bottom:10px">
-          Elimina todos los datos operativos de este taller (clientes, órdenes, facturas, inventario, finanzas, etc.).
+          Elimina todos los datos operativos de este comercio (clientes, órdenes, facturas, inventario, finanzas, etc.).
           Se genera un respaldo de seguridad automático antes de borrar. Esta acción no se puede deshacer desde la app.
         </div>
         <div class="form-group">
           <label class="form-label">Escribe <b>${t?.slug||t?.id}</b> para confirmar</label>
           <input class="form-input" id="db-confirm-borrar" placeholder="${t?.slug||''}">
         </div>
-        <button class="btn btn-danger" onclick="Modulos.superadmin._dbBorrar()">Borrar datos del taller</button>
+        <button class="btn btn-danger" onclick="Modulos.superadmin._dbBorrar()">Borrar datos del comercio</button>
       </div>`;
   },
 
@@ -229,9 +267,9 @@ Modulos.superadmin = {
   async _dbBorrar() {
     const t = this._tenants.find(x=>x.id===this._dbTenantId);
     const txt = document.getElementById('db-confirm-borrar')?.value?.trim();
-    if (!t || txt !== (t.slug||t.id)) { UI.toast('Escribe el identificador exacto del taller para confirmar','error'); return; }
+    if (!t || txt !== (t.slug||t.id)) { UI.toast('Escribe el identificador exacto del comercio para confirmar','error'); return; }
     if (!confirm(`¿Borrar TODOS los datos de "${t.name||t.slug}"?\n\nSe generará un respaldo de seguridad automático antes de borrar. Esta acción no se puede deshacer desde la app.`)) return;
-    UI.toast('Borrando datos del taller...','info');
+    UI.toast('Borrando datos del comercio...','info');
     const { data, error } = await getSB().functions.invoke('tenant-db-tools', { body:{ op:'borrar', tenant_id:this._dbTenantId } });
     if (error || data?.error) { UI.toast('Error: '+(data?.error||error.message),'error'); return; }
     UI.toast(`Datos borrados ✓ ${data.registros_eliminados} registros eliminados`);
@@ -241,17 +279,17 @@ Modulos.superadmin = {
   /* ── NUEVO TALLER: tenant + usuario admin en un paso ── */
   modalNuevoTaller() {
     const venceDefault = (()=>{ const d=new Date(); d.setMonth(d.getMonth()+1); return d.toISOString().slice(0,10); })();
-    UI.modal('➕ Nuevo taller', `
-      <div style="font-weight:700;font-size:13px;color:var(--amber);margin-bottom:8px">Datos del taller</div>
+    UI.modal('➕ Nuevo comercio', `
+      <div style="font-weight:700;font-size:13px;color:var(--amber);margin-bottom:8px">Datos del comercio</div>
       <div class="form-row">
-        <div class="form-group"><label class="form-label">Nombre del taller *</label>
-          <input class="form-input" id="nt-nombre" placeholder="Taller El Buen Freno"></div>
+        <div class="form-group"><label class="form-label">Nombre del comercio *</label>
+          <input class="form-input" id="nt-nombre" placeholder="Comercio El Buen Freno"></div>
         <div class="form-group"><label class="form-label">NIT</label>
           <input class="form-input" id="nt-nit" placeholder="CF o 1234567-8"></div>
       </div>
       <div class="form-row">
-        <div class="form-group"><label class="form-label">Email del taller</label>
-          <input class="form-input" id="nt-email" type="email" placeholder="contacto@taller.com"></div>
+        <div class="form-group"><label class="form-label">Email del comercio</label>
+          <input class="form-input" id="nt-email" type="email" placeholder="contacto@comercio.com"></div>
         <div class="form-group"><label class="form-label">Teléfono</label>
           <input class="form-input" id="nt-tel" placeholder="5555-5555"></div>
       </div>
@@ -265,19 +303,19 @@ Modulos.superadmin = {
         <div class="form-group"><label class="form-label">Suscripción vence</label>
           <input class="form-input" id="nt-vence" type="date" value="${venceDefault}"></div>
       </div>
-      <div style="font-weight:700;font-size:13px;color:var(--amber);margin:14px 0 8px;border-top:1px solid var(--border);padding-top:12px">Usuario administrador del taller</div>
+      <div style="font-weight:700;font-size:13px;color:var(--amber);margin:14px 0 8px;border-top:1px solid var(--border);padding-top:12px">Usuario administrador del comercio</div>
       <div class="form-row">
         <div class="form-group"><label class="form-label">Nombre *</label>
           <input class="form-input" id="nt-adm-nombre" placeholder="Juan Pérez"></div>
         <div class="form-group"><label class="form-label">Email (login) *</label>
-          <input class="form-input" id="nt-adm-email" type="email" placeholder="dueno@taller.com"></div>
+          <input class="form-input" id="nt-adm-email" type="email" placeholder="dueno@comercio.com"></div>
       </div>
       <div class="form-group"><label class="form-label">Contraseña inicial *</label>
         <input class="form-input" id="nt-adm-pass" type="text" placeholder="Mínimo 6 caracteres">
         <div style="font-size:11px;color:var(--text3);margin-top:4px">Se le pedirá cambiarla al primer ingreso.</div></div>
       <div class="modal-footer">
         <button class="btn btn-ghost" onclick="UI.cerrarModal()">Cancelar</button>
-        <button class="btn btn-amber" id="nt-guardar" onclick="Modulos.superadmin.guardarNuevoTaller()">Crear taller</button>
+        <button class="btn btn-amber" id="nt-guardar" onclick="Modulos.superadmin.guardarNuevoTaller()">Crear comercio</button>
       </div>`, '640px');
   },
 
@@ -288,7 +326,7 @@ Modulos.superadmin = {
 
   _slug(nombre) {
     const base = nombre.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'')
-      .replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'').slice(0,40) || 'taller';
+      .replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'').slice(0,40) || 'comercio';
     return base + '-' + Math.random().toString(36).slice(2,6);
   },
 
@@ -296,13 +334,13 @@ Modulos.superadmin = {
     const v = id => document.getElementById(id)?.value?.trim() || '';
     const nombre = v('nt-nombre'), plan = v('nt-plan');
     const admNombre = v('nt-adm-nombre'), admEmail = v('nt-adm-email'), admPass = v('nt-adm-pass');
-    if (!nombre) { UI.toast('El nombre del taller es obligatorio','error'); return; }
+    if (!nombre) { UI.toast('El nombre del comercio es obligatorio','error'); return; }
     if (!admNombre || !admEmail || !admPass) { UI.toast('Completa los datos del administrador','error'); return; }
     if (admPass.length < 6) { UI.toast('La contraseña debe tener al menos 6 caracteres','error'); return; }
 
     const btn = document.getElementById('nt-guardar');
     if (btn) { btn.disabled = true; btn.textContent = 'Creando...'; }
-    const reactivar = () => { if (btn) { btn.disabled = false; btn.textContent = 'Crear taller'; } };
+    const reactivar = () => { if (btn) { btn.disabled = false; btn.textContent = 'Crear comercio'; } };
 
     /* 1. Crear el tenant */
     const { data: tenant, error: tErr } = await DB.crearTenant({
@@ -317,7 +355,7 @@ Modulos.superadmin = {
       ciclo_pago: 'mensual',
       active: true
     });
-    if (tErr || !tenant) { UI.toast('Error creando el taller: '+(tErr?.message||''),'error'); reactivar(); return; }
+    if (tErr || !tenant) { UI.toast('Error creando el comercio: '+(tErr?.message||''),'error'); reactivar(); return; }
 
     /* 2. Crear el usuario admin dentro del nuevo tenant (Edge crear-usuario) */
     const res = await Auth.crearUsuario({
@@ -325,14 +363,14 @@ Modulos.superadmin = {
       rol: 'admin', tenant_id: tenant.id
     });
     if (!res.ok) {
-      /* rollback: no dejar un taller sin administrador */
+      /* rollback: no dejar un comercio sin administrador */
       await DB.deleteTenantById(tenant.id).catch(()=>{});
       UI.toast('No se pudo crear el administrador: '+(res.error||''),'error');
       reactivar(); return;
     }
 
     UI.cerrarModal();
-    UI.toast(`Taller "${nombre}" creado con su administrador ✓`);
+    UI.toast(`Comercio "${nombre}" creado con su administrador ✓`);
     this.render();
   },
 
@@ -434,7 +472,7 @@ Modulos.superadmin = {
     };
     const { error } = await DB.updateTenantById(id, fields);
     if (error) { UI.toast('Error: '+error.message,'error'); return; }
-    UI.cerrarModal(); UI.toast('Taller actualizado ✓');
+    UI.cerrarModal(); UI.toast('Comercio actualizado ✓');
     this.render();
   },
 
@@ -444,7 +482,7 @@ Modulos.superadmin = {
     if (!confirm(`¿Seguro que deseas ${accion} a "${t?.name||t?.slug}"?${activar?'':'\nNo podrá ingresar al sistema.'}`)) return;
     const { error } = await DB.updateTenantById(id, { active: activar });
     if (error) { UI.toast('Error: '+error.message,'error'); return; }
-    UI.toast(activar?'Taller reactivado ✓':'Taller suspendido');
+    UI.toast(activar?'Comercio reactivado ✓':'Comercio suspendido');
     this.render();
   },
 
@@ -452,7 +490,7 @@ Modulos.superadmin = {
   modalCobro(tenantId='') {
     const t = tenantId ? this._tenants.find(x=>x.id===tenantId) : null;
     UI.modal('💵 Registrar cobro', `
-      <div class="form-group"><label class="form-label">Taller *</label>
+      <div class="form-group"><label class="form-label">Comercio *</label>
         <select class="form-select" id="co-tenant">
           ${this._tenants.map(x=>`<option value="${x.id}" ${tenantId===x.id?'selected':''}>${x.name||x.slug}</option>`).join('')}
         </select></div>
@@ -479,7 +517,7 @@ Modulos.superadmin = {
   async guardarCobro() {
     const tenant_id = document.getElementById('co-tenant')?.value;
     const monto = parseFloat(document.getElementById('co-monto')?.value)||0;
-    if (!tenant_id || monto<=0) { UI.toast('Taller y monto son obligatorios','error'); return; }
+    if (!tenant_id || monto<=0) { UI.toast('Comercio y monto son obligatorios','error'); return; }
     const fields = {
       tenant_id,
       periodo: document.getElementById('co-periodo')?.value||this._mesActual(),
@@ -504,10 +542,10 @@ Modulos.superadmin = {
 
   /* ── OPERACIONES SaaS (Edge Functions; el cron diario hace esto solo) ── */
   async respaldarTodos() {
-    UI.toast('Respaldando todos los talleres a Storage...','info');
+    UI.toast('Respaldando todos los comercios a Storage...','info');
     const { data, error } = await getSB().functions.invoke('backup-tenants', { body: {} });
     if (error || data?.error) { UI.toast('Error: '+(data?.error||error.message),'error'); return; }
-    UI.toast(`Respaldo completo ✓ ${data.talleres} talleres · ${data.registros} registros`);
+    UI.toast(`Respaldo completo ✓ ${data.talleres} comercios · ${data.registros} registros`);
     if (data.errores?.length) console.warn('backup-tenants errores:', data.errores);
   },
 

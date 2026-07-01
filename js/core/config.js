@@ -130,9 +130,9 @@ const MODULOS = [
   { id:'respaldos',      icon:'💾', label:'Respaldos',         grupo:'admin'      },
   { id:'superadmin',     icon:'⚡', label:'Panel SaaS',        grupo:'saas',
     subnav:[
-      { tab:'talleres', icon:'🏪', label:'Talleres' },
-      { tab:'cobros',   icon:'💵', label:'Cobros'   },
-      { tab:'planes',   icon:'🎚️', label:'Planes'   }
+      { tab:'comercios', icon:'🏪', label:'Comercios' },
+      { tab:'cobros',    icon:'💵', label:'Cobros'    },
+      { tab:'planes',    icon:'🎚️', label:'Planes'    }
     ] },
   { id:'mi_ot',          icon:'🔍', label:'Mis Órdenes',       grupo:'cliente'    }
 ];
