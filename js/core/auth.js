@@ -333,11 +333,32 @@ const Auth = {
 
   async enrollTOTP() {
     try {
-      const { data, error } = await getSB().auth.mfa.enroll({
+      const sb = getSB();
+      /* Limpiar factores TOTP a medias: si un enrolamiento previo no se
+         completó (no se escaneó el QR), queda un factor 'unverified' y
+         Supabase rechaza un nuevo enroll con el mismo friendlyName
+         ("A factor with the friendly name ... already exists"). */
+      try {
+        const { data: list } = await sb.auth.mfa.listFactors();
+        const pendientes = (list?.all || []).filter(f => f.factor_type === 'totp' && f.status !== 'verified');
+        for (const f of pendientes) {
+          await sb.auth.mfa.unenroll({ factorId: f.id });
+        }
+      } catch(_) { /* si la limpieza falla, intentamos el enroll de todos modos */ }
+
+      let { data, error } = await sb.auth.mfa.enroll({
         factorType: 'totp',
         issuer: 'NexusPro',
         friendlyName: 'Nexus Authenticator'
       });
+      /* Fallback: si aún colisiona el nombre, reintentar con uno único */
+      if (error && /already exists/i.test(error.message || '')) {
+        ({ data, error } = await sb.auth.mfa.enroll({
+          factorType: 'totp',
+          issuer: 'NexusPro',
+          friendlyName: 'Nexus Authenticator ' + Date.now().toString(36)
+        }));
+      }
       if (error) return { ok: false, error: error.message };
       return { ok: true, data };
     } catch(e) {
