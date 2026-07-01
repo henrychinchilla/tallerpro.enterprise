@@ -123,6 +123,38 @@ Modulos.dashboard = {
     /* Órdenes recientes (5) */
     const recientes = ordenes.slice(0, 5);
 
+    /* Banner de suscripción / DEMO — solo para administradores.
+       DEMO (precio 0 o notas de prueba): muestra días restantes.
+       Plan pagado: muestra la fecha del próximo pago. */
+    let subBanner = '';
+    const rolAdmin = ['admin','gerente_tal','superadmin'].includes(Auth.user?.rol);
+    if (rolAdmin && Auth.tenant) {
+      const t = Auth.tenant;
+      const esDemo = (Number(t.precio_mensual)||0)===0 || /prueba/i.test(t.notas_admin||'');
+      const venceStr = t.suscripcion_vence;
+      const dias = venceStr ? Math.ceil((new Date(venceStr+'T00:00:00') - Date.now())/86400000) : null;
+      let clase, icon, texto;
+      if (esDemo) {
+        icon = '🎁';
+        clase = dias===null ? 'cyan' : dias<0 ? 'red' : dias<=7 ? 'amber' : 'cyan';
+        texto = venceStr
+          ? (dias>=0
+              ? `Estás en <b>versión de prueba (DEMO)</b> — te quedan <b>${dias} día${dias===1?'':'s'}</b> (termina el ${UI.fecha(venceStr)}). Para activar un plan y no perder tus datos, contacta a tu proveedor de NexusPro.`
+              : `Tu <b>versión de prueba (DEMO)</b> terminó el <b>${UI.fecha(venceStr)}</b>. Contacta a tu proveedor de NexusPro para activar tu plan.`)
+          : `Estás en <b>versión de prueba (DEMO)</b> gratis de 30 días.`;
+      } else {
+        icon = '💳';
+        const planLbl = PLANES[t.plan]?.label || 'Plan personalizado';
+        clase = dias===null ? 'green' : dias<0 ? 'red' : dias<=5 ? 'amber' : 'green';
+        texto = venceStr
+          ? (dias>=0
+              ? `Plan <b>${planLbl}</b> — tu próximo <b>pago</b> es el <b>${UI.fecha(venceStr)}</b> (en ${dias} día${dias===1?'':'s'}).`
+              : `Plan <b>${planLbl}</b> — <b>pago vencido</b> desde el <b>${UI.fecha(venceStr)}</b>. Regulariza para no perder acceso.`)
+          : `Plan <b>${planLbl}</b> activo.`;
+      }
+      subBanner = `<div class="alert alert-${clase}" style="margin-bottom:16px"><div class="alert-icon">${icon}</div><div class="alert-body" style="font-size:12.5px">${texto}</div></div>`;
+    }
+
     el.innerHTML = `
       <div class="page-header">
         <div>
@@ -136,6 +168,8 @@ Modulos.dashboard = {
         </div>
       </div>
       <div class="page-body">
+
+        ${subBanner}
 
         <!-- ACCIONES RÁPIDAS -->
         <div class="quick-actions">

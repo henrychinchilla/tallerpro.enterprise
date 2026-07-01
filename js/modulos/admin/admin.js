@@ -263,16 +263,28 @@ Modulos.admin = {
             <b style="color:var(--red)">Se elimina:</b> Todos los demás usuarios incluyendo el que ejecuta esta acción.
           </div>
 
-          <!-- PASO 1: CÓDIGO 2FA (Google Authenticator) -->
+          <!-- PASO 1: AUTORIZACIÓN DE 2 ADMINISTRADORES (2FA Google Authenticator) -->
           <div style="background:var(--surface2);border-radius:8px;padding:14px;margin-bottom:12px">
             <div style="font-weight:700;font-size:12px;color:var(--text3);text-transform:uppercase;margin-bottom:8px">
-              Paso 1 — Código de tu Google Authenticator (2FA)
+              Paso 1 — Autorización de 2 administradores (código de Google Authenticator de cada uno)
             </div>
-            <input class="form-input" id="mfa-code" placeholder="000000" maxlength="6" inputmode="numeric"
-                   style="font-family:monospace;font-size:20px;letter-spacing:8px;text-align:center;max-width:220px">
-            <div style="font-size:11px;color:var(--text3);margin-top:6px">
-              Abre tu app de autenticación (Google Authenticator) y escribe el código de 6 dígitos de <b>NexusPro</b>.
-              Necesitas tener el 2FA activado en tu perfil (Usuarios → tu cuenta → Seguridad).
+            <div class="form-row">
+              <div class="form-group"><label class="form-label">Administrador 1 — correo</label>
+                <input class="form-input" id="del-a1-email" type="email" value="${Auth.user?.email||''}"></div>
+              <div class="form-group"><label class="form-label">Admin 1 — código 2FA</label>
+                <input class="form-input" id="del-a1-code" placeholder="000000" maxlength="6" inputmode="numeric"
+                       style="font-family:monospace;font-size:18px;letter-spacing:6px;text-align:center"></div>
+            </div>
+            <div class="form-row">
+              <div class="form-group"><label class="form-label">Administrador 2 — correo</label>
+                <input class="form-input" id="del-a2-email" type="email" placeholder="otro-admin@correo.com"></div>
+              <div class="form-group"><label class="form-label">Admin 2 — código 2FA</label>
+                <input class="form-input" id="del-a2-code" placeholder="000000" maxlength="6" inputmode="numeric"
+                       style="font-family:monospace;font-size:18px;letter-spacing:6px;text-align:center"></div>
+            </div>
+            <div style="font-size:11px;color:var(--text3);margin-top:2px">
+              Cada administrador abre su <b>Google Authenticator</b> y dicta el código de 6 dígitos de <b>NexusPro</b>.
+              Ambos deben tener el 2FA activado en su perfil (Usuarios → Seguridad).
             </div>
           </div>
 
@@ -630,25 +642,27 @@ Modulos.admin = {
     UI.toast(`${rows.length} registros importados ✓`);
   },
 
-  /* ── BORRADO SEGURO (verificado con 2FA / Google Authenticator) ───── */
+  /* ── BORRADO SEGURO (autorizado por 2 administradores con 2FA) ───── */
   async ejecutarBorrado() {
-    const code  = document.getElementById('mfa-code')?.value.trim();
+    const a1 = document.getElementById('del-a1-email')?.value.trim();
+    const c1 = document.getElementById('del-a1-code')?.value.trim();
+    const a2 = document.getElementById('del-a2-email')?.value.trim();
+    const c2 = document.getElementById('del-a2-code')?.value.trim();
     const texto = document.getElementById('confirm-text')?.value.trim().toLowerCase();
 
-    if (!code || !/^\d{6}$/.test(code)) { UI.toast('Ingresa el código de 6 dígitos de tu Google Authenticator','error'); return; }
+    if (!a1||!c1||!a2||!c2) { UI.toast('Completa el correo y el código 2FA de los 2 administradores','error'); return; }
+    if (a1.toLowerCase()===a2.toLowerCase()) { UI.toast('Deben ser DOS administradores diferentes','error'); return; }
+    if (!/^\d{6}$/.test(c1)||!/^\d{6}$/.test(c2)) { UI.toast('Los códigos 2FA son de 6 dígitos','error'); return; }
     if (texto!=='acepto borrar base de datos') { UI.toast('El texto de confirmación no es correcto','error'); return; }
 
-    // Verificar el código contra el 2FA (TOTP) del administrador en Supabase
-    const factores = await Auth.listMFAFactors();
-    const totp = (factores||[]).find(f => f.factor_type==='totp' && f.status==='verified');
-    if (!totp) {
-      UI.toast('Debes activar el 2FA (Google Authenticator) en tu perfil antes de borrar la base de datos.','error',6000);
-      return;
-    }
-    const ch = await Auth.createMFAChallenge(totp.id);
-    if (!ch.ok) { UI.toast('No se pudo iniciar la verificación 2FA: '+(ch.error||''),'error'); return; }
-    const res = await Auth.verifyMFAFactor(totp.id, ch.data.id, code);
-    if (!res.ok) { UI.toast('Código 2FA inválido o vencido. Revisa tu Google Authenticator.','error'); return; }
+    // Verificar en el servidor el TOTP (Google Authenticator) de AMBOS administradores
+    UI.toast('Verificando 2FA de ambos administradores...','info');
+    const { data, error } = await getSB().functions.invoke('verificar-borrado-2fa', {
+      body: { tenant_id: getTID(), admin1_email: a1, code1: c1, admin2_email: a2, code2: c2 }
+    });
+    let msg = data?.error || null;
+    if (error) { try { const j = await error.context.json(); msg = j?.error || error.message; } catch(_) { msg = error.message; } }
+    if (msg) { UI.toast(msg,'error',6000); return; }
 
     const ok = await UI.confirmar(
       `<div style="color:var(--red);font-size:16px;font-weight:800;margin-bottom:12px">☢️ ÚLTIMA CONFIRMACIÓN</div>
