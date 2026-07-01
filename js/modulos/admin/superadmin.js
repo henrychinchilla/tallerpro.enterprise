@@ -366,6 +366,10 @@ Modulos.superadmin = {
         <div class="form-group"><label class="form-label">Suscripción vence</label>
           <input class="form-input" id="nt-vence" type="date" value="${venceDefault}"></div>
       </div>
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:10px;margin-top:4px">
+        <input type="checkbox" id="nt-demo" onchange="Modulos.superadmin._toggleDemoNuevo(this.checked)">
+        <span>🎁 Crear como <b>DEMO</b> — prueba gratis 30 días, sin cobro (precio Q0 y vence en 30 días)</span>
+      </label>
       <div style="font-weight:700;font-size:13px;color:var(--amber);margin:14px 0 8px;border-top:1px solid var(--border);padding-top:12px">Usuario administrador del comercio</div>
       <div class="form-row">
         <div class="form-group"><label class="form-label">Nombre *</label>
@@ -387,6 +391,19 @@ Modulos.superadmin = {
     if (precio && PLANES[plan]) precio.value = PLANES[plan].precio;
   },
 
+  /* DEMO en "Nuevo comercio": precio 0 y vence en 30 días. */
+  _toggleDemoNuevo(demo) {
+    const precio = document.getElementById('nt-precio');
+    const vence = document.getElementById('nt-vence');
+    if (demo) {
+      if (precio) { precio.value = 0; precio.disabled = true; }
+      if (vence) { vence.value = new Date(Date.now()+30*86400000).toISOString().slice(0,10); vence.disabled = true; }
+    } else {
+      if (precio) { precio.disabled = false; this._precioDePlan(document.getElementById('nt-plan')?.value); }
+      if (vence) { vence.disabled = false; }
+    }
+  },
+
   _slug(nombre) {
     const base = nombre.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'')
       .replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'').slice(0,40) || 'comercio';
@@ -405,7 +422,9 @@ Modulos.superadmin = {
     if (btn) { btn.disabled = true; btn.textContent = 'Creando...'; }
     const reactivar = () => { if (btn) { btn.disabled = false; btn.textContent = 'Crear comercio'; } };
 
-    /* 1. Crear el tenant */
+    /* 1. Crear el tenant (DEMO = precio 0 + vence +30 + notas de prueba) */
+    const demo = document.getElementById('nt-demo')?.checked;
+    const venceDemo = new Date(Date.now()+30*86400000).toISOString().slice(0,10);
     const { data: tenant, error: tErr } = await DB.crearTenant({
       slug: this._slug(nombre),
       name: nombre,
@@ -413,9 +432,10 @@ Modulos.superadmin = {
       email: v('nt-email')||null,
       tel: v('nt-tel')||null,
       plan,
-      precio_mensual: parseFloat(v('nt-precio'))||PLANES[plan]?.precio||0,
-      suscripcion_vence: v('nt-vence')||null,
+      precio_mensual: demo ? 0 : (parseFloat(v('nt-precio'))||PLANES[plan]?.precio||0),
+      suscripcion_vence: demo ? venceDemo : (v('nt-vence')||null),
       ciclo_pago: 'mensual',
+      notas_admin: demo ? 'Prueba gratis 30 días (demo otorgado por administrador).' : null,
       active: true
     });
     if (tErr || !tenant) { UI.toast('Error creando el comercio: '+(tErr?.message||''),'error'); reactivar(); return; }
@@ -449,7 +469,11 @@ Modulos.superadmin = {
             ${Object.entries(PLANES).map(([k,p])=>`<option value="${k}" ${t.plan===k?'selected':''}>${p.label} — ${UI.q(p.precio)}/mes</option>`).join('')}
           </select></div>
         <div class="form-group"><label class="form-label">Precio mensual (Q)</label>
-          <input class="form-input" id="sa-precio" type="number" min="0" step="0.01" value="${t.precio_mensual||PLANES[t.plan]?.precio||0}"></div>
+          <div style="display:flex;gap:6px">
+            <input class="form-input" id="sa-precio" type="number" min="0" step="0.01" value="${t.precio_mensual||PLANES[t.plan]?.precio||0}" style="flex:1">
+            <button class="btn btn-sm btn-amber" title="Marcar como DEMO: precio Q0 y vence en 30 días" onclick="Modulos.superadmin._aplicarDemo()">🎁 DEMO 30d</button>
+          </div>
+          <div style="font-size:10px;color:var(--text3);margin-top:3px">🎁 DEMO = prueba gratis: precio Q0 y vence en 30 días (se auto-suspende al vencer)</div></div>
       </div>
       <div class="form-row">
         <div class="form-group"><label class="form-label">Suscripción vence</label>
@@ -485,6 +509,20 @@ Modulos.superadmin = {
         <button class="btn btn-ghost" onclick="UI.cerrarModal()">Cancelar</button>
         <button class="btn btn-amber" onclick="Modulos.superadmin.guardarTaller('${id}')">Guardar</button>
       </div>`, '600px');
+  },
+
+  /* 🎁 DEMO: precio Q0 + vence en 30 días + marca de prueba en notas.
+     El comercio queda como demo (banner de prueba y auto-suspensión al vencer). */
+  _aplicarDemo() {
+    const precio = document.getElementById('sa-precio');
+    const vence = document.getElementById('sa-vence');
+    const notas = document.getElementById('sa-notas');
+    if (precio) precio.value = 0;
+    if (vence) vence.value = new Date(Date.now()+30*86400000).toISOString().slice(0,10);
+    if (notas && !/prueba/i.test(notas.value)) {
+      notas.value = (notas.value ? notas.value.trim()+' ' : '') + 'Prueba gratis 30 días.';
+    }
+    UI.toast('Modo DEMO: Q0 y vence en 30 días. Guarda para aplicar ✓','info');
   },
 
   /* 🎁 Conversión con gracia: si la demo termina (o terminó) a media mes,

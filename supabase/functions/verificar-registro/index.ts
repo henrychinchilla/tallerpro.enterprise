@@ -133,10 +133,11 @@ Deno.serve(async (req) => {
   await admin.from("config_fiscal").insert({ tenant_id: tenant.id, regimen_iva: "general", tasa_iva: 0.12, tasa_isr: 0.05 }).then(() => {}, () => {});
 
   if (sol.auth_user_id) {
-    const { error: uErr } = await admin.from("usuarios").insert({
+    // upsert: adopta el perfil si un trigger ya lo creó (evita conflicto de id)
+    const { error: uErr } = await admin.from("usuarios").upsert({
       id: sol.auth_user_id, tenant_id: tenant.id, nombre: sol.nombre_admin,
       email: sol.email, telefono: sol.telefono, rol: "admin", activo: true, avatar: "👑",
-    });
+    }, { onConflict: "id" });
     if (uErr) {
       // rollback del tenant recién creado
       await admin.from("config_fiscal").delete().eq("tenant_id", tenant.id).then(() => {}, () => {});

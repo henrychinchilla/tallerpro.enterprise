@@ -78,8 +78,9 @@ Deno.serve(async (req) => {
   if (!nombreComercio) return json({ error: "Falta el nombre del comercio" }, 400);
   if (!TEL_RE.test(telefono)) return json({ error: "El teléfono no es válido (mínimo 8 dígitos)" }, 400);
 
-  // ── ¿Ya tiene un comercio? ──
-  const { data: yaTiene } = await admin.from("usuarios").select("id").eq("id", user.id).maybeSingle();
+  // ── ¿Ya tiene un comercio REAL (perfil con tenant)? ──
+  const { data: yaTiene } = await admin.from("usuarios").select("id")
+    .eq("id", user.id).not("tenant_id", "is", null).maybeSingle();
   if (yaTiene) return json({ error: "Tu cuenta ya está vinculada a un comercio." }, 409);
 
   // ── Límite de 3 solicitudes por correo (excluye expiradas) ──
@@ -108,10 +109,10 @@ Deno.serve(async (req) => {
 
   await admin.from("config_fiscal").insert({ tenant_id: tenant.id, regimen_iva: "general", tasa_iva: 0.12, tasa_isr: 0.05 }).then(() => {}, () => {});
 
-  const { error: insErr } = await admin.from("usuarios").insert({
+  const { error: insErr } = await admin.from("usuarios").upsert({
     id: user.id, tenant_id: tenant.id, nombre: nombreAdmin,
     email, telefono, rol: "admin", activo: true, avatar: "👑",
-  });
+  }, { onConflict: "id" });
   if (insErr) {
     await admin.from("config_fiscal").delete().eq("tenant_id", tenant.id).then(() => {}, () => {});
     await admin.from("tenants").delete().eq("id", tenant.id).then(() => {}, () => {});

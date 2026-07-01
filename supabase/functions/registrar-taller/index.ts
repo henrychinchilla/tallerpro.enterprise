@@ -118,8 +118,10 @@ Deno.serve(async (req) => {
   const ts = await validarTurnstile(body.turnstile_token, ip);
   if (!ts.ok) return json({ error: ts.error }, 403);
 
-  // ── ¿Ya existe una cuenta real (comercio verificado/aprobado)? ──
-  const { data: yaExiste } = await admin.from("usuarios").select("id").eq("email", email).maybeSingle();
+  // ── ¿Ya existe una cuenta REAL (perfil con tenant)? Los perfiles con
+  //    tenant_id nulo son registros incompletos y no bloquean. ──
+  const { data: yaExiste } = await admin.from("usuarios").select("id")
+    .eq("email", email).not("tenant_id", "is", null).maybeSingle();
   if (yaExiste) return json({ error: "Ese correo ya tiene una cuenta en NexusPro. Usa 'Olvidé mi contraseña'." }, 409);
 
   // ── ¿Solicitud pendiente de verificación? → se reenvía (no cuenta como intento nuevo) ──
