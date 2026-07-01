@@ -52,22 +52,36 @@ Modulos.admin = {
             <div style="font-size:12px;color:var(--text3)">NIT: ${Auth.tenant?.nit||'—'}</div>
             <div style="font-size:12px;color:var(--text3)">ID: ${Auth.tenant?.id?.slice(0,12)||'—'}...</div>
           </div>
-          <div class="card card-${suscripcionVigente()?'green':'red'}">
-            <div class="card-sub mb-3">💳 Suscripción</div>
+          ${(()=>{
+            const t = Auth.tenant||{};
+            const esDemo = (Number(t.precio_mensual)||0)===0 || /prueba/i.test(t.notas_admin||'');
+            const vig = suscripcionVigente();
+            const venceStr = t.suscripcion_vence;
+            const dias = venceStr ? Math.ceil((new Date(venceStr+'T00:00:00') - Date.now())/86400000) : null;
+            const badgePrincipal = esDemo
+              ? '<span class="badge badge-purple" style="font-size:13px">🎁 DEMO</span>'
+              : `<span class="badge badge-${PLANES[t.plan]?.color||'gray'}" style="font-size:13px">${PLANES[t.plan]?.label || 'Plan personalizado'}</span>`;
+            const badgeEstado = vig
+              ? '<span class="badge badge-green">✓ Vigente</span>'
+              : `<span class="badge badge-red">${esDemo?'Prueba terminada':'Vencida'}</span>`;
+            const detalle = venceStr
+              ? (esDemo
+                  ? (dias>=0 ? `Prueba gratis — <b>${dias} día${dias===1?'':'s'}</b> restantes (vence ${UI.fecha(venceStr)})` : `Prueba vencida el ${UI.fecha(venceStr)}`)
+                  : 'Vence: ' + UI.fecha(venceStr))
+              : (esDemo ? 'Prueba gratis (inicia con tu primer uso)' : 'Sin fecha de vencimiento');
+            const pie = esDemo
+              ? 'Estás en versión de <b>prueba gratis</b>. Para activar un plan y no perder tus datos, contacta a tu proveedor de NexusPro.'
+              : 'Los planes, módulos y pagos se gestionan con tu proveedor de NexusPro.';
+            return `
+          <div class="card card-${vig?(esDemo?'amber':'green'):'red'}">
+            <div class="card-sub mb-3">💳 ${esDemo?'Versión de prueba':'Suscripción'}</div>
             <div style="margin-bottom:6px;display:flex;gap:6px;flex-wrap:wrap;align-items:center">
-              <span class="badge badge-${PLANES[Auth.tenant?.plan]?.color||'gray'}" style="font-size:13px">
-                ${PLANES[Auth.tenant?.plan]?.label || 'Plan personalizado'}</span>
-              ${suscripcionVigente()
-                ? '<span class="badge badge-green">✓ Vigente</span>'
-                : '<span class="badge badge-red">Vencida</span>'}
+              ${badgePrincipal} ${badgeEstado}
             </div>
-            <div style="font-size:12px;color:var(--text3)">
-              ${Auth.tenant?.suscripcion_vence ? 'Vence: ' + UI.fecha(Auth.tenant.suscripcion_vence) : 'Sin fecha de vencimiento'}
-            </div>
-            <div style="font-size:11px;color:var(--text3);margin-top:6px">
-              Los planes, módulos y pagos se gestionan con tu proveedor de NexusPro.
-            </div>
-          </div>
+            <div style="font-size:12px;color:var(--text3)">${detalle}</div>
+            <div style="font-size:11px;color:var(--text3);margin-top:6px">${pie}</div>
+          </div>`;
+          })()}
         </div>
         <div class="card" style="margin-bottom:20px">
           <div class="card-sub mb-3">⚙️ Configuración Fiscal</div>
@@ -238,7 +252,7 @@ Modulos.admin = {
           <div class="alert-icon" style="font-size:24px">☢️</div>
           <div class="alert-body">
             <div style="font-weight:800;font-size:14px;color:var(--red);margin-bottom:4px">ZONA DE PELIGRO — ACCIONES IRREVERSIBLES</div>
-            <div style="font-size:12px">Requiere confirmación de <b>2 administradores</b> con OTP + texto de confirmación.</div>
+            <div style="font-size:12px">Requiere tu <b>código 2FA (Google Authenticator)</b> + texto de confirmación.</div>
           </div>
         </div>
         <div class="card" style="border:2px solid var(--red)">
@@ -249,34 +263,23 @@ Modulos.admin = {
             <b style="color:var(--red)">Se elimina:</b> Todos los demás usuarios incluyendo el que ejecuta esta acción.
           </div>
 
-          <!-- PASO 1: GENERAR OTP -->
+          <!-- PASO 1: CÓDIGO 2FA (Google Authenticator) -->
           <div style="background:var(--surface2);border-radius:8px;padding:14px;margin-bottom:12px">
             <div style="font-weight:700;font-size:12px;color:var(--text3);text-transform:uppercase;margin-bottom:8px">
-              Paso 1 — Cada administrador genera su OTP (válido 10 min)
+              Paso 1 — Código de tu Google Authenticator (2FA)
             </div>
-            <button class="btn btn-ghost" onclick="Modulos.admin.generarMiOTP()">🔐 Generar mi OTP</button>
-            <div id="otp-display" style="margin-top:10px"></div>
-          </div>
-
-          <!-- PASO 2: INGRESAR OTPs -->
-          <div style="background:var(--surface2);border-radius:8px;padding:14px;margin-bottom:12px">
-            <div style="font-weight:700;font-size:12px;color:var(--text3);text-transform:uppercase;margin-bottom:8px">
-              Paso 2 — OTPs de 2 administradores diferentes
-            </div>
-            <div class="form-row">
-              <div class="form-group"><label class="form-label">OTP Admin 1</label>
-                <input class="form-input" id="otp1" placeholder="000000" maxlength="6"
-                       style="font-family:monospace;font-size:20px;letter-spacing:8px;text-align:center"></div>
-              <div class="form-group"><label class="form-label">OTP Admin 2</label>
-                <input class="form-input" id="otp2" placeholder="000000" maxlength="6"
-                       style="font-family:monospace;font-size:20px;letter-spacing:8px;text-align:center"></div>
+            <input class="form-input" id="mfa-code" placeholder="000000" maxlength="6" inputmode="numeric"
+                   style="font-family:monospace;font-size:20px;letter-spacing:8px;text-align:center;max-width:220px">
+            <div style="font-size:11px;color:var(--text3);margin-top:6px">
+              Abre tu app de autenticación (Google Authenticator) y escribe el código de 6 dígitos de <b>NexusPro</b>.
+              Necesitas tener el 2FA activado en tu perfil (Usuarios → tu cuenta → Seguridad).
             </div>
           </div>
 
-          <!-- PASO 3: TEXTO DE CONFIRMACIÓN -->
+          <!-- PASO 2: TEXTO DE CONFIRMACIÓN -->
           <div style="background:var(--surface2);border-radius:8px;padding:14px;margin-bottom:16px">
             <div style="font-weight:700;font-size:12px;color:var(--text3);text-transform:uppercase;margin-bottom:8px">
-              Paso 3 — Escribe exactamente: <code style="color:var(--red)">acepto borrar base de datos</code>
+              Paso 2 — Escribe exactamente: <code style="color:var(--red)">acepto borrar base de datos</code>
             </div>
             <input class="form-input" id="confirm-text" placeholder="acepto borrar base de datos"
                    style="border-color:var(--red-border)">
@@ -627,50 +630,25 @@ Modulos.admin = {
     UI.toast(`${rows.length} registros importados ✓`);
   },
 
-  /* ── OTP Y BORRADO ───────────────────────── */
-  generarMiOTP() {
-    const userId = Auth.user?.id;
-    const nombre = Auth.user?.nombre;
-    const code   = String(Math.floor(100000+Math.random()*900000));
-    const expires = Date.now()+10*60*1000;
-    if (!window._adminOTPs) window._adminOTPs = {};
-    window._adminOTPs[userId] = { code, expires, nombre };
-
-    const el = document.getElementById('otp-display');
-    if (el) {
-      el.innerHTML = `
-        <div class="card card-amber" style="text-align:center;padding:16px">
-          <div style="font-size:11px;color:var(--text3);margin-bottom:6px">${nombre} — válido 10 min</div>
-          <div style="font-family:'DM Mono',monospace;font-size:40px;font-weight:700;color:var(--amber);letter-spacing:10px">${code}</div>
-          <div style="font-size:11px;color:var(--text3);margin-top:6px">Comparte con el otro administrador</div>
-          <div id="otp-countdown" style="font-size:12px;color:var(--text3);margin-top:4px"></div>
-        </div>`;
-      const end = Date.now()+600000;
-      const t = setInterval(()=>{
-        const r = Math.max(0,Math.floor((end-Date.now())/1000));
-        const cd = document.getElementById('otp-countdown');
-        if (cd) cd.textContent = `Expira en: ${Math.floor(r/60)}:${String(r%60).padStart(2,'0')}`;
-        else clearInterval(t);
-        if (!r) { clearInterval(t); if(cd) cd.style.color='var(--red)'; }
-      },1000);
-    }
-  },
-
-  _validarOTP(code) {
-    if (!window._adminOTPs) return false;
-    return Object.values(window._adminOTPs).some(o=>o.code===code&&o.expires>Date.now());
-  },
-
+  /* ── BORRADO SEGURO (verificado con 2FA / Google Authenticator) ───── */
   async ejecutarBorrado() {
-    const otp1  = document.getElementById('otp1')?.value.trim();
-    const otp2  = document.getElementById('otp2')?.value.trim();
+    const code  = document.getElementById('mfa-code')?.value.trim();
     const texto = document.getElementById('confirm-text')?.value.trim().toLowerCase();
 
-    if (!otp1||!otp2) { UI.toast('Ingresa los dos OTPs','error'); return; }
-    if (otp1===otp2)  { UI.toast('Los OTPs deben ser de dos administradores diferentes','error'); return; }
+    if (!code || !/^\d{6}$/.test(code)) { UI.toast('Ingresa el código de 6 dígitos de tu Google Authenticator','error'); return; }
     if (texto!=='acepto borrar base de datos') { UI.toast('El texto de confirmación no es correcto','error'); return; }
-    if (!this._validarOTP(otp1)) { UI.toast('OTP 1 inválido o expirado','error'); return; }
-    if (!this._validarOTP(otp2)) { UI.toast('OTP 2 inválido o expirado','error'); return; }
+
+    // Verificar el código contra el 2FA (TOTP) del administrador en Supabase
+    const factores = await Auth.listMFAFactors();
+    const totp = (factores||[]).find(f => f.factor_type==='totp' && f.status==='verified');
+    if (!totp) {
+      UI.toast('Debes activar el 2FA (Google Authenticator) en tu perfil antes de borrar la base de datos.','error',6000);
+      return;
+    }
+    const ch = await Auth.createMFAChallenge(totp.id);
+    if (!ch.ok) { UI.toast('No se pudo iniciar la verificación 2FA: '+(ch.error||''),'error'); return; }
+    const res = await Auth.verifyMFAFactor(totp.id, ch.data.id, code);
+    if (!res.ok) { UI.toast('Código 2FA inválido o vencido. Revisa tu Google Authenticator.','error'); return; }
 
     const ok = await UI.confirmar(
       `<div style="color:var(--red);font-size:16px;font-weight:800;margin-bottom:12px">☢️ ÚLTIMA CONFIRMACIÓN</div>
@@ -708,7 +686,6 @@ Modulos.admin = {
       },{ onConflict:'tenant_id' });
     }
 
-    window._adminOTPs = {};
     UI.toast('Base de datos borrada ✓ — Cerrando sesión...','warn',4000);
     setTimeout(async()=>{ await Auth.logout(); location.reload(); },3000);
   }
