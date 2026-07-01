@@ -84,6 +84,13 @@ const DB = {
     return { data, error };
   },
 
+  /* Solicitudes de auto-registro (solo superadmin por RLS). Sirve para
+     aprobar/rechazar y para identificar spam por correo/IP. */
+  async getSolicitudes() {
+    const { data } = await getSB().from('solicitudes_comercio').select('*').order('created_at',{ascending:false});
+    return data || [];
+  },
+
   async updateTenantById(id, fields) {
     const { error } = await getSB().from('tenants').update(fields).eq('id', id);
     return { error };

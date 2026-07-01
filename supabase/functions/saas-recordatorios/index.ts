@@ -59,7 +59,30 @@ function diasHasta(fecha: string): number {
   return Math.round((v.getTime() - hoy.getTime()) / 86400000);
 }
 
+// Días que faltan para el ÚLTIMO día del mes actual (0 = hoy es fin de mes).
+function diasHastaFinDeMes(): number {
+  const hoy = new Date(); hoy.setUTCHours(0, 0, 0, 0);
+  const finMes = new Date(Date.UTC(hoy.getUTCFullYear(), hoy.getUTCMonth() + 1, 0));
+  return Math.round((finMes.getTime() - hoy.getTime()) / 86400000);
+}
+
 const Q = (n: number) => "Q" + (Number(n) || 0).toFixed(2);
+
+// Recordatorio de pago para planes MENSUALES activos: 3 días antes de fin de mes.
+function plantillaFinDeMes(tenant: any): { subject: string; html: string } {
+  const comercio = tenant.name ?? tenant.slug ?? "tu comercio";
+  const monto = Q(tenant.precio_mensual);
+  const pie = `<p style="color:#888;font-size:12px">NexusPro — sistema de gestión.<br>
+    Si ya realizaste tu pago, por favor ignora este mensaje.</p>`;
+  return {
+    subject: "⏰ Recordatorio de pago mensual de NexusPro (fin de mes)",
+    html: `<h2>Hola, ${comercio} 👋</h2>
+      <p>Tu plan <b>mensual</b> de NexusPro se renueva al terminar el mes.
+      Faltan <b>3 días</b> para el cierre.</p>
+      <p>Monto mensual: <b>${monto}</b>.</p>
+      <p>Para mantener tu acceso sin interrupciones, realiza tu pago antes de fin de mes.</p>${pie}`,
+  };
+}
 
 function plantilla(tenant: any, dias: number): { subject: string; html: string } {
   const taller = tenant.name ?? tenant.slug ?? "tu taller";
@@ -126,8 +149,7 @@ Deno.serve(async (req) => {
 
   const { data: tenants, error: tErr } = await admin
     .from("tenants")
-    .select("id, slug, name, email, active, precio_mensual, suscripcion_vence")
-    .not("suscripcion_vence", "is", null);
+    .select("id, slug, name, email, active, precio_mensual, suscripcion_vence, ciclo_pago");
   if (tErr) return json({ error: tErr.message }, 500);
 
   const activos = (tenants ?? []).filter((t: any) => t.active !== false);
@@ -136,26 +158,51 @@ Deno.serve(async (req) => {
   const porVencer: any[] = [];
   const vencidos: any[] = [];
 
+  // Regla nº7: recordatorio de pago para planes MENSUALES activos con precio,
+  // 3 días antes de terminar el mes (independiente de suscripcion_vence).
+  const finMes3 = diasHastaFinDeMes() === 3;
+
   for (const t of activos) {
-    const dias = diasHasta(t.suscripcion_vence);
-    if (dias <= 7 && dias >= 0) porVencer.push({ ...t, dias });
-    if (dias < 0) vencidos.push({ ...t, dias });
+    // ── A) Aviso por vencimiento de suscripción (si tiene fecha) ──
+    if (t.suscripcion_vence) {
+      const dias = diasHasta(t.suscripcion_vence);
+      if (dias <= 7 && dias >= 0) porVencer.push({ ...t, dias });
+      if (dias < 0) vencidos.push({ ...t, dias });
 
-    const tocaAviso = DIAS_AVISO_PREVIO.includes(dias) || dias === 0 || DIAS_AVISO_MORA.includes(-dias);
-    if (!tocaAviso) continue;
-    if (!t.email) { errores.push({ tenant: t.name ?? t.slug, error: "sin email registrado" }); continue; }
+      const tocaAviso = DIAS_AVISO_PREVIO.includes(dias) || dias === 0 || DIAS_AVISO_MORA.includes(-dias);
+      if (tocaAviso) {
+        if (!t.email) { errores.push({ tenant: t.name ?? t.slug, error: "sin email registrado" }); }
+        else {
+          const { subject, html } = plantilla(t, dias);
+          try {
+            const id = await enviarEmail(API_KEY, FROM, t.email, subject, html);
+            enviados.push({ tenant: t.name ?? t.slug, dias, email: t.email });
+            admin.from("mensajes").insert({
+              tenant_id: t.id, canal: "email", direccion: "saliente",
+              destino: t.email, contenido: subject, estado: "enviado", wa_message_id: id,
+            }).then(() => {}, () => {});
+          } catch (e: any) {
+            errores.push({ tenant: t.name ?? t.slug, error: e?.message });
+          }
+        }
+      }
+    }
 
-    const { subject, html } = plantilla(t, dias);
-    try {
-      const id = await enviarEmail(API_KEY, FROM, t.email, subject, html);
-      enviados.push({ tenant: t.name ?? t.slug, dias, email: t.email });
-      admin.from("mensajes").insert({
-        tenant_id: t.id, canal: "email", direccion: "saliente",
-        destino: t.email, contenido: subject, estado: "enviado",
-        wa_message_id: id,
-      }).then(() => {}, () => {});
-    } catch (e: any) {
-      errores.push({ tenant: t.name ?? t.slug, error: e?.message });
+    // ── B) Recordatorio mensual 3 días antes de fin de mes ──
+    const esMensual = (t.ciclo_pago ?? "mensual") === "mensual";
+    if (finMes3 && esMensual && (Number(t.precio_mensual) || 0) > 0) {
+      if (!t.email) { errores.push({ tenant: t.name ?? t.slug, error: "sin email registrado (fin de mes)" }); continue; }
+      const { subject, html } = plantillaFinDeMes(t);
+      try {
+        const id = await enviarEmail(API_KEY, FROM, t.email, subject, html);
+        enviados.push({ tenant: t.name ?? t.slug, tipo: "fin_de_mes", email: t.email });
+        admin.from("mensajes").insert({
+          tenant_id: t.id, canal: "email", direccion: "saliente",
+          destino: t.email, contenido: subject, estado: "enviado", wa_message_id: id,
+        }).then(() => {}, () => {});
+      } catch (e: any) {
+        errores.push({ tenant: t.name ?? t.slug, error: e?.message });
+      }
     }
   }
 

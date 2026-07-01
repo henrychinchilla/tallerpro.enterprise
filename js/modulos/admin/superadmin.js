@@ -3,17 +3,20 @@
    cobros mensuales (MRR, pendientes) y supervisa respaldos. */
 Modulos.superadmin = {
   _tab: 'comercios',
-  _tenants: [], _pagos: [],
+  _tenants: [], _pagos: [], _solicitudes: [],
   _dbTenantId: null, _dbBackups: [],
 
   async render() {
     const el = document.getElementById('page-content');
     if (Auth.user?.rol !== 'superadmin') { el.innerHTML = '<div class="empty-state">Sin acceso</div>'; return; }
     UI.loading(el);
-    [this._tenants, this._pagos] = await Promise.all([
+    [this._tenants, this._pagos, this._solicitudes] = await Promise.all([
       DB.getTenantsAdmin().catch(()=>[]),
-      DB.getTenantPagos().catch(()=>[])
+      DB.getTenantPagos().catch(()=>[]),
+      DB.getSolicitudes().catch(()=>[])
     ]);
+    /* Comercios que verificaron su correo y esperan aprobación */
+    this._pendMap = new Map(this._solicitudes.filter(s=>s.estado==='verificado'&&s.tenant_id).map(s=>[s.tenant_id, s]));
 
     el.innerHTML = `
       <div class="page-header">
@@ -28,6 +31,7 @@ Modulos.superadmin = {
       <div class="page-body">
         <div class="tabs">
           <button class="tab-btn ${this._tab==='comercios'?'active':''}" onclick="Modulos.superadmin._ir('comercios')">🏪 Comercios</button>
+          <button class="tab-btn ${this._tab==='solicitudes'?'active':''}" onclick="Modulos.superadmin._ir('solicitudes')">📥 Solicitudes${this._pendMap?.size?` <span class="badge badge-amber" style="font-size:10px">${this._pendMap.size}</span>`:''}</button>
           <button class="tab-btn ${this._tab==='cobros'?'active':''}" onclick="Modulos.superadmin._ir('cobros')">💵 Cobros</button>
           <button class="tab-btn ${this._tab==='planes'?'active':''}" onclick="Modulos.superadmin._ir('planes')">🎚️ Planes</button>
           <button class="tab-btn ${this._tab==='basedatos'?'active':''}" onclick="Modulos.superadmin._ir('basedatos')">🗄️ Base de datos</button>
@@ -102,19 +106,78 @@ Modulos.superadmin = {
               ${this._tenants.map(t=>{
                 const venc = t.suscripcion_vence && t.suscripcion_vence < hoy;
                 const susp = t.active===false;
-                return `<tr style="${susp?'opacity:.55':''}">
+                const pend = this._pendMap?.has(t.id);   // verificó correo, espera aprobación
+                const estadoBadge = pend
+                  ? '<span class="badge badge-amber">⏳ Por aprobar</span>'
+                  : `<span class="badge badge-${susp?'red':'green'}">${susp?'Suspendido':'Activo'}</span>`;
+                return `<tr style="${susp&&!pend?'opacity:.55':''}">
                   <td><b>${t.name||t.slug||'—'}</b><br><small class="text-muted">${t.nit||''} ${t.email?('· '+t.email):''}</small></td>
                   <td><span class="badge badge-${PLANES[t.plan]?.color||'gray'}">${this._planLabel(t.plan)}</span></td>
                   <td class="mono-sm">${UI.q(t.precio_mensual||0)}</td>
                   <td class="mono-sm ${venc?'text-red':''}">${t.suscripcion_vence?UI.fecha(t.suscripcion_vence):'—'}${venc?' ⚠️':''}</td>
-                  <td><span class="badge badge-${susp?'red':'green'}">${susp?'Suspendido':'Activo'}</span></td>
+                  <td>${estadoBadge}</td>
                   <td><div style="display:flex;gap:4px;flex-wrap:wrap">
                     <button class="btn btn-sm btn-amber" onclick="Modulos.superadmin.entrarComercio('${t.id}')" title="Entrar a este comercio para dar soporte">🛟 Entrar</button>
                     <button class="btn btn-sm btn-cyan" onclick="Modulos.superadmin.modalTaller('${t.id}')" title="Plan y módulos">⚙️</button>
+                    ${pend ? `
+                    <button class="btn btn-sm btn-green" onclick="Modulos.superadmin.aprobar('${t.id}')" title="Aprobar: activa el demo y avisa al cliente por correo">✅ Aprobar</button>
+                    <button class="btn btn-sm btn-danger" onclick="Modulos.superadmin.rechazar('${t.id}')" title="Rechazar: borra el comercio (queda la solicitud como evidencia)">❌ Rechazar</button>
+                    ` : `
                     <button class="btn btn-sm btn-green" onclick="Modulos.superadmin.modalCobro('${t.id}')" title="Registrar cobro">💵</button>
                     <button class="btn btn-sm ${susp?'btn-green':'btn-danger'}" onclick="Modulos.superadmin.toggleActivo('${t.id}',${susp})" title="${susp?'Reactivar':'Suspender'}">${susp?'▶️':'⏸️'}</button>
+                    `}
                   </div></td>
                 </tr>`;}).join('')||'<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--text3)">Sin comercios registrados</td></tr>'}
+            </tbody>
+          </table>
+        </div>`;
+    }
+
+    else if (this._tab==='solicitudes') {
+      const S = this._solicitudes;
+      const badgeEstado = {
+        pendiente_verificacion: '<span class="badge badge-gray">✉️ Sin verificar</span>',
+        verificado:             '<span class="badge badge-amber">⏳ Por aprobar</span>',
+        aprobado:               '<span class="badge badge-green">✅ Aprobado</span>',
+        rechazado:              '<span class="badge badge-red">❌ Rechazado</span>',
+        expirado:               '<span class="badge badge-gray">⌛ Expirado</span>'
+      };
+      /* Detección de spam: correos con varias solicitudes rechazadas */
+      const rechPorEmail = {};
+      S.filter(s=>s.estado==='rechazado').forEach(s=>{ const k=(s.email||'').toLowerCase(); rechPorEmail[k]=(rechPorEmail[k]||0)+1; });
+      const cont = { verificado:0, pendiente_verificacion:0, rechazado:0, aprobado:0, expirado:0 };
+      S.forEach(s=>{ cont[s.estado]=(cont[s.estado]||0)+1; });
+      el.innerHTML = `
+        <div class="kpi-grid" style="margin-bottom:20px">
+          ${UI.kpiCard({ icon:'⏳', clase: cont.verificado?'amber':'gray', label:'Por aprobar', value: cont.verificado })}
+          ${UI.kpiCard({ icon:'✉️', clase:'gray', label:'Sin verificar', value: cont.pendiente_verificacion })}
+          ${UI.kpiCard({ icon:'❌', clase: cont.rechazado?'red':'gray', label:'Rechazadas (spam)', value: cont.rechazado })}
+          ${UI.kpiCard({ icon:'✅', clase:'green', label:'Aprobadas', value: cont.aprobado })}
+        </div>
+        <div class="alert alert-cyan" style="margin-bottom:16px"><div class="alert-icon">🛡️</div><div class="alert-body" style="font-size:12px">
+          El comercio se crea solo cuando el cliente <b>verifica su correo</b>. Aquí apruebas (activa el demo y le
+          avisas por correo) o rechazas (borra el comercio, pero la solicitud queda como <b>evidencia de spam</b>).
+          Máximo <b>3 solicitudes por correo</b>.
+        </div></div>
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead><tr><th>Comercio</th><th>Contacto</th><th>Tipo</th><th>Estado</th><th>Fecha</th><th>Acciones</th></tr></thead>
+            <tbody>
+              ${S.map(s=>{
+                const spam = (rechPorEmail[(s.email||'').toLowerCase()]||0) >= 2;
+                return `<tr>
+                  <td><b>${s.nombre_comercio||'—'}</b>${spam?' <span class="badge badge-red" style="font-size:10px" title="Correo con varias solicitudes rechazadas">🚩 spam</span>':''}<br><small class="text-muted">${s.nit||''}</small></td>
+                  <td><small>${s.nombre_admin||''}<br>${s.email||''}${s.telefono?(' · '+s.telefono):''}</small></td>
+                  <td><small>${s.tipo_negocio||'—'}</small></td>
+                  <td>${badgeEstado[s.estado]||s.estado}</td>
+                  <td class="mono-sm">${s.created_at?UI.fecha(s.created_at):'—'}</td>
+                  <td><div style="display:flex;gap:4px;flex-wrap:wrap">
+                    ${s.estado==='verificado'&&s.tenant_id?`
+                      <button class="btn btn-sm btn-green" onclick="Modulos.superadmin.aprobar('${s.tenant_id}')" title="Aprobar y avisar por correo">✅ Aprobar</button>
+                      <button class="btn btn-sm btn-danger" onclick="Modulos.superadmin.rechazar('${s.tenant_id}')" title="Rechazar y borrar el comercio">❌ Rechazar</button>
+                    `:'<span class="text-muted" style="font-size:12px">—</span>'}
+                  </div></td>
+                </tr>`;}).join('')||'<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--text3)">Sin solicitudes</td></tr>'}
             </tbody>
           </table>
         </div>`;
@@ -473,6 +536,29 @@ Modulos.superadmin = {
     const { error } = await DB.updateTenantById(id, fields);
     if (error) { UI.toast('Error: '+error.message,'error'); return; }
     UI.cerrarModal(); UI.toast('Comercio actualizado ✓');
+    this.render();
+  },
+
+  /* Aprobar un comercio verificado: activa + correo "acceso habilitado" (Edge) */
+  async aprobar(tenantId) {
+    const t = this._tenants.find(x=>x.id===tenantId);
+    if (!confirm(`¿Aprobar "${t?.name||t?.slug}"?\nSe activará su demo y se le avisará por correo.`)) return;
+    UI.toast('Aprobando comercio...','info');
+    const { data, error } = await getSB().functions.invoke('aprobar-comercio', { body: { tenant_id: tenantId } });
+    if (error || data?.error) { UI.toast('Error: '+(data?.error||error.message),'error'); return; }
+    UI.toast('Comercio aprobado y notificado ✓','success');
+    this.render();
+  },
+
+  /* Rechazar: borra el comercio del SaaS pero deja la solicitud como evidencia (Edge) */
+  async rechazar(tenantId) {
+    const t = this._tenants.find(x=>x.id===tenantId);
+    if (!confirm(`¿Rechazar "${t?.name||t?.slug}"?\nSe BORRARÁ el comercio. La solicitud quedará registrada para identificar spam.`)) return;
+    const motivo = prompt('Motivo del rechazo (opcional):','')||null;
+    UI.toast('Rechazando comercio...','info');
+    const { data, error } = await getSB().functions.invoke('rechazar-comercio', { body: { tenant_id: tenantId, motivo } });
+    if (error || data?.error) { UI.toast('Error: '+(data?.error||error.message),'error'); return; }
+    UI.toast('Comercio rechazado y eliminado ✓');
     this.render();
   },
 

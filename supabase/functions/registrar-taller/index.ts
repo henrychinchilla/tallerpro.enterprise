@@ -1,26 +1,29 @@
 // ═══════════════════════════════════════════════════════
 // Edge Function: registrar-taller
-// Auto-registro público de talleres con control anti-abuso:
-//   A) Cloudflare Turnstile: valida el token del captcha contra
-//      siteverify usando TURNSTILE_SECRET (si el secret no está
-//      configurado aún, se omite la validación para no bloquear).
-//   B) Aprobación manual: el taller nace SUSPENDIDO (active=false,
-//      notas 'Pendiente de aprobación') y se avisa por email al
-//      superadmin, quien lo activa desde el panel SaaS (▶️).
+// Auto-registro público de comercios con VERIFICACIÓN DE CORREO.
 //
-// El RPC viejo registrar_taller queda revocado (mig 034) para que
-// nadie pueda saltarse el captcha llamándolo directo.
+// Este endpoint YA NO crea el comercio. Solo:
+//   A) Cloudflare Turnstile: valida el captcha (si TURNSTILE_SECRET existe).
+//   B) Límite anti-abuso: máximo 3 solicitudes por correo (excluye expiradas).
+//   C) Crea un usuario auth SIN confirmar (no puede entrar hasta verificar).
+//   D) Registra una SOLICITUD (solicitudes_comercio) en estado
+//      'pendiente_verificacion' con un token de verificación.
+//   E) Envía un correo con el link de verificación (Resend).
 //
-// Body: { nombre_taller, nit?, nombre_admin, email, password,
-//         telefono, turnstile_token? }
+// El comercio (tenant) se crea RECIÉN cuando el usuario abre el link de
+// verificación (Edge: verificar-registro). Si no verifica, no hay comercio.
+//
+// Body: { nombre_taller, nit?, nombre_admin, email, password, telefono,
+//         tipo_negocio?, modulos_activos?, turnstile_token? }
 //
 // Deploy:  supabase functions deploy registrar-taller --no-verify-jwt
-// Secrets: TURNSTILE_SECRET (Cloudflare), RESEND_API_KEY/EMAIL_FROM (aviso)
+// Secrets: TURNSTILE_SECRET, RESEND_API_KEY, EMAIL_FROM
 // ═══════════════════════════════════════════════════════
 
 import { createClient } from "jsr:@supabase/supabase-js@2";
 
-const SUPERADMIN_EMAIL = Deno.env.get("SAAS_ADMIN_EMAIL") ?? "henry.chinchilla@gmail.com";
+const MAX_SOLICITUDES = 3;
+const TOKEN_HORAS = 48;
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -53,19 +56,34 @@ async function validarTurnstile(token: string | undefined, ip: string | null): P
   }
 }
 
-async function avisarSuperadmin(taller: string, email: string, telefono: string) {
+async function enviarVerificacion(email: string, comercio: string, token: string, funcUrl: string) {
   const API_KEY = Deno.env.get("RESEND_API_KEY");
   if (!API_KEY) return;
   const FROM = Deno.env.get("EMAIL_FROM") ?? "NexusPro <onboarding@resend.dev>";
+  const link = `${funcUrl}/functions/v1/verificar-registro?token=${encodeURIComponent(token)}`;
   await fetch("https://api.resend.com/emails", {
     method: "POST",
     headers: { "Authorization": `Bearer ${API_KEY}`, "Content-Type": "application/json" },
     body: JSON.stringify({
-      from: FROM, to: SUPERADMIN_EMAIL,
-      subject: `🆕 Nuevo taller pendiente de aprobación: ${taller}`,
-      html: `<h2>Nuevo registro en NexusPro</h2>
-        <p><b>Taller:</b> ${taller}<br><b>Email:</b> ${email}<br><b>Teléfono:</b> ${telefono}</p>
-        <p>El taller quedó <b>suspendido</b> hasta tu aprobación. Actívalo desde el Panel SaaS (▶️).</p>`,
+      from: FROM, to: email,
+      subject: "Verifica tu correo para activar tu comercio en NexusPro",
+      html: `<div style="font-family:system-ui,Arial,sans-serif;max-width:520px;margin:auto">
+        <h2>¡Casi listo, ${comercio}! 👋</h2>
+        <p>Gracias por registrar tu comercio en <b>NexusPro</b>. Para continuar,
+        confirma que este correo es tuyo:</p>
+        <p style="text-align:center;margin:28px 0">
+          <a href="${link}" style="background:#2563eb;color:#fff;padding:14px 28px;
+            border-radius:8px;text-decoration:none;font-weight:700;display:inline-block">
+            ✅ Verificar mi correo
+          </a>
+        </p>
+        <p style="font-size:13px;color:#666">Al verificar, tu <b>solicitud de versión demo</b>
+        quedará registrada y la activaremos en breve. Te avisaremos por este mismo correo.</p>
+        <p style="font-size:12px;color:#999">Si el botón no funciona, copia este enlace:<br>
+        <a href="${link}">${link}</a></p>
+        <p style="font-size:12px;color:#999">Este enlace vence en ${TOKEN_HORAS} horas.
+        Si no fuiste tú, ignora este mensaje.</p>
+      </div>`,
     }),
   }).catch(() => {});
 }
@@ -86,9 +104,11 @@ Deno.serve(async (req) => {
   const email = (body.email ?? "").toString().trim().toLowerCase();
   const password = (body.password ?? "").toString();
   const telefono = (body.telefono ?? "").toString().trim();
+  const tipoNegocio = (body.tipo_negocio ?? "").toString().trim() || null;
+  const modulos = Array.isArray(body.modulos_activos) ? body.modulos_activos : null;
 
   // ── Validaciones ──
-  if (!nombreTaller || !nombreAdmin) return json({ error: "Faltan el nombre del taller o del administrador" }, 400);
+  if (!nombreTaller || !nombreAdmin) return json({ error: "Faltan el nombre del comercio o del administrador" }, 400);
   if (!EMAIL_RE.test(email)) return json({ error: "El correo no es válido" }, 400);
   if (!TEL_RE.test(telefono)) return json({ error: "El teléfono no es válido (mínimo 8 dígitos)" }, 400);
   if (password.length < 8) return json({ error: "La contraseña debe tener al menos 8 caracteres" }, 400);
@@ -98,54 +118,87 @@ Deno.serve(async (req) => {
   const ts = await validarTurnstile(body.turnstile_token, ip);
   if (!ts.ok) return json({ error: ts.error }, 403);
 
-  // ── Anti-duplicados básicos ──
+  // ── ¿Ya existe una cuenta real (comercio verificado/aprobado)? ──
   const { data: yaExiste } = await admin.from("usuarios").select("id").eq("email", email).maybeSingle();
   if (yaExiste) return json({ error: "Ese correo ya tiene una cuenta en NexusPro. Usa 'Olvidé mi contraseña'." }, 409);
 
-  // ── Crear auth user ──
-  const { data: created, error: cErr } = await admin.auth.admin.createUser({
-    email, password, email_confirm: true,
-    user_metadata: { nombre: nombreAdmin, rol: "admin" },
-  });
-  if (cErr || !created?.user) return json({ error: cErr?.message ?? "No se pudo crear la cuenta" }, 400);
+  // ── ¿Solicitud pendiente de verificación? → se reenvía (no cuenta como intento nuevo) ──
+  const { data: pendiente } = await admin.from("solicitudes_comercio")
+    .select("*").eq("email", email).eq("estado", "pendiente_verificacion")
+    .order("created_at", { ascending: false }).limit(1).maybeSingle();
 
-  // ── B) Tenant SUSPENDIDO pendiente de aprobación (trial 30 días Empresarial) ──
-  const slug = nombreTaller.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "")
-    .replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40)
-    + "-" + Date.now().toString(36);
-
-  // El trial NO fija fecha de vencimiento aquí: los 30 días arrancan con el
-  // PRIMER USO (App._iniciarTrialSiAplica), no mientras espera aprobación.
-  const { data: tenant, error: tErr } = await admin.from("tenants").insert({
-    slug, name: nombreTaller, nit, email, tel: telefono,
-    plan: "empresarial", precio_mensual: 0,
-    suscripcion_vence: null, ciclo_pago: "mensual",
-    ai_limite_mes: 50,   // cuota de Beto en el trial (anzuelo; cliente pagando = 300)
-    active: false,
-    notas_admin: "Pendiente de aprobación (auto-registro). Prueba gratis 30 días.",
-  }).select().single();
-  if (tErr || !tenant) {
-    await admin.auth.admin.deleteUser(created.user.id);
-    return json({ error: "No se pudo crear el taller: " + (tErr?.message ?? "") }, 400);
+  // ── B) Límite de 3 solicitudes (excluye expiradas y la pendiente que se reenvía) ──
+  if (!pendiente) {
+    const { count } = await admin.from("solicitudes_comercio")
+      .select("id", { count: "exact", head: true })
+      .eq("email", email).neq("estado", "expirado");
+    if ((count ?? 0) >= MAX_SOLICITUDES) {
+      return json({ error: `Alcanzaste el límite de ${MAX_SOLICITUDES} solicitudes con este correo. Escríbenos para ayudarte.` }, 429);
+    }
   }
 
-  // config fiscal por defecto + perfil admin
-  await admin.from("config_fiscal").insert({ tenant_id: tenant.id, regimen_iva: "general", tasa_iva: 0.12, tasa_isr: 0.05 });
-  const { error: uErr } = await admin.from("usuarios").insert({
-    id: created.user.id, tenant_id: tenant.id, nombre: nombreAdmin,
-    email, telefono, rol: "admin", activo: true, avatar: "👑",
-  });
-  if (uErr) {
-    await admin.auth.admin.deleteUser(created.user.id);
-    await admin.from("tenants").delete().eq("id", tenant.id);
-    return json({ error: "No se pudo crear el perfil: " + uErr.message }, 400);
+  // ── Token de verificación ──
+  const token = crypto.randomUUID().replace(/-/g, "") + crypto.randomUUID().replace(/-/g, "");
+  const expira = new Date(Date.now() + TOKEN_HORAS * 3600 * 1000).toISOString();
+
+  // ── C) Usuario auth SIN confirmar (no puede entrar hasta verificar el correo) ──
+  let authUserId: string | null = pendiente?.auth_user_id ?? null;
+  if (authUserId) {
+    // Reenvío: actualizar la contraseña por si el usuario la cambió al reintentar
+    await admin.auth.admin.updateUserById(authUserId, { password }).catch(() => {});
+  } else {
+    const { data: created, error: cErr } = await admin.auth.admin.createUser({
+      email, password, email_confirm: false,
+      user_metadata: { nombre: nombreAdmin, rol: "admin" },
+    });
+    if (created?.user) {
+      authUserId = created.user.id;
+    } else {
+      // El usuario auth ya existe (huérfano de un intento previo expirado):
+      // reclamarlo reutilizando su id de la solicitud anterior.
+      const m = (cErr?.message ?? "").toLowerCase();
+      const yaExisteAuth = m.includes("already") || m.includes("registered") || m.includes("exists");
+      if (yaExisteAuth) {
+        const { data: prev } = await admin.from("solicitudes_comercio")
+          .select("auth_user_id").eq("email", email).not("auth_user_id", "is", null)
+          .order("created_at", { ascending: false }).limit(1).maybeSingle();
+        if (prev?.auth_user_id) {
+          authUserId = prev.auth_user_id;
+          await admin.auth.admin.updateUserById(authUserId, { password, email_confirm: false }).catch(() => {});
+        }
+      }
+      if (!authUserId) {
+        return json({ error: cErr?.message ?? "No se pudo crear la cuenta" }, 400);
+      }
+    }
   }
 
-  avisarSuperadmin(nombreTaller, email, telefono);
+  // ── D) Registrar / actualizar la solicitud ──
+  if (pendiente) {
+    await admin.from("solicitudes_comercio").update({
+      nombre_comercio: nombreTaller, nombre_admin: nombreAdmin, nit, telefono,
+      tipo_negocio: tipoNegocio, modulos_activos: modulos,
+      token, token_expira: expira, auth_user_id: authUserId, ip,
+    }).eq("id", pendiente.id);
+  } else {
+    const { error: sErr } = await admin.from("solicitudes_comercio").insert({
+      email, nombre_comercio: nombreTaller, nombre_admin: nombreAdmin,
+      nit, telefono, tipo_negocio: tipoNegocio, modulos_activos: modulos,
+      token, token_expira: expira, auth_user_id: authUserId, ip,
+      estado: "pendiente_verificacion",
+    });
+    if (sErr) {
+      await admin.auth.admin.deleteUser(authUserId).catch(() => {});
+      return json({ error: "No se pudo registrar la solicitud: " + sErr.message }, 400);
+    }
+  }
+
+  // ── E) Correo de verificación ──
+  await enviarVerificacion(email, nombreTaller, token, url);
 
   return json({
     ok: true,
-    pendiente: true,
-    mensaje: "Tu taller fue registrado. Lo estamos activando — te avisaremos a tu correo en breve.",
+    verificar: true,
+    mensaje: "Te enviamos un correo para verificar tu cuenta. Ábrelo y confirma para continuar con tu solicitud de versión demo.",
   });
 });

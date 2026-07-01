@@ -253,7 +253,7 @@ function renderLogin(vista='login') {
         <div class="alert alert-amber" style="margin-bottom:12px">
           <div class="alert-icon">💡</div>
           <div class="alert-body" style="font-size:11px">30 días de prueba gratuita · Sin tarjeta de crédito.
-          Tu taller se activa tras una breve revisión (te avisamos por correo).</div>
+          Primero <b>verifica tu correo</b>; luego tu solicitud de demo se activa tras una breve revisión (te avisamos por correo).</div>
         </div>
 
         <button class="btn btn-amber" style="width:100%" onclick="loginRegistrarTaller()">
@@ -407,7 +407,7 @@ function renderLogin(vista='login') {
         <div class="alert alert-amber" style="margin-bottom:12px">
           <div class="alert-icon">💡</div>
           <div class="alert-body" style="font-size:11px">30 días de prueba gratuita · Sin tarjeta de crédito.
-          Tu taller se activa tras una breve revisión (te avisamos por correo).</div>
+          Primero <b>verifica tu correo</b>; luego tu solicitud de demo se activa tras una breve revisión (te avisamos por correo).</div>
         </div>
 
         <button class="btn btn-amber" style="width:100%" onclick="loginRegistrarTallerGoogle()">
@@ -629,20 +629,8 @@ async function loginRegistrarTaller() {
     if (!turnstile_token) { UI.toast('Completa la verificación de seguridad', 'error'); return; }
   }
 
-  UI.toast('Registrando tu taller...', 'info');
-  const { data, error } = await getSB().functions.invoke('registrar-taller', {
-    body: { nombre_taller: nombre, nit, nombre_admin: admin, email, telefono: tel, password: pass, turnstile_token }
-  });
-
-  let msg = data?.error || null;
-  if (error) { try { const j = await error.context.json(); msg = j?.error || error.message; } catch(_) { msg = error.message; } }
-  if (msg) {
-    UI.toast(msg, 'error');
-    if (window.turnstile && _turnstileWidget !== null) window.turnstile.reset(_turnstileWidget);
-    return;
-  }
-
-  /* Guardar tipo de negocio seleccionado */
+  /* Tipo de negocio + módulos: se envían al backend para guardarlos en el
+     comercio cuando el usuario verifique su correo. */
   const tipo = document.querySelector('input[name="tipo"]:checked')?.value || 'taller';
   const modulos_base = ['clientes','vehiculos','ordenes','inventario','pos'];
   const modulos_map = {
@@ -657,17 +645,33 @@ async function loginRegistrarTaller() {
     otro: modulos_base
   };
   const modulos_activos = modulos_map[tipo] || modulos_base;
-  localStorage.setItem('nt_modulos_activos', JSON.stringify(modulos_activos));
 
-  UI.modal('🎉 ¡Bienvenido a NexusPro!', `
+  UI.toast('Registrando tu solicitud...', 'info');
+  const { data, error } = await getSB().functions.invoke('registrar-taller', {
+    body: { nombre_taller: nombre, nit, nombre_admin: admin, email, telefono: tel, password: pass,
+            tipo_negocio: tipo, modulos_activos, turnstile_token }
+  });
+
+  let msg = data?.error || null;
+  if (error) { try { const j = await error.context.json(); msg = j?.error || error.message; } catch(_) { msg = error.message; } }
+  if (msg) {
+    UI.toast(msg, 'error');
+    if (window.turnstile && _turnstileWidget !== null) window.turnstile.reset(_turnstileWidget);
+    return;
+  }
+
+  /* Ahora el alta NO crea el comercio todavía: primero hay que verificar el correo. */
+  UI.modal('📧 Verifica tu correo', `
     <div style="text-align:center;padding:8px 4px">
-      <div style="font-size:44px;margin-bottom:10px">⚡</div>
+      <div style="font-size:44px;margin-bottom:10px">📧</div>
       <div style="font-weight:800;font-size:16px;margin-bottom:8px">${nombre}</div>
       <p style="font-size:13px;color:var(--text2);line-height:1.6">
-        Tu negocio fue registrado exitosamente en <b>NexusPro</b> y está en <b>revisión de activación</b>
-        (normalmente en horas). Te avisaremos a <b>${email}</b> cuando esté listo
-        para iniciar tus <b>30 días de prueba gratis</b>.<br><br>
-        <b>Tu ecosistema:</b> ${modulos_activos.map(m => m.replace('_',' ')).join(', ')}
+        Te enviamos un correo a <b>${email}</b> para <b>verificar tu cuenta</b>.<br><br>
+        Abre ese correo y toca <b>"Verificar mi correo"</b>. Al confirmar, tu
+        <b>solicitud de versión demo</b> quedará registrada y la activaremos pronto
+        (te avisaremos por el mismo correo).<br><br>
+        <span style="color:var(--text3);font-size:12px">Si no lo ves, revisa la carpeta de spam.
+        El enlace vence en 48 horas.</span>
       </p>
       <div class="modal-footer" style="justify-content:center">
         <button class="btn btn-amber" onclick="UI.cerrarModal();renderLogin('login')">← Volver al Login</button>
