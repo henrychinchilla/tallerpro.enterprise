@@ -196,21 +196,56 @@ const POS = {
           border-color: var(--amber) !important;
           box-shadow: 0 4px 12px rgba(217,119,6,0.2) !important;
         }
+        /* ── Layout responsivo del POS ──
+           Desktop: catálogo + carrito lado a lado.
+           Móvil (≤920px): catálogo a pantalla completa; el carrito es un panel
+           deslizante que se abre con la barra inferior (total + Cobrar). */
+        .pos-shell { display:flex; flex-direction:column; height:100vh; height:100dvh; }
+        .pos-header { display:flex; align-items:center; gap:12px; padding:12px 18px;
+          background:linear-gradient(90deg, var(--surface) 0%, var(--surface2) 100%);
+          border-bottom:1px solid var(--border); flex-wrap:wrap; }
+        .pos-layout { flex:1; display:grid; grid-template-columns:1fr 480px; gap:0; overflow:hidden; min-height:0; }
+        .pos-catalogo { padding:18px; overflow-y:auto; display:flex; flex-direction:column; gap:14px; min-width:0; }
+        .pos-cart-panel { border-left:1px solid var(--border); background:var(--surface); display:flex; flex-direction:column; min-height:0; }
+        #pos-cart { flex:1 1 0; overflow-y:auto; padding:16px; min-height:80px; }
+        #pos-totales { border-top:1px solid var(--border); padding:16px; overflow-y:auto; flex:0 1 auto; }
+        .pos-cart-volver, .pos-mbar { display:none; }
+        @media (max-width: 920px) {
+          .pos-header { padding:10px 12px; gap:8px; }
+          .pos-layout { grid-template-columns:1fr; }
+          .pos-catalogo { padding:12px; padding-bottom:84px; }
+          .pos-cart-panel { position:fixed; inset:0; z-index:60; border-left:none;
+            transform:translateY(100%); transition:transform .25s ease; }
+          .pos-cart-panel.open { transform:translateY(0); }
+          .pos-cart-volver { display:flex; align-items:center; gap:8px; padding:13px 16px;
+            border-bottom:1px solid var(--border); font-weight:800; font-size:14px;
+            cursor:pointer; background:var(--surface2); user-select:none; }
+          .pos-mbar { display:flex; position:fixed; left:12px; right:12px;
+            bottom:calc(12px + env(safe-area-inset-bottom, 0px)); z-index:50;
+            align-items:center; justify-content:space-between; gap:10px;
+            background:var(--amber); color:#fff; border-radius:14px; padding:14px 18px;
+            font-weight:900; font-size:15px; cursor:pointer; user-select:none;
+            box-shadow:0 8px 24px rgba(0,0,0,0.35); }
+        }
+        @media (max-width: 600px) {
+          .pos-user-name { display:none !important; }
+          #pos-grid > div { grid-template-columns:repeat(auto-fill,minmax(112px,1fr)) !important; }
+        }
       </style>
-      <div style="display:flex;flex-direction:column;height:100vh">
-        <header style="display:flex;align-items:center;gap:12px;padding:12px 18px;background:linear-gradient(90deg, var(--surface) 0%, var(--surface2) 100%);border-bottom:1px solid var(--border)">
+      <div class="pos-shell">
+        <header class="pos-header">
           <div style="font-family:\'Outfit\',\'Bebas Neue\',sans-serif;font-size:24px;font-weight:900;letter-spacing:-0.5px;color:var(--amber)">🛒 POS</div>
           <div style="font-size:12px;color:var(--text3);background:var(--surface3);padding:4px 10px;border-radius:6px;font-weight:700">${Auth.tenant?.name||''}</div>
           <div style="margin-left:auto;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
             <button class="btn btn-ghost btn-sm" onclick="POS.corteDiario()">🧾 Corte Diario</button>
             <button class="btn btn-ghost btn-sm" onclick="POS.reportes()">📊 Reportes</button>
-            <span style="font-size:12px;color:var(--text2);font-weight:700;display:flex;align-items:center;gap:6px">${Auth.user?.avatar||'👤'} ${Auth.user?.nombre||Auth.user?.email||''}</span>
+            <span class="pos-user-name" style="font-size:12px;color:var(--text2);font-weight:700;display:flex;align-items:center;gap:6px">${Auth.user?.avatar||'👤'} ${Auth.user?.nombre||Auth.user?.email||''}</span>
             <button class="btn btn-ghost btn-sm" onclick="POS.confirmarSalida()">⏻ Salir</button>
           </div>
         </header>
-        <div style="flex:1;display:grid;grid-template-columns:1fr 480px;gap:0;overflow:hidden">
+        <div class="pos-layout">
           <!-- Catálogo -->
-          <div style="padding:18px;overflow-y:auto;display:flex;flex-direction:column;gap:14px">
+          <div class="pos-catalogo">
             <div style="display:flex;gap:12px;align-items:center">
               <div style="position:relative;flex:1">
                 <span style="position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--text3)">🔍</span>
@@ -228,14 +263,32 @@ const POS = {
             <div id="pos-grid" style="flex:1"></div>
           </div>
           <!-- Carrito -->
-          <div style="border-left:1px solid var(--border);background:var(--surface);display:flex;flex-direction:column">
-            <div id="pos-cart" style="flex:1;overflow-y:auto;padding:16px"></div>
-            <div id="pos-totales" style="border-top:1px solid var(--border);padding:16px"></div>
+          <div class="pos-cart-panel" id="pos-cart-panel">
+            <div class="pos-cart-volver" onclick="POS.toggleCart(false)">← Seguir comprando</div>
+            <div id="pos-cart"></div>
+            <div id="pos-totales"></div>
           </div>
         </div>
+        <!-- Barra móvil: total + acceso al carrito/cobro -->
+        <div class="pos-mbar" id="pos-mbar" onclick="POS.toggleCart(true)"></div>
       </div>`;
     this._pintarGrid();
     this._pintarCart();
+  },
+
+  /* Panel del carrito en móvil (≤920px): se desliza sobre el catálogo */
+  toggleCart(abrir) {
+    document.getElementById('pos-cart-panel')?.classList.toggle('open', !!abrir);
+  },
+
+  _pintarMbar() {
+    const bar = document.getElementById('pos-mbar');
+    if (!bar) return;
+    const n = this._cart.reduce((s,l)=>s+l.cant, 0);
+    const t = this._totales();
+    bar.innerHTML = n
+      ? `<span>🛒 ${n} artículo${n===1?'':'s'}</span><span>Cobrar ${UI.q(t.total)} →</span>`
+      : `<span>🛒 Carrito vacío</span><span style="font-weight:700;font-size:13px">Ver carrito →</span>`;
   },
 
   _onCatChange(el) {
@@ -417,6 +470,7 @@ const POS = {
       <button class="btn btn-amber" style="width:100%;font-size:17px;padding:15px;font-weight:900;border-radius:10px;margin-top:14px;box-shadow:0 6px 18px rgba(217,119,6,0.2)" onclick="POS.cobrar()" ${this._cart.length?'':'disabled'}>
         💵 Cobrar ${UI.q(t.total)}
       </button>`;
+    this._pintarMbar();
   },
 
   _setMetodoPago(metodo, el) {
