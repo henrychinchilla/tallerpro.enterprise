@@ -50,6 +50,33 @@ Modulos.configuracion = {
               </div>
               <button class="btn btn-danger" onclick="Modulos.configuracion.guardarSeguridad()">Guardar</button>
             </div>
+            ${(()=>{ const pt = t.config_pos_tarjeta || {}; return `
+            <div class="card card-green mb-4">
+              <div class="card-sub mb-3">💳 Cobro con tarjeta (POS físico)</div>
+              <label style="display:flex;align-items:center;gap:8px;font-size:13px;margin-bottom:10px;cursor:pointer;user-select:none">
+                <input type="checkbox" id="cfg-pt-on" style="width:16px;height:16px" ${pt.habilitado?'checked':''}>
+                <span>Acepto pagos con tarjeta de crédito/débito (opcional)</span>
+              </label>
+              <div class="form-row">
+                <div class="form-group"><label class="form-label">Proveedor del POS</label>
+                  <select class="form-select" id="cfg-pt-prov">
+                    ${['VISA (Visanet)','CREDOMATIC (BAC)','Otro'].map(p=>`<option ${pt.proveedor===p?'selected':''}>${p}</option>`).join('')}
+                  </select></div>
+                <div class="form-group"><label class="form-label">Comisión (%)</label>
+                  <input class="form-input" id="cfg-pt-comision" type="number" min="0" max="15" step="0.01" value="${pt.comision_pct??''}" placeholder="Ej. 4.5"></div>
+              </div>
+              <div class="form-row">
+                <div class="form-group"><label class="form-label">No. de afiliación</label>
+                  <input class="form-input mono-sm" id="cfg-pt-afiliacion" value="${pt.afiliacion||''}" placeholder="No. de afiliado/comercio"></div>
+                <div class="form-group"><label class="form-label">Banco que deposita</label>
+                  <input class="form-input" id="cfg-pt-banco" value="${pt.banco||''}" placeholder="Ej. BAC, BI, Banrural"></div>
+              </div>
+              <div class="alert alert-cyan" style="margin-bottom:10px"><div class="alert-icon">🔒</div><div class="alert-body" style="font-size:11px">
+                NexusPro <b>nunca guarda el número completo ni el CVV</b> de las tarjetas de tus clientes.
+                El cobro se hace en tu POS físico y aquí solo se registra el voucher: autorización y últimos 4 dígitos.
+              </div></div>
+              <button class="btn btn-green" onclick="Modulos.configuracion.guardarPosTarjeta()">Guardar</button>
+            </div>`; })()}
             <div class="card card-purple mb-4">
               <div class="card-sub mb-3">👥 Usuarios del Sistema</div>
               <button class="btn btn-cyan" style="width:100%" onclick="App.navegarA('usuarios')">
@@ -122,6 +149,28 @@ Modulos.configuracion = {
       Auth.tenant.name = nameVal;
       Auth.tenant.igss_patronal = igssPat;
       App.renderSidebar();
+    }
+    else UI.toast('Error al guardar','error');
+  },
+
+  /* ── COBRO CON TARJETA (POS físico VISA/Credomatic) ──
+     Config opcional por comercio. Solo datos del comercio (afiliación,
+     comisión); jamás datos de tarjetas de clientes. */
+  async guardarPosTarjeta() {
+    const cfg = {
+      habilitado:   !!document.getElementById('cfg-pt-on')?.checked,
+      proveedor:    document.getElementById('cfg-pt-prov')?.value||'VISA (Visanet)',
+      afiliacion:   document.getElementById('cfg-pt-afiliacion')?.value.trim()||null,
+      banco:        document.getElementById('cfg-pt-banco')?.value.trim()||null,
+      comision_pct: parseFloat(document.getElementById('cfg-pt-comision')?.value)||0
+    };
+    if (/\d{13,19}/.test((cfg.afiliacion||'').replace(/[\s\-]/g,''))) {
+      UI.toast('Seguridad: eso parece un número de tarjeta, no una afiliación','error'); return;
+    }
+    const ok = await DB.updateTenant({ config_pos_tarjeta: cfg, updated_at: new Date().toISOString() });
+    if (ok) {
+      Auth.tenant.config_pos_tarjeta = cfg;
+      UI.toast(cfg.habilitado ? 'Cobro con tarjeta activado ✓ Ya puedes cobrar con tarjeta en el POS' : 'Configuración guardada (cobro con tarjeta desactivado)');
     }
     else UI.toast('Error al guardar','error');
   },

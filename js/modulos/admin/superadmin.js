@@ -3,17 +3,18 @@
    cobros mensuales (MRR, pendientes) y supervisa respaldos. */
 Modulos.superadmin = {
   _tab: 'comercios',
-  _tenants: [], _pagos: [], _solicitudes: [],
+  _tenants: [], _pagos: [], _solicitudes: [], _tarjetas: [],
   _dbTenantId: null, _dbBackups: [],
 
   async render() {
     const el = document.getElementById('page-content');
     if (Auth.user?.rol !== 'superadmin') { el.innerHTML = '<div class="empty-state">Sin acceso</div>'; return; }
     UI.loading(el);
-    [this._tenants, this._pagos, this._solicitudes] = await Promise.all([
+    [this._tenants, this._pagos, this._solicitudes, this._tarjetas] = await Promise.all([
       DB.getTenantsAdmin().catch(()=>[]),
       DB.getTenantPagos().catch(()=>[]),
-      DB.getSolicitudes().catch(()=>[])
+      DB.getSolicitudes().catch(()=>[]),
+      DB.getTenantTarjetas().catch(()=>[])
     ]);
     /* Comercios que verificaron su correo y esperan aprobación */
     this._pendMap = new Map(this._solicitudes.filter(s=>s.estado==='verificado'&&s.tenant_id).map(s=>[s.tenant_id, s]));
@@ -201,6 +202,13 @@ Modulos.superadmin = {
           ${UI.kpiCard({ icon:'⏳', clase:'amber', label:'Pendiente este mes', value: pendienteMes, money:true })}
           ${UI.kpiCard({ icon:'⚠️', clase: sinCobrar.length?'red':'gray', label:`Sin cobrar (${mesAct})`, value: sinCobrar.length, trend:'comercios activos' })}
         </div>
+        ${(()=>{
+          const autos = sinCobrar.filter(t=>this._tarjetas.find(x=>x.tenant_id===t.id && x.cargo_automatico));
+          return autos.length?`<div class="alert alert-cyan" style="margin-bottom:12px"><div class="alert-icon">💳</div><div class="alert-body" style="font-size:12px;display:flex;justify-content:space-between;align-items:center;gap:10px">
+            <span>${autos.length} comercio(s) con <b>cargo automático a tarjeta</b> sin cargo de ${mesAct}: ${autos.map(t=>`<b>${t.name||t.slug}</b>`).join(', ')}.</span>
+            <button class="btn btn-sm btn-cyan" style="flex-shrink:0" onclick="Modulos.superadmin.generarCargosTarjeta()">💳 Generar cargos del mes</button>
+          </div></div>`:'';
+        })()}
         ${sinCobrar.length?`<div class="alert alert-amber" style="margin-bottom:16px"><div class="alert-icon">⏰</div><div class="alert-body" style="font-size:12px">
           Sin cobro de ${mesAct}: ${sinCobrar.map(t=>`<b>${t.name||t.slug}</b>`).join(', ')}.
         </div></div>`:''}
@@ -509,6 +517,35 @@ Modulos.superadmin = {
         <div class="form-group"><label class="form-label">Notas internas</label>
           <textarea class="form-input" id="sa-notas" rows="2">${t.notas_admin||''}</textarea></div>
       </div>
+      ${(()=>{ const tj = this._tarjetas.find(x=>x.tenant_id===id) || {}; return `
+      <div style="border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:12px">
+        <div class="card-sub mb-3">💳 Cobro de suscripción con tarjeta ${tj.id?`<span class="badge badge-green" style="margin-left:6px">${tj.marca||'Tarjeta'} ****${tj.ultimos4||'????'}</span>`:'<span class="badge badge-gray" style="margin-left:6px">Sin tarjeta</span>'}</div>
+        <div class="form-row">
+          <div class="form-group"><label class="form-label">Titular</label>
+            <input class="form-input" id="sa-tj-titular" value="${tj.titular||''}" placeholder="Como aparece en la tarjeta"></div>
+          <div class="form-group"><label class="form-label">Marca</label>
+            <select class="form-select" id="sa-tj-marca">${['VISA','MASTERCARD','OTRA'].map(m=>`<option ${tj.marca===m?'selected':''}>${m}</option>`).join('')}</select></div>
+        </div>
+        <div class="form-row">
+          <div class="form-group"><label class="form-label">Últimos 4 dígitos</label>
+            <input class="form-input mono-sm" id="sa-tj-u4" maxlength="4" inputmode="numeric" value="${tj.ultimos4||''}" placeholder="****"
+                   oninput="this.value=this.value.replace(/\\D/g,'').slice(0,4)"></div>
+          <div class="form-group"><label class="form-label">Vence (MM/AA)</label>
+            <div style="display:flex;gap:6px">
+              <input class="form-input mono-sm" id="sa-tj-mes" maxlength="2" inputmode="numeric" value="${tj.exp_mes||''}" placeholder="MM" style="width:70px">
+              <input class="form-input mono-sm" id="sa-tj-anio" maxlength="2" inputmode="numeric" value="${tj.exp_anio?String(tj.exp_anio).slice(-2):''}" placeholder="AA" style="width:70px">
+            </div></div>
+        </div>
+        <div class="form-group"><label class="form-label">Modo de cargo</label>
+          <select class="form-select" id="sa-tj-modo">
+            <option value="manual" ${!tj.cargo_automatico?'selected':''}>Manual — yo registro cada cobro (POS físico / gateway)</option>
+            <option value="auto" ${tj.cargo_automatico?'selected':''}>Automático — generar el cargo del mes solo (💳 en Cobros)</option>
+          </select></div>
+        <div class="form-group"><label class="form-label">Token del gateway (opcional)</label>
+          <input class="form-input mono-sm" id="sa-tj-token" type="password" placeholder="Token de Credomatic/gateway — se cifra en la BD (Vault)" autocomplete="off">
+          <div style="font-size:10px;color:var(--text3);margin-top:3px">🔒 Nunca ingreses el número completo de la tarjeta: solo el token que entrega el gateway. Se guarda cifrado y ni siquiera el superadmin puede volver a leerlo.</div></div>
+        ${tj.id?`<button class="btn btn-sm btn-red" onclick="Modulos.superadmin.eliminarTarjeta('${id}')">🗑️ Quitar tarjeta</button>`:''}
+      </div>`; })()}
       <div class="modal-footer">
         <button class="btn btn-ghost" onclick="UI.cerrarModal()">Cancelar</button>
         <button class="btn btn-amber" onclick="Modulos.superadmin.guardarTaller('${id}')">Guardar</button>
@@ -577,7 +614,39 @@ Modulos.superadmin = {
     };
     const { error } = await DB.updateTenantById(id, fields);
     if (error) { UI.toast('Error: '+error.message,'error'); return; }
+
+    /* Tarjeta de suscripción (opcional): se guarda si hay titular o últimos 4 */
+    const tjTitular = document.getElementById('sa-tj-titular')?.value.trim()||null;
+    const tjU4 = document.getElementById('sa-tj-u4')?.value.trim()||null;
+    const tjToken = document.getElementById('sa-tj-token')?.value.trim()||'';
+    const tjExistente = this._tarjetas.find(x=>x.tenant_id===id);
+    if (tjTitular || tjU4 || tjExistente) {
+      if (tjU4 && !/^\d{4}$/.test(tjU4)) { UI.toast('Últimos 4 dígitos: deben ser exactamente 4 números','error'); return; }
+      const anio2 = parseInt(document.getElementById('sa-tj-anio')?.value)||null;
+      const { data: tj, error: tjErr } = await DB.upsertTenantTarjeta({
+        tenant_id: id,
+        titular: tjTitular,
+        marca: document.getElementById('sa-tj-marca')?.value||'VISA',
+        ultimos4: tjU4,
+        exp_mes: parseInt(document.getElementById('sa-tj-mes')?.value)||null,
+        exp_anio: anio2 ? (anio2 < 100 ? 2000 + anio2 : anio2) : null,
+        cargo_automatico: document.getElementById('sa-tj-modo')?.value === 'auto'
+      });
+      if (tjErr) { UI.toast('Comercio guardado, pero la tarjeta no: '+tjErr.message,'error'); return; }
+      if (tjToken && tj?.id) {
+        const { error: tokErr } = await DB.guardarTokenTarjeta(tj.id, tjToken);
+        if (tokErr) { UI.toast('Tarjeta guardada, pero el token no: '+tokErr.message,'error'); return; }
+      }
+    }
     UI.cerrarModal(); UI.toast('Comercio actualizado ✓');
+    this.render();
+  },
+
+  async eliminarTarjeta(tenantId) {
+    if (!confirm('¿Quitar la tarjeta de suscripción de este comercio?\nSe borra también el token cifrado del gateway.')) return;
+    const ok = await DB.deleteTenantTarjeta(tenantId);
+    if (!ok) { UI.toast('No se pudo quitar la tarjeta','error'); return; }
+    UI.cerrarModal(); UI.toast('Tarjeta eliminada ✓');
     this.render();
   },
 
@@ -630,9 +699,19 @@ Modulos.superadmin = {
       </div>
       <div class="form-row">
         <div class="form-group"><label class="form-label">Método</label>
-          <select class="form-select" id="co-metodo">${['Transferencia','Depósito','Efectivo','Tarjeta','Cheque'].map(m=>`<option>${m}</option>`).join('')}</select></div>
+          <select class="form-select" id="co-metodo" onchange="Modulos.superadmin._toggleCobroTarjeta()">${['Transferencia','Depósito','Efectivo','Tarjeta','Cheque'].map(m=>`<option>${m}</option>`).join('')}</select></div>
         <div class="form-group"><label class="form-label">Estado</label>
           <select class="form-select" id="co-estado"><option value="pagado">Pagado</option><option value="pendiente">Pendiente</option></select></div>
+      </div>
+      <div id="co-tarjeta" style="display:none">
+        <div class="form-row">
+          <div class="form-group"><label class="form-label">No. de autorización *</label>
+            <input class="form-input mono-sm" id="co-tj-aut" maxlength="10" placeholder="Del voucher / gateway"></div>
+          <div class="form-group"><label class="form-label">Últimos 4 dígitos</label>
+            <input class="form-input mono-sm" id="co-tj-u4" maxlength="4" inputmode="numeric" placeholder="****"
+                   oninput="this.value=this.value.replace(/\\D/g,'').slice(0,4)"></div>
+        </div>
+        <div style="font-size:10px;color:var(--text3);margin:-6px 0 10px">🔒 Solo autorización y últimos 4 — nunca el número completo ni el CVV.</div>
       </div>
       <div class="form-group"><label class="form-label">Referencia / Notas</label>
         <input class="form-input" id="co-ref" placeholder="No. de boleta, observaciones..."></div>
@@ -642,17 +721,39 @@ Modulos.superadmin = {
       </div>`);
   },
 
+  /* Muestra la captura de voucher al elegir método Tarjeta y prellena
+     los últimos 4 con la tarjeta registrada del comercio. */
+  _toggleCobroTarjeta() {
+    const esTarjeta = document.getElementById('co-metodo')?.value === 'Tarjeta';
+    const box = document.getElementById('co-tarjeta');
+    if (box) box.style.display = esTarjeta ? '' : 'none';
+    if (esTarjeta) {
+      const tj = this._tarjetas.find(x=>x.tenant_id === document.getElementById('co-tenant')?.value);
+      const u4 = document.getElementById('co-tj-u4');
+      if (tj?.ultimos4 && u4 && !u4.value) u4.value = tj.ultimos4;
+    }
+  },
+
   async guardarCobro() {
     const tenant_id = document.getElementById('co-tenant')?.value;
     const monto = parseFloat(document.getElementById('co-monto')?.value)||0;
     if (!tenant_id || monto<=0) { UI.toast('Comercio y monto son obligatorios','error'); return; }
+    const metodo = document.getElementById('co-metodo')?.value;
+    let referencia = document.getElementById('co-ref')?.value||null;
+    if (metodo === 'Tarjeta') {
+      const aut = (document.getElementById('co-tj-aut')?.value||'').trim();
+      const u4  = (document.getElementById('co-tj-u4')?.value||'').trim();
+      if (!aut) { UI.toast('Ingresa el número de autorización del voucher','error'); return; }
+      if (/\d{13,19}/.test(aut.replace(/[\s\-]/g,''))) { UI.toast('Seguridad: eso parece un número de tarjeta. Ingresa solo la autorización.','error'); return; }
+      referencia = `Aut. ${aut}${u4?` · ****${u4}`:''}${referencia?` · ${referencia}`:''}`;
+    }
     const fields = {
       tenant_id,
       periodo: document.getElementById('co-periodo')?.value||this._mesActual(),
       monto,
-      metodo: document.getElementById('co-metodo')?.value,
+      metodo,
       estado: document.getElementById('co-estado')?.value||'pagado',
-      referencia: document.getElementById('co-ref')?.value||null,
+      referencia,
       fecha: new Date().toISOString().slice(0,10)
     };
     const { error } = await DB.upsertTenantPago(fields);
@@ -665,6 +766,34 @@ Modulos.superadmin = {
     if (!confirm('¿Eliminar este cobro?')) return;
     await DB.deleteTenantPago(id);
     UI.toast('Cobro eliminado');
+    this.render();
+  },
+
+  /* ── CARGOS AUTOMÁTICOS A TARJETA ─────────────────
+     Genera el cobro del mes (método Tarjeta, estado pendiente) para cada
+     comercio activo con tarjeta en modo automático y sin cobro del periodo.
+     Queda pendiente hasta pasar la tarjeta en el POS/gateway y registrar la
+     autorización (editar el cobro o eliminarlo y registrarlo pagado). */
+  async generarCargosTarjeta() {
+    const mesAct = this._mesActual();
+    const conPago = new Set(this._pagos.filter(p=>p.periodo===mesAct).map(p=>p.tenant_id));
+    const autos = this._tenants.filter(t =>
+      t.active!==false && !conPago.has(t.id) && (Number(t.precio_mensual)||0) > 0 &&
+      this._tarjetas.find(x=>x.tenant_id===t.id && x.cargo_automatico));
+    if (!autos.length) { UI.toast('No hay cargos automáticos pendientes de generar este mes','info'); return; }
+    if (!confirm(`Se generarán ${autos.length} cargo(s) de ${mesAct} con método Tarjeta (estado pendiente):\n${autos.map(t=>`• ${t.name||t.slug} — Q${t.precio_mensual}`).join('\n')}\n\n¿Continuar?`)) return;
+    let ok = 0, fail = 0;
+    for (const t of autos) {
+      const tj = this._tarjetas.find(x=>x.tenant_id===t.id);
+      const { error } = await DB.upsertTenantPago({
+        tenant_id: t.id, periodo: mesAct, monto: Number(t.precio_mensual)||0,
+        metodo: 'Tarjeta', estado: 'pendiente',
+        referencia: `Cargo automático ${tj?.marca||''}${tj?.ultimos4?` ****${tj.ultimos4}`:''}`.trim(),
+        fecha: new Date().toISOString().slice(0,10)
+      });
+      if (error) fail++; else ok++;
+    }
+    UI.toast(`Cargos generados: ${ok} ✓${fail?` · ${fail} con error`:''}`);
     this.render();
   },
 

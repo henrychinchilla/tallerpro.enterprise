@@ -119,6 +119,33 @@ const DB = {
     return !error;
   },
 
+  /* ── TARJETAS DE SUSCRIPCIÓN (solo superadmin) ────
+     Columnas explícitas: token_enc está cifrado y el cliente NO tiene
+     privilegio de leerlo (un select * fallaría). */
+  TARJETA_COLS: 'id,tenant_id,titular,marca,ultimos4,exp_mes,exp_anio,cargo_automatico,gateway,notas,updated_at',
+
+  async getTenantTarjetas() {
+    const { data } = await getSB().from('tenant_tarjetas').select(this.TARJETA_COLS);
+    return data || [];
+  },
+
+  async upsertTenantTarjeta(fields) {
+    const { data, error } = await getSB().from('tenant_tarjetas')
+      .upsert(fields, { onConflict: 'tenant_id' }).select(this.TARJETA_COLS).single();
+    return { data, error };
+  },
+
+  async deleteTenantTarjeta(tenantId) {
+    const { error } = await getSB().from('tenant_tarjetas').delete().eq('tenant_id', tenantId);
+    return !error;
+  },
+
+  /* Token del gateway: se cifra en la BD (Vault + pgcrypto); jamás queda en claro */
+  async guardarTokenTarjeta(tarjetaId, token) {
+    const { error } = await getSB().rpc('sa_guardar_token_tarjeta', { p_tarjeta_id: tarjetaId, p_token: token||'' });
+    return { error };
+  },
+
   /* ── RESPALDOS ────────────────────────────────────
      Bitácora (tabla) + exportación on-demand de los datos del taller. */
   async getBackups(tenantId=null) {

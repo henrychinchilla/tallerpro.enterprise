@@ -558,7 +558,7 @@ Modulos.facturacion = {
       <hr><p>Subtotal: Q${f.subtotal?.toFixed(2)}</p>
       <p>IVA (12%): Q${f.iva?.toFixed(2)}</p>
       <p class="total">TOTAL: Q${f.total?.toFixed(2)}</p>
-      <p><b>Método de pago:</b> ${f.metodo_pago||'Efectivo'}</p>
+      <p><b>Método de pago:</b> ${f.metodo_pago||'Efectivo'}${f.tarjeta_datos?` — ${f.tarjeta_datos.red||''} ${f.tarjeta_datos.tipo||''} ${f.tarjeta_datos.ultimos4?'****'+f.tarjeta_datos.ultimos4:''} Aut. ${f.tarjeta_datos.autorizacion||''}`:''}</p>
       <hr><p style="text-align:center;font-size:10px">Documento tributario electrónico FEL</p>
       <script>window.print();</script></body></html>`);
     win.document.close();

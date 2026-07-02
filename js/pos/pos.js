@@ -7,7 +7,7 @@
 ═══════════════════════════════════════════════════════ */
 const POS = {
   _prod: [], _clientes: [], _cart: [], _cliente: null,
-  _metodo: 'Efectivo', _descuento: 0, _canje: 0,
+  _metodo: 'Efectivo', _descuento: 0, _canje: 0, _tarjetaDatos: null,
   _busca: '', _cat: '', _envioData: null,
   _ROLES_OK: ['superadmin','admin','gerente_tal','gerente_fin','recepcionista','vendedor'],
 
@@ -376,12 +376,17 @@ const POS = {
       <!-- Selector de Pago Segmentado -->
       <div style="font-size:11px;font-weight:800;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">Método de Pago</div>
       <div class="pos-pay-grid">
-        ${[
+        ${(()=>{
+          /* Tarjeta: visible salvo que el comercio la haya desactivado en Configuración.
+             Con la config activada (VISA/Credomatic) se captura el voucher al cobrar. */
+          const pt = Auth.tenant?.config_pos_tarjeta;
+          const conTarjeta = !pt || pt.habilitado !== false;
+          return [
           { id:'Efectivo', label:'Efectivo', icon:'💵' },
-          { id:'Tarjeta', label:'Tarjeta', icon:'💳' },
+          ...(conTarjeta ? [{ id:'Tarjeta', label:'Tarjeta', icon:'💳' }] : []),
           { id:'Transferencia', label:'Transfer', icon:'🏦' },
           { id:'Cheque', label:'Cheque', icon:'✍️' }
-        ].map(m=>`
+        ]; })().map(m=>`
           <div class="pos-pay-btn ${this._metodo===m.id?'selected':''}" onclick="POS._setMetodoPago('${m.id}', this)">
             <span style="font-size:18px">${m.icon}</span>
             <span>${m.label}</span>
@@ -416,8 +421,61 @@ const POS = {
 
   _setMetodoPago(metodo, el) {
     this._metodo = metodo;
+    if (metodo !== 'Tarjeta') this._tarjetaDatos = null;
     document.querySelectorAll('.pos-pay-btn').forEach(b=>b.classList.remove('selected'));
     el.classList.add('selected');
+  },
+
+  /* ── VOUCHER DE TARJETA (POS físico VISA/Credomatic) ──
+     Solo se registran autorización y últimos 4 dígitos del voucher.
+     NUNCA se pide ni se guarda el número completo ni el CVV. */
+  modalTarjeta() {
+    const pt = Auth.tenant?.config_pos_tarjeta || {};
+    const t = this._totales();
+    const comision = (Number(pt.comision_pct)||0) > 0 ? t.total * (Number(pt.comision_pct)||0) / 100 : 0;
+    UI.modal('💳 Pago con tarjeta', `
+      <div class="alert alert-cyan" style="margin-bottom:12px"><div class="alert-icon">🔒</div><div class="alert-body" style="font-size:11.5px">
+        Pasa la tarjeta en tu POS <b>${pt.proveedor||'VISA/Credomatic'}</b> y copia los datos del voucher.
+        <b>No ingreses el número completo de la tarjeta ni el CVV.</b>
+      </div></div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Tipo</label>
+          <select class="form-select" id="pt-tipo"><option>Crédito</option><option>Débito</option></select></div>
+        <div class="form-group"><label class="form-label">Red</label>
+          <select class="form-select" id="pt-red"><option>VISA</option><option>Mastercard</option><option>Otra</option></select></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">No. de autorización *</label>
+          <input class="form-input mono-sm" id="pt-aut" maxlength="10" placeholder="Del voucher, ej. 123456"></div>
+        <div class="form-group"><label class="form-label">Últimos 4 dígitos</label>
+          <input class="form-input mono-sm" id="pt-u4" maxlength="4" inputmode="numeric" placeholder="****"
+                 oninput="this.value=this.value.replace(/\\D/g,'').slice(0,4)"></div>
+      </div>
+      ${comision>0?`<div style="font-size:12px;color:var(--text3);margin-bottom:8px">Comisión ${pt.proveedor||''} ${pt.comision_pct}% ≈ <b>${UI.q(comision)}</b> (informativa, la descuenta el banco)</div>`:''}
+      <div class="modal-footer">
+        <button class="btn btn-ghost" onclick="UI.cerrarModal()">Cancelar</button>
+        <button class="btn btn-green" onclick="POS._confirmarTarjeta()">✓ Confirmar y cobrar ${UI.q(t.total)}</button>
+      </div>`, '460px');
+  },
+
+  _confirmarTarjeta() {
+    const aut = (document.getElementById('pt-aut')?.value||'').trim();
+    const u4  = (document.getElementById('pt-u4')?.value||'').trim();
+    if (!aut) { UI.toast('Ingresa el número de autorización del voucher','error'); return; }
+    if (/\d{13,19}/.test(aut.replace(/[\s\-]/g,''))) { UI.toast('Seguridad: eso parece un número de tarjeta. Ingresa solo la autorización del voucher.','error'); return; }
+    if (u4 && !/^\d{4}$/.test(u4)) { UI.toast('Los últimos 4 dígitos deben ser exactamente 4 números','error'); return; }
+    const pt = Auth.tenant?.config_pos_tarjeta || {};
+    const t = this._totales();
+    this._tarjetaDatos = {
+      tipo: document.getElementById('pt-tipo')?.value||'Crédito',
+      red:  document.getElementById('pt-red')?.value||'VISA',
+      autorizacion: aut,
+      ultimos4: u4||null,
+      proveedor: pt.proveedor||null,
+      comision: (Number(pt.comision_pct)||0)>0 ? Math.round(t.total*(Number(pt.comision_pct)||0))/100 : 0
+    };
+    UI.cerrarModal();
+    this.cobrar();
   },
 
   setDescuento(v) { this._descuento = Math.max(0, parseFloat(v)||0); this._pintarCart(); },
@@ -538,11 +596,17 @@ const POS = {
   /* ── COBRO ───────────────────────────────────────── */
   async cobrar() {
     if (!this._cart.length) return;
+    /* Tarjeta con config VISA/Credomatic activa: capturar voucher primero */
+    if (this._metodo === 'Tarjeta' && Auth.tenant?.config_pos_tarjeta?.habilitado && !this._tarjetaDatos) {
+      this.modalTarjeta();
+      return;
+    }
     const t = this._totales();
     const progEnvio = !!this._envioData;
     const cli = this._cliente;
 
     const res = await DB.upsertFactura({
+      tarjeta_datos: this._metodo === 'Tarjeta' ? (this._tarjetaDatos||null) : null,
       cliente_id: cli?.id || null,
       nit: cli?.nit?.trim() || 'CF',
       nombre_receptor: cli?.nombre || 'Consumidor Final',
@@ -598,7 +662,7 @@ const POS = {
     const totalPagado = t.total;
     const ganados = cli?.programa_puntos ? Math.floor(t.total * (Number(fid.puntos_por_q)||0)) : 0;
     /* Reset venta */
-    this._cart = []; this._descuento = 0; this._canje = 0; this._cliente = null; this._metodo = 'Efectivo'; this._envioData = null;
+    this._cart = []; this._descuento = 0; this._canje = 0; this._cliente = null; this._metodo = 'Efectivo'; this._envioData = null; this._tarjetaDatos = null;
     await this.render();
     this._recibo(factura, items, totalPagado, ganados, progEnvio);
   },
@@ -653,6 +717,7 @@ const POS = {
       <div class="r bold" style="font-size:14px"><span>TOTAL</span><span>${UI.q(f.total)}</span></div>
       <div class="hr"></div>
       <div class="r"><span>Método Pago:</span><span>${f.metodo_pago||'Efectivo'}</span></div>
+      ${f.tarjeta_datos?`<div class="r" style="font-size:10px"><span>${f.tarjeta_datos.red||'Tarjeta'} ${f.tarjeta_datos.tipo||''} ${f.tarjeta_datos.ultimos4?'****'+f.tarjeta_datos.ultimos4:''}</span><span>Aut. ${f.tarjeta_datos.autorizacion||''}</span></div>`:''}
       <div class="hr"></div>
       <div class="center bold" style="margin-top:12px;font-size:11px">¡GRACIAS POR SU COMPRA!</div>
       <div class="center" style="font-size:9px;color:#444">NexusPro POS · Powered by Gemini</div>
