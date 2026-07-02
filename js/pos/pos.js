@@ -26,8 +26,9 @@ const POS = {
     const rol = Auth.user?.rol;
     if (!rol) return false;
     const custom = Auth.user?.permisos_custom || {};
-    if (custom.pos === true) return true;
-    if (custom.pos === false) return false;
+    /* El permiso puede venir como bool legacy o como nivel ('ver'/'editar'/true) */
+    if (custom.pos !== undefined)
+      return typeof nivelPermiso === 'function' ? nivelPermiso(custom.pos) !== 'no' : custom.pos === true;
     return this._ROLES_OK.includes(rol);
   },
 

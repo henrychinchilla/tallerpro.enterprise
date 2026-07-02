@@ -330,28 +330,34 @@ Modulos.usuarios = {
         </label>
       </div>
 
-      <!-- EDITOR DE PERMISOS POR MÓDULO -->
+      <!-- EDITOR DE PERMISOS POR MÓDULO (4 niveles) -->
       <div style="border-top:1px solid var(--border);padding-top:14px;margin-top:8px">
         <div style="font-weight:700;font-size:11px;color:var(--text3);letter-spacing:.08em;text-transform:uppercase;margin-bottom:6px">
-          🔐 Acceso a Módulos
+          🔐 Acceso a Módulos — nivel por módulo
         </div>
         <div style="font-size:11px;color:var(--text3);margin-bottom:10px">
-          Los <span style="color:var(--amber)">marcados con ★</span> son personalizados (difieren del rol base).
-          Los cambios en el rol actualizan los valores base pero conservan las personalizaciones.
+          <b>🚫 Sin acceso</b> · <b>👁 Solo ver</b> (no puede crear, editar ni eliminar) ·
+          <b>✏️ Ver y editar</b> (no puede eliminar) · <b>✅ Total</b> (incluye eliminar).
+          Los <span style="color:var(--amber)">marcados con ★</span> difieren del rol base;
+          cambiar el rol restablece los niveles a los del rol.
         </div>
         <div id="eu-permisos" style="display:grid;grid-template-columns:repeat(2,1fr);gap:6px">
           ${MODULOS.filter(m=>m.id!=='mi_ot'&&moduloEnPlan(m.id)).map(m=>{
-            const base   = permsBase[m.id] || false;
-            const custom = permsCustom[m.id];
-            const activo = custom !== undefined ? custom : base;
-            const esCustom = custom !== undefined && custom !== base;
-            return `<label style="display:flex;align-items:center;gap:6px;padding:7px 10px;
-              background:var(--surface2);border-radius:8px;cursor:pointer;font-size:12px;
-              border:1px solid ${activo?'var(--cyan-border)':'var(--border)'}">
-              <input type="checkbox" data-mod="${m.id}" ${activo?'checked':''} style="accent-color:var(--cyan)">
-              <span>${m.icon} ${m.label}</span>
-              ${esCustom?'<span style="margin-left:auto;color:var(--amber);font-size:10px">★ custom</span>':''}
-            </label>`;
+            const nivelBase = permsBase[m.id] ? 'total' : 'no';
+            const custom    = permsCustom[m.id];
+            const nivel     = custom !== undefined ? nivelPermiso(custom) : nivelBase;
+            const esCustom  = custom !== undefined && nivelPermiso(custom) !== nivelBase;
+            return `<div style="display:flex;align-items:center;gap:6px;padding:6px 10px;
+              background:var(--surface2);border-radius:8px;font-size:12px;
+              border:1px solid ${nivel!=='no'?'var(--cyan-border)':'var(--border)'}">
+              <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${m.icon} ${m.label}
+                ${esCustom?'<span style="color:var(--amber);font-size:10px">★</span>':''}</span>
+              <select class="form-select" data-mod="${m.id}"
+                style="width:auto;min-width:132px;padding:3px 6px;font-size:11px"
+                onchange="this.parentElement.style.borderColor=this.value!=='no'?'var(--cyan-border)':'var(--border)'">
+                ${['no','ver','editar','total'].map(n=>`<option value="${n}" ${nivel===n?'selected':''}>${NIVELES_PERMISO_LABEL[n]}</option>`).join('')}
+              </select>
+            </div>`;
           }).join('')}
           ${(()=>{
             const base   = permsBase.doc_empresa || false;
@@ -373,11 +379,15 @@ Modulos.usuarios = {
         <button class="btn btn-ghost" onclick="UI.cerrarModal()">Cancelar</button>
         <button class="btn btn-ghost btn-sm" onclick="Modulos.usuarios.modalReset('${id}','${u.nombre}')">🔑 Reset Pass</button>
         <button class="btn btn-amber" onclick="Modulos.usuarios.guardarEdicion('${id}')">Guardar Cambios</button>
-      </div>`,'640px');
+      </div>`,'720px');
   },
 
   _actualizarPermisos(rol) {
     const base = PERMISOS[rol] || {};
+    document.querySelectorAll('#eu-permisos select[data-mod]').forEach(sel => {
+      sel.value = base[sel.dataset.mod] ? 'total' : 'no';
+      sel.parentElement.style.borderColor = sel.value !== 'no' ? 'var(--cyan-border)' : 'var(--border)';
+    });
     document.querySelectorAll('#eu-permisos input[data-mod]').forEach(cb => {
       const mod = cb.dataset.mod;
       cb.checked = base[mod] || false;
@@ -392,6 +402,14 @@ Modulos.usuarios = {
 
     const base   = PERMISOS[rol] || {};
     const custom = {};
+    /* Niveles por módulo: solo se guarda lo que difiere del rol base.
+       'total'→true y 'no'→false para mantener compatibilidad con el formato legacy. */
+    document.querySelectorAll('#eu-permisos select[data-mod]').forEach(sel => {
+      const nivelBase = base[sel.dataset.mod] ? 'total' : 'no';
+      if (sel.value !== nivelBase)
+        custom[sel.dataset.mod] = sel.value === 'no' ? false : sel.value === 'total' ? true : sel.value;
+    });
+    /* Flags booleanos (doc_empresa) */
     document.querySelectorAll('#eu-permisos input[data-mod]').forEach(cb => {
       const val = cb.checked;
       if (val !== (base[cb.dataset.mod] || false)) custom[cb.dataset.mod] = val;

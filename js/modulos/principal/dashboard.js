@@ -173,10 +173,10 @@ Modulos.dashboard = {
 
         <!-- ACCIONES RÁPIDAS -->
         <div class="quick-actions">
-          ${tieneAcceso('ordenes')    ? `<button class="quick-btn" onclick="App.navegarA('ordenes');setTimeout(()=>Modulos.ordenes?.modalForm?.(),250)"><span class="quick-ico">📋</span>Nueva OT</button>` : ''}
-          ${tieneAcceso('facturacion')? `<button class="quick-btn" onclick="App.navegarA('facturacion');setTimeout(()=>Modulos.facturacion?.modalFactura?.(),250)"><span class="quick-ico">🧾</span>Nueva Factura</button>` : ''}
-          ${tieneAcceso('clientes')   ? `<button class="quick-btn" onclick="App.navegarA('clientes');setTimeout(()=>Modulos.clientes?.modalForm?.(),250)"><span class="quick-ico">👥</span>Nuevo Cliente</button>` : ''}
-          ${tieneAcceso('vehiculos')  ? `<button class="quick-btn" onclick="App.navegarA('vehiculos');setTimeout(()=>Modulos.vehiculos?.modalForm?.(),250)"><span class="quick-ico">🚗</span>Nuevo Vehículo</button>` : ''}
+          ${puedeAccion('ordenes','editar')    ? `<button class="quick-btn" onclick="App.navegarA('ordenes');setTimeout(()=>Modulos.ordenes?.modalForm?.(),250)"><span class="quick-ico">📋</span>Nueva OT</button>` : ''}
+          ${puedeAccion('facturacion','editar')? `<button class="quick-btn" onclick="App.navegarA('facturacion');setTimeout(()=>Modulos.facturacion?.modalFactura?.(),250)"><span class="quick-ico">🧾</span>Nueva Factura</button>` : ''}
+          ${puedeAccion('clientes','editar')   ? `<button class="quick-btn" onclick="App.navegarA('clientes');setTimeout(()=>Modulos.clientes?.modalForm?.(),250)"><span class="quick-ico">👥</span>Nuevo Cliente</button>` : ''}
+          ${puedeAccion('vehiculos','editar')  ? `<button class="quick-btn" onclick="App.navegarA('vehiculos');setTimeout(()=>Modulos.vehiculos?.modalForm?.(),250)"><span class="quick-ico">🚗</span>Nuevo Vehículo</button>` : ''}
           ${tieneAcceso('calendario') ? `<button class="quick-btn" onclick="App.navegarA('calendario')"><span class="quick-ico">📅</span>Agenda</button>` : ''}
         </div>
 

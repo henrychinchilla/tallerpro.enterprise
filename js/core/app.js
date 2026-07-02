@@ -352,6 +352,7 @@ const App = {
       : null;
     App._guardarRuta();
     App.renderSidebar();
+    App._vigilarPermisosUI();
 
     /* Cargar módulo */
     if (modulo?.render) {
@@ -401,6 +402,40 @@ const App = {
       const oc = btn.getAttribute('onclick') || '';
       const activo = oc.includes(`'${tab}'`) || oc.includes(`"${tab}"`);
       btn.classList.toggle('active', activo);
+    });
+  },
+
+  /* ── OCULTAR ACCIONES SEGÚN NIVEL DE ACCESO ────────
+     Red de seguridad para botones NO estandarizados: si el usuario no puede
+     editar/eliminar en el módulo activo se ocultan los botones de crear
+     (＋ Nuevo), editar (✏️) y eliminar (🗑️) que aparezcan en la página.
+     Los módulos que usan Modulos.btnAccion ya ni siquiera los renderizan. */
+  _vigilarPermisosUI() {
+    if (App._permObs) return;
+    const cont = document.getElementById('page-content');
+    if (!cont || typeof MutationObserver === 'undefined') return;
+    App._permObs = new MutationObserver(() => {
+      if (App._permRaf) return;
+      App._permRaf = requestAnimationFrame(() => { App._permRaf = null; App._aplicarPermisosUI(); });
+    });
+    App._permObs.observe(cont, { childList: true, subtree: true });
+    App._aplicarPermisosUI();
+  },
+
+  _aplicarPermisosUI() {
+    const mod = App.paginaActual;
+    if (!mod || typeof puedeAccion !== 'function') return;
+    const pEditar   = puedeAccion(mod, 'editar');
+    const pEliminar = puedeAccion(mod, 'eliminar');
+    if (pEditar && pEliminar) return;
+    document.querySelectorAll('#page-content button:not([data-perm])').forEach(b => {
+      const t  = (b.textContent || '').trim();
+      const oc = b.getAttribute('onclick') || '';
+      const esEliminar = t.includes('🗑') || /^elimina/i.test(b.title || '');
+      const esEditar   = t.includes('✏️') || t.startsWith('＋') || t.startsWith('+ ') ||
+                         /modalNuevo|modalForm|modalEditar/.test(oc);
+      if ((!pEliminar && esEliminar) || (!pEditar && esEditar)) b.style.display = 'none';
+      b.setAttribute('data-perm', '1');
     });
   },
 
@@ -692,6 +727,14 @@ Modulos._parseCSV = function (text) {
    Misma iconografía, color y orden en todos los módulos.
    Uso: ${Modulos.btnAccion('editar', `Modulos.x.modalForm('${id}')`)} */
 Modulos.btnAccion = function (tipo, onclick, opts = {}) {
+  /* Gating por nivel de acceso: si el usuario solo puede VER el módulo activo,
+     los botones editar/eliminar no se renderizan (opts.modulo permite forzar
+     el módulo a evaluar cuando el botón actúa sobre otro módulo). */
+  const modAct = opts.modulo || window.App?.paginaActual;
+  if (modAct && typeof puedeAccion === 'function') {
+    if (tipo === 'editar'   && !puedeAccion(modAct, 'editar'))   return '';
+    if (tipo === 'eliminar' && !puedeAccion(modAct, 'eliminar')) return '';
+  }
   const stop = opts.stop !== false;   // por defecto frena la propagación (filas clickeables)
   const map = {
     ver:      ['btn-cyan',   '👁 Ver',    'Ver'],
@@ -706,6 +749,11 @@ Modulos.btnAccion = function (tipo, onclick, opts = {}) {
 
 /* Eliminar genérico con confirmación (tenant-scoped vía RLS). cb refresca la vista. */
 Modulos.eliminarRegistro = async function (tabla, id, nombre, cb) {
+  const modAct = window.App?.paginaActual;
+  if (modAct && typeof puedeAccion === 'function' && !puedeAccion(modAct, 'eliminar')) {
+    UI.toast('No tienes permiso para eliminar en este módulo', 'error');
+    return;
+  }
   const ok = await UI.confirmar(
     `¿Eliminar <b>${nombre || 'este registro'}</b>? Esta acción no se puede deshacer.`,
     'Eliminar'

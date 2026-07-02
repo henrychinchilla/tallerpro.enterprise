@@ -286,13 +286,51 @@ function getPermisos() {
   return { ...base, ...custom };
 }
 
-function tieneAcceso(modulo) {
-  if (!window.Auth?.user) return false;
+/* ── NIVELES DE ACCESO POR MÓDULO ─────────────────────
+   Cada módulo puede otorgarse en 4 niveles (permisos_custom por usuario):
+     false    → sin acceso
+     'ver'    → solo lectura (no puede crear/editar/eliminar)
+     'editar' → puede ver + crear/editar (no eliminar)
+     true     → acceso total (incluye eliminar) — formato legacy compatible
+   El rol base (PERMISOS) sigue siendo booleano: true = acceso total.      */
+const NIVELES_PERMISO = { no:0, ver:1, editar:2, total:3 };
+const NIVELES_PERMISO_LABEL = {
+  no:     '🚫 Sin acceso',
+  ver:    '👁 Solo ver',
+  editar: '✏️ Ver y editar',
+  total:  '✅ Total (con eliminar)'
+};
+
+/* Normaliza cualquier valor guardado (bool legacy, string u objeto) a un nivel */
+function nivelPermiso(v) {
+  if (v === true  || v === 'total')  return 'total';
+  if (v === 'editar')                return 'editar';
+  if (v === 'ver')                   return 'ver';
+  if (v && typeof v === 'object')    return v.eliminar ? 'total' : v.editar ? 'editar' : v.ver ? 'ver' : 'no';
+  return 'no';
+}
+
+/* Nivel efectivo del usuario en sesión para un módulo */
+function nivelAcceso(modulo) {
+  if (!window.Auth?.user) return 'no';
   const rol = window.Auth.user.rol;
-  if (rol === 'superadmin') return true;          // el dueño del SaaS ve todo
-  if (!moduloEnPlan(modulo)) return false;        // gating por plan (aplica también al admin del taller)
-  if (rol === 'admin') return true;
-  return getPermisos()[modulo] === true;
+  if (rol === 'superadmin') return 'total';       // el dueño del SaaS ve todo
+  if (!moduloEnPlan(modulo)) return 'no';         // gating por plan (aplica también al admin del taller)
+  if (rol === 'admin') return 'total';            // el admin del comercio no se auto-restringe
+  const custom = window.Auth.user.permisos_custom || {};
+  if (custom[modulo] !== undefined) return nivelPermiso(custom[modulo]);
+  const base = PERMISOS[rol] || PERMISOS.recepcionista;
+  return nivelPermiso(base[modulo]);
+}
+
+/* ¿Puede realizar la acción ('ver' | 'editar' | 'eliminar') en el módulo? */
+function puedeAccion(modulo, accion) {
+  const min = { ver:1, editar:2, eliminar:3 }[accion] || 3;
+  return (NIVELES_PERMISO[nivelAcceso(modulo)] || 0) >= min;
+}
+
+function tieneAcceso(modulo) {
+  return puedeAccion(modulo, 'ver');
 }
 
 /* ¿Puede ver el PRECIO DE COMPRA (costo)? — secreto del negocio.
