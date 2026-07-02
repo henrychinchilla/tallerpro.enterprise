@@ -51,7 +51,12 @@ Modulos.inventario = {
                   <td class="mono-sm ${bajo?'text-red':'text-green'}"><b>${i.stock}</b> ${i.unidad_medida||''}</td>
                   <td class="mono-sm text-muted">${i.min_stock}</td>
                   ${verCosto?`<td class="mono-sm">${UI.q(i.precio_costo)}</td>`:''}
-                  <td class="mono-sm text-amber">${UI.q(i.precio_venta)}</td>
+                  <td class="mono-sm text-amber">${UI.q(i.precio_venta)}${(()=>{
+                    /* Alerta si el precio de venta no alcanza el margen mínimo de la Política de precios */
+                    const Mmin = Number(Auth.tenant?.config_precios?.derivado?.multiplicador_min)||0;
+                    return (verCosto && Mmin>1 && Number(i.precio_costo)>0 && Number(i.precio_venta) < Number(i.precio_costo)*Mmin)
+                      ? ` <span class="badge badge-red" title="Bajo tu margen mínimo — sugerido: ${UI.q(i.precio_costo*Mmin)}">⚠️ bajo margen</span>` : '';
+                  })()}</td>
                   <td><div style="display:flex;gap:4px">
                     <button class="btn btn-sm btn-cyan" onclick="Modulos.inventario.modalForm('${i.id}')" title="Editar">✏️ Editar</button>
                     <button class="btn btn-sm btn-ghost" onclick="Modulos.inventario.modalMovimiento('${i.id}','${i.nombre}',${i.stock})" title="Movimiento de stock">±</button>
@@ -131,9 +136,10 @@ Modulos.inventario = {
       </div>
       <div class="form-row">
         ${puedeVerCosto()?`<div class="form-group"><label class="form-label">Precio Costo (Q)</label>
-          <input class="form-input" id="inv-costo" type="number" value="${item.precio_costo||0}" min="0" step="0.01"></div>`:''}
+          <input class="form-input" id="inv-costo" type="number" value="${item.precio_costo||0}" min="0" step="0.01" oninput="Modulos.inventario._hintPrecio()"></div>`:''}
         <div class="form-group"><label class="form-label">Precio Venta (Q)</label>
-          <input class="form-input" id="inv-venta" type="number" value="${item.precio_venta||0}" min="0" step="0.01"></div>
+          <input class="form-input" id="inv-venta" type="number" value="${item.precio_venta||0}" min="0" step="0.01" oninput="Modulos.inventario._hintPrecio()">
+          <div id="inv-hint-precio" style="font-size:10.5px;margin-top:3px"></div></div>
       </div>
       <div class="form-row">
         <div class="form-group"><label class="form-label">No. de parte OEM</label>
@@ -186,6 +192,21 @@ Modulos.inventario = {
           ${esEdicion?'Guardar Cambios':'Crear Artículo'}
         </button>
       </div>`,'640px');
+    this._hintPrecio();
+  },
+
+  /* Sugerencia de precio según la Política de precios (Finanzas 🎯) */
+  _hintPrecio() {
+    const out = document.getElementById('inv-hint-precio');
+    if (!out) return;
+    const d = Auth.tenant?.config_precios?.derivado;
+    const costo = parseFloat(document.getElementById('inv-costo')?.value)||0;
+    const venta = parseFloat(document.getElementById('inv-venta')?.value)||0;
+    if (!d || !(Number(d.multiplicador)>1) || !(costo>0)) { out.innerHTML=''; return; }
+    const sugerido = costo * Number(d.multiplicador);
+    const piso = costo * (Number(d.multiplicador_min)||Number(d.multiplicador));
+    const bajo = venta>0 && venta < piso;
+    out.innerHTML = `🎯 Sugerido: <b style="color:var(--green)">${UI.q(sugerido)}</b>${bajo?` · <span style="color:var(--red);font-weight:800">⚠️ bajo tu margen mínimo (piso ${UI.q(piso)})</span>`:''}`;
   },
 
   async guardar(id='') {

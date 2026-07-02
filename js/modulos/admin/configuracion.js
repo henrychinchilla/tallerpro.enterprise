@@ -71,6 +71,9 @@ Modulos.configuracion = {
                 <div class="form-group"><label class="form-label">Banco que deposita</label>
                   <input class="form-input" id="cfg-pt-banco" value="${pt.banco||''}" placeholder="Ej. BAC, BI, Banrural"></div>
               </div>
+              <div class="form-group"><label class="form-label">Fee mensual del POS (Q)</label>
+                <input class="form-input mono-sm" id="cfg-pt-fee" type="number" min="0" step="0.01" value="${pt.fee_mensual??''}" placeholder="Renta mensual del aparato POS">
+                <div style="font-size:10.5px;color:var(--text3);margin-top:3px">Se toma en cuenta como gasto fijo en Finanzas → 🎯 Política de precios</div></div>
               <div class="alert alert-cyan" style="margin-bottom:10px"><div class="alert-icon">🔒</div><div class="alert-body" style="font-size:11px">
                 NexusPro <b>nunca guarda el número completo ni el CVV</b> de las tarjetas de tus clientes.
                 El cobro se hace en tu POS físico y aquí solo se registra el voucher: autorización y últimos 4 dígitos.
@@ -162,7 +165,8 @@ Modulos.configuracion = {
       proveedor:    document.getElementById('cfg-pt-prov')?.value||'VISA (Visanet)',
       afiliacion:   document.getElementById('cfg-pt-afiliacion')?.value.trim()||null,
       banco:        document.getElementById('cfg-pt-banco')?.value.trim()||null,
-      comision_pct: parseFloat(document.getElementById('cfg-pt-comision')?.value)||0
+      comision_pct: parseFloat(document.getElementById('cfg-pt-comision')?.value)||0,
+      fee_mensual:  parseFloat(document.getElementById('cfg-pt-fee')?.value)||0
     };
     if (/\d{13,19}/.test((cfg.afiliacion||'').replace(/[\s\-]/g,''))) {
       UI.toast('Seguridad: eso parece un número de tarjeta, no una afiliación','error'); return;

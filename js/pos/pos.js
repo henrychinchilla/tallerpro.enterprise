@@ -374,6 +374,7 @@ const POS = {
   },
 
   _pintarCart() {
+    this._pisoOk = false;   // el aviso de margen mínimo se re-evalúa al cambiar el carrito
     const cont = document.getElementById('pos-cart');
     const tot  = document.getElementById('pos-totales');
     if (!cont || !tot) return;
@@ -651,6 +652,19 @@ const POS = {
   /* ── COBRO ───────────────────────────────────────── */
   async cobrar() {
     if (!this._cart.length) return;
+    /* Política de precios: avisar si los descuentos dejan la venta bajo el margen mínimo */
+    const Mmin = Number(Auth.tenant?.config_precios?.derivado?.multiplicador_min)||0;
+    if (Mmin > 1 && !this._pisoOk) {
+      const costoCart = this._cart.reduce((s,l)=>{
+        const p = this._prod.find(x=>x.id===l.id);
+        return s + (Number(p?.precio_costo)||0) * l.cant;
+      }, 0);
+      const piso = costoCart * Mmin;
+      if (costoCart > 0 && this._totales().total < piso - 0.01) {
+        if (!confirm(`⚠️ Con el descuento aplicado, esta venta queda BAJO tu margen mínimo (${Auth.tenant?.config_precios?.margen_minimo_pct||20}%).\nPrecio piso sugerido: ${UI.q(piso)}\n\n¿Cobrar de todos modos?`)) return;
+        this._pisoOk = true;
+      }
+    }
     /* Tarjeta con config VISA/Credomatic activa: capturar voucher primero */
     if (this._metodo === 'Tarjeta' && Auth.tenant?.config_pos_tarjeta?.habilitado && !this._tarjetaDatos) {
       this.modalTarjeta();

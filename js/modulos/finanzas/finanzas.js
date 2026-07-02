@@ -24,6 +24,7 @@ Modulos.finanzas = {
           <button class="tab-btn ${this._tab==='viaticos'?'active':''}" onclick="Modulos.finanzas._ir('viaticos')">🚗 Viáticos</button>
           <button class="tab-btn ${this._tab==='recurrentes'?'active':''}" onclick="Modulos.finanzas._ir('recurrentes')">🔁 Recurrentes</button>
           <button class="tab-btn ${this._tab==='balance'?'active':''}" onclick="Modulos.finanzas._ir('balance')">📋 Estado de Resultados</button>
+          <button class="tab-btn ${this._tab==='precios'?'active':''}" onclick="Modulos.finanzas._ir('precios')">🎯 Política de precios</button>
         </div>
         <div id="fin-content"><div class="empty-state">⏳ Cargando...</div></div>
       </div>`;
@@ -69,6 +70,8 @@ Modulos.finanzas = {
   async _renderTab() {
     const el = document.getElementById('fin-content');
     if (!el) return;
+    /* Política de precios: no depende del periodo seleccionado */
+    if (this._tab==='precios') { await Modulos.precios.render(el); return; }
     const { ingresos, egresos, totalIng, totalEgr, utilidad, totalFact, facturas } = await this._getData();
 
     const agrupar = (items,campo) => {
