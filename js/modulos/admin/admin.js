@@ -259,8 +259,8 @@ Modulos.admin = {
           <div style="font-weight:800;font-size:15px;color:var(--red);margin-bottom:8px">🗑️ Borrar Base de Datos del Taller</div>
           <div style="font-size:13px;color:var(--text2);margin-bottom:16px">
             Elimina <b>todos los datos</b>: clientes, vehículos, órdenes, inventario, empleados, facturas, finanzas.<br>
-            <b style="color:var(--green)">Se conserva:</b> henry.chinchilla@gmail.com, demo@demo.com (durante período demo), licencia activa.<br>
-            <b style="color:var(--red)">Se elimina:</b> Todos los demás usuarios incluyendo el que ejecuta esta acción.
+            <b style="color:var(--green)">🛟 Antes de borrar se genera un respaldo de seguridad automático</b> (recuperable por soporte).<br>
+            Los <b>administradores conservan su acceso</b> para poder entrar y rescatar el comercio.
           </div>
 
           <!-- PASO 1: AUTORIZACIÓN DE 2 ADMINISTRADORES (2FA Google Authenticator) -->
@@ -655,8 +655,20 @@ Modulos.admin = {
     if (!/^\d{6}$/.test(c1)||!/^\d{6}$/.test(c2)) { UI.toast('Los códigos 2FA son de 6 dígitos','error'); return; }
     if (texto!=='acepto borrar base de datos') { UI.toast('El texto de confirmación no es correcto','error'); return; }
 
-    // Verificar en el servidor el TOTP (Google Authenticator) de AMBOS administradores
-    UI.toast('Verificando 2FA de ambos administradores...','info');
+    const ok = await UI.confirmar(
+      `<div style="color:var(--red);font-size:16px;font-weight:800;margin-bottom:12px">☢️ ÚLTIMA CONFIRMACIÓN</div>
+       Esto borrará <b>TODOS</b> los datos de <b>${Auth.tenant?.name}</b>.<br>
+       Antes de borrar se genera un <b>respaldo de seguridad automático</b>.<br>
+       Esta acción es <b>IRREVERSIBLE</b> desde la app.`, '☢️ SÍ, BORRAR TODO'
+    );
+    if (!ok) return;
+
+    /* Todo pasa en el servidor (Edge verificar-borrado-2fa):
+       1) verifica el TOTP de AMBOS administradores,
+       2) respaldo de seguridad obligatorio (si falla, NO borra),
+       3) borra los datos conservando los perfiles de administrador,
+       para que puedan volver a entrar y rescatar el comercio. */
+    UI.toast('Verificando 2FA y ejecutando borrado seguro...', 'warn', 15000);
     const { data, error } = await getSB().functions.invoke('verificar-borrado-2fa', {
       body: { tenant_id: getTID(), admin1_email: a1, code1: c1, admin2_email: a2, code2: c2 }
     });
@@ -664,43 +676,7 @@ Modulos.admin = {
     if (error) { try { const j = await error.context.json(); msg = j?.error || error.message; } catch(_) { msg = error.message; } }
     if (msg) { UI.toast(msg,'error',6000); return; }
 
-    const ok = await UI.confirmar(
-      `<div style="color:var(--red);font-size:16px;font-weight:800;margin-bottom:12px">☢️ ÚLTIMA CONFIRMACIÓN</div>
-       Esto borrará <b>TODOS</b> los datos de <b>${Auth.tenant?.name}</b>.<br>
-       Esta acción es <b>IRREVERSIBLE</b>.`, '☢️ SÍ, BORRAR TODO'
-    );
-    if (!ok) return;
-
-    UI.toast('Ejecutando borrado seguro...', 'warn', 15000);
-    const tid = getTID();
-    const licencia = await DB.getLicencia();
-
-    /* Orden de borrado respetando llaves foráneas (hijos antes que padres;
-       pagos_nomina/viaticos/citas/facturas/ordenes son NO ACTION). */
-    const tablas = [
-      'envios','trabajos_externos','ot_items','factura_items','banco_movimientos','inventario_movimientos',
-      'kpi_empleado','empleado_documentos','pagos_nomina','viaticos','citas',
-      'facturas','ordenes','vehiculos','bancos','inventario','empleados',
-      'activos','egresos_recurrentes','presupuesto','config_productividad',
-      'combos','promociones','egresos','ingresos','proveedores','bodegas','clientes'
-    ];
-
-    for (const t of tablas) {
-      const { error } = await getSB().from(t).delete().eq('tenant_id',tid);
-      if (error) console.warn(`Borrado ${t}:`, error.message);
-    }
-
-    await getSB().from('usuarios').delete()
-      .eq('tenant_id',tid)
-      .not('email','in','("henry.chinchilla@gmail.com","demo@demo.com")');
-
-    if (licencia?.tipo==='completa') {
-      await getSB().from('licencias').upsert({
-        tenant_id:tid, tipo:'completa', activa:true, codigo:licencia.codigo
-      },{ onConflict:'tenant_id' });
-    }
-
-    UI.toast('Base de datos borrada ✓ — Cerrando sesión...','warn',4000);
-    setTimeout(async()=>{ await Auth.logout(); location.reload(); },3000);
+    UI.toast(`Base de datos borrada ✓ (${data?.registros_eliminados ?? 0} registros). Se guardó un respaldo de seguridad. Recargando...`,'warn',5000);
+    setTimeout(()=>location.reload(),4000);
   }
 };
