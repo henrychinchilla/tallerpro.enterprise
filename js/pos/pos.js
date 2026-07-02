@@ -158,6 +158,7 @@ const POS = {
           gap: 8px !important;
           overflow-x: auto !important;
           overflow-y: hidden !important;
+          flex-shrink: 0 !important; /* con overflow, flexbox lo colapsaba a 0px cuando el catálogo era más alto que la pantalla */
           height: 52px !important;
           align-items: center !important;
           padding: 0 4px !important;
