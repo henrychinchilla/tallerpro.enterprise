@@ -23,27 +23,10 @@ const App = {
   /* ── INICIAR APP ──────────────────────────────── */
   async iniciar() {
     App._initEmojiFix();
-    // Check emergency bypass first!
-    if (localStorage.getItem('mfa_bypass') === 'true') {
-      document.getElementById('login-screen')?.style.setProperty('display','none');
-      const appEl = document.getElementById('app');
-      if (appEl) appEl.classList.add('visible');
-      TEMAS.aplicar(localStorage.getItem('tp_tema') || 'light');
-      if (App._bloqueadoPorSuscripcion()) {
-        return App.pantallaSuspendido();
-      }
-      App.renderSidebar();
-      App._initSidebarToggle();
-      App.navegarA(App._restaurarRuta());
-      await App._iniciarTrialSiAplica();
-      App.checkSuscripcion();
-      App.avisoSAT();
-      App.registrarSW();
-      App.iniciarInactividad(Auth.tenant?.session_timeout_minutes);
-      return;
-    }
+    localStorage.removeItem('mfa_bypass');   // purga del bypass antiguo (hueco de seguridad)
 
-    // Check MFA status first!
+    /* SEGURIDAD 2FA: cuenta con factor verificado → el reto es OBLIGATORIO.
+       La activación inicial (cuenta sin factor) sí es posponible. */
     if (typeof Auth !== 'undefined' && Auth.getMFAStatus) {
       try {
         const mfa = await Auth.getMFAStatus();
@@ -53,14 +36,20 @@ const App = {
           if (typeof renderLogin === 'function') renderLogin('mfa-challenge');
           return;
         }
-        if (mfa.currentLevel === 'aal1') {
+        if (mfa.currentLevel === 'aal1' && localStorage.getItem('mfa_enroll_later') !== 'true') {
           document.getElementById('app')?.classList.remove('visible');
           document.getElementById('login-screen')?.style.removeProperty('display');
           if (typeof renderLogin === 'function') renderLogin('mfa-enroll');
           return;
         }
       } catch(err) {
+        /* Fail-closed: sin estado 2FA verificable no se entra a la app */
         console.error('Error al verificar MFA al iniciar:', err);
+        document.getElementById('app')?.classList.remove('visible');
+        document.getElementById('login-screen')?.style.removeProperty('display');
+        if (typeof renderLogin === 'function') renderLogin('login');
+        UI.toast('No se pudo verificar tu 2FA. Inicia sesión de nuevo.', 'error');
+        return;
       }
     }
 

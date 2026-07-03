@@ -47,9 +47,10 @@ function renderLogin(vista='login') {
           Verificar Código →
         </button>
 
-        <button class="btn btn-ghost" style="width:100%;margin-bottom:12px;color:var(--cyan)" onclick="loginBypassMFA()">
-          ⚡ Omitir 2FA y entrar
-        </button>
+        <div style="font-size:11px;color:var(--text3);margin-bottom:12px;line-height:1.5">
+          El 2FA está activo en tu cuenta: es obligatorio para entrar.
+          Si perdiste tu autenticador, contacta al administrador de tu comercio o a soporte NexusPro.
+        </div>
 
         <button class="btn btn-ghost" style="width:100%" onclick="getSB().auth.signOut().then(()=>renderLogin('login'))">
           ← Cancelar y salir
@@ -65,9 +66,16 @@ function renderLogin(vista='login') {
         </div>
 
         <div style="background:var(--surface2);border-radius:10px;padding:16px;margin-bottom:16px;text-align:center;border:1px solid var(--border)">
-          <p style="font-size:12px;color:var(--text2);margin-bottom:12px;line-height:1.5">
-            Escanea este código QR con tu app de autenticación (Google Authenticator, Microsoft, etc.):
+          <p style="font-size:12px;color:var(--text2);margin-bottom:8px;line-height:1.5">
+            Escanea este código QR con tu app de autenticación:
           </p>
+          <div style="display:flex;flex-wrap:wrap;gap:6px;justify-content:center;margin-bottom:12px;font-size:11px">
+            <span style="color:var(--text3);width:100%">Descarga un autenticador (gratis):</span>
+            <a class="btn btn-sm btn-ghost" target="_blank" rel="noopener" href="https://play.google.com/store/apps/details?id=com.google.android.apps.authenticator2">🤖 Google Auth. (Android)</a>
+            <a class="btn btn-sm btn-ghost" target="_blank" rel="noopener" href="https://apps.apple.com/app/google-authenticator/id388497605">🍎 Google Auth. (iPhone)</a>
+            <a class="btn btn-sm btn-ghost" target="_blank" rel="noopener" href="https://play.google.com/store/apps/details?id=com.azure.authenticator">🤖 Microsoft Auth. (Android)</a>
+            <a class="btn btn-sm btn-ghost" target="_blank" rel="noopener" href="https://apps.apple.com/app/microsoft-authenticator/id983156458">🍎 Microsoft Auth. (iPhone)</a>
+          </div>
           <div id="mfa-qr-container" style="display:flex;justify-content:center;background:#ffffff;padding:8px;border-radius:6px;width:160px;height:160px;margin:0 auto 12px">
             <span style="font-size:11px;color:#000000;display:flex;align-items:center">Cargando código QR...</span>
           </div>
@@ -87,8 +95,8 @@ function renderLogin(vista='login') {
           Confirmar y Activar 2FA →
         </button>
 
-        <button class="btn btn-ghost" style="width:100%;margin-top:8px;color:var(--cyan)" onclick="loginBypassMFA()">
-          ⚡ Omitir 2FA y entrar
+        <button class="btn btn-ghost" style="width:100%;margin-top:8px;color:var(--cyan)" onclick="loginPosponerMFA()">
+          Ahora no — activarlo después
         </button>
 
         <button class="btn btn-ghost" style="width:100%;margin-top:8px" onclick="getSB().auth.signOut().then(()=>renderLogin('login'))">
@@ -779,30 +787,44 @@ let _mfaChallengeId = null;
 let _mfaEnrollFactorId = null;
 let _mfaEnrollChallengeId = null;
 
+/* SEGURIDAD: si la cuenta tiene 2FA verificado, el reto es OBLIGATORIO.
+   El viejo 'mfa_bypass' (localStorage) saltaba el reto para siempre — se
+   elimina y se limpia de los navegadores donde quedó grabado. Lo único
+   posponible es la ACTIVACIÓN inicial (cuenta sin factor), nunca el reto. */
 async function loginVerificarMFAYContinuar() {
-  if (localStorage.getItem('mfa_bypass') === 'true') {
-    App.iniciar();
-    return;
-  }
+  localStorage.removeItem('mfa_bypass');   // purga del bypass antiguo
   try {
     const mfa = await Auth.getMFAStatus();
     if (mfa.nextLevel === 'aal2' && mfa.currentLevel === 'aal1') {
-      renderLogin('mfa-challenge');
+      renderLogin('mfa-challenge');        // 2FA activo → código SIEMPRE
       return;
     }
     if (mfa.currentLevel === 'aal1') {
+      /* getMFAStatus devuelve aal1/aal1 también cuando la API falla:
+         verificar los factores reales antes de decidir (fail-closed) */
+      const factors = await Auth.listMFAFactors();
+      if (factors.some(f => f.status === 'verified')) {
+        renderLogin('mfa-challenge');
+        return;
+      }
+      /* Cuenta sin 2FA: ofrecer activarlo (posponible, no obligatorio) */
+      if (localStorage.getItem('mfa_enroll_later') === 'true') { App.iniciar(); return; }
       renderLogin('mfa-enroll');
       return;
     }
     App.iniciar();
   } catch (err) {
+    /* Fail-closed: si no se pudo verificar el estado 2FA, no se entra */
     console.error('Error en el enrutamiento de 2FA:', err);
-    App.iniciar();
+    UI.toast('No se pudo verificar tu 2FA. Intenta iniciar sesión de nuevo.', 'error');
+    getSB().auth.signOut().then(() => renderLogin('login')).catch(() => renderLogin('login'));
   }
 }
 
-function loginBypassMFA() {
-  localStorage.setItem('mfa_bypass', 'true');
+/* Posponer solo la ACTIVACIÓN de 2FA (cuentas que aún no lo tienen).
+   No afecta a cuentas con 2FA activo: a esas siempre se les pide el código. */
+function loginPosponerMFA() {
+  localStorage.setItem('mfa_enroll_later', 'true');
   App.iniciar();
 }
 

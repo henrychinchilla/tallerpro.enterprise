@@ -128,9 +128,16 @@ Modulos.usuarios = {
   async _activarMi2FA() {
     UI.modal('🔒 Enrolar Autenticador 2FA', `
       <div style="text-align:center;padding:12px">
-        <p style="font-size:13px;color:var(--text2);margin-bottom:16px;line-height:1.5">
+        <p style="font-size:13px;color:var(--text2);margin-bottom:10px;line-height:1.5">
           Escanea el código QR con tu aplicación de autenticación para activar el doble factor de seguridad:
         </p>
+        <div style="display:flex;flex-wrap:wrap;gap:6px;justify-content:center;margin-bottom:14px;font-size:11px">
+          <span style="color:var(--text3);width:100%">¿No tienes autenticador? Descárgalo gratis:</span>
+          <a class="btn btn-sm btn-ghost" target="_blank" rel="noopener" href="https://play.google.com/store/apps/details?id=com.google.android.apps.authenticator2">🤖 Google Authenticator (Android)</a>
+          <a class="btn btn-sm btn-ghost" target="_blank" rel="noopener" href="https://apps.apple.com/app/google-authenticator/id388497605">🍎 Google Authenticator (iPhone)</a>
+          <a class="btn btn-sm btn-ghost" target="_blank" rel="noopener" href="https://play.google.com/store/apps/details?id=com.azure.authenticator">🤖 Microsoft Authenticator (Android)</a>
+          <a class="btn btn-sm btn-ghost" target="_blank" rel="noopener" href="https://apps.apple.com/app/microsoft-authenticator/id983156458">🍎 Microsoft Authenticator (iPhone)</a>
+        </div>
         <div id="modal-mfa-qr-container" style="display:flex;justify-content:center;background:#ffffff;padding:8px;border-radius:6px;width:150px;height:150px;margin:0 auto 12px">
           <span style="font-size:11px;color:#000000;display:flex;align-items:center">Generando QR...</span>
         </div>
