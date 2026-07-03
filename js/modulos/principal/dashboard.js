@@ -133,15 +133,16 @@ Modulos.dashboard = {
       const esDemo = (Number(t.precio_mensual)||0)===0 || /prueba/i.test(t.notas_admin||'');
       const venceStr = t.suscripcion_vence;
       const dias = venceStr ? Math.ceil((new Date(venceStr+'T00:00:00') - Date.now())/86400000) : null;
-      let clase, icon, texto;
+      let clase, icon, texto, accion;
       if (esDemo) {
         icon = '🎁';
         clase = dias===null ? 'cyan' : dias<0 ? 'red' : dias<=7 ? 'amber' : 'cyan';
         texto = venceStr
           ? (dias>=0
-              ? `Estás en <b>versión de prueba (DEMO)</b> — te quedan <b>${dias} día${dias===1?'':'s'}</b> (termina el ${UI.fecha(venceStr)}). Para activar un plan y no perder tus datos, contacta a tu proveedor de NexusPro.`
-              : `Tu <b>versión de prueba (DEMO)</b> terminó el <b>${UI.fecha(venceStr)}</b>. Contacta a tu proveedor de NexusPro para activar tu plan.`)
+              ? `Estás en <b>versión de prueba (DEMO)</b> — te quedan <b>${dias} día${dias===1?'':'s'}</b> (termina el ${UI.fecha(venceStr)}). Activa tu plan aquí mismo y no pierdas tus datos.`
+              : `Tu <b>versión de prueba (DEMO)</b> terminó el <b>${UI.fecha(venceStr)}</b>. Activa tu plan para seguir usando NexusPro.`)
           : `Estás en <b>versión de prueba (DEMO)</b> gratis de 30 días.`;
+        accion = 'Activar';
       } else {
         icon = '💳';
         const planLbl = PLANES[t.plan]?.label || 'Plan personalizado';
@@ -151,8 +152,18 @@ Modulos.dashboard = {
               ? `Plan <b>${planLbl}</b> — tu próximo <b>pago</b> es el <b>${UI.fecha(venceStr)}</b> (en ${dias} día${dias===1?'':'s'}).`
               : `Plan <b>${planLbl}</b> — <b>pago vencido</b> desde el <b>${UI.fecha(venceStr)}</b>. Regulariza para no perder acceso.`)
           : `Plan <b>${planLbl}</b> activo.`;
+        accion = 'Pagar';
       }
-      subBanner = `<div class="alert alert-${clase}" style="margin-bottom:16px"><div class="alert-icon">${icon}</div><div class="alert-body" style="font-size:12.5px">${texto}</div></div>`;
+      /* Pago/activación en línea: tarjeta o transferencia con voucher (paywall) */
+      const botones = `
+        <span style="display:flex;gap:6px;flex-shrink:0;flex-wrap:wrap">
+          <button class="btn btn-sm btn-blue" onclick="App.paywallTarjeta()">💳 ${accion} con tarjeta</button>
+          <button class="btn btn-sm btn-green" onclick="App.paywallTransferencia()">🏦 Transferencia</button>
+        </span>`;
+      subBanner = `<div class="alert alert-${clase}" style="margin-bottom:16px"><div class="alert-icon">${icon}</div>
+        <div class="alert-body" style="font-size:12.5px;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
+          <span style="flex:1;min-width:220px">${texto}</span>${botones}
+        </div></div>`;
     }
 
     el.innerHTML = `

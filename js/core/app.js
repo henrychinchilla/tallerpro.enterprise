@@ -22,6 +22,7 @@ const App = {
 
   /* ── INICIAR APP ──────────────────────────────── */
   async iniciar() {
+    App._initEmojiFix();
     // Check emergency bypass first!
     if (localStorage.getItem('mfa_bypass') === 'true') {
       document.getElementById('login-screen')?.style.setProperty('display','none');
@@ -392,6 +393,28 @@ const App = {
     const asunto = `Activación de servicio NexusPro — ${t.name || t.slug || ''}`;
     const body = `Hola, mi prueba/suscripción de NexusPro venció.\n\nComercio: ${t.name || ''}\nPlan: ${PLANES[t.plan]?.label || t.plan || ''}${precio ? `\nMonto mensual: Q${precio}` : ''}\n\n¿Me comparten el número de cuenta para hacer la transferencia?\n\nGracias.`;
     window.open(`mailto:${para}?subject=${encodeURIComponent(asunto)}&body=${encodeURIComponent(body)}`, '_blank');
+  },
+
+  /* ── FIX EMOJIS EN TÍTULOS CON GRADIENTE ─────────────
+     .page-title y .dash-hero-saludo usan background-clip:text con relleno
+     transparente: el texto toma el gradiente pero los emojis pierden su
+     color (se ven monocromos). Se envuelve cada emoji en un span .emoji-color
+     que restaura el relleno normal. Un MutationObserver lo aplica en cada
+     render sin tocar los ~30 módulos que pintan títulos. */
+  _fixEmojiGradiente() {
+    const re = /(\p{Extended_Pictographic}(?:[\u{1F3FB}-\u{1F3FF}️‍]|\p{Extended_Pictographic})*)/gu;
+    document.querySelectorAll('.page-title:not([data-emojifix]), .dash-hero-saludo:not([data-emojifix])').forEach(el => {
+      el.dataset.emojifix = '1';
+      if (re.test(el.innerHTML)) {
+        el.innerHTML = el.innerHTML.replace(re, '<span class="emoji-color">$1</span>');
+      }
+    });
+  },
+  _initEmojiFix() {
+    if (App._emojiObs) return;
+    App._emojiObs = new MutationObserver(() => App._fixEmojiGradiente());
+    App._emojiObs.observe(document.body, { childList: true, subtree: true });
+    App._fixEmojiGradiente();
   },
 
   /* ── SIDEBAR ──────────────────────────────────── */

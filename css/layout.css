@@ -270,6 +270,15 @@
   letter-spacing: 2px;
   line-height: 1;
 }
+/* Los emojis dentro de títulos con gradiente recuperan su color real
+   (App._fixEmojiGradiente los envuelve en .emoji-color) */
+.page-title .emoji-color,
+.dash-hero-saludo .emoji-color {
+  background: none;
+  -webkit-background-clip: initial;
+  background-clip: initial;
+  -webkit-text-fill-color: initial;
+}
 .page-subtitle {
   font-size: 11px;
   color: var(--text3);
