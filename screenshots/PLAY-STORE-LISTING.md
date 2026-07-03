@@ -42,8 +42,8 @@ NexusPro Enterprise es el sistema de gestión más completo para talleres mecán
 🔧 GESTIÓN COMPLETA DE ÓRDENES DE TRABAJO
 Crea, asigna y da seguimiento a tus órdenes de trabajo desde cualquier dispositivo. Tus clientes pueden consultar el estado de su equipo en tiempo real desde el portal de clientes.
 
-🤖 BETO IA — TU ASISTENTE TÉCNICO INTELIGENTE
-Beto es un asistente de inteligencia artificial especializado en diagnóstico técnico. Pregúntale sobre fallas de vehículos, electrodomésticos, refrigeración, electrónica y más. Disponible 24/7, responde con conocimiento técnico real.
+🤖 NEXUS IA — TU ASISTENTE TÉCNICO INTELIGENTE
+Nexus es un asistente de inteligencia artificial especializado en diagnóstico técnico. Pregúntale sobre fallas de vehículos, electrodomésticos, refrigeración, electrónica y más. Disponible 24/7, responde con conocimiento técnico real.
 
 🧾 FACTURACIÓN ELECTRÓNICA FEL · SAT GUATEMALA
 Emite facturas electrónicas certificadas por la SAT directamente desde la orden de trabajo. Cumple 100% con la normativa fiscal guatemalteca. Reportes trimestrales de IVA/ISR incluidos.
@@ -75,7 +75,7 @@ Datos cifrados, aislamiento total entre negocios (multi-tenant), respaldo autom�
 Accede desde tu teléfono, tablet o computadora. Instala como app o úsala directamente en el navegador.
 
 ---
-NexusPro Enterprise es una plataforma SaaS. Se requiere suscripción activa para usar el sistema. Visita nexuspro.telecommgt.com para conocer los planes disponibles.
+NexusPro Enterprise es una plataforma SaaS. Se requiere suscripción activa para usar el sistema. Visita nexuspro.cmtelecommgt.com para conocer los planes disponibles.
 ```
 
 ---
@@ -92,11 +92,11 @@ taller mecánico, gestión taller, orden de trabajo, factura electrónica SAT, F
 | Ícono 512×512 px (PNG sin alpha) | ✅ | /icons/icon-512.png |
 | Screenshot 1 — Dashboard | ✅ | screenshots/play-screen1-dashboard.png |
 | Screenshot 2 — Órdenes | ✅ | screenshots/play-screen2-ordenes.png |
-| Screenshot 3 — Beto IA | ✅ | screenshots/play-screen3-beto.png |
+| Screenshot 3 — Nexus IA | ✅ | screenshots/play-screen3-nexus.png |
 | Screenshot 4 — Facturación FEL | ✅ | screenshots/play-screen4-facturacion.png |
 | Screenshot 5 — Módulos | ✅ | screenshots/play-screen5-modulos.png |
 | APK / AAB | ✅ | nexuspro.apk |
-| Privacy Policy URL | ✅ | https://nexuspro.telecommgt.com/privacidad.html |
+| Privacy Policy URL | ✅ | https://nexuspro.cmtelecommgt.com/privacidad.html |
 | Imagen destacada (Feature Graphic) 1024×500 | ❌ | pendiente |
 
 ---
@@ -109,8 +109,8 @@ Pendiente de crear — misma estética: fondo azul oscuro, logo NexusPro, taglin
 
 ## Contacto para la ficha
 - **Email de soporte:** privacidad@telecommgt.com
-- **Sitio web:** https://nexuspro.telecommgt.com
-- **Política de privacidad:** https://nexuspro.telecommgt.com/privacidad.html
+- **Sitio web:** https://nexuspro.cmtelecommgt.com
+- **Política de privacidad:** https://nexuspro.cmtelecommgt.com/privacidad.html
 
 ---
 
