@@ -256,35 +256,98 @@ const App = {
     } catch (e) { /* tabla aún no migrada */ }
   },
 
-  /* Opción A: registrar tarjeta (solo titular + últimos 4; nunca PAN/CVV) */
+  /* Opción A: pago con tarjeta.
+     El cobro REAL siempre se procesa en el POS / pasarela segura del banco
+     (ahí es donde se usa la tarjeta completa con su CVV, directo al banco).
+     NexusPro nunca pide ni guarda el número completo ni el CVV (norma PCI):
+       • Pago único   → solo se crea la solicitud de cobro, SIN guardar tarjeta.
+       • Recurrente   → se guarda titular + últimos 4 (identificación, no
+         sirven para cobrar) y la autorización del cargo mensual. */
   paywallTarjeta() {
     const meses = [...Array(12)].map((_, i) => `<option>${i + 1}</option>`).join('');
     const anios = [...Array(10)].map((_, i) => `<option>${new Date().getFullYear() + i}</option>`).join('');
+    const precio = App._precioMensual();
     UI.modal('💳 Pagar con tarjeta', `
       <div class="alert alert-cyan" style="margin-bottom:12px"><div class="alert-icon">🔒</div>
-        <div class="alert-body" style="font-size:12px">Por tu seguridad <b>nunca pedimos el número completo ni el CVV</b>.
-        Registra tu tarjeta y NexusPro procesará el cargo de tu plan y activará tu servicio (te confirmamos por correo).</div></div>
-      <div class="form-group"><label class="form-label">Nombre del titular *</label>
-        <input class="form-input" id="pw-tj-titular" placeholder="Como aparece en la tarjeta"></div>
-      <div class="form-row">
-        <div class="form-group"><label class="form-label">Marca</label>
-          <select class="form-select" id="pw-tj-marca"><option>VISA</option><option>MASTERCARD</option><option>OTRA</option></select></div>
-        <div class="form-group"><label class="form-label">Últimos 4 dígitos *</label>
-          <input class="form-input mono-sm" id="pw-tj-u4" maxlength="4" inputmode="numeric" placeholder="****"
-                 oninput="this.value=this.value.replace(/\\D/g,'').slice(0,4)"></div>
+        <div class="alert-body" style="font-size:12px"><b>Tu tarjeta nunca viaja completa por NexusPro.</b>
+        El cobro se procesa en el POS / pasarela segura del banco, donde sí se valida tu tarjeta
+        completa con su CVV. Por seguridad (norma PCI) aquí no pedimos ni guardamos esos datos.</div></div>
+      <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:12px">
+        <label style="display:flex;align-items:flex-start;gap:8px;padding:10px;border:2px solid var(--border);border-radius:8px;cursor:pointer">
+          <input type="radio" name="pw-tj-modo" value="unico" checked onchange="App._toggleModoTarjeta('unico')">
+          <span style="font-size:13px"><b>Pago único</b> — cobrar una sola vez.
+            <span style="color:var(--text3)">No guardamos ningún dato de tu tarjeta.</span></span>
+        </label>
+        <label style="display:flex;align-items:flex-start;gap:8px;padding:10px;border:2px solid var(--border);border-radius:8px;cursor:pointer">
+          <input type="radio" name="pw-tj-modo" value="recurrente" onchange="App._toggleModoTarjeta('recurrente')">
+          <span style="font-size:13px"><b>Pago recurrente</b> — autorizo el cargo automático mensual.
+            <span style="color:var(--text3)">Guardamos solo titular y últimos 4 dígitos para identificarla.</span></span>
+        </label>
       </div>
-      <div class="form-row">
-        <div class="form-group"><label class="form-label">Mes de vencimiento</label>
-          <select class="form-select" id="pw-tj-mes">${meses}</select></div>
-        <div class="form-group"><label class="form-label">Año</label>
-          <select class="form-select" id="pw-tj-anio">${anios}</select></div>
+
+      <div id="pw-tj-unico">
+        <div style="font-size:12.5px;color:var(--text2);line-height:1.6;margin-bottom:12px">
+          Se creará tu <b>solicitud de cobro único${precio ? ` por ${UI.q(precio)}` : ''}</b>.
+          NexusPro te contactará de inmediato para procesar el pago con tu tarjeta en el
+          POS / enlace de pago seguro y activará tu servicio al confirmarse.
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-ghost" onclick="UI.cerrarModal()">Cancelar</button>
+          <button class="btn btn-blue" onclick="App.solicitarCobroUnico()">💳 Solicitar cobro único</button>
+        </div>
       </div>
-      <label style="display:flex;align-items:center;gap:8px;font-size:13px;margin:6px 0 12px">
-        <input type="checkbox" id="pw-tj-auto" checked> Autorizo el cargo automático mensual de mi plan</label>
-      <div class="modal-footer">
-        <button class="btn btn-ghost" onclick="UI.cerrarModal()">Cancelar</button>
-        <button class="btn btn-blue" onclick="App.guardarTarjetaPaywall()">💳 Registrar tarjeta</button>
+
+      <div id="pw-tj-recurrente" style="display:none">
+        <div class="form-group"><label class="form-label">Nombre del titular *</label>
+          <input class="form-input" id="pw-tj-titular" placeholder="Como aparece en la tarjeta"></div>
+        <div class="form-row">
+          <div class="form-group"><label class="form-label">Marca</label>
+            <select class="form-select" id="pw-tj-marca"><option>VISA</option><option>MASTERCARD</option><option>OTRA</option></select></div>
+          <div class="form-group"><label class="form-label">Últimos 4 dígitos *</label>
+            <input class="form-input mono-sm" id="pw-tj-u4" maxlength="4" inputmode="numeric" placeholder="****"
+                   oninput="this.value=this.value.replace(/\\D/g,'').slice(0,4)"></div>
+        </div>
+        <div class="form-row">
+          <div class="form-group"><label class="form-label">Mes de vencimiento</label>
+            <select class="form-select" id="pw-tj-mes">${meses}</select></div>
+          <div class="form-group"><label class="form-label">Año</label>
+            <select class="form-select" id="pw-tj-anio">${anios}</select></div>
+        </div>
+        <div style="font-size:11px;color:var(--text3);margin-bottom:10px">
+          Los últimos 4 dígitos <b>no sirven para cobrar</b>: solo identifican tu tarjeta en los recibos.
+          El primer cargo lo procesa NexusPro contigo en el POS / pasarela segura; los siguientes quedan automáticos.
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-ghost" onclick="UI.cerrarModal()">Cancelar</button>
+          <button class="btn btn-blue" onclick="App.guardarTarjetaPaywall()">💳 Autorizar cargo recurrente</button>
+        </div>
       </div>`);
+  },
+
+  _toggleModoTarjeta(modo) {
+    const u = document.getElementById('pw-tj-unico');
+    const r = document.getElementById('pw-tj-recurrente');
+    if (u) u.style.display = modo === 'unico' ? '' : 'none';
+    if (r) r.style.display = modo === 'recurrente' ? '' : 'none';
+  },
+
+  /* Pago único: NO se guarda la tarjeta. Se crea una solicitud de cobro que
+     el Panel SaaS (Cobros → vouchers) atiende: se procesa en el POS/pasarela
+     y al aprobarla se registra el pago (método Tarjeta) y se activa. */
+  async solicitarCobroUnico() {
+    const precio = App._precioMensual();
+    const { error } = await getSB().from('vouchers_pago').insert({
+      tenant_id: Auth.tenant.id,
+      monto: precio || null,
+      banco: 'Tarjeta — cobro único',
+      referencia: 'Solicitud de cobro único con tarjeta (contactar al cliente)',
+      estado: 'revision',
+    });
+    if (error) { UI.toast('Error: ' + error.message, 'error'); return; }
+    UI.cerrarModal();
+    const el = document.getElementById('pw-estado');
+    if (el) el.innerHTML = '✅ <b>Solicitud de cobro único recibida.</b> Te contactaremos para procesar el pago con tu tarjeta (no guardamos sus datos) y activar tu servicio.';
+    UI.toast('Solicitud de cobro único enviada ✓', 'info', 5000);
   },
 
   async guardarTarjetaPaywall() {
@@ -297,8 +360,8 @@ const App = {
       ultimos4: u4,
       exp_mes: parseInt(document.getElementById('pw-tj-mes')?.value) || null,
       exp_anio: parseInt(document.getElementById('pw-tj-anio')?.value) || null,
-      cargo_automatico: !!document.getElementById('pw-tj-auto')?.checked,
-      notas: 'Registrada por el comercio (activación de servicio)',
+      cargo_automatico: true,
+      notas: 'Cargo recurrente autorizado por el comercio (activación de servicio)',
     };
     /* update si ya existe (privilegios por columna: tenant_id solo en INSERT) */
     const sb = getSB();
@@ -309,8 +372,8 @@ const App = {
     if (error) { UI.toast('Error: ' + error.message, 'error'); return; }
     UI.cerrarModal();
     const el = document.getElementById('pw-estado');
-    if (el) el.innerHTML = '✅ <b>Tarjeta registrada.</b> NexusPro procesará el cargo de tu plan y activará tu servicio; te llegará la confirmación a tu correo.';
-    UI.toast('Tarjeta registrada ✓');
+    if (el) el.innerHTML = '✅ <b>Cargo recurrente autorizado.</b> NexusPro procesará el cargo de tu plan y activará tu servicio; te llegará la confirmación a tu correo.';
+    UI.toast('Cargo recurrente autorizado ✓');
   },
 
   /* Opción B: transferencia/depósito + voucher (lo lee Nexus IA) */

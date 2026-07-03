@@ -835,8 +835,10 @@ Modulos.superadmin = {
     if (!monto || monto<=0) return;
     const precio = Number(t?.precio_mensual) || PLANES[t?.plan]?.precio || monto;
     const meses = Math.max(1, Math.min(24, Math.round(monto/precio) || 1));
-    if (!confirm(`Se registrará el pago de ${UI.q(monto)} (${meses} mes/es), se extenderá la suscripción y se reactivará el comercio.\n\n¿Aprobar?`)) return;
-    const { error } = await getSB().rpc('aprobar_voucher', { p_voucher_id: id, p_monto: monto, p_meses: meses });
+    /* Solicitudes de cobro único con tarjeta se registran con método Tarjeta */
+    const metodo = (v?.banco||'').startsWith('Tarjeta') ? 'Tarjeta' : 'Transferencia';
+    if (!confirm(`Se registrará el pago de ${UI.q(monto)} (${meses} mes/es, método ${metodo}), se extenderá la suscripción y se reactivará el comercio.\n\n¿Aprobar?`)) return;
+    const { error } = await getSB().rpc('aprobar_voucher', { p_voucher_id: id, p_monto: monto, p_meses: meses, p_metodo: metodo });
     if (error) { UI.toast('Error: '+error.message,'error'); return; }
     UI.toast('Voucher aprobado — comercio activado ✓');
     this.render();
