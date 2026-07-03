@@ -14,7 +14,7 @@
 // verificación (Edge: verificar-registro). Si no verifica, no hay comercio.
 //
 // Body: { nombre_taller, nit?, nombre_admin, email, password, telefono,
-//         tipo_negocio?, modulos_activos?, turnstile_token? }
+//         tipo_negocio?, modulos_activos?, regimen_iva?, turnstile_token? }
 //
 // Deploy:  supabase functions deploy registrar-taller --no-verify-jwt
 // Secrets: TURNSTILE_SECRET, RESEND_API_KEY, EMAIL_FROM
@@ -176,16 +176,17 @@ Deno.serve(async (req) => {
   }
 
   // ── D) Registrar / actualizar la solicitud ──
+  const regimenIva = body.regimen_iva === "pequeno" ? "pequeno" : "general";
   if (pendiente) {
     await admin.from("solicitudes_comercio").update({
       nombre_comercio: nombreTaller, nombre_admin: nombreAdmin, nit, telefono,
-      tipo_negocio: tipoNegocio, modulos_activos: modulos,
+      tipo_negocio: tipoNegocio, modulos_activos: modulos, regimen_iva: regimenIva,
       token, token_expira: expira, auth_user_id: authUserId, ip,
     }).eq("id", pendiente.id);
   } else {
     const { error: sErr } = await admin.from("solicitudes_comercio").insert({
       email, nombre_comercio: nombreTaller, nombre_admin: nombreAdmin,
-      nit, telefono, tipo_negocio: tipoNegocio, modulos_activos: modulos,
+      nit, telefono, tipo_negocio: tipoNegocio, modulos_activos: modulos, regimen_iva: regimenIva,
       token, token_expira: expira, auth_user_id: authUserId, ip,
       estado: "pendiente_verificacion",
     });

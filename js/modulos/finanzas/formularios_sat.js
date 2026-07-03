@@ -309,16 +309,16 @@ Modulos.contabilidad.sat = {
       <div class="alert alert-amber" style="margin-bottom:16px">
         <div class="alert-icon">⚠️</div>
         <div class="alert-body">
-          <b>Restricción legal — Decreto 10-2012 (LAT) Art. 69 y 70</b><br>
+          <b>Reglas de la SAT sobre cambio de régimen</b><br>
           <div style="font-size:12px;margin-top:4px;line-height:1.5">
-            Conforme a la Ley de Actualización Tributaria (LAT):
-            <ul style="margin:8px 0 0 14px;padding:0">
-              <li>El cambio de régimen ISR solo puede hacerse <b>una vez al año</b>, con efecto a partir del 1 de enero del año siguiente.</li>
-              <li>Debe notificarse a la SAT por escrito con al menos <b>30 días hábiles de anticipación</b> antes del 31 de diciembre.</li>
-              <li>Una vez inscrito como Pequeño Contribuyente, el regreso al Régimen General requiere habilitación previa en la SAT y puede implicar auditoría del periodo anterior.</li>
-              <li>El cambio <b>no aplica retroactivamente</b> a periodos ya declarados.</li>
+            <b>IVA (Decreto 27-92 y reforma Decreto 31-2024):</b>
+            <ul style="margin:6px 0 8px 14px;padding:0">
+              <li><b>Pequeño Contribuyente → Régimen General:</b> procede en cualquier momento; es <b>obligatorio</b> al superar el límite anual de ingresos (Q465,381.25 desde 2025 — 125 salarios mínimos). Debe hacerse a más tardar el mes siguiente de superar el monto; si no, la SAT lo inscribe <b>de oficio</b>.</li>
+              <li><b>Régimen General → Pequeño Contribuyente:</b> solo con actualización en el RTU (Agencia Virtual SAT) y si sus ingresos anuales no superan el límite; surte efecto a partir del período siguiente, <b>nunca retroactivo</b>.</li>
             </ul>
-            <b>Recomendación:</b> consulte a su contador antes de realizar este cambio.
+            <b>ISR (Decreto 10-2012, Art. 69 y 70):</b> el cambio de régimen ISR solo puede hacerse
+            <b>una vez al año</b>, avisando a la SAT durante el mes anterior al inicio de la anualidad.
+            <div style="margin-top:6px"><b>Recomendación:</b> consulte a su contador. Usted es responsable de hacer el cambio oficial ante la SAT; aquí solo se actualiza cómo calcula NexusPro.</div>
           </div>
         </div>
       </div>
@@ -372,14 +372,29 @@ Modulos.contabilidad.sat = {
     const tasa_iva       = parseFloat(document.getElementById('cfr-tiva')?.value) || 0.12;
     const es_importadora = document.getElementById('cfr-importadora')?.checked || false;
     const fiscal = Modulos.contabilidad._fiscal || {};
+
+    /* SAT: General → Pequeño requiere autorización previa en el RTU y no es
+       retroactivo. Pequeño → General siempre procede. Se advierte pero se
+       respeta la decisión del cliente. */
+    const eraPequeno = (fiscal.regimen_iva||'general').toLowerCase().startsWith('peque');
+    if (!eraPequeno && regimen_iva === 'pequeno') {
+      if (!confirm('⚠️ Cambiar de Régimen General a Pequeño Contribuyente requiere:\n\n' +
+        '• Actualización de datos en el RTU (Agencia Virtual SAT) y autorización.\n' +
+        '• Ingresos anuales que no superen Q465,381.25 (límite 2025, Decreto 31-2024).\n' +
+        '• Surte efecto a partir del período siguiente — NUNCA retroactivo.\n\n' +
+        '¿Confirmas que ya realizaste (o realizarás) este trámite ante la SAT y deseas continuar?')) return;
+    }
+
     const nuevo = { ...fiscal, regimen_iva, tasa_isr, tasa_iva, es_importadora };
     const ok = await DB.saveConfigFiscal(nuevo);
     if (!ok) { UI.toast('Error al guardar la configuración fiscal','error'); return; }
     Modulos.contabilidad._fiscal = nuevo;
     UI.cerrarModal();
     UI.toast('Régimen fiscal actualizado en NexusPro ✓ — recuerde notificar a la SAT', 'success', 6000);
-    /* Recarga el módulo para reflejar el nuevo régimen en los cálculos */
-    await Modulos.contabilidad.render();
+    /* Refleja el nuevo régimen en la página actual (el modal también se
+       puede abrir desde Administración) */
+    if (App.paginaActual === 'contabilidad') await Modulos.contabilidad.render();
+    else if (App.paginaActual === 'admin' && Modulos.admin?._renderTab) await Modulos.admin._renderTab();
   },
 
   togglePeriodoFields(tipo) {

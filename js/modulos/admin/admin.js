@@ -84,7 +84,10 @@ Modulos.admin = {
           })()}
         </div>
         <div class="card" style="margin-bottom:20px">
-          <div class="card-sub mb-3">⚙️ Configuración Fiscal</div>
+          <div style="display:flex;justify-content:space-between;align-items:center" class="mb-3">
+            <div class="card-sub" style="margin-bottom:0">⚙️ Configuración Fiscal</div>
+            <button class="btn btn-sm btn-ghost" onclick="Modulos.contabilidad.sat.modalCambiarRegimen()">⚙️ Cambiar régimen</button>
+          </div>
           <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;margin-bottom:14px">
             <div>
               <div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">Régimen IVA</div>

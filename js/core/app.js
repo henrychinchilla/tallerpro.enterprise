@@ -178,25 +178,220 @@ const App = {
       cuerpo = `<b>${nombre}</b> fue registrado con éxito y está en revisión de activación
         (normalmente toma unas horas). Te avisaremos a tu correo cuando puedas empezar tus
         <b>30 días de prueba gratis</b>.`;
-    } else if (trialVencido) {
-      icon = '🔒'; titulo = 'Tu prueba gratis terminó';
-      cuerpo = `Tu prueba de 30 días de <b>${nombre}</b> venció el <b>${UI.fecha ? UI.fecha(t.suscripcion_vence) : t.suscripcion_vence}</b>.
-        Para seguir usando NexusPro y conservar tus datos, <b>contáctanos y activa tu plan</b>.`;
-    } else {
-      icon = '⏸️'; titulo = 'Cuenta suspendida';
-      cuerpo = `El acceso a <b>${nombre}</b> está temporalmente suspendido.
-        Ponte en contacto con soporte de NexusPro para reactivar tu suscripción.`;
+      if (main) main.innerHTML = `
+        <div style="min-height:90vh;display:flex;align-items:center;justify-content:center;padding:24px">
+          <div class="card" style="max-width:480px;text-align:center">
+            <div style="font-size:44px">${icon}</div>
+            <h2 style="margin:8px 0">${titulo}</h2>
+            <p style="color:var(--text2);font-size:14px">${cuerpo}</p>
+            <div style="margin-top:16px"><button class="btn btn-ghost" onclick="Auth.logout()">Cerrar sesión</button></div>
+          </div>
+        </div>`;
+      return;
     }
 
+    /* Demo vencido o suspendido → paywall: pagar con tarjeta o subir voucher */
+    if (trialVencido) {
+      icon = '🔒'; titulo = 'Tu prueba gratis terminó';
+      cuerpo = `Tu prueba de 30 días de <b>${nombre}</b> venció el <b>${UI.fecha ? UI.fecha(t.suscripcion_vence) : t.suscripcion_vence}</b>.
+        Tus datos están guardados y seguros: activa tu plan para seguir donde te quedaste.`;
+    } else {
+      icon = '⏸️'; titulo = 'Suscripción vencida o suspendida';
+      cuerpo = `El acceso a <b>${nombre}</b> está suspendido por falta de pago o a solicitud del administrador.
+        Realiza tu pago para reactivarlo, o contacta a soporte NexusPro.`;
+    }
+    const precio = App._precioMensual();
     if (main) main.innerHTML = `
       <div style="min-height:90vh;display:flex;align-items:center;justify-content:center;padding:24px">
-        <div class="card" style="max-width:480px;text-align:center">
+        <div class="card" style="max-width:560px;text-align:center">
           <div style="font-size:44px">${icon}</div>
           <h2 style="margin:8px 0">${titulo}</h2>
           <p style="color:var(--text2);font-size:14px">${cuerpo}</p>
-          <div style="margin-top:16px"><button class="btn btn-ghost" onclick="Auth.logout()">Cerrar sesión</button></div>
+          ${precio ? `<div style="margin:10px 0;font-size:13px;color:var(--text2)">Costo de tu servicio:
+            <b style="font-size:18px;color:var(--text)">${UI.q(precio)}</b> <span style="color:var(--text3)">/mes${PLANES[t?.plan]?.label ? ` (plan ${PLANES[t.plan].label})` : ''}</span></div>` : ''}
+          <div style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap;margin-top:14px">
+            <button class="btn btn-blue" onclick="App.paywallTarjeta()">💳 Pagar con tarjeta</button>
+            <button class="btn btn-green" onclick="App.paywallTransferencia()">🏦 Transferencia / depósito</button>
+          </div>
+          <div id="pw-estado" style="margin-top:12px;font-size:12px;color:var(--text3)"></div>
+          <div style="margin-top:16px;display:flex;gap:14px;justify-content:center;flex-wrap:wrap">
+            <button class="btn btn-ghost btn-sm" onclick="App.paywallEmailPagos()">✉️ Solicitar datos de pago por correo</button>
+            <button class="btn btn-ghost btn-sm" onclick="Auth.logout()">Cerrar sesión</button>
+          </div>
         </div>
       </div>`;
+    App._cargarVoucherPrevio();
+  },
+
+  /* ── PAYWALL DE ACTIVACIÓN ─────────────────────────
+     El comercio bloqueado puede: (A) registrar su tarjeta (NexusPro procesa
+     el cargo y activa), o (B) transferir/depositar y subir el voucher, que
+     la Edge Function verificar-voucher lee con IA y activa automáticamente
+     si el pago coincide (si no, queda en revisión en el Panel SaaS). */
+  _precioMensual() {
+    const t = Auth.tenant || {};
+    return Number(t.precio_mensual) > 0 ? Number(t.precio_mensual) : (PLANES[t.plan]?.precio || 0);
+  },
+
+  async _configPagos() {
+    if (App._cfgPagos) return App._cfgPagos;
+    try {
+      const { data } = await getSB().from('saas_config').select('valor').eq('clave', 'pago').maybeSingle();
+      App._cfgPagos = data?.valor || {};
+    } catch (e) { App._cfgPagos = {}; }
+    return App._cfgPagos;
+  },
+
+  /* Si ya subió un voucher, mostrar su estado en el paywall */
+  async _cargarVoucherPrevio() {
+    try {
+      const { data } = await getSB().from('vouchers_pago')
+        .select('estado, motivo_rechazo')
+        .order('created_at', { ascending: false }).limit(1);
+      const v = data?.[0]; const el = document.getElementById('pw-estado');
+      if (!v || !el) return;
+      if (v.estado === 'revision') el.innerHTML = '⏳ Ya recibimos un comprobante tuyo y está <b>en revisión</b>. Te activaremos al confirmarlo.';
+      else if (v.estado === 'rechazado') el.innerHTML = `⚠️ Tu último comprobante fue rechazado${v.motivo_rechazo ? ': ' + v.motivo_rechazo : ''}. Puedes subir otro.`;
+    } catch (e) { /* tabla aún no migrada */ }
+  },
+
+  /* Opción A: registrar tarjeta (solo titular + últimos 4; nunca PAN/CVV) */
+  paywallTarjeta() {
+    const meses = [...Array(12)].map((_, i) => `<option>${i + 1}</option>`).join('');
+    const anios = [...Array(10)].map((_, i) => `<option>${new Date().getFullYear() + i}</option>`).join('');
+    UI.modal('💳 Pagar con tarjeta', `
+      <div class="alert alert-cyan" style="margin-bottom:12px"><div class="alert-icon">🔒</div>
+        <div class="alert-body" style="font-size:12px">Por tu seguridad <b>nunca pedimos el número completo ni el CVV</b>.
+        Registra tu tarjeta y NexusPro procesará el cargo de tu plan y activará tu servicio (te confirmamos por correo).</div></div>
+      <div class="form-group"><label class="form-label">Nombre del titular *</label>
+        <input class="form-input" id="pw-tj-titular" placeholder="Como aparece en la tarjeta"></div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Marca</label>
+          <select class="form-select" id="pw-tj-marca"><option>VISA</option><option>MASTERCARD</option><option>OTRA</option></select></div>
+        <div class="form-group"><label class="form-label">Últimos 4 dígitos *</label>
+          <input class="form-input mono-sm" id="pw-tj-u4" maxlength="4" inputmode="numeric" placeholder="****"
+                 oninput="this.value=this.value.replace(/\\D/g,'').slice(0,4)"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Mes de vencimiento</label>
+          <select class="form-select" id="pw-tj-mes">${meses}</select></div>
+        <div class="form-group"><label class="form-label">Año</label>
+          <select class="form-select" id="pw-tj-anio">${anios}</select></div>
+      </div>
+      <label style="display:flex;align-items:center;gap:8px;font-size:13px;margin:6px 0 12px">
+        <input type="checkbox" id="pw-tj-auto" checked> Autorizo el cargo automático mensual de mi plan</label>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" onclick="UI.cerrarModal()">Cancelar</button>
+        <button class="btn btn-blue" onclick="App.guardarTarjetaPaywall()">💳 Registrar tarjeta</button>
+      </div>`);
+  },
+
+  async guardarTarjetaPaywall() {
+    const titular = document.getElementById('pw-tj-titular')?.value.trim();
+    const u4 = document.getElementById('pw-tj-u4')?.value.trim() || '';
+    if (!titular || u4.length !== 4) { UI.toast('Ingresa el titular y los últimos 4 dígitos', 'error'); return; }
+    const fields = {
+      titular,
+      marca: document.getElementById('pw-tj-marca')?.value || 'VISA',
+      ultimos4: u4,
+      exp_mes: parseInt(document.getElementById('pw-tj-mes')?.value) || null,
+      exp_anio: parseInt(document.getElementById('pw-tj-anio')?.value) || null,
+      cargo_automatico: !!document.getElementById('pw-tj-auto')?.checked,
+      notas: 'Registrada por el comercio (activación de servicio)',
+    };
+    /* update si ya existe (privilegios por columna: tenant_id solo en INSERT) */
+    const sb = getSB();
+    const { data: prev } = await sb.from('tenant_tarjetas').select('id').eq('tenant_id', Auth.tenant.id).maybeSingle();
+    const { error } = prev
+      ? await sb.from('tenant_tarjetas').update(fields).eq('id', prev.id)
+      : await sb.from('tenant_tarjetas').insert({ ...fields, tenant_id: Auth.tenant.id });
+    if (error) { UI.toast('Error: ' + error.message, 'error'); return; }
+    UI.cerrarModal();
+    const el = document.getElementById('pw-estado');
+    if (el) el.innerHTML = '✅ <b>Tarjeta registrada.</b> NexusPro procesará el cargo de tu plan y activará tu servicio; te llegará la confirmación a tu correo.';
+    UI.toast('Tarjeta registrada ✓');
+  },
+
+  /* Opción B: transferencia/depósito + voucher (lo lee Nexus IA) */
+  async paywallTransferencia() {
+    const cfg = await App._configPagos();
+    const cuentas = Array.isArray(cfg.cuentas) ? cfg.cuentas : [];
+    const precio = App._precioMensual();
+    const cuentasHtml = cuentas.length ? cuentas.map(c => `
+      <div style="padding:8px 10px;background:var(--surface2);border-radius:8px;margin-bottom:6px;text-align:left">
+        <div style="font-weight:700;font-size:13px">🏦 ${c.banco || ''} <span class="badge badge-gray" style="font-size:10px">${c.tipo || 'Monetaria'}</span></div>
+        <div class="mono-sm" style="font-size:14px">${c.numero || ''}</div>
+        <div style="font-size:11px;color:var(--text3)">${c.titular || ''}</div>
+      </div>`).join('')
+      : `<div class="alert alert-amber"><div class="alert-icon">✉️</div><div class="alert-body" style="font-size:12px">
+          Solicita el número de cuenta por correo (botón del paywall) y luego sube aquí tu comprobante.</div></div>`;
+    UI.modal('🏦 Pago por transferencia o depósito', `
+      ${precio ? `<div style="font-size:13px;margin-bottom:10px">Monto de tu plan: <b>${UI.q(precio)}</b>/mes
+        <span style="color:var(--text3)">(puedes pagar varios meses en un solo depósito)</span></div>` : ''}
+      ${cuentasHtml}
+      <div style="border-top:1px solid var(--border);margin:12px 0 0;padding-top:12px">
+        <div style="font-weight:700;font-size:13px;margin-bottom:8px">📸 Sube tu comprobante (voucher)</div>
+        <div style="font-size:12px;color:var(--text3);margin-bottom:8px">
+          Nexus leerá el comprobante y, si el pago coincide, <b>activará tu servicio automáticamente</b>.</div>
+        <div class="form-row">
+          <div class="form-group"><label class="form-label">Monto pagado (Q)</label>
+            <input class="form-input" id="pw-vo-monto" type="number" min="0" step="0.01" value="${precio || ''}"></div>
+          <div class="form-group"><label class="form-label">No. de boleta / referencia</label>
+            <input class="form-input" id="pw-vo-ref" placeholder="Opcional"></div>
+        </div>
+        <div class="form-group"><label class="form-label">Foto o captura del comprobante *</label>
+          <input class="form-input" id="pw-vo-file" type="file" accept="image/*"></div>
+        <div id="pw-vo-msg" style="font-size:12px;margin-top:6px"></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" onclick="UI.cerrarModal()">Cancelar</button>
+        <button class="btn btn-green" id="pw-vo-btn" onclick="App.enviarVoucherPaywall()">📤 Enviar comprobante</button>
+      </div>`);
+  },
+
+  async enviarVoucherPaywall() {
+    const file = document.getElementById('pw-vo-file')?.files?.[0];
+    const msg = document.getElementById('pw-vo-msg');
+    const btn = document.getElementById('pw-vo-btn');
+    if (!file) { UI.toast('Selecciona la foto del comprobante', 'error'); return; }
+    try {
+      const { base64, esPdf } = await UI.fileABase64(file, { maxPx: 1400, calidad: 0.85 });
+      if (esPdf) { UI.toast('Sube una foto o captura de pantalla (no PDF)', 'error'); return; }
+      if (btn) { btn.disabled = true; btn.textContent = '🔎 Verificando pago...'; }
+      if (msg) msg.innerHTML = '⏳ Nexus está leyendo tu comprobante...';
+      const { data, error } = await getSB().functions.invoke('verificar-voucher', {
+        body: {
+          imagen_base64: base64,
+          monto: parseFloat(document.getElementById('pw-vo-monto')?.value) || null,
+          referencia: document.getElementById('pw-vo-ref')?.value.trim() || null,
+        },
+      });
+      if (error || data?.error) throw new Error(data?.error || error.message);
+      if (data.estado === 'aprobado') {
+        if (msg) msg.innerHTML = `✅ <b>${data.mensaje}</b> Recargando...`;
+        UI.toast(data.mensaje, 'info', 5000);
+        setTimeout(() => location.reload(), 1800);
+      } else {
+        if (msg) msg.innerHTML = `⏳ ${data.mensaje}`;
+        if (btn) { btn.disabled = false; btn.textContent = '📤 Enviar otro comprobante'; }
+        const est = document.getElementById('pw-estado');
+        if (est) est.innerHTML = '⏳ Comprobante recibido, <b>en revisión</b>. Te activaremos al confirmarlo.';
+      }
+    } catch (e) {
+      if (msg) msg.innerHTML = `❌ ${e.message}`;
+      if (btn) { btn.disabled = false; btn.textContent = '📤 Enviar comprobante'; }
+    }
+  },
+
+  /* Solicitar los datos de pago por correo */
+  async paywallEmailPagos() {
+    const cfg = await App._configPagos();
+    const para = cfg.email_pagos || 'henry.chinchilla@gmail.com';
+    const t = Auth.tenant || {};
+    const precio = App._precioMensual();
+    const asunto = `Activación de servicio NexusPro — ${t.name || t.slug || ''}`;
+    const body = `Hola, mi prueba/suscripción de NexusPro venció.\n\nComercio: ${t.name || ''}\nPlan: ${PLANES[t.plan]?.label || t.plan || ''}${precio ? `\nMonto mensual: Q${precio}` : ''}\n\n¿Me comparten el número de cuenta para hacer la transferencia?\n\nGracias.`;
+    window.open(`mailto:${para}?subject=${encodeURIComponent(asunto)}&body=${encodeURIComponent(body)}`, '_blank');
   },
 
   /* ── SIDEBAR ──────────────────────────────────── */

@@ -130,7 +130,11 @@ Deno.serve(async (req) => {
        <p style="color:#94a3b8">Ocurrió un problema al crear tu comercio. Intenta de nuevo o contáctanos.</p>`, "#dc2626");
   }
 
-  await admin.from("config_fiscal").insert({ tenant_id: tenant.id, regimen_iva: "general", tasa_iva: 0.12, tasa_isr: 0.05 }).then(() => {}, () => {});
+  const regimenIva = sol.regimen_iva === "pequeno" ? "pequeno" : "general";
+  await admin.from("config_fiscal").insert({
+    tenant_id: tenant.id, regimen_iva: regimenIva,
+    tasa_iva: regimenIva === "pequeno" ? 0.05 : 0.12, tasa_isr: 0.05,
+  }).then(() => {}, () => {});
 
   if (sol.auth_user_id) {
     // upsert: adopta el perfil si un trigger ya lo creó (evita conflicto de id)

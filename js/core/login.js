@@ -236,6 +236,15 @@ function renderLogin(vista='login') {
           </div>
         </div>
 
+        <div class="form-group">
+          <label class="form-label">Régimen ante la SAT *</label>
+          <select class="form-select" id="nt-regimen">
+            <option value="general">Régimen General (IVA 12%)</option>
+            <option value="pequeno">Pequeño Contribuyente (IVA 5%)</option>
+          </select>
+          <div style="font-size:11px;color:var(--text3);margin-top:4px">Podrás cambiarlo después en Contabilidad → SAT.</div>
+        </div>
+
         <div id="nt-turnstile" style="margin-bottom:12px"></div>
 
         <div class="legal-disclaimer-box" style="background:rgba(255, 193, 7, 0.05);border:1px solid rgba(255, 193, 7, 0.25);border-radius:8px;padding:12px;margin-bottom:12px;font-size:11.5px;line-height:1.6;color:var(--text2);text-align:left">
@@ -390,6 +399,13 @@ function renderLogin(vista='login') {
         <div class="form-group">
           <label class="form-label">Teléfono de contacto *</label>
           <input class="form-input" id="ntg-tel" type="tel" placeholder="5555-5555">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Régimen ante la SAT *</label>
+          <select class="form-select" id="ntg-regimen">
+            <option value="general">Régimen General (IVA 12%)</option>
+            <option value="pequeno">Pequeño Contribuyente (IVA 5%)</option>
+          </select>
         </div>
 
         <div class="legal-disclaimer-box" style="background:rgba(255, 193, 7, 0.05);border:1px solid rgba(255, 193, 7, 0.25);border-radius:8px;padding:12px;margin-bottom:12px;font-size:11.5px;line-height:1.6;color:var(--text2);text-align:left">
@@ -581,7 +597,8 @@ async function loginRegistrarTallerGoogle() {
 
   UI.toast('Registrando tu comercio...', 'info');
   const { data, error } = await getSB().functions.invoke('registrar-comercio-google', {
-    body: { nombre_comercio: nombre, nit, telefono: tel, tipo_negocio: tipo, modulos_activos }
+    body: { nombre_comercio: nombre, nit, telefono: tel, tipo_negocio: tipo, modulos_activos,
+            regimen_iva: document.getElementById('ntg-regimen')?.value || 'general' }
   });
 
   let msg = data?.error || null;
@@ -651,7 +668,8 @@ async function loginRegistrarTaller() {
   UI.toast('Registrando tu solicitud...', 'info');
   const { data, error } = await getSB().functions.invoke('registrar-taller', {
     body: { nombre_taller: nombre, nit, nombre_admin: admin, email, telefono: tel, password: pass,
-            tipo_negocio: tipo, modulos_activos, turnstile_token }
+            tipo_negocio: tipo, modulos_activos, turnstile_token,
+            regimen_iva: document.getElementById('nt-regimen')?.value || 'general' }
   });
 
   let msg = data?.error || null;

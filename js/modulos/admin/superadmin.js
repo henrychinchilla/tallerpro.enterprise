@@ -3,18 +3,22 @@
    cobros mensuales (MRR, pendientes) y supervisa respaldos. */
 Modulos.superadmin = {
   _tab: 'comercios',
-  _tenants: [], _pagos: [], _solicitudes: [], _tarjetas: [],
+  _tenants: [], _pagos: [], _solicitudes: [], _tarjetas: [], _vouchers: [],
   _dbTenantId: null, _dbBackups: [],
 
   async render() {
     const el = document.getElementById('page-content');
     if (Auth.user?.rol !== 'superadmin') { el.innerHTML = '<div class="empty-state">Sin acceso</div>'; return; }
     UI.loading(el);
-    [this._tenants, this._pagos, this._solicitudes, this._tarjetas] = await Promise.all([
+    [this._tenants, this._pagos, this._solicitudes, this._tarjetas, this._vouchers] = await Promise.all([
       DB.getTenantsAdmin().catch(()=>[]),
       DB.getTenantPagos().catch(()=>[]),
       DB.getSolicitudes().catch(()=>[]),
-      DB.getTenantTarjetas().catch(()=>[])
+      DB.getTenantTarjetas().catch(()=>[]),
+      getSB().from('vouchers_pago')
+        .select('id, tenant_id, monto, banco, referencia, referencia_detectada, estado, analisis, motivo_rechazo, created_at')
+        .order('created_at',{ascending:false}).limit(100)
+        .then(r=>r.data||[]).catch(()=>[])
     ]);
     /* Comercios que verificaron su correo y esperan aprobación */
     this._pendMap = new Map(this._solicitudes.filter(s=>s.estado==='verificado'&&s.tenant_id).map(s=>[s.tenant_id, s]));
@@ -33,7 +37,7 @@ Modulos.superadmin = {
         <div class="tabs">
           <button class="tab-btn ${this._tab==='comercios'?'active':''}" onclick="Modulos.superadmin._ir('comercios')">🏪 Comercios</button>
           <button class="tab-btn ${this._tab==='solicitudes'?'active':''}" onclick="Modulos.superadmin._ir('solicitudes')">📥 Solicitudes${this._pendMap?.size?` <span class="badge badge-amber" style="font-size:10px">${this._pendMap.size}</span>`:''}</button>
-          <button class="tab-btn ${this._tab==='cobros'?'active':''}" onclick="Modulos.superadmin._ir('cobros')">💵 Cobros</button>
+          <button class="tab-btn ${this._tab==='cobros'?'active':''}" onclick="Modulos.superadmin._ir('cobros')">💵 Cobros${(n=>n?` <span class="badge badge-amber" style="font-size:10px">${n}</span>`:'')(this._vouchers.filter(v=>v.estado==='revision').length)}</button>
           <button class="tab-btn ${this._tab==='planes'?'active':''}" onclick="Modulos.superadmin._ir('planes')">🎚️ Planes</button>
           <button class="tab-btn ${this._tab==='basedatos'?'active':''}" onclick="Modulos.superadmin._ir('basedatos')">🗄️ Base de datos</button>
         </div>
@@ -212,6 +216,37 @@ Modulos.superadmin = {
         ${sinCobrar.length?`<div class="alert alert-amber" style="margin-bottom:16px"><div class="alert-icon">⏰</div><div class="alert-body" style="font-size:12px">
           Sin cobro de ${mesAct}: ${sinCobrar.map(t=>`<b>${t.name||t.slug}</b>`).join(', ')}.
         </div></div>`:''}
+        ${(()=>{
+          const pend = this._vouchers.filter(v=>v.estado==='revision');
+          const btnCuentas = `<button class="btn btn-sm btn-ghost" onclick="Modulos.superadmin.modalCuentasPago()">🏦 Cuentas de pago</button>`;
+          if (!pend.length) return `<div style="display:flex;justify-content:flex-end;margin-bottom:10px">${btnCuentas}</div>`;
+          return `
+          <div class="card card-amber" style="margin-bottom:16px">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+              <div class="card-sub">🧾 Vouchers por revisar (${pend.length})</div>${btnCuentas}
+            </div>
+            <div class="table-wrap"><table class="data-table">
+              <thead><tr><th>Fecha</th><th>Comercio</th><th>Monto</th><th>Banco</th><th>Referencia</th><th>Lectura IA</th><th></th></tr></thead>
+              <tbody>${pend.map(v=>{ const t=tnById(v.tenant_id); const a=v.analisis||{};
+                const ia = a.monto!=null
+                  ? `Q${a.monto} · conf. ${Math.round((a.confianza||0)*100)}%${(a.checks||[]).length?`<div style="font-size:10px;color:var(--amber)">${(a.checks||[]).join('<br>')}</div>`:''}`
+                  : '<span style="color:var(--text3)">sin lectura</span>';
+                return `<tr>
+                <td class="mono-sm">${UI.fecha(v.created_at)}</td>
+                <td>${t?.name||t?.slug||'—'}</td>
+                <td class="mono-sm">${v.monto!=null?UI.q(v.monto):'—'}</td>
+                <td>${v.banco||a.banco||'—'}</td>
+                <td class="mono-sm">${v.referencia_detectada||v.referencia||'—'}</td>
+                <td style="font-size:11px">${ia}</td>
+                <td style="white-space:nowrap">
+                  ${Modulos.btnAccion('ver', `Modulos.superadmin.verVoucher('${v.id}')`)}
+                  <button class="btn btn-sm btn-green" onclick="Modulos.superadmin.aprobarVoucher('${v.id}')">✅ Aprobar</button>
+                  <button class="btn btn-sm btn-ghost" onclick="Modulos.superadmin.rechazarVoucher('${v.id}')">✖ Rechazar</button>
+                </td></tr>`;}).join('')}
+              </tbody>
+            </table></div>
+          </div>`;
+        })()}
         <div class="table-wrap">
           <table class="data-table">
             <thead><tr><th>Fecha</th><th>Comercio</th><th>Periodo</th><th>Monto</th><th>Método</th><th>Estado</th><th></th></tr></thead>
@@ -378,6 +413,11 @@ Modulos.superadmin = {
         <div class="form-group"><label class="form-label">Suscripción vence</label>
           <input class="form-input" id="nt-vence" type="date" value="${venceDefault}"></div>
       </div>
+      <div class="form-group"><label class="form-label">Régimen ante la SAT</label>
+        <select class="form-select" id="nt-regimen">
+          <option value="general">Régimen General (IVA 12%)</option>
+          <option value="pequeno">Pequeño Contribuyente (IVA 5%)</option>
+        </select></div>
       <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:10px;margin-top:4px">
         <input type="checkbox" id="nt-demo" onchange="Modulos.superadmin._toggleDemoNuevo(this.checked)">
         <span>🎁 Crear como <b>DEMO</b> — prueba gratis 30 días, sin cobro (precio Q0 y vence en 30 días)</span>
@@ -451,6 +491,13 @@ Modulos.superadmin = {
       active: true
     });
     if (tErr || !tenant) { UI.toast('Error creando el comercio: '+(tErr?.message||''),'error'); reactivar(); return; }
+
+    /* 1b. Config fiscal con el régimen SAT elegido */
+    const regimen = v('nt-regimen')==='pequeno' ? 'pequeno' : 'general';
+    await getSB().from('config_fiscal').insert({
+      tenant_id: tenant.id, regimen_iva: regimen,
+      tasa_iva: regimen==='pequeno' ? 0.05 : 0.12, tasa_isr: 0.05
+    }).then(()=>{},()=>{});
 
     /* 2. Crear el usuario admin dentro del nuevo tenant (Edge crear-usuario) */
     const res = await Auth.crearUsuario({
@@ -767,6 +814,95 @@ Modulos.superadmin = {
     await DB.deleteTenantPago(id);
     UI.toast('Cobro eliminado');
     this.render();
+  },
+
+  /* ── VOUCHERS DE PAGO (activación por transferencia) ──
+     El comercio bloqueado sube su voucher; la Edge verificar-voucher lo
+     aprueba sola si todo coincide. Lo que no coincide cae aquí. Aprobar
+     usa el RPC aprobar_voucher: registra el cobro, extiende
+     suscripcion_vence y reactiva el comercio en una sola transacción. */
+  async verVoucher(id) {
+    const { data } = await getSB().from('vouchers_pago').select('imagen_base64').eq('id', id).single();
+    if (!data?.imagen_base64) { UI.toast('Voucher sin imagen','warn'); return; }
+    UI.verAdjunto(data.imagen_base64, 'Voucher de pago');
+  },
+
+  async aprobarVoucher(id) {
+    const v = this._vouchers.find(x=>x.id===id);
+    const t = this._tenants.find(x=>x.id===v?.tenant_id);
+    const sugerido = Number(v?.monto || v?.analisis?.monto) || Number(t?.precio_mensual) || 0;
+    const monto = parseFloat(prompt(`Monto pagado por ${t?.name||'el comercio'} (Q):`, sugerido));
+    if (!monto || monto<=0) return;
+    const precio = Number(t?.precio_mensual) || PLANES[t?.plan]?.precio || monto;
+    const meses = Math.max(1, Math.min(24, Math.round(monto/precio) || 1));
+    if (!confirm(`Se registrará el pago de ${UI.q(monto)} (${meses} mes/es), se extenderá la suscripción y se reactivará el comercio.\n\n¿Aprobar?`)) return;
+    const { error } = await getSB().rpc('aprobar_voucher', { p_voucher_id: id, p_monto: monto, p_meses: meses });
+    if (error) { UI.toast('Error: '+error.message,'error'); return; }
+    UI.toast('Voucher aprobado — comercio activado ✓');
+    this.render();
+  },
+
+  async rechazarVoucher(id) {
+    const motivo = prompt('Motivo del rechazo (lo verá el comercio):','No se pudo confirmar el pago');
+    if (motivo===null) return;
+    const { error } = await getSB().rpc('rechazar_voucher', { p_voucher_id: id, p_motivo: motivo||null });
+    if (error) { UI.toast('Error: '+error.message,'error'); return; }
+    UI.toast('Voucher rechazado');
+    this.render();
+  },
+
+  /* ── CUENTAS DE PAGO (saas_config.pago) ──
+     Cuentas bancarias que ve el comercio bloqueado y contra las que la IA
+     compara la cuenta destino del voucher. */
+  async modalCuentasPago() {
+    const { data } = await getSB().from('saas_config').select('valor').eq('clave','pago').maybeSingle();
+    const cfg = data?.valor || {};
+    this._cfgPagoEdit = Array.isArray(cfg.cuentas) ? [...cfg.cuentas] : [];
+    UI.modal('🏦 Cuentas de pago (transferencias)', `
+      <div style="font-size:12px;color:var(--text3);margin-bottom:10px">
+        Estas cuentas se muestran al comercio con demo vencido y sirven para que Nexus
+        verifique automáticamente la cuenta destino del voucher.</div>
+      <div id="sa-cuentas-list"></div>
+      <button class="btn btn-sm btn-ghost" onclick="Modulos.superadmin._agregarCuentaPago()">➕ Agregar cuenta</button>
+      <div class="form-group" style="margin-top:12px"><label class="form-label">Email para solicitudes de pago</label>
+        <input class="form-input" id="sa-email-pagos" type="email" value="${cfg.email_pagos||''}" placeholder="pagos@nexuspro.com"></div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" onclick="UI.cerrarModal()">Cancelar</button>
+        <button class="btn btn-green" onclick="Modulos.superadmin.guardarCuentasPago()">💾 Guardar</button>
+      </div>`);
+    this._pintarCuentasPago();
+  },
+
+  _pintarCuentasPago() {
+    const el = document.getElementById('sa-cuentas-list');
+    if (!el) return;
+    el.innerHTML = this._cfgPagoEdit.map((c,i)=>`
+      <div style="display:grid;grid-template-columns:1.2fr 1fr 1.4fr 1.4fr auto;gap:6px;margin-bottom:6px;align-items:center">
+        <input class="form-input" data-cta="banco" data-i="${i}" placeholder="Banco" value="${c.banco||''}">
+        <select class="form-select" data-cta="tipo" data-i="${i}">
+          ${['Monetaria','Ahorro'].map(x=>`<option ${c.tipo===x?'selected':''}>${x}</option>`).join('')}</select>
+        <input class="form-input mono-sm" data-cta="numero" data-i="${i}" placeholder="No. de cuenta" value="${c.numero||''}">
+        <input class="form-input" data-cta="titular" data-i="${i}" placeholder="A nombre de" value="${c.titular||''}">
+        <button class="btn btn-sm btn-ghost" title="Quitar" onclick="Modulos.superadmin._quitarCuentaPago(${i})">🗑️</button>
+      </div>`).join('') || '<div style="font-size:12px;color:var(--text3);margin-bottom:8px">Sin cuentas configuradas.</div>';
+    el.querySelectorAll('[data-cta]').forEach(inp => {
+      inp.onchange = () => { this._cfgPagoEdit[+inp.dataset.i][inp.dataset.cta] = inp.value.trim(); };
+    });
+  },
+
+  _agregarCuentaPago() { this._cfgPagoEdit.push({ banco:'', tipo:'Monetaria', numero:'', titular:'' }); this._pintarCuentasPago(); },
+  _quitarCuentaPago(i) { this._cfgPagoEdit.splice(i,1); this._pintarCuentasPago(); },
+
+  async guardarCuentasPago() {
+    const cuentas = this._cfgPagoEdit.filter(c=>c.banco && c.numero);
+    const valor = {
+      cuentas,
+      email_pagos: document.getElementById('sa-email-pagos')?.value.trim() || null,
+    };
+    const { error } = await getSB().from('saas_config')
+      .upsert({ clave:'pago', valor, updated_at: new Date().toISOString() }, { onConflict:'clave' });
+    if (error) { UI.toast('Error: '+error.message,'error'); return; }
+    UI.cerrarModal(); UI.toast('Cuentas de pago guardadas ✓');
   },
 
   /* ── CARGOS AUTOMÁTICOS A TARJETA ─────────────────

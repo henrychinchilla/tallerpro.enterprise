@@ -200,15 +200,34 @@ Modulos.comunicaciones = {
             </div>
           </div>
 
-          <!-- ── INFILE FEL ── -->
+          <!-- ── FEL — FACTURA ELECTRÓNICA (certificadores SAT) ── -->
           <div class="card card-amber">
-            <div class="card-sub mb-3">🧾 FEL / INFILE — Factura Electrónica</div>
+            <div class="card-sub mb-3">🧾 FEL — Factura Electrónica</div>
             <div class="alert alert-amber" style="margin-bottom:14px">
               <div class="alert-icon">💡</div>
               <div class="alert-body" style="font-size:12px">
-                INFILE cobra aprox. <strong>Q 400 por cada 100 facturas (Q 4/factura)</strong>.
-                Puedes usar credenciales propias si ya tienes contrato con INFILE,
-                o activar el servicio gestionado incluido en tu plan.
+                Elige tu <strong>certificador autorizado por la SAT</strong>. La integración automática de NexusPro
+                hoy funciona con <strong>INFILE</strong> (aprox. Q 400 por cada 100 facturas — Q 4/factura).
+                Si usas otro certificador, guarda tus credenciales y contáctanos para habilitar su integración.
+              </div>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Certificador FEL (autorizados por SAT)</label>
+              <select class="form-select" id="cfg-fel-cert"
+                      onchange="Modulos.comunicaciones._toggleCertificador(this.value)">
+                ${Modulos.comunicaciones.CERTIFICADORES_FEL.map(c=>`<option value="${c.id}" ${(infile.certificador||'infile')===c.id?'selected':''}>${c.nombre}</option>`).join('')}
+              </select>
+              <div style="font-size:11px;color:var(--text3);margin-top:4px">
+                Lista oficial: portal.sat.gob.gt → Factura Electrónica en Línea → Certificador de DTE</div>
+            </div>
+            <div id="fel-aviso-cert" ${(infile.certificador||'infile')==='infile'?'style="display:none"':''}>
+              <div class="alert alert-cyan" style="margin-bottom:12px">
+                <div class="alert-icon">ℹ️</div>
+                <div class="alert-body" style="font-size:12px">
+                  La integración automática con este certificador está <b>disponible bajo solicitud</b>.
+                  Guarda tus credenciales y escríbenos para activarla; mientras tanto puedes emitir desde la
+                  plataforma del certificador y registrar tus facturas en NexusPro.
+                </div>
               </div>
             </div>
             <div class="form-group">
@@ -216,7 +235,7 @@ Modulos.comunicaciones = {
               <select class="form-select" id="cfg-infile-modo"
                       onchange="Modulos.comunicaciones._toggleInfileMode(this.value)">
                 <option value="nexuspro" ${infile.modo==='nexuspro'?'selected':''}>🏢 Gestionado por NexusPro (add-on — incluido en plan Empresarial)</option>
-                <option value="propio"    ${infile.modo==='propio'   ?'selected':''}>🔑 Mis propias credenciales INFILE</option>
+                <option value="propio"    ${infile.modo==='propio'   ?'selected':''}>🔑 Mis propias credenciales del certificador</option>
               </select>
             </div>
             <div id="infile-info-nexuspro" ${infile.modo==='propio'?'style="display:none"':''}>
@@ -225,15 +244,15 @@ Modulos.comunicaciones = {
                 <div class="alert-body" style="font-size:12px">
                   <strong>NexusPro gestiona tu FEL.</strong><br>
                   Las facturas se certifican automáticamente a través del contrato INFILE de NexusPro.
-                  No necesitas crear cuenta propia en INFILE. Para activar este servicio, comunícate con soporte NexusPro.
+                  No necesitas contrato propio con un certificador. Para activar este servicio, comunícate con soporte NexusPro.
                 </div>
               </div>
             </div>
             <div id="infile-campos-propios" ${infile.modo!=='propio'?'style="display:none"':''}>
               <div class="grid-2">
-                <div class="form-group"><label class="form-label">Usuario INFILE *</label>
+                <div class="form-group"><label class="form-label">Usuario del certificador *</label>
                   <input class="form-input" id="cfg-infile-user" placeholder="tu_usuario" value="${infile.usuario||''}"></div>
-                <div class="form-group"><label class="form-label">Contraseña INFILE *</label>
+                <div class="form-group"><label class="form-label">Contraseña / llave API *</label>
                   <input class="form-input" id="cfg-infile-pass" type="password" placeholder="••••••••" value="${infile.password||''}"></div>
               </div>
               <div class="grid-2">
@@ -300,7 +319,34 @@ Modulos.comunicaciones = {
     else UI.toast('Error','error');
   },
 
-  /* ─── INFILE ─────────────────────────────────────────── */
+  /* ─── FEL / CERTIFICADORES ───────────────────────────── */
+  /* Certificadores de DTE autorizados por la SAT (portal.sat.gob.gt →
+     Certificador de DTE). La integración automática de NexusPro es con
+     INFILE; el resto se guarda como elección + credenciales del comercio. */
+  CERTIFICADORES_FEL: [
+    { id:'infile',        nombre:'INFILE, S.A. — integrado con NexusPro' },
+    { id:'sat',           nombre:'SAT — App gratuita FEL (sin costo, manual)' },
+    { id:'digifact',      nombre:'DIGIFACT (Digifact Servicios, S.A.)' },
+    { id:'guatefacturas', nombre:'GUATEFACTURAS, S.A.' },
+    { id:'megaprint',     nombre:'MEGAPRINT, S.A. (Ekofactura)' },
+    { id:'cofidi',        nombre:'COFIDI, S.A.' },
+    { id:'tekra',         nombre:'TEKRA, S.A.' },
+    { id:'forcon',        nombre:'FORCON — Formularios Continuos de Centroamérica, S.A.' },
+    { id:'g4s',           nombre:'G4S Documenta, S.A.' },
+    { id:'ciberespacio',  nombre:'CIBER ESPACIO, S.A.' },
+    { id:'indrese',       nombre:'INDRESE, S.A. (EDICOM)' },
+    { id:'inforum',       nombre:'INFORUM Consulting, S.A.' },
+    { id:'comegsa',       nombre:'COMEGSA — Comercializadora Guatemalteca Mayorista de Electricidad' },
+    { id:'operadora',     nombre:'Operadora Económica, S.A.' },
+    { id:'gom',           nombre:'GOM Solutions, S.A.' },
+    { id:'otro',          nombre:'Otro certificador autorizado por SAT' },
+  ],
+
+  _toggleCertificador(id) {
+    const aviso = document.getElementById('fel-aviso-cert');
+    if (aviso) aviso.style.display = id === 'infile' ? 'none' : '';
+  },
+
   _toggleInfileMode(modo) {
     const info   = document.getElementById('infile-info-nexuspro');
     const campos = document.getElementById('infile-campos-propios');
@@ -310,7 +356,9 @@ Modulos.comunicaciones = {
 
   async guardarInfile() {
     const modo = document.getElementById('cfg-infile-modo')?.value || 'nexuspro';
-    const cfg  = { modo };
+    const certId = document.getElementById('cfg-fel-cert')?.value || 'infile';
+    const cert = this.CERTIFICADORES_FEL.find(c=>c.id===certId);
+    const cfg  = { modo, certificador: certId, certificador_nombre: cert?.nombre || certId };
     if (modo === 'propio') {
       cfg.usuario    = document.getElementById('cfg-infile-user')?.value.trim();
       cfg.password   = document.getElementById('cfg-infile-pass')?.value;

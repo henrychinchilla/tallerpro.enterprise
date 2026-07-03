@@ -8,7 +8,7 @@
 // (mismo flujo que verificar-registro).
 //
 // Auth: JWT del usuario Google autenticado (verify_jwt=true).
-// Body: { nombre_comercio, nit?, telefono, tipo_negocio?, modulos_activos? }
+// Body: { nombre_comercio, nit?, telefono, tipo_negocio?, modulos_activos?, regimen_iva? }
 //
 // Deploy:  supabase functions deploy registrar-comercio-google
 // ═══════════════════════════════════════════════════════
@@ -107,7 +107,11 @@ Deno.serve(async (req) => {
   }).select().single();
   if (tErr || !tenant) return json({ error: "No se pudo crear el comercio: " + (tErr?.message ?? "") }, 400);
 
-  await admin.from("config_fiscal").insert({ tenant_id: tenant.id, regimen_iva: "general", tasa_iva: 0.12, tasa_isr: 0.05 }).then(() => {}, () => {});
+  const regimenIva = body.regimen_iva === "pequeno" ? "pequeno" : "general";
+  await admin.from("config_fiscal").insert({
+    tenant_id: tenant.id, regimen_iva: regimenIva,
+    tasa_iva: regimenIva === "pequeno" ? 0.05 : 0.12, tasa_isr: 0.05,
+  }).then(() => {}, () => {});
 
   const { error: insErr } = await admin.from("usuarios").upsert({
     id: user.id, tenant_id: tenant.id, nombre: nombreAdmin,
@@ -121,7 +125,7 @@ Deno.serve(async (req) => {
 
   await admin.from("solicitudes_comercio").insert({
     email, nombre_comercio: nombreComercio, nombre_admin: nombreAdmin,
-    nit, telefono, tipo_negocio: tipoNegocio, modulos_activos: modulos,
+    nit, telefono, tipo_negocio: tipoNegocio, modulos_activos: modulos, regimen_iva: regimenIva,
     auth_user_id: user.id, tenant_id: tenant.id,
     estado: "verificado", verificado_at: new Date().toISOString(),
   }).then(() => {}, () => {});

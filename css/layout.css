@@ -31,7 +31,7 @@
   margin-bottom: 28px;
 }
 .login-logo h1 {
-  font-family: 'Bebas Neue', sans-serif;
+  font-family: 'Bebas Neue', 'Segoe UI Emoji', 'Apple Color Emoji', 'Noto Color Emoji', sans-serif;
   font-size: 42px;
   color: var(--amber);
   letter-spacing: 4px;
@@ -71,7 +71,7 @@
   border-bottom: 1px solid var(--border);
 }
 .sidebar-brand-name {
-  font-family: 'Bebas Neue', sans-serif;
+  font-family: 'Bebas Neue', 'Segoe UI Emoji', 'Apple Color Emoji', 'Noto Color Emoji', sans-serif;
   font-size: 22px;
   color: var(--amber);
   letter-spacing: 3px;
@@ -187,7 +187,7 @@
   background: var(--amber-dim);
   color: var(--amber);
   border-radius: 10px;
-  font-family: 'Manrope', sans-serif;
+  font-family: 'Manrope', 'Segoe UI Emoji', 'Apple Color Emoji', 'Noto Color Emoji', sans-serif;
   font-size: 13px; font-weight: 700;
   cursor: pointer;
   transition: all .15s;
@@ -261,7 +261,7 @@
 }
 
 .page-title {
-  font-family: 'Bebas Neue', sans-serif;
+  font-family: 'Bebas Neue', 'Segoe UI Emoji', 'Apple Color Emoji', 'Noto Color Emoji', sans-serif;
   font-size: 28px;
   background: linear-gradient(135deg, var(--amber) 0%, color-mix(in srgb, var(--amber) 60%, var(--cyan)) 100%);
   -webkit-background-clip: text;
@@ -310,7 +310,7 @@
   color: var(--text); font-size: 20px; padding: 4px;
 }
 .mobile-page-label {
-  font-family: 'Bebas Neue', sans-serif;
+  font-family: 'Bebas Neue', 'Segoe UI Emoji', 'Apple Color Emoji', 'Noto Color Emoji', sans-serif;
   font-size: 18px; color: var(--amber); letter-spacing: 3px;
 }
 

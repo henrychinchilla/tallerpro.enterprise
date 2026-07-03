@@ -99,7 +99,7 @@ Modulos.configuracion = {
                   return `
                 <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--border)">
                   <div>
-                    <div style="font-size:13px;font-weight:600">🧾 INFILE FEL</div>
+                    <div style="font-size:13px;font-weight:600">🧾 FEL — ${(infile.certificador_nombre||'INFILE').split('—')[0].split('(')[0].trim()}</div>
                     <div style="font-size:11px;color:var(--text3)">${infile.modo==='propio'?(infile.nit_emisor||'NIT no configurado'):'Servicio gestionado por NexusPro'}</div>
                   </div>
                   <div style="display:flex;align-items:center;gap:8px">
