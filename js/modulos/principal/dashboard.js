@@ -154,11 +154,10 @@ Modulos.dashboard = {
           : `Plan <b>${planLbl}</b> activo.`;
         accion = 'Pagar';
       }
-      /* Pago/activación en línea: tarjeta o transferencia con voucher (paywall) */
+      /* Pago/activación en línea: solo los métodos habilitados en el Panel SaaS */
       const botones = `
         <span style="display:flex;gap:6px;flex-shrink:0;flex-wrap:wrap">
-          <button class="btn btn-sm btn-blue" onclick="App.paywallTarjeta()">💳 ${accion} con tarjeta</button>
-          <button class="btn btn-sm btn-green" onclick="App.paywallTransferencia()">🏦 Transferencia</button>
+          ${App._botonesPago(accion, true)}
         </span>`;
       subBanner = `<div class="alert alert-${clase}" style="margin-bottom:16px"><div class="alert-icon">${icon}</div>
         <div class="alert-body" style="font-size:12.5px;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">

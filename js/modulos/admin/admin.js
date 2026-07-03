@@ -70,8 +70,8 @@ Modulos.admin = {
                   : 'Vence: ' + UI.fecha(venceStr))
               : (esDemo ? 'Prueba gratis (inicia con tu primer uso)' : 'Sin fecha de vencimiento');
             const pie = esDemo
-              ? 'Estás en versión de <b>prueba gratis</b>. Activa tu plan aquí mismo: con tarjeta o transferencia (sube tu voucher y Nexus lo verifica).'
-              : 'Puedes pagar tu plan aquí mismo: con tarjeta o transferencia con voucher.';
+              ? 'Estás en versión de <b>prueba gratis</b>. Activa tu plan aquí mismo con los métodos de pago disponibles.'
+              : 'Puedes pagar tu plan aquí mismo con los métodos de pago disponibles.';
             return `
           <div class="card card-${vig?(esDemo?'amber':'green'):'red'}">
             <div class="card-sub mb-3">💳 ${esDemo?'Versión de prueba':'Suscripción'}</div>
@@ -81,8 +81,7 @@ Modulos.admin = {
             <div style="font-size:12px;color:var(--text3)">${detalle}</div>
             <div style="font-size:11px;color:var(--text3);margin-top:6px">${pie}</div>
             <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:10px">
-              <button class="btn btn-sm btn-blue" onclick="App.paywallTarjeta()">💳 ${esDemo?'Activar':'Pagar'} con tarjeta</button>
-              <button class="btn btn-sm btn-green" onclick="App.paywallTransferencia()">🏦 Transferencia</button>
+              ${App._botonesPago(esDemo?'Activar':'Pagar', true)}
             </div>
           </div>`;
           })()}

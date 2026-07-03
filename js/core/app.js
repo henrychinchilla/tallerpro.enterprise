@@ -211,8 +211,7 @@ const App = {
           ${precio ? `<div style="margin:10px 0;font-size:13px;color:var(--text2)">Costo de tu servicio:
             <b style="font-size:18px;color:var(--text)">${UI.q(precio)}</b> <span style="color:var(--text3)">/mes${PLANES[t?.plan]?.label ? ` (plan ${PLANES[t.plan].label})` : ''}</span></div>` : ''}
           <div style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap;margin-top:14px">
-            <button class="btn btn-blue" onclick="App.paywallTarjeta()">💳 Pagar con tarjeta</button>
-            <button class="btn btn-green" onclick="App.paywallTransferencia()">🏦 Transferencia / depósito</button>
+            ${App._botonesPago('Pagar')}
           </div>
           <div id="pw-estado" style="margin-top:12px;font-size:12px;color:var(--text3)"></div>
           <div style="margin-top:16px;display:flex;gap:14px;justify-content:center;flex-wrap:wrap">
@@ -232,6 +231,20 @@ const App = {
   _precioMensual() {
     const t = Auth.tenant || {};
     return Number(t.precio_mensual) > 0 ? Number(t.precio_mensual) : (PLANES[t.plan]?.precio || 0);
+  },
+
+  /* Botones de pago según los métodos habilitados para el comercio
+     (Panel SaaS → ⚙️ del comercio → Métodos de pago). La transferencia con
+     voucher siempre está; tarjeta y PayPal solo si el SaaS los habilitó —
+     así el cliente nunca ve una opción que todavía no funciona. */
+  _botonesPago(accion = 'Pagar', small = false) {
+    const t = Auth.tenant || {};
+    const cls = small ? 'btn btn-sm' : 'btn';
+    const b = [];
+    if (t.pago_tarjeta_habilitado) b.push(`<button class="${cls} btn-blue" onclick="App.paywallTarjeta()">💳 ${accion} con tarjeta</button>`);
+    if (t.pago_paypal_habilitado)  b.push(`<button class="${cls} btn-cyan" onclick="App.paywallPaypal()">🅿️ PayPal</button>`);
+    b.push(`<button class="${cls} btn-green" onclick="App.paywallTransferencia()">🏦 Transferencia / depósito</button>`);
+    return b.join('');
   },
 
   async _configPagos() {
@@ -445,6 +458,40 @@ const App = {
       if (msg) msg.innerHTML = `❌ ${e.message}`;
       if (btn) { btn.disabled = false; btn.textContent = '📤 Enviar comprobante'; }
     }
+  },
+
+  /* Opción C: PayPal (solo si el SaaS lo habilitó para el comercio).
+     El pago se hace en PayPal y el cliente sube su captura, que entra al
+     mismo flujo de vouchers (revisión en Panel SaaS → Cobros). */
+  async paywallPaypal() {
+    const cfg = await App._configPagos();
+    if (!cfg.paypal_email && !cfg.paypal_link) {
+      UI.toast('PayPal aún no está disponible. Usa transferencia o solicita los datos por correo.', 'warn');
+      return;
+    }
+    const precio = App._precioMensual();
+    UI.modal('🅿️ Pago con PayPal', `
+      ${precio ? `<div style="font-size:13px;margin-bottom:10px">Monto de tu plan: <b>${UI.q(precio)}</b>/mes</div>` : ''}
+      <div style="padding:10px;background:var(--surface2);border-radius:8px;margin-bottom:12px;font-size:13px">
+        ${cfg.paypal_email ? `Envía tu pago a: <b>${cfg.paypal_email}</b><br>` : ''}
+        ${cfg.paypal_link ? `<a href="${cfg.paypal_link}" target="_blank" rel="noopener" class="btn btn-sm btn-cyan" style="margin-top:6px">🅿️ Abrir PayPal para pagar</a>` : ''}
+      </div>
+      <div style="font-weight:700;font-size:13px;margin-bottom:8px">📸 Sube la captura de tu pago</div>
+      <div style="font-size:12px;color:var(--text3);margin-bottom:8px">
+        Tu servicio se activará al confirmarse el pago (normalmente en horas).</div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Monto pagado (Q)</label>
+          <input class="form-input" id="pw-vo-monto" type="number" min="0" step="0.01" value="${precio || ''}"></div>
+        <div class="form-group"><label class="form-label">ID de transacción PayPal</label>
+          <input class="form-input" id="pw-vo-ref" placeholder="Opcional"></div>
+      </div>
+      <div class="form-group"><label class="form-label">Captura del pago *</label>
+        <input class="form-input" id="pw-vo-file" type="file" accept="image/*"></div>
+      <div id="pw-vo-msg" style="font-size:12px;margin-top:6px"></div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" onclick="UI.cerrarModal()">Cancelar</button>
+        <button class="btn btn-cyan" id="pw-vo-btn" onclick="App.enviarVoucherPaywall()">📤 Enviar comprobante</button>
+      </div>`);
   },
 
   /* Solicitar los datos de pago por correo */

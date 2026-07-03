@@ -564,6 +564,18 @@ Modulos.superadmin = {
         <div class="form-group"><label class="form-label">Notas internas</label>
           <textarea class="form-input" id="sa-notas" rows="2">${t.notas_admin||''}</textarea></div>
       </div>
+      <div style="border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:12px">
+        <div class="card-sub mb-3">💰 Métodos de pago visibles para este comercio</div>
+        <div style="font-size:11px;color:var(--text3);margin-bottom:8px">
+          La transferencia con voucher siempre está disponible. Tarjeta y PayPal solo aparecen
+          al cliente si los habilitas aquí (actívalos cuando el método realmente funcione).</div>
+        <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;margin-bottom:6px">
+          <input type="checkbox" id="sa-pago-tarjeta" ${t.pago_tarjeta_habilitado?'checked':''}>
+          💳 Pago con tarjeta débito/crédito (pasarela / POS)</label>
+        <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer">
+          <input type="checkbox" id="sa-pago-paypal" ${t.pago_paypal_habilitado?'checked':''}>
+          🅿️ PayPal (configura el correo/enlace en Cobros → Cuentas de pago)</label>
+      </div>
       ${(()=>{ const tj = this._tarjetas.find(x=>x.tenant_id===id) || {}; return `
       <div style="border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:12px">
         <div class="card-sub mb-3">💳 Cobro de suscripción con tarjeta ${tj.id?`<span class="badge badge-green" style="margin-left:6px">${tj.marca||'Tarjeta'} ****${tj.ultimos4||'????'}</span>`:'<span class="badge badge-gray" style="margin-left:6px">Sin tarjeta</span>'}</div>
@@ -657,7 +669,9 @@ Modulos.superadmin = {
       ciclo_pago: document.getElementById('sa-ciclo')?.value||'mensual',
       modulos_activos: modulos,
       ai_limite_mes: parseInt(document.getElementById('sa-ia-limite')?.value)||300,
-      notas_admin: document.getElementById('sa-notas')?.value||null
+      notas_admin: document.getElementById('sa-notas')?.value||null,
+      pago_tarjeta_habilitado: !!document.getElementById('sa-pago-tarjeta')?.checked,
+      pago_paypal_habilitado: !!document.getElementById('sa-pago-paypal')?.checked
     };
     const { error } = await DB.updateTenantById(id, fields);
     if (error) { UI.toast('Error: '+error.message,'error'); return; }
@@ -868,6 +882,14 @@ Modulos.superadmin = {
       <button class="btn btn-sm btn-ghost" onclick="Modulos.superadmin._agregarCuentaPago()">➕ Agregar cuenta</button>
       <div class="form-group" style="margin-top:12px"><label class="form-label">Email para solicitudes de pago</label>
         <input class="form-input" id="sa-email-pagos" type="email" value="${cfg.email_pagos||''}" placeholder="pagos@nexuspro.com"></div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">PayPal — correo de la cuenta</label>
+          <input class="form-input" id="sa-paypal-email" type="email" value="${cfg.paypal_email||''}" placeholder="pagos@nexuspro.com"></div>
+        <div class="form-group"><label class="form-label">PayPal — enlace (paypal.me)</label>
+          <input class="form-input" id="sa-paypal-link" value="${cfg.paypal_link||''}" placeholder="https://paypal.me/nexuspro"></div>
+      </div>
+      <div style="font-size:11px;color:var(--text3);margin-top:-6px;margin-bottom:6px">
+        PayPal solo lo ven los comercios donde lo habilites (⚙️ del comercio → Métodos de pago).</div>
       <div class="modal-footer">
         <button class="btn btn-ghost" onclick="UI.cerrarModal()">Cancelar</button>
         <button class="btn btn-green" onclick="Modulos.superadmin.guardarCuentasPago()">💾 Guardar</button>
@@ -900,6 +922,8 @@ Modulos.superadmin = {
     const valor = {
       cuentas,
       email_pagos: document.getElementById('sa-email-pagos')?.value.trim() || null,
+      paypal_email: document.getElementById('sa-paypal-email')?.value.trim() || null,
+      paypal_link: document.getElementById('sa-paypal-link')?.value.trim() || null,
     };
     const { error } = await getSB().from('saas_config')
       .upsert({ clave:'pago', valor, updated_at: new Date().toISOString() }, { onConflict:'clave' });
