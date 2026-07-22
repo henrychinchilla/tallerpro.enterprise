@@ -8,7 +8,7 @@
    Para forzar actualización: subir CACHE_VERSION.
 ═══════════════════════════════════════════════════════ */
 
-const CACHE_VERSION = 'v3.56.1-20260703c';
+const CACHE_VERSION = 'v3.57.0-20260722a';
 const CACHE_NAME = `nexuspro-${CACHE_VERSION}`;
 
 /* App shell — se precachea en install para que funcione offline */
@@ -31,6 +31,7 @@ const PRECACHE = [
   '/js/modulos/principal/dashboard.js',
   '/js/modulos/operacion/clientes.js',
   '/js/modulos/operacion/vehiculos.js',
+  '/js/modulos/operacion/diagnostico_obd.js',
   '/js/modulos/operacion/ordenes.js',
   '/js/modulos/operacion/inventario.js',
   '/js/modulos/operacion/bodegas.js',

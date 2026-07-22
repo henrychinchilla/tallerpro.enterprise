@@ -304,6 +304,27 @@ const DB = {
     return !error;
   },
 
+  /* ── DIAGNÓSTICO OBD-II ───────────────────────── */
+  async getDiagnosticosOBD(ini, fin) {
+    const { data } = await getSB().from('diagnosticos_obd')
+      .select('*, vehiculos(placa,marca,modelo,anio,clientes(nombre))')
+      .eq('tenant_id', getTID())
+      .gte('created_at', ini).lte('created_at', fin + 'T23:59:59')
+      .order('created_at', { ascending:false });
+    return data || [];
+  },
+
+  async upsertDiagnosticoOBD(fields) {
+    const payload = { ...fields, tenant_id: getTID() };
+    if (fields.id) {
+      payload.updated_at = new Date().toISOString();
+      const { error } = await getSB().from('diagnosticos_obd').update(payload).eq('id', fields.id);
+      return { error };
+    }
+    const { data, error } = await getSB().from('diagnosticos_obd').insert(payload).select().single();
+    return { data, error };
+  },
+
   /* ── ÓRDENES DE TRABAJO ───────────────────────── */
   async getOrdenes(filtros={}) {
     let q = getSB().from('ordenes')
