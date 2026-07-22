@@ -84,10 +84,15 @@ Modulos.diagnostico_obd = {
     log('Reiniciando adaptador (ATZ)...');
     await this._cmd('ATZ', 8000);
     for (const c of ['ATE0','ATL0','ATS0','ATH0']) await this._cmd(c);
-    await this._cmd('ATSP0');                      // autoprotocolo: CAN / ISO9141 / KWP2000
+    await this._cmd('ATSP0');                      // autoprotocolo: CAN / ISO9141 / KWP2000 / J1850
     log('Buscando protocolo del vehículo...');
-    const r = await this._cmd('0100', 20000);      // dispara la búsqueda (SEARCHING...)
-    if (/UNABLE|ERROR|NO DATA/i.test(r) && !/41 ?00/i.test(r.replace(/\s/g,' ')))
+    let r = '';
+    for (let intento = 1; intento <= 2; intento++) {   // ECUs viejas (ISO/KWP) suelen responder al 2º intento
+      r = await this._cmd('0100', 20000);          // dispara la búsqueda (SEARCHING...)
+      if (!/UNABLE|ERROR|NO DATA/i.test(r) || /4100/i.test(r.replace(/\s/g,''))) break;
+      if (intento === 1) { log('Sin respuesta, reintentando...'); await this._cmd('ATSP0'); }
+    }
+    if (/UNABLE|ERROR|NO DATA/i.test(r) && !/4100/i.test(r.replace(/\s/g,'')))
       throw new Error('No se pudo comunicar con el vehículo. Verifica que el switch esté encendido y el adaptador bien conectado al puerto OBD.');
     const dpn = await this._cmd('ATDPN');          // ej. 'A6' = auto, protocolo 6 (CAN)
     this._protoNum = parseInt((dpn.match(/[0-9A-F]$/i) || ['0'])[0], 16) || 0;
@@ -98,7 +103,7 @@ Modulos.diagnostico_obd = {
   /* Limpia una respuesta a solo líneas hex (quita prefijos de trama multilinea '0:','1:'...) */
   _hexLines(resp) {
     return resp.split(/[\r\n]+/)
-      .map(l => l.trim().replace(/^[0-9A-F]{1,2}:/i, '').replace(/[^0-9A-Fa-f]/g, ''))
+      .map(l => l.trim().replace(/^[0-9A-F]{1,2}:/i, '').replace(/[^0-9A-Fa-f]/g, '').toUpperCase())
       .filter(l => l.length >= 2);
   },
 
@@ -117,7 +122,7 @@ Modulos.diagnostico_obd = {
     } catch (_) { return null; }
   },
 
-  async _leerDTCs(modo) {   // modo '03' confirmados / '07' pendientes
+  async _leerDTCs(modo) {   // modo '03' confirmados / '07' pendientes → códigos crudos
     const ok = modo === '03' ? '43' : '47';
     let codigos = [];
     try {
@@ -132,7 +137,7 @@ Modulos.diagnostico_obd = {
         }
       }
     } catch (_) {}
-    return codigos.map(c => ({ codigo: c, desc: this._descDTC(c) }));
+    return codigos;
   },
 
   _decodeDTC(h4) {
@@ -162,22 +167,103 @@ Modulos.diagnostico_obd = {
     return bytes.length ? bytes : null;
   },
 
-  async _leerVivo() {
+  /* Catálogo de PIDs modo 01 — se leen solo los que el vehículo reporta soportar */
+  _PIDS: {
+    '0C': { k:'rpm',       l:'RPM',                    u:'',      f:b=>Math.round((b[0]*256+b[1])/4) },
+    '0D': { k:'vel',       l:'Velocidad',              u:' km/h', f:b=>b[0] },
+    '05': { k:'temp',      l:'Temp. motor',            u:' °C',   f:b=>b[0]-40 },
+    '04': { k:'carga',     l:'Carga motor',            u:' %',    f:b=>Math.round(b[0]*100/255) },
+    '11': { k:'acel',      l:'Acelerador',             u:' %',    f:b=>Math.round(b[0]*100/255) },
+    '0F': { k:'temp_adm',  l:'Temp. admisión',         u:' °C',   f:b=>b[0]-40 },
+    '2F': { k:'comb',      l:'Combustible',            u:' %',    f:b=>Math.round(b[0]*100/255) },
+    '06': { k:'stft1',     l:'Ajuste combustible corto', u:' %',  f:b=>Math.round((b[0]/1.28-100)*10)/10 },
+    '07': { k:'ltft1',     l:'Ajuste combustible largo', u:' %',  f:b=>Math.round((b[0]/1.28-100)*10)/10 },
+    '0A': { k:'pres_comb', l:'Presión de combustible', u:' kPa',  f:b=>b[0]*3 },
+    '0B': { k:'map',       l:'Presión admisión (MAP)', u:' kPa',  f:b=>b[0] },
+    '0E': { k:'avance',    l:'Avance de encendido',    u:' °',    f:b=>b[0]/2-64 },
+    '10': { k:'maf',       l:'Flujo de aire (MAF)',    u:' g/s',  f:b=>Math.round((b[0]*256+b[1])/10)/10 },
+    '1F': { k:'marcha',    l:'Tiempo encendido',       u:' min',  f:b=>Math.round((b[0]*256+b[1])/60) },
+    '21': { k:'dist_mil',  l:'Km con Check Engine',    u:' km',   f:b=>b[0]*256+b[1] },
+    '33': { k:'baro',      l:'Presión barométrica',    u:' kPa',  f:b=>b[0] },
+    '42': { k:'volt_ecu',  l:'Voltaje ECU',            u:' V',    f:b=>Math.round((b[0]*256+b[1])/10)/100 },
+    '46': { k:'temp_amb',  l:'Temp. ambiente',         u:' °C',   f:b=>b[0]-40 },
+    '5C': { k:'temp_aceite',l:'Temp. aceite',          u:' °C',   f:b=>b[0]-40 },
+    '5E': { k:'tasa_comb', l:'Consumo',                u:' L/h',  f:b=>Math.round((b[0]*256+b[1])/20*10)/10 },
+  },
+  _BASICOS: ['0C','0D','05','04','11','0F','2F'],
+  _sop: null,   // PIDs soportados por el vehículo actual
+
+  /* Bitmaps 0100/0120/0140: qué PIDs soporta este vehículo */
+  async _leerSoportados() {
+    const sop = [];
+    for (const base of [0x00, 0x20, 0x40]) {
+      let bytes = null;
+      try { bytes = await this._pid(base.toString(16).padStart(2,'0').toUpperCase(), 6000); } catch (_) {}
+      if (!bytes || bytes.length < 4) break;
+      for (let i = 0; i < 32; i++)
+        if (bytes[i >> 3] & (0x80 >> (i & 7)))
+          sop.push((base + i + 1).toString(16).padStart(2,'0').toUpperCase());
+      if (!sop.includes((base + 0x20).toString(16).padStart(2,'0').toUpperCase())) break;
+    }
+    return sop.filter(p => this._PIDS[p]);
+  },
+
+  async _leerVivo(pids) {
     const d = {};
-    const lect = [
-      ['0C', b => d.rpm      = Math.round((b[0]*256 + b[1]) / 4)],
-      ['0D', b => d.vel      = b[0]],
-      ['05', b => d.temp     = b[0] - 40],
-      ['04', b => d.carga    = Math.round(b[0] * 100 / 255)],
-      ['11', b => d.acel     = Math.round(b[0] * 100 / 255)],
-      ['0F', b => d.temp_adm = b[0] - 40],
-      ['2F', b => d.comb     = Math.round(b[0] * 100 / 255)],
-    ];
-    for (const [pid, fn] of lect) {
-      try { const b = await this._pid(pid); if (b) fn(b); } catch (_) {}
+    for (const pid of (pids && pids.length ? pids : this._BASICOS)) {
+      const def = this._PIDS[pid];
+      if (!def) continue;
+      try { const b = await this._pid(pid); if (b) d[def.k] = def.f(b); } catch (_) {}
     }
     try { d.volt = (await this._cmd('ATRV')).match(/[\d.]+V?/)?.[0] || null; } catch (_) {}
     return d;
+  },
+
+  /* Freeze frame (modo 02): snapshot que la ECU guardó al momento de la falla.
+     La respuesta lleva PID + nº de frame (00) antes de los datos. */
+  async _pidF(pid) {
+    try {
+      const hex = this._hexLines(await this._cmd('02' + pid + '00', 5000)).join('');
+      const i = hex.indexOf('42' + pid);
+      if (i < 0) return null;
+      const bytes = [];
+      for (let p = i + 6; p + 1 < hex.length && bytes.length < 4; p += 2)
+        bytes.push(parseInt(hex.substr(p, 2), 16));
+      return bytes.length ? bytes : null;
+    } catch (_) { return null; }
+  },
+
+  async _leerFreeze() {
+    const b = await this._pidF('02');
+    if (!b || b.length < 2) return null;
+    const dtc = this._decodeDTC((b[0].toString(16).padStart(2,'0') + b[1].toString(16).padStart(2,'0')).toUpperCase());
+    if (!dtc) return null;
+    const fz = { dtc };
+    for (const pid of ['04','05','0C','0D','11']) {
+      const v = await this._pidF(pid);
+      if (v) fz[this._PIDS[pid].k] = this._PIDS[pid].f(v);
+    }
+    return fz;
+  },
+
+  /* Decodifica el VIN contra la API pública de NHTSA (gratuita, con CORS abierto).
+     Cubre vehículos comercializados en EE.UU. — la mayoría del parque importado. */
+  async _decodeVIN(vin) {
+    try {
+      const r = await fetch(`https://vpic.nhtsa.dot.gov/api/vehicles/DecodeVinValues/${encodeURIComponent(vin)}?format=json`);
+      const x = (await r.json())?.Results?.[0];
+      if (!x || !x.Make) return null;
+      const comb = { 'Gasoline':'Gasolina', 'Diesel':'Diésel', 'Electric':'Eléctrico',
+                     'Flexible Fuel Vehicle (FFV)':'Flex', 'Compressed Natural Gas (CNG)':'Gas natural' };
+      return {
+        marca: x.Make, modelo: x.Model || null, anio: x.ModelYear || null,
+        motor: [x.DisplacementL && `${(+x.DisplacementL).toFixed(1)}L`, x.EngineCylinders && `${x.EngineCylinders} cil`]
+          .filter(Boolean).join(' ') || null,
+        cilindros: x.EngineCylinders || null,
+        combustible: comb[x.FuelTypePrimary] || x.FuelTypePrimary || null,
+        pais: x.PlantCountry || null,
+      };
+    } catch (_) { return null; }
   },
 
   _desconectar() {
@@ -219,8 +305,11 @@ Modulos.diagnostico_obd = {
     B0001:'Despliegue de bolsa de aire del conductor',
     U0100:'Sin comunicación con la ECU del motor', U0101:'Sin comunicación con la TCM (transmisión)', U0121:'Sin comunicación con el módulo ABS', U0155:'Sin comunicación con el tablero',
   },
-  _descDTC(c) {
+  _descDTC(c, cat) {
     if (this._DTCS[c]) return this._DTCS[c];
+    const fila = cat && cat[c];
+    if (fila?.descripcion_es) return fila.descripcion_es;
+    if (fila?.descripcion_en) return fila.descripcion_en;
     const rangos = { P00:'Control de mezcla aire/combustible', P01:'Medición de aire/combustible', P02:'Circuito de inyección',
       P03:'Sistema de encendido / fallos de encendido', P04:'Control de emisiones (EGR/EVAP/catalizador)', P05:'Ralentí y velocidad del vehículo',
       P06:'Computadora (ECU) y salidas auxiliares', P07:'Transmisión', P08:'Transmisión', P09:'Transmisión',
@@ -350,15 +439,37 @@ Modulos.diagnostico_obd = {
       log(mil ? `🔴 Check Engine ENCENDIDO (${n} falla(s))` : '✅ Check Engine apagado');
 
       log('Leyendo códigos de falla...');
-      const dtcs = await this._leerDTCs('03');
-      const pend = await this._leerDTCs('07');
-      log(`${dtcs.length} confirmado(s), ${pend.length} pendiente(s)`);
+      const codConf = await this._leerDTCs('03');
+      const codPend = await this._leerDTCs('07');
+      log(`${codConf.length} confirmado(s), ${codPend.length} pendiente(s)`);
 
-      log('Leyendo datos en vivo...');
-      const datos = await this._leerVivo();
+      let freeze = null;
+      if (codConf.length || mil) {
+        log('Leyendo freeze frame (datos al momento de la falla)...');
+        freeze = await this._leerFreeze();
+      }
+
+      /* Descripciones: diccionario local ES → catálogo BD (3,000+ códigos) → rango SAE */
+      const cat = await DB.getDTCCatalogo([...codConf, ...codPend, freeze?.dtc].filter(Boolean));
+      const dtcs = codConf.map(c => ({ codigo:c, desc:this._descDTC(c, cat) }));
+      const pend = codPend.map(c => ({ codigo:c, desc:this._descDTC(c, cat) }));
+      if (freeze) freeze.desc = this._descDTC(freeze.dtc, cat);
+
+      log('Detectando sensores soportados...');
+      this._sop = await this._leerSoportados();
+      log(`Leyendo ${this._sop.length || this._BASICOS.length} sensores en vivo...`);
+      const datos = await this._leerVivo(this._sop);
+
+      let nhtsa = null;
+      if (vin) {
+        log('Consultando VIN en base de datos NHTSA...');
+        nhtsa = await this._decodeVIN(vin);
+        log(nhtsa ? `VIN identificado: <b>${nhtsa.marca} ${nhtsa.modelo||''} ${nhtsa.anio||''}</b>` : 'VIN sin coincidencias en NHTSA');
+      }
 
       this._scan = { vehiculo_id: vehId, vin, protocolo, adaptador: nombre, mil,
-                     dtcs, dtcs_pendientes: pend, datos, voltaje: datos.volt || null };
+                     dtcs, dtcs_pendientes: pend, datos, freeze_frame: freeze,
+                     voltaje: datos.volt || null, nhtsa };
       log('<b>Escaneo completo ✓</b>');
       this._renderResultado();
       document.getElementById('obd-btn-save').style.display = '';
@@ -372,19 +483,92 @@ Modulos.diagnostico_obd = {
   _renderResultado() {
     const s = this._scan, el = document.getElementById('obd-result');
     if (!s || !el) return;
-    const d = s.datos || {};
     el.innerHTML = `
+      ${s.nhtsa ? `<div class="card" style="padding:10px;margin-top:8px;border-left:3px solid var(--cyan)">
+        <b style="font-size:12px">🌐 IDENTIFICADO POR VIN (NHTSA)</b>
+        <div style="font-size:13px;margin-top:4px">${s.nhtsa.marca} ${s.nhtsa.modelo||''} ${s.nhtsa.anio||''}
+          ${s.nhtsa.motor?` · Motor ${s.nhtsa.motor}`:''} ${s.nhtsa.combustible?` · ${s.nhtsa.combustible}`:''}
+          ${s.nhtsa.pais?` · Fab. ${s.nhtsa.pais}`:''}</div>
+        <button class="btn btn-sm btn-cyan" style="margin-top:6px" onclick="Modulos.diagnostico_obd.aplicarVIN()">📋 Completar ficha del vehículo</button>
+      </div>` : ''}
       ${this._tablaDTCs(s)}
+      ${this._freezeHTML(s.freeze_frame)}
       <div class="card" style="padding:10px;margin-top:8px">
-        <b style="font-size:12px">DATOS EN VIVO</b>
+        <b style="font-size:12px">DATOS EN VIVO (${Object.keys(s.datos||{}).length} sensores)</b>
         <div id="obd-vivo" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:8px;margin-top:6px;font-size:13px">
-          ${this._vivoHTML(d)}
+          ${this._vivoHTML(s.datos||{})}
         </div>
-        <div style="margin-top:8px;display:flex;gap:8px">
+        <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap">
           <button class="btn btn-sm btn-ghost" id="obd-btn-live" onclick="Modulos.diagnostico_obd.toggleLive()">▶️ Monitor en vivo</button>
           ${(s.dtcs.length || s.mil) ? `<button class="btn btn-sm btn-danger" onclick="Modulos.diagnostico_obd.borrarDTCs()">🧹 Borrar códigos</button>` : ''}
+          ${(typeof moduloEnPlan !== 'function' || moduloEnPlan('ia')) ? `<button class="btn btn-sm btn-cyan" onclick="Modulos.diagnostico_obd.analizarIA()">🤖 Analizar con IA</button>` : ''}
         </div>
-      </div>`;
+      </div>
+      <div id="obd-ia"></div>`;
+  },
+
+  _freezeHTML(fz) {
+    if (!fz) return '';
+    return `<div class="card" style="padding:10px;margin-top:8px;border-left:3px solid var(--amber)">
+      <b style="font-size:12px">📸 FREEZE FRAME — al momento de la falla ${fz.dtc}${fz.desc?` (${fz.desc})`:''}</b>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:8px;margin-top:6px;font-size:13px">
+        ${this._vivoHTML(fz, ['dtc','desc'])}
+      </div>
+    </div>`;
+  },
+
+  /* Aplica lo decodificado del VIN a la ficha del vehículo (solo campos vacíos) */
+  async aplicarVIN() {
+    const s = this._scan;
+    if (!s?.nhtsa) return;
+    const v = this._vehiculos.find(x => x.id === s.vehiculo_id);
+    if (!v) return;
+    const n = s.nhtsa, campos = { id: v.id, vin: s.vin };
+    if (!v.marca && n.marca)             campos.marca = n.marca;
+    if (!v.modelo && n.modelo)           campos.modelo = n.modelo;
+    if (!v.anio && n.anio)               campos.anio = +n.anio;
+    if (!v.motor && n.motor)             campos.motor = n.motor;
+    if (!v.cilindros && n.cilindros)     campos.cilindros = +n.cilindros;
+    if (!v.combustible && n.combustible) campos.combustible = n.combustible;
+    const { error } = await DB.upsertVehiculo(campos);
+    if (error) { UI.toast('Error: ' + error.message, 'error'); return; }
+    Object.assign(v, campos);
+    UI.toast('Ficha del vehículo completada con datos del VIN ✓');
+  },
+
+  /* Análisis del escaneo con Nexus (Edge Function ai-assistant ya existente) */
+  _promptIA(s, veh) {
+    const dat = Object.entries(s.datos||{}).map(([k,v])=>`${k}:${v}`).join(', ');
+    return `Analiza este escaneo OBD-II y explica en español sencillo para un mecánico: ` +
+      `causa probable de cada código, cómo confirmar el diagnóstico y la reparación recomendada con su urgencia.\n` +
+      `Vehículo: ${veh ? `${veh.marca||''} ${veh.modelo||''} ${veh.anio||''} placa ${veh.placa||''}` : 'no especificado'}\n` +
+      `VIN: ${s.vin||'—'}\nCheck Engine: ${s.mil?'ENCENDIDO':'apagado'}\n` +
+      `Códigos confirmados: ${(s.dtcs||[]).map(d=>`${d.codigo} (${d.desc})`).join('; ')||'ninguno'}\n` +
+      `Códigos pendientes: ${(s.dtcs_pendientes||[]).map(d=>d.codigo).join('; ')||'ninguno'}\n` +
+      `Freeze frame: ${s.freeze_frame?JSON.stringify(s.freeze_frame):'—'}\nDatos en vivo: ${dat||'—'}`;
+  },
+
+  async analizarIA(idGuardado) {
+    const s = idGuardado ? this._data.find(x => x.id === idGuardado) : this._scan;
+    const el = document.getElementById('obd-ia');
+    if (!s || !el) return;
+    el.innerHTML = `<div class="card" style="padding:10px;margin-top:8px">⏳ Nexus está analizando el escaneo...</div>`;
+    const veh = idGuardado ? s.vehiculos : this._vehiculos.find(v => v.id === s.vehiculo_id);
+    const r = await IA.tecnico(this._promptIA(s, veh));
+    if (!r.ok) { el.innerHTML = `<div class="card" style="padding:10px;margin-top:8px;color:var(--red)">⚠️ ${r.error}</div>`; return; }
+    s.ia_analisis = r.respuesta;
+    if (idGuardado) await DB.upsertDiagnosticoOBD({ id: idGuardado, ia_analisis: r.respuesta });  // cachear: 1 sola consulta por escaneo
+    el.innerHTML = this._iaHTML(r.respuesta);
+  },
+
+  _iaHTML(texto) {
+    if (!texto) return '';
+    const cuerpo = (typeof IA !== 'undefined' && IA._formatear) ? IA._formatear(texto)
+      : `<div style="white-space:pre-wrap">${texto}</div>`;
+    return `<div class="card" style="padding:10px;margin-top:8px;border-left:3px solid var(--brand,#3B82F6)">
+      <b style="font-size:12px">🤖 ANÁLISIS DE NEXUS</b>
+      <div style="font-size:13px;margin-top:6px">${cuerpo}</div>
+    </div>`;
   },
 
   _tablaDTCs(s) {
@@ -401,13 +585,17 @@ Modulos.diagnostico_obd = {
     </div>`;
   },
 
-  _vivoHTML(d) {
-    const items = [
-      ['RPM', d.rpm, ''], ['Velocidad', d.vel, ' km/h'], ['Temp. motor', d.temp, ' °C'],
-      ['Carga', d.carga, ' %'], ['Acelerador', d.acel, ' %'], ['Temp. admisión', d.temp_adm, ' °C'],
-      ['Combustible', d.comb, ' %'], ['Batería', d.volt, ''],
-    ];
-    return items.filter(i => i[1] !== undefined && i[1] !== null)
+  /* Convierte {clave:valor} a [[etiqueta, valor, unidad]] usando el catálogo de PIDs */
+  _datosLista(d, excluir = []) {
+    const labels = { volt: ['Batería',''] };
+    Object.values(this._PIDS).forEach(p => labels[p.k] = [p.l, p.u]);
+    return Object.entries(d || {})
+      .filter(([k,v]) => v !== null && v !== undefined && labels[k] && !excluir.includes(k))
+      .map(([k,v]) => [labels[k][0], v, labels[k][1]]);
+  },
+
+  _vivoHTML(d, excluir = []) {
+    return this._datosLista(d, excluir)
       .map(i => `<div style="background:var(--bg2,#0b1220);border-radius:6px;padding:6px 8px">
         <div style="font-size:10px;color:var(--text3)">${i[0]}</div><b>${i[1]}${i[2]}</b></div>`).join('')
       || '<span style="color:var(--text3)">Sin datos (¿motor apagado?)</span>';
@@ -447,8 +635,8 @@ Modulos.diagnostico_obd = {
   async guardarEscaneo() {
     if (!this._scan) return;
     this._stopLive();
-    const notas = null;
-    const { error } = await DB.upsertDiagnosticoOBD({ ...this._scan, notas });
+    const { nhtsa, ...fila } = this._scan;   // nhtsa no se persiste (se aplica a la ficha del vehículo)
+    const { error } = await DB.upsertDiagnosticoOBD(fila);
     if (error) { UI.toast('Error al guardar: ' + error.message, 'error'); return; }
     UI.toast('Escaneo guardado ✓');
     this._cerrarEscaneo();
@@ -469,13 +657,16 @@ Modulos.diagnostico_obd = {
         <b>Protocolo:</b> ${d.protocolo||'—'} · <b>Adaptador:</b> ${d.adaptador||'—'} · <b>Batería:</b> ${d.voltaje||'—'}<br>
         <b>Check Engine:</b> ${d.mil?'🔴 Encendido':'✅ Apagado'} ${d.dtcs_borrados?' · 🧹 Códigos borrados tras el escaneo':''}</p>
         ${this._tablaDTCs(d)}
+        ${this._freezeHTML(d.freeze_frame)}
         <div class="card" style="padding:10px;margin-top:8px">
           <b style="font-size:12px">DATOS AL MOMENTO DEL ESCANEO</b>
           <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:8px;margin-top:6px">${this._vivoHTML(d.datos||{})}</div>
         </div>
+        <div id="obd-ia">${this._iaHTML(d.ia_analisis)}</div>
         ${d.notas ? `<p style="margin-top:8px"><b>Notas:</b> ${d.notas}</p>` : ''}
       </div>
       <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px">
+        ${!d.ia_analisis && (typeof moduloEnPlan !== 'function' || moduloEnPlan('ia')) ? `<button class="btn btn-cyan" onclick="Modulos.diagnostico_obd.analizarIA('${d.id}')">🤖 Analizar con IA</button>` : ''}
         <button class="btn btn-ghost" onclick="UI.cerrarModal()">Cerrar</button>
         ${Modulos.btnAccion('imprimir', `Modulos.diagnostico_obd.imprimir('${d.id}')`, { label:'🖨 Imprimir' })}
       </div>`, '680px');
@@ -525,10 +716,8 @@ Modulos.diagnostico_obd = {
       ...(d.dtcs||[]).map(x => ({ ...x, tipo:'Confirmado' })),
       ...(d.dtcs_pendientes||[]).map(x => ({ ...x, tipo:'Pendiente' })),
     ];
-    const dat = d.datos || {};
-    const vivo = [['RPM',dat.rpm,''],['Velocidad',dat.vel,' km/h'],['Temp. motor',dat.temp,' °C'],['Carga',dat.carga,' %'],
-                  ['Acelerador',dat.acel,' %'],['Temp. admisión',dat.temp_adm,' °C'],['Combustible',dat.comb,' %'],['Batería',dat.volt,'']]
-      .filter(i => i[1] !== undefined && i[1] !== null);
+    const vivo = this._datosLista(d.datos);
+    const fz = d.freeze_frame ? this._datosLista(d.freeze_frame, ['dtc','desc']) : [];
     const win = window.open('', '_blank');
     win.document.write(`<!DOCTYPE html><html><head><title>Diagnóstico OBD-II</title><meta charset="UTF-8">
       <style>
@@ -554,9 +743,13 @@ Modulos.diagnostico_obd = {
           <tbody>${filas.map(f=>`<tr><td><b>${f.codigo}</b></td><td>${f.desc}</td><td>${f.tipo}</td></tr>`).join('')}</tbody></table>`
         : '<p style="color:green">Sin códigos de falla ✓</p>'}
       </div>
+      ${fz.length ? `<div class="section"><b>FREEZE FRAME (al momento de la falla ${d.freeze_frame.dtc}):</b>
+        <table style="margin-top:8px"><tbody>${fz.map(i=>`<tr><td>${i[0]}</td><td><b>${i[1]}${i[2]}</b></td></tr>`).join('')}</tbody></table>
+      </div>` : ''}
       ${vivo.length ? `<div class="section"><b>DATOS AL MOMENTO DEL ESCANEO:</b>
         <table style="margin-top:8px"><tbody>${vivo.map(i=>`<tr><td>${i[0]}</td><td><b>${i[1]}${i[2]}</b></td></tr>`).join('')}</tbody></table>
       </div>` : ''}
+      ${d.ia_analisis ? `<div class="section"><b>ANÁLISIS DE NEXUS (IA):</b><p style="white-space:pre-wrap">${d.ia_analisis}</p></div>` : ''}
       ${d.notas ? `<div class="section"><b>NOTAS DEL TÉCNICO:</b><p>${d.notas}</p></div>` : ''}
       <p style="text-align:center;color:#888;font-size:11px">Generado por NexusPro · ${new Date().toLocaleString('es-GT')}</p>
       <div style="text-align:center"><button onclick="window.print()">🖨 Imprimir</button></div>

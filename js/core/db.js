@@ -314,6 +314,15 @@ const DB = {
     return data || [];
   },
 
+  /* Catálogo global de códigos DTC (sin tenant, solo lectura) */
+  async getDTCCatalogo(codigos) {
+    if (!codigos || !codigos.length) return {};
+    const { data } = await getSB().from('dtc_catalogo').select('*').in('codigo', codigos);
+    const map = {};
+    (data || []).forEach(r => map[r.codigo] = r);
+    return map;
+  },
+
   async upsertDiagnosticoOBD(fields) {
     const payload = { ...fields, tenant_id: getTID() };
     if (fields.id) {
