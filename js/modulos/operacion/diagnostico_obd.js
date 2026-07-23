@@ -495,14 +495,17 @@ Modulos.diagnostico_obd = {
       ${this._freezeHTML(s.freeze_frame)}
       <div class="card" style="padding:10px;margin-top:8px">
         <b style="font-size:12px">DATOS EN VIVO (${Object.keys(s.datos||{}).length} sensores)</b>
+        <div id="obd-mon-sel" style="margin-top:6px;display:none"></div>
         <div id="obd-vivo" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:8px;margin-top:6px;font-size:13px">
           ${this._vivoHTML(s.datos||{})}
         </div>
         <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap">
           <button class="btn btn-sm btn-ghost" id="obd-btn-live" onclick="Modulos.diagnostico_obd.toggleLive()">▶️ Monitor en vivo</button>
+          <button class="btn btn-sm btn-ghost" id="obd-btn-rec" style="display:none" onclick="Modulos.diagnostico_obd.toggleRec()">⏺ Grabar sesión</button>
           ${(s.dtcs.length || s.mil) ? `<button class="btn btn-sm btn-danger" onclick="Modulos.diagnostico_obd.borrarDTCs()">🧹 Borrar códigos</button>` : ''}
           ${(typeof moduloEnPlan !== 'function' || moduloEnPlan('ia')) ? `<button class="btn btn-sm btn-cyan" onclick="Modulos.diagnostico_obd.analizarIA()">🤖 Analizar con IA</button>` : ''}
         </div>
+        <div id="obd-rec-info" style="font-size:11px;color:var(--text3);margin-top:6px"></div>
       </div>
       <div id="obd-ia"></div>`;
   },
@@ -585,10 +588,16 @@ Modulos.diagnostico_obd = {
     </div>`;
   },
 
-  /* Convierte {clave:valor} a [[etiqueta, valor, unidad]] usando el catálogo de PIDs */
-  _datosLista(d, excluir = []) {
+  /* Mapa clave→[etiqueta, unidad] de todos los sensores */
+  _labels() {
     const labels = { volt: ['Batería',''] };
     Object.values(this._PIDS).forEach(p => labels[p.k] = [p.l, p.u]);
+    return labels;
+  },
+
+  /* Convierte {clave:valor} a [[etiqueta, valor, unidad]] usando el catálogo de PIDs */
+  _datosLista(d, excluir = []) {
+    const labels = this._labels();
     return Object.entries(d || {})
       .filter(([k,v]) => v !== null && v !== undefined && labels[k] && !excluir.includes(k))
       .map(([k,v]) => [labels[k][0], v, labels[k][1]]);
@@ -601,23 +610,132 @@ Modulos.diagnostico_obd = {
       || '<span style="color:var(--text3)">Sin datos (¿motor apagado?)</span>';
   },
 
+  /* ═══════════ MONITOR EN VIVO (sensores seleccionables + gráficas + grabación) ═══════════ */
+  _selMon: null, _hist: null, _rec: null,
+
+  _spark(vals) {
+    if (!vals || vals.length < 2 || typeof Charts === 'undefined') return '';
+    const paso = Math.ceil(vals.length / 100);                    // downsample para SVG liviano
+    const ds = paso > 1 ? vals.filter((_, i) => i % paso === 0) : vals;
+    return Charts.sparkline({ valores: ds }).replace('<svg ', '<svg style="width:100%;height:100%" ');
+  },
+
+  _chipsMonitor() {
+    const disp = (this._sop && this._sop.length) ? this._sop : this._BASICOS;
+    return disp.map(p => {
+      const def = this._PIDS[p], on = this._selMon.includes(p);
+      return `<label style="font-size:11px;display:inline-flex;align-items:center;gap:3px;background:var(--bg2,#0b1220);border-radius:12px;padding:3px 8px;cursor:pointer;margin:0 4px 4px 0;opacity:${on?1:.55}">
+        <input type="checkbox" ${on?'checked':''} onchange="Modulos.diagnostico_obd._toggleSel('${p}',this.checked)"> ${def.l}</label>`;
+    }).join('');
+  },
+
+  _toggleSel(pid, on) {
+    if (on && !this._selMon.includes(pid)) this._selMon.push(pid);
+    if (!on) this._selMon = this._selMon.filter(x => x !== pid);
+    const sel = document.getElementById('obd-mon-sel');
+    if (sel) sel.innerHTML = this._chipsMonitor();
+  },
+
+  _tilesMonitor() {
+    return this._selMon.map(p => {
+      const def = this._PIDS[p], vals = this._hist[def.k] || [];
+      const v = vals.length ? vals[vals.length - 1] : '—';
+      return `<div style="background:var(--bg2,#0b1220);border-radius:6px;padding:6px 8px">
+        <div style="font-size:10px;color:var(--text3)">${def.l}</div>
+        <b>${v}${def.u}</b>
+        <div style="height:26px;margin-top:2px">${this._spark(vals)}</div>
+      </div>`;
+    }).join('') || '<span style="color:var(--text3)">Marca al menos un sensor arriba</span>';
+  },
+
   async toggleLive() {
-    const btn = document.getElementById('obd-btn-live');
-    if (this._liveTimer) { this._stopLive(); if (btn) btn.textContent = '▶️ Monitor en vivo'; return; }
+    if (this._liveTimer) { this._stopLive(); return; }
     if (!this._conectado) { UI.toast('Adaptador desconectado — vuelve a escanear', 'error'); return; }
-    if (btn) btn.textContent = '⏸ Detener';
+    const disp = (this._sop && this._sop.length) ? this._sop : this._BASICOS;
+    if (!this._selMon) this._selMon = disp.filter(p => ['0C','05','0D'].includes(p));
+    if (!this._selMon.length) this._selMon = disp.slice(0, 3);
+    this._hist = {};
+    const btn = document.getElementById('obd-btn-live'); if (btn) btn.textContent = '⏸ Detener';
+    const rec = document.getElementById('obd-btn-rec');  if (rec) rec.style.display = '';
+    const sel = document.getElementById('obd-mon-sel');
+    if (sel) { sel.style.display = ''; sel.innerHTML = this._chipsMonitor(); }
     const tick = async () => {
-      if (!this._liveTimer || !this._conectado) return;
-      const d = await this._leerVivo();
+      if (!this._liveTimer) return;
+      if (!this._conectado) { this._stopLive(); return; }
+      const d = await this._leerVivo(this._selMon);
       if (this._scan) this._scan.datos = { ...this._scan.datos, ...d };
+      for (const [k, v] of Object.entries(d)) {
+        if (typeof v !== 'number') continue;
+        (this._hist[k] = this._hist[k] || []).push(v);
+        if (this._hist[k].length > 120) this._hist[k].shift();
+      }
+      if (this._rec) this._rec.muestras.push({ t: Math.round((Date.now() - this._rec.t0) / 100) / 10, ...d });
       const el = document.getElementById('obd-vivo');
-      if (el) el.innerHTML = this._vivoHTML(this._scan?.datos || d);
-      else this._stopLive();
-      if (this._liveTimer) this._liveTimer = setTimeout(tick, 800);
+      if (!el) { this._stopLive(); return; }
+      el.innerHTML = this._tilesMonitor();
+      const info = document.getElementById('obd-rec-info');
+      if (info && this._rec) info.textContent = `⏺ Grabando: ${this._rec.muestras.length} muestras · ${Math.round((Date.now() - this._rec.t0) / 1000)}s`;
+      if (this._liveTimer) this._liveTimer = setTimeout(tick, 150);
     };
     this._liveTimer = setTimeout(tick, 0);
   },
-  _stopLive() { if (this._liveTimer) { clearTimeout(this._liveTimer); this._liveTimer = null; } },
+
+  _stopLive() {
+    if (this._liveTimer) { clearTimeout(this._liveTimer); this._liveTimer = null; }
+    if (this._rec) this._detenerGrab(false);
+    const btn = document.getElementById('obd-btn-live');
+    if (btn) btn.textContent = '▶️ Monitor en vivo';
+  },
+
+  toggleRec() {
+    if (this._rec) { this._detenerGrab(true); return; }
+    this._rec = { t0: Date.now(), inicio: new Date().toISOString(), muestras: [] };
+    const b = document.getElementById('obd-btn-rec');
+    if (b) b.textContent = '⏹ Detener grabación';
+    if (!this._liveTimer) this.toggleLive();
+  },
+
+  _detenerGrab(avisar) {
+    const rec = this._rec; this._rec = null;
+    const b = document.getElementById('obd-btn-rec');
+    if (b) b.textContent = '⏺ Grabar sesión';
+    const info = document.getElementById('obd-rec-info');
+    if (rec && rec.muestras.length && this._scan) {
+      const seg = Math.round((Date.now() - rec.t0) / 1000);
+      this._scan.grabacion = { inicio: rec.inicio, seg, muestras: rec.muestras };
+      if (info) info.textContent = `💾 Grabación lista: ${rec.muestras.length} muestras · ${seg}s — se guarda con el escaneo`;
+      if (avisar) UI.toast(`Grabación capturada (${rec.muestras.length} muestras) — presiona Guardar`);
+    } else if (info) info.textContent = '';
+  },
+
+  /* Estadísticas de una grabación: [{l, u, vals, min, avg, max}] */
+  _grabStats(g) {
+    if (!g?.muestras?.length) return [];
+    const labels = this._labels(), llaves = new Set();
+    g.muestras.forEach(m => Object.keys(m).forEach(k => k !== 't' && llaves.add(k)));
+    return [...llaves].map(k => {
+      const vals = g.muestras.map(m => m[k]).filter(v => typeof v === 'number');
+      if (!vals.length || !labels[k]) return null;
+      return { l: labels[k][0], u: labels[k][1], vals,
+               min: Math.min(...vals), max: Math.max(...vals),
+               avg: Math.round(vals.reduce((a, b) => a + b, 0) / vals.length * 10) / 10 };
+    }).filter(Boolean);
+  },
+
+  _grabHTML(g) {
+    const stats = this._grabStats(g);
+    if (!stats.length) return '';
+    return `<div class="card" style="padding:10px;margin-top:8px;border-left:3px solid var(--cyan)">
+      <b style="font-size:12px">📈 GRABACIÓN DE SESIÓN (${g.muestras.length} muestras · ${g.seg || '?'} s)</b>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px;margin-top:6px;font-size:12px">
+        ${stats.map(s => `<div style="background:var(--bg2,#0b1220);border-radius:6px;padding:6px 8px">
+          <div style="font-size:10px;color:var(--text3)">${s.l}</div>
+          <div style="height:30px">${this._spark(s.vals)}</div>
+          <div style="font-size:10px;color:var(--text3)">min ${s.min} · prom ${s.avg} · max ${s.max}${s.u}</div>
+        </div>`).join('')}
+      </div>
+    </div>`;
+  },
 
   async borrarDTCs() {
     const ok = await UI.confirmar(
@@ -662,6 +780,7 @@ Modulos.diagnostico_obd = {
           <b style="font-size:12px">DATOS AL MOMENTO DEL ESCANEO</b>
           <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:8px;margin-top:6px">${this._vivoHTML(d.datos||{})}</div>
         </div>
+        ${this._grabHTML(d.grabacion)}
         <div id="obd-ia">${this._iaHTML(d.ia_analisis)}</div>
         ${d.notas ? `<p style="margin-top:8px"><b>Notas:</b> ${d.notas}</p>` : ''}
       </div>
@@ -749,6 +868,11 @@ Modulos.diagnostico_obd = {
       ${vivo.length ? `<div class="section"><b>DATOS AL MOMENTO DEL ESCANEO:</b>
         <table style="margin-top:8px"><tbody>${vivo.map(i=>`<tr><td>${i[0]}</td><td><b>${i[1]}${i[2]}</b></td></tr>`).join('')}</tbody></table>
       </div>` : ''}
+      ${(() => { const st = this._grabStats(d.grabacion); return st.length ? `<div class="section">
+        <b>GRABACIÓN DE SESIÓN (${d.grabacion.muestras.length} muestras · ${d.grabacion.seg||'?'} s):</b>
+        <table style="margin-top:8px"><thead><tr><th>Sensor</th><th>Mín</th><th>Promedio</th><th>Máx</th></tr></thead>
+        <tbody>${st.map(s=>`<tr><td>${s.l}</td><td>${s.min}${s.u}</td><td>${s.avg}${s.u}</td><td>${s.max}${s.u}</td></tr>`).join('')}</tbody></table>
+      </div>` : ''; })()}
       ${d.ia_analisis ? `<div class="section"><b>ANÁLISIS DE NEXUS (IA):</b><p style="white-space:pre-wrap">${d.ia_analisis}</p></div>` : ''}
       ${d.notas ? `<div class="section"><b>NOTAS DEL TÉCNICO:</b><p>${d.notas}</p></div>` : ''}
       <p style="text-align:center;color:#888;font-size:11px">Generado por NexusPro · ${new Date().toLocaleString('es-GT')}</p>
