@@ -154,6 +154,22 @@ const GRUPOS = [
   { id:'cliente',      label:''               }
 ];
 
+/* Color de acento por grupo del menú (chip del ícono en el sidebar).
+   Usa las variables de la paleta activa, así se adapta sola a los 8 temas. */
+const GRUPO_COLOR = {
+  principal:      'var(--amber)',
+  operacion:      'var(--cyan)',
+  especializados: 'var(--purple)',
+  agropecuaria:   'var(--green)',
+  finanzas:       'var(--amber)',
+  rrhh:           'var(--red)',
+  marketing:      'var(--purple)',
+  herramientas:   'var(--cyan)',
+  admin:          'var(--gray)',
+  saas:           'var(--green)',
+  cliente:        'var(--cyan)',
+};
+
 /* ── PERMISOS POR ROL ─────────────────────────────── */
 const PERMISOS = {
   superadmin:   { dashboard:true,  pos:true,  descarga:true,  clientes:true,  vehiculos:true,  diagnostico_obd:true,  ordenes:true,  cotizaciones:true,  herreria:true,  peleteria:true,  electronica:true,  refrigeracion:true,  agroservicio:true,  venta_granos:true,  inventario:true,  bodegas:true,  proveedores:true,  compras:true,  activos:true,  envios:true,  facturacion:true,  bancos:true,  finanzas:true,  presupuesto:true,  contabilidad:true,  rrhh:true,  marketing:true,  calendario:true,  comunicaciones:true,  configuracion:true,  usuarios:true,  admin:true,  mi_ot:false, doc_empresa:true  },

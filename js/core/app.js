@@ -528,10 +528,11 @@ const App = {
     };
 
     const itemHtml = m => {
+      const ic = GRUPO_COLOR[m.grupo] || '';
       /* Módulos con enlace externo (ej. POS) abren en nueva pestaña */
       if (m.href) {
         return `
-        <li class="nav-item" style="list-style:none">
+        <li class="nav-item" style="list-style:none;--ic:${ic}">
           <a class="nav-link" href="${m.href}" target="_blank" rel="noopener"
              style="display:flex;align-items:center;gap:10px;padding:10px 16px;text-decoration:none;color:inherit;border-radius:8px;transition:background .15s"
              onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background=''"
@@ -551,7 +552,7 @@ const App = {
             </li>`).join('')}
         </ul>` : '';
       return `
-        <li class="nav-item ${activo ? 'active' : ''}"
+        <li class="nav-item ${activo ? 'active' : ''}" style="--ic:${ic}"
             onclick="App.navegarA('${m.id}')">
           <span class="nav-icon">${m.icon}</span>
           <span class="nav-label">${m.label}</span>
