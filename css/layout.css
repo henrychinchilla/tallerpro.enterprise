@@ -57,8 +57,12 @@
   position: fixed;
   top: 0; left: 0; bottom: 0;
   width: var(--sidebar-w);
-  background: var(--surface);
+  /* Un poco más oscuro que --surface (usado en cards/modales) para que el
+     panel se distinga del contenido y los chips de color de los íconos
+     resalten más sobre el fondo. */
+  background: color-mix(in srgb, var(--surface) 80%, black 20%);
   border-right: 1px solid var(--border);
+  box-shadow: 2px 0 16px rgba(0,0,0,.12);
   display: flex;
   flex-direction: column;
   z-index: 100;
