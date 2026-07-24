@@ -37,3 +37,4 @@ dashboard.jpg
 # Documentos SAT (no subir PDFs al repositorio)
 *.pdf
 electron/package-lock.json
+puente-obd/*.exe

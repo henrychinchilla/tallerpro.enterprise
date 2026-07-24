@@ -1,7 +1,8 @@
-/* NexusPro — Diagnóstico OBD-II (adaptadores ELM327/Vgate/OBDLink/STN1110 vía Bluetooth LE)
-   Todos hablan el set de comandos AT del ELM327 + PIDs OBD-II estándar, así que
-   una sola capa sirve para todos. Solo adaptadores BLE (Web Bluetooth no alcanza
-   Bluetooth Classic ni WiFi; eso requeriría app nativa). */
+/* NexusPro — Diagnóstico OBD-II
+   · Bluetooth LE: adaptadores ELM327/Vgate/OBDLink/STN1110 (comandos AT + PIDs OBD-II).
+     Solo BLE (Web Bluetooth no alcanza Bluetooth Classic ni WiFi).
+   · USB (puente RP1210): adaptadores NEXIQ USB-Link y compatibles vía el puente
+     local (carpeta puente-obd) — camiones J1939 (SPN/FMI) y livianos OBD-II sobre CAN. */
 Modulos.diagnostico_obd = {
   _data: [], _vehiculos: [],
   _mes: null, _anio: null,
@@ -19,6 +20,8 @@ Modulos.diagnostico_obd = {
   ],
 
   get _conectado() { return !!(this._dev?.gatt?.connected && this._char); },
+  /* "listo para leer" según la vía activa (BLE o puente USB) */
+  get _listo() { return this._via === 'ble' ? this._conectado : !!(this._ws && this._ws.readyState === 1); },
 
   async _conectar() {
     if (!navigator.bluetooth)
@@ -63,8 +66,14 @@ Modulos.diagnostico_obd = {
     return dev.name || 'Adaptador OBD';
   },
 
-  /* Envía un comando y espera la respuesta completa (termina en '>') */
+  /* Envía un comando y espera la respuesta completa (termina en '>').
+     Por USB se emula la respuesta del ELM327 para reusar todos los lectores. */
   async _cmd(c, timeout = 6000) {
+    if (this._via === 'usb') {
+      while (this._busy) await new Promise(r => setTimeout(r, 50));
+      this._busy = true;
+      try { return await this._usbElm(c, timeout); } finally { this._busy = false; }
+    }
     if (!this._conectado) throw new Error('Adaptador desconectado');
     while (this._busy) await new Promise(r => setTimeout(r, 50));
     this._busy = true; this._buf = '';
@@ -209,6 +218,14 @@ Modulos.diagnostico_obd = {
   },
 
   async _leerVivo(pids) {
+    if (this._via === 'j1939') {   // el bus emite solo: muestrear lo acumulado
+      await new Promise(r => setTimeout(r, 250));
+      const src = (this._j39 && this._j39.datos) || {}, dj = {};
+      for (const k of (pids && pids.length ? pids : Object.keys(src)))
+        if (src[k] !== undefined) dj[k] = src[k];
+      if (src.volt) dj.volt = src.volt;
+      return dj;
+    }
     const d = {};
     for (const pid of (pids && pids.length ? pids : this._BASICOS)) {
       const def = this._PIDS[pid];
@@ -270,6 +287,294 @@ Modulos.diagnostico_obd = {
     this._stopLive();
     try { this._dev?.gatt?.disconnect(); } catch (_) {}
     this._dev = this._char = null;
+    try { if (this._ws?.readyState === 1) { this._ws.send(JSON.stringify({ op:'desconectar' })); this._ws.close(); } } catch (_) {}
+    this._ws = null; this._j39 = null; this._canRx = null; this._via = 'ble';
+  },
+
+  /* ═══════════ PUENTE USB (RP1210 — NEXIQ USB-Link y compatibles) ═══════════
+     Un programa local pequeño (carpeta puente-obd del repo) expone el adaptador
+     USB por WebSocket en localhost:17210. El puente es una tubería tonta: toda
+     la lógica de protocolo vive aquí (se actualiza con deploy, sin recompilar). */
+  _ws: null, _wsPend: {}, _via: 'ble', _j39: null, _canExt: false, _canRx: null,
+
+  async _puenteConectar() {
+    if (this._ws && this._ws.readyState === 1) return;
+    await new Promise((res, rej) => {
+      let resuelto = false;
+      const ws = new WebSocket('ws://127.0.0.1:17210');
+      ws.onopen = () => { resuelto = true; this._ws = ws; res(); };
+      ws.onmessage = e => { try { this._puenteMsg(JSON.parse(e.data)); } catch (_) {} };
+      ws.onclose = ws.onerror = () => {
+        this._ws = null;
+        if (!resuelto) { resuelto = true;
+          rej(new Error('No se encontró el puente USB en esta PC. Ejecuta iniciar-puente.bat (carpeta puente-obd), deja su ventana abierta y reintenta.')); }
+      };
+    });
+  },
+
+  _puenteMsg(m) {
+    if (m.op === 'mensaje') {
+      if (this._via === 'j1939') this._j39Frame(m.datos);
+      else if (this._canRx) this._canFrame(m.datos);
+      return;
+    }
+    if (m.op === 'error') { console.warn('Puente RP1210:', m.codigo, m.error); return; }
+    const r = this._wsPend[m.op]; delete this._wsPend[m.op];
+    if (r) r(m);
+  },
+
+  _puenteOp(obj, timeout = 8000) {
+    return new Promise((res, rej) => {
+      if (!this._ws || this._ws.readyState !== 1) { rej(new Error('Puente USB desconectado')); return; }
+      this._wsPend[obj.op] = res;
+      setTimeout(() => { if (this._wsPend[obj.op]) { delete this._wsPend[obj.op]; rej(new Error(`El puente no respondió (${obj.op})`)); } }, timeout);
+      this._ws.send(JSON.stringify(obj));
+    });
+  },
+
+  /* ── Vehículos livianos por USB: OBD-II sobre CAN crudo con ISO-TP propio ── */
+  async _usbInit(log) {
+    await this._puenteConectar();
+    const est = await this._puenteOp({ op:'estado' });
+    log(`Puente USB: <b>${est.dispositivo || 'RP1210'}</b> v${est.version || '?'} ✓`);
+    const c = await this._puenteOp({ op:'conectar', protocolo:'CAN:Baud=500', device:1 });
+    if (!c.ok) throw new Error(`El puente no pudo abrir el USB-Link: ${c.error || 'código ' + c.codigo}. ¿Está enchufado a la PC?`);
+    for (const ext of [false, true]) {
+      this._canExt = ext;
+      log(`Probando CAN ${ext ? 29 : 11} bits / 500k...`);
+      const r = await this._usbElm('0100').catch(() => 'NO DATA');
+      if (/4100/.test(r.replace(/\s/g, ''))) {
+        this._protoNum = ext ? 7 : 6;
+        return { nombre: est.dispositivo || 'USB-Link (RP1210)', protocolo: `CAN ${ext ? 29 : 11} bits / 500k (USB)` };
+      }
+    }
+    throw new Error('El vehículo no respondió por USB (CAN 500k). Verifica switch encendido y cable OBD. Para livianos también puedes usar el adaptador Bluetooth.');
+  },
+
+  /* Emula un ELM327 sobre el puente: mismos comandos, misma respuesta hex */
+  async _usbElm(cmd, timeout = 4000) {
+    cmd = cmd.trim().toUpperCase();
+    if (cmd.startsWith('AT')) {
+      if (cmd === 'ATRV') return '';          // CAN crudo no reporta voltaje de batería
+      if (cmd === 'ATDPN') return this._protoNum.toString(16).toUpperCase();
+      if (cmd === 'ATDP') return 'CAN (USB RP1210)';
+      return 'OK';
+    }
+    if (!/^[0-9A-F]{2,}$/.test(cmd)) return '?';
+    const tx = cmd.match(/../g).map(h => parseInt(h, 16));
+    const lineas = await this._isotp(tx, timeout);
+    return lineas.length ? lineas.join('\r') : 'NO DATA';
+  },
+
+  _canTx(id, datos) {
+    const data8 = datos.concat(Array(Math.max(0, 8 - datos.length)).fill(0));
+    return this._puenteOp({ op:'enviar',
+      datos: [this._canExt ? 1 : 0, (id >>> 24) & 0xFF, (id >>> 16) & 0xFF, (id >>> 8) & 0xFF, id & 0xFF, ...data8] });
+  },
+
+  _canFrame(d) {   // lectura RP1210: [timestamp×4][tipo][id×4][datos...]
+    if (d.length < 10 || !this._canRx) return;
+    const id = ((d[5] << 24) | (d[6] << 16) | (d[7] << 8) | d[8]) >>> 0;
+    this._canRx(id, d.slice(9));
+  },
+
+  /* ISO-TP (ISO 15765-2) mínimo: single/first/consecutive + flow control.
+     Junta las respuestas de todas las ECUs (como hace un ELM327 real). */
+  async _isotp(tx, timeout) {
+    const ecus = {};
+    let ultimo = Date.now();
+    const fcId = rid => this._canExt ? ((0x18DA0000 | ((rid & 0xFF) << 8) | 0xF1) >>> 0) : rid - 8;
+    this._canRx = (id, b) => {
+      const esResp = this._canExt ? ((id & 0x1FFFFF00) === 0x18DAF100) : (id >= 0x7E8 && id <= 0x7EF);
+      if (!esResp || !b.length) return;
+      ultimo = Date.now();
+      const pci = b[0] >> 4, e = (ecus[id] = ecus[id] || {});
+      if (pci === 0) { e.datos = b.slice(1, 1 + (b[0] & 0xF)); e.ok = e.datos.length > 0; }
+      else if (pci === 1) {
+        e.len = ((b[0] & 0xF) << 8) | b[1];
+        e.datos = b.slice(2);
+        this._canTx(fcId(id), [0x30, 0, 0]).catch(() => {});   // FC: envía todo, sin pausa
+      } else if (pci === 2 && e.datos && !e.ok) {
+        e.datos = e.datos.concat(b.slice(1));
+        if (e.datos.length >= e.len) { e.datos = e.datos.slice(0, e.len); e.ok = true; }
+      }
+    };
+    try {
+      await this._canTx(this._canExt ? 0x18DB33F1 : 0x7DF, [tx.length, ...tx]);
+      const t0 = Date.now();
+      while (Date.now() - t0 < timeout) {
+        await new Promise(r => setTimeout(r, 60));
+        const hay = Object.values(ecus).some(e => e.ok);
+        const pendiente = Object.values(ecus).some(e => e.datos && !e.ok);
+        if (hay && !pendiente && Date.now() - ultimo > 250) break;
+      }
+    } finally { this._canRx = null; }
+    return Object.values(ecus).filter(e => e.ok)
+      .map(e => e.datos.map(x => x.toString(16).padStart(2, '0')).join('').toUpperCase());
+  },
+
+  /* ── Camiones por USB: J1939. El bus transmite solo (broadcast); DM1/DM2 dan
+       las fallas como SPN (componente) + FMI (tipo de falla). ── */
+
+  /* PGN → sensores (mismas claves que los PIDs OBD-II para reusar toda la UI).
+     0xFF/0xFE… = "no disponible" en J1939, por eso los umbrales de validez. */
+  _J39_PGNS: {
+    61444: [{ k:'rpm',        f:d => d.length > 4 && d[4] < 0xFA ? Math.round((d[3] | d[4] << 8) * 0.125) : null }],
+    61443: [{ k:'acel',       f:d => d.length > 1 && d[1] < 0xFB ? Math.round(d[1] * 0.4) : null },
+            { k:'carga',      f:d => d.length > 2 && d[2] <= 125 ? d[2] : null }],
+    65262: [{ k:'temp',       f:d => d.length > 0 && d[0] < 0xFB ? d[0] - 40 : null },
+            { k:'temp_aceite',f:d => d.length > 3 && d[3] < 0xFA ? Math.round(((d[2] | d[3] << 8) * 0.03125 - 273) * 10) / 10 : null }],
+    65263: [{ k:'pres_aceite',f:d => d.length > 3 && d[3] < 0xFB ? d[3] * 4 : null }],
+    65265: [{ k:'vel',        f:d => d.length > 2 && d[2] < 0xFA ? Math.round((d[1] | d[2] << 8) / 256) : null }],
+    65266: [{ k:'tasa_comb',  f:d => d.length > 1 && d[1] < 0xFA ? Math.round((d[0] | d[1] << 8) * 0.05 * 10) / 10 : null }],
+    65270: [{ k:'boost',      f:d => d.length > 1 && d[1] < 0xFB ? d[1] * 2 : null },
+            { k:'temp_adm',   f:d => d.length > 2 && d[2] < 0xFB ? d[2] - 40 : null }],
+    65271: [{ k:'volt',       f:d => d.length > 7 && d[7] < 0xFA ? ((d[6] | d[7] << 8) * 0.05).toFixed(1) + 'V' : null }],
+    65276: [{ k:'comb',       f:d => d.length > 1 && d[1] < 0xFB ? Math.round(d[1] * 0.4) : null }],
+    65269: [{ k:'baro',       f:d => d.length > 0 && d[0] < 0xFB ? Math.round(d[0] * 0.5) : null },
+            { k:'temp_amb',   f:d => d.length > 3 && d[3] < 0xFA ? Math.round((d[2] | d[3] << 8) * 0.03125 - 273) : null }],
+    65253: [{ k:'horas',      f:d => d.length > 3 && d[3] < 0xFA ? Math.round(((d[0] | d[1] << 8 | d[2] << 16) + d[3] * 16777216) * 0.05) : null }],
+    65248: [{ k:'odometro',   f:d => d.length > 7 && d[7] < 0xFA ? Math.round(((d[4] | d[5] << 8 | d[6] << 16) + d[7] * 16777216) * 0.125) : null }],
+  },
+  /* Sensores que existen en J1939 pero no en el catálogo de PIDs OBD-II */
+  _LBLX: { pres_aceite:['Presión aceite',' kPa'], boost:['Presión turbo',' kPa'], horas:['Horas motor',' h'], odometro:['Odómetro',' km'] },
+
+  /* Componentes SPN comunes en camiones diésel (español) */
+  _J39_SPNS: {
+    84:'Velocidad del vehículo', 91:'Pedal del acelerador', 92:'Carga del motor',
+    94:'Presión de entrega de combustible', 96:'Nivel de combustible', 97:'Agua en el combustible',
+    98:'Nivel de aceite del motor', 100:'Presión de aceite del motor', 102:'Presión del turbo (boost)',
+    105:'Temperatura del aire de admisión', 106:'Presión de aire de admisión', 107:'Restricción del filtro de aire',
+    108:'Presión barométrica', 110:'Temperatura del refrigerante', 111:'Nivel de refrigerante',
+    157:'Presión del riel de inyección', 158:'Voltaje de batería (switch)', 168:'Voltaje de batería',
+    171:'Temperatura ambiente', 174:'Temperatura del combustible', 175:'Temperatura del aceite del motor',
+    190:'RPM del motor', 237:'VIN', 245:'Odómetro', 247:'Horas del motor',
+    411:'Presión EGR', 412:'Temperatura EGR', 626:'Ayuda de arranque en frío (glow/grid)',
+    629:'Computadora del motor (ECU)', 639:'Bus de comunicación J1939',
+    651:'Inyector cilindro 1', 652:'Inyector cilindro 2', 653:'Inyector cilindro 3',
+    654:'Inyector cilindro 4', 655:'Inyector cilindro 5', 656:'Inyector cilindro 6',
+    723:'Sensor de velocidad del árbol de levas', 729:'Calentador del aire de admisión',
+    1127:'Presión del turbo 1', 1172:'Temperatura de entrada del turbo',
+    1213:'Lámpara de falla (MIL)', 1569:'Reducción de potencia (derate) por protección',
+    1761:'Nivel de DEF/urea', 3031:'Temperatura del tanque DEF',
+    3216:'Sensor NOx de entrada', 3226:'Sensor NOx de salida',
+    3242:'Temperatura de entrada del DPF', 3251:'Presión diferencial del DPF',
+    3610:'Presión de salida del DPF', 3719:'Acumulación de hollín en DPF',
+    4094:'Nivel bajo de DEF/urea', 5246:'Inductor SCR (derate por emisiones)',
+  },
+  /* FMI (Failure Mode Identifier) estándar J1939 */
+  _FMI: {
+    0:'dato válido pero muy alto', 1:'dato válido pero muy bajo', 2:'dato errático o intermitente',
+    3:'voltaje alto / corto a positivo', 4:'voltaje bajo / corto a tierra', 5:'corriente baja / circuito abierto',
+    6:'corriente alta / corto a tierra', 7:'sistema mecánico no responde', 8:'frecuencia anormal',
+    9:'tasa de actualización anormal', 10:'tasa de cambio anormal', 11:'causa desconocida',
+    12:'componente defectuoso', 13:'fuera de calibración', 14:'instrucciones especiales',
+    15:'alto — severidad baja', 16:'alto — severidad media', 17:'bajo — severidad baja',
+    18:'bajo — severidad media', 19:'error de datos de red', 20:'dato desviado alto',
+    21:'dato desviado bajo', 31:'condición presente',
+  },
+
+  _j39Frame(d) {   // lectura RP1210 J1939: [ts×4][pgn×3][prio][origen][destino][datos...]
+    const j = this._j39;
+    if (!j || d.length < 10) return;
+    const pgn = d[4] | (d[5] << 8) | (d[6] << 16), data = d.slice(10);
+    j.pgns[pgn] = (j.pgns[pgn] || 0) + 1;
+    const defs = this._J39_PGNS[pgn];
+    if (defs) for (const s of defs) { const v = s.f(data); if (v !== null) j.datos[s.k] = v; }
+    if (pgn === 65226) j.dm1 = data;
+    if (pgn === 65227) j.dm2 = data;
+    if (pgn === 65260) j.vin = data;
+    if (pgn === 65259) j.comp = data;
+    if (j.esperas[pgn]) { j.esperas[pgn](); delete j.esperas[pgn]; }
+  },
+
+  _j39Solicitar(pgn) {   // PGN 59904 (Request) a la dirección global
+    return this._puenteOp({ op:'enviar', datos:[0x00, 0xEA, 0x00, 6, 0xF9, 0xFF, pgn & 0xFF, (pgn >> 8) & 0xFF, (pgn >> 16) & 0xFF] });
+  },
+
+  _j39Esperar(pgn, ms) {
+    return new Promise(res => { this._j39.esperas[pgn] = res; setTimeout(res, ms); });
+  },
+
+  _j39DTCs(d) {   // DM1/DM2: [lámparas×2] + n×[SPN 19 bits | FMI 5 | CM 1 | OC 7]
+    if (!d || d.length < 6) return [];
+    const res = [];
+    for (let i = 2; i + 3 < d.length; i += 4) {
+      const spn = d[i] | (d[i + 1] << 8) | ((d[i + 2] >> 5) << 16);
+      const fmi = d[i + 2] & 0x1F, oc = d[i + 3] & 0x7F;
+      if (!spn) continue;
+      const codigo = `SPN ${spn} FMI ${fmi}`;
+      if (res.some(x => x.codigo === codigo)) continue;
+      res.push({ codigo, desc: `${this._J39_SPNS[spn] || 'Componente SPN ' + spn} — ${this._FMI[fmi] || 'FMI ' + fmi}${oc > 1 ? ` (${oc} veces)` : ''}` });
+    }
+    return res;
+  },
+
+  _j39VIN() {
+    if (!this._j39?.vin) return null;
+    const s = String.fromCharCode(...this._j39.vin).split('*')[0].replace(/[^A-HJ-NPR-Z0-9]/g, '');
+    return s.length >= 17 ? s.slice(0, 17) : (s.length >= 11 ? s : null);
+  },
+
+  async _escanearJ1939(vehId, btn, log) {
+    try {
+      log('Conectando al puente USB local...');
+      await this._puenteConectar();
+      const est = await this._puenteOp({ op:'estado' });
+      log(`Puente USB: <b>${est.dispositivo || 'RP1210'}</b> v${est.version || '?'} ✓`);
+      const c = await this._puenteOp({ op:'conectar', protocolo:'J1939', device:1 });
+      if (!c.ok) throw new Error(`El puente no pudo abrir el USB-Link: ${c.error || 'código ' + c.codigo}. ¿Está enchufado a la PC?`);
+      this._j39 = { datos:{}, pgns:{}, esperas:{}, dm1:null, dm2:null, vin:null, comp:null };
+      /* Reclamar dirección de herramienta de diagnóstico (0xF9) en el bus */
+      await this._puenteOp({ op:'comando', numero:15, datos:[0xF9, 0, 0, 0x60, 0, 0, 0, 0, 0x80, 0] }).catch(() => {});
+      log('Escuchando el bus J1939 (el camión transmite solo)...');
+      await new Promise(r => setTimeout(r, 2500));
+      const nPGN = Object.keys(this._j39.pgns).length;
+      if (!nPGN) log('<span style="color:var(--amber)">Bus silencioso — ¿switch encendido?</span>');
+      else log(`${nPGN} tipos de mensaje detectados ✓`);
+
+      log('Solicitando VIN e identificación...');
+      await this._j39Solicitar(65260); await this._j39Esperar(65260, 1500);
+      await this._j39Solicitar(65259); await this._j39Esperar(65259, 1200);
+      const vin = this._j39VIN();
+      log(vin ? `VIN: <b>${vin}</b>` : 'VIN no disponible por J1939');
+      if (this._j39.comp) {
+        const comp = String.fromCharCode(...this._j39.comp).replace(/[^\x20-\x7E*]/g, '').split('*').filter(Boolean);
+        if (comp.length) log(`Unidad: <b>${comp.slice(0, 2).join(' · ')}</b>`);
+      }
+
+      log('Leyendo códigos de falla (DM1 activos / DM2 previos)...');
+      if (!this._j39.dm1) { await this._j39Solicitar(65226); await this._j39Esperar(65226, 1500); }
+      await this._j39Solicitar(65227); await this._j39Esperar(65227, 1500);
+      const dtcs = this._j39DTCs(this._j39.dm1);
+      const pend = this._j39DTCs(this._j39.dm2);
+      const b0 = this._j39.dm1 ? this._j39.dm1[0] : 0;
+      const mil = ((b0 >> 6) & 3) === 1;
+      if (((b0 >> 4) & 3) === 1) log('<span style="color:var(--red)">🔴 Lámpara de PARO encendida — atender de inmediato</span>');
+      if (((b0 >> 2) & 3) === 1) log('<span style="color:var(--amber)">🟠 Lámpara ámbar de advertencia encendida</span>');
+      log(`${dtcs.length} falla(s) activa(s), ${pend.length} previa(s)`);
+
+      let nhtsa = null;
+      if (vin) {
+        log('Consultando VIN en base de datos NHTSA...');
+        nhtsa = await this._decodeVIN(vin);
+        log(nhtsa ? `VIN identificado: <b>${nhtsa.marca} ${nhtsa.modelo || ''} ${nhtsa.anio || ''}</b>` : 'VIN sin coincidencias en NHTSA');
+      }
+
+      this._sop = Object.keys(this._j39.datos).filter(k => typeof this._j39.datos[k] === 'number');
+      log(`${this._sop.length} sensores del motor en el bus ✓`);
+      this._scan = { vehiculo_id: vehId, vin, protocolo: 'J1939 (camión · USB)',
+                     adaptador: est.dispositivo || 'USB-Link (RP1210)', mil,
+                     dtcs, dtcs_pendientes: pend, datos: { ...this._j39.datos },
+                     freeze_frame: null, voltaje: this._j39.datos.volt || null, nhtsa };
+      log('<b>Escaneo completo ✓</b>');
+      this._renderResultado();
+      document.getElementById('obd-btn-save').style.display = '';
+      btn.textContent = '↻ Re-escanear';
+    } catch (e) {
+      log(`<span style="color:var(--red)">✗ ${e.message}</span>`);
+      UI.toast(e.message, 'error');
+    } finally { btn.disabled = false; }
   },
 
   /* ═══════════ DESCRIPCIONES DTC EN ESPAÑOL ═══════════ */
@@ -342,7 +647,7 @@ Modulos.diagnostico_obd = {
       <div class="page-header">
         <div>
           <h1 class="page-title">🩺 Diagnóstico OBD-II</h1>
-          <p class="page-subtitle">// Escáner ELM327 / Vgate / OBDLink por Bluetooth</p>
+          <p class="page-subtitle">// Escáner ELM327/Vgate por Bluetooth · camiones J1939 y livianos por USB (RP1210)</p>
         </div>
         <div class="page-actions">
           <select class="form-select" style="width:140px" onchange="Modulos.diagnostico_obd._mes=+this.value;Modulos.diagnostico_obd.render()">
@@ -357,7 +662,7 @@ Modulos.diagnostico_obd = {
       </div>
       <div class="page-body">
         ${!navigator.bluetooth ? `<div class="card" style="border-left:3px solid var(--amber);padding:12px;margin-bottom:12px">
-          ⚠️ Este navegador no soporta Bluetooth. Para escanear usa <b>Chrome o Edge en Android</b> (o la app NexusPro) o una PC con Bluetooth. Aquí puedes consultar el historial.
+          ⚠️ Este navegador no soporta Bluetooth. Para escanear por Bluetooth usa <b>Chrome o Edge en Android</b> (o la app NexusPro) o una PC con Bluetooth. El escaneo por <b>USB (puente RP1210)</b> sí está disponible desde esta PC.
         </div>` : ''}
         <div class="card" style="padding:0;overflow:auto">
           <table class="table">
@@ -400,9 +705,18 @@ Modulos.diagnostico_obd = {
           ${this._vehiculos.map(v=>`<option value="${v.id}">${v.placa||'s/placa'} · ${v.marca||''} ${v.modelo||''} ${v.anio||''} ${v.clientes?`(${v.clientes.nombre})`:''}</option>`).join('')}
         </select>
       </div>
+      <div class="form-group">
+        <label class="form-label">Conexión</label>
+        <select class="form-select" id="obd-via">
+          <option value="ble">📶 Bluetooth — ELM327 / Vgate / OBDLink (BLE)</option>
+          <option value="j1939">🚚 USB — camión J1939 (puente RP1210)</option>
+          <option value="usb">🔌 USB — vehículo liviano (puente RP1210 · beta)</option>
+        </select>
+      </div>
       <div id="obd-log" style="background:var(--bg2,#0b1220);border-radius:8px;padding:10px;font-family:monospace;font-size:12px;min-height:70px;max-height:180px;overflow:auto;margin:10px 0">
-        Conecta el adaptador al puerto OBD-II del vehículo y enciende el switch.<br>
-        Luego presiona <b>Conectar y Escanear</b> y elige el adaptador (ej. "OBDII", "Vgate", "iCar Pro").
+        Conecta el adaptador al puerto de diagnóstico del vehículo y enciende el switch.<br>
+        · Bluetooth: presiona <b>Conectar y Escanear</b> y elige el adaptador (ej. "OBDII", "Vgate", "iCar Pro").<br>
+        · USB: enchufa el USB-Link a esta PC y ejecuta antes <b>iniciar-puente.bat</b> (carpeta puente-obd).
       </div>
       <div id="obd-result"></div>
       <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px">
@@ -420,14 +734,22 @@ Modulos.diagnostico_obd = {
   async escanear() {
     const vehId = document.getElementById('obd-veh')?.value;
     if (!vehId) { UI.toast('Selecciona el vehículo a escanear', 'error'); return; }
+    this._via = document.getElementById('obd-via')?.value || 'ble';
     const btn = document.getElementById('obd-btn-scan');
     btn.disabled = true;
     const log = m => this._log(m);
+    if (this._via === 'j1939') return this._escanearJ1939(vehId, btn, log);
     try {
-      log('Buscando adaptador Bluetooth...');
-      const nombre = await this._conectar();
-      log(`Conectado a <b>${nombre}</b> ✓`);
-      const protocolo = await this._init(log);
+      let nombre, protocolo;
+      if (this._via === 'usb') {
+        log('Conectando al puente USB local...');
+        ({ nombre, protocolo } = await this._usbInit(log));
+      } else {
+        log('Buscando adaptador Bluetooth...');
+        nombre = await this._conectar();
+        log(`Conectado a <b>${nombre}</b> ✓`);
+        protocolo = await this._init(log);
+      }
       log(`Protocolo: <b>${protocolo || 'detectado'}</b> ✓`);
 
       log('Leyendo VIN...');
@@ -590,9 +912,20 @@ Modulos.diagnostico_obd = {
 
   /* Mapa clave→[etiqueta, unidad] de todos los sensores */
   _labels() {
-    const labels = { volt: ['Batería',''] };
+    const labels = { volt: ['Batería',''], ...this._LBLX };
     Object.values(this._PIDS).forEach(p => labels[p.k] = [p.l, p.u]);
     return labels;
+  },
+
+  /* Definición de un sensor del monitor: PID OBD-II o clave J1939 */
+  _defSensor(p) {
+    if (this._via === 'j1939') { const lb = this._labels()[p]; return lb ? { k: p, l: lb[0], u: lb[1] } : null; }
+    return this._PIDS[p];
+  },
+
+  _sensoresMonitor() {
+    if (this._sop && this._sop.length) return this._sop;
+    return this._via === 'j1939' ? Object.keys((this._j39 && this._j39.datos) || {}) : this._BASICOS;
   },
 
   /* Convierte {clave:valor} a [[etiqueta, valor, unidad]] usando el catálogo de PIDs */
@@ -621,9 +954,9 @@ Modulos.diagnostico_obd = {
   },
 
   _chipsMonitor() {
-    const disp = (this._sop && this._sop.length) ? this._sop : this._BASICOS;
-    return disp.map(p => {
-      const def = this._PIDS[p], on = this._selMon.includes(p);
+    return this._sensoresMonitor().map(p => {
+      const def = this._defSensor(p), on = this._selMon.includes(p);
+      if (!def) return '';
       return `<label style="font-size:11px;display:inline-flex;align-items:center;gap:3px;background:var(--bg2,#0b1220);border-radius:12px;padding:3px 8px;cursor:pointer;margin:0 4px 4px 0;opacity:${on?1:.55}">
         <input type="checkbox" ${on?'checked':''} onchange="Modulos.diagnostico_obd._toggleSel('${p}',this.checked)"> ${def.l}</label>`;
     }).join('');
@@ -638,7 +971,9 @@ Modulos.diagnostico_obd = {
 
   _tilesMonitor() {
     return this._selMon.map(p => {
-      const def = this._PIDS[p], vals = this._hist[def.k] || [];
+      const def = this._defSensor(p);
+      if (!def) return '';
+      const vals = this._hist[def.k] || [];
       const v = vals.length ? vals[vals.length - 1] : '—';
       return `<div style="background:var(--bg2,#0b1220);border-radius:6px;padding:6px 8px">
         <div style="font-size:10px;color:var(--text3)">${def.l}</div>
@@ -650,9 +985,10 @@ Modulos.diagnostico_obd = {
 
   async toggleLive() {
     if (this._liveTimer) { this._stopLive(); return; }
-    if (!this._conectado) { UI.toast('Adaptador desconectado — vuelve a escanear', 'error'); return; }
-    const disp = (this._sop && this._sop.length) ? this._sop : this._BASICOS;
-    if (!this._selMon) this._selMon = disp.filter(p => ['0C','05','0D'].includes(p));
+    if (!this._listo) { UI.toast('Adaptador desconectado — vuelve a escanear', 'error'); return; }
+    const disp = this._sensoresMonitor();
+    const basicos = this._via === 'j1939' ? ['rpm','temp','vel'] : ['0C','05','0D'];
+    if (!this._selMon) this._selMon = disp.filter(p => basicos.includes(p));
     if (!this._selMon.length) this._selMon = disp.slice(0, 3);
     this._hist = {};
     const btn = document.getElementById('obd-btn-live'); if (btn) btn.textContent = '⏸ Detener';
@@ -661,7 +997,7 @@ Modulos.diagnostico_obd = {
     if (sel) { sel.style.display = ''; sel.innerHTML = this._chipsMonitor(); }
     const tick = async () => {
       if (!this._liveTimer) return;
-      if (!this._conectado) { this._stopLive(); return; }
+      if (!this._listo) { this._stopLive(); return; }
       const d = await this._leerVivo(this._selMon);
       if (this._scan) this._scan.datos = { ...this._scan.datos, ...d };
       for (const [k, v] of Object.entries(d)) {
@@ -743,9 +1079,13 @@ Modulos.diagnostico_obd = {
       'Borrar códigos');
     if (!ok) return;
     try {
-      await this._cmd('04', 8000);
+      if (this._via === 'j1939') {
+        await this._j39Solicitar(65235);   // DM11: borra códigos activos
+        await this._j39Solicitar(65228);   // DM3: borra códigos previos
+        if (this._j39) { this._j39.dm1 = null; this._j39.dm2 = null; }
+      } else await this._cmd('04', 8000);
       if (this._scan) this._scan.dtcs_borrados = true;
-      this._log('🧹 Códigos borrados (modo 04) ✓');
+      this._log(this._via === 'j1939' ? '🧹 Códigos borrados (DM11 + DM3) ✓' : '🧹 Códigos borrados (modo 04) ✓');
       UI.toast('Códigos borrados ✓');
     } catch (e) { UI.toast('No se pudo borrar: ' + e.message, 'error'); }
   },
