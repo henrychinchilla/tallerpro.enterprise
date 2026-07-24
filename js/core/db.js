@@ -334,6 +334,73 @@ const DB = {
     return { data, error };
   },
 
+  /* ── BITÁCORA DE SOLUCIONES TÉCNICAS ──────────── */
+  async getBitacora({ categoria = null, busca = null, orden = 'usadas' } = {}) {
+    let q = getSB().from('bitacora_soluciones').select('*').eq('tenant_id', getTID());
+    if (categoria) q = q.eq('categoria', categoria);
+    if (busca) q = q.or(`titulo.ilike.%${busca}%,sintoma.ilike.%${busca}%,descripcion.ilike.%${busca}%,marca.ilike.%${busca}%,modelo.ilike.%${busca}%`);
+    q = orden === 'recientes' ? q.order('created_at', { ascending:false }) : q.order('veces_ejecutada', { ascending:false });
+    const { data } = await q;
+    return data || [];
+  },
+
+  async upsertBitacora(fields) {
+    const payload = { ...fields, tenant_id: getTID() };
+    if (fields.id) {
+      payload.updated_at = new Date().toISOString();
+      const { error } = await getSB().from('bitacora_soluciones').update(payload).eq('id', fields.id);
+      return { error };
+    }
+    payload.creado_por = window.Auth?.user?.id || null;
+    payload.creado_por_nombre = window.Auth?.user?.nombre || window.Auth?.user?.email || null;
+    const { data, error } = await getSB().from('bitacora_soluciones').insert(payload).select().single();
+    return { data, error };
+  },
+
+  async deleteBitacora(id) {
+    const { error } = await getSB().from('bitacora_soluciones').delete().eq('id', id);
+    return !error;
+  },
+
+  /* Registrar que se volvió a ejecutar una solución conocida (contador
+     veces_ejecutada se recalcula solo con un trigger de BD) */
+  async ejecutarBitacora(bitacoraId, { ordenId = null, vehiculoId = null, nota = null } = {}) {
+    const { error } = await getSB().from('bitacora_ejecuciones').insert({
+      tenant_id: getTID(), bitacora_id: bitacoraId,
+      usuario_id: window.Auth?.user?.id || null,
+      usuario_nombre: window.Auth?.user?.nombre || window.Auth?.user?.email || null,
+      orden_id: ordenId, vehiculo_id: vehiculoId, nota,
+    });
+    return !error;
+  },
+
+  async getEjecucionesBitacora(bitacoraId) {
+    const { data } = await getSB().from('bitacora_ejecuciones')
+      .select('*, ordenes(num), vehiculos(placa,marca,modelo)')
+      .eq('bitacora_id', bitacoraId).order('created_at', { ascending:false });
+    return data || [];
+  },
+
+  async getComentariosBitacora(bitacoraId) {
+    const { data } = await getSB().from('bitacora_comentarios')
+      .select('*').eq('bitacora_id', bitacoraId).order('created_at', { ascending:true });
+    return data || [];
+  },
+
+  async agregarComentarioBitacora(bitacoraId, comentario) {
+    const { error } = await getSB().from('bitacora_comentarios').insert({
+      tenant_id: getTID(), bitacora_id: bitacoraId, comentario,
+      usuario_id: window.Auth?.user?.id || null,
+      usuario_nombre: window.Auth?.user?.nombre || window.Auth?.user?.email || null,
+    });
+    return !error;
+  },
+
+  async eliminarComentarioBitacora(id) {
+    const { error } = await getSB().from('bitacora_comentarios').delete().eq('id', id);
+    return !error;
+  },
+
   /* ── ÓRDENES DE TRABAJO ───────────────────────── */
   async getOrdenes(filtros={}) {
     let q = getSB().from('ordenes')
