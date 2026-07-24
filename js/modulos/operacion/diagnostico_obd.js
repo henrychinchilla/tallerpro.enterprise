@@ -612,16 +612,27 @@ Modulos.diagnostico_obd = {
   },
   _descDTC(c, cat) {
     if (this._DTCS[c]) return this._DTCS[c];
-    const fila = cat && cat[c];
-    if (fila?.descripcion_es) return fila.descripcion_es;
-    if (fila?.descripcion_en) return fila.descripcion_en;
+    /* Rango específico de fabricante (SAE J2012): P1xxx, y en las familias
+       B/C/U cualquier código que no sea X0xxx (B1-B3, C1-C3, U1-U3). P2xxx
+       y P0xxx SÍ son genéricos SAE — mismo significado en cualquier marca.
+       Nuestro catálogo (fuente pública, 3,071 códigos) NO trae el fabricante
+       de cada código: mostrar su texto para un código de fabricante sería
+       adivinar la marca — puede ser el de otro fabricante. Mejor avisar que
+       no está verificado que arriesgar un diagnóstico equivocado. */
+    const esFabricante = (c[0] === 'P' && c[1] === '1') || (c[0] !== 'P' && c[1] !== '0');
+    if (!esFabricante) {
+      const fila = cat && cat[c];
+      if (fila?.descripcion_es) return fila.descripcion_es;
+      if (fila?.descripcion_en) return fila.descripcion_en;
+    }
     const rangos = { P00:'Control de mezcla aire/combustible', P01:'Medición de aire/combustible', P02:'Circuito de inyección',
       P03:'Sistema de encendido / fallos de encendido', P04:'Control de emisiones (EGR/EVAP/catalizador)', P05:'Ralentí y velocidad del vehículo',
       P06:'Computadora (ECU) y salidas auxiliares', P07:'Transmisión', P08:'Transmisión', P09:'Transmisión',
       C:'Chasis (ABS/frenos/suspensión/dirección)', B:'Carrocería (airbag/cinturones/cerraduras)', U:'Red de comunicación entre módulos' };
     const g = rangos[c.slice(0,3)] || rangos[c[0]] || 'Código de diagnóstico';
-    const fab = (c[1] === '1' || c[1] === '2' || c[1] === '3') && c[0] === 'P' ? ' (específico del fabricante)' : '';
-    return g + fab + ' — consultar manual del fabricante';
+    return esFabricante
+      ? g + ' — específico del fabricante, no verificado para esta marca: consultar manual del fabricante'
+      : g + ' — consultar manual del fabricante';
   },
 
   /* ═══════════ VISTA PRINCIPAL (lista por mes) ═══════════ */
