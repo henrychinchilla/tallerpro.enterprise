@@ -716,7 +716,8 @@ Modulos.diagnostico_obd = {
       <div id="obd-log" style="background:var(--bg2,#0b1220);border-radius:8px;padding:10px;font-family:monospace;font-size:12px;min-height:70px;max-height:180px;overflow:auto;margin:10px 0">
         Conecta el adaptador al puerto de diagnóstico del vehículo y enciende el switch.<br>
         · Bluetooth: presiona <b>Conectar y Escanear</b> y elige el adaptador (ej. "OBDII", "Vgate", "iCar Pro").<br>
-        · USB: enchufa el USB-Link a esta PC y ejecuta antes <b>iniciar-puente.bat</b> (carpeta puente-obd).
+        · USB: solo enchufa el USB-Link a esta PC — el puente arranca solo con Windows.<br>
+        &nbsp;&nbsp;¿Primera vez en esta PC? <a href="/puente-obd/instalar-puente.bat" download style="color:var(--cyan)">⬇️ Instalar el puente USB</a> (doble clic al archivo descargado, una sola vez).
       </div>
       <div id="obd-result"></div>
       <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px">

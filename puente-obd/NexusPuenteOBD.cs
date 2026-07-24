@@ -56,8 +56,9 @@ public class PuenteOBD {
       RP1210.RP1210_ReadVersion(a, b, c, d);
       Log("DLL RP1210 cargada OK — DLL v" + Ascii(a) + "." + Ascii(b) + " · API v" + Ascii(c) + "." + Ascii(d));
     } catch (DllNotFoundException) {
+      /* Sin ReadKey: en modo oculto (arranque automatico) no debe quedarse colgado */
       Log("ERROR: no se encontro NXULNK32.dll. Instala los drivers del USB-Link y reintenta.");
-      Console.ReadKey(); return;
+      Thread.Sleep(5000); return;
     } catch (Exception ex) {
       Log("Aviso al leer version de la DLL: " + ex.Message);
     }
@@ -65,8 +66,9 @@ public class PuenteOBD {
     var lst = new TcpListener(IPAddress.Loopback, PUERTO);
     try { lst.Start(); }
     catch (SocketException) {
-      Log("ERROR: el puerto " + PUERTO + " ya esta en uso. ¿El puente ya esta corriendo en otra ventana?");
-      Console.ReadKey(); return;
+      /* Ya hay un puente corriendo (p. ej. el del arranque automatico): salir sin duplicar */
+      Log("El puente ya esta corriendo en esta PC — no se necesita otra instancia.");
+      Thread.Sleep(4000); return;
     }
     Log("Esperando conexion de NexusPro (Chrome/Edge en esta PC)...");
     while (true) {
