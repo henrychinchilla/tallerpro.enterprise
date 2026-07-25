@@ -38,3 +38,6 @@ dashboard.jpg
 *.pdf
 electron/package-lock.json
 puente-obd/*.exe
+
+# Snapshots temporales del MCP de Playwright (basura de sesiones)
+.playwright-mcp/
