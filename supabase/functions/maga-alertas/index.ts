@@ -13,8 +13,12 @@
 //   • pg_cron mensual → header x-cron-secret (Vault)
 //   • admin desde la app → su JWT
 //
-// Body opcional: { mes: 1..12, dry_run: true }  — dry_run arma los correos y
-// los devuelve sin enviarlos, para poder probar sin escribirle a nadie.
+// Body opcional:
+//   { mes: 1..12 }        mes a evaluar (por defecto, el actual)
+//   { dry_run: true }     arma los correos y los devuelve SIN enviarlos
+//   { to_prueba: "..." }  manda todo a esa dirección en vez de a la del
+//                         comercio, para probar el correo real sin escribirle
+//                         a un cliente. Se registra en la respuesta.
 //
 // Deploy: supabase functions deploy maga-alertas --no-verify-jwt
 // ═══════════════════════════════════════════════════════
@@ -101,6 +105,14 @@ Deno.serve(async (req) => {
     const body = await req.json().catch(() => ({}));
     const mes = Number(body.mes) || new Date().getUTCMonth() + 1;
     const dryRun = body.dry_run === true;
+    const toPrueba = typeof body.to_prueba === "string" && body.to_prueba.includes("@")
+      ? body.to_prueba.trim() : null;
+
+    const apiKey = Deno.env.get("RESEND_API_KEY");
+    const FROM = Deno.env.get("EMAIL_FROM") ?? "NexusPro <onboarding@resend.dev>";
+    if (!apiKey && !dryRun) {
+      return json({ error: "El correo aún no está configurado (falta RESEND_API_KEY)." }, 503);
+    }
 
     const { data: filas, error } = await admin.rpc("maga_alertas_ventana", { p_mes: mes, p_anios: 5 });
     if (error) throw new Error("maga_alertas_ventana: " + error.message);
@@ -115,17 +127,30 @@ Deno.serve(async (req) => {
     const resultado: any[] = [];
     for (const [tid, lista] of porTenant) {
       const html = armarHTML(lista[0].tenant_name || "Tu comercio", mes, lista);
-      const destino = lista[0].email;
+      const destino = toPrueba || lista[0].email;
       if (dryRun) { resultado.push({ tenant_id: tid, email: destino, productos: lista.length, enviado: false }); continue; }
-      const r = await fetch(`${url}/functions/v1/email-send`, {
+      /* Se llama a Resend directo y no a la función email-send: esa exige una
+         sesión de usuario (devuelve 401 con la clave de servicio) porque está
+         hecha para el navegador. Es el mismo patrón que usa saas-recordatorios
+         para sus correos de cron. */
+      const r = await fetch("https://api.resend.com/emails", {
         method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}` },
-        body: JSON.stringify({ to: destino, subject: `Ventanas de ${MESES[mes - 1]} — ${lista.length} producto(s)`, html }),
+        headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          from: FROM, to: destino,
+          subject: `Ventanas de ${MESES[mes - 1]} — ${lista.length} producto(s)`, html,
+        }),
       });
-      resultado.push({ tenant_id: tid, email: destino, productos: lista.length, enviado: r.ok, estado: r.status });
+      let detalle: any = null;
+      try { detalle = await r.json(); } catch { detalle = null; }
+      resultado.push({ tenant_id: tid, email: destino, productos: lista.length,
+                       enviado: r.ok, estado: r.status,
+                       id: detalle?.id ?? null,
+                       error: r.ok ? null : (detalle?.message ?? detalle?.error?.message ?? null) });
     }
 
-    return json({ ok: true, mes, dry_run: dryRun, comercios: resultado.length, alertas: (filas || []).length, resultado });
+    return json({ ok: true, mes, dry_run: dryRun, to_prueba: toPrueba,
+                  comercios: resultado.length, alertas: (filas || []).length, resultado });
   } catch (e) {
     return json({ error: String((e as Error).message || e) }, 500);
   }
