@@ -3,12 +3,12 @@
    Estrategias:
      · Navegación (HTML)      → network-first, fallback a shell cacheado (offline)
      · Assets propios (css/js)→ stale-while-revalidate
-     · Iconos / fuentes / CDN → cache-first
+     · Terceros (fuentes/CDN) → sin interceptar (la CSP manda, ver bloque 4)
      · Supabase (API/Auth)    → SIEMPRE red, nunca se cachea
    Para forzar actualización: subir CACHE_VERSION.
 ═══════════════════════════════════════════════════════ */
 
-const CACHE_VERSION = 'v3.67.0-20260724';
+const CACHE_VERSION = 'v3.68.0-20260725';
 const CACHE_NAME = `nexuspro-${CACHE_VERSION}`;
 
 /* App shell — se precachea en install para que funcione offline */
@@ -141,18 +141,13 @@ self.addEventListener('fetch', event => {
     return;
   }
 
-  /* 4. Terceros (fuentes Google, CDN supabase-js): cache-first */
-  if (url.origin !== self.location.origin) {
-    event.respondWith(
-      caches.match(req).then(cacheado => cacheado || fetch(req).then(res => {
-        if (res && (res.status === 200 || res.type === 'opaque')) {
-          const copia = res.clone();
-          caches.open(CACHE_NAME).then(c => c.put(req, copia)).catch(() => {});
-        }
-        return res;
-      }).catch(() => cacheado))
-    );
-  }
+  /* 4. Terceros (fuentes Google, CDN supabase-js): NO interceptar.
+        El SW hereda la CSP con la que se sirve /sw.js, así que su fetch()
+        queda sujeto a connect-src. Al hacer de proxy de estos recursos,
+        cualquier host ausente de connect-src moría con ERR_FAILED (el
+        .catch devolvía undefined) y tumbaba supabase-js → login roto.
+        Dejarlos ir directo a la red: la CSP del documento (script-src,
+        style-src, font-src, img-src) es la única fuente de verdad. */
 });
 
 /* Permite a la página pedir activación inmediata de un SW nuevo */
