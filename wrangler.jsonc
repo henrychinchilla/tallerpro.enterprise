@@ -1,7 +1,9 @@
 {
   "name": "nexuspro-enterprise",
   "compatibility_date": "2026-05-09",
+  "main": "worker.js",
   "assets": {
-    "directory": "."
+    "directory": ".",
+    "binding": "ASSETS"
   }
 }
