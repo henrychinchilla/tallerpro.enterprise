@@ -2,5 +2,15 @@
 *.pdf
 *.xls
 *.xlsx
+*.pptx
+*.apk
+*.md
 electron/dist/
 electron/node_modules/
+.git/
+.codex/
+.agents/
+.claude/
+.playwright-mcp/
+marketing/
+AGENTS.md
