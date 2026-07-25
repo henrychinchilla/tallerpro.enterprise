@@ -64,8 +64,11 @@ Deno.serve(async (req) => {
 
   const admin = createClient(url, serviceKey);
   const { data: perfil } = await admin.from("usuarios")
-    .select("tenant_id").eq("id", userData.user.id).maybeSingle();
+    .select("tenant_id, activo").eq("id", userData.user.id).maybeSingle();
   const tenantId = (perfil as any)?.tenant_id ?? null;
+  if (!tenantId || (perfil as any)?.activo === false) {
+    return json({ error: "Tu cuenta no está habilitada para enviar WhatsApp." }, 403);
+  }
 
   // ── Payload ──
   let body: any;
@@ -91,8 +94,9 @@ Deno.serve(async (req) => {
     };
     resumen = `[plantilla:${nombre}]`;
   } else {
-    const texto = body.texto ?? "";
+    const texto = (body.texto ?? "").toString();
     if (!texto) return json({ error: "Falta el texto" }, 400);
+    if (texto.length > 4_000) return json({ error: "El mensaje excede el tamaño permitido." }, 400);
     payload = { messaging_product: "whatsapp", to, type: "text", text: { body: texto, preview_url: true } };
     resumen = texto.slice(0, 200);
   }

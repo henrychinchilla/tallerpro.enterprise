@@ -51,12 +51,12 @@ Modulos.bitacora = {
             <tbody>
               ${this._data.length ? this._data.map(b => `
                 <tr style="cursor:pointer" onclick="Modulos.bitacora.ver('${b.id}')">
-                  <td><b>${b.titulo}</b>${b.sintoma ? `<div style="font-size:11px;color:var(--text3)">${b.sintoma}</div>` : ''}</td>
+                  <td><b>${UI.esc(b.titulo)}</b>${b.sintoma ? `<div style="font-size:11px;color:var(--text3)">${UI.esc(b.sintoma)}</div>` : ''}</td>
                   <td>${this._catLabel(b.categoria)}</td>
-                  <td>${[b.marca,b.modelo].filter(Boolean).join(' ') || '—'}</td>
-                  <td style="font-family:monospace;font-size:11px">${(b.dtc_codigos||[]).join(', ') || '—'}</td>
+                  <td>${UI.esc([b.marca,b.modelo].filter(Boolean).join(' ') || '—')}</td>
+                  <td style="font-family:monospace;font-size:11px">${UI.esc((b.dtc_codigos||[]).join(', ') || '—')}</td>
                   <td><span class="badge ${b.veces_ejecutada>1?'badge-green':'badge-gray'}">${b.veces_ejecutada}×</span></td>
-                  <td style="font-size:12px">${b.creado_por_nombre || '—'}</td>
+                  <td style="font-size:12px">${UI.esc(b.creado_por_nombre || '—')}</td>
                   <td style="text-align:right;white-space:nowrap">
                     ${Modulos.btnAccion('ver', `Modulos.bitacora.ver('${b.id}')`)}
                     ${puedeEditar ? Modulos.btnAccion('editar', `Modulos.bitacora.modalEditar('${b.id}')`) : ''}
@@ -82,7 +82,7 @@ Modulos.bitacora = {
     return `
       <div class="form-group">
         <label class="form-label">Título / problema resuelto *</label>
-        <input class="form-input" id="bit-titulo" placeholder="Ej. Ralentí inestable con Check Engine intermitente" value="${d.titulo||''}">
+          <input class="form-input" id="bit-titulo" placeholder="Ej. Ralentí inestable con Check Engine intermitente" value="${UI.esc(d.titulo||'')}">
       </div>
       <div class="form-row">
         <div class="form-group">
@@ -93,26 +93,26 @@ Modulos.bitacora = {
         </div>
         <div class="form-group">
           <label class="form-label">Códigos DTC relacionados (opcional)</label>
-          <input class="form-input" id="bit-dtc" placeholder="P0420, P0171" value="${(d.dtc_codigos||[]).join(', ')}">
+          <input class="form-input" id="bit-dtc" placeholder="P0420, P0171" value="${UI.esc((d.dtc_codigos||[]).join(', '))}">
         </div>
       </div>
       <div class="form-row">
         <div class="form-group">
           <label class="form-label">Marca (opcional)</label>
-          <input class="form-input" id="bit-marca" placeholder="Toyota" value="${d.marca||''}">
+          <input class="form-input" id="bit-marca" placeholder="Toyota" value="${UI.esc(d.marca||'')}">
         </div>
         <div class="form-group">
           <label class="form-label">Modelo (opcional)</label>
-          <input class="form-input" id="bit-modelo" placeholder="Hilux" value="${d.modelo||''}">
+          <input class="form-input" id="bit-modelo" placeholder="Hilux" value="${UI.esc(d.modelo||'')}">
         </div>
       </div>
       <div class="form-group">
         <label class="form-label">Síntoma / cómo se presentó</label>
-        <input class="form-input" id="bit-sintoma" placeholder="Ej. tironeaba en frío, se quitaba al calentar" value="${d.sintoma||''}">
+          <input class="form-input" id="bit-sintoma" placeholder="Ej. tironeaba en frío, se quitaba al calentar" value="${UI.esc(d.sintoma||'')}">
       </div>
       <div class="form-group">
         <label class="form-label">Solución ejecutada / hallazgo técnico *</label>
-        <textarea class="form-input" id="bit-desc" rows="6" placeholder="Qué se revisó, qué se encontró y qué se hizo para resolverlo...">${d.descripcion||''}</textarea>
+        <textarea class="form-input" id="bit-desc" rows="6" placeholder="Qué se revisó, qué se encontró y qué se hizo para resolverlo...">${UI.esc(d.descripcion||'')}</textarea>
       </div>`;
   },
 
@@ -192,13 +192,13 @@ Modulos.bitacora = {
           ${(d.dtc_codigos||[]).map(c=>`<span class="badge badge-amber" style="font-family:monospace">${c}</span>`).join('')}
         </p>
         <p style="margin-top:6px;color:var(--text2)">
-          ${[d.marca,d.modelo].filter(Boolean).join(' ') ? `<b>Vehículo:</b> ${[d.marca,d.modelo].filter(Boolean).join(' ')}<br>` : ''}
-          ${d.sintoma ? `<b>Síntoma:</b> ${d.sintoma}<br>` : ''}
-          <b>Agregada por:</b> ${d.creado_por_nombre || '—'} · ${UI.fecha(d.created_at)}
+          ${[d.marca,d.modelo].filter(Boolean).join(' ') ? `<b>Vehículo:</b> ${UI.esc([d.marca,d.modelo].filter(Boolean).join(' '))}<br>` : ''}
+          ${d.sintoma ? `<b>Síntoma:</b> ${UI.esc(d.sintoma)}<br>` : ''}
+          <b>Agregada por:</b> ${UI.esc(d.creado_por_nombre || '—')} · ${UI.fecha(d.created_at)}
         </p>
         <div class="card" style="padding:10px;margin-top:8px">
           <b style="font-size:12px">SOLUCIÓN EJECUTADA</b>
-          <div style="white-space:pre-wrap;margin-top:6px">${d.descripcion}</div>
+          <div style="white-space:pre-wrap;margin-top:6px">${UI.esc(d.descripcion)}</div>
         </div>
         <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">
           <button class="btn btn-sm btn-cyan" onclick="Modulos.bitacora.ejecutar('${d.id}')">✅ Yo también resolví esto así</button>
@@ -207,10 +207,10 @@ Modulos.bitacora = {
           <b style="font-size:12px">HISTORIAL DE EJECUCIONES</b>
           <div style="margin-top:6px;font-size:12px">
             ${ejecs.map(e => `<div style="padding:4px 0;border-bottom:1px solid var(--border)">
-              <b>${e.usuario_nombre||'—'}</b> · ${UI.fecha(e.created_at)}
-              ${e.vehiculos ? ` · ${e.vehiculos.placa||''} ${e.vehiculos.marca||''} ${e.vehiculos.modelo||''}` : ''}
+              <b>${UI.esc(e.usuario_nombre||'—')}</b> · ${UI.fecha(e.created_at)}
+              ${e.vehiculos ? ` · ${UI.esc(`${e.vehiculos.placa||''} ${e.vehiculos.marca||''} ${e.vehiculos.modelo||''}`)}` : ''}
               ${e.ordenes?.num ? ` · OT #${e.ordenes.num}` : ''}
-              ${e.nota ? `<div style="color:var(--text3)">${e.nota}</div>` : ''}
+              ${e.nota ? `<div style="color:var(--text3)">${UI.esc(e.nota)}</div>` : ''}
             </div>`).join('')}
           </div>
         </div>` : ''}
@@ -218,7 +218,7 @@ Modulos.bitacora = {
           <b style="font-size:12px">COMENTARIOS (${comentarios.length})</b>
           <div id="bit-comentarios" style="margin-top:6px;font-size:12px">
             ${comentarios.length ? comentarios.map(c => `<div style="padding:6px 0;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;gap:8px">
-              <div><b>${c.usuario_nombre||'—'}</b> · <span style="color:var(--text3)">${UI.fecha(c.created_at)}</span><div>${c.comentario}</div></div>
+              <div><b>${UI.esc(c.usuario_nombre||'—')}</b> · <span style="color:var(--text3)">${UI.fecha(c.created_at)}</span><div>${UI.esc(c.comentario)}</div></div>
               ${puedeEditar ? `<button class="btn btn-ghost btn-sm" title="Eliminar" style="padding:2px 8px" onclick="Modulos.bitacora.eliminarComentario('${d.id}','${c.id}')">✕</button>` : ''}
             </div>`).join('') : '<span style="color:var(--text3)">Sin comentarios todavía</span>'}
           </div>

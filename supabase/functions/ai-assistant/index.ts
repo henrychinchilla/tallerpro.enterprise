@@ -248,15 +248,11 @@ Deno.serve(async (req) => {
   // Usamos asCaller en lugar del cliente admin de service role para evitar problemas de permisos de esquema
   const { data: perfil } = await asCaller.from("usuarios")
     .select("tenant_id, rol").eq("id", userData.user.id).maybeSingle();
-  let tenantId = (perfil as any)?.tenant_id;
+  const tenantId = (perfil as any)?.tenant_id;
   const rol = (perfil as any)?.rol;
+  if (!tenantId) return json({ error: "Sin taller asociado a tu usuario" }, 403);
   const elevado = userData.user.email?.toLowerCase() === "henry.chinchilla@gmail.com" ||
     ["superadmin", "admin", "gerente_fin", "gerente_tal"].includes(rol);
-
-  if (!tenantId) {
-    const { data: t } = await asCaller.from("tenants").select("id").limit(1).maybeSingle();
-    tenantId = t?.id;
-  }
 
   // ── Gating comercial: módulo 'ia' + tope mensual ──
   // Mismo criterio que el frontend: modulos_activos (a la carta) manda;
@@ -264,7 +260,7 @@ Deno.serve(async (req) => {
   // planes legacy/desconocidos no se bloquean. El superadmin está exento.
   const esSuperadmin = userData.user.email?.toLowerCase() === "henry.chinchilla@gmail.com" ||
     rol === "superadmin";
-  if (!esSuperadmin && tenantId) {
+  if (!esSuperadmin) {
     const { data: tn } = await asCaller.from("tenants")
       .select("plan, modulos_activos, ai_limite_mes").eq("id", tenantId).maybeSingle();
 
@@ -321,6 +317,9 @@ Deno.serve(async (req) => {
       base64Raw = parts[1];
       mediaType = meta.split(";")[0].split(":")[1] || "image/jpeg";
     }
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(mediaType) || !/^[A-Za-z0-9+/=]+$/.test(base64Raw) || base64Raw.length > 7_000_000) {
+      return json({ error: "La imagen debe ser JPG, PNG o WebP y pesar como máximo 5 MB." }, 400);
+    }
     messagesPayload = [
       {
         role: "user",
@@ -341,7 +340,6 @@ Deno.serve(async (req) => {
       },
     ];
   } else if (modo === "chat" || modo === "insights") {
-    if (!tenantId) return json({ error: "Sin taller asociado a tu usuario" }, 400);
 
     // Persona adaptativa: obtener módulos activos del tenant
     let personaDinamica = BASE_GT;

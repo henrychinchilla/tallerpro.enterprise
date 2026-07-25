@@ -62,6 +62,9 @@ Deno.serve(async (req) => {
   const { data: userData, error: uErr } = await asCaller.auth.getUser(token);
   const user = userData?.user;
   if (uErr || !user) return json({ error: "Sesión inválida" }, 401);
+  if (!user.email_confirmed_at || !user.identities?.some(i => i.provider === "google")) {
+    return json({ error: "Esta solicitud requiere una cuenta de Google con correo verificado." }, 403);
+  }
 
   const email = (user.email ?? "").toLowerCase();
   if (!email) return json({ error: "Tu cuenta de Google no tiene correo" }, 400);

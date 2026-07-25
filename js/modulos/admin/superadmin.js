@@ -80,7 +80,7 @@ Modulos.superadmin = {
     bar.style.cssText = 'position:fixed;left:0;right:0;bottom:0;z-index:9999;background:#b45309;color:#fff;'
       + 'padding:8px 14px;display:flex;align-items:center;justify-content:center;gap:12px;flex-wrap:wrap;'
       + 'font-size:13px;box-shadow:0 -2px 10px rgba(0,0,0,.35)';
-    bar.innerHTML = `🛟 <span>Modo soporte — estás dentro de <b>${t.name||t.slug}</b></span>`
+    bar.innerHTML = `🛟 <span>Modo soporte — estás dentro de <b>${UI.esc(t.name||t.slug)}</b></span>`
       + `<button class="btn btn-sm" style="background:#fff;color:#b45309;font-weight:700" `
       + `onclick="Modulos.superadmin.salirSoporte()">← Volver al Panel SaaS</button>`;
   },
@@ -120,7 +120,7 @@ Modulos.superadmin = {
                   ? `<span class="badge badge-purple">🎁 DEMO</span>`
                   : `<span class="badge badge-${PLANES[t.plan]?.color||'gray'}">${this._planLabel(t.plan)}</span>`;
                 return `<tr style="${susp&&!pend?'opacity:.55':''}">
-                  <td><b>${t.name||t.slug||'—'}</b><br><small class="text-muted">${t.nit||''} ${t.email?('· '+t.email):''}</small></td>
+                  <td><b>${UI.esc(t.name||t.slug||'—')}</b><br><small class="text-muted">${UI.esc(t.nit||'')} ${t.email?('· '+UI.esc(t.email)):''}</small></td>
                   <td>${planBadge}</td>
                   <td class="mono-sm">${UI.q(t.precio_mensual||0)}</td>
                   <td class="mono-sm ${venc?'text-red':''}">${t.suscripcion_vence?UI.fecha(t.suscripcion_vence):'—'}${venc?' ⚠️':''}</td>
@@ -175,9 +175,9 @@ Modulos.superadmin = {
               ${S.map(s=>{
                 const spam = (rechPorEmail[(s.email||'').toLowerCase()]||0) >= 2;
                 return `<tr>
-                  <td><b>${s.nombre_comercio||'—'}</b>${spam?' <span class="badge badge-red" style="font-size:10px" title="Correo con varias solicitudes rechazadas">🚩 spam</span>':''}<br><small class="text-muted">${s.nit||''}</small></td>
-                  <td><small>${s.nombre_admin||''}<br>${s.email||''}${s.telefono?(' · '+s.telefono):''}</small></td>
-                  <td><small>${s.tipo_negocio||'—'}</small></td>
+                  <td><b>${UI.esc(s.nombre_comercio||'—')}</b>${spam?' <span class="badge badge-red" style="font-size:10px" title="Correo con varias solicitudes rechazadas">🚩 spam</span>':''}<br><small class="text-muted">${UI.esc(s.nit||'')}</small></td>
+                  <td><small>${UI.esc(s.nombre_admin||'')}<br>${UI.esc(s.email||'')}${s.telefono?(' · '+UI.esc(s.telefono)):''}</small></td>
+                  <td><small>${UI.esc(s.tipo_negocio||'—')}</small></td>
                   <td>${badgeEstado[s.estado]||s.estado}</td>
                   <td class="mono-sm">${s.created_at?UI.fecha(s.created_at):'—'}</td>
                   <td><div style="display:flex;gap:4px;flex-wrap:wrap">

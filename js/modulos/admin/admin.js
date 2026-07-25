@@ -161,7 +161,7 @@ Modulos.admin = {
         <div class="alert alert-cyan" style="margin-bottom:16px">
           <div class="alert-icon">🔒</div>
           <div class="alert-body" style="font-size:12px">
-            Los archivos exportados están <b>encriptados con AES-256</b>. Solo pueden importarse en NexusPro.
+            Los archivos exportados se protegen con <b>una contraseña que eliges</b>. Guárdala: será necesaria para importarlos.
             También puedes exportar como CSV plano para usar en Excel.
           </div>
         </div>
@@ -502,30 +502,33 @@ Modulos.admin = {
   },
 
   /* ── ENCRIPTACIÓN AES-256-GCM ────────────── */
-  async _getKey(password='NexusPro-v3-2026') {
+  async _getKey(password, salt) {
     const enc     = new TextEncoder();
     const keyMat  = await crypto.subtle.importKey('raw', enc.encode(password), 'PBKDF2', false, ['deriveKey']);
     return crypto.subtle.deriveKey(
-      { name:'PBKDF2', salt:enc.encode('nexuspro-salt-2026'), iterations:100000, hash:'SHA-256' },
+      { name:'PBKDF2', salt, iterations:310000, hash:'SHA-256' },
       keyMat, { name:'AES-GCM', length:256 }, false, ['encrypt','decrypt']
     );
   },
 
-  async _encrypt(data) {
-    const key  = await this._getKey();
+  async _encrypt(data, password) {
+    const salt = crypto.getRandomValues(new Uint8Array(16));
+    const key  = await this._getKey(password, salt);
     const iv   = crypto.getRandomValues(new Uint8Array(12));
     const enc  = new TextEncoder();
     const ct   = await crypto.subtle.encrypt({ name:'AES-GCM', iv }, key, enc.encode(JSON.stringify(data)));
-    const buf  = new Uint8Array(iv.byteLength + ct.byteLength);
-    buf.set(iv, 0); buf.set(new Uint8Array(ct), iv.byteLength);
-    return btoa(String.fromCharCode(...buf));
+    return JSON.stringify({ version: 4, kdf: 'PBKDF2-SHA-256', iterations: 310000,
+      salt: btoa(String.fromCharCode(...salt)), iv: btoa(String.fromCharCode(...iv)),
+      ciphertext: btoa(String.fromCharCode(...new Uint8Array(ct))) });
   },
 
-  async _decrypt(b64) {
-    const buf  = Uint8Array.from(atob(b64), c=>c.charCodeAt(0));
-    const iv   = buf.slice(0, 12);
-    const ct   = buf.slice(12);
-    const key  = await this._getKey();
+  async _decrypt(payload, password) {
+    const data = JSON.parse(payload);
+    if (data.version !== 4 || !data.salt || !data.iv || !data.ciphertext) throw new Error('Archivo legado no compatible con el cifrado seguro actual.');
+    const salt = Uint8Array.from(atob(data.salt), c=>c.charCodeAt(0));
+    const iv   = Uint8Array.from(atob(data.iv), c=>c.charCodeAt(0));
+    const ct   = Uint8Array.from(atob(data.ciphertext), c=>c.charCodeAt(0));
+    const key  = await this._getKey(password, salt);
     const pt   = await crypto.subtle.decrypt({ name:'AES-GCM', iv }, key, ct);
     return JSON.parse(new TextDecoder().decode(pt));
   },
@@ -551,8 +554,11 @@ Modulos.admin = {
     UI.toast(`Encriptando ${label}...`, 'info');
     const { data } = await getSB().from(tabla).select('*').eq('tenant_id', getTID());
     if (!data?.length) { UI.toast('Sin datos','warn'); return; }
+    const password = prompt('Crea una contraseña para proteger este archivo (mínimo 12 caracteres):');
+    if (!password) return;
+    if (password.length < 12) { UI.toast('Usa una contraseña de al menos 12 caracteres.', 'error'); return; }
     try {
-      const encrypted = await this._encrypt({ tabla, data, exportado: new Date().toISOString(), taller: Auth.tenant?.name });
+      const encrypted = await this._encrypt({ tabla, data, exportado: new Date().toISOString(), taller: Auth.tenant?.name }, password);
       const a = document.createElement('a');
       a.href = 'data:application/octet-stream;base64,'+encrypted;
       a.download = `${tabla}-${new Date().toISOString().slice(0,10)}.tpro`;
@@ -575,8 +581,11 @@ Modulos.admin = {
       backup[tabla] = data || [];
     }
 
+    const password = prompt('Crea una contraseña para proteger el backup (mínimo 12 caracteres):');
+    if (!password) return;
+    if (password.length < 12) { UI.toast('Usa una contraseña de al menos 12 caracteres.', 'error'); return; }
     try {
-      const encrypted = await this._encrypt(backup);
+      const encrypted = await this._encrypt(backup, password);
       const a = document.createElement('a');
       a.href = 'data:application/octet-stream;base64,'+encrypted;
       a.download = `backup-${Auth.tenant?.name?.replace(/\s/g,'-')}-${new Date().toISOString().slice(0,10)}.tpro`;
@@ -589,10 +598,12 @@ Modulos.admin = {
   async importarBackup(input) {
     const file = input.files?.[0];
     if (!file) return;
+    const password = prompt('Ingresa la contraseña del backup:');
+    if (!password) return;
     UI.toast('Desencriptando backup...', 'info');
     try {
       const text    = await file.text();
-      const backup  = await this._decrypt(text);
+      const backup  = await this._decrypt(text, password);
 
       if (!backup.version) { UI.toast('Archivo inválido o corrupto','error'); return; }
 

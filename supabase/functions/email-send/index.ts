@@ -60,8 +60,11 @@ Deno.serve(async (req) => {
 
   const admin = createClient(url, serviceKey);
   const { data: perfil } = await admin.from("usuarios")
-    .select("tenant_id").eq("id", userData.user.id).maybeSingle();
+    .select("tenant_id, activo").eq("id", userData.user.id).maybeSingle();
   const tenantId = (perfil as any)?.tenant_id ?? null;
+  if (!tenantId || (perfil as any)?.activo === false) {
+    return json({ error: "Tu cuenta no está habilitada para enviar correos." }, 403);
+  }
 
   // ── Payload ──
   let body: any;
@@ -69,11 +72,14 @@ Deno.serve(async (req) => {
 
   const to = (body.to ?? "").toString().trim();
   const subject = (body.subject ?? "").toString().trim();
-  const text = body.text ?? "";
-  const html = body.html ?? (text ? textoAHtml(text) : "");
+  const text = (body.text ?? "").toString();
+  const html = (body.html ?? (text ? textoAHtml(text) : "")).toString();
   if (!to || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(to)) return json({ error: "Destinatario inválido" }, 400);
   if (!subject) return json({ error: "Falta el asunto" }, 400);
   if (!html) return json({ error: "Falta el contenido (html o text)" }, 400);
+  if (subject.length > 160 || text.length > 20_000 || html.length > 50_000) {
+    return json({ error: "El mensaje excede el tamaño permitido." }, 400);
+  }
 
   // ── Llamar a Resend ──
   let estado = "enviado", errorMsg: string | null = null, providerId: string | null = null;

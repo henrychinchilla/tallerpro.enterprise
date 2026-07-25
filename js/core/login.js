@@ -506,7 +506,13 @@ async function _cargarInfoGoogle() {
     if (!session?.user) return;
     const { email, user_metadata } = session.user;
     const nombre = user_metadata?.full_name ?? user_metadata?.name ?? email;
-    el.innerHTML = `${_svgGoogle} &nbsp;<b>${nombre}</b> <span style="color:var(--text3)">· ${email}</span>`;
+    el.innerHTML = _svgGoogle;
+    const nombreEl = document.createElement('b');
+    nombreEl.textContent = ` ${nombre}`;
+    const emailEl = document.createElement('span');
+    emailEl.style.color = 'var(--text3)';
+    emailEl.textContent = ` · ${email}`;
+    el.append(nombreEl, emailEl);
     el.style.display = 'flex';
     el.style.alignItems = 'center';
     el.style.gap = '8px';
@@ -521,18 +527,22 @@ async function loginBuscarTaller() {
   const el = document.getElementById('l-taller-result');
   if (!el) return;
   if (!results.length) { el.textContent = 'Sin resultados'; return; }
-  el.innerHTML = results.map(t =>
-    `<span style="cursor:pointer;margin-right:8px;text-decoration:underline"
-      onclick="_seleccionarTaller('${t.id}','${t.name}','${t.slug}')">
-      ${t.name}
-    </span>`
-  ).join('');
+  el.replaceChildren();
+  results.forEach(t => {
+    const option = document.createElement('button');
+    option.type = 'button';
+    option.className = 'btn btn-ghost btn-sm';
+    option.style.marginRight = '8px';
+    option.textContent = t.name;
+    option.addEventListener('click', () => _seleccionarTaller(t.id, t.name, t.slug));
+    el.appendChild(option);
+  });
 }
 
 function _seleccionarTaller(id, nombre, slug) {
   _tenantLogin = { id, name: nombre, slug };
   const el = document.getElementById('l-taller-result');
-  if (el) el.innerHTML = `<span style="color:var(--green)">✓ ${nombre}</span>`;
+  if (el) { el.textContent = `✓ ${nombre}`; el.style.color = 'var(--green)'; }
   const inp = document.getElementById('l-taller');
   if (inp) inp.value = nombre;
 }

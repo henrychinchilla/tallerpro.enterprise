@@ -229,7 +229,7 @@ Modulos.marketing = {
               <div style="font-size:13px;font-weight:800;margin-bottom:14px;color:var(--text)">¡TU OPINIÓN NOS IMPORTA!</div>
               <div id="qrbox" style="display:inline-flex;justify-content:center;align-items:center;background:#fff;border-radius:10px;padding:12px;box-shadow:0 4px 12px rgba(0,0,0,0.05)">Generando QR...</div>
               <div style="font-size:10px;color:var(--text3);margin-top:12px;word-break:break-all">${url}</div>
-              ${fidelizacionCfg().bono_feedback>0?`<div style="margin-top:12px;background:color-mix(in srgb,var(--amber)12%,var(--surface2));color:var(--amber);font-size:11px;font-weight:800;padding:6px 10px;border-radius:6px;display:inline-block">🎁 ¡Obtén ${fidelizacionCfg().bono_feedback} puntos de regalo!</div>`:''}
+              <div style="margin-top:12px;color:var(--text3);font-size:11px">Para proteger tus puntos, el bono se entrega únicamente mediante el enlace personal enviado por correo.</div>
             </div>
             <div style="display:flex;gap:6px;justify-content:center;margin-top:14px">
               <button class="btn btn-ghost btn-sm" onclick="Modulos.marketing.imprimirQR()">🖨️ Imprimir Poster</button>
@@ -264,10 +264,10 @@ Modulos.marketing = {
           <thead><tr><th>Fecha</th><th>Cliente</th><th>Servicio</th><th>Productos</th><th>Comentario</th><th>Pts</th></tr></thead>
           <tbody>${fb.map(f=>`<tr>
             <td class="mono-sm">${UI.fecha(f.created_at?.slice(0,10))}</td>
-            <td>${f.clientes?.nombre||f.nombre||'Anónimo'}${f.telefono?`<br><small class="text-muted">${f.telefono}</small>`:''}${(f.vehiculo||f.servicio)?`<br><small class="text-muted">${[f.vehiculo,f.servicio].filter(Boolean).join(' · ')}</small>`:''}</td>
+            <td>${UI.esc(f.clientes?.nombre||f.nombre||'Anónimo')}${f.telefono?`<br><small class="text-muted">${UI.esc(f.telefono)}</small>`:''}${(f.vehiculo||f.servicio)?`<br><small class="text-muted">${UI.esc([f.vehiculo,f.servicio].filter(Boolean).join(' · '))}</small>`:''}</td>
             <td>${'⭐'.repeat(f.rating_servicio||0)||'—'}</td>
             <td>${'⭐'.repeat(f.rating_productos||0)||'—'}</td>
-            <td style="font-size:12px;max-width:240px">${f.comentario||'—'}</td>
+            <td style="font-size:12px;max-width:240px">${UI.esc(f.comentario||'—')}</td>
             <td class="mono-sm text-amber">${f.puntos_otorgados||0}</td>
           </tr>`).join('')||'<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--text3)">Sin respuestas todavía. Comparte el QR con tus clientes.</td></tr>'}</tbody>
         </table></div>`;
@@ -370,7 +370,7 @@ Modulos.marketing = {
     win.document.write(`<html><head><title>QR Feedback</title></head>
       <body style="text-align:center;font-family:Arial;padding:36px">
       <h2>${taller}</h2><h3>📱 Escanea y déjanos tu opinión</h3>
-      ${fidelizacionCfg().bono_feedback>0?`<p style="color:#d97706;font-weight:700">¡Gana ${fidelizacionCfg().bono_feedback} puntos de fidelización!</p>`:''}
+      <p style="color:#64748b;font-size:12px">Las respuestas por QR ayudan a mejorar el servicio.</p>
       ${img}
       <p style="font-size:11px;color:#666;margin-top:10px">${this._qrUrl}</p>
       <script>window.print()<\/script></body></html>`);
@@ -390,9 +390,12 @@ Modulos.marketing = {
     const email = document.getElementById('enc-mail')?.value.trim();
     if (!email) { UI.toast('Ingresa un correo','error'); return; }
     const tid = Auth.tenant?.id || '';
-    const url = `${location.origin}/feedback.html?t=${encodeURIComponent(tid)}&o=email`;
     const taller = Auth.tenant?.name || 'NexusPro';
-    const html = `<div style="font-family:Arial,sans-serif;max-width:480px"><h2 style="color:#d97706">🔧 ${taller}</h2>`+
+    UI.toast('Creando enlace seguro...', 'info');
+    const { data: tokenData, error: tokenError } = await getSB().functions.invoke('create-feedback-token', { body: { email } });
+    if (tokenError || tokenData?.error || !tokenData?.token) { UI.toast(tokenData?.error || 'No se pudo crear el enlace seguro.', 'error'); return; }
+    const url = `${location.origin}/feedback.html?t=${encodeURIComponent(tid)}&o=email&token=${encodeURIComponent(tokenData.token)}`;
+    const html = `<div style="font-family:Arial,sans-serif;max-width:480px"><h2 style="color:#d97706">🔧 ${UI.esc(taller)}</h2>`+
       `<p>¡Tu opinión nos importa! Cuéntanos cómo te fue${fidelizacionCfg().bono_feedback>0?` y <b>gana ${fidelizacionCfg().bono_feedback} puntos</b> de fidelización`:''}.</p>`+
       `<p style="text-align:center;margin:18px 0"><a href="${url}" style="background:#d97706;color:#fff;padding:12px 22px;border-radius:8px;text-decoration:none;font-weight:700">Responder encuesta</a></p>`+
       `<p style="font-size:11px;color:#666">${url}</p></div>`;

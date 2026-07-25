@@ -160,42 +160,15 @@ const Auth = {
         getSB().from('usuarios').update({ ultimo_login: new Date().toISOString() })
           .eq('id', userId).then(() => {});
       } else {
-        /* Fallback para superadmin u otros sin perfil */
-        Auth.user = {
-          id:     userId,
-          nombre: email === 'henry.chinchilla@gmail.com' ? 'Henry Chinchilla' : email.split('@')[0],
-          email,
-          rol:    email === 'henry.chinchilla@gmail.com' ? 'superadmin' : 'admin',
-          activo: true,
-          avatar: email === 'henry.chinchilla@gmail.com' ? '⚡' : '👑'
-        };
-        /* Buscar tenant */
-        if (tenantSlug) {
-          const { data: t } = await getSB().from('tenants').select('*').eq('slug', tenantSlug).maybeSingle();
-          Auth.tenant = t; window._cachedTenantId = t?.id || null;
-        }
-        if (!Auth.tenant) {
-          const { data: t } = await getSB().from('tenants').select('*').limit(1).maybeSingle();
-          Auth.tenant = t; window._cachedTenantId = t?.id || null;
-        }
+        await getSB().auth.signOut();
+        throw new Error('Tu cuenta todavía no está asignada a un comercio. Contacta al administrador.');
       }
     } catch(err) {
       console.error('Error al cargar perfil de usuario:', err);
-      // Fallback seguro para no bloquear la sesión
-      Auth.user = {
-        id:     userId,
-        nombre: email.split('@')[0],
-        email,
-        rol:    'admin',
-        activo: true,
-        avatar: '👤'
-      };
-      if (!Auth.tenant) {
-        try {
-          const { data: t } = await getSB().from('tenants').select('*').limit(1).maybeSingle();
-          Auth.tenant = t; window._cachedTenantId = t?.id || null;
-        } catch(_) {}
-      }
+      await getSB().auth.signOut().catch(() => {});
+      Auth.user = Auth.tenant = Auth.supaUser = Auth.licencia = null;
+      window._cachedTenantId = null;
+      throw new Error('No se pudo validar el perfil de acceso. Inicia sesión de nuevo o contacta al administrador.');
     }
   },
 

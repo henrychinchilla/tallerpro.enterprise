@@ -5,6 +5,14 @@
 
 const UI = {
 
+  /* Texto no confiable dentro de plantillas HTML. Nunca usar datos de clientes,
+     formularios o perfiles directamente en innerHTML. */
+  esc(valor='') {
+    return String(valor ?? '')
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  },
+
   /* ── TOAST ────────────────────────────────────── */
   toast(msg, tipo='success', duracion=3000) {
     const tipos = ['success', 'error', 'warn', 'info'];

@@ -17,7 +17,7 @@ function createWindow() {
   mainWindow.loadURL(APP_URL);
 
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-    if (!url.startsWith(APP_URL)) { shell.openExternal(url); return { action: 'deny' }; }
+    if (new URL(url).origin !== new URL(APP_URL).origin) { shell.openExternal(url); return { action: 'deny' }; }
     return { action: 'allow' };
   });
 

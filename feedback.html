@@ -129,7 +129,7 @@
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` },
           body: JSON.stringify({
-            tenant: TENANT, origen,
+            tenant: TENANT, origen, token: new URLSearchParams(location.search).get('token') || '',
             nombre: document.getElementById('fb-nom').value.trim(),
             telefono: document.getElementById('fb-tel').value.trim(),
             email: document.getElementById('fb-mail').value.trim(),
@@ -146,8 +146,8 @@
           <div class="gracias">
             <div class="em">🙏</div>
             <h2>¡Gracias por tu opinión!</h2>
-            ${d.identificado
-              ? '<p class="pts">Si estás registrado con nosotros, ¡te abonamos 50 puntos! ⭐</p>'
+            ${d.puntos
+              ? '<p class="pts">¡Tu bono de fidelización fue registrado! ⭐</p>'
               : '<p style="color:#64748b;font-size:14px">Tu opinión nos ayuda a mejorar.</p>'}
           </div>`;
       } catch (e) {
