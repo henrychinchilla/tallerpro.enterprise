@@ -283,6 +283,165 @@ Modulos.diagnostico_obd = {
     } catch (_) { return null; }
   },
 
+  /* ═══════════ CAMPAÑAS DE FÁBRICA Y QUEJAS (NHTSA) ═══════════
+     Antes de cotizar una reparación hay que ver si el fabricante ya la cubre
+     gratis por un llamado a revisión: cobrarle al cliente algo que la agencia
+     le hace sin costo es el error caro. La API de NHTSA es de dominio público,
+     sin llave y con CORS abierto (api.nhtsa.gov está en connect-src del CSP).
+     Cubre el mercado de EE.UU.: un vehículo importado de otro mercado (japonés,
+     europeo) puede no aparecer aunque sí tenga campaña en su país de origen. */
+  async _nhtsaConsulta(ruta, marca, modelo, anio) {
+    const q = `make=${encodeURIComponent(marca)}&model=${encodeURIComponent(modelo)}&modelYear=${encodeURIComponent(anio)}`;
+    const r = await fetch(`https://api.nhtsa.gov/${ruta}?${q}`);
+    /* 400 = NHTSA no reconoce esa combinación (el taller escribe "Corolla XLI 1.8"
+       y su catálogo dice "COROLLA"). No es una falla: se devuelve vacío para que
+       el reintento con el nombre corto llegue a correr. */
+    if (r.status === 400) return [];
+    if (!r.ok) throw new Error(`NHTSA respondió ${r.status}`);
+    return (await r.json())?.results || [];
+  },
+
+  /* El modelo que escribe el taller ("Corolla XLI 1.8") no siempre coincide con
+     el catálogo de NHTSA ("COROLLA"): si no hay resultados se reintenta con la
+     primera palabra antes de dar por hecho que no hay campañas. */
+  async _nhtsaBuscar(ruta, marca, modelo, anio) {
+    const limpio = s => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+    const ma = limpio(marca), mo = limpio(modelo), an = parseInt(anio, 10);
+    if (!ma || !mo || !an) return [];
+    let res = await this._nhtsaConsulta(ruta, ma, mo, an);
+    const corto = mo.split(/\s+/)[0];
+    if (!res.length && corto && corto !== mo) res = await this._nhtsaConsulta(ruta, ma, corto, an);
+    return res;
+  },
+
+  /* NHTSA clasifica con un catálogo fijo y corto de componentes: traducirlo es
+     barato y es lo primero que el mecánico lee. El resumen y la solución quedan
+     en inglés (texto libre): se marcan como tal en vez de arriesgar una
+     traducción automática de algo que define una reparación. */
+  _NHTSA_COMP: {
+    'AIR BAGS':'Bolsas de aire', 'SEAT BELTS':'Cinturones de seguridad',
+    'SERVICE BRAKES':'Frenos de servicio', 'SERVICE BRAKES, HYDRAULIC':'Frenos hidráulicos',
+    'POWER TRAIN':'Tren motriz', 'ENGINE':'Motor', 'ENGINE AND ENGINE COOLING':'Motor y refrigeración',
+    'ELECTRICAL SYSTEM':'Sistema eléctrico', 'FUEL SYSTEM':'Sistema de combustible',
+    'FUEL SYSTEM, GASOLINE':'Sistema de combustible (gasolina)',
+    'STEERING':'Dirección', 'SUSPENSION':'Suspensión', 'STRUCTURE':'Estructura/carrocería',
+    'VEHICLE SPEED CONTROL':'Control de velocidad', 'EXTERIOR LIGHTING':'Luces exteriores',
+    'INTERIOR LIGHTING':'Luces interiores', 'WHEELS':'Ruedas', 'TIRES':'Llantas',
+    'VISIBILITY':'Visibilidad', 'VISIBILITY/WIPER':'Visibilidad/limpiaparabrisas',
+    'LATCHES/LOCKS/LINKAGES':'Cerraduras y seguros', 'EQUIPMENT':'Equipamiento',
+    'TRAILER HITCHES':'Enganche de remolque', 'PARKING BRAKE':'Freno de mano',
+    'BACK OVER PREVENTION':'Asistencia de reversa', 'FORWARD COLLISION AVOIDANCE':'Prevención de colisión',
+    'UNKNOWN OR OTHER':'Sin clasificar', 'OTHER':'Otros',
+  },
+
+  _comp(nombre) {
+    const n = String(nombre || '').trim().toUpperCase();
+    if (this._NHTSA_COMP[n]) return this._NHTSA_COMP[n];
+    /* "AIR BAGS: AIR BAG/RESTRAINT CONTROL MODULE" → traduce la familia y deja el detalle */
+    const [fam, ...resto] = n.split(':');
+    const t = this._NHTSA_COMP[fam.trim()];
+    return t ? (resto.length ? `${t}: ${resto.join(':').trim().toLowerCase()}` : t) : nombre;
+  },
+
+  /* Pinta campañas + quejas dentro de un contenedor ya existente. */
+  async pintarCampanas(idContenedor, marca, modelo, anio) {
+    const el = document.getElementById(idContenedor);
+    if (!el) return;
+    el.innerHTML = `<div class="card" style="padding:10px;margin-top:8px;font-size:12px;color:var(--text3)">🔎 Consultando campañas de fábrica en NHTSA…</div>`;
+    let campanas = [], quejas = [];
+    try {
+      [campanas, quejas] = await Promise.all([
+        this._nhtsaBuscar('recalls/recallsByVehicle', marca, modelo, anio),
+        this._nhtsaBuscar('complaints/complaintsByVehicle', marca, modelo, anio).catch(() => []),
+      ]);
+    } catch (e) {
+      el.innerHTML = `<div class="card" style="padding:10px;margin-top:8px;border-left:3px solid var(--amber);font-size:12px">
+        ⚠️ No se pudo consultar NHTSA (${this._esc(e.message)}). Es una fuente externa: si no hay internet, el diagnóstico local sigue sirviendo.</div>`;
+      return;
+    }
+
+    /* Las quejas sirven agrupadas: "en este modelo lo que más reportan es X".
+       Una por una son 200+ relatos sueltos y no ayudan a decidir qué revisar. */
+    const porComponente = {};
+    quejas.forEach(q => String(q.components || 'OTROS').split(/\s*,\s*/).map(c => this._comp(c)).forEach(c => {
+      if (c) porComponente[c] = (porComponente[c] || 0) + 1;
+    }));
+    const top = Object.entries(porComponente).sort((a, b) => b[1] - a[1]).slice(0, 6);
+
+    el.innerHTML = `
+      <div class="card" style="padding:10px;margin-top:8px;border-left:3px solid ${campanas.length ? 'var(--red)' : 'var(--border)'}">
+        <b style="font-size:12px">🔔 CAMPAÑAS DE FÁBRICA (NHTSA) — ${this._esc(marca)} ${this._esc(modelo)} ${this._esc(anio)}</b>
+        ${campanas.length ? `
+          <div style="font-size:12px;color:var(--red);font-weight:800;margin-top:4px">
+            ${campanas.length} llamado(s) a revisión: la agencia debe repararlo sin costo. Confirmar con el número de campaña antes de cotizar.
+          </div>
+          <div style="margin-top:8px;display:flex;flex-direction:column;gap:8px">
+            ${campanas.slice(0, 8).map(c => `
+              <div style="border:1px solid var(--border);border-radius:8px;padding:8px">
+                <div style="font-weight:800;font-size:12.5px">${this._esc(this._comp(c.Component) || 'Componente no indicado')}</div>
+                <div style="font-size:11px;color:var(--text3);margin:2px 0">Campaña ${this._esc(c.NHTSACampaignNumber || '—')}${c.ReportReceivedDate ? ` · ${this._esc(c.ReportReceivedDate)}` : ''}</div>
+                <div style="font-size:12px">${this._esc((c.Summary || '').slice(0, 300))}</div>
+                <div style="font-size:10px;color:var(--text3)">texto original de NHTSA (inglés)</div>
+                ${c.Remedy ? `<div style="font-size:12px;margin-top:4px"><b>Solución de fábrica:</b> ${this._esc(c.Remedy.slice(0, 300))}</div>` : ''}
+              </div>`).join('')}
+          </div>
+          ${campanas.length > 8 ? `<div style="font-size:11px;color:var(--text3);margin-top:6px">y ${campanas.length - 8} más — se muestran las 8 primeras</div>` : ''}
+        ` : `<div style="font-size:12px;margin-top:4px">Sin campañas registradas en NHTSA.</div>`}
+        ${top.length ? `
+          <div style="margin-top:10px;border-top:1px solid var(--border);padding-top:8px">
+            <b style="font-size:12px">📋 LO QUE MÁS REPORTAN LOS DUEÑOS (${quejas.length} quejas)</b>
+            <div style="font-size:12px;margin-top:4px">${top.map(([c, n]) => `${this._esc(c)} <b>(${n})</b>`).join(' · ')}</div>
+          </div>` : ''}
+        <div style="font-size:10.5px;color:var(--text3);margin-top:8px">
+          Fuente: NHTSA (gobierno de EE.UU., dominio público). Cubre el mercado estadounidense;
+          un vehículo importado de otro mercado puede no aparecer aquí.
+        </div>
+      </div>`;
+  },
+
+  /* Consulta suelta, sin necesidad de escanear: sirve al cotizar. */
+  modalCampanas() {
+    const vs = this._vehiculos || [];
+    UI.modal('🔔 Campañas de fábrica', `
+      <p style="font-size:12.5px;color:var(--text2);margin-bottom:10px">
+        Revisa si el fabricante tiene un llamado a revisión para este vehículo. La reparación
+        de una campaña la hace la agencia <b>sin costo</b>: conviene verificarlo antes de cotizar.
+      </p>
+      ${vs.length ? `<label class="form-label">Tomar datos de un vehículo del taller</label>
+      <select class="form-select" style="width:100%;margin-bottom:10px" onchange="Modulos.diagnostico_obd._llenarCampanas(this.value)">
+        <option value="">— escribir a mano —</option>
+        ${vs.map(v => `<option value="${this._esc(v.id)}">${this._esc(v.placa || '')} ${this._esc(v.marca || '')} ${this._esc(v.modelo || '')} ${this._esc(v.anio || '')}</option>`).join('')}
+      </select>` : ''}
+      <div style="display:grid;grid-template-columns:1fr 1fr 90px;gap:8px">
+        <div><label class="form-label">Marca</label><input class="form-input" id="camp-marca" placeholder="Toyota"></div>
+        <div><label class="form-label">Modelo</label><input class="form-input" id="camp-modelo" placeholder="Corolla"></div>
+        <div><label class="form-label">Año</label><input class="form-input" id="camp-anio" type="number" placeholder="2015"></div>
+      </div>
+      <button class="btn btn-brand" style="width:100%;margin-top:10px" onclick="Modulos.diagnostico_obd.buscarCampanas()">🔎 Buscar</button>
+      <div id="camp-res"></div>
+    `, '620px');
+  },
+
+  _llenarCampanas(id) {
+    const v = (this._vehiculos || []).find(x => x.id === id);
+    if (!v) return;
+    document.getElementById('camp-marca').value = v.marca || '';
+    document.getElementById('camp-modelo').value = v.modelo || '';
+    document.getElementById('camp-anio').value = v.anio || '';
+  },
+
+  buscarCampanas() {
+    const marca = document.getElementById('camp-marca').value.trim();
+    const modelo = document.getElementById('camp-modelo').value.trim();
+    const anio = document.getElementById('camp-anio').value.trim();
+    if (!marca || !modelo || !anio) return UI.toast('Marca, modelo y año son necesarios', 'warn');
+    this.pintarCampanas('camp-res', marca, modelo, anio);
+  },
+
+  _esc(t) {
+    return String(t ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+  },
+
   _desconectar() {
     this._stopLive();
     try { this._dev?.gatt?.disconnect(); } catch (_) {}
@@ -1152,6 +1311,7 @@ Modulos.diagnostico_obd = {
           <select class="form-select" style="width:90px" onchange="Modulos.diagnostico_obd._anio=+this.value;Modulos.diagnostico_obd.render()">
             ${anios.map(a=>`<option ${a===this._anio?'selected':''}>${a}</option>`).join('')}
           </select>
+          <button class="btn btn-ghost" onclick="Modulos.diagnostico_obd.modalCampanas()">🔔 Campañas de fábrica</button>
           <button class="btn btn-ghost" onclick="Modulos.diagnostico_obd.render()">↻ Actualizar</button>
           ${puedeEditar ? `<button class="btn btn-brand" onclick="Modulos.diagnostico_obd.modalEscanear()">📡 Nuevo Escaneo</button>` : ''}
         </div>
@@ -1313,6 +1473,7 @@ Modulos.diagnostico_obd = {
         <button class="btn btn-sm btn-cyan" style="margin-top:6px" onclick="Modulos.diagnostico_obd.aplicarVIN()">📋 Completar ficha del vehículo</button>
       </div>` : ''}
       ${this._tablaDTCs(s)}
+      <div id="obd-campanas"></div>
       ${this._freezeHTML(s.freeze_frame)}
       <div class="card" style="padding:10px;margin-top:8px">
         <b style="font-size:12px">DATOS EN VIVO (${Object.keys(s.datos||{}).length} sensores)</b>
@@ -1329,6 +1490,13 @@ Modulos.diagnostico_obd = {
         <div id="obd-rec-info" style="font-size:11px;color:var(--text3);margin-top:6px"></div>
       </div>
       <div id="obd-ia"></div>`;
+
+    /* Se consulta sola, sin pedir clic: si el mecánico tuviera que acordarse,
+       la campaña de fábrica se descubre cuando el cliente ya pagó la reparación.
+       Va sin await para no demorar el resultado del escaneo. */
+    const v = (this._vehiculos || []).find(x => x.id === s.vehiculo_id);
+    const marca = s.nhtsa?.marca || v?.marca, modelo = s.nhtsa?.modelo || v?.modelo, anio = s.nhtsa?.anio || v?.anio;
+    if (marca && modelo && anio) this.pintarCampanas('obd-campanas', marca, modelo, anio);
   },
 
   _freezeHTML(fz) {
