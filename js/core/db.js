@@ -382,6 +382,15 @@ const DB = {
     return data || [];
   },
 
+  /* Índice estacional de TODOS los productos (100 = promedio del año). Se
+     calcula en la base: traer 35 mil precios al navegador para sacar 12
+     promedios por producto sería absurdo. Devuelve 12 filas por producto. */
+  async getMagaEstacionalidad(anios = 5) {
+    const { data, error } = await getSB().rpc('maga_estacionalidad', { p_anios: anios });
+    if (error) { console.warn('maga_estacionalidad:', error.message); return []; }
+    return data || [];
+  },
+
   /* ── BITÁCORA DE SOLUCIONES TÉCNICAS ──────────── */
   /* Lo que este taller ya resolvió para estos códigos o este modelo.
      Es la única fuente que cubre lo que ningún manual gringo trae (Hilux,

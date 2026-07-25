@@ -14,11 +14,86 @@ Modulos.precios_maga = {
 
   _CATS: { fruta:'🍉 Frutas', grano:'🌾 Granos', hortaliza:'🥬 Hortalizas', otro:'📦 Otros' },
   _MESES: ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'],
+  _vista: 'ventanas', _estac: null, _estacAnios: null,
+
+  /* ═══════════ ESTACIONALIDAD ═══════════
+     El índice dice cuánto vale cada mes respecto del promedio de su año
+     (100 = promedio). Lo importante no es solo la brecha entre el mes más caro
+     y el más barato, sino cuánto se repite: un patrón con mucha dispersión
+     entre años es ruido disfrazado de señal, y decirlo es parte del trabajo.
+     Medido sobre la serie real: mango 94%, papa 52%, sandía 36%… y frijol 13%,
+     porque lo almacenable no tiene ventana: todos pueden esperar. */
+  _MIN_BRECHA: 20,      // debajo de esto no hay negocio que perseguir
+  _MAX_DISPERSION: 30,  // arriba de esto el patrón no se repite lo suficiente
+
+  async _cargarEstac() {
+    if (this._estac && this._estacAnios === this._anios) return this._estac;
+    const filas = await DB.getMagaEstacionalidad(this._anios || 5);
+    const porProd = {};
+    filas.forEach(f => {
+      (porProd[f.producto_id] ||= {})[f.mes] = { i: Number(f.indice), n: f.anios, d: Number(f.dispersion) };
+    });
+    this._estac = porProd;
+    this._estacAnios = this._anios;
+    return porProd;
+  },
+
+  /* Resume el patrón de un producto: ventanas, brecha y qué tan confiable es. */
+  _resumen(meses) {
+    if (!meses) return null;
+    const ent = Object.entries(meses).map(([m, v]) => ({ mes: +m, ...v }));
+    /* Con menos de 6 meses los 3 más baratos y los 3 más caros se traslapan y el
+       consejo sale contradictorio ("comprá y vendé en julio"). Le pasa al durazno,
+       que solo tiene 4 meses con dato. Con 6 ya son conjuntos disjuntos, y así no
+       se pierde el mango (7 meses y 94% de brecha, de las señales más fuertes). */
+    if (ent.length < 6) return null;
+    const orden = [...ent].sort((a, b) => a.i - b.i);
+    const brecha = (orden[orden.length - 1].i / orden[0].i - 1) * 100;
+    const disp = ent.reduce((s, x) => s + x.d, 0) / ent.length;
+    const baratos = orden.slice(0, 3).map(x => x.mes);
+    const caros = orden.slice(-3).reverse().map(x => x.mes);
+    let fuerza, nota;
+    if (brecha < this._MIN_BRECHA) {
+      fuerza = 'ninguna';
+      nota = 'El precio casi no cambia con la temporada: no hay ventana que aprovechar.';
+    } else if (disp > this._MAX_DISPERSION) {
+      fuerza = 'debil';
+      nota = 'El patrón existe pero cambia mucho de un año a otro: tomarlo como pista, no como plan.';
+    } else {
+      fuerza = brecha >= 35 ? 'fuerte' : 'moderada';
+      nota = 'El patrón se repite con regularidad entre años.';
+    }
+    return { meses: ent, brecha, disp, baratos, caros, fuerza, nota };
+  },
+
+  _mesActual() { return new Date().getMonth() + 1; },
 
   async render() {
     const el = document.getElementById('page-content');
     UI.loading(el);
     if (!this._prods.length) this._prods = await DB.getMagaProductos();
+    await this._cargarEstac();
+
+    const vistas = `<div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
+      <button class="btn btn-sm ${this._vista==='ventanas'?'btn-cyan':'btn-ghost'}" onclick="Modulos.precios_maga._irVista('ventanas')">🎯 Ventanas de este mes</button>
+      <button class="btn btn-sm ${this._vista==='explorar'?'btn-cyan':'btn-ghost'}" onclick="Modulos.precios_maga._irVista('explorar')">🔍 Explorar productos</button>
+    </div>`;
+
+    if (this._vista === 'ventanas') {
+      el.innerHTML = `
+        <div class="page-header">
+          <div>
+            <h1 class="page-title">📈 Precios de referencia (MAGA)</h1>
+            <p class="page-subtitle">// Estacionalidad sobre ${this._anios || 5} años · ${this._prods.length} productos</p>
+          </div>
+        </div>
+        <div class="page-body">
+          ${Modulos.venta_granos?._tabsHTML ? Modulos.venta_granos._tabsHTML() : ''}
+          ${vistas}
+          ${this._ventanasHTML()}
+        </div>`;
+      return;
+    }
 
     const filtrados = this._filtrar();
     el.innerHTML = `
@@ -30,6 +105,7 @@ Modulos.precios_maga = {
       </div>
       <div class="page-body">
         ${Modulos.venta_granos?._tabsHTML ? Modulos.venta_granos._tabsHTML() : ''}
+        ${vistas}
         <div class="card" style="padding:12px;margin-bottom:12px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">
           <input class="form-input" id="maga-busca" placeholder="Buscar producto: sandía, frijol, tomate..."
                  style="flex:2;min-width:220px" value="${UI.esc(this._busca)}"
@@ -54,6 +130,75 @@ Modulos.precios_maga = {
         .maga-item.activo{background:var(--surface2);border-left:3px solid var(--green)}
         @media(max-width:820px){.maga-layout{grid-template-columns:1fr !important}}
       </style>`;
+  },
+
+  _irVista(v) { this._vista = v; this.render(); },
+
+  /* Qué conviene mirar ESTE mes. Sin esta vista el usuario tendría que adivinar
+     qué producto abrir; acá el sistema le dice cuáles están en su ventana. */
+  _ventanasHTML() {
+    const mes = this._mesActual();
+    const comprar = [], vender = [];
+    for (const p of this._prods) {
+      const r = this._resumen(this._estac?.[p.id]);
+      if (!r || r.fuerza === 'ninguna' || r.fuerza === 'debil') continue;
+      const fila = { p, r, idx: r.meses.find(m => m.mes === mes)?.i };
+      if (r.baratos.includes(mes)) comprar.push(fila);
+      else if (r.caros.includes(mes)) vender.push(fila);
+    }
+    const orden = (a, b) => b.r.brecha - a.r.brecha;
+    comprar.sort(orden); vender.sort(orden);
+
+    const tarjeta = (f, tipo) => {
+      const color = tipo === 'compra' ? 'var(--green)' : 'var(--red)';
+      const otros = tipo === 'compra' ? f.r.caros : f.r.baratos;
+      return `<div style="border:1px solid var(--border);border-left:3px solid ${color};border-radius:10px;padding:9px 11px;cursor:pointer"
+                   onclick="Modulos.precios_maga._verDesdeVentanas(${f.p.id})">
+        <div style="font-size:12.5px;font-weight:800">${UI.esc(f.p.nombre)}</div>
+        <div style="font-size:10.5px;color:var(--text3);margin:2px 0">${UI.esc(f.p.medida)}</div>
+        <div style="font-size:11.5px">
+          ${tipo === 'compra'
+            ? `Suele estar <b style="color:${color}">barato</b> en ${this._nombresMeses(f.r.baratos)} · sube en ${this._nombresMeses(otros)}`
+            : `Suele estar <b style="color:${color}">caro</b> en ${this._nombresMeses(f.r.caros)} · baja en ${this._nombresMeses(otros)}`}
+        </div>
+        <div style="font-size:11px;color:var(--text3);margin-top:3px">
+          brecha histórica <b style="color:${color}">${f.r.brecha.toFixed(0)}%</b> ·
+          ${f.r.fuerza === 'fuerte' ? 'patrón fuerte' : 'patrón moderado'} (±${f.r.disp.toFixed(0)} pts entre años)
+        </div>
+      </div>`;
+    };
+
+    const bloque = (titulo, lista, tipo, vacio) => `
+      <div class="card" style="padding:12px">
+        <b style="font-size:12.5px">${titulo}</b>
+        ${lista.length
+          ? `<div style="display:flex;flex-direction:column;gap:8px;margin-top:8px">${lista.slice(0, 12).map(f => tarjeta(f, tipo)).join('')}</div>
+             ${lista.length > 12 ? `<div style="font-size:11px;color:var(--text3);margin-top:6px">y ${lista.length - 12} más</div>` : ''}`
+          : `<div style="font-size:12px;color:var(--text3);margin-top:6px">${vacio}</div>`}
+      </div>`;
+
+    return `
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:12px" class="maga-ventanas">
+        ${bloque(`🟢 EN SU MES BARATO — conviene comprar (${this._MESES[mes-1]})`, comprar, 'compra',
+                 'Ningún producto con patrón confiable está en su piso este mes.')}
+        ${bloque(`🔴 EN SU MES CARO — conviene vender (${this._MESES[mes-1]})`, vender, 'venta',
+                 'Ningún producto con patrón confiable está en su pico este mes.')}
+      </div>
+      <div class="card" style="padding:11px;margin-top:12px;font-size:11.5px;color:var(--text3)">
+        Solo se listan productos cuya brecha entre el mes más caro y el más barato supera el
+        ${this._MIN_BRECHA}% y cuyo patrón se repite entre años (dispersión bajo ${this._MAX_DISPERSION} puntos).
+        Los que no aparecen no es que falten datos: es que <b>no tienen ventana</b> — el frijol, por ejemplo,
+        se mueve apenas 13% porque al ser almacenable todos pueden esperar.
+        Esto describe lo que ha pasado, no lo que va a pasar: una sequía o un cambio de importaciones rompe cualquier patrón.
+      </div>`;
+  },
+
+  _nombresMeses(ms) { return ms.map(m => this._MESES[m-1]).join(', '); },
+
+  async _verDesdeVentanas(id) {
+    this._vista = 'explorar';
+    await this.render();
+    await this.ver(id);
   },
 
   _filtrar() {
@@ -188,12 +333,74 @@ Modulos.precios_maga = {
 
         <div style="overflow-x:auto">${grafica}</div>
 
+        ${this._estacionalidadHTML(p)}
+
         <div style="font-size:10.5px;color:var(--text3);margin-top:8px">
           ${datos.length} observaciones · ${meses.length} meses · fuente:
           <a href="https://precios.maga.gob.gt/otros/datos-abiertos/" target="_blank" rel="noopener">datos abiertos del MAGA</a>.
           El percentil dice si el precio de hoy está caro o barato frente a su propio rango del período; no es un pronóstico.
         </div>
       </div>`;
+  },
+
+  /* Barras de los 12 meses: verde lo barato, rojo lo caro, y marcado el mes en
+     curso. Es la vista que responde "¿cuándo compro y cuándo vendo?". */
+  _estacionalidadHTML(p) {
+    const r = this._resumen(this._estac?.[p.id]);
+    if (!r) {
+      return `<div style="margin-top:12px;border-top:1px solid var(--border);padding-top:10px;font-size:12px;color:var(--text3)">
+        <b style="font-size:12px;color:var(--text2)">🗓 ESTACIONALIDAD</b><br>
+        No hay suficiente historia reciente de este producto para calcular un patrón confiable
+        (hacen falta al menos 3 años con datos).
+      </div>`;
+    }
+    const mesHoy = this._mesActual();
+    const barras = Array.from({ length: 12 }, (_, k) => {
+      const m = r.meses.find(x => x.mes === k + 1);
+      if (!m) return `<div style="flex:1;text-align:center"><div style="height:70px"></div>
+        <div style="font-size:9.5px;color:var(--text3)">${this._MESES[k]}</div></div>`;
+      const color = m.i <= 95 ? 'var(--green)' : m.i >= 105 ? 'var(--red)' : 'var(--amber)';
+      // el alto se escala entre 70 y 130 del índice, que es donde vive casi todo
+      const alto = Math.max(6, Math.min(70, ((m.i - 70) / 60) * 70));
+      const hoy = (k + 1) === mesHoy;
+      return `<div style="flex:1;text-align:center" title="${this._MESES[k]}: ${m.i.toFixed(0)} (±${m.d.toFixed(0)}, ${m.n} años)">
+        <div style="height:70px;display:flex;align-items:flex-end;justify-content:center">
+          <div style="width:74%;height:${alto}px;background:${color};border-radius:3px 3px 0 0;opacity:${hoy?1:.72}"></div>
+        </div>
+        <div style="font-size:9.5px;color:${hoy?'var(--text)':'var(--text3)'};font-weight:${hoy?800:400}">${this._MESES[k]}</div>
+        <div style="font-size:9px;color:var(--text3)">${m.i.toFixed(0)}</div>
+      </div>`;
+    }).join('');
+
+    const colorF = { fuerte:'var(--green)', moderada:'var(--amber)', debil:'var(--amber)', ninguna:'var(--text3)' }[r.fuerza];
+    const etiqueta = { fuerte:'Patrón fuerte', moderada:'Patrón moderado', debil:'Patrón poco confiable', ninguna:'Sin ventana' }[r.fuerza];
+
+    return `<div style="margin-top:12px;border-top:1px solid var(--border);padding-top:10px">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">
+        <b style="font-size:12px">🗓 ESTACIONALIDAD — ${this._anios || 5} años</b>
+        <span style="font-size:10.5px;font-weight:800;color:${colorF};border:1px solid ${colorF};border-radius:6px;padding:1px 7px">
+          ${etiqueta} · brecha ${r.brecha.toFixed(0)}%
+        </span>
+      </div>
+      <div style="font-size:10.5px;color:var(--text3);margin:2px 0 6px">100 = promedio del año · el mes en curso va resaltado</div>
+      <div style="display:flex;gap:3px;align-items:flex-end">${barras}</div>
+      ${r.fuerza === 'ninguna' ? `
+        <div style="font-size:12px;color:var(--text2);margin-top:8px">${UI.esc(r.nota)}</div>`
+      : `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:8px;margin-top:10px">
+          <div style="background:var(--surface2);border-left:3px solid var(--green);border-radius:8px;padding:8px 10px">
+            <div style="font-size:10px;color:var(--text3);text-transform:uppercase">Suele estar barato</div>
+            <div style="font-size:13.5px;font-weight:800;color:var(--green)">${this._nombresMeses(r.baratos)}</div>
+          </div>
+          <div style="background:var(--surface2);border-left:3px solid var(--red);border-radius:8px;padding:8px 10px">
+            <div style="font-size:10px;color:var(--text3);text-transform:uppercase">Suele estar caro</div>
+            <div style="font-size:13.5px;font-weight:800;color:var(--red)">${this._nombresMeses(r.caros)}</div>
+          </div>
+        </div>
+        <div style="font-size:11.5px;color:var(--text2);margin-top:8px">
+          ${UI.esc(r.nota)} Dispersión entre años: ±${r.disp.toFixed(0)} puntos.
+          Contra la brecha del ${r.brecha.toFixed(0)}%, restá tu costo de bodega y la merma antes de decidir si esperar conviene.
+        </div>`}
+    </div>`;
   },
 
   _kpi(label, valor, color) {

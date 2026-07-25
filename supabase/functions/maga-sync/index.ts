@@ -145,8 +145,18 @@ Deno.serve(async (req) => {
     const contenido = unzipSync(zipBytes);
     const nombreCsv = Object.keys(contenido).find((k) => /\.csv$/i.test(k));
     if (!nombreCsv) throw new Error("El ZIP del MAGA no trae ningún CSV");
-    // el archivo viene en Latin-1: con UTF-8 los nombres salen rotos ("r?balo")
-    const texto = new TextDecoder("iso-8859-1").decode(contenido[nombreCsv]);
+    /* El archivo del MAGA es UTF-8 (verificado decodificando el archivo entero).
+       Decodificarlo como Latin-1 "funciona" sin lanzar error pero deja los
+       nombres doblemente codificados ("Limón" → "LimÃ³n"), y de paso rompe la
+       clasificación por palabra clave. Se intenta UTF-8 estricto y solo si el
+       archivo dejara de serlo se cae a Latin-1. */
+    const bytes = contenido[nombreCsv];
+    let texto: string;
+    try {
+      texto = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+    } catch {
+      texto = new TextDecoder("iso-8859-1").decode(bytes);
+    }
 
     const filas = parseCSV(texto);
     const cab = filas[0].map((h) => h.trim());
