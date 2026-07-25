@@ -423,6 +423,26 @@ const DB = {
     return data || [];
   },
 
+  /* Productos que este comercio sigue: son los que dispara la alerta mensual
+     por correo (Edge Function maga-alertas). */
+  async getSeguimientoMaga() {
+    const { data } = await getSB().from('maga_seguimiento')
+      .select('producto_id').eq('tenant_id', getTID());
+    return new Set((data || []).map(r => r.producto_id));
+  },
+
+  async seguirProductoMaga(productoId, seguir) {
+    const sb = getSB();
+    if (!seguir) {
+      const { error } = await sb.from('maga_seguimiento').delete()
+        .eq('tenant_id', getTID()).eq('producto_id', productoId);
+      return { error };
+    }
+    const { error } = await sb.from('maga_seguimiento')
+      .upsert({ tenant_id: getTID(), producto_id: productoId }, { onConflict: 'tenant_id,producto_id' });
+    return { error };
+  },
+
   /* ── BITÁCORA DE SOLUCIONES TÉCNICAS ──────────── */
   /* Lo que este taller ya resolvió para estos códigos o este modelo.
      Es la única fuente que cubre lo que ningún manual gringo trae (Hilux,

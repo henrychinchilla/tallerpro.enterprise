@@ -72,7 +72,7 @@ Modulos.precios_maga = {
     const el = document.getElementById('page-content');
     UI.loading(el);
     if (!this._prods.length) this._prods = await DB.getMagaProductos();
-    await this._cargarEstac();
+    await Promise.all([this._cargarEstac(), this._cargarSeguidos()]);
 
     const vistas = `<div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
       <button class="btn btn-sm ${this._vista==='ventanas'?'btn-cyan':'btn-ghost'}" onclick="Modulos.precios_maga._irVista('ventanas')">🎯 Ventanas de este mes</button>
@@ -91,6 +91,7 @@ Modulos.precios_maga = {
           ${Modulos.venta_granos?._tabsHTML ? Modulos.venta_granos._tabsHTML() : ''}
           ${vistas}
           ${this._ventanasHTML()}
+          ${this._calendarioHTML()}
         </div>`;
       return;
     }
@@ -133,6 +134,87 @@ Modulos.precios_maga = {
   },
 
   _irVista(v) { this._vista = v; this.render(); },
+
+  /* ═══════════ SEGUIMIENTO Y CALENDARIO (fase 4) ═══════════
+     La ventana de compra dura semanas y se pasa. Si hay que acordarse de abrir
+     la pantalla, el análisis no sirve: por eso el comercio marca los productos
+     que le importan y el día 8 de cada mes le llega el aviso por correo
+     (Edge Function maga-alertas, con los mismos umbrales que esta pantalla). */
+  _seguidos: new Set(),
+
+  async _cargarSeguidos() {
+    try { this._seguidos = await DB.getSeguimientoMaga(); }
+    catch (_) { this._seguidos = new Set(); }
+    return this._seguidos;
+  },
+
+  async alternarSeguir(id, ev) {
+    if (ev) ev.stopPropagation();
+    const seguir = !this._seguidos.has(id);
+    const { error } = await DB.seguirProductoMaga(id, seguir);
+    if (error) return UI.toast('No se pudo guardar: ' + error.message, 'error');
+    if (seguir) this._seguidos.add(id); else this._seguidos.delete(id);
+    UI.toast(seguir ? 'Te avisamos cuando entre en ventana ⭐' : 'Ya no lo seguís');
+    await this.render();   // con await, quien llame sabe cuándo quedó pintado
+  },
+
+  _btnSeguir(id, chico) {
+    const on = this._seguidos.has(id);
+    return `<button class="btn btn-sm ${on?'btn-amber':'btn-ghost'}" style="${chico?'padding:2px 7px;font-size:11px':''}"
+      title="${on?'Dejar de seguir':'Seguir: te avisamos por correo cuando entre en ventana'}"
+      onclick="Modulos.precios_maga.alternarSeguir(${id}, event)">${on?'⭐ Siguiendo':'☆ Seguir'}</button>`;
+  },
+
+  /* Calendario anual: una fila por producto seguido, doce columnas. Sirve para
+     planificar el año completo de un vistazo, no solo el mes en curso. */
+  _calendarioHTML() {
+    const seguidos = this._prods.filter(p => this._seguidos.has(p.id));
+    if (!seguidos.length) {
+      return `<div class="card" style="padding:22px;text-align:center;color:var(--text3);margin-top:12px">
+        <div style="font-size:30px">🗓</div>
+        <p style="font-size:13px;margin-top:6px">Todavía no seguís ningún producto.</p>
+        <p style="font-size:12px">Marcá con <b>☆ Seguir</b> los que te interesen: acá vas a ver su año completo
+           y el día 8 de cada mes te llega por correo cuáles entraron en ventana.</p>
+      </div>`;
+    }
+    const mesHoy = this._mesActual();
+    const filas = seguidos.map(p => {
+      const r = this._resumen(this._estac?.[p.id]);
+      const celdas = Array.from({ length: 12 }, (_, k) => {
+        const m = r?.meses.find(x => x.mes === k + 1);
+        const hoy = (k + 1) === mesHoy;
+        if (!m) return `<td style="padding:0"><div style="height:26px;background:var(--surface2);border:1px solid var(--border);${hoy?'outline:2px solid var(--cyan);outline-offset:-2px':''}"></div></td>`;
+        const color = m.i <= 95 ? 'var(--green)' : m.i >= 105 ? 'var(--red)' : 'var(--amber)';
+        return `<td style="padding:0" title="${this._MESES[k]}: índice ${m.i.toFixed(0)}">
+          <div style="height:26px;background:${color};opacity:${hoy?1:.7};display:flex;align-items:center;justify-content:center;
+                      font-size:9.5px;font-weight:700;color:#08111c;${hoy?'outline:2px solid var(--cyan);outline-offset:-2px':''}">
+            ${m.i.toFixed(0)}</div></td>`;
+      }).join('');
+      return `<tr>
+        <td style="white-space:nowrap;padding-right:8px">
+          <div style="font-size:12px;font-weight:700">${UI.esc(p.nombre)}</div>
+          <div style="font-size:10px;color:var(--text3)">${r ? `brecha ${r.brecha.toFixed(0)}%` : 'sin patrón'}</div>
+        </td>
+        ${celdas}
+        <td style="padding-left:8px">${this._btnSeguir(p.id, true)}</td>
+      </tr>`;
+    }).join('');
+
+    return `<div class="card" style="padding:12px;margin-top:12px;overflow-x:auto">
+      <b style="font-size:12.5px">🗓 CALENDARIO ANUAL — ${seguidos.length} producto(s) que seguís</b>
+      <div style="font-size:11px;color:var(--text3);margin:2px 0 8px">
+        100 = promedio del año · verde barato, rojo caro · el mes en curso va remarcado
+      </div>
+      <table style="width:100%;border-collapse:separate;border-spacing:2px;min-width:640px">
+        <thead><tr><th></th>${this._MESES.map(m => `<th style="font-size:10px;color:var(--text3);font-weight:600">${m}</th>`).join('')}<th></th></tr></thead>
+        <tbody>${filas}</tbody>
+      </table>
+      <div style="font-size:11px;color:var(--text3);margin-top:8px">
+        El día 8 de cada mes te llega un correo con los que entraron en ventana. Solo se avisa de
+        patrones con brecha sobre ${this._MIN_BRECHA}% que se repiten entre años.
+      </div>
+    </div>`;
+  },
 
   /* ═══════════ MI PRECIO CONTRA EL MERCADO (fase 3) ═══════════
      La referencia sola dice "el mercado estaba a Q X". Cruzada con lo que el
@@ -274,9 +356,12 @@ Modulos.precios_maga = {
             ? `Suele estar <b style="color:${color}">barato</b> en ${this._nombresMeses(f.r.baratos)} · sube en ${this._nombresMeses(otros)}`
             : `Suele estar <b style="color:${color}">caro</b> en ${this._nombresMeses(f.r.caros)} · baja en ${this._nombresMeses(otros)}`}
         </div>
-        <div style="font-size:11px;color:var(--text3);margin-top:3px">
-          brecha histórica <b style="color:${color}">${f.r.brecha.toFixed(0)}%</b> ·
-          ${f.r.fuerza === 'fuerte' ? 'patrón fuerte' : 'patrón moderado'} (±${f.r.disp.toFixed(0)} pts entre años)
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:3px;flex-wrap:wrap">
+          <span style="font-size:11px;color:var(--text3)">
+            brecha histórica <b style="color:${color}">${f.r.brecha.toFixed(0)}%</b> ·
+            ${f.r.fuerza === 'fuerte' ? 'patrón fuerte' : 'patrón moderado'} (±${f.r.disp.toFixed(0)} pts entre años)
+          </span>
+          ${this._btnSeguir(f.p.id, true)}
         </div>
       </div>`;
     };
@@ -416,6 +501,7 @@ Modulos.precios_maga = {
             </div>
           </div>
           <div style="text-align:right">
+            <div style="margin-bottom:4px">${this._btnSeguir(p.id, true)}</div>
             <div style="font-size:22px;font-weight:900;font-family:'Outfit',sans-serif">${UI.q(ultimo)}</div>
             <div style="font-size:11px;color:var(--text3)">${UI.esc(ultimaFecha.slice(0,7))}${
               p.kg_equiv ? ` · ${UI.q(ultimo / Number(p.kg_equiv))}/kg` : ''}</div>
