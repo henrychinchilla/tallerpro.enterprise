@@ -1098,6 +1098,35 @@ const DB = {
     return data || [];
   },
 
+  /* ── CAJA POS ─────────────────────────────────────── */
+  async getCajaPosAbierta() {
+    const { data } = await getSB().from('cajas_pos').select('*')
+      .eq('tenant_id', getTID()).eq('estado', 'abierta').maybeSingle();
+    return data || null;
+  },
+
+  async abrirCajaPos(fields) {
+    const { data, error } = await getSB().from('cajas_pos').insert({
+      tenant_id: getTID(), ...fields
+    }).select().single();
+    return { data, error };
+  },
+
+  async cerrarCajaPos(id, fields) {
+    const { data, error } = await getSB().from('cajas_pos').update({
+      ...fields, estado:'cerrada', cerrada_at:new Date().toISOString(), updated_at:new Date().toISOString()
+    }).eq('id', id).eq('tenant_id', getTID()).eq('estado', 'abierta').select().maybeSingle();
+    return { data, error };
+  },
+
+  async getVentasParaCaja(desde) {
+    const { data } = await getSB().from('facturas')
+      .select('id,total,metodo_pago,estado,created_at')
+      .eq('tenant_id', getTID()).gte('created_at', desde)
+      .order('created_at', { ascending:false });
+    return data || [];
+  },
+
   async upsertFactura(fields) {
     const payload = { ...fields, tenant_id: getTID() };
     if (fields.id) {

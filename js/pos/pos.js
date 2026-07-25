@@ -8,7 +8,7 @@
 const POS = {
   _prod: [], _clientes: [], _cart: [], _cliente: null,
   _metodo: 'Efectivo', _descuento: 0, _canje: 0, _tarjetaDatos: null,
-  _busca: '', _cat: '', _envioData: null,
+  _busca: '', _cat: '', _envioData: null, _ventasHoy: [], _caja: null,
   _ROLES_OK: ['superadmin','admin','gerente_tal','gerente_fin','recepcionista','vendedor'],
 
   async iniciar() {
@@ -32,30 +32,117 @@ const POS = {
     return this._ROLES_OK.includes(rol);
   },
 
-  _postLogin() {
+  async _postLogin() {
     if (!this._puedeEntrar()) return this.renderDenegado();
+    this._caja = await DB.getCajaPosAbierta();
+    if (!this._caja) return this.renderApertura();
+    return this.render();
+  },
+
+  renderApertura() {
+    const cfg = Auth.tenant?.config_pos_caja || {};
+    const sugerido = Number(cfg.fondo_inicial_sugerido ?? 500);
+    document.getElementById('pos-root').innerHTML = `
+      <div class="pos-login-shell"><div class="pos-login-card">
+        <div class="pos-login-brand"><div class="pos-brand-mark">Q</div><div><strong>NexusPro</strong> <em>CAJA</em><span>Apertura de turno</span></div></div>
+        <h1>Abre tu caja</h1>
+        <p>Registra el efectivo disponible antes de iniciar cobros. Así NexusPro podrá calcular tu vuelto y cuadre de turno.</p>
+        <div class="form-group"><label class="form-label">Fondo inicial en efectivo (Q)</label>
+          <input class="form-input" id="pos-fondo-inicial" type="number" min="0" step="0.01" value="${sugerido.toFixed(2)}" autofocus></div>
+        <div class="form-group"><label class="form-label">Nota de apertura <span style="color:var(--text3)">(opcional)</span></label>
+          <input class="form-input" id="pos-nota-apertura" placeholder="Ej. Fondo entregado por gerente"></div>
+        <button class="pos-login-submit" onclick="POS.abrirCaja()">Abrir caja <span>→</span></button>
+        <div class="pos-login-back"><button class="btn btn-ghost btn-sm" onclick="POS.salir()">Cerrar sesión</button></div>
+      </div></div>`;
+  },
+
+  async abrirCaja() {
+    const fondo = Number(document.getElementById('pos-fondo-inicial')?.value);
+    if (!Number.isFinite(fondo) || fondo < 0) { UI.toast('Ingresa un fondo inicial válido', 'error'); return; }
+    const { data, error } = await DB.abrirCajaPos({
+      usuario_apertura_id: Auth.user.id, fondo_inicial:fondo,
+      notas_apertura:document.getElementById('pos-nota-apertura')?.value.trim() || null
+    });
+    if (error || !data) { UI.toast('No se pudo abrir caja: ' + (error?.message||''), 'error'); return; }
+    this._caja = data;
+    UI.toast('Caja abierta con ' + UI.q(fondo) + ' ✓');
     this.render();
+  },
+
+  async _resumenCaja() {
+    if (!this._caja) return { efectivo:0, total:0, ventas:0, esperado:0 };
+    const ventas = (await DB.getVentasParaCaja(this._caja.abierta_at)).filter(f => f.estado !== 'anulada');
+    const efectivo = ventas.filter(f => f.metodo_pago === 'Efectivo').reduce((s,f) => s + (Number(f.total)||0), 0);
+    const total = ventas.reduce((s,f) => s + (Number(f.total)||0), 0);
+    return { efectivo, total, ventas:ventas.length, esperado:(Number(this._caja.fondo_inicial)||0) + efectivo };
+  },
+
+  async modalCierreCaja() {
+    if (!this._caja) return;
+    const r = await this._resumenCaja();
+    UI.modal('🧾 Cierre de caja', `
+      <div class="alert alert-cyan"><div class="alert-icon">Q</div><div class="alert-body">Cuenta el efectivo físico antes de confirmar. NexusPro comparará el monto contado contra lo esperado.</div></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:14px 0">
+        <div class="card" style="padding:12px"><div class="text-muted" style="font-size:11px">Fondo inicial</div><b>${UI.q(this._caja.fondo_inicial)}</b></div>
+        <div class="card" style="padding:12px"><div class="text-muted" style="font-size:11px">Ventas en efectivo</div><b>${UI.q(r.efectivo)}</b></div>
+        <div class="card" style="padding:12px"><div class="text-muted" style="font-size:11px">Ventas del turno</div><b>${r.ventas} · ${UI.q(r.total)}</b></div>
+        <div class="card card-amber" style="padding:12px"><div class="text-muted" style="font-size:11px">Efectivo esperado</div><b style="font-size:18px">${UI.q(r.esperado)}</b></div>
+      </div>
+      <div class="form-group"><label class="form-label">Efectivo contado en caja (Q) *</label><input class="form-input" id="pos-efectivo-contado" type="number" min="0" step="0.01" placeholder="${r.esperado.toFixed(2)}"></div>
+      <div class="form-group"><label class="form-label">Observación de cierre</label><input class="form-input" id="pos-nota-cierre" placeholder="Ej. Faltante explicado / retiro para depósito"></div>
+      <div class="modal-footer"><button class="btn btn-ghost" onclick="UI.cerrarModal()">Cancelar</button><button class="btn btn-amber" onclick="POS.cerrarCaja()">Confirmar cierre</button></div>`, '520px');
+  },
+
+  async cerrarCaja() {
+    const contado = Number(document.getElementById('pos-efectivo-contado')?.value);
+    if (!Number.isFinite(contado) || contado < 0) { UI.toast('Ingresa el efectivo contado', 'error'); return; }
+    const r = await this._resumenCaja();
+    const diferencia = Math.round((contado - r.esperado) * 100) / 100;
+    const { error } = await DB.cerrarCajaPos(this._caja.id, {
+      usuario_cierre_id:Auth.user.id, efectivo_esperado:r.esperado, efectivo_contado:contado,
+      diferencia, ventas_efectivo:r.efectivo, ventas_total:r.total, num_ventas:r.ventas,
+      notas_cierre:document.getElementById('pos-nota-cierre')?.value.trim() || null
+    });
+    if (error) { UI.toast('No se pudo cerrar caja: ' + error.message, 'error'); return; }
+    UI.cerrarModal(); this._caja = null;
+    UI.toast(diferencia === 0 ? 'Caja cuadrada ✓' : `Cierre registrado · diferencia ${UI.q(diferencia)}`, diferencia === 0 ? 'success' : 'warn', 6000);
+    await Auth.logout(); this.renderLogin();
   },
 
   /* ── LOGIN ───────────────────────────────────────── */
   renderLogin() {
     document.getElementById('pos-root').innerHTML = `
-      <div style="min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px">
-        <div class="card" style="width:100%;max-width:380px">
-          <div style="text-align:center;margin-bottom:18px">
-            <div style="font-family:'Bebas Neue',sans-serif;font-size:30px;letter-spacing:1px">NEXUSPRO</div>
-            <div style="color:var(--amber);font-weight:800;letter-spacing:.1em">PUNTO DE VENTA</div>
+      <div class="pos-login-shell">
+        <div class="pos-login-card">
+          <div class="pos-login-brand">
+            <div class="pos-brand-mark">N</div>
+            <div><strong>NexusPro</strong> <em>POS</em><span>Tu caja, siempre en control</span></div>
           </div>
+          <h1>Inicia tu turno</h1>
+          <p>Accede con tu cuenta del sistema para cobrar y controlar tu caja.</p>
+          <button class="pos-google-btn" onclick="POS.loginConGoogle()"><span>G</span> Continuar con Google</button>
+          <div class="pos-login-divider"><span>o usa tu correo</span></div>
           <div class="form-group"><label class="form-label">Correo</label>
             <input class="form-input" id="pos-email" type="email" autocomplete="username"></div>
           <div class="form-group"><label class="form-label">Contraseña</label>
             <input class="form-input" id="pos-pass" type="password" autocomplete="current-password"
                    onkeydown="if(event.key==='Enter')POS.login()"></div>
-          <button class="btn btn-amber" style="width:100%" onclick="POS.login()">Ingresar</button>
+          <button class="pos-login-submit" onclick="POS.login()">Ingresar al POS <span>→</span></button>
           <div id="pos-login-err" style="color:var(--red);font-size:12px;margin-top:10px;text-align:center"></div>
-          <div style="text-align:center;margin-top:14px"><a href="/" style="color:var(--text3);font-size:12px">← Ir al sistema completo</a></div>
+          <div class="pos-login-back"><a href="/">← Ir al sistema completo</a></div>
         </div>
       </div>`;
+  },
+
+  async loginConGoogle() {
+    localStorage.setItem('google_intent', 'login');
+    const { error } = await getSB().auth.signInWithOAuth({
+      provider: 'google', options: { redirectTo: window.location.origin + '/pos.html' }
+    });
+    if (error) {
+      const err = document.getElementById('pos-login-err');
+      if (err) err.textContent = 'No se pudo conectar con Google: ' + error.message;
+    }
   },
 
   async login() {
@@ -103,7 +190,7 @@ const POS = {
 
   _guardarSesion() { UI.cerrarModal(); location.href = '/'; },
 
-  async _terminarTurno() {
+  async _terminarTurnoLegacy() {
     UI.cerrarModal();
     UI.toast('Generando cierre de caja...','info');
     const hoy = new Date().toISOString().slice(0,10);
@@ -136,11 +223,17 @@ const POS = {
   },
 
   /* ── PANTALLA PRINCIPAL ──────────────────────────── */
+  async _terminarTurno() {
+    UI.cerrarModal();
+    return this.modalCierreCaja();
+  },
+
   async render() {
     const root = document.getElementById('pos-root');
     root.innerHTML = `<div class="empty-state"><div class="empty-state-sm">⏳</div>Cargando productos...</div>`;
-    [this._prod, this._clientes] = await Promise.all([
-      DB.getInventario(), DB.getClientes()
+    const hoy = new Date().toISOString().slice(0,10);
+    [this._prod, this._clientes, this._ventasHoy] = await Promise.all([
+      DB.getInventario(), DB.getClientes(), DB.getFacturas(hoy, hoy)
     ]);
     this._pintar();
   },
@@ -238,7 +331,7 @@ const POS = {
           <div style="font-family:\'Outfit\',\'Bebas Neue\',sans-serif;font-size:24px;font-weight:900;letter-spacing:-0.5px;color:var(--amber)">🛒 POS</div>
           <div style="font-size:12px;color:var(--text3);background:var(--surface3);padding:4px 10px;border-radius:6px;font-weight:700">${Auth.tenant?.name||''}</div>
           <div style="margin-left:auto;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-            <button class="btn btn-ghost btn-sm" onclick="POS.corteDiario()">🧾 Corte Diario</button>
+            <button class="btn btn-ghost btn-sm" onclick="POS.modalCierreCaja()">🧾 Cerrar caja</button>
             <button class="btn btn-ghost btn-sm" onclick="POS.reportes()">📊 Reportes</button>
             <span class="pos-user-name" style="font-size:12px;color:var(--text2);font-weight:700;display:flex;align-items:center;gap:6px">${Auth.user?.avatar||'👤'} ${Auth.user?.nombre||Auth.user?.email||''}</span>
             <button class="btn btn-ghost btn-sm" onclick="POS.confirmarSalida()">⏻ Salir</button>
@@ -651,6 +744,7 @@ const POS = {
 
   /* ── COBRO ───────────────────────────────────────── */
   async cobrar() {
+    if (!this._caja?.id) { UI.toast('Abre la caja antes de cobrar', 'error'); return this.renderApertura(); }
     if (!this._cart.length) return;
     /* Política de precios: avisar si los descuentos dejan la venta bajo el margen mínimo */
     const Mmin = Number(Auth.tenant?.config_precios?.derivado?.multiplicador_min)||0;

@@ -80,6 +80,15 @@ Modulos.configuracion = {
               </div></div>
               <button class="btn btn-green" onclick="Modulos.configuracion.guardarPosTarjeta()">Guardar</button>
             </div>`; })()}
+            ${(()=>{ const caja = t.config_pos_caja || {}; return `
+            <div class="card card-amber mb-4">
+              <div class="card-sub mb-3">🧾 Caja del Punto de Venta</div>
+              <div class="form-group"><label class="form-label">Fondo inicial sugerido (Q)</label>
+                <input class="form-input mono-sm" id="cfg-caja-fondo" type="number" min="0" step="0.01" value="${Number(caja.fondo_inicial_sugerido ?? 500).toFixed(2)}">
+                <div style="font-size:10.5px;color:var(--text3);margin-top:3px">Se propone al abrir turno; cada cajero confirma el efectivo físico antes de cobrar.</div>
+              </div>
+              <button class="btn btn-amber" onclick="Modulos.configuracion.guardarCajaPOS()">Guardar configuración de caja</button>
+            </div>`; })()}
             <div class="card card-purple mb-4">
               <div class="card-sub mb-3">👥 Usuarios del Sistema</div>
               <button class="btn btn-cyan" style="width:100%" onclick="App.navegarA('usuarios')">
@@ -177,6 +186,16 @@ Modulos.configuracion = {
       UI.toast(cfg.habilitado ? 'Cobro con tarjeta activado ✓ Ya puedes cobrar con tarjeta en el POS' : 'Configuración guardada (cobro con tarjeta desactivado)');
     }
     else UI.toast('Error al guardar','error');
+  },
+
+  async guardarCajaPOS() {
+    const fondo = Number(document.getElementById('cfg-caja-fondo')?.value);
+    if (!Number.isFinite(fondo) || fondo < 0) { UI.toast('Ingresa un fondo inicial válido','error'); return; }
+    const cfg = { fondo_inicial_sugerido: fondo };
+    const ok = await DB.updateTenant({ config_pos_caja:cfg, updated_at:new Date().toISOString() });
+    if (!ok) { UI.toast('Error al guardar','error'); return; }
+    Auth.tenant.config_pos_caja = cfg;
+    UI.toast('Fondo inicial sugerido actualizado ✓');
   },
 
   async guardarSeguridad() {
