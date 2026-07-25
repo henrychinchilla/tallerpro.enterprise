@@ -42,24 +42,41 @@ Modulos._especialOT = {
   /* Slot temporal para el modal de anticipo (evita serializar JSON en onclick) */
   _ant: null,
 
+  /* Aritmética de abonos, pura y testeable (tools/test-abonos.js).
+     `anticipo` guarda el ACUMULADO: antes cada abono sobrescribía al
+     anterior y el saldo quedaba inflado. Redondeo a centavos para que
+     abonos fraccionados no dejen saldos fantasma de 0.001. */
+  _calcAbono(total, previo, monto) {
+    const t = Math.round((Number(total) || 0) * 100) / 100;
+    const p = Math.round((Number(previo) || 0) * 100) / 100;
+    const m = Math.round((Number(monto) || 0) * 100) / 100;
+    const pendiente = Math.max(0, Math.round((t - p) * 100) / 100);
+    if (!(m > 0))                return { ok:false, error:'Ingresa un monto válido', pendiente };
+    if (m > pendiente + 0.005)   return { ok:false, error:`El abono excede el saldo pendiente (${pendiente.toFixed(2)})`, pendiente };
+    const acumulado = Math.round((p + m) * 100) / 100;
+    return { ok:true, acumulado, saldo: Math.max(0, Math.round((t - acumulado) * 100) / 100), pendiente };
+  },
+
   /* Modal de anticipo del 50% con comprobante imprimible */
   async modalAnticipo(tablaProyecto, proyecto, campoTotal, modulo, renderFn, otNum='') {
     this._ant = { tablaProyecto, proyecto, campoTotal, modulo, renderFn };
     const total     = Number(proyecto[campoTotal]) || 0;
-    const sugerido  = Math.round(total * 0.5 * 100) / 100;
     const yaAbonado = Number(proyecto.anticipo) || 0;
-    const label     = { herreria:'proyecto', peleteria:'pedido', electronica:'reparación', refrigeracion:'servicio' }[modulo] || 'trabajo';
+    const pendiente = Math.max(0, Math.round((total - yaAbonado) * 100) / 100);
+    /* Primer abono: 50% sugerido. Abonos siguientes: lo que falta. */
+    const sugerido  = yaAbonado > 0 ? pendiente : Math.round(total * 0.5 * 100) / 100;
+    const label     = { herreria:'proyecto', peleteria:'pedido', electronica:'reparación', refrigeracion:'servicio', agroservicio:'servicio' }[modulo] || 'trabajo';
 
     UI.modal('💰 Registrar Anticipo / Abono', `
       <div style="background:var(--card2);border-radius:8px;padding:12px;margin-bottom:14px">
         <div style="font-size:13px;color:var(--text3)">Ref: <b>${proyecto.num||'—'}</b>${otNum ? ` · OT: <b>${otNum}</b>` : ''}</div>
         <div style="font-size:22px;font-weight:800;color:var(--cyan);margin-top:4px">${UI.q(total)}</div>
         <div style="font-size:12px;color:var(--text3)">Monto total del ${label}</div>
-        ${yaAbonado ? `<div style="font-size:13px;color:var(--amber);margin-top:4px">Ya abonado: ${UI.q(yaAbonado)}</div>` : ''}
+        ${yaAbonado ? `<div style="font-size:13px;color:var(--amber);margin-top:4px">Ya abonado: ${UI.q(yaAbonado)} · Pendiente: <b>${UI.q(pendiente)}</b></div>` : ''}
       </div>
       <div class="form-row">
-        <div class="form-group"><label class="form-label">Monto del anticipo (Q) <span style="color:var(--cyan)">(sugerido 50% = ${UI.q(sugerido)})</span></label>
-          <input class="form-input" id="ant-monto" type="number" min="0" step="0.01" value="${sugerido}" style="font-size:18px;font-weight:700"></div>
+        <div class="form-group"><label class="form-label">Monto de <b>este</b> abono (Q) <span style="color:var(--cyan)">(sugerido ${UI.q(sugerido)})</span></label>
+          <input class="form-input" id="ant-monto" type="number" min="0" max="${pendiente}" step="0.01" value="${sugerido}" style="font-size:18px;font-weight:700"></div>
         <div class="form-group"><label class="form-label">Forma de pago</label>
           <select class="form-select" id="ant-forma">
             <option value="efectivo">💵 Efectivo</option>
@@ -86,31 +103,36 @@ Modulos._especialOT = {
     if (monto <= 0) { UI.toast('Ingresa un monto válido', 'error'); return; }
 
     const { tablaProyecto, proyecto, campoTotal, modulo, renderFn } = ctx;
+    const calc = this._calcAbono(proyecto[campoTotal], proyecto.anticipo, monto);
+    if (!calc.ok) { UI.toast(calc.error, 'error'); return; }
+    const { acumulado, saldo } = calc;
+
     const { data: updated, error } = await getSB().from(tablaProyecto)
-      .update({
-        anticipo: monto,
-        saldo: Math.max(0, (Number(proyecto[campoTotal]) || 0) - monto),
-        forma_pago_anticipo: forma,
-      })
+      .update({ anticipo: acumulado, saldo, forma_pago_anticipo: forma })
       .eq('id', proyecto.id)
       .select().single();
     if (error) { UI.toast('Error: ' + error.message, 'error'); return; }
 
+    /* Histórico: el escalar `anticipo` no permite auditar abonos parciales */
+    await DB.registrarAbonoVertical(tablaProyecto, proyecto.id, { monto, forma_pago: forma, notas });
+
     if (proyecto.orden_id) {
-      await getSB().from('ordenes').update({ anticipo: monto, saldo: Math.max(0,(Number(proyecto[campoTotal])||0)-monto) }).eq('id', proyecto.orden_id);
+      await getSB().from('ordenes').update({ anticipo: acumulado, saldo }).eq('id', proyecto.orden_id);
     }
 
     UI.cerrarModal();
-    UI.toast('Anticipo registrado ✓');
+    UI.toast('Abono registrado ✓');
     this._ant = null;
-    this._imprimirComprobante({ ...proyecto, ...updated, anticipo: monto, forma_pago_anticipo: forma }, modulo, notas);
+    this._imprimirComprobante({ ...proyecto, ...updated, anticipo: acumulado, forma_pago_anticipo: forma }, modulo, notas, monto);
     if (renderFn && Modulos[renderFn]) Modulos[renderFn].render();
   },
 
-  _imprimirComprobante(proyecto, modulo, notas = '') {
+  _imprimirComprobante(proyecto, modulo, notas = '', montoAbono = null) {
     const total   = Number(proyecto.precio_venta || proyecto.precio_total) || 0;
     const anticipo = Number(proyecto.anticipo) || 0;
     const saldo   = Math.max(0, total - anticipo);
+    /* Si hubo abonos previos, el recibo debe separar lo de hoy del acumulado */
+    const parcial = montoAbono != null && Math.abs(montoAbono - anticipo) > 0.005 ? Number(montoAbono) : null;
     const formas  = { efectivo:'Efectivo', tarjeta:'Tarjeta', transferencia:'Transferencia/Depósito', cheque:'Cheque' };
     const forma   = formas[proyecto.forma_pago_anticipo] || proyecto.forma_pago_anticipo || 'Efectivo';
     const hoy     = new Date().toLocaleDateString('es-GT');
@@ -147,7 +169,8 @@ Modulos._especialOT = {
     </table>
     <table class="totales">
       <tr><td>MONTO TOTAL</td><td class="monto">${UI.q(total)}</td></tr>
-      <tr><td>ANTICIPO RECIBIDO</td><td class="monto" style="color:#16a34a">${UI.q(anticipo)}</td></tr>
+      ${parcial != null ? `<tr><td>ABONO RECIBIDO HOY</td><td class="monto" style="color:#16a34a">${UI.q(parcial)}</td></tr>` : ''}
+      <tr><td>${parcial != null ? 'TOTAL ABONADO' : 'ANTICIPO RECIBIDO'}</td><td class="monto" style="color:#16a34a">${UI.q(anticipo)}</td></tr>
       <tr><td>SALDO PENDIENTE</td><td class="${saldo > 0 ? 'saldo' : 'monto'}">${UI.q(saldo)}</td></tr>
     </table>
     <p style="text-align:center;font-size:11px;color:#555">Este comprobante acredita el pago de anticipo. El saldo deberá cancelarse a la entrega.</p>
@@ -390,8 +413,11 @@ Modulos.herreria = {
     if (error) { UI.toast('Error: '+error.message,'error'); return; }
     UI.cerrarModal(); UI.toast(id?'Proyecto actualizado ✓':'Proyecto creado ✓');
 
-    /* Auto-generar OT si corresponde */
-    const proyecto = { ...fields, id: saved?.id||id, clientes: { nombre: this._clientes.find(c=>c.id===clienteId)?.nombre||'' }, orden_id: prevOrdenId };
+    /* Auto-generar OT si corresponde.
+       `saved` trae el `num` correlativo que genera db.js; sin él la
+       descripción de la OT salía como "HER undefined". */
+    const prev = id ? this._data.find(x=>x.id===id) : null;
+    const proyecto = { ...prev, ...fields, ...(saved||{}), id: saved?.id||id, clientes: { nombre: this._clientes.find(c=>c.id===clienteId)?.nombre||'' }, orden_id: prevOrdenId };
     const estadoNuevo = fields.estado;
     const debeOT = !prevOrdenId && (
       fields.tipo_inicio === 'directo' ||

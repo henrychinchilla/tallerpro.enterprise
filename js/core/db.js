@@ -567,8 +567,7 @@ const DB = {
       return { error };
     }
     /* Generar número OT */
-    const { count } = await getSB().from('ordenes').select('*',{count:'exact',head:true}).eq('tenant_id',getTID());
-    payload.num = `OT-${new Date().getFullYear()}-${String((count||0)+1).padStart(4,'0')}`;
+    payload.num = await this.siguienteNum('OT', 'OT', 'ordenes');
     const { data, error } = await getSB().from('ordenes').insert(payload).select().single();
     return { data, error };
   },
@@ -621,8 +620,7 @@ const DB = {
       const { error } = await getSB().from('cotizaciones').update(payload).eq('id', cotId);
       if (error) return { error };
     } else {
-      const { count } = await getSB().from('cotizaciones').select('*',{count:'exact',head:true}).eq('tenant_id',getTID());
-      payload.num = `COT-${new Date().getFullYear()}-${String((count||0)+1).padStart(4,'0')}`;
+      payload.num = await this.siguienteNum('COT', 'COT', 'cotizaciones');
       const { data, error } = await getSB().from('cotizaciones').insert(payload).select().single();
       if (error) return { error };
       cotId = data.id;
@@ -652,6 +650,34 @@ const DB = {
     return { data: orden };
   },
 
+  /* ── CORRELATIVOS Y ABONOS DE LOS VERTICALES ─────────── */
+
+  /* Reserva atómica del siguiente correlativo (migración 091).
+     Antes se usaba count(*)+1 en el cliente: dos usuarios simultáneos
+     obtenían el mismo número y borrar un registro lo hacía repetirse.
+     Si el RPC no está disponible se cae al método viejo para no bloquear. */
+  async siguienteNum(clave, prefijo, tabla) {
+    const { data, error } = await getSB().rpc('siguiente_correlativo', { p_clave: clave, p_prefijo: prefijo });
+    if (!error && data) return data;
+    const { count } = await getSB().from(tabla).select('*',{count:'exact',head:true}).eq('tenant_id',getTID());
+    return `${prefijo}-${new Date().getFullYear()}-${String((count||0)+1).padStart(4,'0')}`;
+  },
+
+  async registrarAbonoVertical(tablaOrigen, registroId, { monto, forma_pago, notas }) {
+    const { error } = await getSB().from('pagos_anticipo_vertical').insert({
+      tenant_id: getTID(), tabla_origen: tablaOrigen, registro_id: registroId,
+      monto, forma_pago, notas: notas || null,
+    });
+    return !error;
+  },
+
+  async getAbonosVertical(tablaOrigen, registroId) {
+    const { data } = await getSB().from('pagos_anticipo_vertical').select('*')
+      .eq('tenant_id', getTID()).eq('tabla_origen', tablaOrigen).eq('registro_id', registroId)
+      .order('created_at');
+    return data || [];
+  },
+
   /* ── HERRERÍA INDUSTRIAL Y VENTANERÍA PVC/ALUMINIO ───── */
   async getHerreriaProyectos(filtros={}) {
     let q = getSB().from('herreria_proyectos').select('*, clientes(nombre,tel,email), ordenes(num)')
@@ -667,8 +693,7 @@ const DB = {
       const { error } = await getSB().from('herreria_proyectos').update(payload).eq('id', fields.id);
       return { error };
     }
-    const { count } = await getSB().from('herreria_proyectos').select('*',{count:'exact',head:true}).eq('tenant_id',getTID());
-    payload.num = `HER-${new Date().getFullYear()}-${String((count||0)+1).padStart(4,'0')}`;
+    payload.num = await this.siguienteNum('HER', 'HER', 'herreria_proyectos');
     const { data, error } = await getSB().from('herreria_proyectos').insert(payload).select().single();
     return { data, error };
   },
@@ -688,8 +713,7 @@ const DB = {
       const { error } = await getSB().from('peleteria_pedidos').update(payload).eq('id', fields.id);
       return { error };
     }
-    const { count } = await getSB().from('peleteria_pedidos').select('*',{count:'exact',head:true}).eq('tenant_id',getTID());
-    payload.num = `PEL-${new Date().getFullYear()}-${String((count||0)+1).padStart(4,'0')}`;
+    payload.num = await this.siguienteNum('PEL', 'PEL', 'peleteria_pedidos');
     const { data, error } = await getSB().from('peleteria_pedidos').insert(payload).select().single();
     return { data, error };
   },
@@ -709,8 +733,7 @@ const DB = {
       const { error } = await getSB().from('reparaciones_electronicas').update(payload).eq('id', fields.id);
       return { error };
     }
-    const { count } = await getSB().from('reparaciones_electronicas').select('*',{count:'exact',head:true}).eq('tenant_id',getTID());
-    payload.num = `REP-${new Date().getFullYear()}-${String((count||0)+1).padStart(4,'0')}`;
+    payload.num = await this.siguienteNum('REP', 'REP', 'reparaciones_electronicas');
     const { data, error } = await getSB().from('reparaciones_electronicas').insert(payload).select().single();
     return { data, error };
   },
@@ -730,39 +753,36 @@ const DB = {
       const { error } = await getSB().from('refrigeracion_servicios').update(payload).eq('id', fields.id);
       return { error };
     }
-    const { count } = await getSB().from('refrigeracion_servicios').select('*',{count:'exact',head:true}).eq('tenant_id',getTID());
-    payload.num = `REF-${new Date().getFullYear()}-${String((count||0)+1).padStart(4,'0')}`;
+    payload.num = await this.siguienteNum('REF', 'REF', 'refrigeracion_servicios');
     const { data, error } = await getSB().from('refrigeracion_servicios').insert(payload).select().single();
     return { data, error };
   },
 
   /* ── AGROSERVICIO ────────────────────────────────── */
   async getAgroservicioPedidos(filtros={}) {
-    let q = getSB().from('agroservicio_servicios').select('*, clientes(nombre,tel,email)')
+    let q = getSB().from('agroservicio_servicios').select('*, clientes(nombre,tel,email), ordenes(num)')
       .eq('tenant_id', getTID()).order('created_at',{ascending:false});
     if (filtros.estado) q = q.eq('estado', filtros.estado);
     const { data } = await q;
-    return data || [];
+    return (data||[]).map(r=>({ ...r, ot_num: r.ordenes?.num||null }));
   },
 
-  async crearAgroservicio(fields) {
-    const payload = { ...fields, tenant_id: getTID() };
+  /* Mismo contrato que los demás verticales: { data, error } */
+  async upsertAgroservicio(fields) {
+    const payload = { ...fields, tenant_id: getTID(), updated_at: new Date().toISOString() };
+    if (fields.id) {
+      const { error } = await getSB().from('agroservicio_servicios').update(payload).eq('id', fields.id);
+      return { error };
+    }
+    payload.num = await this.siguienteNum('AGRO', 'AGRO', 'agroservicio_servicios');
     const { data, error } = await getSB().from('agroservicio_servicios').insert(payload).select().single();
-    return data?.id || null;
+    return { data, error };
   },
 
-  async updateAgroservicio(id, fields) {
-    const payload = { ...fields, updated_at: new Date().toISOString() };
-    const { error } = await getSB().from('agroservicio_servicios').update(payload)
-      .eq('id', id).eq('tenant_id', getTID());
-    return !error;
-  },
-
-  async crearPagoAgroservicio(id, pago) {
-    return await getSB().from('pagos_agroservicio').insert({
-      tenant_id: getTID(), agroservicio_id: id, ...pago
-    });
-  },
+  /* updateAgroservicio y crearPagoAgroservicio se eliminaron: los reemplazan
+     upsertAgroservicio y registrarAbonoVertical. El camino viejo escribía en
+     pagos_agroservicio sin actualizar anticipo/saldo, así que dejarlo vivo era
+     una trampa para volver a sobrescribir abonos. */
 
   /* ── VENTA DE GRANOS ─────────────────────────────── */
   async getVentaGranos(filtros={}) {

@@ -193,7 +193,9 @@ Modulos.peleteria = {
     if (error) { UI.toast('Error: '+error.message,'error'); return; }
     UI.cerrarModal(); UI.toast(id?'Pedido actualizado ✓':'Pedido creado ✓');
 
-    const proyecto = { ...fields, id: saved?.id||id, clientes: { nombre: this._clientes.find(c=>c.id===clienteId)?.nombre||'' }, orden_id: prevOrdenId };
+    /* `saved` trae el `num` correlativo de db.js; sin él la OT salía "PEL undefined" */
+    const prev = id ? this._data.find(x=>x.id===id) : null;
+    const proyecto = { ...prev, ...fields, ...(saved||{}), id: saved?.id||id, clientes: { nombre: this._clientes.find(c=>c.id===clienteId)?.nombre||'' }, orden_id: prevOrdenId };
     const estadoNuevo = fields.estado;
     const debeOT = !prevOrdenId && (
       fields.tipo_inicio === 'directo' ||

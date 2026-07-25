@@ -85,12 +85,19 @@ Modulos.agroservicio = {
         <div><div style="font-size:11px;color:var(--text3)">Cantidad</div><div>${p.cantidad}  ${p.unidad||'unid.'}</div></div>
         <div><div style="font-size:11px;color:var(--text3)">Fecha Entrega</div><div>${p.fecha_entrega?UI.fecha(p.fecha_entrega):'—'}</div></div>
         <div><div style="font-size:11px;color:var(--text3)">Precio Venta</div><div class="mono-sm" style="font-weight:700">${UI.q(p.precio_venta)}</div></div>
-        <div><div style="font-size:11px;color:var(--text3)">Anticipo (50%)</div><div class="mono-sm" style="font-weight:700;color:var(--green)">${UI.q(p.anticipo)}</div></div>
+        <div><div style="font-size:11px;color:var(--text3)">Abonado</div><div class="mono-sm" style="font-weight:700;color:var(--green)">${UI.q(p.anticipo)}</div></div>
         <div><div style="font-size:11px;color:var(--text3)">Saldo</div><div class="mono-sm" style="font-weight:700;color:var(--${p.saldo>0?'red':'green'})">${UI.q(p.saldo)}</div></div>
       </div>
+      ${p.orden_id?`<div style="background:var(--card2);padding:10px;border-radius:6px;display:flex;align-items:center;gap:10px;margin-bottom:10px">
+        <span style="font-size:20px">🔧</span>
+        <div><div style="font-size:11px;color:var(--text3)">OT vinculada</div><div style="font-weight:700;color:var(--cyan)">${p.ot_num||p.orden_id}</div></div>
+      </div>`:`<div style="color:var(--text3);font-size:12px;margin-bottom:10px">Sin OT. Se genera al guardar (si es directo) o al iniciar proceso.</div>`}
       <div class="modal-footer">
         <button class="btn btn-ghost" onclick="UI.cerrarModal()">Cerrar</button>
-      </div>`, '520px');
+        ${!p.orden_id?`<button class="btn btn-cyan" onclick="UI.cerrarModal();Modulos.agroservicio._accionGenerarOT('${p.id}')">🔧 Generar OT</button>`:''}
+        <button class="btn btn-ghost" onclick="UI.cerrarModal();Modulos.agroservicio._accionAnticipo('${p.id}')">💰 Abono</button>
+        <button class="btn btn-amber" onclick="UI.cerrarModal();Modulos.agroservicio.modalForm('${p.id}')">✏️ Editar</button>
+      </div>`, '560px');
   },
 
   modalForm(id=null) {
@@ -163,7 +170,7 @@ Modulos.agroservicio = {
 
         <div class="alert alert-cyan" style="margin-top:8px;font-size:11px">
           <div class="alert-icon">💡</div>
-          <div class="alert-body">Anticipo: se calcula como 50% del precio venta. Saldo se genera automáticamente.</div>
+          <div class="alert-body">El anticipo se registra con el botón 💰 cuando entra el dinero (sugerido 50%), y emite comprobante imprimible. Al crear "⚡ Directo" se genera la OT automáticamente.</div>
         </div>
       </div>`;
 
@@ -188,70 +195,68 @@ Modulos.agroservicio = {
       UI.toast('Completa los campos obligatorios (*)', 'error'); return;
     }
 
-    const anticipo = precio_venta * 0.5;
-    const saldo = precio_venta - anticipo;
+    const prev = id ? this._data.find(x=>x.id===id) : null;
+    const estadoPrev = prev?.estado || 'solicitado';
+    const prevOrdenId = prev?.orden_id || null;
+    /* El anticipo se registra cuando entra el dinero (modal de abono),
+       no se asume 50% al crear: antes el saldo nacía cobrado a medias. */
+    const anticipo = Number(prev?.anticipo) || 0;
 
     const payload = {
       cliente_id, tipo_servicio, descripcion, cantidad, unidad,
-      precio_venta, anticipo, saldo, fecha_entrega, tipo_inicio, estado
+      precio_venta, anticipo, saldo: Math.max(0, precio_venta - anticipo),
+      fecha_entrega, tipo_inicio, estado
     };
+    if (id) payload.id = id;
 
-    if (id) {
-      const ok = await DB.updateAgroservicio(id, payload);
-      if (ok) { UI.toast('Servicio actualizado ✓'); UI.cerrarModal(); Modulos.agroservicio.render(Modulos.agroservicio._filtroEstado); }
-      else UI.toast('Error al actualizar', 'error');
-    } else {
-      const num = 'AGRO-' + String(Math.floor(Math.random()*1000000)).padStart(6,'0');
-      const ok = await DB.crearAgroservicio({ num, ...payload });
-      if (ok) {
-        UI.toast('✓ Servicio creado. Generando OT...', 'success');
-        UI.cerrarModal();
-        Modulos.agroservicio.render();
-        if (tipo_inicio === 'directo') {
-          await Modulos._especialOT.crearOT(ok, 'agroservicio', cliente_id, `${tipo_servicio}: ${descripcion}`);
-        }
-      } else UI.toast('Error al crear', 'error');
+    const { data: saved, error } = await DB.upsertAgroservicio(payload);
+    if (error) { UI.toast('Error: '+error.message, 'error'); return; }
+    UI.cerrarModal();
+    UI.toast(id ? 'Servicio actualizado ✓' : 'Servicio creado ✓');
+
+    const debeOT = !prevOrdenId && (
+      tipo_inicio === 'directo' ||
+      (estadoPrev === 'solicitado' && estado === 'en_proceso')
+    );
+    if (debeOT) {
+      const proyecto = {
+        ...prev, ...payload, ...(saved||{}), id: saved?.id||id,
+        clientes: { nombre: this._clientes.find(c=>c.id===cliente_id)?.nombre||'' },
+        orden_id: null,
+      };
+      const ot = await Modulos._especialOT.generarOT(
+        'agroservicio_servicios', proyecto, 'precio_venta', 'agroservicio',
+        s => `AGRO ${s.num||''}: ${this._TIPOS[s.tipo_servicio]||s.tipo_servicio} — ${s.descripcion||''}`.slice(0,200)
+      );
+      if (ot) await Modulos._especialOT.modalAnticipo(
+        'agroservicio_servicios', { ...proyecto, orden_id: ot.id },
+        'precio_venta', 'agroservicio', 'agroservicio', ot.num
+      );
     }
+    this.render(this._filtroEstado);
   },
 
+  async _accionGenerarOT(id) {
+    const p = this._data.find(x=>x.id===id); if (!p) return;
+    const ot = await Modulos._especialOT.generarOT(
+      'agroservicio_servicios', p, 'precio_venta', 'agroservicio',
+      s => `AGRO ${s.num||''}: ${this._TIPOS[s.tipo_servicio]||s.tipo_servicio} — ${s.descripcion||''}`.slice(0,200)
+    );
+    if (ot) {
+      await getSB().from('agroservicio_servicios').update({ estado:'en_proceso' }).eq('id',id);
+      await Modulos._especialOT.modalAnticipo(
+        'agroservicio_servicios', { ...p, orden_id: ot.id },
+        'precio_venta', 'agroservicio', 'agroservicio', ot.num
+      );
+    }
+    this.render(this._filtroEstado);
+  },
+
+  /* Usa el modal compartido: acumula abonos, deja histórico e imprime comprobante */
   async _accionAnticipo(id) {
     const p = this._data.find(x=>x.id===id); if (!p) return;
-    UI.modal('💰 Registrar Anticipo', `
-      <div style="display:grid;gap:10px">
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-          <div><div style="font-size:11px;color:var(--text3)">Precio Venta</div><div class="mono-sm" style="font-weight:700">${UI.q(p.precio_venta)}</div></div>
-          <div><div style="font-size:11px;color:var(--text3)">Anticipo Esperado (50%)</div><div class="mono-sm" style="font-weight:700;color:var(--green)">${UI.q(p.anticipo)}</div></div>
-          <div><div style="font-size:11px;color:var(--text3)">Saldo Pendiente</div><div class="mono-sm" style="font-weight:700;color:var(--red)">${UI.q(p.saldo)}</div></div>
-        </div>
-        <div class="form-group">
-          <label class="form-label">Monto Recibido (Q)</label>
-          <input class="form-input" type="number" id="anticipo-monto" value="${p.anticipo}" min="0" step="0.01">
-        </div>
-        <div class="form-group">
-          <label class="form-label">Medio de Pago</label>
-          <select class="form-input" id="anticipo-pago">
-            <option value="efectivo">💵 Efectivo</option>
-            <option value="deposito">🏦 Depósito/Transferencia</option>
-            <option value="cheque">📄 Cheque</option>
-            <option value="otro">Otro</option>
-          </select>
-        </div>
-        <div class="form-group">
-          <label class="form-label">Notas (opcional)</label>
-          <textarea class="form-input" id="anticipo-notas" style="min-height:50px"></textarea>
-        </div>
-      </div>`, '500px', [
-      { label:'Cancelar', onclick:() => UI.cerrarModal(), clase:'ghost' },
-      { label:'Registrar Anticipo', onclick:() => {
-        const monto = parseFloat(document.getElementById('anticipo-monto').value)||0;
-        const pago = document.getElementById('anticipo-pago').value;
-        const notas = document.getElementById('anticipo-notas').value;
-        if (monto<=0) { UI.toast('Ingresa un monto', 'error'); return; }
-        DB.crearPagoAgroservicio(id, { monto, tipo_pago: pago, notas }).then(ok=>{
-          if (ok) { UI.toast('✓ Anticipo registrado'); UI.cerrarModal(); Modulos.agroservicio.render(Modulos.agroservicio._filtroEstado); }
-          else UI.toast('Error', 'error');
-        });
-      }, clase:'amber' }
-    ]);
+    await Modulos._especialOT.modalAnticipo(
+      'agroservicio_servicios', p, 'precio_venta', 'agroservicio', 'agroservicio', p.ot_num||''
+    );
   }
 };

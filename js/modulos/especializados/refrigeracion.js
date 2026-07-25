@@ -11,10 +11,11 @@ Modulos.refrigeracion = {
   _ESTADOS: { pendiente:'Pendiente', en_proceso:'En Proceso', completado:'Completado', garantia:'Garantía', cancelado:'Cancelado' },
   _colorEstado(e) { return { pendiente:'gray', en_proceso:'amber', completado:'green', garantia:'purple', cancelado:'red' }[e]||'gray'; },
 
-  async render(filtroEstado='') {
+  async render(filtroEstado='', soloProximos=false) {
     const el = document.getElementById('page-content');
     UI.loading(el);
     this._filtroEstado = filtroEstado;
+    this._soloProximos = soloProximos;
     [this._data, this._clientes, this._empleados] = await Promise.all([
       DB.getRefrigeracionServicios(filtroEstado ? { estado: filtroEstado } : {}),
       DB.getClientes(), DB.getEmpleados().catch(()=>[])
@@ -25,6 +26,13 @@ Modulos.refrigeracion = {
     const mesActual = new Date().toISOString().slice(0,7);
     const completadosMes = this._data.filter(s=>s.estado==='completado' && (s.updated_at||'').slice(0,7)===mesActual).length;
     const saldoPorCobrar = this._data.reduce((s,r)=>s+(Number(r.saldo)||0),0);
+
+    /* Mantenimiento preventivo: proxima_revision se guardaba pero nadie la leía */
+    const hoy    = new Date().toISOString().slice(0,10);
+    const en30   = new Date(Date.now()+30*86400000).toISOString().slice(0,10);
+    const proximos = this._data.filter(s=>s.proxima_revision && s.proxima_revision<=en30 && s.estado!=='cancelado');
+    const vencidos = proximos.filter(s=>s.proxima_revision < hoy).length;
+    const lista = soloProximos ? proximos : this._data;
 
     el.innerHTML = `
       <div class="page-header">
@@ -39,21 +47,23 @@ Modulos.refrigeracion = {
           ${UI.kpiCard({ icon:'⏳', clase:'amber', label:'Pendientes', value: pendientes })}
           ${UI.kpiCard({ icon:'🛠️', clase:'cyan', label:'En proceso', value: enProceso })}
           ${UI.kpiCard({ icon:'✅', clase:'green', label:'Completados este mes', value: completadosMes })}
+          ${UI.kpiCard({ icon:'🔔', clase: vencidos?'red':(proximos.length?'amber':'gray'), label:'Revisiones por vencer (30d)', value: proximos.length })}
           ${UI.kpiCard({ icon:'💰', clase: saldoPorCobrar?'red':'gray', label:'Saldo por cobrar', value: saldoPorCobrar, money:true })}
         </div>
         <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap">
-          <button class="btn btn-sm ${!filtroEstado?'btn-cyan':'btn-ghost'}" onclick="Modulos.refrigeracion.render('')">Todos</button>
-          ${Object.entries(this._ESTADOS).map(([k,l])=>`<button class="btn btn-sm ${filtroEstado===k?'btn-cyan':'btn-ghost'}" onclick="Modulos.refrigeracion.render('${k}')">${l}</button>`).join('')}
+          <button class="btn btn-sm ${!filtroEstado&&!soloProximos?'btn-cyan':'btn-ghost'}" onclick="Modulos.refrigeracion.render('')">Todos</button>
+          ${Object.entries(this._ESTADOS).map(([k,l])=>`<button class="btn btn-sm ${filtroEstado===k&&!soloProximos?'btn-cyan':'btn-ghost'}" onclick="Modulos.refrigeracion.render('${k}')">${l}</button>`).join('')}
+          <button class="btn btn-sm ${soloProximos?'btn-amber':'btn-ghost'}" onclick="Modulos.refrigeracion.render('${filtroEstado}',true)" title="Mantenimientos preventivos por vencer">🔔 Por vencer${proximos.length?` (${proximos.length})`:''}</button>
         </div>
         <div class="table-wrap"><table class="data-table">
           <thead><tr><th>No.</th><th>Cliente</th><th>Sistema</th><th>Servicio</th><th>Fecha</th><th>Total</th><th>Anticipo</th><th>Saldo</th><th>OT</th><th>Estado</th><th>Acciones</th></tr></thead>
           <tbody>
-            ${this._data.map(s=>`<tr>
+            ${lista.map(s=>`<tr>
               <td class="mono-sm"><b>${s.num||'—'}</b></td>
               <td>${s.clientes?.nombre||'—'}</td>
               <td><span class="badge badge-gray">${this._SISTEMAS[s.tipo_sistema]||s.tipo_sistema}</span>${s.vehiculos?`<div style="font-size:11px;color:var(--text3)">${s.vehiculos.placa}</div>`:''}<div style="font-size:11px;color:var(--text3)">${s.tipo_inicio==='directo'?'⚡ Directo':'📋 Cotización'}</div></td>
               <td>${this._SERVICIOS[s.tipo_servicio]||s.tipo_servicio}</td>
-              <td class="mono-sm">${UI.fecha(s.fecha_servicio)}</td>
+              <td class="mono-sm">${UI.fecha(s.fecha_servicio)}${s.proxima_revision?`<div style="font-size:11px;color:var(--${s.proxima_revision<hoy?'red':(s.proxima_revision<=en30?'amber':'text3')})" title="Próxima revisión">🔔 ${UI.fecha(s.proxima_revision)}</div>`:''}</td>
               <td class="mono-sm">${UI.q(s.precio_total)}</td>
               <td class="mono-sm ${s.anticipo>0?'text-green':''}">${UI.q(s.anticipo)}</td>
               <td class="mono-sm ${s.saldo>0?'text-red':'text-green'}">${UI.q(s.saldo)}</td>
@@ -65,7 +75,7 @@ Modulos.refrigeracion = {
                 <button class="btn btn-sm btn-cyan" onclick="Modulos.refrigeracion._accionAnticipo('${s.id}')" title="Registrar anticipo">💰</button>
                 ${Modulos.btnAccion('eliminar', `Modulos.eliminarRegistro('refrigeracion_servicios','${s.id}','el servicio ${s.num||''}',()=>Modulos.refrigeracion.render(Modulos.refrigeracion._filtroEstado))`)}
               </div></td>
-            </tr>`).join('')||'<tr><td colspan="11" style="text-align:center;padding:24px;color:var(--text3)">Sin servicios registrados. Registra el primero con "＋ Nuevo Servicio".</td></tr>'}
+            </tr>`).join('')||`<tr><td colspan="11" style="text-align:center;padding:24px;color:var(--text3)">${soloProximos?'Sin revisiones por vencer en los próximos 30 días.':'Sin servicios registrados. Registra el primero con "＋ Nuevo Servicio".'}</td></tr>`}
           </tbody>
         </table></div>
       </div>`;
@@ -264,7 +274,9 @@ Modulos.refrigeracion = {
       (estadoPrev === 'pendiente' && estadoNuevo === 'en_proceso')
     );
     if (debeOT) {
-      const proyecto = { ...fields, id: saved?.id||id, clientes: { nombre: this._clientes.find(c=>c.id===clienteId)?.nombre||'' }, orden_id: null };
+      /* `saved` trae el `num` correlativo de db.js; sin él la OT iba sin número */
+      const prev = id ? this._data.find(x=>x.id===id) : null;
+      const proyecto = { ...prev, ...fields, ...(saved||{}), id: saved?.id||id, clientes: { nombre: this._clientes.find(c=>c.id===clienteId)?.nombre||'' }, orden_id: null };
       const ot = await Modulos._especialOT.generarOT(
         'refrigeracion_servicios', proyecto, 'precio_total', 'refrigeracion',
         s => `REFR ${s.num||''}: ${this._SISTEMAS[s.tipo_sistema]||s.tipo_sistema} — ${this._SERVICIOS[s.tipo_servicio]||s.tipo_servicio} ${s.marca_equipo||''}`.slice(0,200)
