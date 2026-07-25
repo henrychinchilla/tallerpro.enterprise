@@ -14,3 +14,6 @@ electron/node_modules/
 .playwright-mcp/
 marketing/
 AGENTS.md
+
+tools/
+prueba-*.html

@@ -8,7 +8,7 @@
    Para forzar actualización: subir CACHE_VERSION.
 ═══════════════════════════════════════════════════════ */
 
-const CACHE_VERSION = 'v3.72.0-20260725';
+const CACHE_VERSION = 'v3.73.0-20260725';
 const CACHE_NAME = `nexuspro-${CACHE_VERSION}`;
 
 /* App shell — se precachea en install para que funcione offline */
@@ -96,7 +96,9 @@ function esSupabase(url) {
 }
 function esEstaticoPropio(url) {
   return url.origin === self.location.origin &&
-    /\.(css|js|png|jpg|jpeg|svg|webp|ico|woff2?)$/i.test(url.pathname);
+    /* .json incluido por los boletines de fábrica (data/tsb/…): son de solo
+       lectura y el taller los necesita justo cuando no hay señal. */
+    /\.(css|js|json|png|jpg|jpeg|svg|webp|ico|woff2?)$/i.test(url.pathname);
 }
 
 /* ── FETCH ─────────────────────────────────────────── */

@@ -1,0 +1,28 @@
+{
+ "fuente": "NHTSA Manufacturer Communications (dominio público)",
+ "url": "https://static.nhtsa.gov/odi/ffdd/tsbs/",
+ "tramos": [
+  "2015-2019",
+  "2020-2024"
+ ],
+ "anio_desde": 2012,
+ "marcas": {
+  "CHEVROLET": 71016,
+  "FORD": 12853,
+  "FREIGHTLINER": 9423,
+  "HINO": 1480,
+  "HONDA": 4524,
+  "HYUNDAI": 3355,
+  "INTERNATIONAL": 5354,
+  "ISUZU": 357,
+  "KIA": 4936,
+  "MAZDA": 8490,
+  "MITSUBISHI": 1731,
+  "MITSUBISHI FUSO": 315,
+  "NISSAN": 7762,
+  "SUZUKI": 125,
+  "TOYOTA": 13451,
+  "VOLKSWAGEN": 16857
+ },
+ "total": 162029
+}

@@ -20,3 +20,8 @@ schema_v3.sql
 *.md
 .playwright-mcp/
 screenshots/*.html
+
+# herramientas de generación: no son parte del sitio
+tools/
+data/tsb/**/_modelos.json.map
+prueba-*.html

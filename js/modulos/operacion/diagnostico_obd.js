@@ -343,22 +343,125 @@ Modulos.diagnostico_obd = {
     return t ? (resto.length ? `${t}: ${resto.join(':').trim().toLowerCase()}` : t) : nombre;
   },
 
+  /* ═══════════ BOLETINES DE FÁBRICA (TSB) ═══════════
+     Un boletín es una falla que la propia marca ya reconoció para ese modelo, con
+     su procedimiento. Revisarlo antes de diagnosticar desde cero ahorra horas: si
+     el síntoma ya está descrito, el camino corto es el del fabricante.
+     El índice se sirve como archivo estático (data/tsb/MARCA/INICIAL.json), no
+     ocupa base de datos y queda cacheado para trabajar sin señal.
+     Se genera con tools/tsb/generar.py desde los archivos públicos de NHTSA. */
+  /* Mismo slug que usa tools/tsb/generar.py para nombrar los archivos.
+     Si uno cambia, hay que cambiar el otro. */
+  _tsbSlug(t) {
+    return String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+      .toUpperCase().replace(/[^A-Z0-9]+/g, '-').replace(/^-+|-+$/g, '') || '_';
+  },
+
+  /* El taller escribe "Corolla XLI 1.8" y el catálogo dice "COROLLA": hay que
+     resolver el nombre contra el índice de modelos antes de pedir el archivo. */
+  async _tsbModelo(marcaSlug, modelo) {
+    this._tsbIdx = this._tsbIdx || {};
+    if (!(marcaSlug in this._tsbIdx)) {
+      try {
+        const r = await fetch(`/data/tsb/${marcaSlug}/_modelos.json`);
+        this._tsbIdx[marcaSlug] = r.ok ? await r.json() : null;
+      } catch (_) { this._tsbIdx[marcaSlug] = null; }
+    }
+    const lista = this._tsbIdx[marcaSlug];
+    if (!lista || !lista.length) return null;
+    const mo = this._tsbSlug(modelo);
+    if (lista.includes(mo)) return mo;
+    /* Prioridad: que el nombre del catálogo esté contenido en lo que escribió el
+       taller (COROLLA dentro de COROLLA-XLI-1-8), y de esos el más largo. Solo si
+       no hay ninguno se acepta al revés, y ahí el más corto: con "SILVERADO" a
+       secas no se puede elegir entre 1500 y 2500, mejor no inventar la versión. */
+    const contenidos = lista.filter(m => mo.startsWith(m + '-'));
+    if (contenidos.length) return contenidos.sort((a, b) => b.length - a.length)[0];
+    const amplios = lista.filter(m => m.startsWith(mo + '-'));
+    if (amplios.length) return amplios.sort((a, b) => a.length - b.length)[0];
+    return null;
+  },
+
+  async _tsbBuscar(marca, modelo, anio) {
+    const ma = this._tsbSlug(marca);
+    if (!ma || !modelo) return [];
+    const mod = await this._tsbModelo(ma, modelo);
+    if (!mod) return [];
+    let datos;
+    try {
+      const resp = await fetch(`/data/tsb/${ma}/${mod}.json`);
+      if (!resp.ok) return [];          // marca/modelo sin índice: no es error
+      datos = await resp.json();
+    } catch (_) { return []; }
+    const an = parseInt(anio, 10) || null;
+    return an ? datos.filter(b => an >= b.d && an <= b.h) : datos;
+  },
+
+  _tsbHTML(boletines, marca, modelo, anio) {
+    if (!boletines.length) {
+      return `<div style="margin-top:10px;border-top:1px solid var(--border);padding-top:8px">
+        <b style="font-size:12px">📄 BOLETINES DE FÁBRICA (TSB)</b>
+        <div style="font-size:12px;margin-top:4px;color:var(--text3)">
+          Sin boletines para ese modelo y año en el índice descargado.
+          <a href="https://www.nhtsa.gov/recalls" target="_blank" rel="noopener">Buscar en NHTSA →</a>
+        </div></div>`;
+    }
+    /* Agrupados por componente: el mecánico llega con un síntoma ("suena la
+       suspensión"), no con un número de boletín. */
+    const porComp = {};
+    boletines.forEach(b => { (porComp[b.c || 'SIN CLASIFICAR'] ||= []).push(b); });
+    const grupos = Object.entries(porComp).sort((a, b) => b[1].length - a[1].length);
+    return `<div style="margin-top:10px;border-top:1px solid var(--border);padding-top:8px">
+      <b style="font-size:12px">📄 BOLETINES DE FÁBRICA (TSB) — ${boletines.length} para ${this._esc(marca)} ${this._esc(modelo)}${anio ? ' ' + this._esc(anio) : ''}</b>
+      <div style="font-size:11px;color:var(--text3);margin:2px 0 6px">
+        Fallas que la marca ya reconoció en este modelo. Buscá el síntoma antes de diagnosticar desde cero.
+      </div>
+      <input class="form-input" style="width:100%;font-size:12px;margin-bottom:6px" placeholder="Filtrar por síntoma: ruido, fuga, transmisión…"
+             oninput="Modulos.diagnostico_obd._filtrarTSB(this.value)">
+      <div id="tsb-lista" style="max-height:340px;overflow-y:auto">
+        ${grupos.map(([comp, bs]) => `
+          <div class="tsb-grupo" data-txt="${this._esc((comp + ' ' + bs.map(b => b.t).join(' ')).toLowerCase())}">
+            <div style="font-weight:800;font-size:11.5px;color:var(--cyan);margin:6px 0 2px">${this._esc(this._comp(comp))} (${bs.length})</div>
+            ${bs.slice(0, 25).map(b => `
+              <div class="tsb-item" data-txt="${this._esc((b.t + ' ' + b.n).toLowerCase())}" style="border-bottom:1px solid var(--border);padding:5px 0">
+                <div style="font-size:12px">${this._esc(b.t)}</div>
+                <div style="font-size:10.5px;color:var(--text3)">Boletín ${this._esc(b.n)} · ${this._esc(b.m)} ${b.d}${b.h !== b.d ? '–' + b.h : ''}${b.f ? ` · ${this._esc(b.f.slice(0,4))}` : ''}</div>
+              </div>`).join('')}
+            ${bs.length > 25 ? `<div style="font-size:10.5px;color:var(--text3);padding:4px 0">y ${bs.length - 25} más en este componente — usá el filtro</div>` : ''}
+          </div>`).join('')}
+      </div>
+      <div style="font-size:10.5px;color:var(--text3);margin-top:6px">
+        Índice de NHTSA (dominio público). El texto completo del boletín lo publica la marca:
+        pedilo por su número en el concesionario o en el sistema de la agencia.
+      </div></div>`;
+  },
+
+  _filtrarTSB(texto) {
+    const q = String(texto || '').toLowerCase().trim();
+    document.querySelectorAll('#tsb-lista .tsb-item').forEach(el => {
+      el.style.display = !q || el.dataset.txt.includes(q) ? '' : 'none';
+    });
+    document.querySelectorAll('#tsb-lista .tsb-grupo').forEach(g => {
+      const visibles = [...g.querySelectorAll('.tsb-item')].some(i => i.style.display !== 'none');
+      g.style.display = visibles ? '' : 'none';
+    });
+  },
+
   /* Pinta campañas + quejas dentro de un contenedor ya existente. */
   async pintarCampanas(idContenedor, marca, modelo, anio) {
     const el = document.getElementById(idContenedor);
     if (!el) return;
     el.innerHTML = `<div class="card" style="padding:10px;margin-top:8px;font-size:12px;color:var(--text3)">🔎 Consultando campañas de fábrica en NHTSA…</div>`;
-    let campanas = [], quejas = [];
-    try {
-      [campanas, quejas] = await Promise.all([
-        this._nhtsaBuscar('recalls/recallsByVehicle', marca, modelo, anio),
-        this._nhtsaBuscar('complaints/complaintsByVehicle', marca, modelo, anio).catch(() => []),
-      ]);
-    } catch (e) {
-      el.innerHTML = `<div class="card" style="padding:10px;margin-top:8px;border-left:3px solid var(--amber);font-size:12px">
-        ⚠️ No se pudo consultar NHTSA (${this._esc(e.message)}). Es una fuente externa: si no hay internet, el diagnóstico local sigue sirviendo.</div>`;
-      return;
-    }
+    /* Cada fuente se resuelve por separado a propósito: los boletines salen de un
+       archivo local y tienen que verse aunque NHTSA esté caído o no haya internet,
+       que es justo cuando el taller más los necesita. */
+    const [resCamp, quejas, boletines] = await Promise.all([
+      this._nhtsaBuscar('recalls/recallsByVehicle', marca, modelo, anio).catch(e => ({ falla: e.message })),
+      this._nhtsaBuscar('complaints/complaintsByVehicle', marca, modelo, anio).catch(() => []),
+      this._tsbBuscar(marca, modelo, anio).catch(() => []),
+    ]);
+    const fallaNhtsa = resCamp && resCamp.falla ? resCamp.falla : null;
+    const campanas = fallaNhtsa ? [] : resCamp;
 
     /* Las quejas sirven agrupadas: "en este modelo lo que más reportan es X".
        Una por una son 200+ relatos sueltos y no ayudan a decidir qué revisar. */
@@ -386,12 +489,15 @@ Modulos.diagnostico_obd = {
               </div>`).join('')}
           </div>
           ${campanas.length > 8 ? `<div style="font-size:11px;color:var(--text3);margin-top:6px">y ${campanas.length - 8} más — se muestran las 8 primeras</div>` : ''}
-        ` : `<div style="font-size:12px;margin-top:4px">Sin campañas registradas en NHTSA.</div>`}
+        ` : fallaNhtsa
+            ? `<div style="font-size:12px;margin-top:4px;color:var(--amber)">⚠️ No se pudo consultar NHTSA (${this._esc(fallaNhtsa)}). Los boletines de abajo son locales y sí están disponibles.</div>`
+            : `<div style="font-size:12px;margin-top:4px">Sin campañas registradas en NHTSA.</div>`}
         ${top.length ? `
           <div style="margin-top:10px;border-top:1px solid var(--border);padding-top:8px">
             <b style="font-size:12px">📋 LO QUE MÁS REPORTAN LOS DUEÑOS (${quejas.length} quejas)</b>
             <div style="font-size:12px;margin-top:4px">${top.map(([c, n]) => `${this._esc(c)} <b>(${n})</b>`).join(' · ')}</div>
           </div>` : ''}
+        ${this._tsbHTML(boletines, marca, modelo, anio)}
         <div style="font-size:10.5px;color:var(--text3);margin-top:8px">
           Fuente: NHTSA (gobierno de EE.UU., dominio público). Cubre el mercado estadounidense;
           un vehículo importado de otro mercado puede no aparecer aquí.
