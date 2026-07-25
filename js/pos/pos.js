@@ -8,18 +8,35 @@
 const POS = {
   _prod: [], _clientes: [], _cart: [], _cliente: null,
   _metodo: 'Efectivo', _descuento: 0, _canje: 0, _tarjetaDatos: null,
-  _busca: '', _cat: '', _envioData: null, _ventasHoy: [], _caja: null,
+  _busca: '', _cat: '', _envioData: null, _ventasHoy: [], _caja: null, _terminal: null, _procesandoSesion: false,
   _ROLES_OK: ['superadmin','admin','gerente_tal','gerente_fin','recepcionista','vendedor'],
 
   async iniciar() {
+    getSB().auth.onAuthStateChange((evento, sesion) => {
+      if (evento === 'SIGNED_IN' && sesion?.user && !this._procesandoSesion) this._procesarSesion(sesion);
+    });
     try {
       const { data } = await getSB().auth.getSession();
-      if (data?.session?.user) {
-        await Auth._cargarPerfil(data.session.user.id, data.session.user.email);
-        return this._postLogin();
-      }
+      if (data?.session?.user) return this._procesarSesion(data.session);
     } catch (_) {}
     this.renderLogin();
+  },
+
+  async _procesarSesion(session) {
+    if (this._procesandoSesion) return;
+    this._procesandoSesion = true;
+    try {
+      Auth.supaUser = session.user;
+      const esGoogle = (session.user.identities || []).some(i => i.provider === 'google');
+      await Auth._cargarPerfil(session.user.id, session.user.email, null, { permitir_registro_google: esGoogle });
+      const acceso = await DB.getMisTalleresPOS();
+      if (acceso.error) throw acceso.error;
+      if (!acceso.data.length) return this.renderSinTaller();
+      return this.renderSelectorTalleres(acceso.data);
+    } catch (err) {
+      console.error('POS: no se pudo preparar acceso', err);
+      this.renderLogin('No pudimos validar tu acceso. Intenta de nuevo o contacta al administrador.');
+    } finally { this._procesandoSesion = false; }
   },
 
   _puedeEntrar() {
@@ -34,9 +51,48 @@ const POS = {
 
   async _postLogin() {
     if (!this._puedeEntrar()) return this.renderDenegado();
-    this._caja = await DB.getCajaPosAbierta();
+    if (!this._terminal?.id) return this.renderSelectorTerminales();
+    this._caja = await DB.getCajaPosAbierta(this._terminal.id);
     if (!this._caja) return this.renderApertura();
     return this.render();
+  },
+
+  _seguro(texto) { const e = document.createElement('div'); e.textContent = texto || ''; return e.innerHTML; },
+
+  renderSelectorTalleres(talleres) {
+    const opciones = talleres.map(t => `<button class="pos-select-option" onclick="POS.seleccionarTaller('${t.tenant_id}')"><b>${this._seguro(t.tenant_nombre)}</b><span>${this._seguro(t.rol || 'Usuario')} · Elegir taller →</span></button>`).join('');
+    document.getElementById('pos-root').innerHTML = `<div class="pos-login-shell"><div class="pos-login-card"><div class="pos-login-brand"><div class="pos-brand-mark">N</div><div><strong>NexusPro</strong> <em>POS</em><span>Acceso seguro por ubicación</span></div></div><h1>¿En qué taller trabajarás?</h1><p>Elige únicamente entre los talleres que tu administrador te asignó.</p><div class="pos-select-list">${opciones}</div><div class="pos-login-back"><button class="btn btn-ghost btn-sm" onclick="POS.salir()">Cerrar sesión</button></div></div></div>`;
+  },
+
+  async seleccionarTaller(tenantId) {
+    const r = await DB.seleccionarTallerPOS(tenantId);
+    if (r.error) { UI.toast('No se pudo seleccionar el taller: ' + r.error.message, 'error'); return; }
+    await Auth._cargarPerfil(Auth.supaUser.id, Auth.supaUser.email, null, { permitir_registro_google:true });
+    this._terminal = null; localStorage.removeItem('pos_terminal_id');
+    this.renderSelectorTerminales();
+  },
+
+  async renderSelectorTerminales() {
+    const r = await DB.getTerminalesPOS();
+    if (r.error || !r.data.length) return this.renderSinTerminal();
+    const opciones = r.data.map(t => `<button class="pos-select-option" onclick="POS.seleccionarTerminal('${t.id}')"><b>${this._seguro(t.nombre)}</b><span>${t.es_principal ? 'Terminal principal' : 'Terminal POS'} · Elegir terminal →</span></button>`).join('');
+    document.getElementById('pos-root').innerHTML = `<div class="pos-login-shell"><div class="pos-login-card"><div class="pos-login-brand"><div class="pos-brand-mark">N</div><div><strong>NexusPro</strong> <em>POS</em><span>${this._seguro(Auth.tenant?.name || 'Taller')}</span></div></div><h1>Elige tu terminal POS</h1><p>La caja, sus ventas y su cierre quedan registrados para esta terminal.</p><div class="pos-select-list">${opciones}</div><div class="pos-login-back"><button class="btn btn-ghost btn-sm" onclick="POS._procesarSesion({user:Auth.supaUser})">← Cambiar taller</button></div></div></div>`;
+  },
+
+  seleccionarTerminal(id) {
+    DB.getTerminalesPOS().then(r => {
+      this._terminal = r.data.find(t => t.id === id) || null;
+      if (!this._terminal) return UI.toast('Terminal no válida', 'error');
+      localStorage.setItem('pos_terminal_id', id); this._postLogin();
+    });
+  },
+
+  renderSinTaller() {
+    document.getElementById('pos-root').innerHTML = `<div class="pos-login-shell"><div class="pos-login-card"><div class="pos-login-brand"><div class="pos-brand-mark">N</div><div><strong>NexusPro</strong> <em>POS</em><span>Acceso pendiente</span></div></div><h1>Tu cuenta aún no tiene taller</h1><p>Google confirmó tu identidad, pero un administrador debe asignarte al taller y darte permiso de POS antes de cobrar.</p><div class="pos-login-back"><button class="btn btn-ghost" onclick="POS.salir()">Cerrar sesión</button></div></div></div>`;
+  },
+
+  renderSinTerminal() {
+    document.getElementById('pos-root').innerHTML = `<div class="pos-login-shell"><div class="pos-login-card"><h1>No hay terminal POS disponible</h1><p>El administrador del taller debe crear o activar una terminal antes de iniciar cobros.</p><div class="pos-login-back"><button class="btn btn-ghost" onclick="POS.salir()">Cerrar sesión</button></div></div></div>`;
   },
 
   renderApertura() {
@@ -60,7 +116,7 @@ const POS = {
     const fondo = Number(document.getElementById('pos-fondo-inicial')?.value);
     if (!Number.isFinite(fondo) || fondo < 0) { UI.toast('Ingresa un fondo inicial válido', 'error'); return; }
     const { data, error } = await DB.abrirCajaPos({
-      usuario_apertura_id: Auth.user.id, fondo_inicial:fondo,
+      terminal_id:this._terminal.id, usuario_apertura_id: Auth.user.id, fondo_inicial:fondo,
       notas_apertura:document.getElementById('pos-nota-apertura')?.value.trim() || null
     });
     if (error || !data) { UI.toast('No se pudo abrir caja: ' + (error?.message||''), 'error'); return; }
@@ -110,7 +166,7 @@ const POS = {
   },
 
   /* ── LOGIN ───────────────────────────────────────── */
-  renderLogin() {
+  renderLogin(mensaje='') {
     document.getElementById('pos-root').innerHTML = `
       <div class="pos-login-shell">
         <div class="pos-login-card">
@@ -128,7 +184,7 @@ const POS = {
             <input class="form-input" id="pos-pass" type="password" autocomplete="current-password"
                    onkeydown="if(event.key==='Enter')POS.login()"></div>
           <button class="pos-login-submit" onclick="POS.login()">Ingresar al POS <span>→</span></button>
-          <div id="pos-login-err" style="color:var(--red);font-size:12px;margin-top:10px;text-align:center"></div>
+          <div id="pos-login-err" style="color:var(--red);font-size:12px;margin-top:10px;text-align:center">${this._seguro(mensaje)}</div>
           <div class="pos-login-back"><a href="/">← Ir al sistema completo</a></div>
         </div>
       </div>`;
@@ -153,7 +209,7 @@ const POS = {
     if (err) err.textContent = 'Ingresando...';
     const r = await Auth.login(email, pass);
     if (!r.ok) { if (err) err.textContent = r.error || 'No se pudo ingresar'; return; }
-    this._postLogin();
+    this._procesarSesion({ user: Auth.supaUser || { id: Auth.user?.id, email: Auth.user?.email, identities:[] } });
   },
 
   renderDenegado() {

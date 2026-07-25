@@ -1099,9 +1099,25 @@ const DB = {
   },
 
   /* ── CAJA POS ─────────────────────────────────────── */
-  async getCajaPosAbierta() {
+  async getMisTalleresPOS() {
+    const { data, error } = await getSB().rpc('mis_talleres_pos');
+    return { data: data || [], error };
+  },
+
+  async seleccionarTallerPOS(tenantId) {
+    const { data, error } = await getSB().rpc('seleccionar_taller_pos', { p_tenant_id: tenantId });
+    return { data: data?.[0] || null, error };
+  },
+
+  async getTerminalesPOS() {
+    const { data, error } = await getSB().from('pos_terminales').select('*')
+      .eq('tenant_id', getTID()).eq('activo', true).order('es_principal', { ascending:false }).order('nombre');
+    return { data: data || [], error };
+  },
+
+  async getCajaPosAbierta(terminalId) {
     const { data } = await getSB().from('cajas_pos').select('*')
-      .eq('tenant_id', getTID()).eq('estado', 'abierta').maybeSingle();
+      .eq('tenant_id', getTID()).eq('terminal_id', terminalId).eq('estado', 'abierta').maybeSingle();
     return data || null;
   },
 
