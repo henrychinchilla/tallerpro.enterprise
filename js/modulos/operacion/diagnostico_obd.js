@@ -1339,6 +1339,137 @@ Modulos.diagnostico_obd = {
     U0121:'Sin comunicación con el módulo ABS',
     U0155:'Sin comunicación con el tablero',
   },
+  /* ═══════════ GUÍA DE DIAGNÓSTICO ═══════════
+     Un código NO dice qué pieza cambiar: dice qué monitor salió fuera de rango.
+     Por eso cada guía trae qué medir ANTES de comprar nada, y las causas en orden
+     de probabilidad y costo (primero lo barato y común). Cubre los códigos que de
+     verdad entran al taller; el resto muestra solo la descripción.
+     sev: informativa | atencion | alta | critica  (si puede seguir manejando) */
+  _GUIA: {
+    P0011: { sev:'atencion', sint:'Ralentí inestable, falta de potencia, a veces ruido de cadena en frío.',
+      causas:['Aceite sucio, viejo o con nivel bajo (causa más común)','Malla/filtro del solenoide VVT (OCV) tapada','Solenoide VVT con falla eléctrica','Cadena o tensor de tiempo estirados','Sensor de árbol de levas'],
+      medir:'Revisá nivel y estado del aceite ANTES que nada: el VVT trabaja con presión de aceite y un aceite pasado reproduce este código. Después compará en datos en vivo el ángulo de leva comandado contra el real, y medí la resistencia del solenoide.' },
+    P0016: { sev:'alta', sint:'Arranque difícil o no arranca, tironeo, pérdida de potencia.',
+      causas:['Cadena/banda de tiempo saltada o estirada','Tensor de cadena vencido','Rueda dentada o reluctor dañado','Sensor CKP o CMP','Actuador VVT atascado'],
+      medir:'Verificá la sincronización mecánica con las marcas antes de tocar sensores. Cambiar el CKP por este código sin revisar el tiempo es el error clásico. Con osciloscopio, comparar la señal de cigüeñal contra la de levas.' },
+    P0101: { sev:'atencion', sint:'Falta de potencia, consumo alto, ralentí irregular, tirones al acelerar.',
+      causas:['Filtro de aire sucio o mal asentado','MAF sucio (típico con filtros de alto flujo aceitados)','Fuga de aire entre el MAF y el múltiple','Ducto de admisión roto o flojo','MAF dañado'],
+      medir:'Mirá los g/s en vivo: en ralentí un motor de 2.0L ronda 3–5 g/s y a 2500 rpm sube proporcional. Si el valor es bajo, limpiá el MAF con limpiador específico antes de comprar uno: se recupera seguido.' },
+    P0102: { sev:'atencion', sint:'Falta de potencia, humo, motor que se apaga.', causas:['Ducto de admisión desconectado o roto','MAF sucio','Conector o cableado del MAF','MAF dañado'],
+      medir:'Revisá el ducto completo del filtro al múltiple. Con el conector puesto, medí la señal del MAF acelerando: debe subir parejo.' },
+    P0106: { sev:'atencion', sint:'Ralentí irregular, respuesta pobre.', causas:['Manguera de vacío rota, floja o tapada','Sensor MAP sucio de carbón','Fuga en el múltiple de admisión','Sensor MAP dañado'],
+      medir:'Con el motor apagado, el MAP debe leer casi lo mismo que la presión barométrica. Si no coincide, el sensor miente. En ralentí debe marcar vacío alto y estable.' },
+    P0113: { sev:'informativa', sint:'Arranque en frío difícil, consumo levemente alto.', causas:['Conector del sensor IAT suelto o con falso contacto','Cableado abierto','Sensor IAT dañado'],
+      medir:'Con el motor frío, la temperatura de aire debe leer parecida a la ambiente. Puenteando el conector la lectura debe irse al otro extremo: si lo hace, el problema es el sensor, no el cableado.' },
+    P0117: { sev:'atencion', sint:'Ventilador siempre encendido, mezcla rica, consumo alto.', causas:['Sensor ECT en corto','Cableado rozado','Conector con agua o verdín'],
+      medir:'Compará la temperatura del refrigerante en vivo contra un termómetro infrarrojo en la culata. Si difieren mucho, el sensor miente.' },
+    P0118: { sev:'atencion', sint:'Arranque en frío difícil, ventilador que no arranca.', causas:['Circuito abierto del sensor ECT','Conector desconectado','Sensor dañado'],
+      medir:'Igual que P0117: comparar contra termómetro. Ojo con el nivel de refrigerante bajo, que deja el sensor sin contacto con el líquido.' },
+    P0128: { sev:'atencion', sint:'El motor tarda en calentar, calefacción tibia, consumo alto.', causas:['Termostato pegado abierto (causa más común)','Nivel de refrigerante bajo','Sensor ECT mintiendo','Ventilador que corre de más'],
+      medir:'Cronometrá cuánto tarda en llegar a temperatura de trabajo y palpá la manguera superior. Si el motor nunca pasa de media temperatura, es termostato.' },
+    P0131: { sev:'atencion', sint:'Consumo alto, ralentí inestable.', causas:['Fuga de escape antes del sensor (entra aire y lo hace leer pobre)','Sensor contaminado','Mezcla realmente pobre','Cableado del sensor'],
+      medir:'Buscá fugas de escape antes de condenar el sensor. En vivo, un O2 sano oscila entre 0.1 y 0.9 V aproximadamente una vez por segundo.' },
+    P0133: { sev:'atencion', sint:'Consumo alto, pierde algo de potencia.', causas:['Sensor O2 envejecido (lo normal después de 100 mil km)','Contaminado por aceite o refrigerante quemado','Fuga de escape'],
+      medir:'Mirá la velocidad de conmutación en vivo: si el sensor se mueve lento o se queda plano, está agotado. Antes de cambiarlo, descartá consumo de aceite.' },
+    P0135: { sev:'atencion', sint:'Consumo alto en frío, testigo encendido.', causas:['Fusible del calefactor','Cableado o conector','Relé de alimentación','Calefactor del sensor abierto'],
+      medir:'Medí la resistencia del calefactor (suele andar entre 3 y 15 ohm) y verificá que le llegue voltaje con el switch. Sin voltaje, el problema es el circuito, no el sensor.' },
+    P0141: { sev:'informativa', sint:'Testigo encendido, casi sin síntomas de manejo.', causas:['Calefactor del sensor posterior abierto','Fusible o cableado','Conector dañado por calor'],
+      medir:'Mismo procedimiento que P0135, pero en el sensor después del catalizador.' },
+    P0171: { sev:'atencion', sint:'Ralentí inestable, tirones, falta de potencia, consumo alto.',
+      causas:['Fuga de aire falso: mangueras, empaque del múltiple, PCV, bota del acelerador','MAF sucio o subinformando','Presión de combustible baja (filtro o bomba)','Inyectores sucios','Sensor O2 mintiendo','EGR pegada abierta'],
+      medir:'Mirá los ajustes de combustible (STFT/LTFT) en ralentí y a 2500 rpm: si el ajuste es muy positivo en ralentí y mejora en alta, es fuga de vacío. Si se mantiene alto en todo el rango, apuntá a combustible o MAF. La prueba de humo es la que menos tiempo pierde.' },
+    P0172: { sev:'atencion', sint:'Olor a combustible, humo negro, bujías tiznadas, consumo alto.',
+      causas:['Inyector goteando','Presión de combustible alta o retorno tapado','MAF sobreinformando','Sensor ECT que reporta el motor frío de más','Filtro de aire tapado'],
+      medir:'Ajustes de combustible muy negativos confirman rica. Revisá el sensor de refrigerante: si dice que el motor está frío, la ECU enriquece de más para siempre.' },
+    P0174: { sev:'atencion', sint:'Igual que P0171 pero en el banco 2.', causas:['Fuga de aire en el banco 2','MAF o presión de combustible (si además aparece P0171)','Inyectores del banco 2','O2 del banco 2'],
+      medir:'Si aparecen P0171 y P0174 juntos, la causa es común a ambos bancos (MAF, presión, PCV). Si es uno solo, buscá la fuga o el inyector de ese lado.' },
+    P0201: { sev:'alta', sint:'Fallo de encendido en un cilindro, tironeo.', causas:['Conector del inyector suelto','Cableado cortado o rozado','Inyector abierto eléctricamente','Driver de la ECU'],
+      medir:'Medí la resistencia del inyector y compará con los otros: una diferencia grande lo delata. Verificá pulso con lámpara de inyector antes de culpar a la ECU.' },
+    P0300: { sev:'alta', sint:'Motor que vibra, tironea, pierde potencia. Si el testigo PARPADEA, apagá el motor.',
+      causas:['Bujías gastadas o con luz mal calibrada','Bobinas o cables de bujía','Combustible malo o agua en el tanque','Presión de combustible baja','Fuga de vacío','Compresión baja o válvulas','Tiempo de encendido'],
+      medir:'Un testigo parpadeando significa que está entrando combustible sin quemar al catalizador y lo va a fundir: no lo sigas manejando. Mirá los contadores de fallo por cilindro: si el fallo salta entre cilindros, sospechá de combustible, vacío o presión; si se concentra, seguí con los códigos P030x.' },
+    P0301: { sev:'alta', sint:'Vibración, tironeo, pérdida de potencia.', causas:['Bujía del cilindro 1','Bobina de ese cilindro','Inyector tapado','Compresión baja o válvula quemada','Cableado'],
+      medir:'Intercambiá la bobina y la bujía con otro cilindro y volvé a escanear: si el código se mueve al otro cilindro, encontraste la pieza. Si el fallo se queda, hacé prueba de compresión. Confirmar cuesta 20 minutos; equivocarse cuesta el repuesto.' },
+    P0302: { sev:'alta', sint:'Igual que P0301, en el cilindro 2.', causas:['Bujía','Bobina','Inyector','Compresión'], medir:'Intercambiá bobina y bujía con otro cilindro y reescaneá: si el código se mueve, es esa pieza.' },
+    P0303: { sev:'alta', sint:'Igual que P0301, en el cilindro 3.', causas:['Bujía','Bobina','Inyector','Compresión'], medir:'Intercambiá bobina y bujía con otro cilindro y reescaneá: si el código se mueve, es esa pieza.' },
+    P0304: { sev:'alta', sint:'Igual que P0301, en el cilindro 4.', causas:['Bujía','Bobina','Inyector','Compresión'], medir:'Intercambiá bobina y bujía con otro cilindro y reescaneá: si el código se mueve, es esa pieza.' },
+    P0325: { sev:'informativa', sint:'Pérdida de potencia leve, la ECU atrasa el tiempo por seguridad.',
+      causas:['Sensor de detonación flojo o mal torqueado','Cableado o conector','Ruido mecánico real (biela, pistón)','Sensor dañado'],
+      medir:'El torque del sensor importa: montado flojo no lee. Antes de cambiarlo, escuchá el motor: si hay golpeteo real, el sensor está haciendo su trabajo.' },
+    P0335: { sev:'alta', sint:'No arranca, se apaga en caliente, tacómetro errático.', causas:['Sensor CKP (falla típica en caliente)','Entrehierro o rueda fónica dañada','Cableado o conector','Aceite en el conector'],
+      medir:'Si falla solo en caliente, probá el sensor a temperatura de trabajo: en frío mide bien y engaña. Revisá que la rueda dentada no tenga dientes rotos.' },
+    P0340: { sev:'alta', sint:'Arranque demorado, tironeo, motor que se apaga.', causas:['Sensor CMP','Cadena de tiempo saltada','Cableado','Actuador VVT'],
+      medir:'Si aparece junto con P0016, revisá primero la sincronización mecánica: el sensor puede estar bien y estar reportando un tiempo corrido.' },
+    P0401: { sev:'atencion', sint:'Tironeo a baja velocidad, testigo, a veces pinado.', causas:['Conductos de EGR carbonizados (causa más común)','Válvula EGR pegada','Sensor DPFE o de posición','Falta de vacío en la válvula'],
+      medir:'Destapá y limpiá los conductos antes de comprar la válvula: en motores con kilometraje el carbón los tapa y la válvula está sana.' },
+    P0402: { sev:'atencion', sint:'Ralentí inestable, motor que se apaga al frenar.', causas:['Válvula EGR pegada abierta','Diafragma roto','Sensor de posición'],
+      medir:'Con el motor en ralentí, la EGR debe estar cerrada. Si la abrís a mano y el motor casi se apaga, la válvula responde; el problema es que queda abierta.' },
+    P0420: { sev:'atencion', sint:'Testigo encendido, casi sin síntomas de manejo, no pasa la revisión de emisiones.',
+      causas:['Fuga de escape antes o entre los sensores','Sensor O2 posterior lento o envejecido','Fallos de encendido o consumo de aceite que envenenaron el catalizador','Catalizador realmente agotado'],
+      medir:'Es el código donde más plata se tira. Antes de cambiar el catalizador, compará en vivo la señal del O2 delantero contra el trasero: el trasero debe estar casi plano; si copia al delantero, el catalizador no está trabajando. Y buscá la causa: si el motor quema aceite o falla, el catalizador nuevo se muere igual.' },
+    P0430: { sev:'atencion', sint:'Igual que P0420, en el banco 2.', causas:['Fuga de escape','O2 posterior del banco 2','Fallos de encendido o aceite','Catalizador agotado'],
+      medir:'Mismo procedimiento que P0420, del lado del banco 2.' },
+    P0442: { sev:'informativa', sint:'Casi sin síntomas, a veces olor a combustible.', causas:['Tapón de combustible flojo, mal roscado o con empaque vencido','Manguera del EVAP agrietada','Válvula de purga o de venteo','Canister fisurado'],
+      medir:'Empezá por el tapón: es la causa más común y la más barata. Si no, prueba de humo en el sistema EVAP; a ojo no se encuentra una fuga pequeña.' },
+    P0455: { sev:'informativa', sint:'Olor a combustible, testigo encendido.', causas:['Tapón de combustible ausente o mal cerrado','Manguera del EVAP desconectada','Canister o válvula de venteo dañados'],
+      medir:'Fuga grande: normalmente se encuentra a la vista. Revisá el tapón y las mangueras del canister antes de la prueba de humo.' },
+    P0456: { sev:'informativa', sint:'Testigo encendido, sin síntomas de manejo.', causas:['Empaque del tapón reseco','Fisura fina en manguera','Válvula de purga que no sella'],
+      medir:'Fuga muy pequeña: solo aparece con prueba de humo. No cambies piezas a ciegas por este código.' },
+    P0500: { sev:'atencion', sint:'Velocímetro errático o muerto, cambios bruscos de la caja.', causas:['Sensor de velocidad','Rueda fónica o corona dañada','Cableado','Módulo de ABS'],
+      medir:'Si el vehículo toma la velocidad del ABS, revisá primero los códigos de ABS: el problema suele estar ahí y no en un sensor propio.' },
+    P0506: { sev:'informativa', sint:'Ralentí bajo, el motor se apaga al frenar o en marcha lenta.', causas:['Cuerpo de aceleración sucio de carbón','Válvula IAC pegada','Fuga de vacío','Falta de aprendizaje del ralentí tras desconectar la batería'],
+      medir:'Limpiá el cuerpo de aceleración y hacé el reaprendizaje de ralentí que pida la marca. Muchos casos se resuelven ahí.' },
+    P0507: { sev:'atencion', sint:'Ralentí alto, el motor no baja de vueltas.', causas:['Fuga de aire falso (la causa más común)','Cuerpo de aceleración sucio o mal ajustado','IAC pegada','Cable del acelerador trabado'],
+      medir:'Buscá la fuga de vacío con humo. Un ralentí alto casi siempre es aire que entra sin medir.' },
+    P0562: { sev:'alta', sint:'Luces que bajan, testigos varios, arranque flojo.', causas:['Batería en mal estado o bornes sulfatados','Banda del alternador floja','Alternador o regulador','Cables de tierra flojos'],
+      medir:'Con el motor en marcha el sistema debe estar entre 13.5 y 14.5 V aproximadamente. Antes de cambiar el alternador, limpiá bornes y revisá las tierras: un mal contacto reproduce todo esto.' },
+    P0563: { sev:'atencion', sint:'Focos que se queman seguido, testigo encendido.', causas:['Regulador del alternador','Batería en falla','Conexión de tierra deficiente'],
+      medir:'Si el voltaje pasa de 15 V con el motor en marcha, el regulador está dejando cargar de más y va a dañar módulos.' },
+    P0601: { sev:'alta', sint:'Funcionamiento errático, el motor puede no arrancar.', causas:['Alimentación o tierra de la ECU con mal contacto','Software desactualizado','Módulo dañado'],
+      medir:'Revisá alimentaciones y tierras de la ECU antes de condenarla; un módulo se cambia de último y con la reprogramación resuelta.' },
+    P0700: { sev:'atencion', sint:'Testigo encendido, la caja puede entrar en modo de emergencia.', causas:['Este código solo avisa que la TCM guardó un código propio'],
+      medir:'No cambies nada por este código: es un aviso. Leé los códigos de la transmisión (TCM) y trabajá sobre esos.' },
+    P0740: { sev:'atencion', sint:'Aumento de revoluciones sin avanzar, consumo alto, la caja calienta.', causas:['Nivel o estado del aceite de transmisión (empezar por acá)','Solenoide del convertidor (TCC)','Cuerpo de válvulas','Convertidor de par'],
+      medir:'Revisá nivel, color y olor del ATF antes que nada: quemado u oscuro explica el código. Verificá el bloqueo del convertidor en vivo a velocidad de crucero.' },
+    P0741: { sev:'atencion', sint:'Las revoluciones no bajan al mantener velocidad, la caja calienta.', causas:['ATF sucio o con nivel bajo','Solenoide TCC pegado','Cuerpo de válvulas sucio','Convertidor dañado'],
+      medir:'Mismo camino que P0740: aceite primero, solenoide después, convertidor de último.' },
+    U0100: { sev:'critica', sint:'El motor puede no arrancar o apagarse en marcha; varios testigos encendidos.',
+      causas:['Alimentación o tierra de la ECU','Bus CAN cortado o en corto','Conector con corrosión o agua','Resistencias terminadoras del bus','Módulo dañado'],
+      medir:'Medí la resistencia entre CAN-H y CAN-L con todo apagado: lo normal ronda 60 ohm (dos resistencias de 120 en paralelo). Un valor muy distinto apunta al cableado, no al módulo.' },
+  },
+
+  /* Muestra la guía de un código en un modal, con las causas en orden. */
+  verGuia(codigo) {
+    const g = this._GUIA[codigo];
+    const desc = this._descDTC(codigo, null);
+    if (!g) {
+      return UI.modal(`🔧 ${codigo}`, `<p style="font-size:13px"><b>${this._esc(desc)}</b></p>
+        <p style="font-size:12.5px;color:var(--text2);margin-top:8px">
+          Todavía no hay guía cargada para este código. Un código indica qué monitor salió
+          fuera de rango, no qué pieza cambiar: confirmá con mediciones y consultá el manual
+          del fabricante y los boletines de ese modelo antes de reemplazar nada.</p>`, '560px');
+    }
+    const sevTxt = { informativa:['Informativa','var(--text3)','Puede seguir circulando; corregir cuando se pueda.'],
+      atencion:['Atención','var(--amber)','Puede circular, pero conviene atenderlo pronto: gasta más y puede dañar otras piezas.'],
+      alta:['Alta','var(--red)','Atender de inmediato: manejar así puede dañar el motor o el catalizador.'],
+      critica:['Crítica','var(--red)','No circular. Puede quedar tirado o dañar módulos.'] }[g.sev] || ['—','var(--text3)',''];
+    UI.modal(`🔧 ${codigo}`, `
+      <div style="font-size:13.5px;font-weight:800;margin-bottom:2px">${this._esc(desc)}</div>
+      <div style="display:inline-block;font-size:11px;font-weight:800;color:${sevTxt[1]};border:1px solid ${sevTxt[1]};border-radius:6px;padding:2px 8px;margin-bottom:8px">Severidad: ${sevTxt[0]}</div>
+      <div style="font-size:12.5px;color:var(--text2);margin-bottom:10px">${this._esc(sevTxt[2])}</div>
+      <div style="margin-bottom:10px"><b style="font-size:12px">SÍNTOMAS TÍPICOS</b>
+        <div style="font-size:12.5px;margin-top:2px">${this._esc(g.sint)}</div></div>
+      <div style="margin-bottom:10px"><b style="font-size:12px">CAUSAS PROBABLES</b>
+        <div style="font-size:11px;color:var(--text3)">en orden: primero lo más común y barato</div>
+        <ol style="font-size:12.5px;margin:4px 0 0 18px">${g.causas.map(c => `<li style="margin:2px 0">${this._esc(c)}</li>`).join('')}</ol></div>
+      <div style="background:var(--surface2);border-left:3px solid var(--cyan);border-radius:8px;padding:10px">
+        <b style="font-size:12px">QUÉ MEDIR ANTES DE CAMBIAR PIEZAS</b>
+        <div style="font-size:12.5px;margin-top:4px">${this._esc(g.medir)}</div></div>
+      <div style="font-size:10.5px;color:var(--text3);margin-top:10px">
+        Guía general para códigos genéricos SAE. El procedimiento exacto y los valores de
+        especificación los da el manual del fabricante para ese motor.</div>`, '600px');
+  },
+
   _descDTC(c, cat) {
     if (this._DTCS[c]) return this._DTCS[c];
     /* Rango específico de fabricante (SAE J2012): P1xxx, y en las familias
@@ -1677,8 +1808,8 @@ Modulos.diagnostico_obd = {
     return `<div class="card" style="padding:10px;margin-top:8px">
       <b style="font-size:12px">CÓDIGOS DE FALLA (DTC)</b>
       ${filas.length ? `<table class="table" style="margin-top:6px;font-size:12px">
-        <thead><tr><th>Código</th><th>Descripción</th><th>Estado</th></tr></thead>
-        <tbody>${filas.map(f=>`<tr><td><b style="font-family:monospace">${f.codigo}</b></td><td>${f.desc}${f.origen ? `<div style="font-size:10px;color:var(--text3);margin-top:2px">${f.origen}${f.fuente ? ` · ${f.fuente}` : ''}</div>` : ''}</td><td><span class="badge badge-${f.color}">${f.tipo}</span></td></tr>`).join('')}</tbody>
+        <thead><tr><th>Código</th><th>Descripción</th><th>Estado</th><th style="text-align:right">Guía</th></tr></thead>
+        <tbody>${filas.map(f=>`<tr><td><b style="font-family:monospace">${f.codigo}</b></td><td>${f.desc}${f.origen ? `<div style="font-size:10px;color:var(--text3);margin-top:2px">${f.origen}${f.fuente ? ` · ${f.fuente}` : ''}</div>` : ''}</td><td><span class="badge badge-${f.color}">${f.tipo}</span></td><td style="text-align:right;white-space:nowrap"><button class="btn btn-sm btn-ghost" onclick="Modulos.diagnostico_obd.verGuia('${this._esc(f.codigo)}')" title="Qué medir antes de cambiar piezas">🔧${this._GUIA[f.codigo] ? '' : '<span style="opacity:.5"> ·</span>'}</button></td></tr>`).join('')}</tbody>
       </table>` : '<p style="color:var(--green);margin:6px 0 0">✅ Sin códigos de falla</p>'}
     </div>`;
   },
