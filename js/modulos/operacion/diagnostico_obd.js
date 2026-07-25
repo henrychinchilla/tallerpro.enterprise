@@ -412,7 +412,7 @@ Modulos.diagnostico_obd = {
     boletines.forEach(b => { (porComp[b.c || 'SIN CLASIFICAR'] ||= []).push(b); });
     const grupos = Object.entries(porComp).sort((a, b) => b[1].length - a[1].length);
     return `<div style="margin-top:10px;border-top:1px solid var(--border);padding-top:8px">
-      <b style="font-size:12px">📄 BOLETINES DE FÁBRICA (TSB) — ${boletines.length} para ${this._esc(marca)} ${this._esc(modelo)}${anio ? ' ' + this._esc(anio) : ''}</b>
+      <b style="font-size:12px">📄 BOLETINES DE FÁBRICA (TSB) — ${boletines.length} para ${UI.esc(marca)} ${UI.esc(modelo)}${anio ? ' ' + UI.esc(anio) : ''}</b>
       <div style="font-size:11px;color:var(--text3);margin:2px 0 6px">
         Fallas que la marca ya reconoció en este modelo. Buscá el síntoma antes de diagnosticar desde cero.
       </div>
@@ -420,12 +420,12 @@ Modulos.diagnostico_obd = {
              oninput="Modulos.diagnostico_obd._filtrarTSB(this.value)">
       <div id="tsb-lista" style="max-height:340px;overflow-y:auto">
         ${grupos.map(([comp, bs]) => `
-          <div class="tsb-grupo" data-txt="${this._esc((comp + ' ' + bs.map(b => b.t).join(' ')).toLowerCase())}">
-            <div style="font-weight:800;font-size:11.5px;color:var(--cyan);margin:6px 0 2px">${this._esc(this._comp(comp))} (${bs.length})</div>
+          <div class="tsb-grupo" data-txt="${UI.esc((comp + ' ' + bs.map(b => b.t).join(' ')).toLowerCase())}">
+            <div style="font-weight:800;font-size:11.5px;color:var(--cyan);margin:6px 0 2px">${UI.esc(this._comp(comp))} (${bs.length})</div>
             ${bs.slice(0, 25).map(b => `
-              <div class="tsb-item" data-txt="${this._esc((b.t + ' ' + b.n).toLowerCase())}" style="border-bottom:1px solid var(--border);padding:5px 0">
-                <div style="font-size:12px">${this._esc(b.t)}</div>
-                <div style="font-size:10.5px;color:var(--text3)">Boletín ${this._esc(b.n)} · ${this._esc(b.m)} ${b.d}${b.h !== b.d ? '–' + b.h : ''}${b.f ? ` · ${this._esc(b.f.slice(0,4))}` : ''}</div>
+              <div class="tsb-item" data-txt="${UI.esc((b.t + ' ' + b.n).toLowerCase())}" style="border-bottom:1px solid var(--border);padding:5px 0">
+                <div style="font-size:12px">${UI.esc(b.t)}</div>
+                <div style="font-size:10.5px;color:var(--text3)">Boletín ${UI.esc(b.n)} · ${UI.esc(b.m)} ${b.d}${b.h !== b.d ? '–' + b.h : ''}${b.f ? ` · ${UI.esc(b.f.slice(0,4))}` : ''}</div>
               </div>`).join('')}
             ${bs.length > 25 ? `<div style="font-size:10.5px;color:var(--text3);padding:4px 0">y ${bs.length - 25} más en este componente — usá el filtro</div>` : ''}
           </div>`).join('')}
@@ -473,7 +473,7 @@ Modulos.diagnostico_obd = {
 
     el.innerHTML = `
       <div class="card" style="padding:10px;margin-top:8px;border-left:3px solid ${campanas.length ? 'var(--red)' : 'var(--border)'}">
-        <b style="font-size:12px">🔔 CAMPAÑAS DE FÁBRICA (NHTSA) — ${this._esc(marca)} ${this._esc(modelo)} ${this._esc(anio)}</b>
+        <b style="font-size:12px">🔔 CAMPAÑAS DE FÁBRICA (NHTSA) — ${UI.esc(marca)} ${UI.esc(modelo)} ${UI.esc(anio)}</b>
         ${campanas.length ? `
           <div style="font-size:12px;color:var(--red);font-weight:800;margin-top:4px">
             ${campanas.length} llamado(s) a revisión: la agencia debe repararlo sin costo. Confirmar con el número de campaña antes de cotizar.
@@ -481,21 +481,21 @@ Modulos.diagnostico_obd = {
           <div style="margin-top:8px;display:flex;flex-direction:column;gap:8px">
             ${campanas.slice(0, 8).map(c => `
               <div style="border:1px solid var(--border);border-radius:8px;padding:8px">
-                <div style="font-weight:800;font-size:12.5px">${this._esc(this._comp(c.Component) || 'Componente no indicado')}</div>
-                <div style="font-size:11px;color:var(--text3);margin:2px 0">Campaña ${this._esc(c.NHTSACampaignNumber || '—')}${c.ReportReceivedDate ? ` · ${this._esc(c.ReportReceivedDate)}` : ''}</div>
-                <div style="font-size:12px">${this._esc((c.Summary || '').slice(0, 300))}</div>
+                <div style="font-weight:800;font-size:12.5px">${UI.esc(this._comp(c.Component) || 'Componente no indicado')}</div>
+                <div style="font-size:11px;color:var(--text3);margin:2px 0">Campaña ${UI.esc(c.NHTSACampaignNumber || '—')}${c.ReportReceivedDate ? ` · ${UI.esc(c.ReportReceivedDate)}` : ''}</div>
+                <div style="font-size:12px">${UI.esc((c.Summary || '').slice(0, 300))}</div>
                 <div style="font-size:10px;color:var(--text3)">texto original de NHTSA (inglés)</div>
-                ${c.Remedy ? `<div style="font-size:12px;margin-top:4px"><b>Solución de fábrica:</b> ${this._esc(c.Remedy.slice(0, 300))}</div>` : ''}
+                ${c.Remedy ? `<div style="font-size:12px;margin-top:4px"><b>Solución de fábrica:</b> ${UI.esc(c.Remedy.slice(0, 300))}</div>` : ''}
               </div>`).join('')}
           </div>
           ${campanas.length > 8 ? `<div style="font-size:11px;color:var(--text3);margin-top:6px">y ${campanas.length - 8} más — se muestran las 8 primeras</div>` : ''}
         ` : fallaNhtsa
-            ? `<div style="font-size:12px;margin-top:4px;color:var(--amber)">⚠️ No se pudo consultar NHTSA (${this._esc(fallaNhtsa)}). Los boletines de abajo son locales y sí están disponibles.</div>`
+            ? `<div style="font-size:12px;margin-top:4px;color:var(--amber)">⚠️ No se pudo consultar NHTSA (${UI.esc(fallaNhtsa)}). Los boletines de abajo son locales y sí están disponibles.</div>`
             : `<div style="font-size:12px;margin-top:4px">Sin campañas registradas en NHTSA.</div>`}
         ${top.length ? `
           <div style="margin-top:10px;border-top:1px solid var(--border);padding-top:8px">
             <b style="font-size:12px">📋 LO QUE MÁS REPORTAN LOS DUEÑOS (${quejas.length} quejas)</b>
-            <div style="font-size:12px;margin-top:4px">${top.map(([c, n]) => `${this._esc(c)} <b>(${n})</b>`).join(' · ')}</div>
+            <div style="font-size:12px;margin-top:4px">${top.map(([c, n]) => `${UI.esc(c)} <b>(${n})</b>`).join(' · ')}</div>
           </div>` : ''}
         ${this._tsbHTML(boletines, marca, modelo, anio)}
         <div style="font-size:10.5px;color:var(--text3);margin-top:8px">
@@ -516,7 +516,7 @@ Modulos.diagnostico_obd = {
       ${vs.length ? `<label class="form-label">Tomar datos de un vehículo del taller</label>
       <select class="form-select" style="width:100%;margin-bottom:10px" onchange="Modulos.diagnostico_obd._llenarCampanas(this.value)">
         <option value="">— escribir a mano —</option>
-        ${vs.map(v => `<option value="${this._esc(v.id)}">${this._esc(v.placa || '')} ${this._esc(v.marca || '')} ${this._esc(v.modelo || '')} ${this._esc(v.anio || '')}</option>`).join('')}
+        ${vs.map(v => `<option value="${UI.esc(v.id)}">${UI.esc(v.placa || '')} ${UI.esc(v.marca || '')} ${UI.esc(v.modelo || '')} ${UI.esc(v.anio || '')}</option>`).join('')}
       </select>` : ''}
       <div style="display:grid;grid-template-columns:1fr 1fr 90px;gap:8px">
         <div><label class="form-label">Marca</label><input class="form-input" id="camp-marca" placeholder="Toyota"></div>
@@ -542,10 +542,6 @@ Modulos.diagnostico_obd = {
     const anio = document.getElementById('camp-anio').value.trim();
     if (!marca || !modelo || !anio) return UI.toast('Marca, modelo y año son necesarios', 'warn');
     this.pintarCampanas('camp-res', marca, modelo, anio);
-  },
-
-  _esc(t) {
-    return String(t ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
   },
 
   _desconectar() {
@@ -1339,6 +1335,75 @@ Modulos.diagnostico_obd = {
     U0121:'Sin comunicación con el módulo ABS',
     U0155:'Sin comunicación con el tablero',
   },
+  /* ═══════════ MEMORIA DEL TALLER ═══════════
+     Los manuales y NHTSA cubren el mercado de EE.UU.: el Hilux, el Canter y casi
+     todo lo importado de Japón o Corea no están en ninguna de esas fuentes. Lo
+     único que va a cubrir esos vehículos es lo que este taller ya resolvió, así
+     que la bitácora se consulta durante el escaneo y se alimenta desde ahí. */
+  async pintarBitacora(s) {
+    const el = document.getElementById('obd-bitacora');
+    if (!el) return;
+    const v = (this._vehiculos || []).find(x => x.id === s.vehiculo_id);
+    const marca = s.nhtsa?.marca || v?.marca || null;
+    const modelo = s.nhtsa?.modelo || v?.modelo || null;
+    const codigos = [...(s.dtcs || []), ...(s.dtcs_pendientes || [])].map(d => d.codigo);
+    let filas = [];
+    try { filas = await DB.getBitacoraRelacionada(codigos, marca, modelo); } catch (_) { filas = []; }
+
+    const prellenado = JSON.stringify({
+      dtc_codigos: codigos,
+      marca: marca || '', modelo: modelo || '',
+      categoria: this._catBitacora(codigos[0]),
+      titulo: codigos.length ? `${codigos[0]} — ${this._descDTC(codigos[0], null)}`.slice(0, 120) : '',
+    }).replace(/"/g, '&quot;');
+    const btnNueva = `<button class="btn btn-sm btn-brand" onclick="Modulos.diagnostico_obd.guardarEnBitacora(${prellenado})">➕ Guardar lo que resolvimos</button>`;
+
+    el.innerHTML = `<div class="card" style="padding:10px;margin-top:8px;border-left:3px solid var(--green)">
+      <b style="font-size:12px">📖 LO QUE ESTE TALLER YA RESOLVIÓ</b>
+      ${filas.length ? `
+        <div style="margin-top:6px;display:flex;flex-direction:column;gap:6px">
+          ${filas.slice(0, 8).map(b => `
+            <div style="border:1px solid var(--border);border-radius:8px;padding:8px;cursor:pointer"
+                 onclick="Modulos.bitacora.ver('${UI.esc(b.id)}')">
+              <div style="font-size:12.5px;font-weight:800">${UI.esc(b.titulo)}</div>
+              <div style="font-size:11px;color:var(--text3);margin-top:2px">
+                ${b.motivo === 'codigo' ? '🎯 mismo código' : '🚗 mismo modelo'}
+                ${(b.dtc_codigos || []).length ? ` · ${UI.esc((b.dtc_codigos || []).join(', '))}` : ''}
+                ${b.veces_ejecutada > 1 ? ` · resuelto ${b.veces_ejecutada}×` : ''}
+                ${b.creado_por_nombre ? ` · ${UI.esc(b.creado_por_nombre)}` : ''}
+              </div>
+              ${b.sintoma ? `<div style="font-size:11.5px;color:var(--text2);margin-top:2px">${UI.esc(b.sintoma)}</div>` : ''}
+            </div>`).join('')}
+        </div>
+        <div style="margin-top:8px">${btnNueva}</div>`
+      : `<div style="font-size:12px;color:var(--text3);margin-top:4px">
+          Nada registrado todavía para estos códigos ni para este modelo.
+          Cuando lo resuelvan, guardarlo acá hace que el próximo que vea este código lo encuentre hecho.
+        </div>
+        <div style="margin-top:8px">${btnNueva}</div>`}
+    </div>`;
+  },
+
+  /* La categoría se deduce de la familia del código para no hacerlo escribir */
+  _catBitacora(codigo) {
+    if (!codigo) return 'general';
+    if (codigo[0] === 'U') return 'electrico';
+    if (codigo[0] === 'C') return 'frenos';
+    if (codigo[0] === 'B') return 'carroceria';
+    const fam = codigo.slice(1, 3);
+    if (['03'].includes(fam)) return 'motor';
+    if (['01', '02'].includes(fam)) return 'combustible';
+    if (['04'].includes(fam)) return 'escape';
+    if (['07', '08', '09'].includes(fam)) return 'transmision';
+    if (['05', '06'].includes(fam)) return 'electrico';
+    return 'motor';
+  },
+
+  guardarEnBitacora(prellenado) {
+    if (!Modulos.bitacora) return UI.toast('El módulo de bitácora no está disponible', 'error');
+    Modulos.bitacora.modalNueva(prellenado || {});
+  },
+
   /* ═══════════ GUÍA DE DIAGNÓSTICO ═══════════
      Un código NO dice qué pieza cambiar: dice qué monitor salió fuera de rango.
      Por eso cada guía trae qué medir ANTES de comprar nada, y las causas en orden
@@ -1443,7 +1508,7 @@ Modulos.diagnostico_obd = {
     const g = this._GUIA[codigo];
     const desc = this._descDTC(codigo, null);
     if (!g) {
-      return UI.modal(`🔧 ${codigo}`, `<p style="font-size:13px"><b>${this._esc(desc)}</b></p>
+      return UI.modal(`🔧 ${codigo}`, `<p style="font-size:13px"><b>${UI.esc(desc)}</b></p>
         <p style="font-size:12.5px;color:var(--text2);margin-top:8px">
           Todavía no hay guía cargada para este código. Un código indica qué monitor salió
           fuera de rango, no qué pieza cambiar: confirmá con mediciones y consultá el manual
@@ -1454,17 +1519,17 @@ Modulos.diagnostico_obd = {
       alta:['Alta','var(--red)','Atender de inmediato: manejar así puede dañar el motor o el catalizador.'],
       critica:['Crítica','var(--red)','No circular. Puede quedar tirado o dañar módulos.'] }[g.sev] || ['—','var(--text3)',''];
     UI.modal(`🔧 ${codigo}`, `
-      <div style="font-size:13.5px;font-weight:800;margin-bottom:2px">${this._esc(desc)}</div>
+      <div style="font-size:13.5px;font-weight:800;margin-bottom:2px">${UI.esc(desc)}</div>
       <div style="display:inline-block;font-size:11px;font-weight:800;color:${sevTxt[1]};border:1px solid ${sevTxt[1]};border-radius:6px;padding:2px 8px;margin-bottom:8px">Severidad: ${sevTxt[0]}</div>
-      <div style="font-size:12.5px;color:var(--text2);margin-bottom:10px">${this._esc(sevTxt[2])}</div>
+      <div style="font-size:12.5px;color:var(--text2);margin-bottom:10px">${UI.esc(sevTxt[2])}</div>
       <div style="margin-bottom:10px"><b style="font-size:12px">SÍNTOMAS TÍPICOS</b>
-        <div style="font-size:12.5px;margin-top:2px">${this._esc(g.sint)}</div></div>
+        <div style="font-size:12.5px;margin-top:2px">${UI.esc(g.sint)}</div></div>
       <div style="margin-bottom:10px"><b style="font-size:12px">CAUSAS PROBABLES</b>
         <div style="font-size:11px;color:var(--text3)">en orden: primero lo más común y barato</div>
-        <ol style="font-size:12.5px;margin:4px 0 0 18px">${g.causas.map(c => `<li style="margin:2px 0">${this._esc(c)}</li>`).join('')}</ol></div>
+        <ol style="font-size:12.5px;margin:4px 0 0 18px">${g.causas.map(c => `<li style="margin:2px 0">${UI.esc(c)}</li>`).join('')}</ol></div>
       <div style="background:var(--surface2);border-left:3px solid var(--cyan);border-radius:8px;padding:10px">
         <b style="font-size:12px">QUÉ MEDIR ANTES DE CAMBIAR PIEZAS</b>
-        <div style="font-size:12.5px;margin-top:4px">${this._esc(g.medir)}</div></div>
+        <div style="font-size:12.5px;margin-top:4px">${UI.esc(g.medir)}</div></div>
       <div style="font-size:10.5px;color:var(--text3);margin-top:10px">
         Guía general para códigos genéricos SAE. El procedimiento exacto y los valores de
         especificación los da el manual del fabricante para ese motor.</div>`, '600px');
@@ -1710,6 +1775,7 @@ Modulos.diagnostico_obd = {
         <button class="btn btn-sm btn-cyan" style="margin-top:6px" onclick="Modulos.diagnostico_obd.aplicarVIN()">📋 Completar ficha del vehículo</button>
       </div>` : ''}
       ${this._tablaDTCs(s)}
+      <div id="obd-bitacora"></div>
       <div id="obd-campanas"></div>
       ${this._freezeHTML(s.freeze_frame)}
       <div class="card" style="padding:10px;margin-top:8px">
@@ -1734,6 +1800,7 @@ Modulos.diagnostico_obd = {
     const v = (this._vehiculos || []).find(x => x.id === s.vehiculo_id);
     const marca = s.nhtsa?.marca || v?.marca, modelo = s.nhtsa?.modelo || v?.modelo, anio = s.nhtsa?.anio || v?.anio;
     if (marca && modelo && anio) this.pintarCampanas('obd-campanas', marca, modelo, anio);
+    this.pintarBitacora(s);   // la memoria del taller no depende de internet
   },
 
   _freezeHTML(fz) {
@@ -1809,7 +1876,7 @@ Modulos.diagnostico_obd = {
       <b style="font-size:12px">CÓDIGOS DE FALLA (DTC)</b>
       ${filas.length ? `<table class="table" style="margin-top:6px;font-size:12px">
         <thead><tr><th>Código</th><th>Descripción</th><th>Estado</th><th style="text-align:right">Guía</th></tr></thead>
-        <tbody>${filas.map(f=>`<tr><td><b style="font-family:monospace">${f.codigo}</b></td><td>${f.desc}${f.origen ? `<div style="font-size:10px;color:var(--text3);margin-top:2px">${f.origen}${f.fuente ? ` · ${f.fuente}` : ''}</div>` : ''}</td><td><span class="badge badge-${f.color}">${f.tipo}</span></td><td style="text-align:right;white-space:nowrap"><button class="btn btn-sm btn-ghost" onclick="Modulos.diagnostico_obd.verGuia('${this._esc(f.codigo)}')" title="Qué medir antes de cambiar piezas">🔧${this._GUIA[f.codigo] ? '' : '<span style="opacity:.5"> ·</span>'}</button></td></tr>`).join('')}</tbody>
+        <tbody>${filas.map(f=>`<tr><td><b style="font-family:monospace">${f.codigo}</b></td><td>${f.desc}${f.origen ? `<div style="font-size:10px;color:var(--text3);margin-top:2px">${f.origen}${f.fuente ? ` · ${f.fuente}` : ''}</div>` : ''}</td><td><span class="badge badge-${f.color}">${f.tipo}</span></td><td style="text-align:right;white-space:nowrap"><button class="btn btn-sm btn-ghost" onclick="Modulos.diagnostico_obd.verGuia('${UI.esc(f.codigo)}')" title="Qué medir antes de cambiar piezas">🔧${this._GUIA[f.codigo] ? '' : '<span style="opacity:.5"> ·</span>'}</button></td></tr>`).join('')}</tbody>
       </table>` : '<p style="color:var(--green);margin:6px 0 0">✅ Sin códigos de falla</p>'}
     </div>`;
   },

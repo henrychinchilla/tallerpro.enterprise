@@ -405,7 +405,9 @@ Modulos.ordenes = {
     await DB.updateEstadoOT(id, estado);
     UI.toast('Estado actualizado ✓');
     UI.cerrarModal();
-    this.render();
+    const o = this._data.find(x => x.id === id);
+    await this.render();
+    if (estado === 'listo') this._ofrecerBitacora(o);
   },
 
   /* ── TRABAJOS EXTERNOS (torno, subcontratos) ───────── */
@@ -1245,5 +1247,29 @@ Modulos.ordenes = {
     UI.toast('Estado actualizado ✓');
     const o = this._data.find(x=>x.id===id);
     if (o) o.estado = estado;
+    if (estado === 'listo') this._ofrecerBitacora(o);
+  },
+
+  /* Al marcar la OT "listo" es cuando el mecánico tiene fresco qué era y qué hizo;
+     en "entregado" ya pasaron días y a veces lo entrega otra persona. Se ofrece,
+     no se obliga: si registrar se vuelve un trámite, nadie lo llena. */
+  _ofrecerBitacora(o) {
+    const v = o?.vehiculos;
+    if (!v || !Modulos.bitacora) return;   // servicios sin vehículo no alimentan la memoria técnica
+    const prellenado = {
+      marca: v.marca || '', modelo: v.modelo || '',
+      sintoma: o.diagnostico || '', categoria: 'general',
+    };
+    UI.modal('📖 ¿Lo guardamos en la bitácora?', `
+      <p style="font-size:13px;color:var(--text2)">
+        Terminaron <b>${UI.esc(v.placa || '')} ${UI.esc(v.marca || '')} ${UI.esc(v.modelo || '')}</b>.
+        Si lo que encontraron sirve para la próxima vez, guardalo ahora que lo tenés fresco:
+        el que vea este síntoma en este modelo lo va a encontrar resuelto.
+      </p>
+      ${o.diagnostico ? `<p style="font-size:12px;color:var(--text3)">Síntoma reportado: ${UI.esc(o.diagnostico)}</p>` : ''}
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px">
+        <button class="btn btn-ghost" onclick="UI.cerrarModal()">Ahora no</button>
+        <button class="btn btn-brand" onclick="Modulos.bitacora.modalNueva(${UI.esc(JSON.stringify(prellenado))})">📖 Guardar solución</button>
+      </div>`, '520px');
   }
 };

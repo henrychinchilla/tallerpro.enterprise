@@ -359,6 +359,34 @@ const DB = {
   },
 
   /* ── BITÁCORA DE SOLUCIONES TÉCNICAS ──────────── */
+  /* Lo que este taller ya resolvió para estos códigos o este modelo.
+     Es la única fuente que cubre lo que ningún manual gringo trae (Hilux,
+     Canter, importados de Japón), así que se consulta durante el escaneo.
+     Dos consultas a propósito: primero lo que coincide por código —lo más
+     relevante— y después lo del mismo modelo aunque el código sea otro. */
+  async getBitacoraRelacionada(codigos = [], marca = null, modelo = null) {
+    const tid = getTID();
+    const vistos = new Set(), res = [];
+    const sumar = (filas, motivo) => (filas || []).forEach(f => {
+      if (vistos.has(f.id)) return;
+      vistos.add(f.id); res.push({ ...f, motivo });
+    });
+
+    if (codigos.length) {
+      const { data } = await getSB().from('bitacora_soluciones').select('*')
+        .eq('tenant_id', tid).overlaps('dtc_codigos', codigos)
+        .order('veces_ejecutada', { ascending: false }).limit(20);
+      sumar(data, 'codigo');
+    }
+    if (marca && modelo) {
+      const { data } = await getSB().from('bitacora_soluciones').select('*')
+        .eq('tenant_id', tid).ilike('marca', marca).ilike('modelo', `${modelo}%`)
+        .order('veces_ejecutada', { ascending: false }).limit(10);
+      sumar(data, 'modelo');
+    }
+    return res;
+  },
+
   async getBitacora({ categoria = null, busca = null, orden = 'usadas' } = {}) {
     let q = getSB().from('bitacora_soluciones').select('*').eq('tenant_id', getTID());
     if (categoria) q = q.eq('categoria', categoria);

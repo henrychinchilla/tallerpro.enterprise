@@ -116,9 +116,11 @@ Modulos.bitacora = {
       </div>`;
   },
 
-  modalNueva() {
+  /* prellenado: lo llama el diagnóstico OBD con el código, marca y modelo del
+     escaneo, para que registrar la solución cueste escribir solo lo que se hizo */
+  modalNueva(prellenado = {}) {
     UI.modal('➕ Nueva Solución', `
-      ${this._form()}
+      ${this._form(prellenado)}
       <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px">
         <button class="btn btn-ghost" onclick="UI.cerrarModal()">Cancelar</button>
         <button class="btn btn-brand" onclick="Modulos.bitacora.guardarNueva()">Guardar</button>
