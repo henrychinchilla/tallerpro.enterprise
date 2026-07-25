@@ -988,12 +988,19 @@ window.addEventListener('load', async () => {
       const intent = localStorage.getItem('google_intent');
       localStorage.removeItem('google_intent');
 
-      await Auth._cargarPerfil(session.user.id, session.user.email);
+      const esGoogle = session.user.identities?.some(i => i.provider === 'google');
+      await Auth._cargarPerfil(session.user.id, session.user.email, null, {
+        permitir_registro_google: esGoogle
+      });
       Auth.supaUser = session.user;
+      /* Supabase ya persistió la sesión; no dejar el token OAuth visible en la URL. */
+      if (window.location.hash.includes('access_token=')) {
+        window.history.replaceState({}, document.title, window.location.pathname + window.location.search);
+      }
       if (Auth.tenant?.id) window._cachedTenantId = Auth.tenant.id;
 
       /* Google sin taller aún → completar registro */
-      if (!Auth.tenant && Auth.user?.rol !== 'superadmin') {
+      if (!Auth.tenant && esGoogle) {
         renderLogin('nuevo-taller-google');
         return;
       }

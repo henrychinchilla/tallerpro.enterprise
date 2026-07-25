@@ -129,7 +129,7 @@ const Auth = {
   },
 
   /* ── CARGAR PERFIL ────────────────────────────── */
-  async _cargarPerfil(userId, email, tenantSlug=null) {
+  async _cargarPerfil(userId, email, tenantSlug=null, opciones={}) {
     try {
       /* Buscar perfil en public.usuarios */
       const { data: perfil, error: pErr } = await getSB().from('usuarios')
@@ -159,6 +159,13 @@ const Auth = {
         /* Actualizar último login */
         getSB().from('usuarios').update({ ultimo_login: new Date().toISOString() })
           .eq('id', userId).then(() => {});
+      } else if (opciones.permitir_registro_google) {
+        /* Una identidad Google autenticada puede no tener aún perfil porque
+           está completando el alta de su taller. No le damos acceso a datos;
+           solo conservamos la sesión para la Edge Function de registro. */
+        Auth.user = Auth.tenant = Auth.licencia = null;
+        window._cachedTenantId = null;
+        return null;
       } else {
         await getSB().auth.signOut();
         throw new Error('Tu cuenta todavía no está asignada a un comercio. Contacta al administrador.');
