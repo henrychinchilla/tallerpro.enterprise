@@ -32,6 +32,13 @@ const POS = {
       const acceso = await DB.getMisTalleresPOS();
       if (acceso.error) throw acceso.error;
       if (!acceso.data.length) return this.renderSinTaller();
+      /* No volver a preguntar lo que ya se respondió: con un solo taller, o con
+         el último recordado, se entra directo. El RPC valida la membresía igual. */
+      const recordado = localStorage.getItem('pos_tenant_id');
+      const directo = acceso.data.length === 1
+        ? acceso.data[0]
+        : acceso.data.find(t => t.tenant_id === recordado);
+      if (directo) return this.seleccionarTaller(directo.tenant_id);
       return this.renderSelectorTalleres(acceso.data);
     } catch (err) {
       console.error('POS: no se pudo preparar acceso', err);
@@ -66,25 +73,57 @@ const POS = {
 
   async seleccionarTaller(tenantId) {
     const r = await DB.seleccionarTallerPOS(tenantId);
-    if (r.error) { UI.toast('No se pudo seleccionar el taller: ' + r.error.message, 'error'); return; }
+    /* Si el taller no abre, decirlo en pantalla: un toast solo dejaba la
+       pantalla congelada sin explicar nada. */
+    if (r.error) return this.renderErrorAcceso('No se pudo abrir el taller', r.error.message);
     await Auth._cargarPerfil(Auth.supaUser.id, Auth.supaUser.email, null, { permitir_registro_google:true });
-    this._terminal = null; localStorage.removeItem('pos_terminal_id');
+    /* Cambiar de taller invalida la terminal recordada; volver al mismo la conserva. */
+    if (localStorage.getItem('pos_tenant_id') !== tenantId) {
+      this._terminal = null; localStorage.removeItem('pos_terminal_id');
+    }
+    localStorage.setItem('pos_tenant_id', tenantId);
     this.renderSelectorTerminales();
   },
 
-  async renderSelectorTerminales() {
+  /* forzar=true lo abre aunque haya una terminal recordada (botón "Cambiar terminal") */
+  async renderSelectorTerminales(forzar=false) {
     const r = await DB.getTerminalesPOS();
-    if (r.error || !r.data.length) return this.renderSinTerminal();
+    if (r.error) return this.renderErrorAcceso('No se pudieron cargar las terminales', r.error.message);
+    if (!r.data.length) return this.renderSinTerminal();
+    if (!forzar) {
+      const recordada = localStorage.getItem('pos_terminal_id');
+      const directa = r.data.find(t => t.id === recordada) || (r.data.length === 1 ? r.data[0] : null);
+      if (directa) return this.seleccionarTerminal(directa.id, r.data);
+    }
     const opciones = r.data.map(t => `<button class="pos-select-option" onclick="POS.seleccionarTerminal('${t.id}')"><b>${this._seguro(t.nombre)}</b><span>${t.es_principal ? 'Terminal principal' : 'Terminal POS'} · Elegir terminal →</span></button>`).join('');
-    document.getElementById('pos-root').innerHTML = `<div class="pos-login-shell"><div class="pos-login-card"><div class="pos-login-brand"><div class="pos-brand-mark">N</div><div><strong>NexusPro</strong> <em>POS</em><span>${this._seguro(Auth.tenant?.name || 'Taller')}</span></div></div><h1>Elige tu terminal POS</h1><p>La caja, sus ventas y su cierre quedan registrados para esta terminal.</p><div class="pos-select-list">${opciones}</div><div class="pos-login-back"><button class="btn btn-ghost btn-sm" onclick="POS._procesarSesion({user:Auth.supaUser})">← Cambiar taller</button></div></div></div>`;
+    document.getElementById('pos-root').innerHTML = `<div class="pos-login-shell"><div class="pos-login-card"><div class="pos-login-brand"><div class="pos-brand-mark">N</div><div><strong>NexusPro</strong> <em>POS</em><span>${this._seguro(Auth.tenant?.name || 'Taller')}</span></div></div><h1>Elige tu terminal POS</h1><p>La caja, sus ventas y su cierre quedan registrados para esta terminal.</p><div class="pos-select-list">${opciones}</div><div class="pos-login-back"><button class="btn btn-ghost btn-sm" onclick="POS.cambiarTaller()">← Cambiar taller</button></div></div></div>`;
   },
 
-  seleccionarTerminal(id) {
-    DB.getTerminalesPOS().then(r => {
-      this._terminal = r.data.find(t => t.id === id) || null;
-      if (!this._terminal) return UI.toast('Terminal no válida', 'error');
-      localStorage.setItem('pos_terminal_id', id); this._postLogin();
-    });
+  async seleccionarTerminal(id, lista=null) {
+    const data = lista || (await DB.getTerminalesPOS()).data;
+    this._terminal = data.find(t => t.id === id) || null;
+    if (!this._terminal) {
+      /* La terminal recordada ya no existe o la desactivaron: olvidarla y preguntar. */
+      localStorage.removeItem('pos_terminal_id');
+      UI.toast('Esa terminal ya no está disponible. Elige otra.', 'warn');
+      return this.renderSelectorTerminales(true);
+    }
+    localStorage.setItem('pos_terminal_id', id);
+    this._postLogin();
+  },
+
+  cambiarTerminal() { this.renderSelectorTerminales(true); },
+
+  /* Olvida lo recordado para poder volver a elegir taller (y con él, terminal) */
+  cambiarTaller() {
+    localStorage.removeItem('pos_tenant_id');
+    localStorage.removeItem('pos_terminal_id');
+    this._terminal = null;
+    this._procesarSesion({ user: Auth.supaUser });
+  },
+
+  renderErrorAcceso(titulo, detalle) {
+    document.getElementById('pos-root').innerHTML = `<div class="pos-login-shell"><div class="pos-login-card"><div class="pos-login-brand"><div class="pos-brand-mark">N</div><div><strong>NexusPro</strong> <em>POS</em><span>No se pudo continuar</span></div></div><h1>${this._seguro(titulo)}</h1><p>${this._seguro(detalle || 'Intenta de nuevo. Si sigue igual, avisa al administrador.')}</p><div class="pos-select-list"><button class="pos-select-option" onclick="POS._procesarSesion({user:Auth.supaUser})"><b>Reintentar</b><span>Volver a cargar tus talleres</span></button></div><div class="pos-login-back"><button class="btn btn-ghost btn-sm" onclick="POS.salir()">Cerrar sesión</button></div></div></div>`;
   },
 
   renderSinTaller() {
@@ -347,19 +386,39 @@ const POS = {
           box-shadow: 0 4px 12px rgba(217,119,6,0.2) !important;
         }
         /* ── Layout responsivo del POS ──
-           Desktop: catálogo + carrito lado a lado.
-           Móvil (≤920px): catálogo a pantalla completa; el carrito es un panel
+           El catálogo se busca y se filtra, así que cede ancho: lo que el cajero
+           necesita ver completo es la venta. El panel de venta es elástico
+           (40vw) y se parte en dos —ticket con scroll propio + riel de cobro—
+           en cuanto hay ancho para que ambos se lean sin pelearse el alto.
+           Móvil (≤920px): catálogo a pantalla completa; la venta es un panel
            deslizante que se abre con la barra inferior (total + Cobrar). */
         .pos-shell { display:flex; flex-direction:column; height:100vh; height:100dvh; }
         .pos-header { display:flex; align-items:center; gap:12px; padding:12px 18px;
           background:linear-gradient(90deg, var(--surface) 0%, var(--surface2) 100%);
           border-bottom:1px solid var(--border); flex-wrap:wrap; }
-        .pos-layout { flex:1; display:grid; grid-template-columns:1fr 480px; gap:0; overflow:hidden; min-height:0; }
-        .pos-catalogo { padding:18px; overflow-y:auto; display:flex; flex-direction:column; gap:14px; min-width:0; }
-        .pos-cart-panel { border-left:1px solid var(--border); background:var(--surface); display:flex; flex-direction:column; min-height:0; }
-        #pos-cart { flex:1 1 0; overflow-y:auto; padding:16px; min-height:80px; }
-        #pos-totales { border-top:1px solid var(--border); padding:16px; overflow-y:auto; flex:0 1 auto; }
+        .pos-layout { flex:1; display:grid;
+          grid-template-columns:minmax(0,1fr) clamp(500px, 40vw, 860px);
+          gap:0; overflow:hidden; min-height:0; }
+        .pos-catalogo { padding:16px; overflow-y:auto; display:flex; flex-direction:column; gap:12px; min-width:0; }
+        .pos-cart-panel { border-left:1px solid var(--border); background:var(--surface);
+          display:flex; flex-direction:column; min-height:0; overflow:hidden; }
+        .pos-ticket { flex:1 1 0; display:flex; flex-direction:column; min-height:0; min-width:0; }
+        #pos-cart { flex:1 1 0; overflow-y:auto; padding:14px 16px; min-height:0; }
+        /* flex:0 1 auto (y no un alto fijo): en pantallas cortas el bloque de cobro
+           encoge y hace scroll propio en vez de que se corte el botón Cobrar. */
+        #pos-totales { flex:0 1 auto; border-top:1px solid var(--border); background:var(--surface2);
+          padding:14px 16px; overflow-y:auto; }
         .pos-cart-volver, .pos-mbar { display:none; }
+        /* Ancho suficiente para que el ticket y el cobro convivan lado a lado.
+           El panel se ensancha al partirse: si no, el riel de cobro (330px) le
+           come al ticket y las líneas de venta quedan más angostas que los totales.
+           ponytail: abajo de 1560px se queda vertical (en laptop corta el ticket
+           muestra ~5 líneas y hace scroll); partirlo ahí dejaría el catálogo inservible. */
+        @media (min-width: 1560px) {
+          .pos-layout { grid-template-columns:minmax(0,1fr) clamp(760px, 52vw, 1000px); }
+          .pos-cart-panel { flex-direction:row; }
+          #pos-totales { flex:0 0 330px; border-top:none; border-left:1px solid var(--border); }
+        }
         @media (max-width: 920px) {
           .pos-header { padding:10px 12px; gap:8px; }
           .pos-layout { grid-template-columns:1fr; }
@@ -379,13 +438,18 @@ const POS = {
         }
         @media (max-width: 600px) {
           .pos-user-name { display:none !important; }
-          #pos-grid > div { grid-template-columns:repeat(auto-fill,minmax(112px,1fr)) !important; }
+          #pos-grid > div { grid-template-columns:repeat(auto-fill,minmax(104px,1fr)) !important; }
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .pos-cart-panel { transition:none; }
         }
       </style>
       <div class="pos-shell">
         <header class="pos-header">
           <div style="font-family:\'Outfit\',\'Bebas Neue\',sans-serif;font-size:24px;font-weight:900;letter-spacing:-0.5px;color:var(--amber)">🛒 POS</div>
           <div style="font-size:12px;color:var(--text3);background:var(--surface3);padding:4px 10px;border-radius:6px;font-weight:700">${Auth.tenant?.name||''}</div>
+          <!-- La terminal se recuerda, así que este chip es la única forma de cambiarla -->
+          <button class="btn btn-ghost btn-sm" style="font-size:12px" onclick="POS.cambiarTerminal()" title="Cambiar de terminal o de taller">🖥️ ${this._seguro(this._terminal?.nombre || 'Terminal')}</button>
           <div style="margin-left:auto;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
             <button class="btn btn-ghost btn-sm" onclick="POS.modalCierreCaja()">🧾 Cerrar caja</button>
             <button class="btn btn-ghost btn-sm" onclick="POS.reportes()">📊 Reportes</button>
@@ -414,8 +478,10 @@ const POS = {
           </div>
           <!-- Carrito -->
           <div class="pos-cart-panel" id="pos-cart-panel">
-            <div class="pos-cart-volver" onclick="POS.toggleCart(false)">← Seguir comprando</div>
-            <div id="pos-cart"></div>
+            <div class="pos-ticket">
+              <div class="pos-cart-volver" onclick="POS.toggleCart(false)">← Seguir comprando</div>
+              <div id="pos-cart"></div>
+            </div>
             <div id="pos-totales"></div>
           </div>
         </div>
