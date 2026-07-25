@@ -546,8 +546,10 @@ Modulos.diagnostico_obd = {
       log('Leyendo códigos de falla (DM1 activos / DM2 previos)...');
       if (!this._j39.dm1) { await this._j39Solicitar(65226); await this._j39Esperar(65226, 1500); }
       await this._j39Solicitar(65227); await this._j39Esperar(65227, 1500);
-      const dtcs = this._j39DTCs(this._j39.dm1);
-      const pend = this._j39DTCs(this._j39.dm2);
+      let dtcs = this._j39DTCs(this._j39.dm1);
+      let pend = this._j39DTCs(this._j39.dm2);
+      dtcs = await this._enriquecerDTCs(dtcs, vehId, 'j1939');
+      pend = await this._enriquecerDTCs(pend, vehId, 'j1939');
       const b0 = this._j39.dm1 ? this._j39.dm1[0] : 0;
       const mil = ((b0 >> 6) & 3) === 1;
       if (((b0 >> 4) & 3) === 1) log('<span style="color:var(--red)">🔴 Lámpara de PARO encendida — atender de inmediato</span>');
@@ -633,6 +635,23 @@ Modulos.diagnostico_obd = {
     return esFabricante
       ? g + ' — específico del fabricante, no verificado para esta marca: consultar manual del fabricante'
       : g + ' — consultar manual del fabricante';
+  },
+
+  /* Reemplaza una descripción base únicamente si hay una fuente con licencia
+     y verificada para el vehículo concreto. */
+  async _enriquecerDTCs(dtcs, vehId, protocolo = 'obd2') {
+    if (!dtcs?.length) return dtcs || [];
+    const veh = this._vehiculos.find(v => v.id === vehId);
+    try {
+      const especificos = await DB.getDTCEspecificos(dtcs.map(d => d.codigo), veh, protocolo);
+      return dtcs.map(d => {
+        const e = especificos[d.codigo];
+        return e ? { ...d, desc:e.descripcion_es, origen:'Específico verificado', fuente:e.fuente, severidad:e.severidad }
+          : { ...d, origen: protocolo === 'j1939' ? 'J1939 base' : 'SAE genérico' };
+      });
+    } catch (_) {
+      return dtcs.map(d => ({ ...d, origen: protocolo === 'j1939' ? 'J1939 base' : 'SAE genérico' }));
+    }
   },
 
   /* ═══════════ VISTA PRINCIPAL (lista por mes) ═══════════ */
@@ -785,8 +804,10 @@ Modulos.diagnostico_obd = {
 
       /* Descripciones: diccionario local ES → catálogo BD (3,000+ códigos) → rango SAE */
       const cat = await DB.getDTCCatalogo([...codConf, ...codPend, freeze?.dtc].filter(Boolean));
-      const dtcs = codConf.map(c => ({ codigo:c, desc:this._descDTC(c, cat) }));
-      const pend = codPend.map(c => ({ codigo:c, desc:this._descDTC(c, cat) }));
+      let dtcs = codConf.map(c => ({ codigo:c, desc:this._descDTC(c, cat) }));
+      let pend = codPend.map(c => ({ codigo:c, desc:this._descDTC(c, cat) }));
+      dtcs = await this._enriquecerDTCs(dtcs, vehId);
+      pend = await this._enriquecerDTCs(pend, vehId);
       if (freeze) freeze.desc = this._descDTC(freeze.dtc, cat);
 
       log('Detectando sensores soportados...');
@@ -917,7 +938,7 @@ Modulos.diagnostico_obd = {
       <b style="font-size:12px">CÓDIGOS DE FALLA (DTC)</b>
       ${filas.length ? `<table class="table" style="margin-top:6px;font-size:12px">
         <thead><tr><th>Código</th><th>Descripción</th><th>Estado</th></tr></thead>
-        <tbody>${filas.map(f=>`<tr><td><b style="font-family:monospace">${f.codigo}</b></td><td>${f.desc}</td><td><span class="badge badge-${f.color}">${f.tipo}</span></td></tr>`).join('')}</tbody>
+        <tbody>${filas.map(f=>`<tr><td><b style="font-family:monospace">${f.codigo}</b></td><td>${f.desc}${f.origen ? `<div style="font-size:10px;color:var(--text3);margin-top:2px">${f.origen}${f.fuente ? ` · ${f.fuente}` : ''}</div>` : ''}</td><td><span class="badge badge-${f.color}">${f.tipo}</span></td></tr>`).join('')}</tbody>
       </table>` : '<p style="color:var(--green);margin:6px 0 0">✅ Sin códigos de falla</p>'}
     </div>`;
   },

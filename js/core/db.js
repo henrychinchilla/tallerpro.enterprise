@@ -323,6 +323,30 @@ const DB = {
     return map;
   },
 
+  /* DTCs con significado validado para una marca/modelo/motor. */
+  async getDTCEspecificos(codigos, vehiculo, protocolo = 'obd2') {
+    if (!codigos || !codigos.length) return {};
+    const { data } = await getSB().from('dtc_catalogo_especifico').select('*')
+      .eq('protocolo', protocolo).eq('estado', 'verificado').in('codigo', codigos);
+    const marca = String(vehiculo?.marca || '').trim().toUpperCase();
+    const modelo = String(vehiculo?.modelo || '').trim().toUpperCase();
+    const motor = String(vehiculo?.motor || '').trim().toUpperCase();
+    const anio = Number(vehiculo?.anio) || null;
+    const score = r => {
+      if (r.marca && String(r.marca).trim().toUpperCase() !== marca) return -1;
+      if (r.modelo && String(r.modelo).trim().toUpperCase() !== modelo) return -1;
+      if (r.motor && String(r.motor).trim().toUpperCase() !== motor) return -1;
+      if (anio && ((r.anio_desde && anio < r.anio_desde) || (r.anio_hasta && anio > r.anio_hasta))) return -1;
+      return (r.marca ? 8 : 0) + (r.modelo ? 4 : 0) + (r.motor ? 2 : 0) + (r.anio_desde || r.anio_hasta ? 1 : 0);
+    };
+    const map = {};
+    (data || []).forEach(r => {
+      const actual = map[r.codigo];
+      if (score(r) >= 0 && (!actual || score(r) > score(actual))) map[r.codigo] = r;
+    });
+    return map;
+  },
+
   async upsertDiagnosticoOBD(fields) {
     const payload = { ...fields, tenant_id: getTID() };
     if (fields.id) {
