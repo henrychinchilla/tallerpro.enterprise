@@ -11,7 +11,26 @@ Modulos.venta_granos = {
   _ESTADOS: { cotizado:'Cotizado', pendiente:'Pendiente', vendido:'Vendido', entregado:'Entregado', cancelado:'Cancelado' },
   _colorEstado(e) { return { cotizado:'gray', pendiente:'amber', vendido:'cyan', entregado:'green', cancelado:'red' }[e]||'gray'; },
 
+  /* La referencia de precios del MAGA vive como pestaña de este módulo y no como
+     módulo aparte: así hereda el permiso y el gating por plan que ya tiene Venta
+     de Granos, sin tener que tocar la matriz de roles ni los modulos_activos de
+     cada tenant. */
+  _tab: 'ventas',
+
+  _irTab(tab) {
+    this._tab = tab;
+    return tab === 'referencia' ? Modulos.precios_maga.render() : this.render(this._filtroGrano);
+  },
+
+  _tabsHTML() {
+    return `<div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
+      <button class="btn btn-sm ${this._tab!=='referencia'?'btn-cyan':'btn-ghost'}" onclick="Modulos.venta_granos._irTab('ventas')">🌽 Transacciones</button>
+      <button class="btn btn-sm ${this._tab==='referencia'?'btn-cyan':'btn-ghost'}" onclick="Modulos.venta_granos._irTab('referencia')">📈 Precios de referencia</button>
+    </div>`;
+  },
+
   async render(filtroGrano='') {
+    if (this._tab === 'referencia') return Modulos.precios_maga.render();
     const el = document.getElementById('page-content');
     UI.loading(el);
     this._filtroGrano = filtroGrano;
@@ -35,6 +54,7 @@ Modulos.venta_granos = {
         </div>
       </div>
       <div class="page-body">
+        ${this._tabsHTML()}
         <div class="kpi-grid" style="margin-bottom:16px">
           ${UI.kpiCard({ icon:'🌽', clase:'cyan', label:'Pendientes', value: pendientes })}
           ${UI.kpiCard({ icon:'✓', clase:'green', label:'Vendidos', value: vendidos })}

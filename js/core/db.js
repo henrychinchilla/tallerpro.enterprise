@@ -358,6 +358,30 @@ const DB = {
     return { data, error };
   },
 
+  /* ── PRECIOS DE REFERENCIA MAGA ────────────────
+     Datos públicos y globales (sin tenant): sirven para comparar el precio de
+     hoy contra la propia historia del producto. Los escribe la Edge Function
+     maga-sync; desde la app son solo lectura. */
+  async getMagaProductos() {
+    const { data } = await getSB().from('maga_productos')
+      .select('id,nombre,medida,categoria,kg_equiv,primer_dato,ultimo_dato,n_datos')
+      .gt('n_datos', 0).order('nombre');
+    return data || [];
+  },
+
+  /* Serie mensual de un producto. `desde` acota los años: el análisis por
+     defecto mira 5 años (más parecido al mercado de hoy) pero la historia
+     completa queda disponible para contrastar. */
+  async getMagaSerie(productoId, { mercado = null, desde = null } = {}) {
+    let q = getSB().from('maga_precios')
+      .select('mercado,fecha,precio,precio_kg')
+      .eq('producto_id', productoId);
+    if (mercado) q = q.eq('mercado', mercado);
+    if (desde) q = q.gte('fecha', desde);
+    const { data } = await q.order('fecha');
+    return data || [];
+  },
+
   /* ── BITÁCORA DE SOLUCIONES TÉCNICAS ──────────── */
   /* Lo que este taller ya resolvió para estos códigos o este modelo.
      Es la única fuente que cubre lo que ningún manual gringo trae (Hilux,
