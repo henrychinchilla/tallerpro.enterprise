@@ -439,6 +439,13 @@ const POS = {
         @media (max-width: 600px) {
           .pos-user-name { display:none !important; }
           #pos-grid > div { grid-template-columns:repeat(auto-fill,minmax(104px,1fr)) !important; }
+          /* En teléfono las columnas fijas de la fila (imagen, ±, total, papelera)
+             dejaban ~66px al nombre y el ticket decía "Aceite …". La fila se parte:
+             nombre completo arriba, cantidad y total abajo. */
+          .pos-line { flex-wrap:wrap; row-gap:6px; }
+          .pos-line-info { flex-basis:calc(100% - 60px) !important; }
+          .pos-line-nombre { white-space:normal !important; overflow:visible !important; line-height:1.3; }
+          .pos-line-total { flex:1; }
         }
         @media (prefers-reduced-motion: reduce) {
           .pos-cart-panel { transition:none; }
@@ -596,10 +603,10 @@ const POS = {
     cont.innerHTML = `
       <div style="font-weight:800;font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:var(--amber);margin-bottom:12px">🧾 Detalle de la Venta</div>
       ${this._cart.length ? this._cart.map(l=>`
-        <div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border)">
+        <div class="pos-line" style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border)">
           ${l.imagen_url?`<img src="${l.imagen_url}" style="width:40px;height:40px;border-radius:8px;object-fit:cover;flex-shrink:0">`:'<div style="width:40px;height:40px;border-radius:8px;background:var(--surface3);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:18px">📦</div>'}
-          <div style="flex:1;min-width:0">
-            <div style="font-size:13.5px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--text)">${l.nombre}</div>
+          <div class="pos-line-info" style="flex:1;min-width:0">
+            <div class="pos-line-nombre" style="font-size:13.5px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--text)">${l.nombre}</div>
             <div style="font-size:11.5px;color:var(--text3);margin-top:2px">${UI.q(l.precio)} c/u</div>
           </div>
           <div style="display:flex;align-items:center;gap:6px">
@@ -607,7 +614,7 @@ const POS = {
             <span style="min-width:24px;text-align:center;font-weight:900;font-size:14px">${l.cant}</span>
             <button class="btn btn-ghost" style="width:26px;height:26px;border-radius:50%;padding:0;display:flex;align-items:center;justify-content:center;font-size:16px;line-height:1;border:1px solid var(--border)" onclick="POS.cambiarCant('${l.id}',1)">+</button>
           </div>
-          <div style="width:84px;text-align:right;font-weight:900;font-size:14px" class="text-amber">${UI.q(l.cant*l.precio)}</div>
+          <div style="width:84px;text-align:right;font-weight:900;font-size:14px" class="text-amber pos-line-total">${UI.q(l.cant*l.precio)}</div>
           <button class="btn btn-ghost" style="padding:4px 6px;color:var(--text3)" onclick="POS.quitar('${l.id}')" title="Eliminar">🗑️</button>
         </div>`).join('') : '<div class="text-muted" style="padding:40px 20px;text-align:center;font-size:13px">Selecciona productos a la izquierda para agregarlos al carrito</div>'}`;
 
