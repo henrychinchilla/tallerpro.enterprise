@@ -19,18 +19,21 @@ Modulos.venta_granos = {
 
   _irTab(tab) {
     this._tab = tab;
-    return tab === 'referencia' ? Modulos.precios_maga.render() : this.render(this._filtroGrano);
+    if (tab === 'referencia') return Modulos.precios_maga.render();
+    if (tab === 'comparar')   return Modulos.precios_maga.renderComparacion();
+    return this.render(this._filtroGrano);
   },
 
   _tabsHTML() {
+    const b = (tab, txt) => `<button class="btn btn-sm ${this._tab===tab?'btn-cyan':'btn-ghost'}" onclick="Modulos.venta_granos._irTab('${tab}')">${txt}</button>`;
     return `<div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
-      <button class="btn btn-sm ${this._tab!=='referencia'?'btn-cyan':'btn-ghost'}" onclick="Modulos.venta_granos._irTab('ventas')">🌽 Transacciones</button>
-      <button class="btn btn-sm ${this._tab==='referencia'?'btn-cyan':'btn-ghost'}" onclick="Modulos.venta_granos._irTab('referencia')">📈 Precios de referencia</button>
+      ${b('ventas','🌽 Transacciones')}${b('referencia','📈 Precios de referencia')}${b('comparar','📊 Mi precio vs mercado')}
     </div>`;
   },
 
   async render(filtroGrano='') {
     if (this._tab === 'referencia') return Modulos.precios_maga.render();
+    if (this._tab === 'comparar')   return Modulos.precios_maga.renderComparacion();
     const el = document.getElementById('page-content');
     UI.loading(el);
     this._filtroGrano = filtroGrano;

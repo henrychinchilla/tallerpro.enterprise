@@ -134,6 +134,119 @@ Modulos.precios_maga = {
 
   _irVista(v) { this._vista = v; this.render(); },
 
+  /* ═══════════ MI PRECIO CONTRA EL MERCADO (fase 3) ═══════════
+     La referencia sola dice "el mercado estaba a Q X". Cruzada con lo que el
+     comercio pagó o cobró dice lo que de verdad importa: "compraste 12% arriba
+     del mercado ese mes". dif > 0 = por encima del mercado, que comprando es
+     malo y vendiendo es bueno; por eso el color se invierte según el caso. */
+  _mapeo: {},
+
+  async renderComparacion() {
+    const el = document.getElementById('page-content');
+    UI.loading(el);
+    if (!this._prods.length) this._prods = await DB.getMagaProductos();
+    const [mapeo, filas] = await Promise.all([DB.getMapeoGranos(), DB.getComparacionGranos()]);
+    this._mapeo = mapeo || {};
+
+    const conRef = filas.filter(f => f.dif_pct !== null && f.dif_pct !== undefined);
+    const compras = conRef.filter(f => f.es_compra), ventas = conRef.filter(f => !f.es_compra);
+    const prom = xs => xs.length ? xs.reduce((s, f) => s + Number(f.dif_pct), 0) / xs.length : null;
+    const pc = prom(compras), pv = prom(ventas);
+
+    el.innerHTML = `
+      <div class="page-header">
+        <div>
+          <h1 class="page-title">📊 Mi precio vs mercado</h1>
+          <p class="page-subtitle">// Cada compra y venta contra el precio mayorista del MAGA de ese mes</p>
+        </div>
+      </div>
+      <div class="page-body">
+        ${Modulos.venta_granos?._tabsHTML ? Modulos.venta_granos._tabsHTML() : ''}
+        ${this._configMapeoHTML()}
+        ${filas.length ? `
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;margin:12px 0">
+            ${this._kpi('Transacciones comparadas', `${conRef.length} de ${filas.length}`, 'var(--text2)')}
+            ${this._kpi('En compras', pc===null?'—':`${pc>0?'+':''}${pc.toFixed(1)}%`,
+                        pc===null?'var(--text3)':(pc>0?'var(--red)':'var(--green)'))}
+            ${this._kpi('En ventas', pv===null?'—':`${pv>0?'+':''}${pv.toFixed(1)}%`,
+                        pv===null?'var(--text3)':(pv>0?'var(--green)':'var(--red)'))}
+          </div>
+          <div style="font-size:11.5px;color:var(--text3);margin-bottom:8px">
+            Comprando, quedar <b style="color:var(--green)">debajo</b> del mercado es bueno;
+            vendiendo, lo bueno es quedar <b style="color:var(--green)">encima</b>.
+          </div>
+          <div class="card" style="padding:0;overflow:auto">
+            <table class="table" style="font-size:12px">
+              <thead><tr>
+                <th>Fecha</th><th>N°</th><th>Grano</th><th>Tipo</th>
+                <th style="text-align:right">Mi Q/kg</th><th style="text-align:right">Mercado Q/kg</th>
+                <th style="text-align:right">Diferencia</th>
+              </tr></thead>
+              <tbody>${filas.map(f => this._filaComparacion(f)).join('')}</tbody>
+            </table>
+          </div>`
+        : `<div class="card" style="padding:26px;text-align:center;color:var(--text3);margin-top:12px">
+            <div style="font-size:32px">📊</div>
+            <p style="font-size:13px;margin-top:6px">Todavía no hay transacciones de granos registradas.</p>
+            <p style="font-size:12px">En cuanto registres compras o ventas en la pestaña <b>Transacciones</b>,
+               acá vas a ver a cómo compraste o vendiste comparado con el precio del mercado de ese mes.</p>
+          </div>`}
+      </div>`;
+  },
+
+  _filaComparacion(f) {
+    const dif = f.dif_pct === null || f.dif_pct === undefined ? null : Number(f.dif_pct);
+    /* Comprando conviene estar abajo del mercado; vendiendo, arriba. */
+    const bueno = dif === null ? null : (f.es_compra ? dif < 0 : dif > 0);
+    const color = dif === null ? 'var(--text3)' : (bueno ? 'var(--green)' : 'var(--red)');
+    return `<tr>
+      <td>${UI.esc(String(f.fecha || '').slice(0,10))}</td>
+      <td>${UI.esc(f.num || '')}</td>
+      <td>${UI.esc(f.tipo_grano || '')}${f.referencia ? `<div style="font-size:10px;color:var(--text3)">${UI.esc(f.referencia)}</div>` : ''}</td>
+      <td><span class="badge badge-${f.es_compra?'amber':'green'}">${f.es_compra?'Compra':'Venta'}</span></td>
+      <td style="text-align:right">${UI.q(f.precio_kg)}</td>
+      <td style="text-align:right">${f.precio_ref_kg ? `${UI.q(f.precio_ref_kg)}<div style="font-size:10px;color:var(--text3)">${UI.esc(String(f.fecha_ref||'').slice(0,7))}</div>` : '—'}</td>
+      <td style="text-align:right;font-weight:800;color:${color}">
+        ${dif === null ? '<span style="font-size:11px;font-weight:400;color:var(--text3)">sin referencia</span>'
+                       : `${dif>0?'+':''}${dif.toFixed(1)}%`}
+      </td>
+    </tr>`;
+  },
+
+  _configMapeoHTML() {
+    const tipos = Modulos.venta_granos?._TIPOS_GRANO || {};
+    const granos = this._prods.filter(p => p.categoria === 'grano' && p.n_datos > 24)
+                              .sort((a, b) => a.nombre.localeCompare(b.nombre));
+    return `<details class="card" style="padding:12px" ${Object.keys(this._mapeo).length ? '' : 'open'}>
+      <summary style="cursor:pointer;font-size:12.5px;font-weight:800">⚙️ Qué precio del MAGA usar como referencia</summary>
+      <p style="font-size:11.5px;color:var(--text3);margin:6px 0 10px">
+        Tus transacciones usan tipos genéricos y el MAGA publica variedades
+        (maíz blanco o amarillo, frijol negro, rojo o blanco). Elegí cuál se parece a lo que comerciás.
+      </p>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:8px">
+        ${Object.entries(tipos).map(([k, label]) => `
+          <div>
+            <label class="form-label" style="font-size:11.5px">${UI.esc(label)}</label>
+            <select class="form-select" style="width:100%;font-size:12px"
+                    onchange="Modulos.precios_maga._guardarMapeo('${UI.esc(k)}', this.value)">
+              <option value="">— sin referencia —</option>
+              ${granos.map(g => `<option value="${g.id}" ${this._mapeo[k]===g.id?'selected':''}>${UI.esc(g.nombre)}</option>`).join('')}
+            </select>
+          </div>`).join('')}
+      </div>
+      <p style="font-size:11px;color:var(--amber);margin-top:8px">
+        El MAGA no publica precio de <b>trigo</b>: ese tipo va a quedar siempre sin referencia, y no es una falla del sistema.
+      </p>
+    </details>`;
+  },
+
+  async _guardarMapeo(tipo, productoId) {
+    const { error } = await DB.guardarMapeoGrano(tipo, productoId ? Number(productoId) : null);
+    if (error) return UI.toast('No se pudo guardar: ' + error.message, 'error');
+    UI.toast('Referencia actualizada ✓');
+    this.renderComparacion();
+  },
+
   /* Qué conviene mirar ESTE mes. Sin esta vista el usuario tendría que adivinar
      qué producto abrir; acá el sistema le dice cuáles están en su ventana. */
   _ventanasHTML() {

@@ -391,6 +391,38 @@ const DB = {
     return data || [];
   },
 
+  /* Qué producto del MAGA es la referencia de cada tipo de grano que comercia
+     este comercio. Se elige por taller: venta_granos usa tipos genéricos y el
+     MAGA publica variedades (maíz blanco/amarillo, frijol negro/rojo/blanco). */
+  async getMapeoGranos() {
+    const { data } = await getSB().from('maga_mapeo_grano')
+      .select('tipo_grano,producto_id').eq('tenant_id', getTID());
+    const map = {};
+    (data || []).forEach(r => map[r.tipo_grano] = r.producto_id);
+    return map;
+  },
+
+  async guardarMapeoGrano(tipoGrano, productoId) {
+    const sb = getSB();
+    if (!productoId) {
+      const { error } = await sb.from('maga_mapeo_grano').delete()
+        .eq('tenant_id', getTID()).eq('tipo_grano', tipoGrano);
+      return { error };
+    }
+    const { error } = await sb.from('maga_mapeo_grano').upsert(
+      { tenant_id: getTID(), tipo_grano: tipoGrano, producto_id: productoId, updated_at: new Date().toISOString() },
+      { onConflict: 'tenant_id,tipo_grano' });
+    return { error };
+  },
+
+  /* Cada compra/venta contra el precio mayorista de su mes. dif_pct > 0 = por
+     encima del mercado (malo comprando, bueno vendiendo). */
+  async getComparacionGranos({ desde = null, hasta = null } = {}) {
+    const { data, error } = await getSB().rpc('maga_comparar_granos', { p_desde: desde, p_hasta: hasta });
+    if (error) { console.warn('maga_comparar_granos:', error.message); return []; }
+    return data || [];
+  },
+
   /* ── BITÁCORA DE SOLUCIONES TÉCNICAS ──────────── */
   /* Lo que este taller ya resolvió para estos códigos o este modelo.
      Es la única fuente que cubre lo que ningún manual gringo trae (Hilux,
