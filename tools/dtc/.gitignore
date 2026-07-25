@@ -1,0 +1,3 @@
+# intermedios regenerables (node prep.js && node limpiar.js && node gen-dtc.js)
+verificados.json
+dtc_es.json
