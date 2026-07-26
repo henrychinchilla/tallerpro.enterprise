@@ -217,7 +217,9 @@ Modulos.electronica = {
       estadoNuevo === 'en_reparacion'
     );
     if (debeOT) {
-      const proyecto = { ...fields, id: saved?.id||id, clientes: { nombre: this._clientes.find(c=>c.id===clienteId)?.nombre||'' }, orden_id: null };
+      /* `saved` trae el `num` correlativo de db.js; sin él la OT iba sin número */
+      const prev = id ? this._data.find(x=>x.id===id) : null;
+      const proyecto = { ...prev, ...fields, ...(saved||{}), id: saved?.id||id, clientes: { nombre: this._clientes.find(c=>c.id===clienteId)?.nombre||'' }, orden_id: null };
       const ot = await Modulos._especialOT.generarOT(
         'reparaciones_electronicas', proyecto, 'precio_total', 'electronica',
         r => `ELEC ${r.num||''}: ${this._TIPOS[r.tipo_equipo]||r.tipo_equipo} ${r.marca||''} ${r.modelo||''} — ${r.falla_reportada||''}`.slice(0,200)
