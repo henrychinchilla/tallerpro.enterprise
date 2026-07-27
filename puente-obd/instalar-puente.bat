@@ -14,10 +14,16 @@ if errorlevel 1 (
   pause
   exit /b 1
 )
-echo Configurando arranque automatico con Windows...
-powershell -NoProfile -Command "$w=New-Object -ComObject WScript.Shell; $s=$w.CreateShortcut([Environment]::GetFolderPath('Startup')+'\NexusPro Puente OBD.lnk'); $s.TargetPath='%PS32%'; $s.Arguments='-ExecutionPolicy Bypass -NoProfile -WindowStyle Hidden -File \"%DEST%\puente.ps1\"'; $s.WorkingDirectory='%DEST%'; $s.Save(); $d=$w.CreateShortcut([Environment]::GetFolderPath('Desktop')+'\Puente OBD USB.lnk'); $d.TargetPath='%DEST%\iniciar-puente.bat'; $d.WorkingDirectory='%DEST%'; $d.IconLocation='%SystemRoot%\System32\shell32.dll,12'; $d.Save()"
+echo Configurando arranque automatico con Windows (registro)...
+rem HKCU\...\Run: queda en el registro de la maquina y no pide permisos de admin.
+reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\Run" /v "NexusPro Puente OBD" /t REG_SZ /d "\"%PS32%\" -ExecutionPolicy Bypass -NoProfile -WindowStyle Hidden -File \"%DEST%\puente.ps1\"" /f >nul
+rem Quita el acceso directo de Inicio que dejaban las versiones anteriores (evita doble arranque).
+del "%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup\NexusPro Puente OBD.lnk" >nul 2>&1
+rem Icono opcional en el escritorio, para verlo en modo visible.
+powershell -NoProfile -Command "$w=New-Object -ComObject WScript.Shell; $d=$w.CreateShortcut([Environment]::GetFolderPath('Desktop')+'\Puente OBD USB.lnk'); $d.TargetPath='%DEST%\iniciar-puente.bat'; $d.WorkingDirectory='%DEST%'; $d.IconLocation='%SystemRoot%\System32\shell32.dll,12'; $d.Save()"
 echo Iniciando puente en segundo plano...
-start "" "%PS32%" -ExecutionPolicy Bypass -NoProfile -WindowStyle Hidden -File "%DEST%\puente.ps1"
+rem Si ya hay uno escuchando en 17210, no levantar otro (el segundo no podria abrir el puerto).
+netstat -ano | findstr ":17210" >nul || start "" "%PS32%" -ExecutionPolicy Bypass -NoProfile -WindowStyle Hidden -File "%DEST%\puente.ps1"
 echo.
 echo LISTO. El puente ya esta corriendo, oculto, y arrancara solo con Windows.
 echo (El icono "Puente OBD USB" del escritorio es opcional, para verlo en modo visible.)
