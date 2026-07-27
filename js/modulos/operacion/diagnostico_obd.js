@@ -176,28 +176,49 @@ Modulos.diagnostico_obd = {
     return bytes.length ? bytes : null;
   },
 
-  /* Catálogo de PIDs modo 01 — se leen solo los que el vehículo reporta soportar */
+  /* Catálogo de PIDs modo 01 — se leen solo los que el vehículo reporta soportar.
+     r  = rango de referencia [min,max] que se dibuja como banda en la gráfica.
+     rc = condición en la que ese rango vale (se muestra al mecánico: un MAP de
+          90 kPa está mal en ralentí y bien a fondo, así que el rango sin su
+          condición engaña).
+     a  = true sólo si estar fuera del rango es señal de falla pase lo que pase.
+          Sin esto la herramienta gritaría "¡falla!" cada vez que se acelera. */
   _PIDS: {
-    '0C': { k:'rpm',       l:'RPM',                    u:'',      f:b=>Math.round((b[0]*256+b[1])/4) },
+    '0C': { k:'rpm',       l:'RPM',                    u:'',      f:b=>Math.round((b[0]*256+b[1])/4), r:[600,1000], rc:'en ralentí' },
     '0D': { k:'vel',       l:'Velocidad',              u:' km/h', f:b=>b[0] },
-    '05': { k:'temp',      l:'Temp. motor',            u:' °C',   f:b=>b[0]-40 },
-    '04': { k:'carga',     l:'Carga motor',            u:' %',    f:b=>Math.round(b[0]*100/255) },
-    '11': { k:'acel',      l:'Acelerador',             u:' %',    f:b=>Math.round(b[0]*100/255) },
-    '0F': { k:'temp_adm',  l:'Temp. admisión',         u:' °C',   f:b=>b[0]-40 },
+    '05': { k:'temp',      l:'Temp. motor',            u:' °C',   f:b=>b[0]-40, r:[80,105], rc:'motor caliente', a:true },
+    '04': { k:'carga',     l:'Carga motor',            u:' %',    f:b=>Math.round(b[0]*100/255), r:[15,35], rc:'en ralentí' },
+    '11': { k:'acel',      l:'Acelerador',             u:' %',    f:b=>Math.round(b[0]*100/255), r:[0,20], rc:'pie fuera' },
+    '0F': { k:'temp_adm',  l:'Temp. admisión',         u:' °C',   f:b=>b[0]-40, r:[10,60] },
     '2F': { k:'comb',      l:'Combustible',            u:' %',    f:b=>Math.round(b[0]*100/255) },
-    '06': { k:'stft1',     l:'Ajuste combustible corto', u:' %',  f:b=>Math.round((b[0]/1.28-100)*10)/10 },
-    '07': { k:'ltft1',     l:'Ajuste combustible largo', u:' %',  f:b=>Math.round((b[0]/1.28-100)*10)/10 },
+    '06': { k:'stft1',     l:'Ajuste combustible corto', u:' %',  f:b=>Math.round((b[0]/1.28-100)*10)/10, r:[-10,10], a:true },
+    '07': { k:'ltft1',     l:'Ajuste combustible largo', u:' %',  f:b=>Math.round((b[0]/1.28-100)*10)/10, r:[-10,10], a:true },
     '0A': { k:'pres_comb', l:'Presión de combustible', u:' kPa',  f:b=>b[0]*3 },
-    '0B': { k:'map',       l:'Presión admisión (MAP)', u:' kPa',  f:b=>b[0] },
-    '0E': { k:'avance',    l:'Avance de encendido',    u:' °',    f:b=>b[0]/2-64 },
-    '10': { k:'maf',       l:'Flujo de aire (MAF)',    u:' g/s',  f:b=>Math.round((b[0]*256+b[1])/10)/10 },
+    '0B': { k:'map',       l:'Presión admisión (MAP)', u:' kPa',  f:b=>b[0], r:[25,45], rc:'en ralentí' },
+    '0E': { k:'avance',    l:'Avance de encendido',    u:' °',    f:b=>b[0]/2-64, r:[0,25], rc:'en ralentí' },
+    '10': { k:'maf',       l:'Flujo de aire (MAF)',    u:' g/s',  f:b=>Math.round((b[0]*256+b[1])/10)/10, r:[2,6], rc:'en ralentí' },
     '1F': { k:'marcha',    l:'Tiempo encendido',       u:' min',  f:b=>Math.round((b[0]*256+b[1])/60) },
     '21': { k:'dist_mil',  l:'Km con Check Engine',    u:' km',   f:b=>b[0]*256+b[1] },
     '33': { k:'baro',      l:'Presión barométrica',    u:' kPa',  f:b=>b[0] },
-    '42': { k:'volt_ecu',  l:'Voltaje ECU',            u:' V',    f:b=>Math.round((b[0]*256+b[1])/10)/100 },
+    '42': { k:'volt_ecu',  l:'Voltaje ECU',            u:' V',    f:b=>Math.round((b[0]*256+b[1])/10)/100, r:[13.2,14.8], rc:'motor encendido', a:true },
     '46': { k:'temp_amb',  l:'Temp. ambiente',         u:' °C',   f:b=>b[0]-40 },
-    '5C': { k:'temp_aceite',l:'Temp. aceite',          u:' °C',   f:b=>b[0]-40 },
+    '5C': { k:'temp_aceite',l:'Temp. aceite',          u:' °C',   f:b=>b[0]-40, r:[80,110], rc:'motor caliente', a:true },
     '5E': { k:'tasa_comb', l:'Consumo',                u:' L/h',  f:b=>Math.round((b[0]*256+b[1])/20*10)/10 },
+    /* ── agregados 2026-07-27: el Picanto soportaba 38 PIDs y se leían 13 ── */
+    '14': { k:'o2_b1s1',   l:'Sonda lambda B1S1',      u:' V',    f:b=>Math.round(b[0]/200*1000)/1000, r:[0.1,0.9], rc:'debe oscilar, no quedarse fija', a:true },
+    '15': { k:'o2_b1s2',   l:'Sonda lambda B1S2',      u:' V',    f:b=>Math.round(b[0]/200*1000)/1000, r:[0.4,0.8], rc:'post-catalizador: estable' },
+    '44': { k:'lambda',    l:'Relación de mezcla (λ)', u:'',      f:b=>Math.round((b[0]*256+b[1])*2/65536*1000)/1000, r:[0.97,1.03], a:true },
+    '3C': { k:'temp_cat',  l:'Temp. catalizador',      u:' °C',   f:b=>Math.round(((b[0]*256+b[1])/10-40)*10)/10, r:[400,800], rc:'caliente y en marcha' },
+    '43': { k:'carga_abs', l:'Carga absoluta',         u:' %',    f:b=>Math.round((b[0]*256+b[1])*100/255), r:[15,35], rc:'en ralentí' },
+    '2E': { k:'evap',      l:'Purga EVAP (cánister)',  u:' %',    f:b=>Math.round(b[0]*100/255) },
+    '45': { k:'acel_rel',  l:'Acelerador relativo',    u:' %',    f:b=>Math.round(b[0]*100/255), r:[0,20], rc:'pie fuera' },
+    '47': { k:'acel_abs',  l:'Acelerador absoluto B',  u:' %',    f:b=>Math.round(b[0]*100/255) },
+    '49': { k:'pedal_d',   l:'Pedal acelerador D',     u:' %',    f:b=>Math.round(b[0]*100/255) },
+    '4A': { k:'pedal_e',   l:'Pedal acelerador E',     u:' %',    f:b=>Math.round(b[0]*100/255) },
+    '4C': { k:'acel_cmd',  l:'Acelerador comandado',   u:' %',    f:b=>Math.round(b[0]*100/255) },
+    '56': { k:'ltft2s',    l:'Ajuste sonda post-cat',  u:' %',    f:b=>Math.round((b[0]/1.28-100)*10)/10, r:[-10,10], a:true },
+    '30': { k:'warmups',   l:'Calentamientos desde borrado', u:'', f:b=>b[0] },
+    '31': { k:'dist_borr', l:'Km desde borrado',       u:' km',   f:b=>b[0]*256+b[1] },
   },
   _BASICOS: ['0C','0D','05','04','11','0F','2F'],
   _sop: null,   // PIDs soportados por el vehículo actual
@@ -1790,7 +1811,7 @@ Modulos.diagnostico_obd = {
       <div class="card" style="padding:10px;margin-top:8px">
         <b style="font-size:12px">DATOS EN VIVO (${Object.keys(s.datos||{}).length} sensores)</b>
         <div id="obd-mon-sel" style="margin-top:6px;display:none"></div>
-        <div id="obd-vivo" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:8px;margin-top:6px;font-size:13px">
+        <div id="obd-vivo" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(185px,1fr));gap:8px;margin-top:6px;font-size:13px">
           ${this._vivoHTML(s.datos||{})}
         </div>
         <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap">
@@ -1926,11 +1947,20 @@ Modulos.diagnostico_obd = {
   /* ═══════════ MONITOR EN VIVO (sensores seleccionables + gráficas + grabación) ═══════════ */
   _selMon: null, _hist: null, _rec: null,
 
-  _spark(vals) {
+  _spark(vals, ref = null, colorVar = 'cyan') {
     if (!vals || vals.length < 2 || typeof Charts === 'undefined') return '';
     const paso = Math.ceil(vals.length / 100);                    // downsample para SVG liviano
     const ds = paso > 1 ? vals.filter((_, i) => i % paso === 0) : vals;
-    return Charts.sparkline({ valores: ds }).replace('<svg ', '<svg style="width:100%;height:100%" ');
+    return Charts.sparkline({ valores: ds, colorVar, ref }).replace('<svg ', '<svg style="width:100%;height:100%" ');
+  },
+
+  /* Cómo está el sensor contra su referencia. Sólo marca falla cuando el rango
+     vale pase lo que pase (def.a); si depende de la condición, la banda de la
+     gráfica ya lo muestra sin gritar "¡falla!" cada vez que se acelera. */
+  _estadoSensor(def, v) {
+    if (!def || !def.r || typeof v !== 'number') return null;
+    if (v >= def.r[0] && v <= def.r[1]) return 'ok';
+    return def.a ? 'mal' : 'fuera';
   },
 
   _chipsMonitor() {
@@ -1953,12 +1983,23 @@ Modulos.diagnostico_obd = {
     return this._selMon.map(p => {
       const def = this._defSensor(p);
       if (!def) return '';
-      const vals = this._hist[def.k] || [];
-      const v = vals.length ? vals[vals.length - 1] : '—';
-      return `<div style="background:var(--bg2,#0b1220);border-radius:6px;padding:6px 8px">
-        <div style="font-size:10px;color:var(--text3)">${def.l}</div>
-        <b>${v}${def.u}</b>
-        <div style="height:26px;margin-top:2px">${this._spark(vals)}</div>
+      const vals = (this._hist[def.k] || []).filter(x => typeof x === 'number');
+      const v = vals.length ? vals[vals.length - 1] : null;
+      const est = this._estadoSensor(def, v);
+      const color = est === 'mal' ? 'red' : est === 'ok' ? 'green' : 'cyan';
+      const redondo = x => Math.round(x * 100) / 100;
+      const mm = vals.length > 1
+        ? `mín ${redondo(Math.min(...vals))} · máx ${redondo(Math.max(...vals))} · ` : '';
+      const ref = def.r
+        ? `ref ${def.r[0]}–${def.r[1]}${def.u}${def.rc ? ` (${def.rc})` : ''}`
+        : 'sin referencia estándar';
+      return `<div style="background:var(--bg2,#0b1220);border-radius:8px;padding:8px 10px;border-left:3px solid var(--${color})">
+        <div style="font-size:10.5px;color:var(--text3);display:flex;justify-content:space-between;gap:6px;align-items:baseline">
+          <span>${def.l}</span>${est === 'mal' ? '<span style="color:var(--red);font-weight:700">⚠ fuera</span>' : ''}
+        </div>
+        <div style="font-size:21px;font-weight:700;line-height:1.2${est === 'mal' ? ';color:var(--red)' : ''}">${v === null ? '—' : v}<span style="font-size:12px;font-weight:500;color:var(--text3)">${def.u}</span></div>
+        <div style="height:38px;margin:3px 0">${this._spark(vals, def.r, color)}</div>
+        <div style="font-size:9.5px;color:var(--text3);line-height:1.35">${mm}${ref}</div>
       </div>`;
     }).join('') || '<span style="color:var(--text3)">Marca al menos un sensor arriba</span>';
   },
