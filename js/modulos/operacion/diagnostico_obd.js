@@ -1866,7 +1866,7 @@ Modulos.diagnostico_obd = {
           <option value="usb">🔌 USB — forzar vehículo liviano (puente RP1210)</option>
         </select>
       </div>
-      <div id="obd-log" style="background:var(--bg2,#0b1220);color:var(--text);border:1px solid var(--borde,rgba(127,127,127,.25));border-radius:8px;padding:10px 12px;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12.5px;line-height:1.75;min-height:70px;max-height:220px;overflow:auto;margin:10px 0">
+      <div id="obd-log" style="background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:10px 12px;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12.5px;line-height:1.8;min-height:70px;max-height:220px;overflow:auto;margin:10px 0">
         Conecta el adaptador al puerto de diagnóstico del vehículo y enciende el switch.<br>
         · Bluetooth: presiona <b>Conectar y Escanear</b> y elige el adaptador (ej. "OBDII", "Vgate", "iCar Pro").<br>
         · USB: solo enchufa el USB-Link a esta PC — el puente arranca solo con Windows.<br>
@@ -1882,7 +1882,10 @@ Modulos.diagnostico_obd = {
 
   _log(msg) {
     const el = document.getElementById('obd-log');
-    if (el) { el.innerHTML += `<div>› ${msg}</div>`; el.scrollTop = el.scrollHeight; }
+    if (!el) return;
+    /* la flecha en color de acento hace la lista escaneable de un vistazo */
+    el.innerHTML += `<div><span style="color:var(--cyan)">›</span> ${msg}</div>`;
+    el.scrollTop = el.scrollHeight;
   },
 
   async escanear() {
@@ -1988,7 +1991,7 @@ Modulos.diagnostico_obd = {
       <div class="card" style="padding:10px;margin-top:8px">
         <b style="font-size:12px">DATOS EN VIVO (${Object.keys(s.datos||{}).length} sensores)</b>
         <div id="obd-mon-sel" style="margin-top:6px;display:none"></div>
-        <div id="obd-vivo" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(185px,1fr));gap:8px;margin-top:6px;font-size:13px">
+        <div id="obd-vivo" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:9px;margin-top:6px;font-size:13px">
           ${this._vivoHTML(s.datos||{})}
         </div>
         <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap">
@@ -2068,7 +2071,7 @@ Modulos.diagnostico_obd = {
     if (!texto) return '';
     const cuerpo = (typeof IA !== 'undefined' && IA._formatear) ? IA._formatear(texto)
       : `<div style="white-space:pre-wrap">${texto}</div>`;
-    return `<div class="card" style="padding:10px;margin-top:8px;border-left:3px solid var(--brand,#3B82F6)">
+    return `<div class="card" style="padding:10px;margin-top:8px;border-left:3px solid var(--cyan)">
       <b style="font-size:12px">🤖 ANÁLISIS DE NEXUS</b>
       <div style="font-size:13px;margin-top:6px">${cuerpo}</div>
     </div>`;
@@ -2116,13 +2119,21 @@ Modulos.diagnostico_obd = {
 
   _vivoHTML(d, excluir = []) {
     return this._datosLista(d, excluir)
-      .map(i => `<div style="background:var(--bg2,#0b1220);border-radius:6px;padding:6px 8px">
+      .map(i => `<div style="background:var(--surface2);border-radius:6px;padding:6px 8px">
         <div style="font-size:10px;color:var(--text3)">${i[0]}</div><b>${i[1]}${i[2]}</b></div>`).join('')
       || '<span style="color:var(--text3)">Sin datos (¿motor apagado?)</span>';
   },
 
   /* ═══════════ MONITOR EN VIVO (sensores seleccionables + gráficas + grabación) ═══════════ */
-  _selMon: null, _hist: null, _rec: null,
+  _selMon: null, _hist: null, _rec: null, _zoom: null,
+
+  /* Clic en un recuadro: lo agranda a todo el ancho. El tick del monitor
+     vuelve a dibujar solo, así que el valor ampliado sigue vivo. */
+  _toggleZoom(pid) {
+    this._zoom = this._zoom === pid ? null : pid;
+    const el = document.getElementById('obd-vivo');
+    if (el) el.innerHTML = this._tilesMonitor();
+  },
 
   _spark(vals, ref = null, colorVar = 'cyan') {
     if (!vals || vals.length < 2 || typeof Charts === 'undefined') return '';
@@ -2144,7 +2155,7 @@ Modulos.diagnostico_obd = {
     return this._sensoresMonitor().map(p => {
       const def = this._defSensor(p), on = this._selMon.includes(p);
       if (!def) return '';
-      return `<label style="font-size:11px;display:inline-flex;align-items:center;gap:3px;background:var(--bg2,#0b1220);border-radius:12px;padding:3px 8px;cursor:pointer;margin:0 4px 4px 0;opacity:${on?1:.55}">
+      return `<label style="font-size:11px;display:inline-flex;align-items:center;gap:3px;background:var(--surface2);border-radius:12px;padding:3px 8px;cursor:pointer;margin:0 4px 4px 0;opacity:${on?1:.55}">
         <input type="checkbox" ${on?'checked':''} onchange="Modulos.diagnostico_obd._toggleSel('${p}',this.checked)"> ${def.l}</label>`;
     }).join('');
   },
@@ -2170,13 +2181,17 @@ Modulos.diagnostico_obd = {
       const ref = def.r
         ? `ref ${def.r[0]}–${def.r[1]}${def.u}${def.rc ? ` (${def.rc})` : ''}`
         : 'sin referencia estándar';
-      return `<div style="background:var(--bg2,#0b1220);border-radius:8px;padding:8px 10px;border-left:3px solid var(--${color})">
-        <div style="font-size:10.5px;color:var(--text3);display:flex;justify-content:space-between;gap:6px;align-items:baseline">
-          <span>${def.l}</span>${est === 'mal' ? '<span style="color:var(--red);font-weight:700">⚠ fuera</span>' : ''}
+      const z = this._zoom === p;                       // ampliado a todo el ancho
+      return `<div onclick="Modulos.diagnostico_obd._toggleZoom('${p}')" title="Clic para ${z ? 'reducir' : 'ampliar'}"
+        style="background:var(--surface2);border-radius:8px;padding:${z ? '16px 18px' : '10px 12px'};border-left:3px solid var(--${color});cursor:pointer${z ? ';grid-column:1/-1' : ''}">
+        <div style="font-size:${z ? '14px' : '11px'};color:var(--text3);display:flex;justify-content:space-between;gap:6px;align-items:baseline">
+          <span>${def.l}</span>${est === 'mal'
+            ? '<span style="color:var(--red);font-weight:700">⚠ fuera</span>'
+            : `<span style="opacity:.45">${z ? '⤡' : '⤢'}</span>`}
         </div>
-        <div style="font-size:21px;font-weight:700;line-height:1.2${est === 'mal' ? ';color:var(--red)' : ''}">${v === null ? '—' : v}<span style="font-size:12px;font-weight:500;color:var(--text3)">${def.u}</span></div>
-        <div style="height:38px;margin:3px 0">${this._spark(vals, def.r, color)}</div>
-        <div style="font-size:9.5px;color:var(--text3);line-height:1.35">${mm}${ref}</div>
+        <div style="font-size:${z ? '56px' : '24px'};font-weight:700;line-height:1.15${est === 'mal' ? ';color:var(--red)' : ''}">${v === null ? '—' : v}<span style="font-size:${z ? '22px' : '13px'};font-weight:500;color:var(--text3)">${def.u}</span></div>
+        <div style="height:${z ? '160px' : '46px'};margin:4px 0">${this._spark(vals, def.r, color)}</div>
+        <div style="font-size:${z ? '12.5px' : '10px'};color:var(--text3);line-height:1.4">${mm}${ref}</div>
       </div>`;
     }).join('') || '<span style="color:var(--text3)">Marca al menos un sensor arriba</span>';
   },
@@ -2262,7 +2277,7 @@ Modulos.diagnostico_obd = {
     return `<div class="card" style="padding:10px;margin-top:8px;border-left:3px solid var(--cyan)">
       <b style="font-size:12px">📈 GRABACIÓN DE SESIÓN (${g.muestras.length} muestras · ${g.seg || '?'} s)</b>
       <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px;margin-top:6px;font-size:12px">
-        ${stats.map(s => `<div style="background:var(--bg2,#0b1220);border-radius:6px;padding:6px 8px">
+        ${stats.map(s => `<div style="background:var(--surface2);border-radius:6px;padding:6px 8px">
           <div style="font-size:10px;color:var(--text3)">${s.l}</div>
           <div style="height:30px">${this._spark(s.vals)}</div>
           <div style="font-size:10px;color:var(--text3)">min ${s.min} · prom ${s.avg} · max ${s.max}${s.u}</div>
