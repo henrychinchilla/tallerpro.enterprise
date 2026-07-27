@@ -16,18 +16,26 @@ const Charts = {
   },
 
   /* ── SPARKLINE (mini línea para tarjetas KPI) ──────
-     opts = { valores:[...], colorVar? } */
-  sparkline({ valores = [], colorVar = 'cyan' }) {
+     opts = { valores:[...], colorVar?, ref?, refVar? }
+     ref = [min,max]: dibuja la banda de referencia y estira la escala para que
+     la banda siempre se vea — sin eso el valor medido no se puede juzgar. */
+  sparkline({ valores = [], colorVar = 'cyan', ref = null, refVar = 'green' }) {
     if (!valores.length || valores.length < 2) return '';
     const W = 200, H = 40, pad = 3;
-    const max = Math.max(...valores), min = Math.min(...valores);
+    let max = Math.max(...valores), min = Math.min(...valores);
+    if (ref && ref.length === 2) {
+      max = Math.max(max, ref[1]); min = Math.min(min, ref[0]);
+      const margen = ((max - min) || 1) * 0.12;      // aire para que la banda no toque el borde
+      max += margen; min -= margen;
+    }
     const span = (max - min) || 1;
+    const yDe = v => H - pad - ((v - min) / span) * (H - pad * 2);
+    const banda = ref && ref.length === 2
+      ? `<rect x="0" y="${yDe(ref[1]).toFixed(1)}" width="${W}" height="${Math.max(1, yDe(ref[0]) - yDe(ref[1])).toFixed(1)}"
+           style="fill:var(--${refVar})" fill-opacity="0.16"/>`
+      : '';
     const n = valores.length;
-    const pts = valores.map((v, i) => {
-      const x = pad + (i / (n - 1)) * (W - pad * 2);
-      const y = H - pad - ((v - min) / span) * (H - pad * 2);
-      return [x, y];
-    });
+    const pts = valores.map((v, i) => [pad + (i / (n - 1)) * (W - pad * 2), yDe(v)]);
     const line = pts.map(([x, y], i) => `${i === 0 ? 'M' : 'L'}${x.toFixed(1)},${y.toFixed(1)}`).join(' ');
     const area = `${line} L${pts[n-1][0].toFixed(1)},${H} L${pts[0][0].toFixed(1)},${H} Z`;
     const gradId = `spark-grad-${colorVar}-${Math.floor(Math.random()*10000)}`;
@@ -38,6 +46,7 @@ const Charts = {
           <stop offset="100%" stop-color="var(--${colorVar})" stop-opacity="0.00"/>
         </linearGradient>
       </defs>
+      ${banda}
       <path d="${area}" fill="url(#${gradId})"/>
       <path d="${line}" fill="none" style="stroke:var(--${colorVar})" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
     </svg>`;
