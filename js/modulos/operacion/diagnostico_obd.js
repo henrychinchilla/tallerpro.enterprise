@@ -238,7 +238,7 @@ Modulos.diagnostico_obd = {
     return sop.filter(p => this._PIDS[p]);
   },
 
-  async _leerVivo(pids) {
+  async _leerVivo(pids, log) {
     if (this._via === 'j1939') {   // el bus emite solo: muestrear lo acumulado
       await new Promise(r => setTimeout(r, 250));
       const src = (this._j39 && this._j39.datos) || {}, dj = {};
@@ -248,10 +248,15 @@ Modulos.diagnostico_obd = {
       return dj;
     }
     const d = {};
-    for (const pid of (pids && pids.length ? pids : this._BASICOS)) {
+    const lista = (pids && pids.length ? pids : this._BASICOS);
+    let n = 0;
+    for (const pid of lista) {
       const def = this._PIDS[pid];
       if (!def) continue;
-      try { const b = await this._pid(pid); if (b) d[def.k] = def.f(b); } catch (_) {}
+      /* 1500 ms y no 4000: un sensor que no contesta no puede costar 4 s cuando
+         son 30. Los que sí contestan tardan ~300 ms. */
+      try { const b = await this._pid(pid, 1500); if (b) d[def.k] = def.f(b); } catch (_) {}
+      if (log && ++n % 6 === 0) log(`&nbsp;&nbsp;… ${n} de ${lista.length}`);
     }
     try { d.volt = (await this._cmd('ATRV')).match(/[\d.]+V?/)?.[0] || null; } catch (_) {}
     return d;
@@ -269,6 +274,115 @@ Modulos.diagnostico_obd = {
         bytes.push(parseInt(hex.substr(p, 2), 16));
       return bytes.length ? bytes : null;
     } catch (_) { return null; }
+  },
+
+  /* ═══════════ MODO 06 — monitores a bordo (valor medido + límites) ═══════════
+     Es la única fuente en OBD-II genérico de los contadores de fallo de
+     encendido POR CILINDRO, y la única que entrega el límite del fabricante
+     junto al valor medido.
+     Respuesta: 46 [MID][TID][UAS][valor×2][mín×2][máx×2] … 9 bytes por prueba.
+
+     NO se convierten unidades a propósito. El byte UAS (unidad y escala) mapea
+     a una tabla de J1979 que no está verificada contra este hardware, y
+     escribirla de memoria mostraría números plausibles pero falsos en una
+     herramienta de diagnóstico — el mismo criterio que ya se aplicó con los
+     códigos P1xxx de fabricante. Valor y límites llegan en la MISMA escala, así
+     que el veredicto dentro/fuera de límites es válido igual, y en los
+     cilindros el valor ya es un conteo de fallos directo. */
+  _nombreMID(mid) {
+    if (mid >= 0x01 && mid <= 0x0A) return `Fallo de encendido · cilindro ${mid}`;
+    if (mid === 0x41) return 'Monitor de catalizador · banco 1';
+    if (mid === 0x42) return 'Monitor de catalizador · banco 2';
+    return `Monitor $${mid.toString(16).padStart(2, '0').toUpperCase()}`;
+  },
+
+  /* Devuelve los bytes que siguen al '46' de cada ECU que conteste */
+  async _modo6(mid) {
+    const h = mid.toString(16).padStart(2, '0').toUpperCase();
+    const out = [];
+    try {
+      for (const line of this._hexLines(await this._cmd('06' + h, 7000))) {
+        const i = line.indexOf('46' + h);
+        if (i < 0) continue;
+        const b = [];
+        for (let p = i + 2; p + 1 < line.length; p += 2) b.push(parseInt(line.substr(p, 2), 16));
+        if (b.length) out.push(b);
+      }
+    } catch (_) {}
+    return out;
+  },
+
+  async _leerMonitores(log) {
+    const BITMAPS = [0x00, 0x20, 0x40, 0x60, 0x80, 0xA0];
+    const mids = [];
+    for (const base of BITMAPS) {
+      const r = await this._modo6(base);
+      if (!r.length) break;
+      const b = r[0].slice(1);                      // [0] es el eco del MID pedido
+      if (b.length < 4) break;
+      for (let i = 0; i < 32; i++)
+        if (b[i >> 3] & (0x80 >> (i & 7))) mids.push(base + i + 1);
+      if (!(b[3] & 1)) break;                       // bit 32 = "hay más en el rango siguiente"
+    }
+    const pruebas = [];
+    for (const mid of mids.filter(m => !BITMAPS.includes(m))) {
+      for (const b of await this._modo6(mid)) {
+        for (let p = 0; p + 8 < b.length; p += 9) {  // 9 bytes por prueba
+          const uas = b[p+2];
+          /* Los UAS con el bit alto puesto son valores CON SIGNO. Leerlos sin
+             signo daba mínimos mayores que los máximos (visto en el MID $35 de
+             un vehículo real): basura que se reportaba como "fuera de límite". */
+          const u16 = (h, l) => (h << 8) | l;
+          const s16 = (h, l) => { const v = u16(h, l); return v >= 0x8000 ? v - 0x10000 : v; };
+          const n = (uas & 0x80) ? s16 : u16;
+          const val = n(b[p+3], b[p+4]), min = n(b[p+5], b[p+6]), max = n(b[p+7], b[p+8]);
+          const sinTope = u16(b[p+7], b[p+8]) === 0xFFFF, sinPiso = u16(b[p+5], b[p+6]) === 0x0000;
+          pruebas.push({
+            mid: b[p], tid: b[p+1], uas, val, min, max, sinTope, sinPiso,
+            cilindro: b[p] >= 0x01 && b[p] <= 0x0A ? b[p] : null,
+            /* Sin límites reales no hay nada que juzgar; y si el mínimo supera
+               al máximo, la trama no se interpretó bien: mejor no opinar que
+               inventar un veredicto. */
+            ok: (sinTope && sinPiso) || min > max ? null : (val >= min && val <= max),
+          });
+        }
+      }
+    }
+    if (log) log(`${pruebas.length} prueba(s) de monitores en ${mids.length} módulo(s) ✓`);
+    return pruebas.length ? pruebas : null;
+  },
+
+  _monitoresHTML(ms) {
+    if (!ms || !ms.length) return '';
+    const cil = ms.filter(m => m.cilindro), otros = ms.filter(m => !m.cilindro);
+    const fila = m => {
+      /* Ámbar y no rojo a propósito: un monitor que todavía no corrió en este
+         ciclo reporta un valor bajo y saldría "fuera" sin estar fallando. */
+      const est = m.ok === null ? '<span style="color:var(--text3)">sin evaluar</span>'
+        : m.ok ? '<span style="color:var(--green)">✓ dentro</span>'
+               : '<span style="color:var(--amber);font-weight:700">fuera de límite</span>';
+      return `<tr><td>${this._nombreMID(m.mid)}<span style="color:var(--text3);font-size:10px"> · prueba $${m.tid.toString(16).padStart(2,'0').toUpperCase()}</span></td>
+        <td style="text-align:right;font-weight:700">${m.val}</td>
+        <td style="text-align:right;color:var(--text3)">${m.sinPiso ? '—' : m.min}</td>
+        <td style="text-align:right;color:var(--text3)">${m.sinTope ? '—' : m.max}</td>
+        <td style="text-align:right">${est}</td></tr>`;
+    };
+    return `<div class="section" style="margin-top:14px">
+      <b>MONITORES A BORDO (modo 06) — valor medido y límites del fabricante</b>
+      ${cil.length ? `<div style="font-size:11px;color:var(--text3);margin:6px 0 2px">Fallo de encendido por cilindro</div>` : ''}
+      <table class="table" style="font-size:12px">
+        <thead><tr><th>Monitor</th><th style="text-align:right">Medido</th><th style="text-align:right">Mín</th><th style="text-align:right">Máx</th><th style="text-align:right">Estado</th></tr></thead>
+        <tbody>${cil.map(fila).join('')}${otros.map(fila).join('')}</tbody>
+      </table>
+      <div style="font-size:10px;color:var(--text3);margin-top:4px">
+        Los valores están en la escala interna de la ECU (no se convierten a unidades para no mostrar
+        cifras falsas). El veredicto es válido igual: medido y límites vienen en la misma escala.
+        En los cilindros el valor ya es el conteo de fallos.
+        <b>"Fuera de límite" no es lo mismo que falla</b>: un monitor que todavía no completó su ciclo
+        de manejo reporta un valor bajo y aparece fuera sin estar averiado. Confirmá siempre contra
+        los códigos de falla y el Check Engine.
+      </div>
+    </div>`;
   },
 
   async _leerFreeze() {
@@ -596,22 +710,72 @@ Modulos.diagnostico_obd = {
 
   _puenteMsg(m) {
     if (m.op === 'mensaje') {
+      if (this._sniff) this._sniff(m.datos);          // observa sin desviar la ruta normal
       if (this._via === 'j1939') this._j39Frame(m.datos);
       else if (this._canRx) this._canFrame(m.datos);
       return;
     }
     if (m.op === 'error') { console.warn('Puente RP1210:', m.codigo, m.error); return; }
-    const r = this._wsPend[m.op]; delete this._wsPend[m.op];
-    if (r) r(m);
+    const cola = this._wsPend[m.op];
+    if (cola && cola.length) cola.shift()(m);
   },
 
+  /* Una COLA por operación, no un solo casillero: el control de flujo del ISO-TP
+     dispara un 'enviar' desde dentro de la recepción, que se pisaba con el
+     'enviar' en curso y dejaba una promesa colgada hasta el timeout. Con 30
+     sensores eso convertía el escaneo en minutos de espera. Se responden en
+     orden porque el puente atiende las operaciones de a una. */
   _puenteOp(obj, timeout = 8000) {
     return new Promise((res, rej) => {
       if (!this._ws || this._ws.readyState !== 1) { rej(new Error('Puente USB desconectado')); return; }
-      this._wsPend[obj.op] = res;
-      setTimeout(() => { if (this._wsPend[obj.op]) { delete this._wsPend[obj.op]; rej(new Error(`El puente no respondió (${obj.op})`)); } }, timeout);
+      const cola = (this._wsPend[obj.op] = this._wsPend[obj.op] || []);
+      cola.push(res);
+      setTimeout(() => {
+        const i = cola.indexOf(res);
+        if (i >= 0) { cola.splice(i, 1); rej(new Error(`El puente no respondió (${obj.op})`)); }
+      }, timeout);
       this._ws.send(JSON.stringify(obj));
     });
+  },
+
+  /* Un camión con conector OBD-II de 16 pines puede hablar OBD-II a 500k o
+     J1939 a 250k por los mismos pines. Se prueba en vez de hacer adivinar:
+     primero OBD-II (contesta a una petición), después J1939 (el camión
+     transmite solo, así que basta con escuchar). */
+  _canBaud: 500, _j39Baud: 250, _sniff: null,
+
+  async _detectarVia(log) {
+    await this._puenteConectar();
+    const est = await this._puenteOp({ op:'estado' });
+    log(`Puente USB: <b>${est.dispositivo || 'RP1210'}</b> v${est.version || '?'} ✓`);
+
+    for (const baud of [500, 250]) {
+      const c = await this._puenteOp({ op:'conectar', protocolo:`CAN:Baud=${baud}`, device:1 }).catch(() => ({ ok:false }));
+      if (!c.ok) continue;
+      for (const ext of [false, true]) {
+        this._canExt = ext;
+        log(`Probando OBD-II en CAN ${ext ? 29 : 11} bits / ${baud}k...`);
+        const r = await this._usbElm('0100', 2500).catch(() => 'NO DATA');
+        if (/4100/.test(r.replace(/\s/g, ''))) {
+          this._canBaud = baud;
+          log(`Responde OBD-II en CAN ${ext ? 29 : 11} bits / ${baud}k ✓`);
+          return 'usb';
+        }
+      }
+    }
+
+    for (const baud of [250, 500]) {
+      log(`Escuchando bus J1939 a ${baud}k...`);
+      const c = await this._puenteOp({ op:'conectar', protocolo:`J1939:Baud=${baud}`, device:1 }).catch(() => ({ ok:false }));
+      if (!c.ok) continue;
+      let tramas = 0;
+      this._sniff = () => tramas++;
+      await new Promise(r => setTimeout(r, 1800));
+      this._sniff = null;
+      if (tramas > 0) { this._j39Baud = baud; log(`Bus J1939 activo a ${baud}k (${tramas} tramas) ✓`); return 'j1939'; }
+    }
+
+    throw new Error('No se detectó ningún bus: ni OBD-II (CAN 500k/250k) ni J1939 (250k/500k). Verificá que el switch esté en contacto y el cable bien puesto en el conector de 16 pines.');
   },
 
   /* ── Vehículos livianos por USB: OBD-II sobre CAN crudo con ISO-TP propio ── */
@@ -619,18 +783,18 @@ Modulos.diagnostico_obd = {
     await this._puenteConectar();
     const est = await this._puenteOp({ op:'estado' });
     log(`Puente USB: <b>${est.dispositivo || 'RP1210'}</b> v${est.version || '?'} ✓`);
-    const c = await this._puenteOp({ op:'conectar', protocolo:'CAN:Baud=500', device:1 });
+    const c = await this._puenteOp({ op:'conectar', protocolo:`CAN:Baud=${this._canBaud}`, device:1 });
     if (!c.ok) throw new Error(`El puente no pudo abrir el USB-Link: ${c.error || 'código ' + c.codigo}. ¿Está enchufado a la PC?`);
     for (const ext of [false, true]) {
       this._canExt = ext;
-      log(`Probando CAN ${ext ? 29 : 11} bits / 500k...`);
+      log(`Probando CAN ${ext ? 29 : 11} bits / ${this._canBaud}k...`);
       const r = await this._usbElm('0100').catch(() => 'NO DATA');
       if (/4100/.test(r.replace(/\s/g, ''))) {
         this._protoNum = ext ? 7 : 6;
-        return { nombre: est.dispositivo || 'USB-Link (RP1210)', protocolo: `CAN ${ext ? 29 : 11} bits / 500k (USB)` };
+        return { nombre: est.dispositivo || 'USB-Link (RP1210)', protocolo: `CAN ${ext ? 29 : 11} bits / ${this._canBaud}k (USB)` };
       }
     }
-    throw new Error('El vehículo no respondió por USB (CAN 500k). Verifica switch encendido y cable OBD. Si es camión, elegí la opción "USB — camión J1939". (El USB-Link es solo USB: la opción Bluetooth es para un dongle ELM327/Vgate aparte.)');
+    throw new Error(`El vehículo no respondió por OBD-II en CAN ${this._canBaud}k. Probá la opción "Automático", que además busca bus J1939 de camión. Verificá switch en contacto y cable bien puesto. (El USB-Link es solo USB: la opción Bluetooth es para un dongle ELM327/Vgate aparte.)`);
   },
 
   /* Emula un ELM327 sobre el puente: mismos comandos, misma respuesta hex */
@@ -813,7 +977,7 @@ Modulos.diagnostico_obd = {
       await this._puenteConectar();
       const est = await this._puenteOp({ op:'estado' });
       log(`Puente USB: <b>${est.dispositivo || 'RP1210'}</b> v${est.version || '?'} ✓`);
-      const c = await this._puenteOp({ op:'conectar', protocolo:'J1939', device:1 });
+      const c = await this._puenteOp({ op:'conectar', protocolo:`J1939:Baud=${this._j39Baud || 250}`, device:1 });
       if (!c.ok) throw new Error(`El puente no pudo abrir el USB-Link: ${c.error || 'código ' + c.codigo}. ¿Está enchufado a la PC?`);
       this._j39 = { datos:{}, pgns:{}, esperas:{}, dm1:null, dm2:null, vin:null, comp:null };
       /* Reclamar dirección de herramienta de diagnóstico (0xF9) en el bus */
@@ -1696,12 +1860,13 @@ Modulos.diagnostico_obd = {
       <div class="form-group">
         <label class="form-label">Conexión</label>
         <select class="form-select" id="obd-via">
+          <option value="auto">🔎 USB — detectar solo (recomendado: liviano o camión)</option>
           <option value="ble">📶 Bluetooth — ELM327 / Vgate / OBDLink (BLE)</option>
-          <option value="j1939">🚚 USB — camión J1939 (puente RP1210)</option>
-          <option value="usb">🔌 USB — vehículo liviano (puente RP1210 · beta)</option>
+          <option value="j1939">🚚 USB — forzar camión J1939 (puente RP1210)</option>
+          <option value="usb">🔌 USB — forzar vehículo liviano (puente RP1210)</option>
         </select>
       </div>
-      <div id="obd-log" style="background:var(--bg2,#0b1220);border-radius:8px;padding:10px;font-family:monospace;font-size:12px;min-height:70px;max-height:180px;overflow:auto;margin:10px 0">
+      <div id="obd-log" style="background:var(--bg2,#0b1220);color:var(--text);border:1px solid var(--borde,rgba(127,127,127,.25));border-radius:8px;padding:10px 12px;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12.5px;line-height:1.75;min-height:70px;max-height:220px;overflow:auto;margin:10px 0">
         Conecta el adaptador al puerto de diagnóstico del vehículo y enciende el switch.<br>
         · Bluetooth: presiona <b>Conectar y Escanear</b> y elige el adaptador (ej. "OBDII", "Vgate", "iCar Pro").<br>
         · USB: solo enchufa el USB-Link a esta PC — el puente arranca solo con Windows.<br>
@@ -1727,6 +1892,13 @@ Modulos.diagnostico_obd = {
     const btn = document.getElementById('obd-btn-scan');
     btn.disabled = true;
     const log = m => this._log(m);
+    if (this._via === 'auto') {
+      try { this._via = await this._detectarVia(log); }
+      catch (e) {
+        log(`<span style="color:var(--red)">✗ ${e.message}</span>`);
+        UI.toast(e.message, 'error'); btn.disabled = false; return;
+      }
+    }
     if (this._via === 'j1939') return this._escanearJ1939(vehId, btn, log);
     try {
       let nombre, protocolo;
@@ -1771,7 +1943,11 @@ Modulos.diagnostico_obd = {
       log('Detectando sensores soportados...');
       this._sop = await this._leerSoportados();
       log(`Leyendo ${this._sop.length || this._BASICOS.length} sensores en vivo...`);
-      const datos = await this._leerVivo(this._sop);
+      const datos = await this._leerVivo(this._sop, log);
+
+      log('Leyendo monitores a bordo (modo 06)...');
+      const monitores = await this._leerMonitores(log).catch(() => null);
+      if (!monitores) log('Este vehículo no reporta monitores en modo 06');
 
       let nhtsa = null;
       if (vin) {
@@ -1782,7 +1958,7 @@ Modulos.diagnostico_obd = {
 
       this._scan = { vehiculo_id: vehId, vin, protocolo, adaptador: nombre, mil,
                      dtcs, dtcs_pendientes: pend, datos, freeze_frame: freeze,
-                     voltaje: datos.volt || null, nhtsa };
+                     monitores, voltaje: datos.volt || null, nhtsa };
       log('<b>Escaneo completo ✓</b>');
       this._renderResultado();
       document.getElementById('obd-btn-save').style.display = '';
@@ -1808,6 +1984,7 @@ Modulos.diagnostico_obd = {
       <div id="obd-bitacora"></div>
       <div id="obd-campanas"></div>
       ${this._freezeHTML(s.freeze_frame)}
+      ${this._monitoresHTML(s.monitores)}
       <div class="card" style="padding:10px;margin-top:8px">
         <b style="font-size:12px">DATOS EN VIVO (${Object.keys(s.datos||{}).length} sensores)</b>
         <div id="obd-mon-sel" style="margin-top:6px;display:none"></div>
@@ -2137,6 +2314,7 @@ Modulos.diagnostico_obd = {
         <b>Check Engine:</b> ${d.mil?'🔴 Encendido':'✅ Apagado'} ${d.dtcs_borrados?' · 🧹 Códigos borrados tras el escaneo':''}</p>
         ${this._tablaDTCs(d)}
         ${this._freezeHTML(d.freeze_frame)}
+        ${this._monitoresHTML(d.monitores)}
         <div class="card" style="padding:10px;margin-top:8px">
           <b style="font-size:12px">DATOS AL MOMENTO DEL ESCANEO</b>
           <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:8px;margin-top:6px">${this._vivoHTML(d.datos||{})}</div>
