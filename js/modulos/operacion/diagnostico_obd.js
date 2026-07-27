@@ -609,7 +609,7 @@ Modulos.diagnostico_obd = {
         return { nombre: est.dispositivo || 'USB-Link (RP1210)', protocolo: `CAN ${ext ? 29 : 11} bits / 500k (USB)` };
       }
     }
-    throw new Error('El vehículo no respondió por USB (CAN 500k). Verifica switch encendido y cable OBD. Para livianos también puedes usar el adaptador Bluetooth.');
+    throw new Error('El vehículo no respondió por USB (CAN 500k). Verifica switch encendido y cable OBD. Si es camión, elegí la opción "USB — camión J1939". (El USB-Link es solo USB: la opción Bluetooth es para un dongle ELM327/Vgate aparte.)');
   },
 
   /* Emula un ELM327 sobre el puente: mismos comandos, misma respuesta hex */
@@ -627,16 +627,25 @@ Modulos.diagnostico_obd = {
     return lineas.length ? lineas.join('\r') : 'NO DATA';
   },
 
+  /* Trama RP1210/CAN del USB-Link (verificado en vehículo real 2026-07-27):
+     [tipo][id][datos] donde tipo 0 = 11 bits con id de 2 bytes, 1 = 29 bits con
+     id de 4 bytes. Mandar siempre 4 bytes lo rechaza con ERR_MESSAGE_TOO_LONG. */
   _canTx(id, datos) {
     const data8 = datos.concat(Array(Math.max(0, 8 - datos.length)).fill(0));
-    return this._puenteOp({ op:'enviar',
-      datos: [this._canExt ? 1 : 0, (id >>> 24) & 0xFF, (id >>> 16) & 0xFF, (id >>> 8) & 0xFF, id & 0xFF, ...data8] });
+    const cab = this._canExt
+      ? [1, (id >>> 24) & 0xFF, (id >>> 16) & 0xFF, (id >>> 8) & 0xFF, id & 0xFF]
+      : [0, (id >>> 8) & 0xFF, id & 0xFF];
+    return this._puenteOp({ op:'enviar', datos: [...cab, ...data8] });
   },
 
-  _canFrame(d) {   // lectura RP1210: [timestamp×4][tipo][id×4][datos...]
-    if (d.length < 10 || !this._canRx) return;
-    const id = ((d[5] << 24) | (d[6] << 16) | (d[7] << 8) | d[8]) >>> 0;
-    this._canRx(id, d.slice(9));
+  /* Lectura: [timestamp×4][tipo][id 2 ó 4 bytes][datos...] — el largo del id lo
+     manda la trama misma, no lo que creemos que estamos hablando. */
+  _canFrame(d) {
+    if (d.length < 8 || !this._canRx) return;
+    const ext = d[4] === 1;
+    const id = ext ? (((d[5] << 24) | (d[6] << 16) | (d[7] << 8) | d[8]) >>> 0)
+                   : (((d[5] << 8) | d[6]) >>> 0);
+    this._canRx(id, d.slice(ext ? 9 : 7));
   },
 
   /* ISO-TP (ISO 15765-2) mínimo: single/first/consecutive + flow control.
