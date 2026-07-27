@@ -1,5 +1,5 @@
 -- ═══════════════════════════════════════════════════════
--- 033 — Beto IA por suscripción + trial unificado
+-- 033 — Nexus IA por suscripción + trial unificado
 --   • tenants.ai_limite_mes: tope mensual de consultas IA
 --     (default 300, ampliable por taller desde el panel SA)
 --   • registrar_taller: el auto-registro YA NO crea licencia demo;

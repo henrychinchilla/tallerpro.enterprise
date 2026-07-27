@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════════════════════
-// Edge Function: ai-assistant — "Beto", asistente mecánico de NexusPro.
+// Edge Function: ai-assistant — "Nexus", asistente mecánico de NexusPro.
 // Proxy seguro a la API de Claude. ANTHROPIC_API_KEY solo en el servidor.
 // 503 elegante si no está configurada.
 //
@@ -29,10 +29,10 @@ const json = (body: unknown, status = 200) =>
 // Se puede subir de modelo por taller exigente vía secret AI_MODEL.
 const MODELO = Deno.env.get("AI_MODEL") ?? "claude-haiku-4-5-20251001";
 const EFFORT = Deno.env.get("AI_EFFORT") ?? "medium";
-const NOMBRE = Deno.env.get("AI_NOMBRE") ?? "Beto";
+const NOMBRE = Deno.env.get("AI_NOMBRE") ?? "Nexus";
 const LIMITE_DEFAULT = 300; // consultas IA/mes si el tenant no tiene ai_limite_mes
 
-/* Conocimiento específico por módulo para que Beto lo aplique según el tenant */
+/* Conocimiento específico por módulo para que Nexus lo aplique según el tenant */
 const MOD_CONOCIMIENTO: Record<string, string> = {
   ordenes:      "🔧 TALLER MECÁNICO: Órdenes de trabajo (OT-NNNN), diagnóstico DTC/OBD-II, procedimientos de reparación, torques, intervalos de mantenimiento preventivo por km/tiempo.",
   vehiculos:    "🚗 VEHÍCULOS: Fichas de vehículos, historial de servicio, kilometraje, alertas de mantenimiento.",
@@ -45,9 +45,9 @@ const MOD_CONOCIMIENTO: Record<string, string> = {
   clientes:     "👥 CLIENTES: Registro, historial de servicio, fidelización y contacto.",
 };
 
-/* Construye la identidad y conocimiento de Beto según módulos activos del tenant.
+/* Construye la identidad y conocimiento de Nexus según módulos activos del tenant.
    Si modulos=[] (sin override) → experto en todo (comportamiento legacy). */
-function buildBetoPersona(nombre: string, modulos: string[]): string {
+function buildNexusPersona(nombre: string, modulos: string[]): string {
   const tiene = (m: string) => !modulos.length || modulos.includes(m);
   const tieneMec  = tiene("ordenes") || tiene("vehiculos");
   const tieneHer  = tiene("herreria");
@@ -84,7 +84,7 @@ REGLA IMPORTANTE: Responde SIEMPRE preguntas técnicas sobre diagnóstico, falla
 }
 
 /* Persona base como fallback (todo incluido) */
-const BASE_GT = buildBetoPersona(NOMBRE, []);
+const BASE_GT = buildNexusPersona(NOMBRE, []);
 
 const SUGERENCIA_RECURSOS = `
 Cuando la consulta sea sobre una falla, código DTC, procedimiento de reparación o
@@ -348,10 +348,10 @@ Deno.serve(async (req) => {
         .select("modulos_activos, plan").eq("id", tenantId).maybeSingle();
       const mods: string[] = Array.isArray(tnMods?.modulos_activos) && tnMods.modulos_activos.length
         ? tnMods.modulos_activos : [];
-      personaDinamica = buildBetoPersona(NOMBRE, mods);
+      personaDinamica = buildNexusPersona(NOMBRE, mods);
     }
 
-    // Historial de las últimas 3 conversaciones para dar contexto continuo a Beto
+    // Historial de las últimas 3 conversaciones para dar contexto continuo a Nexus
     let historialCtx: Array<{ role: "user" | "assistant"; content: string }> = [];
     if (modo === "chat") {
       const { data: prevConvs } = await asCaller
