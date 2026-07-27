@@ -14,16 +14,21 @@ Habilita el escaneo por **USB**:
    **⬇️ Instalar el puente USB** (o descarga
    `https://nexuspro.cmtelecommgt.com/puente-obd/instalar-puente.bat`).
 2. Doble clic al archivo descargado. Eso descarga el puente a
-   `%USERPROFILE%\NexusPro\puente-obd`, lo deja **arrancando automáticamente con
-   Windows (oculto, sin ventana)** y lo inicia de una vez.
+   `%USERPROFILE%\NexusPro\puente-obd`, lo registra en
+   `HKCU\Software\Microsoft\Windows\CurrentVersion\Run` para que **arranque
+   automáticamente con Windows (oculto, sin ventana)** y lo inicia de una vez.
 
 Desde entonces **no hay que correr nada a mano**: enchufas el USB-Link y escaneas.
 
 - El icono **"Puente OBD USB"** del escritorio es opcional: lo abre en modo
   visible (ventana con registro) para diagnóstico. Si ya corre el oculto, la
   ventana avisa y se cierra sola — no se duplica.
-- Para desinstalar: borra el acceso directo "NexusPro Puente OBD" de la carpeta
-  de inicio (`Win+R` → `shell:startup`) y la carpeta `%USERPROFILE%\NexusPro`.
+- Para desinstalar: borra el valor "NexusPro Puente OBD" del registro
+  (`reg delete "HKCU\Software\Microsoft\Windows\CurrentVersion\Run" /v "NexusPro Puente OBD" /f`)
+  y la carpeta `%USERPROFILE%\NexusPro`.
+- La página se conecta al puente por `ws://127.0.0.1:17210`, así que ese origen
+  debe estar en `connect-src` de la CSP (`_headers`). Si falta, el navegador
+  bloquea el WebSocket y el módulo reporta "no se encontró el puente".
 
 ## Requisitos
 
