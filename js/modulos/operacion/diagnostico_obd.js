@@ -12,6 +12,17 @@ Modulos.diagnostico_obd = {
   _protoNum: 0, _liveTimer: null, _busy: false,
 
   /* Pares servicio/característica conocidos de adaptadores OBD BLE */
+  /* Servicios BLE que se piden permiso para inspeccionar. No hace falta conocer
+     el par escritura/notificación de cada uno: alcanza con poder VERLO para que
+     la autodetección encuentre la característica que notifica y la que escribe. */
+  _SVC_CANDIDATOS: [
+    '0000fff0-0000-1000-8000-00805f9b34fb',   // Vgate iCar Pro y muchos genéricos
+    '0000ffe0-0000-1000-8000-00805f9b34fb',   // módulos tipo HM-10 / JDY
+    '0000ffe5-0000-1000-8000-00805f9b34fb',   // variante de escritura del anterior
+    'e7810a71-73ae-499d-8c15-faa9aef0c3f2',   // LELink
+    '6e400001-b5a3-f393-e0a9-e50e24dcca9e',   // Nordic UART, usado por varios puentes serie BLE
+  ],
+
   _UUIDS: [
     { svc:'0000fff0-0000-1000-8000-00805f9b34fb', wr:'0000fff2-0000-1000-8000-00805f9b34fb', nt:'0000fff1-0000-1000-8000-00805f9b34fb' },
     { svc:'0000ffe0-0000-1000-8000-00805f9b34fb', wr:'0000ffe1-0000-1000-8000-00805f9b34fb', nt:'0000ffe1-0000-1000-8000-00805f9b34fb' },
@@ -26,7 +37,13 @@ Modulos.diagnostico_obd = {
   async _conectar() {
     if (!navigator.bluetooth)
       throw new Error('Este navegador no tiene Bluetooth. Usa Chrome/Edge en Android o en una PC con Bluetooth.');
-    const svcs = [...new Set(this._UUIDS.map(u => u.svc))];
+    /* Web Bluetooth SÓLO deja ver los servicios declarados acá: getPrimaryServices()
+       no devuelve nada fuera de esta lista. Por eso la autodetección de más abajo
+       era letra muerta —no podía descubrir un servicio que no estuviera ya pedido—
+       y un adaptador con UUID distinto fallaba aunque el código pareciera cubrirlo.
+       La lista va ancha a propósito, aunque de varios no sepamos el par exacto de
+       características: de eso se encarga la autodetección. */
+    const svcs = [...new Set([...this._UUIDS.map(u => u.svc), ...this._SVC_CANDIDATOS])];
     const dev = await navigator.bluetooth.requestDevice({ acceptAllDevices:true, optionalServices:svcs });
     const server = await dev.gatt.connect();
 
