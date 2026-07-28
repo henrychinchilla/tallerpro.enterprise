@@ -131,22 +131,41 @@ Modulos.diagnostico_obd = {
     } catch (_) { return null; }
   },
 
-  async _leerDTCs(modo) {   // modo '03' confirmados / '07' pendientes → códigos crudos
-    const ok = modo === '03' ? '43' : '47';
-    let codigos = [];
+  /* Módulos que contestan OBD-II, preguntando a la dirección de difusión: cada
+     computadora responde con la suya.
+     OJO al alcance: NO son todas las computadoras del vehículo. ABS, airbag,
+     dirección eléctrica o clima no están obligados a contestar aquí y en
+     general no lo hacen — hablan UDS propietario de cada marca. Lo que se
+     lista es lo que la norma garantiza, no el vehículo entero. */
+  async _leerModulos() {
     try {
-      for (let line of this._hexLines(await this._cmd(modo, 8000))) {
-        const i = line.indexOf(ok);
+      const r = await this._cmdPorECU('0100', 5000);
+      const mods = r.filter(x => x.hex.indexOf('4100') >= 0)
+                    .map(x => ({ ecu: x.ecu, nombre: this._nombreModulo(x.ecu) }));
+      return mods.length ? mods : null;
+    } catch (_) { return null; }
+  },
+
+  /* modo '03' confirmados / '07' pendientes → [{codigo, ecu}].
+     Cada ECU contesta con su propia dirección, así que el mismo código puede
+     venir de dos módulos: se listan por separado en vez de deduplicar, porque
+     "P0300 en el motor" y "P0300 en la transmisión" no son el mismo hallazgo. */
+  async _leerDTCs(modo) {
+    const ok = modo === '03' ? '43' : '47';
+    const encontrados = [];
+    try {
+      for (const { ecu, hex } of await this._cmdPorECU(modo, 8000)) {
+        const i = hex.indexOf(ok);
         if (i < 0) continue;
-        let h = line.slice(i + 2);
+        let h = hex.slice(i + 2);
         if (this._protoNum >= 6) h = h.slice(2);          // CAN antepone el conteo de DTCs
         for (let p = 0; p + 3 < h.length; p += 4) {
           const c = this._decodeDTC(h.substr(p, 4));
-          if (c && !codigos.includes(c)) codigos.push(c);
+          if (c && !encontrados.some(x => x.codigo === c && x.ecu === ecu)) encontrados.push({ codigo: c, ecu });
         }
       }
     } catch (_) {}
-    return codigos;
+    return encontrados;
   },
 
   _decodeDTC(h4) {
@@ -775,7 +794,20 @@ Modulos.diagnostico_obd = {
       if (tramas > 0) { this._j39Baud = baud; log(`Bus J1939 activo a ${baud}k (${tramas} tramas) ✓`); return 'j1939'; }
     }
 
-    throw new Error('No se detectó ningún bus: ni OBD-II (CAN 500k/250k) ni J1939 (250k/500k). Verificá que el switch esté en contacto y el cable bien puesto en el conector de 16 pines.');
+    /* Camiones antiguos: J1708/J1587. Se detecta el bus para no decir "no hay
+       nada" cuando en realidad hay tráfico; la decodificación de fallas J1587
+       (MID/PID/FMI) todavía no está implementada. */
+    log('Escuchando bus J1708 (camión antiguo)...');
+    const c8 = await this._puenteOp({ op:'conectar', protocolo:'J1708', device:1 }).catch(() => ({ ok:false }));
+    if (c8.ok) {
+      let tramas = 0;
+      this._sniff = () => tramas++;
+      await new Promise(r => setTimeout(r, 1800));
+      this._sniff = null;
+      if (tramas > 0) throw new Error(`Este vehículo habla J1708/J1587: el bus está activo (${tramas} tramas). Es un camión antiguo y NexusPro todavía no decodifica ese protocolo — el adaptador sí lo soporta, falta programarlo.`);
+    }
+
+    throw new Error('No se detectó ningún bus: ni OBD-II (CAN 500k/250k), ni J1939 (250k/500k), ni J1708. Verificá que el switch esté en contacto y el cable bien puesto en el conector.');
   },
 
   /* ── Vehículos livianos por USB: OBD-II sobre CAN crudo con ISO-TP propio ── */
@@ -809,7 +841,33 @@ Modulos.diagnostico_obd = {
     if (!/^[0-9A-F]{2,}$/.test(cmd)) return '?';
     const tx = cmd.match(/../g).map(h => parseInt(h, 16));
     const lineas = await this._isotp(tx, timeout);
-    return lineas.length ? lineas.join('\r') : 'NO DATA';
+    return lineas.length ? lineas.map(l => l.hex).join('\r') : 'NO DATA';
+  },
+
+  /* Nombre del módulo por su dirección de respuesta. Sólo se nombran las dos
+     que la norma fija; el resto se muestra por dirección en vez de inventarle
+     un nombre que podría ser de otro fabricante. */
+  _nombreModulo(ecu) {
+    if (!ecu) return 'Módulo no identificado';
+    if (ecu === 0x7E8) return 'Motor (ECM)';
+    if (ecu === 0x7E9) return 'Transmisión (TCM)';
+    return `Módulo 0x${ecu.toString(16).toUpperCase()}`;
+  },
+
+  /* Como _cmd, pero devuelve [{ecu, hex}] para atribuir cada respuesta a su
+     módulo. Por Bluetooth el ELM327 oculta la dirección salvo que se enciendan
+     cabeceras (ATH1), así que ahí se devuelve ecu:null y la interfaz lo dice
+     en vez de atribuirle el código al módulo equivocado. */
+  async _cmdPorECU(cmd, timeout = 8000) {
+    if (this._via !== 'usb') {
+      return this._hexLines(await this._cmd(cmd, timeout)).map(hex => ({ ecu: null, hex }));
+    }
+    while (this._busy) await new Promise(r => setTimeout(r, 50));
+    this._busy = true;
+    try {
+      const tx = cmd.trim().toUpperCase().match(/../g).map(h => parseInt(h, 16));
+      return await this._isotp(tx, timeout);
+    } finally { this._busy = false; }
   },
 
   /* Trama RP1210/CAN del USB-Link (verificado en vehículo real 2026-07-27):
@@ -864,8 +922,10 @@ Modulos.diagnostico_obd = {
         if (hay && !pendiente && Date.now() - ultimo > 250) break;
       }
     } finally { this._canRx = null; }
-    return Object.values(ecus).filter(e => e.ok)
-      .map(e => e.datos.map(x => x.toString(16).padStart(2, '0')).join('').toUpperCase());
+    /* Se conserva la dirección de la ECU: sin eso no se puede decir QUÉ módulo
+       reportó cada código, que es justo lo que distingue a un escáner serio. */
+    return Object.entries(ecus).filter(([, e]) => e.ok)
+      .map(([id, e]) => ({ ecu: +id, hex: e.datos.map(x => x.toString(16).padStart(2, '0')).join('').toUpperCase() }));
   },
 
   /* ── Camiones por USB: J1939. El bus transmite solo (broadcast); DM1/DM2 dan
@@ -1924,6 +1984,11 @@ Modulos.diagnostico_obd = {
       const { mil, n } = await this._leerMIL();
       log(mil ? `🔴 Check Engine ENCENDIDO (${n} falla(s))` : '✅ Check Engine apagado');
 
+      log('Buscando módulos que responden...');
+      const modulos = await this._leerModulos();
+      log(modulos ? `${modulos.length} módulo(s): ${modulos.map(m => m.nombre).join(', ')} ✓`
+                  : 'No se pudo enumerar los módulos');
+
       log('Leyendo códigos de falla...');
       const codConf = await this._leerDTCs('03');
       const codPend = await this._leerDTCs('07');
@@ -1936,9 +2001,10 @@ Modulos.diagnostico_obd = {
       }
 
       /* Descripciones: diccionario local ES → catálogo BD (3,000+ códigos) → rango SAE */
-      const cat = await DB.getDTCCatalogo([...codConf, ...codPend, freeze?.dtc].filter(Boolean));
-      let dtcs = codConf.map(c => ({ codigo:c, desc:this._descDTC(c, cat) }));
-      let pend = codPend.map(c => ({ codigo:c, desc:this._descDTC(c, cat) }));
+      const cat = await DB.getDTCCatalogo(
+        [...codConf.map(c => c.codigo), ...codPend.map(c => c.codigo), freeze?.dtc].filter(Boolean));
+      let dtcs = codConf.map(c => ({ codigo:c.codigo, ecu:c.ecu, modulo:this._nombreModulo(c.ecu), desc:this._descDTC(c.codigo, cat) }));
+      let pend = codPend.map(c => ({ codigo:c.codigo, ecu:c.ecu, modulo:this._nombreModulo(c.ecu), desc:this._descDTC(c.codigo, cat) }));
       dtcs = await this._enriquecerDTCs(dtcs, vehId);
       pend = await this._enriquecerDTCs(pend, vehId);
       if (freeze) freeze.desc = this._descDTC(freeze.dtc, cat);
@@ -1961,7 +2027,7 @@ Modulos.diagnostico_obd = {
 
       this._scan = { vehiculo_id: vehId, vin, protocolo, adaptador: nombre, mil,
                      dtcs, dtcs_pendientes: pend, datos, freeze_frame: freeze,
-                     monitores, voltaje: datos.volt || null, nhtsa };
+                     monitores, modulos, voltaje: datos.volt || null, nhtsa };
       log('<b>Escaneo completo ✓</b>');
       this._renderResultado();
       document.getElementById('obd-btn-save').style.display = '';
@@ -1983,6 +2049,7 @@ Modulos.diagnostico_obd = {
           ${s.nhtsa.pais?` · Fab. ${s.nhtsa.pais}`:''}</div>
         <button class="btn btn-sm btn-cyan" style="margin-top:6px" onclick="Modulos.diagnostico_obd.aplicarVIN()">📋 Completar ficha del vehículo</button>
       </div>` : ''}
+      ${this._modulosHTML(s)}
       ${this._tablaDTCs(s)}
       <div id="obd-bitacora"></div>
       <div id="obd-campanas"></div>
@@ -2077,6 +2144,33 @@ Modulos.diagnostico_obd = {
     </div>`;
   },
 
+  _modulosHTML(s) {
+    if (!s || !s.modulos || !s.modulos.length) return '';
+    return `<div class="card" style="padding:10px;margin-top:8px">
+      <b style="font-size:12px">MÓDULOS DETECTADOS (${s.modulos.length})</b>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:8px;margin-top:6px">
+        ${s.modulos.map(m => {
+          const conf = (s.dtcs || []).filter(d => d.ecu === m.ecu).length;
+          const pend = (s.dtcs_pendientes || []).filter(d => d.ecu === m.ecu).length;
+          const col = conf ? 'red' : pend ? 'amber' : 'green';
+          const estado = conf || pend
+            ? `${conf ? `${conf} confirmado(s)` : ''}${conf && pend ? ' · ' : ''}${pend ? `${pend} pendiente(s)` : ''}`
+            : 'responde · sin códigos';
+          return `<div style="background:var(--surface2);border-radius:8px;padding:9px 11px;border-left:3px solid var(--${col})">
+            <div style="font-size:12.5px;font-weight:600">${m.nombre}</div>
+            <div style="font-size:10px;color:var(--text3);font-family:ui-monospace,Consolas,monospace">${m.ecu ? '0x' + m.ecu.toString(16).toUpperCase() : 'dirección no expuesta'}</div>
+            <div style="font-size:11.5px;margin-top:4px;color:var(--${col});font-weight:600">${estado}</div>
+          </div>`;
+        }).join('')}
+      </div>
+      <div style="font-size:10px;color:var(--text3);margin-top:7px;line-height:1.5">
+        Acá sólo aparecen los módulos que la norma OBD-II obliga a responder (motor y, si existe, transmisión).
+        <b>ABS, airbag, dirección eléctrica y clima no salen en esta lista</b>: usan protocolos propios de cada
+        marca. Que no aparezcan no significa que estén fallando.
+      </div>
+    </div>`;
+  },
+
   _tablaDTCs(s) {
     const filas = [
       ...s.dtcs.map(x => ({ ...x, tipo:'Confirmado', color:'red' })),
@@ -2085,8 +2179,8 @@ Modulos.diagnostico_obd = {
     return `<div class="card" style="padding:10px;margin-top:8px">
       <b style="font-size:12px">CÓDIGOS DE FALLA (DTC)</b>
       ${filas.length ? `<table class="table" style="margin-top:6px;font-size:12px">
-        <thead><tr><th>Código</th><th>Descripción</th><th>Estado</th><th style="text-align:right">Guía</th></tr></thead>
-        <tbody>${filas.map(f=>`<tr><td><b style="font-family:monospace">${f.codigo}</b></td><td>${f.desc}${f.origen ? `<div style="font-size:10px;color:var(--text3);margin-top:2px">${f.origen}${f.fuente ? ` · ${f.fuente}` : ''}</div>` : ''}</td><td><span class="badge badge-${f.color}">${f.tipo}</span></td><td style="text-align:right;white-space:nowrap"><button class="btn btn-sm btn-ghost" onclick="Modulos.diagnostico_obd.verGuia('${UI.esc(f.codigo)}')" title="Qué medir antes de cambiar piezas">🔧${this._GUIA[f.codigo] ? '' : '<span style="opacity:.5"> ·</span>'}</button></td></tr>`).join('')}</tbody>
+        <thead><tr><th>Código</th><th>Módulo</th><th>Descripción</th><th>Estado</th><th style="text-align:right">Guía</th></tr></thead>
+        <tbody>${filas.map(f=>`<tr><td><b style="font-family:monospace">${f.codigo}</b></td><td style="font-size:11px;white-space:nowrap">${f.modulo || this._nombreModulo(f.ecu)}</td><td>${f.desc}${f.origen ? `<div style="font-size:10px;color:var(--text3);margin-top:2px">${f.origen}${f.fuente ? ` · ${f.fuente}` : ''}</div>` : ''}</td><td><span class="badge badge-${f.color}">${f.tipo}</span></td><td style="text-align:right;white-space:nowrap"><button class="btn btn-sm btn-ghost" onclick="Modulos.diagnostico_obd.verGuia('${UI.esc(f.codigo)}')" title="Qué medir antes de cambiar piezas">🔧${this._GUIA[f.codigo] ? '' : '<span style="opacity:.5"> ·</span>'}</button></td></tr>`).join('')}</tbody>
       </table>` : '<p style="color:var(--green);margin:6px 0 0">✅ Sin códigos de falla</p>'}
     </div>`;
   },
@@ -2327,6 +2421,7 @@ Modulos.diagnostico_obd = {
         <b>Fecha:</b> ${UI.fecha(d.created_at)} · <b>VIN:</b> <span style="font-family:monospace">${d.vin||'—'}</span><br>
         <b>Protocolo:</b> ${d.protocolo||'—'} · <b>Adaptador:</b> ${d.adaptador||'—'} · <b>Batería:</b> ${d.voltaje||'—'}<br>
         <b>Check Engine:</b> ${d.mil?'🔴 Encendido':'✅ Apagado'} ${d.dtcs_borrados?' · 🧹 Códigos borrados tras el escaneo':''}</p>
+        ${this._modulosHTML(d)}
         ${this._tablaDTCs(d)}
         ${this._freezeHTML(d.freeze_frame)}
         ${this._monitoresHTML(d.monitores)}
