@@ -786,6 +786,13 @@ Modulos.diagnostico_obd = {
     const est = await this._puenteOp({ op:'estado' });
     log(`Puente USB: <b>${est.dispositivo || 'RP1210'}</b> v${est.version || '?'} ✓`);
 
+    /* En un taller con los software de fábrica instalados (Cummins, CAT,
+       Navistar, Detroit…) hay varios adaptadores RP1210 registrados. Saber
+       cuáles hay dice con qué hardware más podría hablar NexusPro. */
+    const inst = await this._puenteOp({ op:'apis' }, 4000).catch(() => null);
+    if (inst?.ok && inst.apis?.length > 1)
+      log(`Adaptadores RP1210 en esta PC: ${inst.apis.map(a => a.nombre || a.api).join(' · ')}`);
+
     for (const baud of [500, 250]) {
       const c = await this._puenteOp({ op:'conectar', protocolo:`CAN:Baud=${baud}`, device:1 }).catch(() => ({ ok:false }));
       if (!c.ok) continue;

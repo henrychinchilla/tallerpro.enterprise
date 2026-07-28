@@ -6,11 +6,15 @@
 
    Compilar y ejecutar: iniciar-puente.bat
    IMPORTANTE: x86 obligatorio — la DLL RP1210 (NXULNK32.dll) es de 32 bits.
-   ponytail: DLL fija NXULNK32; si algún día hay otro adaptador RP1210, leer
-   APIImplementations de C:\Windows\RP121032.INI y cargarla dinámicamente. */
+   ponytail: la DLL sigue fija en NXULNK32 para conectarse, pero la operación
+   'apis' ya enumera todos los adaptadores RP1210 instalados leyendo
+   C:\Windows\RP121032.INI. Falta el paso de cargar la elegida dinámicamente
+   (LoadLibrary + GetProcAddress en vez de DllImport); se hará con el adaptador
+   presente para poder probarlo, no a ciegas. */
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.IO;
 using System.Net;
 using System.Net.Sockets;
 using System.Runtime.InteropServices;
@@ -102,6 +106,11 @@ public class PuenteOBD {
         resp["op"] = op;
         try {
           switch (op) {
+            case "apis": {
+              resp["ok"] = true;
+              resp["apis"] = ApisInstaladas();
+              break;
+            }
             case "estado": {
               resp["ok"] = true;
               resp["api"] = "NXULNK32";
@@ -162,6 +171,63 @@ public class PuenteOBD {
       try { tcp.Close(); } catch (Exception) { }
       Log("NexusPro desconectado");
     }
+  }
+
+  /* ── Adaptadores RP1210 instalados en esta PC ──────────────────────────────
+     Cada software de fábrica (Cummins, CAT, Navistar, Detroit, Allison, Isuzu…)
+     registra su propio adaptador RP1210. Enumerarlos dice con qué hardware
+     PODRÍA hablar NexusPro en un taller que ya tiene esos programas.
+     Sólo lee archivos .INI: no carga ninguna DLL, así que no puede afectar la
+     conexión en curso. */
+  static string LeerClave(string archivo, string clave) {
+    try {
+      foreach (var linea in File.ReadAllLines(archivo)) {
+        var l = linea.Trim();
+        int i = l.IndexOf('=');
+        if (i > 0 && l.Substring(0, i).Trim().Equals(clave, StringComparison.OrdinalIgnoreCase))
+          return l.Substring(i + 1).Trim();
+      }
+    } catch (Exception) { }
+    return null;
+  }
+
+  static List<string> TodasLasClaves(string archivo, string clave) {
+    var res = new List<string>();
+    try {
+      foreach (var linea in File.ReadAllLines(archivo)) {
+        var l = linea.Trim();
+        int i = l.IndexOf('=');
+        if (i > 0 && l.Substring(0, i).Trim().Equals(clave, StringComparison.OrdinalIgnoreCase)) {
+          var v = l.Substring(i + 1).Trim();
+          if (v.Length > 0 && !res.Contains(v)) res.Add(v);
+        }
+      }
+    } catch (Exception) { }
+    return res;
+  }
+
+  static List<object> ApisInstaladas() {
+    var lista = new List<object>();
+    try {
+      var win = Environment.GetFolderPath(Environment.SpecialFolder.Windows);
+      var impl = LeerClave(Path.Combine(win, "RP121032.INI"), "APIImplementations");
+      if (impl == null) return lista;
+      foreach (var bruto in impl.Split(',')) {
+        var api = bruto.Trim();
+        if (api.Length == 0) continue;
+        var ini = Path.Combine(win, api + ".INI");
+        var d = new Dictionary<string, object>();
+        d["api"] = api;
+        d["instalado"] = File.Exists(ini);
+        if (File.Exists(ini)) {
+          d["nombre"] = LeerClave(ini, "Name") ?? api;
+          d["protocolos"] = TodasLasClaves(ini, "ProtocolString");
+          d["dispositivos"] = TodasLasClaves(ini, "DeviceDescription");
+        }
+        lista.Add(d);
+      }
+    } catch (Exception) { }
+    return lista;
   }
 
   /* Bombea mensajes del bus del vehículo hacia la app en cuanto llegan */
