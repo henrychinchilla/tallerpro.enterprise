@@ -731,6 +731,7 @@ Modulos.diagnostico_obd = {
     if (m.op === 'mensaje') {
       if (this._sniff) this._sniff(m.datos);          // observa sin desviar la ruta normal
       if (this._via === 'j1939') this._j39Frame(m.datos);
+      else if (this._via === 'j1708') this._j1587Frame(m.datos);
       else if (this._canRx) this._canFrame(m.datos);
       return;
     }
@@ -804,7 +805,7 @@ Modulos.diagnostico_obd = {
       this._sniff = () => tramas++;
       await new Promise(r => setTimeout(r, 1800));
       this._sniff = null;
-      if (tramas > 0) throw new Error(`Este vehículo habla J1708/J1587: el bus está activo (${tramas} tramas). Es un camión antiguo y NexusPro todavía no decodifica ese protocolo — el adaptador sí lo soporta, falta programarlo.`);
+      if (tramas > 0) { log(`Bus J1708/J1587 activo (${tramas} tramas) — camión antiguo ✓`); return 'j1708'; }
     }
 
     throw new Error('No se detectó ningún bus: ni OBD-II (CAN 500k/250k), ni J1939 (250k/500k), ni J1708. Verificá que el switch esté en contacto y el cable bien puesto en el conector.');
@@ -987,6 +988,114 @@ Modulos.diagnostico_obd = {
     15:'alto — severidad baja', 16:'alto — severidad media', 17:'bajo — severidad baja',
     18:'bajo — severidad media', 19:'error de datos de red', 20:'dato desviado alto',
     21:'dato desviado bajo', 31:'condición presente',
+  },
+
+  /* ═══════════ J1708 / J1587 — camiones antiguos (MID/PID/FMI) ═══════════
+     Es lo que muestra la app de servicio de Navistar en un DT466 de esa época.
+     Trama RP1210: [ts×4][MID][parámetros...]; cada parámetro es PID + datos, y
+     las fallas viajan en el PID 194.
+
+     ADVERTENCIA DE ALCANCE: el formato de trama y el bit exacto de las banderas
+     del PID 194 NO están verificados contra hardware — no hay camión todavía.
+     Por eso se muestra SIEMPRE el MID/PID/FMI numérico, que es lo mismo que
+     muestra la app de Navistar y lo que se busca en el manual, y la
+     interpretación va rotulada como sin verificar. Mandan los números.
+     El FMI se reutiliza de _FMI: los valores 0-14 son iguales en J1587 y J1939. */
+  _J1587_MIDS: {
+    128:'Motor #1', 130:'Transmisión', 136:'Frenos / ABS', 137:'Frenos del remolque',
+    140:'Tablero de instrumentos', 141:'Control de viaje', 142:'Gestión del vehículo',
+    143:'Suspensión', 144:'Control de cabina', 150:'Control de tracción',
+    162:'Navegación', 172:'Aire acondicionado', 178:'Control de puertas',
+    181:'Registrador de datos', 183:'Sistema de combustible', 186:'Compresor de aire',
+    187:'Toma de fuerza', 188:'Control de arranque', 190:'Dirección',
+  },
+  _nombreMID1587(mid) { return this._J1587_MIDS[mid] || `Módulo MID ${mid}`; },
+
+  _j1587Frame(d) {
+    const j = this._j87;
+    if (!j) return;
+    j.total = (j.total || 0) + 1;
+    if (!j.crudo) j.crudo = [];
+    if (j.crudo.length < 6) j.crudo.push(d.slice(0, 24));
+    if (d.length < 6) { j.cortas = (j.cortas || 0) + 1; return; }
+
+    const mid = d[4];                               // tras el timestamp de 4 bytes
+    j.mids[mid] = (j.mids[mid] || 0) + 1;
+
+    const par = d.slice(5);
+    for (let i = 0; i < par.length; i++) {
+      if (par[i] !== 194) continue;                 // PID 194 = códigos de diagnóstico
+      const n = par[i + 1];
+      if (!n || i + 2 + n > par.length) break;
+      const cuerpo = par.slice(i + 2, i + 2 + n);
+      for (let k = 0; k + 1 < cuerpo.length; k += 2) {
+        const id = cuerpo[k], cod = cuerpo[k + 1];
+        const falla = {
+          mid, id, fmi: cod & 0x0F,
+          sid: !!(cod & 0x80),                      // identificador de subsistema en vez de parámetro
+          inactiva: !!(cod & 0x40),
+          crudo: `${id.toString(16).padStart(2,'0')} ${cod.toString(16).padStart(2,'0')}`.toUpperCase(),
+        };
+        const clave = `${falla.mid}-${falla.id}-${falla.fmi}-${falla.sid}`;
+        if (!j.fallas.some(f => `${f.mid}-${f.id}-${f.fmi}-${f.sid}` === clave)) j.fallas.push(falla);
+      }
+      break;
+    }
+  },
+
+  /* Formato del código igual al de la herramienta de fábrica, para poder
+     compararlo de frente contra la app de Navistar. */
+  _codigoJ1587(f) {
+    return `MID ${f.mid} · ${f.sid ? 'SID' : 'PID'} ${f.id} · FMI ${f.fmi}`;
+  },
+
+  async _escanearJ1587(vehId, btn, log) {
+    try {
+      log('Conectando al puente USB local...');
+      await this._puenteConectar();
+      const est = await this._puenteOp({ op:'estado' });
+      log(`Puente USB: <b>${est.dispositivo || 'RP1210'}</b> v${est.version || '?'} ✓`);
+      const c = await this._puenteOp({ op:'conectar', protocolo:'J1708', device:1 });
+      if (!c.ok) throw new Error(`El puente no pudo abrir el J1708: ${c.error || 'código ' + c.codigo}. ¿Está enchufado a la PC?`);
+
+      this._j87 = { mids:{}, fallas:[], total:0 };
+      log('Escuchando el bus J1708 (el camión transmite solo)...');
+      await new Promise(r => setTimeout(r, 4000));
+      const j = this._j87;
+      if (!j.total) throw new Error('Bus J1708 silencioso: no llegó ninguna trama. Verificá el switch en contacto y el cable en los pines A/B del conector de 9 pines.');
+
+      const mids = Object.keys(j.mids).map(Number);
+      log(`${j.total} tramas de ${mids.length} módulo(s): ${mids.map(m => this._nombreMID1587(m)).join(', ')} ✓`);
+
+      /* Siempre se vuelca la trama cruda: es lo que permite confirmar el formato
+         contra la app de Navistar en el mismo camión. */
+      log('<b>Trama cruda tal como llega del adaptador:</b>');
+      for (const t of (j.crudo || [])) log(`&nbsp;&nbsp;<code>${t.map(x => x.toString(16).padStart(2, '0')).join(' ')}</code>`);
+
+      const aFila = f => ({
+        codigo: this._codigoJ1587(f), ecu: f.mid, modulo: this._nombreMID1587(f.mid),
+        desc: `${this._FMI[f.fmi] || 'FMI ' + f.fmi}`, origen: `bytes ${f.crudo}`,
+      });
+      const dtcs = j.fallas.filter(f => !f.inactiva).map(aFila);
+      const pend = j.fallas.filter(f => f.inactiva).map(aFila);
+      log(`${dtcs.length} falla(s) activa(s), ${pend.length} inactiva(s)`);
+      if (!j.fallas.length) log('No se encontró ningún PID 194 en el tráfico — puede que el camión no tenga fallas, o que el formato de trama no sea el asumido');
+
+      this._scan = {
+        vehiculo_id: vehId, vin: null, protocolo: 'J1708/J1587 (camión antiguo · USB)',
+        adaptador: est.dispositivo || 'USB-Link (RP1210)', mil: dtcs.length > 0,
+        dtcs, dtcs_pendientes: pend, datos: {}, freeze_frame: null, monitores: null,
+        modulos: mids.map(m => ({ ecu: m, nombre: this._nombreMID1587(m) })),
+        voltaje: null, nhtsa: null,
+      };
+      log('<b>Escaneo completo ✓</b>');
+      this._renderResultado();
+      const bs = document.getElementById('obd-btn-save'); if (bs) bs.style.display = '';
+      btn.textContent = '↻ Re-escanear';
+    } catch (e) {
+      log(`<span style="color:var(--red)">✗ ${e.message}</span>`);
+      UI.toast(e.message, 'error');
+    } finally { btn.disabled = false; }
   },
 
   _j39Frame(d) {   // lectura RP1210 J1939: [ts×4][pgn×3][prio][origen][destino][datos...]
@@ -1954,6 +2063,7 @@ Modulos.diagnostico_obd = {
           <option value="auto">🔎 USB — detectar solo (recomendado: liviano o camión)</option>
           <option value="ble">📶 Bluetooth — ELM327 / Vgate / OBDLink (BLE)</option>
           <option value="j1939">🚚 USB — forzar camión J1939 (puente RP1210)</option>
+          <option value="j1708">🚛 USB — forzar camión antiguo J1708/J1587 (MID/PID/FMI)</option>
           <option value="usb">🔌 USB — forzar vehículo liviano (puente RP1210)</option>
         </select>
       </div>
@@ -1994,6 +2104,7 @@ Modulos.diagnostico_obd = {
       }
     }
     if (this._via === 'j1939') return this._escanearJ1939(vehId, btn, log);
+    if (this._via === 'j1708') return this._escanearJ1587(vehId, btn, log);
     try {
       let nombre, protocolo;
       if (this._via === 'usb') {
@@ -2177,6 +2288,9 @@ Modulos.diagnostico_obd = {
 
   _modulosHTML(s) {
     if (!s || !s.modulos || !s.modulos.length) return '';
+    /* En J1587 los módulos SON los MID y ahí sí aparecen frenos, tablero y
+       demás; la advertencia de "acá no sale el ABS" sólo vale para OBD-II. */
+    const j87 = /J1587/.test(s.protocolo || '');
     return `<div class="card" style="padding:10px;margin-top:8px">
       <b style="font-size:12px">MÓDULOS DETECTADOS (${s.modulos.length})</b>
       <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:8px;margin-top:6px">
@@ -2189,15 +2303,15 @@ Modulos.diagnostico_obd = {
             : 'responde · sin códigos';
           return `<div style="background:var(--surface2);border-radius:8px;padding:9px 11px;border-left:3px solid var(--${col})">
             <div style="font-size:12.5px;font-weight:600">${m.nombre}</div>
-            <div style="font-size:10px;color:var(--text3);font-family:ui-monospace,Consolas,monospace">${m.ecu ? '0x' + m.ecu.toString(16).toUpperCase() : 'dirección no expuesta'}</div>
+            <div style="font-size:10px;color:var(--text3);font-family:ui-monospace,Consolas,monospace">${m.ecu ? (j87 ? `MID ${m.ecu}` : '0x' + m.ecu.toString(16).toUpperCase()) : 'dirección no expuesta'}</div>
             <div style="font-size:11.5px;margin-top:4px;color:var(--${col});font-weight:600">${estado}</div>
           </div>`;
         }).join('')}
       </div>
       <div style="font-size:10px;color:var(--text3);margin-top:7px;line-height:1.5">
-        Acá sólo aparecen los módulos que la norma OBD-II obliga a responder (motor y, si existe, transmisión).
-        <b>ABS, airbag, dirección eléctrica y clima no salen en esta lista</b>: usan protocolos propios de cada
-        marca. Que no aparezcan no significa que estén fallando.
+        ${j87
+          ? 'Son los módulos que se anunciaron en el bus J1708 durante la escucha. Un módulo que no transmitió en esos segundos no aparece, aunque esté presente.'
+          : 'Acá sólo aparecen los módulos que la norma OBD-II obliga a responder (motor y, si existe, transmisión). <b>ABS, airbag, dirección eléctrica y clima no salen en esta lista</b>: usan protocolos propios de cada marca. Que no aparezcan no significa que estén fallando.'}
       </div>
     </div>`;
   },
@@ -2207,8 +2321,18 @@ Modulos.diagnostico_obd = {
       ...s.dtcs.map(x => ({ ...x, tipo:'Confirmado', color:'red' })),
       ...(s.dtcs_pendientes||[]).map(x => ({ ...x, tipo:'Pendiente', color:'amber' })),
     ];
+    /* J1587 todavía no se contrastó contra un camión: el número manda, el texto
+       acompaña. Se dice en pantalla para que nadie cambie una pieza por una
+       interpretación que aún no se verificó. */
+    const sinVerificar = /J1587/.test(s.protocolo || '')
+      ? `<div style="background:var(--amber-dim);border:1px solid var(--amber-border);border-radius:6px;padding:7px 9px;margin-top:6px;font-size:11px;line-height:1.5">
+          <b>Lectura J1587 sin verificar contra hardware.</b> Los números MID/PID/FMI son los que reporta
+          el camión y son los que valen — contrastalos con la app de servicio de Navistar antes de
+          intervenir. La descripción del FMI es orientativa.
+        </div>` : '';
     return `<div class="card" style="padding:10px;margin-top:8px">
       <b style="font-size:12px">CÓDIGOS DE FALLA (DTC)</b>
+      ${sinVerificar}
       ${filas.length ? `<table class="table" style="margin-top:6px;font-size:12px">
         <thead><tr><th>Código</th><th>Módulo</th><th>Descripción</th><th>Estado</th><th style="text-align:right">Guía</th></tr></thead>
         <tbody>${filas.map(f=>`<tr><td><b style="font-family:monospace">${f.codigo}</b></td><td style="font-size:11px;white-space:nowrap">${f.modulo || this._nombreModulo(f.ecu)}</td><td>${f.desc}${f.origen ? `<div style="font-size:10px;color:var(--text3);margin-top:2px">${f.origen}${f.fuente ? ` · ${f.fuente}` : ''}</div>` : ''}</td><td><span class="badge badge-${f.color}">${f.tipo}</span></td><td style="text-align:right;white-space:nowrap"><button class="btn btn-sm btn-ghost" onclick="Modulos.diagnostico_obd.verGuia('${UI.esc(f.codigo)}')" title="Qué medir antes de cambiar piezas">🔧${this._GUIA[f.codigo] ? '' : '<span style="opacity:.5"> ·</span>'}</button></td></tr>`).join('')}</tbody>
