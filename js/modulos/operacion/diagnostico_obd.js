@@ -991,7 +991,15 @@ Modulos.diagnostico_obd = {
 
   _j39Frame(d) {   // lectura RP1210 J1939: [ts×4][pgn×3][prio][origen][destino][datos...]
     const j = this._j39;
-    if (!j || d.length < 10) return;
+    if (!j) return;
+    /* El formato CAN se verificó contra un vehículo real; este NO (hace falta un
+       camión). Se guardan muestras crudas para que, si no decodifica nada, el
+       log muestre la trama de verdad y se corrija en una sola pasada en vez de
+       ir adivinando offsets. */
+    j.total = (j.total || 0) + 1;
+    if (!j.crudo) j.crudo = [];
+    if (j.crudo.length < 4) j.crudo.push(d.slice(0, 20));
+    if (d.length < 10) { j.cortas = (j.cortas || 0) + 1; return; }
     const pgn = d[4] | (d[5] << 8) | (d[6] << 16), data = d.slice(10);
     j.pgns[pgn] = (j.pgns[pgn] || 0) + 1;
     const defs = this._J39_PGNS[pgn];
@@ -1040,13 +1048,36 @@ Modulos.diagnostico_obd = {
       const c = await this._puenteOp({ op:'conectar', protocolo:`J1939:Baud=${this._j39Baud || 250}`, device:1 });
       if (!c.ok) throw new Error(`El puente no pudo abrir el USB-Link: ${c.error || 'código ' + c.codigo}. ¿Está enchufado a la PC?`);
       this._j39 = { datos:{}, pgns:{}, esperas:{}, dm1:null, dm2:null, vin:null, comp:null };
-      /* Reclamar dirección de herramienta de diagnóstico (0xF9) en el bus */
-      await this._puenteOp({ op:'comando', numero:15, datos:[0xF9, 0, 0, 0x60, 0, 0, 0, 0, 0x80, 0] }).catch(() => {});
+      /* Reclamar la dirección de herramienta de diagnóstico (0xF9) en el bus.
+         El número de comando de RP1210 para esto no está verificado contra este
+         hardware, así que se prueban los dos candidatos y se reporta cuál pasó
+         en vez de fiarse de la memoria del spec. Escuchar DM1 no lo necesita
+         (el camión transmite solo), por eso fallar acá no rompe el escaneo. */
+      let claim = null;
+      for (const num of [19, 15]) {
+        const r = await this._puenteOp({ op:'comando', numero:num, datos:[0xF9, 0, 0, 0x60, 0, 0, 0, 0, 0x80, 0] }).catch(() => null);
+        if (r && r.ok) { claim = num; break; }
+      }
+      log(claim ? `Dirección de diagnóstico reclamada (comando ${claim}) ✓`
+                : 'No se pudo reclamar dirección — se escucha igual (el camión transmite solo)');
       log('Escuchando el bus J1939 (el camión transmite solo)...');
       await new Promise(r => setTimeout(r, 2500));
       const nPGN = Object.keys(this._j39.pgns).length;
-      if (!nPGN) log('<span style="color:var(--amber)">Bus silencioso — ¿switch encendido?</span>');
-      else log(`${nPGN} tipos de mensaje detectados ✓`);
+      const j = this._j39;
+      if (!j.total) log('<span style="color:var(--amber)">Bus silencioso — ¿switch encendido?</span>');
+      else if (!nPGN) log(`<span style="color:var(--amber)">Llegan tramas (${j.total}) pero ninguna se pudo interpretar</span>`);
+      else log(`${nPGN} tipos de mensaje detectados en ${j.total} tramas ✓`);
+
+      /* Si el bus habla pero no se reconoce ni un PGN conocido, casi seguro el
+         offset de la trama RP1210 no es el que asumimos. Se vuelca la trama
+         cruda al log para corregirlo con evidencia en una sola visita al camión
+         en vez de ir probando offsets a ciegas. */
+      const conocidos = Object.keys(j.pgns).filter(p => this._J39_PGNS[p]).length;
+      if (j.total && !conocidos && j.crudo?.length) {
+        log('<b>Diagnóstico — trama cruda tal como llega del adaptador:</b>');
+        for (const t of j.crudo) log(`&nbsp;&nbsp;<code>${t.map(x => x.toString(16).padStart(2, '0')).join(' ')}</code>`);
+        log(`&nbsp;&nbsp;(${j.cortas || 0} tramas más cortas de 10 bytes) — mandale esto a soporte`);
+      }
 
       log('Solicitando VIN e identificación...');
       await this._j39Solicitar(65260); await this._j39Esperar(65260, 1500);
