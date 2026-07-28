@@ -2199,7 +2199,7 @@ Modulos.diagnostico_obd = {
       ${this._monitoresHTML(s.monitores)}
       <div class="card" style="padding:10px;margin-top:8px">
         <b style="font-size:12px">DATOS EN VIVO (${Object.keys(s.datos||{}).length} sensores)</b>
-        <div id="obd-mon-sel" style="margin-top:6px;display:none"></div>
+        <div id="obd-mon-sel" style="margin-top:6px">${this._chipsInicial()}</div>
         <div id="obd-vivo" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:9px;margin-top:6px;font-size:13px">
           ${this._vivoHTML(s.datos||{})}
         </div>
@@ -2355,7 +2355,33 @@ Modulos.diagnostico_obd = {
 
   _sensoresMonitor() {
     if (this._sop && this._sop.length) return this._sop;
-    return this._via === 'j1939' ? Object.keys((this._j39 && this._j39.datos) || {}) : this._BASICOS;
+    if (this._via === 'j1939') return Object.keys((this._j39 && this._j39.datos) || {});
+    /* Al reabrir un escaneo guardado ya no existe _sop, pero sí quedaron los
+       datos que se leyeron: se reconstruye la lista desde ahí. Antes caía a los
+       7 básicos y parecía que el vehículo sólo daba un puñado de sensores. */
+    const leidos = Object.keys((this._scan && this._scan.datos) || {});
+    const desdeDatos = Object.keys(this._PIDS).filter(p => leidos.includes(this._PIDS[p].k));
+    return desdeDatos.length ? desdeDatos : this._BASICOS;
+  },
+
+  /* Deja el selector listo apenas termina el escaneo: antes sólo aparecía al
+     arrancar el monitor, así que parecía que no se podía elegir nada. */
+  _chipsInicial() {
+    if (!this._selMon) {
+      const disp = this._sensoresMonitor().filter(p => this._defSensor(p));
+      const basicos = this._via === 'j1939' ? ['rpm', 'temp', 'vel'] : ['0C', '05', '0D'];
+      this._selMon = disp.filter(p => basicos.includes(p));
+      if (!this._selMon.length) this._selMon = disp.slice(0, 3);
+    }
+    return this._chipsMonitor();
+  },
+
+  _selTodos(todos) {
+    this._selMon = todos ? this._sensoresMonitor().filter(p => this._defSensor(p)) : [];
+    const sel = document.getElementById('obd-mon-sel');
+    if (sel) sel.innerHTML = this._chipsMonitor();
+    const el = document.getElementById('obd-vivo');
+    if (el) el.innerHTML = this._tilesMonitor();
   },
 
   /* Convierte {clave:valor} a [[etiqueta, valor, unidad]] usando el catálogo de PIDs */
@@ -2401,12 +2427,23 @@ Modulos.diagnostico_obd = {
   },
 
   _chipsMonitor() {
-    return this._sensoresMonitor().map(p => {
-      const def = this._defSensor(p), on = this._selMon.includes(p);
-      if (!def) return '';
-      return `<label style="font-size:11px;display:inline-flex;align-items:center;gap:3px;background:var(--surface2);border-radius:12px;padding:3px 8px;cursor:pointer;margin:0 4px 4px 0;opacity:${on?1:.55}">
-        <input type="checkbox" ${on?'checked':''} onchange="Modulos.diagnostico_obd._toggleSel('${p}',this.checked)"> ${def.l}</label>`;
-    }).join('');
+    const disp = this._sensoresMonitor().filter(p => this._defSensor(p));
+    const n = (this._selMon || []).length;
+    /* Los sensores se leen uno por uno (~0.3 s cada uno), así que elegir muchos
+       espacia el refresco. Se dice el número real en vez de dejar que parezca
+       que la app se trabó. */
+    const seg = Math.max(0.2, n * 0.32).toFixed(1);
+    return `<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px">
+        <b style="font-size:11.5px">Sensores a monitorear — ${n} de ${disp.length}</b>
+        <button class="btn btn-sm btn-ghost" onclick="Modulos.diagnostico_obd._selTodos(true)">Todos</button>
+        <button class="btn btn-sm btn-ghost" onclick="Modulos.diagnostico_obd._selTodos(false)">Ninguno</button>
+        <span style="font-size:10.5px;color:var(--text3)">refresco ≈ ${seg} s</span>
+      </div>
+      <div>${disp.map(p => {
+        const def = this._defSensor(p), on = (this._selMon || []).includes(p);
+        return `<label style="font-size:11.5px;display:inline-flex;align-items:center;gap:4px;background:var(--surface2);border:1px solid var(--${on ? 'cyan' : 'border'});border-radius:12px;padding:4px 9px;cursor:pointer;margin:0 5px 5px 0;opacity:${on ? 1 : .7}">
+          <input type="checkbox" ${on ? 'checked' : ''} onchange="Modulos.diagnostico_obd._toggleSel('${p}',this.checked)"> ${def.l}</label>`;
+      }).join('')}</div>`;
   },
 
   _toggleSel(pid, on) {
@@ -2448,15 +2485,11 @@ Modulos.diagnostico_obd = {
   async toggleLive() {
     if (this._liveTimer) { this._stopLive(); return; }
     if (!this._listo) { UI.toast('Adaptador desconectado — vuelve a escanear', 'error'); return; }
-    const disp = this._sensoresMonitor();
-    const basicos = this._via === 'j1939' ? ['rpm','temp','vel'] : ['0C','05','0D'];
-    if (!this._selMon) this._selMon = disp.filter(p => basicos.includes(p));
-    if (!this._selMon.length) this._selMon = disp.slice(0, 3);
     this._hist = {};
     const btn = document.getElementById('obd-btn-live'); if (btn) btn.textContent = '⏸ Detener';
     const rec = document.getElementById('obd-btn-rec');  if (rec) rec.style.display = '';
     const sel = document.getElementById('obd-mon-sel');
-    if (sel) { sel.style.display = ''; sel.innerHTML = this._chipsMonitor(); }
+    if (sel) { sel.style.display = ''; sel.innerHTML = this._chipsInicial(); }
     const tick = async () => {
       if (!this._liveTimer) return;
       if (!this._listo) { this._stopLive(); return; }
