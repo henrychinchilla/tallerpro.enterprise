@@ -306,11 +306,18 @@ const DB = {
 
   /* ── DIAGNÓSTICO OBD-II ───────────────────────── */
   async getDiagnosticosOBD(ini, fin) {
-    const { data } = await getSB().from('diagnosticos_obd')
+    const { data, error } = await getSB().from('diagnosticos_obd')
       .select('*, vehiculos(placa,marca,modelo,anio,clientes(nombre))')
       .eq('tenant_id', getTID())
       .gte('created_at', ini).lte('created_at', fin + 'T23:59:59')
       .order('created_at', { ascending:false });
+    /* Descartar el error hacía que un fallo de permisos se viera EXACTAMENTE
+       igual que "no hay escaneos": el módulo estuvo roto sin que nadie se
+       enterara. Si falla la consulta, que se note. */
+    if (error) {
+      console.error('getDiagnosticosOBD:', error);
+      if (typeof UI !== 'undefined' && UI.toast) UI.toast('No se pudieron cargar los escaneos: ' + error.message, 'error');
+    }
     return data || [];
   },
 
