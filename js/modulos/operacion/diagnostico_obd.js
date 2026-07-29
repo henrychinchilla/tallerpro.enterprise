@@ -1976,6 +1976,14 @@ Modulos.diagnostico_obd = {
 
       this._sop = Object.keys(this._j39.datos).filter(k => typeof this._j39.datos[k] === 'number');
       log(`${this._sop.length} sensores del motor en el bus ✓`);
+
+      /* Mismo criterio que en OBD-II: si el bus no dijo NADA, no se puede
+         afirmar que el camión esté sano. */
+      if (!j.total && !Object.keys(this._j39.claim).length) {
+        throw new Error(
+          'SIN COMUNICACIÓN CON EL BUS J1939 — no llegó ninguna trama, así que NO se puede afirmar que el camión no tenga fallas. ' +
+          'Revisá el cable en el conector, el switch en contacto y que el adaptador esté alimentado por los 12 V del vehículo.');
+      }
       /* La lista definitiva junta a los que se identificaron (Address Claim) con
          los que se oyeron difundiendo: un módulo puede aparecer por cualquiera
          de las dos vías y ninguna sola alcanza. */
@@ -3079,6 +3087,22 @@ Modulos.diagnostico_obd = {
       const codPend = await this._leerDTCs('07');
       log(`${codConf.length} confirmado(s), ${codPend.length} pendiente(s)`);
 
+      /* ¿El vehículo contestó ALGO? Sin esta verificación, un cable flojo, un
+         switch apagado o un adaptador que no llega al bus daban exactamente el
+         mismo resultado que un vehículo sano: cero códigos, y el reporte salía
+         en verde "Sin códigos de falla". Un vehículo con fallas reales podía
+         declararse sano, que es la peor manera de fallar que tiene esto.
+         Se exige evidencia positiva de comunicación: módulos que respondieron,
+         VIN, códigos, o el estado del Check Engine. */
+      const hubo = !!(modulos && modulos.length) || !!vin || codConf.length || codPend.length || mil;
+      if (!hubo) {
+        throw new Error(
+          'SIN COMUNICACIÓN CON EL VEHÍCULO — no se leyó nada, así que NO se puede afirmar que no tenga fallas. ' +
+          'Revisá: el cable bien puesto en el conector de diagnóstico, el switch en contacto, y que el adaptador ' +
+          'sea compatible con este vehículo (un adaptador de camión necesita cable OBD-II de 16 pines para un liviano). ' +
+          'Usá el botón "Probar adaptador" para ver qué protocolo responde.');
+      }
+
       let freeze = null;
       if (codConf.length || mil) {
         log('Leyendo freeze frame (datos al momento de la falla)...');
@@ -3327,8 +3351,20 @@ Modulos.diagnostico_obd = {
       ${filas.length ? `<table class="table" style="margin-top:6px;font-size:12px">
         <thead><tr><th>Código</th><th>Módulo</th><th>Descripción</th><th>Estado</th><th style="text-align:right">Guía</th></tr></thead>
         <tbody>${filas.map(f=>`<tr><td><b style="font-family:monospace">${f.codigo}</b></td><td style="font-size:11px;white-space:nowrap">${f.modulo || this._nombreModulo(f.ecu)}</td><td>${f.desc}${f.origen ? `<div style="font-size:10px;color:var(--text3);margin-top:2px">${f.origen}${f.fuente ? ` · ${f.fuente}` : ''}</div>` : ''}</td><td><span class="badge badge-${f.color}">${f.tipo}</span></td><td style="text-align:right;white-space:nowrap"><button class="btn btn-sm btn-ghost" onclick="Modulos.diagnostico_obd.verGuia('${UI.esc(f.codigo)}')" title="Qué medir antes de cambiar piezas">🔧${this._GUIA[f.codigo] ? '' : '<span style="opacity:.5"> ·</span>'}</button></td></tr>`).join('')}</tbody>
-      </table>` : '<p style="color:var(--green);margin:6px 0 0">✅ Sin códigos de falla</p>'}
+      </table>` : this._sinCodigosHTML(s)}
     </div>`;
+  },
+
+  /* "Sin códigos" en verde solo si el vehículo REALMENTE contestó. Si no hubo
+     evidencia de comunicación, decirlo en rojo: un escaneo que no llegó al bus
+     no prueba que el vehículo esté sano, y el verde invita a devolverlo así. */
+  _sinCodigosHTML(s) {
+    const hablo = !!(s && ((s.modulos && s.modulos.length) || s.vin || s.mil ||
+                           (s.datos && Object.keys(s.datos).length) || s.readiness));
+    if (hablo) return '<p style="color:var(--green);margin:6px 0 0">✅ Sin códigos de falla</p>';
+    return '<p style="color:var(--red);margin:6px 0 0"><b>⚠️ Sin comunicación con el vehículo.</b><br>' +
+           '<span style="font-size:11.5px">No se leyó ningún dato, así que esto <b>no significa</b> que no tenga fallas. ' +
+           'Revisá el cable, el switch en contacto y el adaptador, y volvé a escanear.</span></p>';
   },
 
   /* ── Voltaje de batería ──────────────────────────────────────────────────
