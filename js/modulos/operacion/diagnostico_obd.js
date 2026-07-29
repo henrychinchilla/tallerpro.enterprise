@@ -766,6 +766,11 @@ Modulos.diagnostico_obd = {
      sensores eso convertía el escaneo en minutos de espera. Se responden en
      orden porque el puente atiende las operaciones de a una. */
   _puenteOp(obj, timeout = 8000) {
+    /* El adaptador elegido se inyecta acá y no en cada llamada: 'conectar' se
+       invoca desde ocho lugares (autodetección, J1939, J1587, liviano…) y
+       olvidarlo en uno solo haría que ese camino siguiera usando el de
+       siempre, con un síntoma dificilísimo de rastrear. */
+    if (obj && obj.op === 'conectar' && this._api && !obj.api) obj = Object.assign({}, obj, { api: this._api });
     return new Promise((res, rej) => {
       if (!this._ws || this._ws.readyState !== 1) { rej(new Error('Puente USB desconectado')); return; }
       const cola = (this._wsPend[obj.op] = this._wsPend[obj.op] || []);
@@ -778,6 +783,18 @@ Modulos.diagnostico_obd = {
     });
   },
 
+  /* Estado del puente, asegurando primero que tenga cargado el adaptador
+     elegido. Si se pidiera el estado antes de cargarlo, el log mostraría el
+     adaptador anterior y daría la impresión de que el selector no hace nada. */
+  async _puenteEstado() {
+    if (this._api) {
+      const c = await this._puenteOp({ op:'cargar', api: this._api }, 6000).catch(() => null);
+      if (c && c.ok === false)
+        throw new Error(`No se pudo usar ese adaptador: ${c.error || 'error desconocido'}`);
+    }
+    return this._puenteOp({ op:'estado' });
+  },
+
   /* Un camión con conector OBD-II de 16 pines puede hablar OBD-II a 500k o
      J1939 a 250k por los mismos pines. Se prueba en vez de hacer adivinar:
      primero OBD-II (contesta a una petición), después J1939 (el camión
@@ -786,15 +803,17 @@ Modulos.diagnostico_obd = {
 
   async _detectarVia(log) {
     await this._puenteConectar();
-    const est = await this._puenteOp({ op:'estado' });
+    const est = await this._puenteEstado();
     log(`Puente USB: <b>${est.dispositivo || 'RP1210'}</b> v${est.version || '?'} ✓`);
 
     /* En un taller con los software de fábrica instalados (Cummins, CAT,
-       Navistar, Detroit…) hay varios adaptadores RP1210 registrados. Saber
-       cuáles hay dice con qué hardware más podría hablar NexusPro. */
+       Navistar, Detroit…) hay varios adaptadores RP1210 registrados. Se avisa
+       que hay más para que, si este no responde, se sepa que hay con qué
+       reintentar desde el selector en vez de dar el escaneo por perdido. */
     const inst = await this._puenteOp({ op:'apis' }, 4000).catch(() => null);
-    if (inst?.ok && inst.apis?.length > 1)
-      log(`Adaptadores RP1210 en esta PC: ${inst.apis.map(a => a.nombre || a.api).join(' · ')}`);
+    const otros = ((inst && inst.apis) || []).filter(a => a.instalado && !a.cargada);
+    if (otros.length)
+      log(`Hay ${otros.length} adaptador(es) más en esta PC: ${otros.map(a => a.nombre || a.api).join(' · ')}`);
 
     for (const baud of [500, 250]) {
       const c = await this._puenteOp({ op:'conectar', protocolo:`CAN:Baud=${baud}`, device:1 }).catch(() => ({ ok:false }));
@@ -841,7 +860,7 @@ Modulos.diagnostico_obd = {
   /* ── Vehículos livianos por USB: OBD-II sobre CAN crudo con ISO-TP propio ── */
   async _usbInit(log) {
     await this._puenteConectar();
-    const est = await this._puenteOp({ op:'estado' });
+    const est = await this._puenteEstado();
     log(`Puente USB: <b>${est.dispositivo || 'RP1210'}</b> v${est.version || '?'} ✓`);
     const c = await this._puenteOp({ op:'conectar', protocolo:`CAN:Baud=${this._canBaud}`, device:1 });
     if (!c.ok) throw new Error(`El puente no pudo abrir el USB-Link: ${c.error || 'código ' + c.codigo}. ¿Está enchufado a la PC?`);
@@ -1168,7 +1187,7 @@ Modulos.diagnostico_obd = {
     try {
       log('Conectando al puente USB local...');
       await this._puenteConectar();
-      const est = await this._puenteOp({ op:'estado' });
+      const est = await this._puenteEstado();
       log(`Puente USB: <b>${est.dispositivo || 'RP1210'}</b> v${est.version || '?'} ✓`);
       const c = await this._puenteOp({ op:'conectar', protocolo:'J1708', device:1 });
       if (!c.ok) throw new Error(`El puente no pudo abrir el J1708: ${c.error || 'código ' + c.codigo}. ¿Está enchufado a la PC?`);
@@ -1286,7 +1305,7 @@ Modulos.diagnostico_obd = {
     try {
       log('Conectando al puente USB local...');
       await this._puenteConectar();
-      const est = await this._puenteOp({ op:'estado' });
+      const est = await this._puenteEstado();
       log(`Puente USB: <b>${est.dispositivo || 'RP1210'}</b> v${est.version || '?'} ✓`);
       const c = await this._puenteOp({ op:'conectar', protocolo:`J1939:Baud=${this._j39Baud || 250}`, device:1 });
       if (!c.ok) throw new Error(`El puente no pudo abrir el USB-Link: ${c.error || 'código ' + c.codigo}. ¿Está enchufado a la PC?`);
@@ -2193,13 +2212,22 @@ Modulos.diagnostico_obd = {
       </div>
       <div class="form-group">
         <label class="form-label">Conexión</label>
-        <select class="form-select" id="obd-via">
+        <select class="form-select" id="obd-via" onchange="Modulos.diagnostico_obd._verApis()">
           <option value="auto">🔎 USB — detectar solo (recomendado: liviano o camión)</option>
           <option value="ble">📶 Bluetooth — ELM327 / Vgate / OBDLink (BLE)</option>
           <option value="j1939">🚚 USB — forzar camión J1939 (puente RP1210)</option>
           <option value="j1708">🚛 USB — forzar camión antiguo J1708/J1587 (MID/PID/FMI)</option>
           <option value="usb">🔌 USB — forzar vehículo liviano (puente RP1210)</option>
         </select>
+      </div>
+      <div class="form-group" id="obd-api-wrap">
+        <label class="form-label">Adaptador USB</label>
+        <select class="form-select" id="obd-api">
+          <option value="">Buscando adaptadores…</option>
+        </select>
+        <div style="font-size:11px;color:var(--text3);margin-top:4px">
+          Un taller con software de fábrica (Cummins, Navistar, Allison…) tiene varios adaptadores RP1210 registrados. Si el de siempre no responde, probá con otro.
+        </div>
       </div>
       <div id="obd-log" style="background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:10px 12px;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12.5px;line-height:1.8;min-height:70px;max-height:220px;overflow:auto;margin:10px 0">
         Conecta el adaptador al puerto de diagnóstico del vehículo y enciende el switch.<br>
@@ -2213,6 +2241,49 @@ Modulos.diagnostico_obd = {
         <button class="btn btn-brand" id="obd-btn-scan" onclick="Modulos.diagnostico_obd.escanear()">🔌 Conectar y Escanear</button>
         <button class="btn btn-cyan" id="obd-btn-save" style="display:none" onclick="Modulos.diagnostico_obd.guardarEscaneo()">💾 Guardar</button>
       </div>`, '640px');
+
+    /* Se puebla después de pintar el modal: hablar con el puente tarda y no
+       vale la pena demorar la apertura por algo que solo aplica al USB. */
+    this._api = null;
+    this._verApis();
+    this._cargarApis();
+  },
+
+  /* ── Elección de adaptador RP1210 ────────────────────────────────────────
+     El puente carga la API en caliente, así que se puede usar cualquiera de las
+     registradas en RP121032.INI (NEXIQ, DPA5, VXDIAG…). Sin esto quedaba atado
+     al NEXIQ aunque la PC tuviera otros. */
+  _api: null,
+
+  /* Oculta el selector en Bluetooth, donde no aplica */
+  _verApis() {
+    const via = document.getElementById('obd-via')?.value;
+    const wrap = document.getElementById('obd-api-wrap');
+    if (wrap) wrap.style.display = via === 'ble' ? 'none' : '';
+  },
+
+  async _cargarApis() {
+    const poner = html => { const s = document.getElementById('obd-api'); if (s) s.innerHTML = html; };
+    try {
+      await this._puenteConectar();
+      const r = await this._puenteOp({ op:'apis' }, 4000);
+      /* Sin .INI no hay drivers de ese adaptador: mostrarlo solo confundiría */
+      const apis = ((r && r.apis) || []).filter(a => a.instalado);
+      if (!apis.length) { poner('<option value="">No hay ningún adaptador RP1210 instalado</option>'); return; }
+      poner(apis.map(a => {
+        /* Los protocolos dicen de un vistazo si ese adaptador sirve para el
+           camión que se tiene enfrente (J1708 para los viejos, J1939 para los
+           nuevos). Es la información que hace útil al selector. */
+        const protos = (a.protocolos || []).map(p => String(p).split(',')[0]);
+        const clave = protos.filter(p => /^(J1939|J1708|OBDII|CAN|ISO15765|J1850)$/i.test(p));
+        const resumen = clave.length ? ` — ${clave.slice(0, 4).join(', ')}` : '';
+        return `<option value="${UI.esc(a.api)}"${a.cargada ? ' selected' : ''}>${UI.esc(a.nombre || a.api)}${UI.esc(resumen)}</option>`;
+      }).join(''));
+      this._api = document.getElementById('obd-api')?.value || null;
+    } catch (_) {
+      /* Que no haya puente no es un error acá: se puede escanear por Bluetooth */
+      poner('<option value="">Puente USB no disponible — solo Bluetooth</option>');
+    }
   },
 
   _log(msg) {
@@ -2227,6 +2298,7 @@ Modulos.diagnostico_obd = {
     const vehId = document.getElementById('obd-veh')?.value;
     if (!vehId) { UI.toast('Selecciona el vehículo a escanear', 'error'); return; }
     this._via = document.getElementById('obd-via')?.value || 'ble';
+    this._api = (this._via !== 'ble' && document.getElementById('obd-api')?.value) || null;
     const btn = document.getElementById('obd-btn-scan');
     btn.disabled = true;
     const log = m => this._log(m);
