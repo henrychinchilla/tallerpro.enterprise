@@ -396,6 +396,100 @@ Modulos.diagnostico_obd = {
     return { avisos: av, origen: info, norma, calib };
   },
 
+  /* ── Comparación contra los iguales del taller ───────────────────────────
+     Los monitores dicen si le falta algo que la NORMA exige — eso es
+     concluyente solo. Pero para "a este le reprogramaron la computadora" o
+     "a este le falta un módulo que sus hermanos sí traen" hace falta un
+     baseline, y comprarle la lista de equipamiento a un proveedor no es una
+     opción. La salida es comparar contra los MISMOS modelos que ya pasaron por
+     el taller: eso es data propia y mejora sola con el uso.
+
+     Es evidencia de mayoría, no prueba: por eso pide un mínimo de vehículos
+     antes de afirmar nada, y dice sobre cuántos se apoya. */
+  _MIN_IGUALES: 3,
+
+  async _compararConIguales({ vehId, calib, readiness, modulos }) {
+    try {
+      const v = (this._vehiculos || []).find(x => x.id === vehId);
+      if (!v || !v.marca || !v.modelo) return null;
+
+      const previos = (await DB.getDiagnosticosPorModelo(v.marca, v.modelo, v.anio))
+        .filter(d => d.vehiculo_id !== vehId);          // otros vehículos, no este
+      /* Un vehículo puede tener varios escaneos: vale UNO por vehículo, si no
+         el que más veces entró al taller decide por todos. */
+      const porVeh = {};
+      for (const d of previos) if (!porVeh[d.vehiculo_id]) porVeh[d.vehiculo_id] = d;
+      const iguales = Object.values(porVeh);
+
+      const res = { marca:v.marca, modelo:v.modelo, anio:v.anio, n: iguales.length, avisos: [] };
+      if (iguales.length < this._MIN_IGUALES) {
+        res.insuficiente = true;
+        return res;
+      }
+
+      /* CVN: la firma del software. Si la mayoría comparte una y este trae otra,
+         a este le tocaron la calibración. */
+      const cvn = calib && calib.cvn;
+      if (cvn) {
+        const cuenta = {};
+        for (const d of iguales) {
+          const c = d.calibracion && d.calibracion.cvn;
+          if (c) cuenta[c] = (cuenta[c] || 0) + 1;
+        }
+        const total = Object.values(cuenta).reduce((a, b) => a + b, 0);
+        const dominante = Object.keys(cuenta).sort((a, b) => cuenta[b] - cuenta[a])[0];
+        if (dominante && total >= this._MIN_IGUALES && dominante !== cvn && cuenta[dominante] >= Math.ceil(total * 0.6)) {
+          res.avisos.push({ nivel:'alto',
+            txt:`<b>La calibración del ECU no coincide con la de sus iguales.</b> ${cuenta[dominante]} de ${total} ${v.marca} ${v.modelo} del taller traen <code>${UI.esc(dominante)}</code> y este trae <code>${UI.esc(cvn)}</code>. Señal de computadora reprogramada.` });
+        }
+      }
+
+      /* Monitores que los iguales declaran y este no: sistema eliminado. */
+      if (readiness && readiness.monitores) {
+        const mios = new Set(readiness.monitores.filter(m => m.soportado).map(m => m.nombre));
+        const cuenta = {};
+        let conLectura = 0;
+        for (const d of iguales) {
+          const r = d.readiness;
+          if (!r || !r.monitores) continue;
+          conLectura++;
+          for (const m of r.monitores) if (m.soportado) cuenta[m.nombre] = (cuenta[m.nombre] || 0) + 1;
+        }
+        if (conLectura >= this._MIN_IGUALES) {
+          for (const nombre of Object.keys(cuenta)) {
+            if (mios.has(nombre)) continue;
+            if (cuenta[nombre] < Math.ceil(conLectura * 0.7)) continue;   // que sea la norma del modelo
+            res.avisos.push({ nivel:'alto',
+              txt:`<b>No declara el monitor de ${UI.esc(nombre)}</b>, que ${cuenta[nombre]} de ${conLectura} ${v.marca} ${v.modelo} del taller sí declaran. Señal de sistema eliminado.` });
+          }
+        }
+      }
+
+      /* Módulos que los iguales tienen y este no responde. Acá está la
+         diferencia entre "no lo trae" y "lo trae y está muerto". */
+      const mios = new Set((modulos || []).map(m => String(m.nombre || m.ecu)));
+      const cuenta = {};
+      let conModulos = 0;
+      for (const d of iguales) {
+        if (!Array.isArray(d.modulos) || !d.modulos.length) continue;
+        conModulos++;
+        for (const m of d.modulos) {
+          const k = String(m.nombre || m.ecu);
+          cuenta[k] = (cuenta[k] || 0) + 1;
+        }
+      }
+      if (conModulos >= this._MIN_IGUALES) {
+        for (const k of Object.keys(cuenta)) {
+          if (mios.has(k)) continue;
+          if (cuenta[k] < Math.ceil(conModulos * 0.7)) continue;
+          res.avisos.push({ nivel:'medio',
+            txt:`<b>${UI.esc(k)} no respondió</b>, y ${cuenta[k]} de ${conModulos} ${v.marca} ${v.modelo} del taller sí lo tienen. Puede estar dañado, desconectado o sin alimentación — verificar antes de darlo por ausente.` });
+        }
+      }
+      return res;
+    } catch (e) { console.warn('_compararConIguales:', e.message); return null; }
+  },
+
   /* Lee un PID modo 01 y devuelve los bytes de datos */
   async _pid(pid, timeout = 4000) {
     const hex = this._hexLines(await this._cmd('01' + pid, timeout)).join('');
@@ -3010,6 +3104,20 @@ Modulos.diagnostico_obd = {
         log(`<span style="color:${col}">${a.nivel === 'alto' ? '⛔' : a.nivel === 'medio' ? '⚠️' : 'ℹ️'} ${a.txt}</span>`);
       }
 
+      /* Contra los mismos modelos que ya pasaron por el taller: es lo que
+         permite pasar de "le falta lo que exige la norma" a "le falta lo que
+         sus iguales sí traen". */
+      log('Comparando contra vehículos iguales del taller...');
+      const iguales = await this._compararConIguales({ vehId, calib, readiness, modulos });
+      if (!iguales) log('&nbsp;&nbsp;<span style="color:var(--text3)">Sin datos de marca/modelo para comparar</span>');
+      else if (iguales.insuficiente)
+        log(`&nbsp;&nbsp;<span style="color:var(--text3)">Solo ${iguales.n} ${iguales.marca} ${iguales.modelo} en el historial (hacen falta ${this._MIN_IGUALES}). Escaneá más de este modelo y la comparación empieza a servir.</span>`);
+      else if (!iguales.avisos.length)
+        log(`&nbsp;&nbsp;<span style="color:var(--green)">Coincide con los ${iguales.n} ${iguales.marca} ${iguales.modelo} del taller ✓</span>`);
+      else for (const a of iguales.avisos)
+        log(`<span style="color:${a.nivel === 'alto' ? 'var(--red)' : 'var(--amber)'}">${a.nivel === 'alto' ? '⛔' : '⚠️'} ${a.txt}</span>`);
+      if (iguales && iguales.avisos) equipo.iguales = iguales;
+
       let nhtsa = null;
       if (vin) {
         log('Consultando VIN en base de datos NHTSA...');
@@ -3226,7 +3334,26 @@ Modulos.diagnostico_obd = {
         const ic = a.nivel === 'alto' ? '⛔' : a.nivel === 'medio' ? '⚠️' : 'ℹ️';
         return `<div style="font-size:11.5px;color:${col};margin-top:3px">${ic} ${a.txt}</div>`;
       }).join('')}</div>` : ''}
+      ${this._igualesHTML(e && e.iguales)}
     </div>`;
+  },
+
+  /* Comparación contra los mismos modelos del taller. Se dice SIEMPRE sobre
+     cuántos vehículos se apoya: sin ese número, "no coincide con sus iguales"
+     puede significar tanto "contra 30 vehículos" como "contra uno". */
+  _igualesHTML(g) {
+    if (!g) return '';
+    const cab = `<div style="font-size:11px;color:var(--text3);margin-top:8px;border-top:1px solid var(--border);padding-top:6px">` +
+                `Comparado contra ${g.n} ${UI.esc(g.marca)} ${UI.esc(g.modelo)}${g.anio ? ' ' + g.anio : ''} del taller</div>`;
+    if (g.insuficiente)
+      return `<div style="font-size:11px;color:var(--text3);margin-top:8px;border-top:1px solid var(--border);padding-top:6px">` +
+             `Solo ${g.n} ${UI.esc(g.marca)} ${UI.esc(g.modelo)} en el historial: hacen falta ${this._MIN_IGUALES} para comparar. ` +
+             `Escaneá más de este modelo — sobre todo los que estén sanos — y esta sección empieza a servir.</div>`;
+    if (!g.avisos || !g.avisos.length)
+      return cab + `<div style="font-size:11.5px;color:var(--green)">✓ Coincide con sus iguales</div>`;
+    return cab + g.avisos.map(a =>
+      `<div style="font-size:11.5px;color:${a.nivel === 'alto' ? 'var(--red)' : 'var(--amber)'};margin-top:3px">` +
+      `${a.nivel === 'alto' ? '⛔' : '⚠️'} ${a.txt}</div>`).join('');
   },
 
   /* Mapa clave→[etiqueta, unidad] de todos los sensores */
@@ -3475,11 +3602,32 @@ Modulos.diagnostico_obd = {
     } catch (e) { UI.toast('No se pudo borrar: ' + e.message, 'error'); }
   },
 
+  /* Campos que dependen de una migración posterior a la tabla original. El
+     código se despliega antes que la migración (son dos pasos distintos), así
+     que un escaneo no puede perderse solo porque la columna todavía no exista.*/
+  _CAMPOS_NUEVOS: ['permanentes', 'readiness', 'norma_obd', 'calibracion', 'equipamiento'],
+
   async guardarEscaneo() {
     if (!this._scan) return;
     this._stopLive();
     const { nhtsa, ...fila } = this._scan;   // nhtsa no se persiste (se aplica a la ficha del vehículo)
-    const { error } = await DB.upsertDiagnosticoOBD(fila);
+    let { error } = await DB.upsertDiagnosticoOBD(fila);
+
+    /* PGRST204 = la tabla no tiene esa columna. Se reintenta sin los campos
+       nuevos: es preferible guardar el escaneo sin el análisis de equipamiento
+       que perder el trabajo entero y que el mecánico tenga que rescanear. */
+    if (error && /PGRST204|column|no existe|does not exist/i.test(error.message || '')) {
+      const base = { ...fila };
+      for (const c of this._CAMPOS_NUEVOS) delete base[c];
+      const r2 = await DB.upsertDiagnosticoOBD(base);
+      if (!r2.error) {
+        UI.toast('Escaneo guardado, sin el análisis de equipamiento (falta aplicar la migración 095)', 'warn');
+        this._cerrarEscaneo();
+        this.render();
+        return;
+      }
+      error = r2.error;
+    }
     if (error) { UI.toast('Error al guardar: ' + error.message, 'error'); return; }
     UI.toast('Escaneo guardado ✓');
     this._cerrarEscaneo();

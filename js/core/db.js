@@ -354,6 +354,27 @@ const DB = {
     return map;
   },
 
+  /* Escaneos de vehículos del MISMO modelo, para comparar uno contra sus
+     iguales. Sin filtro de fecha a propósito: el valor está justamente en los
+     escaneos viejos, y son pocos por modelo.
+     Si la consulta falla (p. ej. faltan las columnas de la migración 095) se
+     devuelve vacío: la comparación es un extra, no puede tumbar el escaneo. */
+  async getDiagnosticosPorModelo(marca, modelo, anio) {
+    try {
+      let q = getSB().from('diagnosticos_obd')
+        .select('id,created_at,vehiculo_id,calibracion,readiness,modulos,vehiculos!inner(marca,modelo,anio)')
+        .eq('tenant_id', getTID())
+        .eq('vehiculos.marca', marca)
+        .eq('vehiculos.modelo', modelo)
+        .order('created_at', { ascending:false })
+        .limit(60);
+      if (anio) q = q.eq('vehiculos.anio', anio);
+      const { data, error } = await q;
+      if (error) { console.warn('getDiagnosticosPorModelo:', error.message); return []; }
+      return data || [];
+    } catch (e) { console.warn('getDiagnosticosPorModelo:', e.message); return []; }
+  },
+
   async upsertDiagnosticoOBD(fields) {
     const payload = { ...fields, tenant_id: getTID() };
     if (fields.id) {
