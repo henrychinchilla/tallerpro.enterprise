@@ -795,6 +795,59 @@ Modulos.diagnostico_obd = {
     return this._puenteOp({ op:'estado' });
   },
 
+  /* ── Escucha adaptativa del bus ──────────────────────────────────────────
+     Los buses de difusión (J1939, J1587) no se consultan: los módulos hablan
+     cuando quieren. Esperar un plazo fijo falla de las dos maneras — se queda
+     corto con un camión que tarda en arrancar a hablar (se pierde justo el
+     módulo que interesa) y desperdicia segundos con uno que ya dijo todo.
+
+     Acá se escucha mientras SIGA APARECIENDO algo nuevo: un módulo que no había
+     hablado, un parámetro que no se había visto, una falla nueva. Cuando pasan
+     `quieto` ms sin novedad, se corta. `min` evita cortar en el primer respiro y
+     `max` es el tope duro para no colgar la pantalla.
+
+     `huella` devuelve un valor que cambia cuando entró información nueva. */
+  async _escucharBus(huella, opts = {}) {
+    const min = opts.min || 1500, max = opts.max || 12000, quieto = opts.quieto || 2000;
+    const paso = 200;
+    const t0 = Date.now();
+    let previa = huella(), ultimoCambio = t0, avisos = 0;
+    for (;;) {
+      await new Promise(r => setTimeout(r, paso));
+      const ahora = Date.now();
+      const h = huella();
+      if (h !== previa) {
+        previa = h; ultimoCambio = ahora;
+        /* Un avance visible cada ~2 s: en un bus lento, sin esto la pantalla
+           parece congelada y el mecánico desconecta creyendo que falló. */
+        if (opts.log && ahora - t0 > (avisos + 1) * 2000) { avisos++; opts.log(); }
+      }
+      const t = ahora - t0;
+      if (t >= max) return { ms: t, motivo: 'tope' };
+      if (t >= min && ahora - ultimoCambio >= quieto) return { ms: t, motivo: 'estable' };
+    }
+  },
+
+  /* Sale apenas hay tráfico: para decidir QUÉ bus es, la primera trama alcanza.
+     Antes se esperaba el plazo completo aunque el camión ya hubiera contestado,
+     y con tres protocolos a probar eso eran varios segundos regalados. */
+  async _hayTrafico(maxMs = 2200) {
+    let tramas = 0;
+    this._sniff = () => tramas++;
+    const t0 = Date.now();
+    try {
+      while (Date.now() - t0 < maxMs) {
+        await new Promise(r => setTimeout(r, 100));
+        if (tramas > 0) {
+          /* Un respiro para no reportar 1 trama suelta como si fuera el bus */
+          await new Promise(r => setTimeout(r, 400));
+          break;
+        }
+      }
+    } finally { this._sniff = null; }
+    return tramas;
+  },
+
   /* Un camión con conector OBD-II de 16 pines puede hablar OBD-II a 500k o
      J1939 a 250k por los mismos pines. Se prueba en vez de hacer adivinar:
      primero OBD-II (contesta a una petición), después J1939 (el camión
@@ -834,10 +887,7 @@ Modulos.diagnostico_obd = {
       log(`Escuchando bus J1939 a ${baud}k...`);
       const c = await this._puenteOp({ op:'conectar', protocolo:`J1939:Baud=${baud}`, device:1 }).catch(() => ({ ok:false }));
       if (!c.ok) continue;
-      let tramas = 0;
-      this._sniff = () => tramas++;
-      await new Promise(r => setTimeout(r, 1800));
-      this._sniff = null;
+      const tramas = await this._hayTrafico();
       if (tramas > 0) { this._j39Baud = baud; log(`Bus J1939 activo a ${baud}k (${tramas} tramas) ✓`); return 'j1939'; }
     }
 
@@ -847,10 +897,7 @@ Modulos.diagnostico_obd = {
     log('Escuchando bus J1708 (camión antiguo)...');
     const c8 = await this._puenteOp({ op:'conectar', protocolo:'J1708', device:1 }).catch(() => ({ ok:false }));
     if (c8.ok) {
-      let tramas = 0;
-      this._sniff = () => tramas++;
-      await new Promise(r => setTimeout(r, 1800));
-      this._sniff = null;
+      const tramas = await this._hayTrafico();
       if (tramas > 0) { log(`Bus J1708/J1587 activo (${tramas} tramas) — camión antiguo ✓`); return 'j1708'; }
     }
 
@@ -1194,8 +1241,24 @@ Modulos.diagnostico_obd = {
 
       this._j87 = { mids:{}, fallas:[], total:0, datos:{}, crudoPid:{}, vistos:{} };
       log('Escuchando el bus J1708 (el camión transmite solo)...');
-      await new Promise(r => setTimeout(r, 4000));
       const j = this._j87;
+      /* Módulos + parámetros + fallas: mientras aparezca algo que no estaba,
+         se sigue escuchando. En un DT466 con varios módulos, el tablero y los
+         frenos pueden tardar en entrar. */
+      const esc = await this._escucharBus(
+        () => `${Object.keys(j.mids).length}|${Object.keys(j.datos).length}|${j.fallas.length}`,
+        { min:2000, max:14000, quieto:2500,
+          log: () => log(`&nbsp;&nbsp;<span style="color:var(--text3)">…${Object.keys(j.mids).length} módulo(s), ${Object.keys(j.datos).length} parámetro(s), ${j.fallas.length} falla(s)</span>`) });
+      log(`Escucha ${esc.motivo === 'tope' ? 'cortada por tiempo' : 'completa'} (${(esc.ms/1000).toFixed(1)} s)`);
+
+      /* Bus mudo casi siempre es el switch, y el mecánico está en la cabina con
+         la laptop en el asiento. Antes esto tiraba error y había que rehacer el
+         escaneo entero; ahora se le da la ventana para girar la llave. */
+      if (!j.total) {
+        log('<b style="color:var(--amber)">Bus mudo — poné el switch en contacto AHORA.</b> Reintentando 15 s...');
+        await this._escucharBus(() => j.total, { min:3000, max:15000, quieto:2500,
+          log: () => log('&nbsp;&nbsp;<span style="color:var(--text3)">…esperando</span>') });
+      }
       if (!j.total) throw new Error('Bus J1708 silencioso: no llegó ninguna trama. Verificá el switch en contacto y el cable en los pines A/B del conector de 9 pines.');
 
       const mids = Object.keys(j.mids).map(Number);
@@ -1323,9 +1386,23 @@ Modulos.diagnostico_obd = {
       log(claim ? `Dirección de diagnóstico reclamada (comando ${claim}) ✓`
                 : 'No se pudo reclamar dirección — se escucha igual (el camión transmite solo)');
       log('Escuchando el bus J1939 (el camión transmite solo)...');
-      await new Promise(r => setTimeout(r, 2500));
-      const nPGN = Object.keys(this._j39.pgns).length;
       const j = this._j39;
+      /* Los PGN lentos (odómetro, horas, DM1 de un módulo dormido) pueden tardar
+         más de 2,5 s en aparecer; con el plazo fijo se perdían de a ratos y el
+         escaneo salía distinto en cada intento sobre el mismo camión. */
+      const esc = await this._escucharBus(
+        () => `${Object.keys(j.pgns).length}|${Object.keys(j.datos).length}|${j.dm1 ? 1 : 0}`,
+        { min:2000, max:14000, quieto:2500,
+          log: () => log(`&nbsp;&nbsp;<span style="color:var(--text3)">…${Object.keys(j.pgns).length} tipo(s) de mensaje, ${Object.keys(j.datos).length} parámetro(s)</span>`) });
+      log(`Escucha ${esc.motivo === 'tope' ? 'cortada por tiempo' : 'completa'} (${(esc.ms/1000).toFixed(1)} s)`);
+      /* Misma ventana que en J1708: dar chance a girar la llave antes de dar el
+         escaneo por perdido. */
+      if (!j.total) {
+        log('<b style="color:var(--amber)">Bus mudo — poné el switch en contacto AHORA.</b> Reintentando 15 s...');
+        await this._escucharBus(() => j.total, { min:3000, max:15000, quieto:2500,
+          log: () => log('&nbsp;&nbsp;<span style="color:var(--text3)">…esperando</span>') });
+      }
+      const nPGN = Object.keys(this._j39.pgns).length;
       if (!j.total) log('<span style="color:var(--amber)">Bus silencioso — ¿switch encendido?</span>');
       else if (!nPGN) log(`<span style="color:var(--amber)">Llegan tramas (${j.total}) pero ninguna se pudo interpretar</span>`);
       else log(`${nPGN} tipos de mensaje detectados en ${j.total} tramas ✓`);
