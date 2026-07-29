@@ -5,12 +5,16 @@
    OBD-II) vive en la app web, que se actualiza sin recompilar esto.
 
    Compilar y ejecutar: iniciar-puente.bat
-   IMPORTANTE: x86 obligatorio — la DLL RP1210 (NXULNK32.dll) es de 32 bits.
-   ponytail: la DLL sigue fija en NXULNK32 para conectarse, pero la operación
-   'apis' ya enumera todos los adaptadores RP1210 instalados leyendo
-   C:\Windows\RP121032.INI. Falta el paso de cargar la elegida dinámicamente
-   (LoadLibrary + GetProcAddress en vez de DllImport); se hará con el adaptador
-   presente para poder probarlo, no a ciegas. */
+   IMPORTANTE: x86 obligatorio — las DLL RP1210 son de 32 bits.
+
+   La API RP1210 se carga en caliente (LoadLibrary + GetProcAddress), así que el
+   puente puede usar CUALQUIERA de los adaptadores registrados en
+   C:\Windows\RP121032.INI y cambiar entre ellos sin reiniciarse:
+     · 'apis'    — enumera los instalados (marca cuál está cargado)
+     · 'cargar'  — {api:"DGDPA5MA"} elige con cuál hablar
+     · 'conectar'— acepta {api:"..."} para elegir y conectar de una vez
+   Al arrancar intenta NXULNK32 (NEXIQ, el más común), pero que falte ya no es
+   fatal: la app puede pedir otro. */
 using System;
 using System.Collections;
 using System.Collections.Generic;
@@ -23,20 +27,106 @@ using System.Text;
 using System.Threading;
 using System.Web.Script.Serialization;
 
+/* ── API RP1210 cargada en caliente ────────────────────────────────────────
+   Antes la DLL estaba fija en NXULNK32 con DllImport, así que el puente solo
+   hablaba con el NEXIQ aunque la PC tuviera otros adaptadores registrados
+   (DPA5, VXDIAG, el simulador de Cummins…). Con LoadLibrary + GetProcAddress
+   se puede usar cualquiera de las que enumera RP121032.INI, y cambiar de una a
+   otra sin reiniciar el puente.
+
+   Las funciones RP1210 son __stdcall: los delegados DEBEN declararlo. Con la
+   convención equivocada la pila queda corrupta al volver de cada llamada y el
+   proceso se cae de formas difíciles de leer. */
 public static class RP1210 {
-  [DllImport("NXULNK32.dll", CharSet = CharSet.Ansi)]
-  public static extern short RP1210_ClientConnect(int hwnd, short deviceId, string protocolo, int txBuf, int rxBuf, short packetize);
-  [DllImport("NXULNK32.dll")] public static extern short RP1210_ClientDisconnect(short cliente);
-  [DllImport("NXULNK32.dll")] public static extern short RP1210_SendCommand(short comando, short cliente, byte[] datos, short n);
-  [DllImport("NXULNK32.dll")] public static extern short RP1210_SendMessage(short cliente, byte[] msg, short n, short notify, short block);
-  [DllImport("NXULNK32.dll")] public static extern short RP1210_ReadMessage(short cliente, byte[] buf, short n, short block);
-  [DllImport("NXULNK32.dll")] public static extern short RP1210_ReadVersion(byte[] dllMaj, byte[] dllMin, byte[] apiMaj, byte[] apiMin);
-  [DllImport("NXULNK32.dll")] public static extern short RP1210_GetErrorMsg(short codigo, byte[] msg);
+  [DllImport("kernel32.dll", CharSet = CharSet.Ansi, SetLastError = true)]
+  static extern IntPtr LoadLibrary(string archivo);
+  [DllImport("kernel32.dll", SetLastError = true)]
+  static extern bool FreeLibrary(IntPtr modulo);
+  [DllImport("kernel32.dll", CharSet = CharSet.Ansi, SetLastError = true)]
+  static extern IntPtr GetProcAddress(IntPtr modulo, string nombre);
+
+  [UnmanagedFunctionPointer(CallingConvention.StdCall, CharSet = CharSet.Ansi)]
+  public delegate short DConnect(int hwnd, short deviceId, string protocolo, int txBuf, int rxBuf, short packetize);
+  [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+  public delegate short DDisconnect(short cliente);
+  [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+  public delegate short DSendCommand(short comando, short cliente, byte[] datos, short n);
+  [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+  public delegate short DSendMessage(short cliente, byte[] msg, short n, short notify, short block);
+  [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+  public delegate short DReadMessage(short cliente, byte[] buf, short n, short block);
+  [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+  public delegate short DReadVersion(byte[] dllMaj, byte[] dllMin, byte[] apiMaj, byte[] apiMin);
+  [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+  public delegate short DGetErrorMsg(short codigo, byte[] msg);
+
+  static IntPtr _mod = IntPtr.Zero;
+  public static string Api;                 // cuál está cargada ahora mismo
+
+  public static DConnect ClientConnect;
+  public static DDisconnect ClientDisconnect;
+  public static DSendCommand SendCommand;
+  public static DSendMessage SendMessage;
+  public static DReadMessage ReadMessage;
+  static DReadVersion _readVersion;
+  static DGetErrorMsg _getErrorMsg;
+
+  public static bool Listo { get { return _mod != IntPtr.Zero && ClientConnect != null; } }
+
+  static Delegate Fn(IntPtr mod, string nombre, Type tipo) {
+    var p = GetProcAddress(mod, nombre);
+    if (p == IntPtr.Zero) return null;
+    return Marshal.GetDelegateForFunctionPointer(p, tipo);
+  }
+
+  public static bool Cargar(string api, out string error) {
+    error = null;
+    if (string.IsNullOrEmpty(api)) { error = "No se indicó qué adaptador cargar."; return false; }
+    if (_mod != IntPtr.Zero && string.Equals(api, Api, StringComparison.OrdinalIgnoreCase)) return true;
+
+    var dll = api.EndsWith(".dll", StringComparison.OrdinalIgnoreCase) ? api : api + ".dll";
+    var mod = LoadLibrary(dll);
+    if (mod == IntPtr.Zero) {
+      error = "No se pudo cargar " + dll + " (error " + Marshal.GetLastWin32Error() +
+              "). Probablemente faltan los drivers de ese adaptador.";
+      return false;
+    }
+    var cc = (DConnect)Fn(mod, "RP1210_ClientConnect", typeof(DConnect));
+    var cd = (DDisconnect)Fn(mod, "RP1210_ClientDisconnect", typeof(DDisconnect));
+    var sc = (DSendCommand)Fn(mod, "RP1210_SendCommand", typeof(DSendCommand));
+    var sm = (DSendMessage)Fn(mod, "RP1210_SendMessage", typeof(DSendMessage));
+    var rm = (DReadMessage)Fn(mod, "RP1210_ReadMessage", typeof(DReadMessage));
+    if (cc == null || cd == null || sc == null || sm == null || rm == null) {
+      FreeLibrary(mod);
+      error = dll + " se cargó pero no exporta las funciones RP1210 esperadas.";
+      return false;
+    }
+    /* La anterior se suelta recién acá: si la nueva fallaba, se sigue con la que
+       ya venía funcionando en vez de quedarse sin ninguna. */
+    if (_mod != IntPtr.Zero) { try { FreeLibrary(_mod); } catch (Exception) { } }
+    _mod = mod;
+    Api = api;
+    ClientConnect = cc; ClientDisconnect = cd; SendCommand = sc; SendMessage = sm; ReadMessage = rm;
+    _readVersion = (DReadVersion)Fn(mod, "RP1210_ReadVersion", typeof(DReadVersion));
+    _getErrorMsg = (DGetErrorMsg)Fn(mod, "RP1210_GetErrorMsg", typeof(DGetErrorMsg));
+    return true;
+  }
+
+  static string Txt(byte[] b) { return Encoding.ASCII.GetString(b).TrimEnd('\0').Trim(); }
+
+  /* "1.0 · API 2.0", o null si la DLL no expone ReadVersion */
+  public static string Version() {
+    if (_readVersion == null) return null;
+    var a = new byte[17]; var b = new byte[17]; var c = new byte[17]; var d = new byte[17];
+    try { _readVersion(a, b, c, d); } catch (Exception) { return null; }
+    var dll = Txt(a) + "." + Txt(b);
+    return dll.Length > 1 ? dll : null;
+  }
 
   public static string ErrorMsg(short codigo) {
     var b = new byte[120];
-    try { RP1210_GetErrorMsg(codigo, b); } catch (Exception) { }
-    var s = Encoding.ASCII.GetString(b).TrimEnd('\0').Trim();
+    if (_getErrorMsg != null) { try { _getErrorMsg(codigo, b); } catch (Exception) { } }
+    var s = Txt(b);
     return s.Length > 0 ? s : ("Error RP1210 " + codigo);
   }
 }
@@ -46,26 +136,36 @@ public class PuenteOBD {
   static readonly JavaScriptSerializer JSON = new JavaScriptSerializer();
 
   static void Log(string s) { Console.WriteLine(DateTime.Now.ToString("HH:mm:ss") + "  " + s); }
-  static string Ascii(byte[] b) { return Encoding.ASCII.GetString(b).TrimEnd('\0').Trim(); }
+
+  const string API_DEFECTO = "NXULNK32";     // NEXIQ USB-Link, el más común en taller
 
   public static void Main() {
     Console.Title = "NexusPro - Puente OBD USB (RP1210)";
     try { Console.OutputEncoding = Encoding.UTF8; } catch (Exception) { }
     Log("NexusPro — Puente OBD USB · puerto " + PUERTO);
-    Log("Adaptador: NEXIQ USB-Link (NXULNK32, RP1210)");
     Log("Deja esta ventana abierta mientras escaneas desde NexusPro.");
 
-    try {
-      var a = new byte[8]; var b = new byte[8]; var c = new byte[8]; var d = new byte[8];
-      RP1210.RP1210_ReadVersion(a, b, c, d);
-      Log("DLL RP1210 cargada OK — DLL v" + Ascii(a) + "." + Ascii(b) + " · API v" + Ascii(c) + "." + Ascii(d));
-    } catch (DllNotFoundException) {
-      /* Sin ReadKey: en modo oculto (arranque automatico) no debe quedarse colgado */
-      Log("ERROR: no se encontro NXULNK32.dll. Instala los drivers del USB-Link y reintenta.");
-      Thread.Sleep(5000); return;
-    } catch (Exception ex) {
-      Log("Aviso al leer version de la DLL: " + ex.Message);
+    /* Se intenta la de siempre, pero ya no es fatal que falte: la app puede
+       pedir otra de las instaladas con la operación 'cargar'. Antes, sin el
+       NEXIQ, el puente se cerraba y no había forma de usar otro adaptador. */
+    string err;
+    if (RP1210.Cargar(API_DEFECTO, out err)) {
+      var v = RP1210.Version();
+      Log("Adaptador: " + API_DEFECTO + (v != null ? " · DLL v" + v : "") + " ✓");
+    } else {
+      Log("No se pudo cargar " + API_DEFECTO + ": " + err);
     }
+
+    var otras = ApisInstaladas();
+    if (otras.Count > 0) {
+      var nombres = new List<string>();
+      foreach (var o in otras) {
+        var d = (Dictionary<string, object>)o;
+        if ((bool)d["instalado"]) nombres.Add((string)d["api"]);
+      }
+      Log("Adaptadores RP1210 en esta PC: " + (nombres.Count > 0 ? string.Join(", ", nombres.ToArray()) : "ninguno"));
+    }
+    if (!RP1210.Listo) Log("Ninguno cargado todavía — NexusPro puede elegir uno al escanear.");
 
     var lst = new TcpListener(IPAddress.Loopback, PUERTO);
     try { lst.Start(); }
@@ -112,23 +212,55 @@ public class PuenteOBD {
               break;
             }
             case "estado": {
-              resp["ok"] = true;
-              resp["api"] = "NXULNK32";
-              resp["dispositivo"] = "NEXIQ USB-Link";
-              var a = new byte[8]; var b = new byte[8]; var c = new byte[8]; var d = new byte[8];
-              try { RP1210.RP1210_ReadVersion(a, b, c, d); resp["version"] = Ascii(a) + "." + Ascii(b); } catch (Exception) { }
+              resp["ok"] = RP1210.Listo;
+              resp["api"] = RP1210.Api;
+              resp["dispositivo"] = NombreApi(RP1210.Api);
+              var v = RP1210.Version();
+              if (v != null) resp["version"] = v;
+              if (!RP1210.Listo) resp["error"] = "Ningún adaptador RP1210 cargado.";
+              break;
+            }
+            /* Elegir con qué adaptador hablar, entre los que enumera 'apis'.
+               Sirve para el DPA5, el VXDIAG y el simulador de Cummins, que
+               antes eran inalcanzables por tener la DLL fija. */
+            case "cargar": {
+              var api = m.ContainsKey("api") ? (string)m["api"] : null;
+              if (cliente >= 0) { leyendo[0] = false; Thread.Sleep(50); RP1210.ClientDisconnect(cliente); cliente = -1; }
+              string e2;
+              if (RP1210.Cargar(api, out e2)) {
+                resp["ok"] = true; resp["api"] = RP1210.Api;
+                resp["dispositivo"] = NombreApi(RP1210.Api);
+                var v = RP1210.Version(); if (v != null) resp["version"] = v;
+                Log("Adaptador cargado: " + RP1210.Api);
+              } else {
+                resp["ok"] = false; resp["error"] = e2;
+                Log("No se pudo cargar " + api + ": " + e2);
+              }
               break;
             }
             case "conectar": {
-              if (cliente >= 0) { leyendo[0] = false; Thread.Sleep(50); RP1210.RP1210_ClientDisconnect(cliente); cliente = -1; }
+              if (cliente >= 0) { leyendo[0] = false; Thread.Sleep(50); RP1210.ClientDisconnect(cliente); cliente = -1; }
+              /* Permite cambiar de adaptador en la misma llamada */
+              if (m.ContainsKey("api") && m["api"] != null) {
+                string e3;
+                if (!RP1210.Cargar((string)m["api"], out e3)) {
+                  resp["ok"] = false; resp["error"] = e3;
+                  break;
+                }
+              }
+              if (!RP1210.Listo) {
+                resp["ok"] = false;
+                resp["error"] = "No hay ningún adaptador RP1210 cargado. Instalá los drivers, o elegí otro con la operación 'cargar'.";
+                break;
+              }
               var proto = m.ContainsKey("protocolo") ? (string)m["protocolo"] : "J1939";
               short dev = m.ContainsKey("device") ? Convert.ToInt16(m["device"]) : (short)1;
-              short r = RP1210.RP1210_ClientConnect(0, dev, proto, 0, 0, 0);
+              short r = RP1210.ClientConnect(0, dev, proto, 0, 0, 0);
               if (r >= 0 && r < 128) {
                 cliente = r;
-                RP1210.RP1210_SendCommand(3, cliente, new byte[1], 0);   // 3 = todos los filtros a "pasar"
-                resp["ok"] = true; resp["cliente"] = (int)r;
-                Log("Cliente RP1210 abierto: " + proto + " (id " + r + ")");
+                RP1210.SendCommand(3, cliente, new byte[1], 0);   // 3 = todos los filtros a "pasar"
+                resp["ok"] = true; resp["cliente"] = (int)r; resp["api"] = RP1210.Api;
+                Log("Cliente RP1210 abierto: " + proto + " en " + RP1210.Api + " (id " + r + ")");
                 leyendo[0] = true;
                 short cl = cliente;
                 new Thread(() => Bombear(cl, activo, leyendo, enviar)) { IsBackground = true }.Start();
@@ -140,7 +272,7 @@ public class PuenteOBD {
             }
             case "enviar": {
               var datos = ABytes(m.ContainsKey("datos") ? m["datos"] : null);
-              short r = RP1210.RP1210_SendMessage(cliente, datos, (short)datos.Length, 0, 0);
+              short r = RP1210.SendMessage(cliente, datos, (short)datos.Length, 0, 0);
               resp["ok"] = r == 0;
               if (r != 0) { resp["codigo"] = (int)r; resp["error"] = RP1210.ErrorMsg(r); }
               break;
@@ -148,14 +280,14 @@ public class PuenteOBD {
             case "comando": {
               short num = Convert.ToInt16(m["numero"]);
               var datos = ABytes(m.ContainsKey("datos") ? m["datos"] : null);
-              short r = RP1210.RP1210_SendCommand(num, cliente, datos.Length > 0 ? datos : new byte[1], (short)datos.Length);
+              short r = RP1210.SendCommand(num, cliente, datos.Length > 0 ? datos : new byte[1], (short)datos.Length);
               resp["ok"] = r == 0;
               if (r != 0) { resp["codigo"] = (int)r; resp["error"] = RP1210.ErrorMsg(r); }
               break;
             }
             case "desconectar": {
               leyendo[0] = false;
-              if (cliente >= 0) { Thread.Sleep(50); RP1210.RP1210_ClientDisconnect(cliente); cliente = -1; Log("Cliente RP1210 cerrado"); }
+              if (cliente >= 0) { Thread.Sleep(50); RP1210.ClientDisconnect(cliente); cliente = -1; Log("Cliente RP1210 cerrado"); }
               resp["ok"] = true;
               break;
             }
@@ -167,7 +299,7 @@ public class PuenteOBD {
     } catch (Exception) { }
     finally {
       activo[0] = false; leyendo[0] = false;
-      if (cliente >= 0) { try { RP1210.RP1210_ClientDisconnect(cliente); } catch (Exception) { } }
+      if (cliente >= 0) { try { RP1210.ClientDisconnect(cliente); } catch (Exception) { } }
       try { tcp.Close(); } catch (Exception) { }
       Log("NexusPro desconectado");
     }
@@ -206,6 +338,17 @@ public class PuenteOBD {
     return res;
   }
 
+  /* Nombre legible del adaptador, leído de su propio .INI */
+  static string NombreApi(string api) {
+    if (string.IsNullOrEmpty(api)) return null;
+    try {
+      var ini = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Windows), api + ".INI");
+      var n = LeerClave(ini, "Name");
+      if (!string.IsNullOrEmpty(n)) return n;
+    } catch (Exception) { }
+    return api;
+  }
+
   static List<object> ApisInstaladas() {
     var lista = new List<object>();
     try {
@@ -219,6 +362,7 @@ public class PuenteOBD {
         var d = new Dictionary<string, object>();
         d["api"] = api;
         d["instalado"] = File.Exists(ini);
+        d["cargada"] = string.Equals(api, RP1210.Api, StringComparison.OrdinalIgnoreCase);
         if (File.Exists(ini)) {
           d["nombre"] = LeerClave(ini, "Name") ?? api;
           d["protocolos"] = TodasLasClaves(ini, "ProtocolString");
@@ -236,7 +380,7 @@ public class PuenteOBD {
     short ultimoError = 0;
     while (activo[0] && leyendo[0]) {
       short r;
-      try { r = RP1210.RP1210_ReadMessage(cliente, buf, (short)buf.Length, 0); }
+      try { r = RP1210.ReadMessage(cliente, buf, (short)buf.Length, 0); }
       catch (Exception) { break; }
       if (r > 0) {
         var arr = new int[r];

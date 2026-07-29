@@ -49,5 +49,19 @@ Desde entonces **no hay que correr nada a mano**: enchufas el USB-Link y escanea
 | Síntoma | Solución |
 |---|---|
 | NexusPro dice "No se encontró el puente USB" | Corre el instalador de nuevo, o abre el icono "Puente OBD USB" del escritorio. |
-| "no se encontró NXULNK32.dll" | Instala los drivers del USB-Link. |
+| "No se pudo cargar NXULNK32.dll" | Instala los drivers del USB-Link — **o usa otro adaptador**: el puente lista los RP1210 instalados y puede cargar cualquiera (ver abajo). |
 | El puente abre pero el vehículo no responde | Switch encendido, cable bien puesto. Prueba con la herramienta oficial `C:\NEXIQ\Test\CommCheck.exe`. |
+
+## Varios adaptadores en la misma PC
+
+Un taller que ya tiene software de fábrica (Cummins INSITE, Navistar ServiceMaxx,
+Allison DOC, JPRO…) suele tener **varios adaptadores RP1210 registrados**. El
+puente los carga en caliente, así que no está atado al NEXIQ:
+
+- Al arrancar lista los que encuentra en `C:\Windows\RP121032.INI`.
+- Si falta el NEXIQ, **no se cierra**: queda esperando a que NexusPro elija otro.
+- Cambiar de adaptador no requiere reiniciar el puente.
+
+Adaptadores vistos en el campo: `NXULNK32` (NEXIQ USB-Link), `DGDPA5MA` (Dearborn
+DPA 5), `VCXRP32` (VXDIAG), `CMNSIM32` (simulador de Cummins, útil para probar
+sin camión), `S1939C32` (International J1939), `BNB1850` (Noregon J1850).
