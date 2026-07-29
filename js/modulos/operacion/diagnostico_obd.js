@@ -2237,6 +2237,7 @@ Modulos.diagnostico_obd = {
       </div>
       <div id="obd-result"></div>
       <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px">
+        <button class="btn btn-ghost" id="obd-btn-test" title="Prueba cada adaptador instalado y dice cuál responde" onclick="Modulos.diagnostico_obd.probarAdaptador()" style="margin-right:auto">🔧 Probar adaptador</button>
         <button class="btn btn-ghost" onclick="Modulos.diagnostico_obd._cerrarEscaneo()">Cancelar</button>
         <button class="btn btn-brand" id="obd-btn-scan" onclick="Modulos.diagnostico_obd.escanear()">🔌 Conectar y Escanear</button>
         <button class="btn btn-cyan" id="obd-btn-save" style="display:none" onclick="Modulos.diagnostico_obd.guardarEscaneo()">💾 Guardar</button>
@@ -2255,11 +2256,104 @@ Modulos.diagnostico_obd = {
      al NEXIQ aunque la PC tuviera otros. */
   _api: null,
 
-  /* Oculta el selector en Bluetooth, donde no aplica */
+  /* ── Probar adaptador ────────────────────────────────────────────────────
+     Cuando el escaneo falla, el mecánico se queda con un número de error y nada
+     más. Esto recorre CADA adaptador instalado y prueba abrir cada protocolo
+     que ese adaptador dice soportar, para responder la única pregunta que
+     importa: ¿el problema es el cable, el adaptador, o el camión?
+
+     Todo se hace con las operaciones que el puente ya tiene (apis/cargar/
+     conectar), así que no hay que reinstalarlo en cada taller. Tampoco se lanza
+     ningún .exe desde acá: darle al puente la capacidad de ejecutar programas
+     abriría un agujero mucho peor que la molestia que ahorra. Si nada responde,
+     se indica dónde está la herramienta del fabricante para abrirla a mano. */
+  _PROTOS_PRUEBA: [
+    { p:'J1708',        et:'J1708/J1587 · camión antiguo' },
+    { p:'J1939',        et:'J1939 · camión moderno' },
+    { p:'CAN:Baud=500', et:'CAN 500k · vehículo liviano', req:'CAN' },
+  ],
+
+  /* Los mensajes que devuelve cada DLL vienen como salen del fabricante: con
+     saltos de línea y espacios de relleno que descuadran el log. */
+  _errLimpio(c) {
+    const t = String((c && c.error) || (c && c.codigo != null ? 'código ' + c.codigo : 'sin respuesta'))
+      .replace(/\s+/g, ' ').trim();
+    return t.length > 110 ? t.slice(0, 107) + '…' : t;
+  },
+
+  async probarAdaptador() {
+    const btn = document.getElementById('obd-btn-test');
+    if (btn) { btn.disabled = true; btn.textContent = '⏳ Probando...'; }
+    const log = m => this._log(m);
+    const apiPrevia = this._api;
+    let algunoRespondio = false;
+    try {
+      await this._puenteConectar();
+      const r = await this._puenteOp({ op:'apis' }, 5000);
+      const apis = ((r && r.apis) || []).filter(a => a.instalado);
+      if (!apis.length) { log('<b>No hay ningún adaptador RP1210 instalado en esta PC.</b>'); return; }
+
+      log(`<b>Probando ${apis.length} adaptador(es)...</b>`);
+      for (const a of apis) {
+        const nombre = a.nombre || a.api;
+        const soporta = ((a.protocolos) || []).map(p => String(p).split(',')[0].toUpperCase());
+        /* Se prueban SOLO los protocolos que el adaptador declara. Intentar los
+           demás sería medio minuto de esperas para llegar al mismo "no". */
+        const pruebas = this._PROTOS_PRUEBA.filter(t =>
+          soporta.includes((t.req || t.p.split(':')[0]).toUpperCase()));
+        if (!pruebas.length) { log(`&nbsp;&nbsp;<b>${nombre}</b> — no maneja protocolos de vehículo, se omite`); continue; }
+
+        const carga = await this._puenteOp({ op:'cargar', api:a.api }, 6000).catch(() => null);
+        if (!carga || !carga.ok) {
+          log(`&nbsp;&nbsp;<b>${nombre}</b> — <span style="color:var(--red)">no se pudo cargar</span>: ${this._errLimpio(carga)}`);
+          continue;
+        }
+        const detalle = [];
+        for (const t of pruebas) {
+          const c = await this._puenteOp({ op:'conectar', protocolo:t.p, device:1, api:a.api }, 8000)
+            .catch(() => ({ ok:false, error:'sin respuesta del puente' }));
+          if (c.ok) {
+            algunoRespondio = true;
+            detalle.push(`<span style="color:var(--green)">✓ ${t.et}</span>`);
+            await this._puenteOp({ op:'desconectar' }, 5000).catch(() => {});
+          } else {
+            detalle.push(`<span style="color:var(--text3)">✗ ${t.et} — ${this._errLimpio(c)}</span>`);
+          }
+        }
+        log(`&nbsp;&nbsp;<b>${nombre}</b>${carga.version ? ` <span style="color:var(--text3)">v${carga.version}</span>` : ''}`);
+        for (const d of detalle) log(`&nbsp;&nbsp;&nbsp;&nbsp;${d}`);
+      }
+
+      if (algunoRespondio) {
+        log('<b style="color:var(--green)">✓ Hay al menos un adaptador respondiendo.</b> Elegí arriba el que dio ✓ en el protocolo de este vehículo y escaneá.');
+      } else {
+        /* El caso más común y el más frustrante: todo "instalado" pero nada
+           enchufado. Conviene decirlo con todas las letras. */
+        log('<b style="color:var(--red)">Ningún adaptador respondió.</b> Los drivers están, pero el hardware no contesta. Revisá, en este orden:');
+        log('&nbsp;&nbsp;1. El adaptador enchufado al <b>USB de esta PC</b> (que Windows lo vea)');
+        log('&nbsp;&nbsp;2. El cable en el <b>conector del vehículo</b> — en camión antiguo, pines A/B del Deutsch de 9 pines');
+        log('&nbsp;&nbsp;3. El <b>switch en contacto</b> (no hace falta arrancar, pero con el motor andando se ven más datos)');
+        log('&nbsp;&nbsp;4. Si nada de eso: probá la herramienta del fabricante, <code>C:\\NEXIQ\\Test\\CommCheck.exe</code>');
+      }
+    } catch (e) {
+      log(`<span style="color:var(--red)">✗ ${e.message}</span>`);
+    } finally {
+      /* Dejar cargado el que el usuario había elegido: si no, el próximo
+         escaneo saldría con el último que se probó acá. */
+      if (apiPrevia) await this._puenteOp({ op:'cargar', api:apiPrevia }, 6000).catch(() => {});
+      this._api = apiPrevia;
+      if (btn) { btn.disabled = false; btn.textContent = '🔧 Probar adaptador'; }
+    }
+  },
+
+  /* Oculta el selector y la prueba en Bluetooth, donde no aplican */
   _verApis() {
     const via = document.getElementById('obd-via')?.value;
+    const usb = via !== 'ble';
     const wrap = document.getElementById('obd-api-wrap');
-    if (wrap) wrap.style.display = via === 'ble' ? 'none' : '';
+    if (wrap) wrap.style.display = usb ? '' : 'none';
+    const test = document.getElementById('obd-btn-test');
+    if (test) test.style.display = usb ? '' : 'none';
   },
 
   async _cargarApis() {
