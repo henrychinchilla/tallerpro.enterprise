@@ -1373,8 +1373,69 @@ Modulos.diagnostico_obd = {
     if (j.crudo.length < 4) j.crudo.push(d.slice(0, 20));
     if (d.length < 10) { j.cortas = (j.cortas || 0) + 1; return; }
     const pgn = d[4] | (d[5] << 8) | (d[6] << 16), sa = d[8], data = d.slice(10);
-    j.pgns[pgn] = (j.pgns[pgn] || 0) + 1;
     if (sa !== 0xF9) j.sas[sa] = (j.sas[sa] || 0) + 1;   // 0xF9 somos nosotros
+
+    /* Transporte multipaquete: un mensaje que no entra en 8 bytes se manda
+       partido y hay que rearmarlo antes de interpretarlo. Se cuentan acá porque
+       son tramas de transporte, no contenido: el PGN que transportan se cuenta
+       al entregarlo rearmado. */
+    if (pgn === 60416) { j.pgns[pgn] = (j.pgns[pgn] || 0) + 1; this._j39TPCM(j, sa, data); return; }
+    if (pgn === 60160) { j.pgns[pgn] = (j.pgns[pgn] || 0) + 1; this._j39TPDT(j, sa, data); return; }
+
+    this._j39Entregar(j, pgn, sa, data);
+  },
+
+  /* ── Transporte multipaquete J1939 (BAM) ─────────────────────────────────
+     Una trama CAN lleva 8 bytes. Todo lo que no entra ahí viaja partido: el
+     módulo anuncia "voy a mandar N bytes en M paquetes del PGN tal" (TP.CM) y
+     después manda los pedazos numerados (TP.DT).
+
+     Sin esto se perdían dos cosas importantes:
+       · El VIN (17 caracteres + terminador) NUNCA entra en 8 bytes, así que
+         por J1939 no se leía nunca.
+       · Un DM1 de 8 bytes solo alcanza para UNA falla. Un módulo con varias
+         las manda partidas, y se veía solo la primera — o ninguna.
+
+     El rearmado va por dirección de origen: dos módulos pueden estar mandando
+     multipaquete a la vez y sus pedazos se intercalan en el bus. */
+  _j39TPCM(j, sa, d) {
+    if (d.length < 8) return;
+    /* 32 = BAM (difusión). 16 = RTS, que es punto a punto y no nos aplica:
+       nadie nos está mandando nada dirigido, solo escuchamos difusión. */
+    if (d[0] !== 32) return;
+    const tam = d[1] | (d[2] << 8);
+    const paquetes = d[3];
+    const pgn = d[5] | (d[6] << 8) | (d[7] << 16);
+    if (!tam || !paquetes || paquetes > 255) return;
+    /* Un anuncio nuevo del mismo módulo cancela el anterior: si el previo quedó
+       incompleto (se perdió un paquete), acumular pedazos sueltos daría un
+       mensaje corrupto. */
+    j.tp[sa] = { pgn, tam, paquetes, partes: {}, t: Date.now() };
+  },
+
+  _j39TPDT(j, sa, d) {
+    const s = j.tp[sa];
+    if (!s || d.length < 2) return;
+    /* La norma da 750 ms entre paquetes de un BAM. Pasado eso, lo que llega ya
+       no pertenece a esa sesión: se descarta en vez de mezclarlo. */
+    if (Date.now() - s.t > 3000) { delete j.tp[sa]; return; }
+    const seq = d[0];
+    if (seq < 1 || seq > s.paquetes) return;
+    s.partes[seq] = d.slice(1, 8);
+    s.t = Date.now();
+    if (Object.keys(s.partes).length < s.paquetes) return;
+
+    const bytes = [];
+    for (let i = 1; i <= s.paquetes; i++) bytes.push(...s.partes[i]);
+    delete j.tp[sa];
+    j.bam = (j.bam || 0) + 1;
+    this._j39Entregar(j, s.pgn, sa, bytes.slice(0, s.tam));
+  },
+
+  /* Un PGN ya listo para interpretar, venga de una trama suelta o rearmado de
+     varios paquetes. */
+  _j39Entregar(j, pgn, sa, data) {
+    j.pgns[pgn] = (j.pgns[pgn] || 0) + 1;
     const defs = this._J39_PGNS[pgn];
     if (defs) for (const s of defs) { const v = s.f(data); if (v !== null) j.datos[s.k] = v; }
     /* POR DIRECCIÓN DE ORIGEN, no en una sola variable. En J1939 CADA módulo
@@ -1438,7 +1499,7 @@ Modulos.diagnostico_obd = {
       log(`Puente USB: <b>${est.dispositivo || 'RP1210'}</b> v${est.version || '?'} ✓`);
       const c = await this._puenteOp({ op:'conectar', protocolo:`J1939:Baud=${this._j39Baud || 250}`, device:1 });
       if (!c.ok) throw new Error(`El puente no pudo abrir el USB-Link: ${c.error || 'código ' + c.codigo}. ¿Está enchufado a la PC?`);
-      this._j39 = { datos:{}, pgns:{}, esperas:{}, sas:{}, dm1:{}, dm2:{}, vin:null, comp:null };
+      this._j39 = { datos:{}, pgns:{}, esperas:{}, sas:{}, dm1:{}, dm2:{}, tp:{}, vin:null, comp:null };
       /* Reclamar la dirección de herramienta de diagnóstico (0xF9) en el bus.
          El número de comando de RP1210 para esto no está verificado contra este
          hardware, así que se prueban los dos candidatos y se reporta cuál pasó
@@ -1484,9 +1545,13 @@ Modulos.diagnostico_obd = {
         log(`&nbsp;&nbsp;(${j.cortas || 0} tramas más cortas de 10 bytes) — mandale esto a soporte`);
       }
 
+      /* El VIN y la identificación vienen partidos en varios paquetes (17
+         caracteres no entran en 8 bytes), así que hay que darles más margen que
+         a un PGN suelto: la respuesta completa tarda lo que tarde el módulo en
+         mandar todos los pedazos. */
       log('Solicitando VIN e identificación...');
-      await this._j39Solicitar(65260); await this._j39Esperar(65260, 1500);
-      await this._j39Solicitar(65259); await this._j39Esperar(65259, 1200);
+      await this._j39Solicitar(65260); await this._j39Esperar(65260, 3000);
+      await this._j39Solicitar(65259); await this._j39Esperar(65259, 2500);
       const vin = this._j39VIN();
       log(vin ? `VIN: <b>${vin}</b>` : 'VIN no disponible por J1939');
       if (this._j39.comp) {
