@@ -275,9 +275,12 @@ Modulos.diagnostico_obd = {
   },
 
   async _leerVivo(pids, log) {
-    if (this._via === 'j1939') {   // el bus emite solo: muestrear lo acumulado
+    /* J1939 y J1587 son buses de difusión: nadie pregunta, los módulos emiten
+       solos. Se muestrea lo que se acumuló en vez de pedir PID por PID. */
+    if (this._via === 'j1939' || this._via === 'j1708') {
       await new Promise(r => setTimeout(r, 250));
-      const src = (this._j39 && this._j39.datos) || {}, dj = {};
+      const acum = this._via === 'j1708' ? this._j87 : this._j39;
+      const src = (acum && acum.datos) || {}, dj = {};
       for (const k of (pids && pids.length ? pids : Object.keys(src)))
         if (src[k] !== undefined) dj[k] = src[k];
       if (src.volt) dj.volt = src.volt;
@@ -976,8 +979,10 @@ Modulos.diagnostico_obd = {
     65253: [{ k:'horas',      f:d => d.length > 3 && d[3] < 0xFA ? Math.round(((d[0] | d[1] << 8 | d[2] << 16) + d[3] * 16777216) * 0.05) : null }],
     65248: [{ k:'odometro',   f:d => d.length > 7 && d[7] < 0xFA ? Math.round(((d[4] | d[5] << 8 | d[6] << 16) + d[7] * 16777216) * 0.125) : null }],
   },
-  /* Sensores que existen en J1939 pero no en el catálogo de PIDs OBD-II */
-  _LBLX: { pres_aceite:['Presión aceite',' kPa'], boost:['Presión turbo',' kPa'], horas:['Horas motor',' h'], odometro:['Odómetro',' km'] },
+  /* Sensores que existen en J1939/J1587 pero no en el catálogo de PIDs OBD-II */
+  _LBLX: { pres_aceite:['Presión aceite',' kPa'], boost:['Presión turbo',' kPa'], horas:['Horas motor',' h'], odometro:['Odómetro',' km'],
+           nivel_aceite:['Nivel de aceite',' %'], nivel_refrig:['Nivel de refrigerante',' %'],
+           temp_comb:['Temp. combustible',' °C'], pres_adm:['Presión de admisión',' kPa'] },
 
   /* Componentes SPN comunes en camiones diésel (español) */
   _J39_SPNS: {
@@ -1035,6 +1040,97 @@ Modulos.diagnostico_obd = {
   },
   _nombreMID1587(mid) { return this._J1587_MIDS[mid] || `Módulo MID ${mid}`; },
 
+  /* Parámetros J1587 que emite un motor diésel de esta época (DT466 y parientes).
+     Mismas claves `k` que los PIDs OBD-II y los PGN J1939, para reusar toda la UI.
+
+     Resoluciones tomadas del estándar SAE J1587. NO están verificadas contra un
+     camión: por eso la UI muestra siempre el byte crudo junto al valor, para
+     poder contrastarlo contra ServiceMaxx en el mismo vehículo. Si alguno sale
+     desviado, se corrige aquí sin tocar el resto.
+
+     n = bytes de datos (lo determina el rango del PID, ver _j1587Params).
+     Los multi-byte de J1587 van en little-endian (LSB primero).
+     0xFF / 0xFFFF = "no disponible" y se descartan. */
+  _J1587_PIDS: {
+    84:  { k:'vel',         l:'Velocidad',              u:' km/h', n:1, f:b => b[0] * 0.805 },
+    91:  { k:'acel',        l:'Acelerador',             u:' %',    n:1, f:b => b[0] * 0.4 },
+    92:  { k:'carga',       l:'Carga motor',            u:' %',    n:1, f:b => b[0] * 0.5 },
+    94:  { k:'pres_comb',   l:'Presión de combustible', u:' kPa',  n:1, f:b => b[0] * 3.447 },
+    96:  { k:'comb',        l:'Combustible',            u:' %',    n:1, f:b => b[0] * 0.5 },
+    98:  { k:'nivel_aceite',l:'Nivel de aceite',        u:' %',    n:1, f:b => b[0] * 0.5 },
+    100: { k:'pres_aceite', l:'Presión aceite',         u:' kPa',  n:1, f:b => b[0] * 3.447 },
+    102: { k:'boost',       l:'Presión turbo',          u:' kPa',  n:1, f:b => b[0] * 0.862 },
+    105: { k:'temp_adm',    l:'Temp. admisión',         u:' °C',   n:1, f:b => b[0] - 40 },
+    106: { k:'pres_adm',    l:'Presión de admisión',    u:' kPa',  n:1, f:b => b[0] * 0.862 },
+    108: { k:'baro',        l:'Presión barométrica',    u:' kPa',  n:1, f:b => b[0] * 0.5 },
+    110: { k:'temp',        l:'Temp. motor',            u:' °C',   n:1, f:b => b[0] - 40 },
+    111: { k:'nivel_refrig',l:'Nivel de refrigerante',  u:' %',    n:1, f:b => b[0] * 0.5 },
+    174: { k:'temp_comb',   l:'Temp. combustible',      u:' °C',   n:1, f:b => b[0] - 40 },
+    175: { k:'temp_aceite', l:'Temp. aceite',           u:' °C',   n:2, f:b => (b[0] | b[1] << 8) * 0.03125 - 273 },
+    171: { k:'temp_amb',    l:'Temp. ambiente',         u:' °C',   n:2, f:b => (b[0] | b[1] << 8) * 0.03125 - 273 },
+    190: { k:'rpm',         l:'RPM',                    u:'',      n:2, f:b => (b[0] | b[1] << 8) * 0.25 },
+    158: { k:'volt_ecu',    l:'Voltaje ECU',            u:' V',    n:2, f:b => (b[0] | b[1] << 8) * 0.05 },
+    168: { k:'volt',        l:'Batería',                u:' V',    n:2, f:b => (b[0] | b[1] << 8) * 0.05 },
+  },
+  _nombrePID1587(id, sid) {
+    if (sid) return null;                           // los SID son por módulo, no hay tabla única
+    const d = this._J1587_PIDS[id];
+    return d ? d.l : null;
+  },
+
+  /* Camina una trama J1587 devolviendo sus parámetros.
+     La longitud de cada parámetro la fija el rango del PID (SAE J1587):
+       0-127   → 1 byte de datos
+       128-191 → 2 bytes
+       192-253 → variable: el byte que sigue al PID es la longitud
+       254     → escape a la página 2 (los PID siguientes son de otra tabla)
+       255     → relleno / fin de trama
+     Sin esto no se puede saber dónde empieza el siguiente PID, y buscar un byte
+     suelto (p. ej. el 194 de las fallas) toma datos de otro parámetro como si
+     fueran un PID: de ahí salían códigos fantasma. */
+  _j1587Params(par) {
+    const out = [];
+    let i = 0, pagina = 0;
+    while (i < par.length) {
+      const pid = par[i];
+      if (pid === 255) break;                       // relleno: lo que sigue no es dato
+      if (pid === 254) { pagina = 1; i++; continue; }
+      i++;
+      let n;
+      if (pid < 128) n = 1;
+      else if (pid < 192) n = 2;
+      else { if (i >= par.length) break; n = par[i]; i++; }
+      if (n === undefined || i + n > par.length) break;   // trama truncada o checksum al final
+      out.push({ pid, pagina, datos: par.slice(i, i + n) });
+      i += n;
+    }
+    return out;
+  },
+
+  /* PID 194: pares [identificador][carácter de diagnóstico]. En el carácter,
+     bit7 = el identificador es SID (subsistema) y no PID, bit6 = falla inactiva,
+     bit5 = viene un byte extra con el conteo de ocurrencias, bits 3-0 = FMI.
+     Consumir ese byte extra es obligatorio: si no, todo lo que sigue se
+     desalinea y aparecen fallas inventadas. */
+  _j1587Fallas(mid, cuerpo, j) {
+    let k = 0;
+    while (k + 1 < cuerpo.length) {
+      const id = cuerpo[k], cod = cuerpo[k + 1];
+      k += 2;
+      let oc = null;
+      if (cod & 0x20) { oc = cuerpo[k]; k++; }
+      const falla = {
+        mid, id, fmi: cod & 0x0F,
+        sid: !!(cod & 0x80),
+        inactiva: !!(cod & 0x40),
+        oc: oc !== null && oc !== undefined ? (oc & 0x7F) : null,
+        crudo: `${id.toString(16).padStart(2,'0')} ${cod.toString(16).padStart(2,'0')}`.toUpperCase(),
+      };
+      const clave = `${falla.mid}-${falla.id}-${falla.fmi}-${falla.sid}`;
+      if (!j.fallas.some(f => `${f.mid}-${f.id}-${f.fmi}-${f.sid}` === clave)) j.fallas.push(falla);
+    }
+  },
+
   _j1587Frame(d) {
     const j = this._j87;
     if (!j) return;
@@ -1046,24 +1142,19 @@ Modulos.diagnostico_obd = {
     const mid = d[4];                               // tras el timestamp de 4 bytes
     j.mids[mid] = (j.mids[mid] || 0) + 1;
 
-    const par = d.slice(5);
-    for (let i = 0; i < par.length; i++) {
-      if (par[i] !== 194) continue;                 // PID 194 = códigos de diagnóstico
-      const n = par[i + 1];
-      if (!n || i + 2 + n > par.length) break;
-      const cuerpo = par.slice(i + 2, i + 2 + n);
-      for (let k = 0; k + 1 < cuerpo.length; k += 2) {
-        const id = cuerpo[k], cod = cuerpo[k + 1];
-        const falla = {
-          mid, id, fmi: cod & 0x0F,
-          sid: !!(cod & 0x80),                      // identificador de subsistema en vez de parámetro
-          inactiva: !!(cod & 0x40),
-          crudo: `${id.toString(16).padStart(2,'0')} ${cod.toString(16).padStart(2,'0')}`.toUpperCase(),
-        };
-        const clave = `${falla.mid}-${falla.id}-${falla.fmi}-${falla.sid}`;
-        if (!j.fallas.some(f => `${f.mid}-${f.id}-${f.fmi}-${f.sid}` === clave)) j.fallas.push(falla);
-      }
-      break;
+    for (const p of this._j1587Params(d.slice(5))) {
+      if (p.pagina) continue;                       // página 2: no está en el catálogo
+      if (p.pid === 194) { this._j1587Fallas(mid, p.datos, j); continue; }
+      const def = this._J1587_PIDS[p.pid];
+      if (!def || p.datos.length < def.n) continue;
+      /* 0xFF / 0xFFFF = parámetro no disponible en este camión */
+      const todoFF = p.datos.slice(0, def.n).every(x => x === 0xFF);
+      if (todoFF) continue;
+      const v = def.f(p.datos);
+      if (v === null || v === undefined || !isFinite(v)) continue;
+      j.datos[def.k] = Math.round(v * 10) / 10;
+      j.crudoPid[def.k] = p.datos.slice(0, def.n).map(x => x.toString(16).padStart(2,'0').toUpperCase()).join(' ');
+      j.vistos[p.pid] = (j.vistos[p.pid] || 0) + 1;
     }
   },
 
@@ -1082,7 +1173,7 @@ Modulos.diagnostico_obd = {
       const c = await this._puenteOp({ op:'conectar', protocolo:'J1708', device:1 });
       if (!c.ok) throw new Error(`El puente no pudo abrir el J1708: ${c.error || 'código ' + c.codigo}. ¿Está enchufado a la PC?`);
 
-      this._j87 = { mids:{}, fallas:[], total:0 };
+      this._j87 = { mids:{}, fallas:[], total:0, datos:{}, crudoPid:{}, vistos:{} };
       log('Escuchando el bus J1708 (el camión transmite solo)...');
       await new Promise(r => setTimeout(r, 4000));
       const j = this._j87;
@@ -1091,15 +1182,34 @@ Modulos.diagnostico_obd = {
       const mids = Object.keys(j.mids).map(Number);
       log(`${j.total} tramas de ${mids.length} módulo(s): ${mids.map(m => this._nombreMID1587(m)).join(', ')} ✓`);
 
+      /* Parámetros en vivo: antes esto no se leía y el camión parecía mudo salvo
+         por las fallas. La presión barométrica (PID 108) entra por acá. */
+      const nPar = Object.keys(j.datos).length;
+      if (nPar) {
+        const vistos = Object.keys(j.vistos).map(Number).sort((a, b) => a - b);
+        log(`${nPar} parámetro(s) en vivo — PID ${vistos.join(', ')} ✓`);
+      } else {
+        log('Ningún parámetro conocido en el tráfico: el motor puede estar apagado, o los PID que emite no están en el catálogo todavía.');
+      }
+
       /* Siempre se vuelca la trama cruda: es lo que permite confirmar el formato
          contra la app de Navistar en el mismo camión. */
       log('<b>Trama cruda tal como llega del adaptador:</b>');
       for (const t of (j.crudo || [])) log(`&nbsp;&nbsp;<code>${t.map(x => x.toString(16).padStart(2, '0')).join(' ')}</code>`);
 
-      const aFila = f => ({
-        codigo: this._codigoJ1587(f), ecu: f.mid, modulo: this._nombreMID1587(f.mid),
-        desc: `${this._FMI[f.fmi] || 'FMI ' + f.fmi}`, origen: `bytes ${f.crudo}`,
-      });
+      /* El nombre del parámetro va adelante: "Presión barométrica — voltaje alto"
+         dice mucho más que un FMI suelto. Si el PID no está en el catálogo (o es
+         un SID, que es por módulo), se cae al número, que es lo que se busca en
+         el manual de todos modos. */
+      const aFila = f => {
+        const par = this._nombrePID1587(f.id, f.sid);
+        const fmi = this._FMI[f.fmi] || 'FMI ' + f.fmi;
+        return {
+          codigo: this._codigoJ1587(f), ecu: f.mid, modulo: this._nombreMID1587(f.mid),
+          desc: (par ? `${par} — ${fmi}` : fmi) + (f.oc ? ` (${f.oc} veces)` : ''),
+          origen: `bytes ${f.crudo}`,
+        };
+      };
       const dtcs = j.fallas.filter(f => !f.inactiva).map(aFila);
       const pend = j.fallas.filter(f => f.inactiva).map(aFila);
       log(`${dtcs.length} falla(s) activa(s), ${pend.length} inactiva(s)`);
@@ -1108,9 +1218,9 @@ Modulos.diagnostico_obd = {
       this._scan = {
         vehiculo_id: vehId, vin: null, protocolo: 'J1708/J1587 (camión antiguo · USB)',
         adaptador: est.dispositivo || 'USB-Link (RP1210)', mil: dtcs.length > 0,
-        dtcs, dtcs_pendientes: pend, datos: {}, freeze_frame: null, monitores: null,
+        dtcs, dtcs_pendientes: pend, datos: j.datos, freeze_frame: null, monitores: null,
         modulos: mids.map(m => ({ ecu: m, nombre: this._nombreMID1587(m) })),
-        voltaje: null, nhtsa: null,
+        voltaje: j.datos.volt != null ? j.datos.volt + 'V' : null, nhtsa: null,
       };
       log('<b>Escaneo completo ✓</b>');
       this._renderResultado();
@@ -2371,14 +2481,15 @@ Modulos.diagnostico_obd = {
     return labels;
   },
 
-  /* Definición de un sensor del monitor: PID OBD-II o clave J1939 */
+  /* Definición de un sensor del monitor: PID OBD-II, o clave J1939/J1587 */
   _defSensor(p) {
-    if (this._via === 'j1939') { const lb = this._labels()[p]; return lb ? { k: p, l: lb[0], u: lb[1] } : null; }
+    if (this._via === 'j1939' || this._via === 'j1708') { const lb = this._labels()[p]; return lb ? { k: p, l: lb[0], u: lb[1] } : null; }
     return this._PIDS[p];
   },
 
   _sensoresMonitor() {
     if (this._sop && this._sop.length) return this._sop;
+    if (this._via === 'j1708') return Object.keys((this._j87 && this._j87.datos) || (this._scan && this._scan.datos) || {});
     if (this._via === 'j1939') return Object.keys((this._j39 && this._j39.datos) || {});
     /* Al reabrir un escaneo guardado ya no existe _sop, pero sí quedaron los
        datos que se leyeron: se reconstruye la lista desde ahí. Antes caía a los
@@ -2393,7 +2504,7 @@ Modulos.diagnostico_obd = {
   _chipsInicial() {
     if (!this._selMon) {
       const disp = this._sensoresMonitor().filter(p => this._defSensor(p));
-      const basicos = this._via === 'j1939' ? ['rpm', 'temp', 'vel'] : ['0C', '05', '0D'];
+      const basicos = (this._via === 'j1939' || this._via === 'j1708') ? ['rpm', 'temp', 'vel'] : ['0C', '05', '0D'];
       this._selMon = disp.filter(p => basicos.includes(p));
       if (!this._selMon.length) this._selMon = disp.slice(0, 3);
     }
