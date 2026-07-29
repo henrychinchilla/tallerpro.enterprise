@@ -201,6 +201,201 @@ Modulos.diagnostico_obd = {
     } catch (_) { return { mil:false, n:0 }; }
   },
 
+  /* ═══════════ EQUIPAMIENTO DECLARADO Y ELIMINACIONES ═══════════
+     Un vehículo al que le sacaron el DPF o el EGR no tiene fallas: anda "bien"
+     justamente porque le quitaron lo que fallaba. No se detecta buscando
+     códigos — se detecta viendo qué dice el propio ECU que monitorea.
+
+     La norma obliga a cada motor a declarar sus monitores de disponibilidad.
+     Un diésel al que le corresponde postratamiento TIENE que declarar el
+     monitor de filtro de partículas y el de EGR. Si no los declara, no es una
+     variante regional: se los borraron del software.
+
+     Todo sale del propio vehículo y del VIN (público). No hace falta ninguna
+     base de datos de equipamiento con licencia. */
+
+  /* Monitores de disponibilidad (modo 01 PID 01), SAE J1979.
+     Byte B bit 3 dice el tipo de motor, y eso cambia qué significan C y D. */
+  _MON_DIESEL: {
+    0x01:'Catalizador NMHC', 0x02:'Postratamiento NOx / SCR', 0x08:'Presión de sobrealimentación',
+    0x20:'Sensor de gases de escape', 0x40:'Filtro de partículas (DPF)', 0x80:'Sistema EGR / VVT',
+  },
+  _MON_GASOLINA: {
+    0x01:'Catalizador', 0x02:'Catalizador calentado', 0x04:'Sistema evaporativo',
+    0x08:'Aire secundario', 0x10:'Refrigerante A/A', 0x20:'Sensor de oxígeno',
+    0x40:'Calefactor de sonda', 0x80:'Sistema EGR',
+  },
+
+  async _leerReadiness() {
+    try {
+      const hex = this._hexLines(await this._cmd('0101')).join('');
+      const i = hex.indexOf('4101');
+      if (i < 0) return null;
+      const b = [1, 2, 3].map(k => parseInt(hex.substr(i + 4 + k * 2, 2), 16));
+      if (b.some(isNaN)) return null;
+      const [B, C, D] = b;
+      const diesel = !!(B & 0x08);
+      const tabla = diesel ? this._MON_DIESEL : this._MON_GASOLINA;
+      const monitores = [];
+      for (const bit of Object.keys(tabla).map(Number)) {
+        const soportado = !!(C & bit);
+        /* En D, 1 = INCOMPLETO. Un monitor soportado y nunca completado también
+           es señal: puede ser que se borraron los códigos hace poco, o que el
+           sistema no llega a ejecutarse porque no está. */
+        const listo = soportado && !(D & bit);
+        monitores.push({ nombre: tabla[bit], bit, soportado, listo });
+      }
+      return { diesel, monitores };
+    } catch (_) { return null; }
+  },
+
+  /* Norma OBD que el vehículo declara cumplir (PID 1C). Dice la región. */
+  _OBD_STD: {
+    1:'OBD-II (CARB, EE.UU.)', 2:'OBD (EPA, EE.UU.)', 3:'OBD y OBD-II', 4:'OBD-I',
+    5:'Sin OBD', 6:'EOBD (Europa)', 7:'EOBD y OBD-II', 8:'EOBD y OBD', 9:'EOBD, OBD y OBD-II',
+    10:'JOBD (Japón)', 11:'JOBD y OBD-II', 12:'JOBD y EOBD', 13:'JOBD, EOBD y OBD-II',
+    17:'EMD (motores pesados)', 18:'EMD+', 19:'HD OBD-C (pesados, EE.UU.)',
+    20:'HD OBD (pesados, EE.UU.)', 21:'WWH-OBD (mundial)', 23:'HD EOBD-I (Europa)',
+    24:'HD EOBD-I N', 25:'HD EOBD-II', 28:'OBDBr-1 (Brasil)', 29:'OBDBr-2 (Brasil)',
+    30:'KOBD (Corea)', 31:'IOBD-I (India)', 32:'IOBD-II (India)', 33:'HD EOBD-IV',
+  },
+  async _leerNormaOBD() {
+    try {
+      const b = await this._pid('1C', 3000);
+      if (!b || !b.length) return null;
+      return { codigo: b[0], nombre: this._OBD_STD[b[0]] || `Norma ${b[0]}` };
+    } catch (_) { return null; }
+  },
+
+  /* Calibración del ECU (modo 09): CALID es el nombre del software y CVN su
+     firma. Sirven para saber si a este motor le reprogramaron la computadora:
+     dos vehículos iguales de fábrica traen el mismo CVN. */
+  async _leerCalibracion() {
+    const sacar = async (info, marca) => {
+      try {
+        const hex = this._hexLines(await this._cmd('09' + info, 8000)).join('');
+        const i = hex.indexOf(marca);
+        return i < 0 ? null : hex.slice(i + marca.length + 2);   // +2: salta el conteo
+      } catch (_) { return null; }
+    };
+    const out = { calid: null, cvn: null };
+    const h4 = await sacar('04', '4904');
+    if (h4) {
+      let s = '';
+      for (let p = 0; p + 1 < h4.length; p += 2) {
+        const c = String.fromCharCode(parseInt(h4.substr(p, 2), 16));
+        if (/[\x20-\x7E]/.test(c)) s += c;
+      }
+      s = s.replace(/\s+/g, ' ').trim();
+      if (s) out.calid = s;
+    }
+    const h6 = await sacar('06', '4906');
+    if (h6) {
+      const cvn = h6.replace(/[^0-9A-F]/gi, '').toUpperCase();
+      if (cvn) out.cvn = cvn.match(/.{1,8}/g).slice(0, 4).join(' ');
+    }
+    return (out.calid || out.cvn) ? out : null;
+  },
+
+  /* Modo 0A: códigos PERMANENTES. No se borran desconectando la batería ni con
+     el modo 04 — solo se van cuando el monitor correspondiente corre y pasa.
+     Es lo que delata a quien "limpió" los códigos justo antes de vender. */
+  async _leerPermanentes() {
+    const encontrados = [];
+    try {
+      for (const { ecu, hex } of await this._cmdPorECU('0A', 8000)) {
+        const i = hex.indexOf('4A');
+        if (i < 0) continue;
+        let h = hex.slice(i + 2);
+        if (this._protoNum >= 6) h = h.slice(2);
+        for (let p = 0; p + 3 < h.length; p += 4) {
+          const c = this._decodeDTC(h.substr(p, 4));
+          if (c && !encontrados.some(x => x.codigo === c && x.ecu === ecu)) encontrados.push({ codigo: c, ecu });
+        }
+      }
+    } catch (_) {}
+    return encontrados;
+  },
+
+  /* País de fabricación por el primer carácter del VIN (ISO 3780). Fija qué
+     norma de emisiones le corresponde, que es lo que decide si "no tiene DPF"
+     es normal o es una eliminación. */
+  _paisVIN(vin) {
+    if (!vin || vin.length < 10) return null;
+    const c = vin[0].toUpperCase();
+    const t = { '1':['Estados Unidos','us'], '4':['Estados Unidos','us'], '5':['Estados Unidos','us'],
+                '2':['Canadá','us'], '3':['México','us'], '9':['Brasil','br'], '8':['Argentina','br'],
+                'J':['Japón','jp'], 'K':['Corea','kr'], 'L':['China','cn'], 'M':['India','in'],
+                'S':['Reino Unido','eu'], 'V':['Francia/España','eu'], 'W':['Alemania','eu'],
+                'Y':['Suecia/Finlandia','eu'], 'Z':['Italia','eu'], 'T':['Suiza/Chequia','eu'] };
+    const r = t[c];
+    if (!r) return null;
+    /* Décima posición = año modelo. Salta I, O, Q, U, Z y el 0.
+       El código es CÍCLICO de 30 años: la misma letra vale para 1999 y 2029.
+       Si resolver al ciclo actual da un año futuro, es del ciclo anterior. Sin
+       esto un camión de 1999 se fechaba en 2029 y la revisión de equipamiento
+       lo acusaba de haberle eliminado el DPF. */
+    const cod = 'ABCDEFGHJKLMNPRSTVWXY123456789';
+    const k = cod.indexOf(vin[9].toUpperCase());
+    let anio = null;
+    if (k >= 0) {
+      anio = 2010 + k;
+      const tope = new Date().getFullYear() + 1;   // el modelo puede adelantarse un año
+      if (anio > tope) anio -= 30;
+    }
+    return { pais: r[0], region: r[1], anio };
+  },
+
+  /* Cruza todo y arma los hallazgos. Solo afirma lo que se puede sostener: si
+     no hay VIN o no hay lectura de monitores, lo dice en vez de suponer. */
+  _analizarEquipamiento({ readiness, norma, vin, calib }) {
+    const av = [];
+    const info = vin ? this._paisVIN(vin) : null;
+
+    if (!readiness) {
+      av.push({ nivel:'info', txt:'El vehículo no reportó monitores de disponibilidad: no se puede verificar el equipamiento de emisiones.' });
+      return { avisos: av, origen: info, norma, calib };
+    }
+
+    if (readiness.diesel) {
+      /* A un diésel con postratamiento le corresponden ambos. El corte por año
+         es conservador a propósito: EPA 2010 y Euro V/VI en adelante. Antes de
+         eso, no declararlos es legítimo y no se marca nada. */
+      const exigible = !info || !info.anio || info.anio >= 2010;
+      const dpf = readiness.monitores.find(m => m.bit === 0x40);
+      const egr = readiness.monitores.find(m => m.bit === 0x80);
+      const nox = readiness.monitores.find(m => m.bit === 0x02);
+      if (exigible) {
+        if (dpf && !dpf.soportado)
+          av.push({ nivel:'alto', txt:'<b>No declara monitor de filtro de partículas (DPF).</b> A un diésel de este año le corresponde tenerlo: es señal de que el DPF fue eliminado del software.' });
+        if (egr && !egr.soportado)
+          av.push({ nivel:'alto', txt:'<b>No declara monitor de EGR.</b> Señal de que el sistema EGR fue eliminado del software.' });
+        if (nox && !nox.soportado && info && info.region === 'us')
+          av.push({ nivel:'medio', txt:'No declara monitor de postratamiento NOx / SCR. En un vehículo de EE.UU. de este año debería estar.' });
+      } else if (info && info.anio) {
+        av.push({ nivel:'info', txt:`Modelo ${info.anio}: no se exige postratamiento, así que la ausencia de monitores de DPF/EGR no es concluyente.` });
+      }
+      /* Soportado pero nunca completado: puede ser borrado reciente de códigos
+         (para pasar una revisión) o un sistema que no llega a ejecutarse. */
+      const pend = readiness.monitores.filter(m => m.soportado && !m.listo);
+      if (pend.length)
+        av.push({ nivel:'medio', txt:`Monitores declarados pero sin completar: ${pend.map(m => m.nombre).join(', ')}. Puede ser que se borraran los códigos hace poco.` });
+    } else {
+      const egr = readiness.monitores.find(m => m.bit === 0x80);
+      const cat = readiness.monitores.find(m => m.bit === 0x01);
+      if (cat && !cat.soportado)
+        av.push({ nivel:'alto', txt:'<b>No declara monitor de catalizador.</b> Señal de catalizador eliminado del software.' });
+      if (egr && !egr.soportado)
+        av.push({ nivel:'medio', txt:'No declara monitor de EGR.' });
+      const pend = readiness.monitores.filter(m => m.soportado && !m.listo);
+      if (pend.length)
+        av.push({ nivel:'medio', txt:`Monitores sin completar: ${pend.map(m => m.nombre).join(', ')}.` });
+    }
+
+    if (!vin) av.push({ nivel:'info', txt:'Sin VIN no se puede saber el origen ni el año, así que lo anterior se evalúa sin ese contexto.' });
+    return { avisos: av, origen: info, norma, calib };
+  },
+
   /* Lee un PID modo 01 y devuelve los bytes de datos */
   async _pid(pid, timeout = 4000) {
     const hex = this._hexLines(await this._cmd('01' + pid, timeout)).join('');
@@ -2786,6 +2981,35 @@ Modulos.diagnostico_obd = {
       const monitores = await this._leerMonitores(log).catch(() => null);
       if (!monitores) log('Este vehículo no reporta monitores en modo 06');
 
+      /* Códigos PERMANENTES: los que no se borran con la batería ni con el modo
+         04. Si aparecen y no hay códigos confirmados, alguien limpió la memoria
+         hace poco — dato clave al recibir un vehículo que no se conoce. */
+      log('Leyendo códigos permanentes (modo 0A)...');
+      const permanentes = await this._leerPermanentes();
+      if (permanentes.length) {
+        log(`<b style="color:var(--amber)">${permanentes.length} código(s) PERMANENTE(S)</b> — no se borran desconectando la batería`);
+        if (!dtcs.length) log('&nbsp;&nbsp;Hay permanentes pero ningún código confirmado: la memoria se borró hace poco.');
+      } else log('Sin códigos permanentes');
+
+      /* Equipamiento declarado: lo que permite ver un DPF o un EGR eliminados,
+         que no dejan ningún código porque el software ya no los busca. */
+      log('Verificando equipamiento declarado...');
+      const readiness = await this._leerReadiness();
+      const normaObd = await this._leerNormaOBD();
+      const calib = await this._leerCalibracion();
+      if (normaObd) log(`Norma declarada: <b>${normaObd.nombre}</b>`);
+      if (calib?.calid) log(`Calibración: <b>${calib.calid}</b>${calib.cvn ? ` <span style="color:var(--text3)">· CVN ${calib.cvn}</span>` : ''}`);
+      else if (calib?.cvn) log(`CVN de calibración: <b>${calib.cvn}</b>`);
+      const equipo = this._analizarEquipamiento({ readiness, norma:normaObd, vin, calib });
+      if (readiness) {
+        const sop = readiness.monitores.filter(m => m.soportado);
+        log(`Motor ${readiness.diesel ? 'diésel' : 'a gasolina'} — declara ${sop.length} de ${readiness.monitores.length} monitores`);
+      }
+      for (const a of equipo.avisos) {
+        const col = a.nivel === 'alto' ? 'var(--red)' : a.nivel === 'medio' ? 'var(--amber)' : 'var(--text3)';
+        log(`<span style="color:${col}">${a.nivel === 'alto' ? '⛔' : a.nivel === 'medio' ? '⚠️' : 'ℹ️'} ${a.txt}</span>`);
+      }
+
       let nhtsa = null;
       if (vin) {
         log('Consultando VIN en base de datos NHTSA...');
@@ -2795,7 +3019,9 @@ Modulos.diagnostico_obd = {
 
       this._scan = { vehiculo_id: vehId, vin, protocolo, adaptador: nombre, mil,
                      dtcs, dtcs_pendientes: pend, datos, freeze_frame: freeze,
-                     monitores, modulos, voltaje: datos.volt || null, nhtsa };
+                     monitores, modulos, voltaje: datos.volt || null, nhtsa,
+                     permanentes, readiness, norma_obd: normaObd, calibracion: calib,
+                     equipamiento: equipo };
       log('<b>Escaneo completo ✓</b>');
       this._renderResultado();
       document.getElementById('obd-btn-save').style.display = '';
@@ -2822,6 +3048,7 @@ Modulos.diagnostico_obd = {
       <div id="obd-bitacora"></div>
       <div id="obd-campanas"></div>
       ${this._freezeHTML(s.freeze_frame)}
+      ${this._equipamientoHTML(s)}
       ${this._monitoresHTML(s.monitores)}
       <div class="card" style="padding:10px;margin-top:8px">
         <b style="font-size:12px">DATOS EN VIVO (${Object.keys(s.datos||{}).length} sensores)</b>
@@ -2963,6 +3190,42 @@ Modulos.diagnostico_obd = {
         <thead><tr><th>Código</th><th>Módulo</th><th>Descripción</th><th>Estado</th><th style="text-align:right">Guía</th></tr></thead>
         <tbody>${filas.map(f=>`<tr><td><b style="font-family:monospace">${f.codigo}</b></td><td style="font-size:11px;white-space:nowrap">${f.modulo || this._nombreModulo(f.ecu)}</td><td>${f.desc}${f.origen ? `<div style="font-size:10px;color:var(--text3);margin-top:2px">${f.origen}${f.fuente ? ` · ${f.fuente}` : ''}</div>` : ''}</td><td><span class="badge badge-${f.color}">${f.tipo}</span></td><td style="text-align:right;white-space:nowrap"><button class="btn btn-sm btn-ghost" onclick="Modulos.diagnostico_obd.verGuia('${UI.esc(f.codigo)}')" title="Qué medir antes de cambiar piezas">🔧${this._GUIA[f.codigo] ? '' : '<span style="opacity:.5"> ·</span>'}</button></td></tr>`).join('')}</tbody>
       </table>` : '<p style="color:var(--green);margin:6px 0 0">✅ Sin códigos de falla</p>'}
+    </div>`;
+  },
+
+  /* Tarjeta de equipamiento: lo que el vehículo declara y lo que falta.
+     Va arriba porque un DPF eliminado no genera ningún código y se pasaría por
+     alto mirando solo la lista de fallas. */
+  _equipamientoHTML(s) {
+    const e = s && s.equipamiento;
+    const r = s && s.readiness;
+    if (!e && !r && !s?.norma_obd && !s?.calibracion && !(s?.permanentes || []).length) return '';
+    const av = (e && e.avisos) || [];
+    const alto = av.filter(a => a.nivel === 'alto');
+
+    const chip = m => `<span style="display:inline-block;padding:2px 8px;margin:2px;border-radius:10px;font-size:11px;` +
+      `background:${m.soportado ? (m.listo ? 'rgba(34,197,94,.15)' : 'rgba(245,158,11,.15)') : 'rgba(148,163,184,.12)'};` +
+      `color:${m.soportado ? (m.listo ? 'var(--green)' : 'var(--amber)') : 'var(--text3)'}">` +
+      `${m.soportado ? (m.listo ? '✓' : '◔') : '—'} ${UI.esc(m.nombre)}</span>`;
+
+    const origen = e && e.origen;
+    return `<div class="card" style="padding:10px;margin-top:8px${alto.length ? ';border:1px solid rgba(239,68,68,.45)' : ''}">
+      <b style="font-size:12px">EQUIPAMIENTO DECLARADO POR EL VEHÍCULO</b>
+      <div style="font-size:11px;color:var(--text3);margin-top:2px">Un sistema eliminado del software no genera códigos: se detecta porque el motor deja de declarar su monitor.</div>
+      ${origen ? `<div style="font-size:11.5px;margin-top:6px">Origen por VIN: <b>${UI.esc(origen.pais)}</b>${origen.anio ? ` · modelo <b>${origen.anio}</b>` : ''}</div>` : ''}
+      ${s.norma_obd ? `<div style="font-size:11.5px">Norma declarada: <b>${UI.esc(s.norma_obd.nombre)}</b></div>` : ''}
+      ${s.calibracion?.calid ? `<div style="font-size:11.5px">Calibración: <b style="font-family:ui-monospace,Consolas,monospace">${UI.esc(s.calibracion.calid)}</b></div>` : ''}
+      ${s.calibracion?.cvn ? `<div style="font-size:11.5px">CVN: <span style="font-family:ui-monospace,Consolas,monospace">${UI.esc(s.calibracion.cvn)}</span> <span style="color:var(--text3)">— dos vehículos iguales de fábrica traen el mismo</span></div>` : ''}
+      ${r ? `<div style="margin-top:8px"><div style="font-size:11px;color:var(--text3)">Monitores (motor ${r.diesel ? 'diésel' : 'a gasolina'}): ✓ listo · ◔ sin completar · — no declarado</div>
+        <div style="margin-top:4px">${r.monitores.map(chip).join('')}</div></div>` : ''}
+      ${(s.permanentes || []).length ? `<div style="margin-top:8px;font-size:11.5px;color:var(--amber)">
+        <b>${s.permanentes.length} código(s) permanente(s):</b> ${s.permanentes.map(p => UI.esc(p.codigo)).join(', ')}
+        <div style="color:var(--text3);font-size:11px">No se borran desconectando la batería. Si aparecen sin códigos confirmados, la memoria se limpió hace poco.</div></div>` : ''}
+      ${av.length ? `<div style="margin-top:8px">${av.map(a => {
+        const col = a.nivel === 'alto' ? 'var(--red)' : a.nivel === 'medio' ? 'var(--amber)' : 'var(--text3)';
+        const ic = a.nivel === 'alto' ? '⛔' : a.nivel === 'medio' ? '⚠️' : 'ℹ️';
+        return `<div style="font-size:11.5px;color:${col};margin-top:3px">${ic} ${a.txt}</div>`;
+      }).join('')}</div>` : ''}
     </div>`;
   },
 
@@ -3239,7 +3502,8 @@ Modulos.diagnostico_obd = {
         ${this._modulosHTML(d)}
         ${this._tablaDTCs(d)}
         ${this._freezeHTML(d.freeze_frame)}
-        ${this._monitoresHTML(d.monitores)}
+        ${this._equipamientoHTML(d)}
+      ${this._monitoresHTML(d.monitores)}
         <div class="card" style="padding:10px;margin-top:8px">
           <b style="font-size:12px">DATOS AL MOMENTO DEL ESCANEO</b>
           <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:8px;margin-top:6px">${this._vivoHTML(d.datos||{})}</div>
