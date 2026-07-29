@@ -1072,6 +1072,40 @@ Modulos.diagnostico_obd = {
     3242:'Temperatura de entrada del DPF', 3251:'Presión diferencial del DPF',
     3610:'Presión de salida del DPF', 3719:'Acumulación de hollín en DPF',
     4094:'Nivel bajo de DEF/urea', 5246:'Inductor SCR (derate por emisiones)',
+
+    /* ── Frenos / ABS ──────────────────────────────────────────────────────
+       Faltaban por completo: el catálogo era casi todo de motor, así que una
+       falla de ABS salía como "Componente SPN 789" y no decía nada. En un
+       camión el ABS es de los módulos que más falla (sensores y anillos
+       dentados a la intemperie) y es el que no se puede dejar pasar. */
+    46:'Presión neumática de suministro', 117:'Presión del depósito de frenos #1',
+    118:'Presión del depósito de frenos #2', 121:'Retardador — freno de escape',
+    561:'ASR — control de freno activo', 562:'ASR — control de motor activo',
+    563:'ABS activo', 596:'Interruptor de control de crucero',
+    597:'Interruptor del pedal de freno', 598:'Interruptor del embrague',
+    904:'Velocidad del eje delantero',
+    905:'Velocidad relativa — rueda delantera izquierda',
+    906:'Velocidad relativa — rueda delantera derecha',
+    907:'Velocidad relativa — rueda trasera izquierda',
+    908:'Velocidad relativa — rueda trasera derecha',
+    1045:'ABS — solicitud de freno del remolque',
+    1121:'Velocidad de rueda — eje 1 izquierda', 1122:'Velocidad de rueda — eje 1 derecha',
+    1123:'Velocidad de rueda — eje 2 izquierda', 1124:'Velocidad de rueda — eje 2 derecha',
+
+    /* ── Transmisión ─────────────────────────────────────────────────────── */
+    161:'Velocidad de entrada de la transmisión', 177:'Temperatura del aceite de transmisión',
+    191:'Velocidad de salida de la transmisión', 522:'Marcha solicitada',
+    523:'Marcha actual', 524:'Marcha seleccionada', 560:'Embrague de la transmisión',
+    573:'Convertidor de par — embrague de bloqueo', 584:'Freno de estacionamiento',
+
+    /* ── Post-tratamiento / regeneración ──────────────────────────────────
+       Lo que se ve cuando el DPF entra en problemas, que es la falla más común
+       en camión moderno después de las de sensor. */
+    3699:'Regeneración de DPF inhibida', 3700:'Regeneración de DPF activa',
+    3701:'Obstrucción del DPF', 3702:'Regeneración estacionaria en curso',
+    3703:'Regeneración de DPF — inhibida por el conductor',
+    3720:'Ceniza acumulada en el DPF', 3936:'Estado del sistema de post-tratamiento',
+    4364:'Eficiencia de conversión del SCR', 4360:'Temperatura de entrada del SCR',
   },
   /* FMI (Failure Mode Identifier) estándar J1939 */
   _FMI: {
@@ -1237,7 +1271,7 @@ Modulos.diagnostico_obd = {
       const est = await this._puenteEstado();
       log(`Puente USB: <b>${est.dispositivo || 'RP1210'}</b> v${est.version || '?'} ✓`);
       const c = await this._puenteOp({ op:'conectar', protocolo:'J1708', device:1 });
-      if (!c.ok) throw new Error(`El puente no pudo abrir el J1708: ${c.error || 'código ' + c.codigo}. ¿Está enchufado a la PC?`);
+      if (!c.ok) throw new Error(`El puente no pudo abrir el J1708: ${c.error || 'código ' + c.codigo}. Revisá que el adaptador esté conectado AL CAMIÓN y con el switch en contacto: los LED encienden con el USB, pero sin los 12 V del vehículo no abre ningún bus.`);
 
       this._j87 = { mids:{}, fallas:[], total:0, datos:{}, crudoPid:{}, vistos:{} };
       log('Escuchando el bus J1708 (el camión transmite solo)...');
@@ -1314,6 +1348,19 @@ Modulos.diagnostico_obd = {
     } finally { btn.disabled = false; }
   },
 
+  /* Direcciones de origen J1939 (tabla de direcciones preferidas de la norma).
+     Se nombran las que el estándar fija; el resto se muestra por número, que es
+     lo que se busca en el manual del fabricante. */
+  _J39_SA: {
+    0:'Motor #1', 1:'Motor #2', 3:'Transmisión #1', 5:'Consola de cambios',
+    6:'Toma de fuerza (PTO)', 7:'Eje directriz', 8:'Eje motriz #1', 9:'Eje motriz #2',
+    11:'Frenos / ABS', 13:'Frenos del remolque', 15:'Retardador del motor',
+    16:'Retardador de transmisión', 17:'Control de crucero',
+    23:'Instrumentos / tablero', 33:'Controlador de carrocería',
+    37:'Suspensión', 49:'Control de cabina', 249:'Herramienta de diagnóstico',
+  },
+  _nombreSA(sa) { return this._J39_SA[sa] || `Módulo ${sa} (0x${Number(sa).toString(16).toUpperCase()})`; },
+
   _j39Frame(d) {   // lectura RP1210 J1939: [ts×4][pgn×3][prio][origen][destino][datos...]
     const j = this._j39;
     if (!j) return;
@@ -1325,15 +1372,34 @@ Modulos.diagnostico_obd = {
     if (!j.crudo) j.crudo = [];
     if (j.crudo.length < 4) j.crudo.push(d.slice(0, 20));
     if (d.length < 10) { j.cortas = (j.cortas || 0) + 1; return; }
-    const pgn = d[4] | (d[5] << 8) | (d[6] << 16), data = d.slice(10);
+    const pgn = d[4] | (d[5] << 8) | (d[6] << 16), sa = d[8], data = d.slice(10);
     j.pgns[pgn] = (j.pgns[pgn] || 0) + 1;
+    if (sa !== 0xF9) j.sas[sa] = (j.sas[sa] || 0) + 1;   // 0xF9 somos nosotros
     const defs = this._J39_PGNS[pgn];
     if (defs) for (const s of defs) { const v = s.f(data); if (v !== null) j.datos[s.k] = v; }
-    if (pgn === 65226) j.dm1 = data;
-    if (pgn === 65227) j.dm2 = data;
+    /* POR DIRECCIÓN DE ORIGEN, no en una sola variable. En J1939 CADA módulo
+       difunde su propio DM1: motor, ABS, transmisión, tablero. Guardarlos en un
+       único campo hacía que el último en llegar pisara a los demás — y como el
+       motor transmite mucho más seguido que el ABS, las fallas de frenos
+       desaparecían del escaneo. Un camión con el ABS averiado salía "sin
+       códigos", que es la peor forma de fallar que puede tener esta pantalla. */
+    if (pgn === 65226) j.dm1[sa] = data;
+    if (pgn === 65227) j.dm2[sa] = data;
     if (pgn === 65260) j.vin = data;
     if (pgn === 65259) j.comp = data;
     if (j.esperas[pgn]) { j.esperas[pgn](); delete j.esperas[pgn]; }
+  },
+
+  /* Recorre el DM1/DM2 de TODOS los módulos y devuelve las fallas con el módulo
+     que las reportó. */
+  _j39DTCsTodos(mapa) {
+    const res = [];
+    for (const sa of Object.keys(mapa || {})) {
+      const n = Number(sa);
+      for (const f of this._j39DTCs(mapa[sa]))
+        res.push({ ...f, ecu: n, modulo: this._nombreSA(n) });
+    }
+    return res;
   },
 
   _j39Solicitar(pgn) {   // PGN 59904 (Request) a la dirección global
@@ -1372,7 +1438,7 @@ Modulos.diagnostico_obd = {
       log(`Puente USB: <b>${est.dispositivo || 'RP1210'}</b> v${est.version || '?'} ✓`);
       const c = await this._puenteOp({ op:'conectar', protocolo:`J1939:Baud=${this._j39Baud || 250}`, device:1 });
       if (!c.ok) throw new Error(`El puente no pudo abrir el USB-Link: ${c.error || 'código ' + c.codigo}. ¿Está enchufado a la PC?`);
-      this._j39 = { datos:{}, pgns:{}, esperas:{}, dm1:null, dm2:null, vin:null, comp:null };
+      this._j39 = { datos:{}, pgns:{}, esperas:{}, sas:{}, dm1:{}, dm2:{}, vin:null, comp:null };
       /* Reclamar la dirección de herramienta de diagnóstico (0xF9) en el bus.
          El número de comando de RP1210 para esto no está verificado contra este
          hardware, así que se prueban los dos candidatos y se reporta cuál pasó
@@ -1391,7 +1457,7 @@ Modulos.diagnostico_obd = {
          más de 2,5 s en aparecer; con el plazo fijo se perdían de a ratos y el
          escaneo salía distinto en cada intento sobre el mismo camión. */
       const esc = await this._escucharBus(
-        () => `${Object.keys(j.pgns).length}|${Object.keys(j.datos).length}|${j.dm1 ? 1 : 0}`,
+        () => `${Object.keys(j.pgns).length}|${Object.keys(j.datos).length}|${Object.keys(j.sas).length}|${Object.keys(j.dm1).length}`,
         { min:2000, max:14000, quieto:2500,
           log: () => log(`&nbsp;&nbsp;<span style="color:var(--text3)">…${Object.keys(j.pgns).length} tipo(s) de mensaje, ${Object.keys(j.datos).length} parámetro(s)</span>`) });
       log(`Escucha ${esc.motivo === 'tope' ? 'cortada por tiempo' : 'completa'} (${(esc.ms/1000).toFixed(1)} s)`);
@@ -1429,17 +1495,39 @@ Modulos.diagnostico_obd = {
       }
 
       log('Leyendo códigos de falla (DM1 activos / DM2 previos)...');
-      if (!this._j39.dm1) { await this._j39Solicitar(65226); await this._j39Esperar(65226, 1500); }
+      if (!Object.keys(this._j39.dm1).length) { await this._j39Solicitar(65226); await this._j39Esperar(65226, 1500); }
       await this._j39Solicitar(65227); await this._j39Esperar(65227, 1500);
-      let dtcs = this._j39DTCs(this._j39.dm1);
-      let pend = this._j39DTCs(this._j39.dm2);
+      /* Se piden a la dirección global, así que contestan TODOS los módulos:
+         hay que darles tiempo a los lentos (el ABS suele contestar después del
+         motor) en vez de leer apenas llega la primera respuesta. */
+      await this._escucharBus(
+        () => `${Object.keys(this._j39.dm1).length}|${Object.keys(this._j39.dm2).length}`,
+        { min:1200, max:6000, quieto:1500 });
+      let dtcs = this._j39DTCsTodos(this._j39.dm1);
+      let pend = this._j39DTCsTodos(this._j39.dm2);
       dtcs = await this._enriquecerDTCs(dtcs, vehId, 'j1939');
       pend = await this._enriquecerDTCs(pend, vehId, 'j1939');
-      const b0 = this._j39.dm1 ? this._j39.dm1[0] : 0;
-      const mil = ((b0 >> 6) & 3) === 1;
-      if (((b0 >> 4) & 3) === 1) log('<span style="color:var(--red)">🔴 Lámpara de PARO encendida — atender de inmediato</span>');
-      if (((b0 >> 2) & 3) === 1) log('<span style="color:var(--amber)">🟠 Lámpara ámbar de advertencia encendida</span>');
+
+      /* Las lámparas las reporta cada módulo; vale la peor de todas. Antes se
+         leía solo el byte del último DM1 recibido, así que una lámpara de paro
+         encendida por el ABS podía no mostrarse nunca. */
+      let peor = 0, paro = false, ambar = false;
+      for (const sa of Object.keys(this._j39.dm1)) {
+        const b = this._j39.dm1[sa][0] || 0;
+        if (((b >> 6) & 3) === 1) peor = 1;
+        if (((b >> 4) & 3) === 1) paro = true;
+        if (((b >> 2) & 3) === 1) ambar = true;
+      }
+      const mil = peor === 1;
+      if (paro)  log('<span style="color:var(--red)">🔴 Lámpara de PARO encendida — atender de inmediato</span>');
+      if (ambar) log('<span style="color:var(--amber)">🟠 Lámpara ámbar de advertencia encendida</span>');
+
+      /* Qué módulo reportó qué: es la diferencia entre "el camión tiene 3
+         fallas" y "el ABS tiene una falla de sensor de rueda". */
+      const porMod = {};
+      for (const d of dtcs) porMod[d.modulo] = (porMod[d.modulo] || 0) + 1;
       log(`${dtcs.length} falla(s) activa(s), ${pend.length} previa(s)`);
+      for (const m of Object.keys(porMod)) log(`&nbsp;&nbsp;${m}: ${porMod[m]}`);
 
       let nhtsa = null;
       if (vin) {
@@ -1450,9 +1538,16 @@ Modulos.diagnostico_obd = {
 
       this._sop = Object.keys(this._j39.datos).filter(k => typeof this._j39.datos[k] === 'number');
       log(`${this._sop.length} sensores del motor en el bus ✓`);
+      /* Qué módulos hay en el bus. Sirve para dos cosas: ver de un vistazo si
+         el ABS está presente, y notar su AUSENCIA — un módulo que no habla
+         puede ser justamente el problema. */
+      const sas = Object.keys(this._j39.sas).map(Number).sort((a, b) => a - b);
+      if (sas.length) log(`Módulos en el bus: ${sas.map(s => this._nombreSA(s)).join(' · ')}`);
+
       this._scan = { vehiculo_id: vehId, vin, protocolo: 'J1939 (camión · USB)',
                      adaptador: est.dispositivo || 'USB-Link (RP1210)', mil,
                      dtcs, dtcs_pendientes: pend, datos: { ...this._j39.datos },
+                     modulos: sas.map(s => ({ ecu: s, nombre: this._nombreSA(s) })),
                      freeze_frame: null, voltaje: this._j39.datos.volt || null, nhtsa };
       log('<b>Escaneo completo ✓</b>');
       this._renderResultado();
@@ -2407,10 +2502,15 @@ Modulos.diagnostico_obd = {
         /* El caso más común y el más frustrante: todo "instalado" pero nada
            enchufado. Conviene decirlo con todas las letras. */
         log('<b style="color:var(--red)">Ningún adaptador respondió.</b> Los drivers están, pero el hardware no contesta. Revisá, en este orden:');
-        log('&nbsp;&nbsp;1. El adaptador enchufado al <b>USB de esta PC</b> (que Windows lo vea)');
+        /* Lo más frecuente y lo que más tiempo hace perder: el adaptador
+           enciende sus LED con la alimentación del USB y parece listo, pero los
+           transceptores del bus se alimentan de los 12 V del vehículo. Sin el
+           cable en el camión NUNCA va a conectar, por más que se vea encendido. */
+        log('&nbsp;&nbsp;1. <b>El adaptador tiene que estar conectado al vehículo</b>, no solo al USB. Con los LED encendidos por el USB parece listo, pero sin los <b>12 V del camión</b> no puede abrir ningún bus.');
         log('&nbsp;&nbsp;2. El cable en el <b>conector del vehículo</b> — en camión antiguo, pines A/B del Deutsch de 9 pines');
         log('&nbsp;&nbsp;3. El <b>switch en contacto</b> (no hace falta arrancar, pero con el motor andando se ven más datos)');
-        log('&nbsp;&nbsp;4. Si nada de eso: probá la herramienta del fabricante, <code>C:\\NEXIQ\\Test\\CommCheck.exe</code>');
+        log('&nbsp;&nbsp;4. Que Windows vea el adaptador en el USB');
+        log('&nbsp;&nbsp;5. Si nada de eso: probá la herramienta del fabricante, <code>C:\\NEXIQ\\Test\\CommCheck.exe</code>');
       }
     } catch (e) {
       log(`<span style="color:var(--red)">✗ ${e.message}</span>`);
@@ -2955,7 +3055,7 @@ Modulos.diagnostico_obd = {
       if (this._via === 'j1939') {
         await this._j39Solicitar(65235);   // DM11: borra códigos activos
         await this._j39Solicitar(65228);   // DM3: borra códigos previos
-        if (this._j39) { this._j39.dm1 = null; this._j39.dm2 = null; }
+        if (this._j39) { this._j39.dm1 = {}; this._j39.dm2 = {}; }
       } else await this._cmd('04', 8000);
       if (this._scan) this._scan.dtcs_borrados = true;
       this._log(this._via === 'j1939' ? '🧹 Códigos borrados (DM11 + DM3) ✓' : '🧹 Códigos borrados (modo 04) ✓');
