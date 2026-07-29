@@ -11,6 +11,126 @@ Modulos.vehiculos = {
     'ATV / Cuatrimoto','Motor de lancha','Motogenerador',
     'Maquinaria Agrícola','Montacargas / Industrial',
   ],
+  /* Uso del vehículo. Estaba como campo de texto libre con solo un placeholder,
+     así que cada quien escribía lo suyo ("PARTICULAR", "particular", "Part.") y
+     el dato quedaba inservible para filtrar o reportar. */
+  _usos: [
+    'Particular','Comercial','Transporte de carga','Transporte de pasajeros',
+    'Taxi','Reparto / Mensajería','Agrícola','Construcción',
+    'Institucional','Emergencia','Alquiler','Prueba / Demostración',
+  ],
+
+  /* ── Campo de lista con opción de escribir otro ───────────────────────────
+     El tipo era un <input list=datalist>: el datalist solo sugiere MIENTRAS se
+     escribe y no muestra ningún desplegable, así que las 16 opciones quedaban
+     invisibles y el campo parecía texto libre. Un <select> sí muestra la lista;
+     la opción "Otro" conserva la libertad de escribir uno que no esté. */
+  _campoLista(id, opciones, valor, placeholder, onchange) {
+    const enLista = valor && opciones.includes(valor);
+    const otro = !!valor && !enLista;
+    const ev = onchange ? `Modulos.vehiculos._verOtro('${id}');${onchange}` : `Modulos.vehiculos._verOtro('${id}')`;
+    return `<select class="form-select" id="${id}" onchange="${ev}">
+        <option value="">— Seleccionar —</option>
+        ${opciones.map(o => `<option value="${o}"${valor === o ? ' selected' : ''}>${o}</option>`).join('')}
+        <option value="__otro"${otro ? ' selected' : ''}>✏️ Otro (escribir)…</option>
+      </select>
+      <input class="form-input" id="${id}-otro" placeholder="${placeholder}"
+             value="${otro ? String(valor).replace(/"/g, '&quot;') : ''}"
+             style="margin-top:6px;display:${otro ? '' : 'none'}"
+             ${onchange ? `oninput="${onchange}"` : ''}>`;
+  },
+
+  /* ── NIT / CUI ↔ cliente ──────────────────────────────────────────────────
+     La búsqueda del cliente por NIT existía, pero solo corría al escanear la
+     tarjeta de circulación con IA. Escribiendo el NIT a mano no pasaba nada, y
+     es como se cargan la mayoría de los vehículos. */
+  _norm(s) { return (s == null ? '' : String(s)).replace(/[^a-zA-Z0-9]/g, '').toUpperCase(); },
+
+  /* Busca por NIT y también por CUI/DPI: hay clientes registrados como
+     consumidor final que solo tienen el DPI cargado. */
+  _clientePorDoc(doc) {
+    const d = this._norm(doc);
+    if (!d || d === 'CF') return null;
+    return (this._clientes || []).find(c =>
+      (c.nit && this._norm(c.nit) === d) ||
+      (c.cui && this._norm(c.cui) === d) ||
+      (c.dpi && this._norm(c.dpi) === d)) || null;
+  },
+
+  /* Al escribir el NIT o el CUI, engancha el cliente solo. Si no hay ninguno,
+     lo dice: así se sabe que hay que crearlo antes de guardar. */
+  _buscarClientePorDoc(campo) {
+    const val = document.getElementById(campo)?.value;
+    const sel = document.getElementById('veh-cliente');
+    const aviso = document.getElementById('veh-doc-status');
+    if (!sel) return;
+    const d = this._norm(val);
+    if (!d || d.length < 4) { if (aviso) aviso.innerHTML = ''; return; }
+    const c = this._clientePorDoc(val);
+    if (c) {
+      /* No se pisa una selección distinta hecha a mano sin avisar */
+      if (sel.value && sel.value !== c.id) {
+        if (aviso) aviso.innerHTML = `<span style="color:var(--amber);font-size:11px">⚠️ Ese documento es de <b>${c.nombre}</b>, pero hay otro cliente seleccionado.</span>`;
+        return;
+      }
+      sel.value = c.id;
+      if (aviso) aviso.innerHTML = `<span style="color:var(--green);font-size:11px">✓ Cliente enlazado: <b>${c.nombre}</b></span>`;
+    } else if (aviso) {
+      aviso.innerHTML = `<span style="color:var(--text3);font-size:11px">Ningún cliente con ese documento — creá el cliente o elegilo abajo.</span>`;
+    }
+  },
+
+  /* Y al revés: al elegir el cliente, completa el NIT/CUI que estén vacíos. */
+  _clienteElegido() {
+    const sel = document.getElementById('veh-cliente');
+    const c = (this._clientes || []).find(x => x.id === sel?.value);
+    if (!c) return;
+    const nit = document.getElementById('veh-nit');
+    const cui = document.getElementById('veh-cui');
+    if (nit && !nit.value.trim() && c.nit) nit.value = c.nit;
+    if (cui && !cui.value.trim() && (c.cui || c.dpi)) cui.value = c.cui || c.dpi;
+    const aviso = document.getElementById('veh-doc-status');
+    if (aviso) aviso.innerHTML = `<span style="color:var(--green);font-size:11px">✓ Cliente: <b>${c.nombre}</b></span>`;
+  },
+
+  /* Abre el escaneo OBD con este vehículo ya elegido. */
+  async diagnosticar(id) {
+    const m = Modulos.diagnostico_obd;
+    if (!m || typeof m.modalEscanear !== 'function') {
+      UI.toast('El módulo de diagnóstico OBD no está disponible', 'error');
+      return;
+    }
+    await m.modalEscanear(id);
+  },
+
+  _verOtro(id) {
+    const s = document.getElementById(id), i = document.getElementById(id + '-otro');
+    if (!s || !i) return;
+    const es = s.value === '__otro';
+    i.style.display = es ? '' : 'none';
+    if (es) i.focus();
+  },
+
+  /* Valor real del campo: la opción elegida, o lo escrito si se eligió "Otro" */
+  _valorLista(id) {
+    const s = document.getElementById(id);
+    if (!s) return null;
+    if (s.value === '__otro') return (document.getElementById(id + '-otro')?.value || '').trim() || null;
+    return s.value || null;
+  },
+
+  /* Coloca un valor que puede o no estar en la lista (lo usa el escaneo de la
+     tarjeta de circulación, que trae lo que venga impreso). */
+  _setLista(id, valor) {
+    const s = document.getElementById(id), i = document.getElementById(id + '-otro');
+    if (!s || valor == null || valor === '') return;
+    const v = String(valor).trim();
+    const hay = [...s.options].some(o => o.value === v);
+    if (hay) { s.value = v; }
+    else if (i) { s.value = '__otro'; i.value = v; }
+    this._verOtro(id);
+  },
+
   _marcasPorTipo: {
     'Liviano': ['Toyota','Honda','Nissan','Hyundai','Kia','Mazda','Chevrolet','Volkswagen','Mitsubishi','Suzuki','Ford','Renault','Peugeot','Geely','BYD','Changan'],
     'Pickup / Camioneta': ['Toyota','Mitsubishi','Nissan','Ford','Chevrolet','Isuzu','Mazda','Suzuki','JAC','Foton','Dongfeng','Faw','RAM','Volkswagen'],
@@ -206,7 +326,7 @@ Modulos.vehiculos = {
 
   /* Al cambiar el tipo, repuebla marcas y modelos sugeridos sin borrar lo escrito */
   _onTipoChange() {
-    const tipo = document.getElementById('veh-tipo')?.value;
+    const tipo = this._valorLista('veh-tipo');
     const dl = document.getElementById('marcas-list');
     if (dl) dl.innerHTML = this._opcionesMarca(tipo);
     const dlMod = document.getElementById('modelos-list');
@@ -216,7 +336,7 @@ Modulos.vehiculos = {
   /* Al cambiar la marca, repuebla los modelos sugeridos según el tipo */
   _onMarcaChange() {
     const marca = document.getElementById('veh-marca')?.value;
-    const tipo = document.getElementById('veh-tipo')?.value;
+    const tipo = this._valorLista('veh-tipo');
     const dl = document.getElementById('modelos-list');
     if (dl) dl.innerHTML = this._opcionesModelo(marca, tipo);
   },
@@ -252,6 +372,7 @@ Modulos.vehiculos = {
                 <td onclick="event.stopPropagation()">
                   <div style="display:flex;gap:4px;flex-wrap:wrap">
                     <button class="btn btn-sm btn-ghost" onclick="Modulos.vehiculos.planMantenimiento('${v.id}')" title="Plan de mantenimiento preventivo">🔧 Mant.</button>
+                    <button class="btn btn-sm btn-ghost" onclick="Modulos.vehiculos.diagnosticar('${v.id}')" title="Escanear este vehículo con el adaptador OBD">🩺 Diagnosticar</button>
                     <button class="btn btn-sm btn-cyan" onclick="Modulos.vehiculos.modalForm('${v.id}')" title="Editar">✏️ Editar</button>
                     <button class="btn btn-sm btn-amber" onclick="Modulos.ordenes?.modalForm(null,'${v.id}')" title="Nueva OT">＋ OT</button>
                     <button class="btn btn-sm btn-danger" onclick="Modulos.vehiculos.eliminar('${v.id}','${v.placa}')" title="Eliminar">🗑️</button>
@@ -374,7 +495,7 @@ Modulos.vehiculos = {
           setVal('veh-cilindros', data.cilindros);
           setVal('veh-cc', data.cc);
           setVal('veh-ton', data.ton);
-          setVal('veh-uso', data.uso);
+          this._setLista('veh-uso', data.uso);
           setVal('veh-serie', data.serie);
           setVal('veh-asientos', data.asientos);
           setVal('veh-ejes', data.ejes);
@@ -385,14 +506,24 @@ Modulos.vehiculos = {
             if (tEl) {
               const tipoNormal = data.tipo.toUpperCase();
               let matchedTipo = null;
-              if (tipoNormal.includes('CAMIONETA') || tipoNormal.includes('SUV')) matchedTipo = 'SUV';
-              else if (tipoNormal.includes('PESADO') || tipoNormal.includes('CAMION') || tipoNormal.includes('CABEZAL')) matchedTipo = 'Pesado';
+              /* Estos valores TIENEN que existir en _tipos. Antes mapeaba a
+                 'SUV', 'Pesado' y 'ATV', que no son opciones reales de la
+                 lista, así que la tarjeta escaneada dejaba el campo en un
+                 valor que no correspondía a ninguna opción. */
+              if (tipoNormal.includes('CAMIONETA') || tipoNormal.includes('PICKUP')) matchedTipo = 'Pickup / Camioneta';
+              else if (tipoNormal.includes('SUV')) matchedTipo = 'SUV / Crossover';
+              else if (tipoNormal.includes('PESADO') || tipoNormal.includes('CABEZAL') || tipoNormal.includes('TRAILER') || tipoNormal.includes('TRÁILER')) matchedTipo = 'Pesado / Tráiler';
+              else if (tipoNormal.includes('CAMION') || tipoNormal.includes('CAMIÓN')) matchedTipo = 'Camión de reparto';
+              else if (tipoNormal.includes('MICROBUS') || tipoNormal.includes('MICROBÚS')) matchedTipo = 'Microbús';
+              else if (tipoNormal.includes('BUS')) matchedTipo = 'Bus / Autobús';
+              else if (tipoNormal.includes('PANEL') || tipoNormal.includes('VAN')) matchedTipo = 'Van / Minivan';
               else if (tipoNormal.includes('MOTO')) matchedTipo = 'Motocicleta';
-              else if (tipoNormal.includes('ATV') || tipoNormal.includes('CUATRIMOTO')) matchedTipo = 'ATV';
-              else if (tipoNormal.includes('LIVIANO') || tipoNormal.includes('SEDAN') || tipoNormal.includes('AUTO')) matchedTipo = 'Liviano';
+              else if (tipoNormal.includes('ATV') || tipoNormal.includes('CUATRIMOTO')) matchedTipo = 'ATV / Cuatrimoto';
+              else if (tipoNormal.includes('AGRICOLA') || tipoNormal.includes('AGRÍCOLA')) matchedTipo = 'Maquinaria Agrícola';
+              else if (tipoNormal.includes('LIVIANO') || tipoNormal.includes('SEDAN') || tipoNormal.includes('SEDÁN') || tipoNormal.includes('AUTO')) matchedTipo = 'Liviano';
 
-              /* Si no coincide con un tipo conocido, conserva el texto original (campo libre) */
-              tEl.value = matchedTipo || data.tipo;
+              /* Si no coincide con ninguno conocido, va a "Otro" con el texto de la tarjeta */
+              Modulos.vehiculos._setLista('veh-tipo', matchedTipo || data.tipo);
               Modulos.vehiculos._onTipoChange();
             }
           }
@@ -450,13 +581,16 @@ Modulos.vehiculos = {
       <div style="font-weight:700;font-size:12px;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px;border-bottom:1px solid var(--border);padding-bottom:4px">🚗 Identificación y Propietario</div>
       <div class="form-row">
         <div class="form-group"><label class="form-label">NIT</label>
-          <input class="form-input" id="veh-nit" value="${v.nit||''}" placeholder="NIT del propietario"></div>
-        <div class="form-group"><label class="form-label">CUI</label>
-          <input class="form-input" id="veh-cui" value="${v.cui||''}" placeholder="CUI del propietario"></div>
+          <input class="form-input" id="veh-nit" value="${v.nit||''}" placeholder="NIT del propietario"
+                 oninput="Modulos.vehiculos._buscarClientePorDoc('veh-nit')"></div>
+        <div class="form-group"><label class="form-label">CUI / DPI</label>
+          <input class="form-input" id="veh-cui" value="${v.cui||''}" placeholder="DPI del propietario"
+                 oninput="Modulos.vehiculos._buscarClientePorDoc('veh-cui')"></div>
       </div>
+      <div id="veh-doc-status" style="min-height:14px;margin:-4px 0 8px"></div>
       <div class="form-row">
         <div class="form-group"><label class="form-label">Cliente *</label>
-          <select class="form-select" id="veh-cliente">
+          <select class="form-select" id="veh-cliente" onchange="Modulos.vehiculos._clienteElegido()">
             <option value="">Seleccionar cliente...</option>
             ${this._clientes.map(c=>`<option value="${c.id}" ${v.cliente_id===c.id?'selected':''}>${c.nombre} ${c.nit?`(${c.nit})`:''}</option>`).join('')}
           </select></div>
@@ -467,11 +601,9 @@ Modulos.vehiculos = {
       <div style="font-weight:700;font-size:12px;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;margin-top:14px;margin-bottom:8px;border-bottom:1px solid var(--border);padding-bottom:4px">📋 Especificaciones del Vehículo</div>
       <div class="form-row">
         <div class="form-group"><label class="form-label">Tipo *</label>
-          <input class="form-input" id="veh-tipo" list="tipos-list" autocomplete="off" value="${v.tipo||'Liviano'}" placeholder="Elige o escribe un tipo..."
-                 oninput="Modulos.vehiculos._onTipoChange()" onchange="Modulos.vehiculos._onTipoChange()">
-          <datalist id="tipos-list">${this._tipos.map(t=>`<option value="${t}">`).join('')}</datalist></div>
+          ${this._campoLista('veh-tipo', this._tipos, v.tipo || 'Liviano', 'Escribí el tipo…', 'Modulos.vehiculos._onTipoChange()')}</div>
         <div class="form-group"><label class="form-label">Uso</label>
-          <input class="form-input" id="veh-uso" value="${v.uso||''}" placeholder="PARTICULAR, COMERCIAL, etc."></div>
+          ${this._campoLista('veh-uso', this._usos, v.uso || '', 'Escribí el uso…')}</div>
       </div>
       <div class="form-row">
         <div class="form-group"><label class="form-label">Marca *</label>
@@ -560,7 +692,7 @@ Modulos.vehiculos = {
 
     const fields = {
       placa, cliente_id:cliente, marca, modelo,
-      tipo:        document.getElementById('veh-tipo')?.value||null,
+      tipo:        this._valorLista('veh-tipo'),
       anio:        getInt('veh-anio'),
       color:       document.getElementById('veh-color')?.value||null,
       combustible: document.getElementById('veh-comb')?.value||null,
@@ -571,7 +703,7 @@ Modulos.vehiculos = {
       
       chasis:      (document.getElementById('veh-chasis')?.value||'').trim().toUpperCase()||null,
       serie:       (document.getElementById('veh-serie')?.value||'').trim().toUpperCase()||null,
-      uso:         document.getElementById('veh-uso')?.value||null,
+      uso:         this._valorLista('veh-uso'),
       asientos:    getInt('veh-asientos'),
       ejes:        getInt('veh-ejes'),
       cilindros:   getInt('veh-cilindros'),

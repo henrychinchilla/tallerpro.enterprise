@@ -1621,6 +1621,7 @@ Modulos.diagnostico_obd = {
       if (!j.fallas.length) log('No se encontró ningún PID 194 en el tráfico — puede que el camión no tenga fallas, o que el formato de trama no sea el asumido');
 
       this._scan = {
+        costo: this._costoEscaneo(vehId),
         vehiculo_id: vehId, vin: null, protocolo: 'J1708/J1587 (camión antiguo · USB)',
         adaptador: est.dispositivo || 'USB-Link (RP1210)', mil: dtcs.length > 0,
         dtcs, dtcs_pendientes: pend, datos: j.datos, freeze_frame: null, monitores: null,
@@ -1982,7 +1983,8 @@ Modulos.diagnostico_obd = {
         .sort((a, b) => a - b);
       if (sas.length) log(`Módulos en el bus: ${sas.map(s => this._nombreSA(s)).join(' · ')}`);
 
-      this._scan = { vehiculo_id: vehId, vin, protocolo: 'J1939 (camión · USB)',
+      this._scan = { costo: this._costoEscaneo(vehId),
+                     vehiculo_id: vehId, vin, protocolo: 'J1939 (camión · USB)',
                      adaptador: est.dispositivo || 'USB-Link (RP1210)', mil,
                      dtcs, dtcs_pendientes: pend, datos: { ...this._j39.datos },
                      modulos: sas.map(s => ({ ecu: s, nombre: this._nombreSA(s) })),
@@ -2810,14 +2812,22 @@ Modulos.diagnostico_obd = {
   },
 
   /* ═══════════ NUEVO ESCANEO ═══════════ */
-  modalEscanear() {
+  /* `vehId` llega cuando se entra desde la ficha del vehículo: evita tener que
+     buscarlo de nuevo en una lista que en un taller con flota es larga. */
+  async modalEscanear(vehId) {
     this._scan = null;
+    /* Al entrar desde la ficha del vehículo este módulo puede no haberse
+       renderizado todavía, así que su lista estaría vacía y el selector
+       saldría sin opciones. */
+    if (!this._vehiculos || !this._vehiculos.length) {
+      try { this._vehiculos = await DB.getVehiculos() || []; } catch (_) { this._vehiculos = []; }
+    }
     UI.modal('📡 Nuevo Escaneo OBD-II', `
       <div class="form-group">
         <label class="form-label">Vehículo *</label>
         <select class="form-select" id="obd-veh">
           <option value="">— Seleccionar vehículo —</option>
-          ${this._vehiculos.map(v=>`<option value="${v.id}">${v.placa||'s/placa'} · ${v.marca||''} ${v.modelo||''} ${v.anio||''} ${v.clientes?`(${v.clientes.nombre})`:''}</option>`).join('')}
+          ${this._vehiculos.map(v=>`<option value="${v.id}"${vehId===v.id?' selected':''}>${v.placa||'s/placa'} · ${v.marca||''} ${v.modelo||''} ${v.anio||''} ${v.clientes?`(${v.clientes.nombre})`:''}</option>`).join('')}
         </select>
       </div>
       <div class="form-group">
@@ -2858,6 +2868,24 @@ Modulos.diagnostico_obd = {
     this._api = null;
     this._verApis();
     this._cargarApis();
+  },
+
+  /* ── Costo del escaneo ───────────────────────────────────────────────────
+     Tarifa del taller: Q250 en liviano y Q750 en camión. La diferencia está en
+     el tiempo y en el equipo — un camión necesita el adaptador RP1210 y
+     recorrer varios módulos, un liviano se resuelve por OBD-II.
+     Se calcula por el TIPO del vehículo, no por el protocolo: un camión al que
+     se le escanea el OBD-II sigue siendo un camión. */
+  _TARIFA: { liviano: 250, camion: 750 },
+  _TIPOS_PESADOS: /cami[oó]n|pesado|tr[aá]iler|cabezal|bus|autob[uú]s|microb[uú]s|maquinaria|montacarga|industrial/i,
+
+  _costoEscaneo(vehId) {
+    const v = (this._vehiculos || []).find(x => x.id === vehId);
+    const tipo = (v && v.tipo) || '';
+    const pesado = this._TIPOS_PESADOS.test(tipo);
+    return { monto: pesado ? this._TARIFA.camion : this._TARIFA.liviano,
+             categoria: pesado ? 'camión' : 'liviano',
+             tipo: tipo || null };
   },
 
   /* ── Elección de adaptador RP1210 ────────────────────────────────────────
@@ -3125,7 +3153,8 @@ Modulos.diagnostico_obd = {
         log(nhtsa ? `VIN identificado: <b>${nhtsa.marca} ${nhtsa.modelo||''} ${nhtsa.anio||''}</b>` : 'VIN sin coincidencias en NHTSA');
       }
 
-      this._scan = { vehiculo_id: vehId, vin, protocolo, adaptador: nombre, mil,
+      this._scan = { costo: this._costoEscaneo(vehId),
+                     vehiculo_id: vehId, vin, protocolo, adaptador: nombre, mil,
                      dtcs, dtcs_pendientes: pend, datos, freeze_frame: freeze,
                      monitores, modulos, voltaje: datos.volt || null, nhtsa,
                      permanentes, readiness, norma_obd: normaObd, calibracion: calib,
@@ -3156,6 +3185,7 @@ Modulos.diagnostico_obd = {
       <div id="obd-bitacora"></div>
       <div id="obd-campanas"></div>
       ${this._freezeHTML(s.freeze_frame)}
+      ${this._costoHTML(s)}
       ${this._equipamientoHTML(s)}
       ${this._monitoresHTML(s.monitores)}
       <div class="card" style="padding:10px;margin-top:8px">
@@ -3298,6 +3328,21 @@ Modulos.diagnostico_obd = {
         <thead><tr><th>Código</th><th>Módulo</th><th>Descripción</th><th>Estado</th><th style="text-align:right">Guía</th></tr></thead>
         <tbody>${filas.map(f=>`<tr><td><b style="font-family:monospace">${f.codigo}</b></td><td style="font-size:11px;white-space:nowrap">${f.modulo || this._nombreModulo(f.ecu)}</td><td>${f.desc}${f.origen ? `<div style="font-size:10px;color:var(--text3);margin-top:2px">${f.origen}${f.fuente ? ` · ${f.fuente}` : ''}</div>` : ''}</td><td><span class="badge badge-${f.color}">${f.tipo}</span></td><td style="text-align:right;white-space:nowrap"><button class="btn btn-sm btn-ghost" onclick="Modulos.diagnostico_obd.verGuia('${UI.esc(f.codigo)}')" title="Qué medir antes de cambiar piezas">🔧${this._GUIA[f.codigo] ? '' : '<span style="opacity:.5"> ·</span>'}</button></td></tr>`).join('')}</tbody>
       </table>` : '<p style="color:var(--green);margin:6px 0 0">✅ Sin códigos de falla</p>'}
+    </div>`;
+  },
+
+  /* Cobro del escaneo, visible en el reporte para que no se pase por alto al
+     armar la OT. La tarifa es del taller, así que se muestra como sugerencia:
+     el monto final lo decide quien factura. */
+  _costoHTML(s) {
+    const c = s && s.costo;
+    if (!c || !c.monto) return '';
+    return `<div class="card" style="padding:10px;margin-top:8px;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap">
+      <div>
+        <b style="font-size:12px">COBRO DEL ESCANEO</b>
+        <div style="font-size:11px;color:var(--text3)">Tarifa de ${UI.esc(c.categoria)}${c.tipo ? ` · ${UI.esc(c.tipo)}` : ''} — sugerida, ajustable al facturar</div>
+      </div>
+      <div style="font-size:20px;font-weight:700;font-family:ui-monospace,Consolas,monospace">Q${c.monto.toLocaleString('es-GT')}</div>
     </div>`;
   },
 
@@ -3605,7 +3650,7 @@ Modulos.diagnostico_obd = {
   /* Campos que dependen de una migración posterior a la tabla original. El
      código se despliega antes que la migración (son dos pasos distintos), así
      que un escaneo no puede perderse solo porque la columna todavía no exista.*/
-  _CAMPOS_NUEVOS: ['permanentes', 'readiness', 'norma_obd', 'calibracion', 'equipamiento'],
+  _CAMPOS_NUEVOS: ['permanentes', 'readiness', 'norma_obd', 'calibracion', 'equipamiento', 'costo'],
 
   async guardarEscaneo() {
     if (!this._scan) return;
@@ -3650,7 +3695,8 @@ Modulos.diagnostico_obd = {
         ${this._modulosHTML(d)}
         ${this._tablaDTCs(d)}
         ${this._freezeHTML(d.freeze_frame)}
-        ${this._equipamientoHTML(d)}
+        ${this._costoHTML(d)}
+      ${this._equipamientoHTML(d)}
       ${this._monitoresHTML(d.monitores)}
         <div class="card" style="padding:10px;margin-top:8px">
           <b style="font-size:12px">DATOS AL MOMENTO DEL ESCANEO</b>

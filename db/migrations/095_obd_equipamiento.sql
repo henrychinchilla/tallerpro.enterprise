@@ -10,12 +10,16 @@
 --   calibracion   {calid,cvn}     modo 09 — firma del software del ECU
 --   equipamiento  {avisos[],origen,norma,calib}  análisis cruzado
 
+--   costo         {monto,categoria,tipo}  tarifa del escaneo segun el vehiculo
+--                 (Q250 liviano / Q750 camion), para pasarlo a la OT o factura
+
 alter table public.diagnosticos_obd
   add column if not exists permanentes  jsonb,
   add column if not exists readiness    jsonb,
   add column if not exists norma_obd    jsonb,
   add column if not exists calibracion  jsonb,
-  add column if not exists equipamiento jsonb;
+  add column if not exists equipamiento jsonb,
+  add column if not exists costo        jsonb;
 
 -- El CVN es la firma de la calibración: comparar un vehículo contra OTROS DEL
 -- MISMO MODELO que pasaron por el taller es lo que permite decir "a este le
