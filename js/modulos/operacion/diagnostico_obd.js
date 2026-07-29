@@ -1359,7 +1359,64 @@ Modulos.diagnostico_obd = {
     23:'Instrumentos / tablero', 33:'Controlador de carrocería',
     37:'Suspensión', 49:'Control de cabina', 249:'Herramienta de diagnóstico',
   },
-  _nombreSA(sa) { return this._J39_SA[sa] || `Módulo ${sa} (0x${Number(sa).toString(16).toUpperCase()})`; },
+  _nombreSA(sa) {
+    /* Si el módulo se identificó con su NAME, ese dato manda: es lo que el
+       módulo dice ser, no lo que suponemos por la dirección que ocupa. */
+    const c = this._j39 && this._j39.claim && this._j39.claim[sa];
+    if (c && c.nombre) return c.nombre;
+    return this._J39_SA[sa] || `Módulo ${sa} (0x${Number(sa).toString(16).toUpperCase()})`;
+  },
+
+  /* Función del módulo dentro del NAME (J1939-81). Es lo que permite decir
+     "esto es la transmisión" aunque esté en una dirección no estándar. */
+  _J39_FUNC: {
+    0:'Motor', 1:'Unidad de potencia auxiliar', 2:'Control de propulsión eléctrica',
+    3:'Transmisión', 4:'Monitor del paquete de baterías', 5:'Control de cambios',
+    6:'Toma de fuerza (PTO)', 7:'Eje directriz', 8:'Eje motriz',
+    9:'Frenos — controlador del sistema (ABS)', 10:'Frenos — eje directriz',
+    11:'Frenos — eje motriz', 12:'Retardador del motor', 13:'Retardador de transmisión',
+    14:'Control de crucero', 15:'Sistema de combustible', 16:'Controlador de dirección',
+    17:'Suspensión — eje directriz', 18:'Suspensión — eje motriz',
+    19:'Tablero de instrumentos', 20:'Registrador de viaje', 21:'Climatización de cabina',
+    23:'Navegación', 24:'Seguridad del vehículo', 25:'Interconexión de red (gateway)',
+    26:'Controlador de carrocería', 28:'Puerta de enlace externa',
+    29:'Terminal virtual', 30:'Computadora de gestión',
+  },
+
+  /* NAME de 64 bits del Address Claim. Poco intuitivo: va en little-endian y
+     varios campos cruzan el borde de un byte. */
+  _j39NAME(d) {
+    if (!d || d.length < 8) return null;
+    const identidad   = (d[0] | (d[1] << 8) | ((d[2] & 0x1F) << 16)) >>> 0;  // 21 bits
+    const fabricante  = ((d[2] >> 5) | (d[3] << 3)) & 0x7FF;                 // 11 bits
+    const funcion     = d[5];
+    const sistema     = (d[6] >> 1) & 0x7F;
+    const grupo       = (d[7] >> 4) & 0x07;
+    return { identidad, fabricante, funcion, sistema, grupo,
+             nombre: this._J39_FUNC[funcion] || null };
+  },
+
+  /* Pregunta al bus entero "¿quién está ahí?". Cada módulo contesta con su
+     NAME, INCLUIDO el que nunca difunde nada por su cuenta — que es
+     justamente el que se perdía cuando solo se escuchaba quién habla. */
+  async _j39Enumerar(log) {
+    const j = this._j39;
+    if (!j) return [];
+    await this._j39Solicitar(60928);
+    await this._escucharBus(() => Object.keys(j.claim).length,
+      { min:1200, max:5000, quieto:1200 });
+    const sas = Object.keys(j.claim).map(Number).sort((a, b) => a - b);
+    if (log && sas.length) {
+      log(`<b>${sas.length} módulo(s) identificados en el bus:</b>`);
+      for (const sa of sas) {
+        const c = j.claim[sa];
+        log(`&nbsp;&nbsp;<b>${this._nombreSA(sa)}</b> <span style="color:var(--text3)">— dirección ${sa}` +
+            (c.fabricante ? ` · fabricante ${c.fabricante}` : '') +
+            (c.nombre ? '' : ` · función ${c.funcion} (no estándar)`) + '</span>');
+      }
+    }
+    return sas;
+  },
 
   _j39Frame(d) {   // lectura RP1210 J1939: [ts×4][pgn×3][prio][origen][destino][datos...]
     const j = this._j39;
@@ -1448,6 +1505,7 @@ Modulos.diagnostico_obd = {
     if (pgn === 65227) j.dm2[sa] = data;
     if (pgn === 65260) j.vin = data;
     if (pgn === 65259) j.comp = data;
+    if (pgn === 60928) { const n = this._j39NAME(data); if (n) j.claim[sa] = n; }
     if (j.esperas[pgn]) { j.esperas[pgn](); delete j.esperas[pgn]; }
   },
 
@@ -1463,8 +1521,12 @@ Modulos.diagnostico_obd = {
     return res;
   },
 
-  _j39Solicitar(pgn) {   // PGN 59904 (Request) a la dirección global
-    return this._puenteOp({ op:'enviar', datos:[0x00, 0xEA, 0x00, 6, 0xF9, 0xFF, pgn & 0xFF, (pgn >> 8) & 0xFF, (pgn >> 16) & 0xFF] });
+  /* PGN 59904 (Request). Por omisión va a la dirección global (0xFF) y contesta
+     el que quiera; con `da` se le pregunta a UN módulo concreto, que es la
+     única forma de sacarle los códigos al que no difunde nada por su cuenta
+     (pasa con varios TCM: solo hablan si se les pregunta directo). */
+  _j39Solicitar(pgn, da = 0xFF) {
+    return this._puenteOp({ op:'enviar', datos:[0x00, 0xEA, 0x00, 6, 0xF9, da & 0xFF, pgn & 0xFF, (pgn >> 8) & 0xFF, (pgn >> 16) & 0xFF] });
   },
 
   _j39Esperar(pgn, ms) {
@@ -1499,7 +1561,7 @@ Modulos.diagnostico_obd = {
       log(`Puente USB: <b>${est.dispositivo || 'RP1210'}</b> v${est.version || '?'} ✓`);
       const c = await this._puenteOp({ op:'conectar', protocolo:`J1939:Baud=${this._j39Baud || 250}`, device:1 });
       if (!c.ok) throw new Error(`El puente no pudo abrir el USB-Link: ${c.error || 'código ' + c.codigo}. ¿Está enchufado a la PC?`);
-      this._j39 = { datos:{}, pgns:{}, esperas:{}, sas:{}, dm1:{}, dm2:{}, tp:{}, vin:null, comp:null };
+      this._j39 = { datos:{}, pgns:{}, esperas:{}, sas:{}, dm1:{}, dm2:{}, tp:{}, claim:{}, vin:null, comp:null };
       /* Reclamar la dirección de herramienta de diagnóstico (0xF9) en el bus.
          El número de comando de RP1210 para esto no está verificado contra este
          hardware, así que se prueban los dos candidatos y se reporta cuál pasó
@@ -1559,6 +1621,10 @@ Modulos.diagnostico_obd = {
         if (comp.length) log(`Unidad: <b>${comp.slice(0, 2).join(' · ')}</b>`);
       }
 
+      /* Enumerar ANTES de pedir códigos: así se sabe a quién preguntarle. */
+      log('Preguntando al bus qué módulos hay (Address Claim)...');
+      const enumerados = await this._j39Enumerar(log);
+
       log('Leyendo códigos de falla (DM1 activos / DM2 previos)...');
       if (!Object.keys(this._j39.dm1).length) { await this._j39Solicitar(65226); await this._j39Esperar(65226, 1500); }
       await this._j39Solicitar(65227); await this._j39Esperar(65227, 1500);
@@ -1568,6 +1634,23 @@ Modulos.diagnostico_obd = {
       await this._escucharBus(
         () => `${Object.keys(this._j39.dm1).length}|${Object.keys(this._j39.dm2).length}`,
         { min:1200, max:6000, quieto:1500 });
+
+      /* A los que se identificaron pero no contestaron a la pregunta general se
+         les pregunta DIRIGIDO. Varios TCM (y módulos de carrocería) solo hablan
+         si se les pregunta a su dirección: con la pregunta global se quedaban
+         callados y parecía que el camión no los tenía. */
+      const callados = enumerados.filter(sa => !this._j39.dm1[sa] && !this._j39.dm2[sa]);
+      if (callados.length) {
+        log(`${callados.length} módulo(s) no contestaron a la pregunta general — preguntando uno por uno...`);
+        for (const sa of callados) {
+          await this._j39Solicitar(65226, sa);
+          await this._j39Solicitar(65227, sa);
+          await this._escucharBus(() => `${this._j39.dm1[sa] ? 1 : 0}${this._j39.dm2[sa] ? 1 : 0}`,
+            { min:400, max:1800, quieto:500 });
+          const r = this._j39.dm1[sa] || this._j39.dm2[sa];
+          log(`&nbsp;&nbsp;${this._nombreSA(sa)}: ${r ? 'respondió ✓' : 'sin respuesta'}`);
+        }
+      }
       let dtcs = this._j39DTCsTodos(this._j39.dm1);
       let pend = this._j39DTCsTodos(this._j39.dm2);
       dtcs = await this._enriquecerDTCs(dtcs, vehId, 'j1939');
@@ -1603,10 +1686,11 @@ Modulos.diagnostico_obd = {
 
       this._sop = Object.keys(this._j39.datos).filter(k => typeof this._j39.datos[k] === 'number');
       log(`${this._sop.length} sensores del motor en el bus ✓`);
-      /* Qué módulos hay en el bus. Sirve para dos cosas: ver de un vistazo si
-         el ABS está presente, y notar su AUSENCIA — un módulo que no habla
-         puede ser justamente el problema. */
-      const sas = Object.keys(this._j39.sas).map(Number).sort((a, b) => a - b);
+      /* La lista definitiva junta a los que se identificaron (Address Claim) con
+         los que se oyeron difundiendo: un módulo puede aparecer por cualquiera
+         de las dos vías y ninguna sola alcanza. */
+      const sas = [...new Set([...enumerados, ...Object.keys(this._j39.sas).map(Number)])]
+        .sort((a, b) => a - b);
       if (sas.length) log(`Módulos en el bus: ${sas.map(s => this._nombreSA(s)).join(' · ')}`);
 
       this._scan = { vehiculo_id: vehId, vin, protocolo: 'J1939 (camión · USB)',
