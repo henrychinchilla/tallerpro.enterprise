@@ -73,14 +73,26 @@ const UI = {
     return 'Q' + (n||0).toLocaleString('es-GT', { minimumFractionDigits:2, maximumFractionDigits:2 });
   },
 
+  /* El 'T12:00:00' existe para que una fecha suelta (2026-07-29) no se corra un
+     día por zona horaria al interpretarla como UTC. Pero se le estaba pegando
+     TAMBIÉN a los timestamps completos que devuelve la base
+     (2026-07-29T14:23:45+00:00), y el resultado —
+     "2026-07-29T14:23:45+00:00T12:00:00" — no es una fecha: por eso salía
+     "Fecha inválida" en Diagnóstico, Bitácora, Admin, Marketing y RRHH, que son
+     los que muestran created_at.
+     Ahora la hora se agrega solo cuando falta, y una fecha que no se puede
+     interpretar devuelve el guion en vez de "Invalid Date". */
   fecha(f) {
     if (!f) return '—';
-    return new Date(f+'T12:00:00').toLocaleDateString('es-GT');
+    const s = String(f).trim();
+    const d = /^\d{4}-\d{2}-\d{2}$/.test(s) ? new Date(s + 'T12:00:00') : new Date(s);
+    return isNaN(d.getTime()) ? '—' : d.toLocaleDateString('es-GT');
   },
 
   fechaHora(f) {
     if (!f) return '—';
-    return new Date(f).toLocaleString('es-GT');
+    const d = new Date(String(f).trim());
+    return isNaN(d.getTime()) ? '—' : d.toLocaleString('es-GT');
   },
 
   /* ── BADGE ESTADO ─────────────────────────────── */

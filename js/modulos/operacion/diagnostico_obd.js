@@ -914,7 +914,7 @@ Modulos.diagnostico_obd = {
   async pintarCampanas(idContenedor, marca, modelo, anio) {
     const el = document.getElementById(idContenedor);
     if (!el) return;
-    el.innerHTML = `<div class="card" style="padding:10px;margin-top:8px;font-size:12px;color:var(--text3)">🔎 Consultando campañas de fábrica en NHTSA…</div>`;
+    el.innerHTML = `<div class="card" style="padding:14px;margin-top:12px;font-size:12px;color:var(--text3)">🔎 Consultando campañas de fábrica en NHTSA…</div>`;
     /* Cada fuente se resuelve por separado a propósito: los boletines salen de un
        archivo local y tienen que verse aunque NHTSA esté caído o no haya internet,
        que es justo cuando el taller más los necesita. */
@@ -935,7 +935,7 @@ Modulos.diagnostico_obd = {
     const top = Object.entries(porComponente).sort((a, b) => b[1] - a[1]).slice(0, 6);
 
     el.innerHTML = `
-      <div class="card" style="padding:10px;margin-top:8px;border-left:3px solid ${campanas.length ? 'var(--red)' : 'var(--border)'}">
+      <div class="card" style="padding:14px;margin-top:12px;border-left:3px solid ${campanas.length ? 'var(--red)' : 'var(--border)'}">
         <b style="font-size:12px">🔔 CAMPAÑAS DE FÁBRICA (NHTSA) — ${UI.esc(marca)} ${UI.esc(modelo)} ${UI.esc(anio)}</b>
         ${campanas.length ? `
           <div style="font-size:12px;color:var(--red);font-weight:800;margin-top:4px">
@@ -1626,7 +1626,7 @@ Modulos.diagnostico_obd = {
         adaptador: est.dispositivo || 'USB-Link (RP1210)', mil: dtcs.length > 0,
         dtcs, dtcs_pendientes: pend, datos: j.datos, freeze_frame: null, monitores: null,
         modulos: mids.map(m => ({ ecu: m, nombre: this._nombreMID1587(m) })),
-        voltaje: j.datos.volt != null ? j.datos.volt + 'V' : null, nhtsa: null,
+        voltaje: this._voltajeDe(j.datos), nhtsa: null,
       };
       log('<b>Escaneo completo ✓</b>');
       this._renderResultado();
@@ -1988,7 +1988,7 @@ Modulos.diagnostico_obd = {
                      adaptador: est.dispositivo || 'USB-Link (RP1210)', mil,
                      dtcs, dtcs_pendientes: pend, datos: { ...this._j39.datos },
                      modulos: sas.map(s => ({ ecu: s, nombre: this._nombreSA(s) })),
-                     freeze_frame: null, voltaje: this._j39.datos.volt || null, nhtsa };
+                     freeze_frame: null, voltaje: this._voltajeDe(this._j39.datos), nhtsa };
       log('<b>Escaneo completo ✓</b>');
       this._renderResultado();
       document.getElementById('obd-btn-save').style.display = '';
@@ -2517,7 +2517,7 @@ Modulos.diagnostico_obd = {
     }).replace(/"/g, '&quot;');
     const btnNueva = `<button class="btn btn-sm btn-brand" onclick="Modulos.diagnostico_obd.guardarEnBitacora(${prellenado})">➕ Guardar lo que resolvimos</button>`;
 
-    el.innerHTML = `<div class="card" style="padding:10px;margin-top:8px;border-left:3px solid var(--green)">
+    el.innerHTML = `<div class="card" style="padding:14px;margin-top:12px;border-left:3px solid var(--green)">
       <b style="font-size:12px">📖 LO QUE ESTE TALLER YA RESOLVIÓ</b>
       ${filas.length ? `
         <div style="margin-top:6px;display:flex;flex-direction:column;gap:6px">
@@ -3156,7 +3156,7 @@ Modulos.diagnostico_obd = {
       this._scan = { costo: this._costoEscaneo(vehId),
                      vehiculo_id: vehId, vin, protocolo, adaptador: nombre, mil,
                      dtcs, dtcs_pendientes: pend, datos, freeze_frame: freeze,
-                     monitores, modulos, voltaje: datos.volt || null, nhtsa,
+                     monitores, modulos, voltaje: this._voltajeDe(datos), nhtsa,
                      permanentes, readiness, norma_obd: normaObd, calibracion: calib,
                      equipamiento: equipo };
       log('<b>Escaneo completo ✓</b>');
@@ -3173,7 +3173,7 @@ Modulos.diagnostico_obd = {
     const s = this._scan, el = document.getElementById('obd-result');
     if (!s || !el) return;
     el.innerHTML = `
-      ${s.nhtsa ? `<div class="card" style="padding:10px;margin-top:8px;border-left:3px solid var(--cyan)">
+      ${s.nhtsa ? `<div class="card" style="padding:14px;margin-top:12px;border-left:3px solid var(--cyan)">
         <b style="font-size:12px">🌐 IDENTIFICADO POR VIN (NHTSA)</b>
         <div style="font-size:13px;margin-top:4px">${s.nhtsa.marca} ${s.nhtsa.modelo||''} ${s.nhtsa.anio||''}
           ${s.nhtsa.motor?` · Motor ${s.nhtsa.motor}`:''} ${s.nhtsa.combustible?` · ${s.nhtsa.combustible}`:''}
@@ -3188,7 +3188,7 @@ Modulos.diagnostico_obd = {
       ${this._costoHTML(s)}
       ${this._equipamientoHTML(s)}
       ${this._monitoresHTML(s.monitores)}
-      <div class="card" style="padding:10px;margin-top:8px">
+      <div class="card" style="padding:14px;margin-top:12px">
         <b style="font-size:12px">DATOS EN VIVO (${Object.keys(s.datos||{}).length} sensores)</b>
         <div id="obd-mon-sel" style="margin-top:6px">${this._chipsInicial()}</div>
         <div id="obd-vivo" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:9px;margin-top:6px;font-size:13px">
@@ -3215,9 +3215,9 @@ Modulos.diagnostico_obd = {
 
   _freezeHTML(fz) {
     if (!fz) return '';
-    return `<div class="card" style="padding:10px;margin-top:8px;border-left:3px solid var(--amber)">
+    return `<div class="card" style="padding:14px;margin-top:12px;border-left:3px solid var(--amber)">
       <b style="font-size:12px">📸 FREEZE FRAME — al momento de la falla ${fz.dtc}${fz.desc?` (${fz.desc})`:''}</b>
-      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:8px;margin-top:6px;font-size:13px">
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px;margin-top:10px;font-size:13px">
         ${this._vivoHTML(fz, ['dtc','desc'])}
       </div>
     </div>`;
@@ -3258,10 +3258,10 @@ Modulos.diagnostico_obd = {
     const s = idGuardado ? this._data.find(x => x.id === idGuardado) : this._scan;
     const el = document.getElementById('obd-ia');
     if (!s || !el) return;
-    el.innerHTML = `<div class="card" style="padding:10px;margin-top:8px">⏳ Nexus está analizando el escaneo...</div>`;
+    el.innerHTML = `<div class="card" style="padding:14px;margin-top:12px">⏳ Nexus está analizando el escaneo...</div>`;
     const veh = idGuardado ? s.vehiculos : this._vehiculos.find(v => v.id === s.vehiculo_id);
     const r = await IA.tecnico(this._promptIA(s, veh));
-    if (!r.ok) { el.innerHTML = `<div class="card" style="padding:10px;margin-top:8px;color:var(--red)">⚠️ ${r.error}</div>`; return; }
+    if (!r.ok) { el.innerHTML = `<div class="card" style="padding:14px;margin-top:12px;color:var(--red)">⚠️ ${r.error}</div>`; return; }
     s.ia_analisis = r.respuesta;
     if (idGuardado) await DB.upsertDiagnosticoOBD({ id: idGuardado, ia_analisis: r.respuesta });  // cachear: 1 sola consulta por escaneo
     el.innerHTML = this._iaHTML(r.respuesta);
@@ -3271,7 +3271,7 @@ Modulos.diagnostico_obd = {
     if (!texto) return '';
     const cuerpo = (typeof IA !== 'undefined' && IA._formatear) ? IA._formatear(texto)
       : `<div style="white-space:pre-wrap">${texto}</div>`;
-    return `<div class="card" style="padding:10px;margin-top:8px;border-left:3px solid var(--cyan)">
+    return `<div class="card" style="padding:14px;margin-top:12px;border-left:3px solid var(--cyan)">
       <b style="font-size:12px">🤖 ANÁLISIS DE NEXUS</b>
       <div style="font-size:13px;margin-top:6px">${cuerpo}</div>
     </div>`;
@@ -3282,7 +3282,7 @@ Modulos.diagnostico_obd = {
     /* En J1587 los módulos SON los MID y ahí sí aparecen frenos, tablero y
        demás; la advertencia de "acá no sale el ABS" sólo vale para OBD-II. */
     const j87 = /J1587/.test(s.protocolo || '');
-    return `<div class="card" style="padding:10px;margin-top:8px">
+    return `<div class="card" style="padding:14px;margin-top:12px">
       <b style="font-size:12px">MÓDULOS DETECTADOS (${s.modulos.length})</b>
       <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:8px;margin-top:6px">
         ${s.modulos.map(m => {
@@ -3321,7 +3321,7 @@ Modulos.diagnostico_obd = {
           el camión y son los que valen — contrastalos con la app de servicio de Navistar antes de
           intervenir. La descripción del FMI es orientativa.
         </div>` : '';
-    return `<div class="card" style="padding:10px;margin-top:8px">
+    return `<div class="card" style="padding:14px;margin-top:12px">
       <b style="font-size:12px">CÓDIGOS DE FALLA (DTC)</b>
       ${sinVerificar}
       ${filas.length ? `<table class="table" style="margin-top:6px;font-size:12px">
@@ -3331,13 +3331,31 @@ Modulos.diagnostico_obd = {
     </div>`;
   },
 
+  /* ── Voltaje de batería ──────────────────────────────────────────────────
+     Venía SOLO del comando ATRV del ELM327, que por USB no existe (el CAN crudo
+     no lo reporta): el campo quedaba vacío o en 0 aunque el propio ECU hubiera
+     dicho su voltaje en un PID. Ahora se toma el primero que sirva:
+     ATRV → PGN/PID de batería (168, 65271) → voltaje del ECU (PID 42 / 158).
+
+     Un 0 nunca es lectura buena: si el bus contesta, hay batería. Por debajo de
+     5 V se descarta como dato inválido en vez de mostrar "0V", que hace dudar
+     de todo el escaneo. */
+  _voltajeDe(datos) {
+    for (const v of [datos && datos.volt, datos && datos.volt_ecu]) {
+      if (v == null || v === '') continue;
+      const n = parseFloat(String(v).replace(',', '.'));
+      if (isFinite(n) && n > 5) return n.toFixed(1) + 'V';
+    }
+    return null;
+  },
+
   /* Cobro del escaneo, visible en el reporte para que no se pase por alto al
      armar la OT. La tarifa es del taller, así que se muestra como sugerencia:
      el monto final lo decide quien factura. */
   _costoHTML(s) {
     const c = s && s.costo;
     if (!c || !c.monto) return '';
-    return `<div class="card" style="padding:10px;margin-top:8px;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap">
+    return `<div class="card" style="padding:14px;margin-top:12px;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap">
       <div>
         <b style="font-size:12px">COBRO DEL ESCANEO</b>
         <div style="font-size:11px;color:var(--text3)">Tarifa de ${UI.esc(c.categoria)}${c.tipo ? ` · ${UI.esc(c.tipo)}` : ''} — sugerida, ajustable al facturar</div>
@@ -3362,7 +3380,7 @@ Modulos.diagnostico_obd = {
       `${m.soportado ? (m.listo ? '✓' : '◔') : '—'} ${UI.esc(m.nombre)}</span>`;
 
     const origen = e && e.origen;
-    return `<div class="card" style="padding:10px;margin-top:8px${alto.length ? ';border:1px solid rgba(239,68,68,.45)' : ''}">
+    return `<div class="card" style="padding:14px;margin-top:12px${alto.length ? ';border:1px solid rgba(239,68,68,.45)' : ''}">
       <b style="font-size:12px">EQUIPAMIENTO DECLARADO POR EL VEHÍCULO</b>
       <div style="font-size:11px;color:var(--text3);margin-top:2px">Un sistema eliminado del software no genera códigos: se detecta porque el motor deja de declarar su monitor.</div>
       ${origen ? `<div style="font-size:11.5px;margin-top:6px">Origen por VIN: <b>${UI.esc(origen.pais)}</b>${origen.anio ? ` · modelo <b>${origen.anio}</b>` : ''}</div>` : ''}
@@ -3618,7 +3636,7 @@ Modulos.diagnostico_obd = {
   _grabHTML(g) {
     const stats = this._grabStats(g);
     if (!stats.length) return '';
-    return `<div class="card" style="padding:10px;margin-top:8px;border-left:3px solid var(--cyan)">
+    return `<div class="card" style="padding:14px;margin-top:12px;border-left:3px solid var(--cyan)">
       <b style="font-size:12px">📈 GRABACIÓN DE SESIÓN (${g.muestras.length} muestras · ${g.seg || '?'} s)</b>
       <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px;margin-top:6px;font-size:12px">
         ${stats.map(s => `<div style="background:var(--surface2);border-radius:6px;padding:6px 8px">
@@ -3698,9 +3716,9 @@ Modulos.diagnostico_obd = {
         ${this._costoHTML(d)}
       ${this._equipamientoHTML(d)}
       ${this._monitoresHTML(d.monitores)}
-        <div class="card" style="padding:10px;margin-top:8px">
+        <div class="card" style="padding:14px;margin-top:12px">
           <b style="font-size:12px">DATOS AL MOMENTO DEL ESCANEO</b>
-          <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:8px;margin-top:6px">${this._vivoHTML(d.datos||{})}</div>
+          <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px;margin-top:10px">${this._vivoHTML(d.datos||{})}</div>
         </div>
         ${this._grabHTML(d.grabacion)}
         <div id="obd-ia">${this._iaHTML(d.ia_analisis)}</div>
@@ -3710,7 +3728,7 @@ Modulos.diagnostico_obd = {
         ${!d.ia_analisis && (typeof moduloEnPlan !== 'function' || moduloEnPlan('ia')) ? `<button class="btn btn-cyan" onclick="Modulos.diagnostico_obd.analizarIA('${d.id}')">🤖 Analizar con IA</button>` : ''}
         <button class="btn btn-ghost" onclick="UI.cerrarModal()">Cerrar</button>
         ${Modulos.btnAccion('imprimir', `Modulos.diagnostico_obd.imprimir('${d.id}')`, { label:'🖨 Imprimir' })}
-      </div>`, '680px');
+      </div>`, '980px');
   },
 
   modalEditar(id) {
