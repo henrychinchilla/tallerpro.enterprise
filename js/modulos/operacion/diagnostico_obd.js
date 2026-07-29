@@ -1311,6 +1311,139 @@ Modulos.diagnostico_obd = {
       .map(([id, e]) => ({ ecu: +id, hex: e.datos.map(x => x.toString(16).padStart(2, '0')).join('').toUpperCase() }));
   },
 
+  /* ═══════════ ESCANEO COMPLETO POR MÓDULO (UDS sobre CAN) ═══════════
+     El modo 03 de OBD-II solo lo contestan los módulos de emisiones: motor y
+     transmisión. Todo lo demás — ABS, TPMS, carrocería, airbag, tracción — tiene
+     su propia dirección y solo habla si se le pregunta directo.
+
+     Verificado en un Nissan Rogue 2017 el 2026-07-29: por modo 03 el vehículo
+     reportaba CERO códigos, y preguntando módulo por módulo aparecieron 16,
+     entre ellos el TPMS de la rueda con presión baja y los sensores de rueda
+     que alimentan al AWD. Las dos alarmas que el tablero mostraba y el escaneo
+     de emisiones no veía.
+
+     No hace falta ningún protocolo con licencia: es UDS estándar (ISO 14229)
+     sobre CAN. Lo que hacía falta era preguntar en el lugar correcto. */
+
+  /* Direcciones frecuentes. Sirven para poner un nombre; lo que manda para
+     saber QUÉ es cada módulo son los códigos que reporta (C=chasis, B=carrocería,
+     P=motor/transmisión, U=red), porque las direcciones cambian entre marcas. */
+  _UDS_NOMBRES: {
+    0x7E0:'Motor (ECM)', 0x7E1:'Transmisión (TCM)', 0x7E2:'Módulo 0x7E2', 0x7E3:'Módulo 0x7E3',
+    0x740:'Frenos / ABS', 0x742:'Dirección asistida', 0x743:'Tablero de instrumentos',
+    0x744:'Airbag / SRS', 0x745:'Carrocería (BCM)', 0x746:'Climatización',
+    0x748:'Control de tracción', 0x74D:'Puerta de enlace / gateway',
+    0x752:'Carrocería auxiliar', 0x758:'Presión de neumáticos (TPMS)',
+    0x760:'Frenos / ABS', 0x765:'Carrocería (BCM)',
+  },
+  _nombreUDS(req, codigos) {
+    if (this._UDS_NOMBRES[req]) return this._UDS_NOMBRES[req];
+    /* Sin nombre conocido, se deduce por el tipo de códigos que reporta: es más
+       honesto que inventarle un nombre que podría ser de otra marca. */
+    const l = (codigos || []).map(c => c.codigo[0]);
+    if (l.length) {
+      if (l.every(x => x === 'C')) return `Chasis / frenos (0x${req.toString(16).toUpperCase()})`;
+      if (l.every(x => x === 'B')) return `Carrocería (0x${req.toString(16).toUpperCase()})`;
+      if (l.every(x => x === 'P')) return `Motor / transmisión (0x${req.toString(16).toUpperCase()})`;
+    }
+    return `Módulo 0x${req.toString(16).toUpperCase()}`;
+  },
+
+  /* Diálogo UDS punto a punto con UN módulo. El _isotp normal solo escucha
+     0x7E8-0x7EF (las respuestas de emisiones), así que no sirve acá. */
+  async _udsPedir(reqId, respId, tx, timeout = 2500) {
+    let datos = null, len = 0, ok = false;
+    this._canRx = (id, b) => {
+      if (id !== respId || !b.length) return;
+      const pci = b[0] >> 4;
+      if (pci === 0) { datos = b.slice(1, 1 + (b[0] & 0x0F)); ok = datos.length > 0; }
+      else if (pci === 1) {
+        len = ((b[0] & 0x0F) << 8) | b[1];
+        datos = b.slice(2);
+        /* Flow Control. Sin esto el módulo se queda esperando y solo se ve el
+           primer fragmento: un módulo con 8 códigos parece tener uno o ninguno. */
+        this._canTx(reqId, [0x30, 0x00, 0x00]).catch(() => {});
+      } else if (pci === 2 && datos && !ok) {
+        datos = datos.concat(b.slice(1));
+        if (datos.length >= len) { datos = datos.slice(0, len); ok = true; }
+      }
+    };
+    try {
+      await this._canTx(reqId, [tx.length, ...tx]);
+      const t0 = Date.now();
+      while (Date.now() - t0 < timeout && !ok) await new Promise(r => setTimeout(r, 40));
+    } catch (_) {} finally { this._canRx = null; }
+    return ok ? datos : null;
+  },
+
+  /* Pregunta "¿hay alguien?" en cada dirección y anota quién contesta y desde
+     qué ID responde. La relación pregunta→respuesta no es fija (vimos +0x20,
+     +0x08 y saltos irregulares en el mismo vehículo), así que se escucha todo
+     en vez de suponer el ID de vuelta. */
+  async _barrerModulos(log) {
+    const hallados = [];
+    let capt = [];
+    this._canRx = (id, b) => { capt.push({ id, b }); };
+    try {
+      for (let req = 0x700; req <= 0x7EF; req++) {
+        capt = [];
+        /* 3E 00 = Tester Present: es de solo lectura, no cambia nada en el
+           vehículo. Es la forma segura de preguntar si hay un módulo ahí. */
+        await this._canTx(req, [0x02, 0x3E, 0x00]).catch(() => {});
+        await new Promise(r => setTimeout(r, 70));
+        for (const c of capt) {
+          if (c.id === req) continue;
+          if (hallados.some(h => h.req === req && h.resp === c.id)) continue;
+          hallados.push({ req, resp: c.id });
+        }
+        if (log && (req & 0x3F) === 0x3F)
+          log(`&nbsp;&nbsp;<span style="color:var(--text3)">…0x${req.toString(16).toUpperCase()} (${hallados.length} encontrados)</span>`);
+      }
+    } finally { this._canRx = null; }
+    return hallados;
+  },
+
+  /* Respuesta a UDS 19 02: [59][02][máscara][DTC 3 bytes + estado]…
+     El estado trae los bits que distinguen una falla presente AHORA de una
+     guardada de antes — la diferencia entre mandar a revisar y no. */
+  _dtcsUDS(d) {
+    if (!d || d[0] !== 0x59) return [];
+    const out = [];
+    for (let i = 3; i + 3 < d.length; i += 4) {
+      const a = d[i], b = d[i+1], sub = d[i+2], st = d[i+3];
+      if ((a === 0 && b === 0 && sub === 0) || (a === 0xFF && b === 0xFF)) continue;
+      const codigo = ['P','C','B','U'][a >> 6] + ((a >> 4) & 3) +
+                     (a & 0x0F).toString(16).toUpperCase() + b.toString(16).padStart(2,'0').toUpperCase();
+      const full = sub ? `${codigo}-${sub.toString(16).padStart(2,'0').toUpperCase()}` : codigo;
+      if (out.some(x => x.codigo === full)) continue;
+      out.push({ codigo: full, base: codigo, estado: st,
+                 activo: !!(st & 0x01), confirmado: !!(st & 0x08) });
+    }
+    return out;
+  },
+
+  /* Recorre todos los módulos y junta sus códigos. Es lo que convierte el
+     escaneo de "emisiones" en un escaneo del vehículo entero. */
+  async _escanearModulos(log) {
+    const mods = await this._barrerModulos(log);
+    if (!mods.length) { if (log) log('Ningún módulo respondió al barrido por dirección'); return null; }
+    if (log) log(`<b>${mods.length} módulo(s) encontrados</b> — leyendo códigos de cada uno...`);
+
+    const res = [];
+    for (const m of mods) {
+      const d = await this._udsPedir(m.req, m.resp, [0x19, 0x02, 0xFF], 2500);
+      const cods = this._dtcsUDS(d);
+      const nombre = this._nombreUDS(m.req, cods);
+      res.push({ ecu: m.req, resp: m.resp, nombre, codigos: cods, respondio: !!d });
+      if (log && cods.length) {
+        const act = cods.filter(c => c.activo).length;
+        log(`&nbsp;&nbsp;<b>${nombre}</b>: ${cods.length} código(s)` +
+            (act ? ` <span style="color:var(--red)">(${act} activo${act > 1 ? 's' : ''})</span>` : ''));
+      }
+    }
+    return res;
+  },
+
   /* ── Camiones por USB: J1939. El bus transmite solo (broadcast); DM1/DM2 dan
        las fallas como SPN (componente) + FMI (tipo de falla). ── */
 
@@ -3094,7 +3227,24 @@ Modulos.diagnostico_obd = {
          declararse sano, que es la peor manera de fallar que tiene esto.
          Se exige evidencia positiva de comunicación: módulos que respondieron,
          VIN, códigos, o el estado del Check Engine. */
-      const hubo = !!(modulos && modulos.length) || !!vin || codConf.length || codPend.length || mil;
+      /* Escaneo por módulo: lo que encuentra las fallas que NO son de emisiones
+         (TPMS, ABS, tracción, carrocería). Solo por USB — el ELM327 Bluetooth
+         no deja dirigir tramas a una dirección arbitraria. */
+      let porModulo = null;
+      if (this._via === 'usb') {
+        log('<b>Escaneando TODOS los módulos del vehículo...</b> (esto tarda ~30 s)');
+        porModulo = await this._escanearModulos(log).catch(e => { log(`No se pudo barrer módulos: ${e.message}`); return null; });
+        if (porModulo) {
+          const conFallas = porModulo.filter(m => m.codigos.length);
+          const total = conFallas.reduce((n, m) => n + m.codigos.length, 0);
+          log(total
+            ? `<b style="color:var(--amber)">${total} código(s) en ${conFallas.length} módulo(s)</b> además de los de emisiones`
+            : `Los ${porModulo.length} módulos respondieron sin códigos`);
+        }
+      }
+
+      const hubo = !!(modulos && modulos.length) || !!vin || codConf.length || codPend.length || mil
+                   || !!(porModulo && porModulo.length);
       if (!hubo) {
         throw new Error(
           'SIN COMUNICACIÓN CON EL VEHÍCULO — no se leyó nada, así que NO se puede afirmar que no tenga fallas. ' +
@@ -3180,7 +3330,7 @@ Modulos.diagnostico_obd = {
       this._scan = { costo: this._costoEscaneo(vehId),
                      vehiculo_id: vehId, vin, protocolo, adaptador: nombre, mil,
                      dtcs, dtcs_pendientes: pend, datos, freeze_frame: freeze,
-                     monitores, modulos, voltaje: this._voltajeDe(datos), nhtsa,
+                     monitores, modulos, por_modulo: porModulo, voltaje: this._voltajeDe(datos), nhtsa,
                      permanentes, readiness, norma_obd: normaObd, calibracion: calib,
                      equipamiento: equipo };
       log('<b>Escaneo completo ✓</b>');
@@ -3209,6 +3359,7 @@ Modulos.diagnostico_obd = {
       <div id="obd-bitacora"></div>
       <div id="obd-campanas"></div>
       ${this._freezeHTML(s.freeze_frame)}
+      ${this._porModuloHTML(s)}
       ${this._costoHTML(s)}
       ${this._equipamientoHTML(s)}
       ${this._monitoresHTML(s.monitores)}
@@ -3383,6 +3534,41 @@ Modulos.diagnostico_obd = {
       if (isFinite(n) && n > 5) return n.toFixed(1) + 'V';
     }
     return null;
+  },
+
+  /* Códigos por módulo. Va ARRIBA de la tabla de emisiones porque acá aparecen
+     las fallas que el modo 03 no ve — y son las que el cliente está sintiendo. */
+  _porModuloHTML(s) {
+    const ms = s && s.por_modulo;
+    if (!Array.isArray(ms) || !ms.length) return '';
+    const conFallas = ms.filter(m => m.codigos && m.codigos.length);
+    const total = conFallas.reduce((n, m) => n + m.codigos.length, 0);
+    const activos = conFallas.reduce((n, m) => n + m.codigos.filter(c => c.activo).length, 0);
+
+    return `<div class="card" style="padding:14px;margin-top:12px${activos ? ';border:1px solid rgba(239,68,68,.45)' : ''}">
+      <b style="font-size:12px">ESCANEO POR MÓDULO (todo el vehículo)</b>
+      <div style="font-size:11px;color:var(--text3);margin-top:2px">
+        ${ms.length} módulo(s) consultados uno por uno. Acá aparecen las fallas que el escaneo de emisiones no puede ver: frenos, presión de neumáticos, tracción, carrocería.
+      </div>
+      ${total ? `<div style="font-size:12px;margin-top:8px"><b>${total} código(s)</b> en ${conFallas.length} módulo(s)${activos ? ` · <span style="color:var(--red)"><b>${activos} activo(s) ahora</b></span>` : ''}</div>` : ''}
+      ${!total ? '<p style="color:var(--green);margin:8px 0 0;font-size:12px">✅ Ningún módulo reportó códigos</p>' : `
+      <div style="margin-top:10px">${conFallas.map(m => `
+        <div style="margin-bottom:10px">
+          <div style="font-size:12px;font-weight:600">${UI.esc(m.nombre)}
+            <span style="color:var(--text3);font-weight:400;font-family:ui-monospace,Consolas,monospace;font-size:10.5px"> · 0x${m.ecu.toString(16).toUpperCase()}</span></div>
+          <div style="margin-top:4px">${m.codigos.map(c => `
+            <span style="display:inline-block;margin:2px 4px 2px 0;padding:3px 9px;border-radius:6px;font-family:ui-monospace,Consolas,monospace;font-size:11.5px;
+              background:${c.activo ? 'rgba(239,68,68,.16)' : 'rgba(148,163,184,.14)'};
+              color:${c.activo ? 'var(--red)' : 'var(--text2)'}"
+              title="${c.activo ? 'Falla presente ahora' : 'Guardada — ocurrió antes'}">${UI.esc(c.codigo)}${c.activo ? ' ●' : ''}</span>`).join('')}</div>
+        </div>`).join('')}
+      </div>
+      <div style="font-size:10.5px;color:var(--text3);border-top:1px solid var(--border);padding-top:6px">
+        ● = falla presente en este momento. El resto quedó guardada de una ocurrencia anterior.
+      </div>`}
+      ${ms.length > conFallas.length ? `<div style="font-size:10.5px;color:var(--text3);margin-top:6px">
+        Sin códigos: ${ms.filter(m => !m.codigos.length).map(m => UI.esc(m.nombre)).join(' · ')}</div>` : ''}
+    </div>`;
   },
 
   /* Cobro del escaneo, visible en el reporte para que no se pase por alto al
@@ -3704,7 +3890,7 @@ Modulos.diagnostico_obd = {
   /* Campos que dependen de una migración posterior a la tabla original. El
      código se despliega antes que la migración (son dos pasos distintos), así
      que un escaneo no puede perderse solo porque la columna todavía no exista.*/
-  _CAMPOS_NUEVOS: ['permanentes', 'readiness', 'norma_obd', 'calibracion', 'equipamiento', 'costo'],
+  _CAMPOS_NUEVOS: ['permanentes', 'readiness', 'norma_obd', 'calibracion', 'equipamiento', 'costo', 'por_modulo'],
 
   async guardarEscaneo() {
     if (!this._scan) return;
@@ -3749,7 +3935,8 @@ Modulos.diagnostico_obd = {
         ${this._modulosHTML(d)}
         ${this._tablaDTCs(d)}
         ${this._freezeHTML(d.freeze_frame)}
-        ${this._costoHTML(d)}
+        ${this._porModuloHTML(d)}
+      ${this._costoHTML(d)}
       ${this._equipamientoHTML(d)}
       ${this._monitoresHTML(d.monitores)}
         <div class="card" style="padding:14px;margin-top:12px">

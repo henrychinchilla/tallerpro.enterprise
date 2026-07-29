@@ -19,7 +19,8 @@ alter table public.diagnosticos_obd
   add column if not exists norma_obd    jsonb,
   add column if not exists calibracion  jsonb,
   add column if not exists equipamiento jsonb,
-  add column if not exists costo        jsonb;
+  add column if not exists costo        jsonb,
+  add column if not exists por_modulo   jsonb;
 
 -- El CVN es la firma de la calibración: comparar un vehículo contra OTROS DEL
 -- MISMO MODELO que pasaron por el taller es lo que permite decir "a este le
