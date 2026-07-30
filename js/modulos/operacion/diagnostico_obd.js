@@ -1445,7 +1445,48 @@ Modulos.diagnostico_obd = {
       if (tramas > 0) { log(`Bus J1708/J1587 activo (${tramas} tramas) — camión antiguo ✓`); return 'j1708'; }
     }
 
-    throw new Error('No se detectó ningún bus: ni OBD-II (CAN 500k/250k), ni J1939 (250k/500k), ni J1708. Verificá que el switch esté en contacto y el cable bien puesto en el conector.');
+    /* Ultimo sospechoso, y el que faltaba: un liviano anterior a ~2006 no tiene
+       CAN de diagnostico. Habla OBD-II igual, pero por K-line (pin 7). Que no
+       conteste en CAN no significa que no tenga bus — significa que se le esta
+       preguntando por el cable equivocado. */
+    const kl = await this._probarKlineUSB(log);
+    if (kl.abrio) throw new Error(
+      `Este vehículo no responde en CAN, y el adaptador SÍ puede abrir K-line (${kl.abrio}). ` +
+      'Es un liviano anterior a ~2006: diagnostica por K-line (pin 7), no por CAN. ' +
+      'NexusPro todavía no arma tramas K-line por USB/RP1210 — para este vehículo usá la opción ' +
+      '<b>Bluetooth</b> con el dongle ELM327, que sí habla ISO 9141-2 y KWP2000.');
+
+    throw new Error('No se detectó ningún bus: ni OBD-II (CAN 500k/250k), ni J1939 (250k/500k), ni J1708' +
+      (kl.declara ? '' : ', y este adaptador no declara K-line (ISO 9141-2 / ISO 14230)') + '. ' +
+      'Verificá que el switch esté en contacto y el cable bien puesto en el conector. ' +
+      'Si el vehículo es anterior a ~2006 es K-line: usá la opción <b>Bluetooth</b> con el dongle ELM327.');
+  },
+
+  /* ── ¿Puede este adaptador abrir K-line? ────────────────────────────────
+     No lee códigos: contesta la única pregunta que importa cuando un liviano
+     viejo no responde en CAN — si el "no hay bus" es del vehículo o del
+     adaptador. Se distingue entre "no lo declara" (el USB-Link es de camión y
+     puede no traer K-line) y "lo declara pero no abrió" (ahí sí es el cable,
+     el pin 7 o el switch). */
+  async _probarKlineUSB(log) {
+    const out = { declara: false, abrio: null };
+    try {
+      const r = await this._puenteOp({ op:'apis' }, 4000).catch(() => null);
+      const yo = ((r && r.apis) || []).find(a => a.cargada) || null;
+      const soporta = ((yo && yo.protocolos) || []).map(p => String(p).split(',')[0].toUpperCase());
+      const candidatos = ['ISO14230', 'ISO9141'].filter(p => soporta.includes(p));
+      out.declara = candidatos.length > 0;
+      if (!out.declara) {
+        if (log) log('<span style="color:var(--text3)">Este adaptador no declara K-line (ISO 9141-2 / ISO 14230): no puede hablarle a un liviano anterior a ~2006.</span>');
+        return out;
+      }
+      for (const p of candidatos) {
+        if (log) log(`Probando K-line (${p}) — vehículo anterior a ~2006...`);
+        const c = await this._puenteOp({ op:'conectar', protocolo:p, device:1 }, 8000).catch(() => ({ ok:false }));
+        if (c.ok) { out.abrio = p; await this._puenteOp({ op:'desconectar' }, 5000).catch(() => {}); break; }
+      }
+    } catch (_) { /* el diagnostico es de cortesia: si falla, no tapa el error real */ }
+    return out;
   },
 
   /* ── Vehículos livianos por USB: OBD-II sobre CAN crudo con ISO-TP propio ── */
@@ -1464,7 +1505,16 @@ Modulos.diagnostico_obd = {
         return { nombre: est.dispositivo || 'USB-Link (RP1210)', protocolo: `CAN ${ext ? 29 : 11} bits / ${this._canBaud}k (USB)` };
       }
     }
-    throw new Error(`El vehículo no respondió por OBD-II en CAN ${this._canBaud}k. Probá la opción "Automático", que además busca bus J1939 de camión. Verificá switch en contacto y cable bien puesto. (El USB-Link es solo USB: la opción Bluetooth es para un dongle ELM327/Vgate aparte.)`);
+    /* Antes se culpaba al cable y al switch. En un liviano anterior a ~2006 eso
+       manda a revisar lo que esta bien: el vehiculo habla OBD-II, pero por
+       K-line (pin 7), y por CAN no va a contestar nunca. */
+    const kl = await this._probarKlineUSB(log);
+    throw new Error(`El vehículo no respondió por OBD-II en CAN ${this._canBaud}k. ` +
+      (kl.abrio
+        ? `El adaptador SÍ abrió K-line (${kl.abrio}): este vehículo es anterior a ~2006 y diagnostica por K-line (pin 7), no por CAN. NexusPro todavía no arma tramas K-line por USB/RP1210 — usá la opción <b>Bluetooth</b> con el dongle ELM327, que sí habla ISO 9141-2 y KWP2000.`
+        : `Si es un liviano anterior a ~2006 es K-line (pin 7) y por CAN no va a contestar: usá la opción <b>Bluetooth</b> con el dongle ELM327. ` +
+          (kl.declara ? '' : 'Este adaptador no declara K-line. ') +
+          `Si es camión, probá "Automático", que además busca J1939. Verificá switch en contacto y cable bien puesto.`));
   },
 
   /* Emula un ELM327 sobre el puente: mismos comandos, misma respuesta hex */
@@ -1829,6 +1879,129 @@ Modulos.diagnostico_obd = {
     return hallados;
   },
 
+  /* ═══ Escaneo por modulo en K-line (ISO 14230 / KWP2000) ═══════════════════
+     Todo el escaneo por modulo de arriba direcciona por CAN: le pregunta a los
+     IDs 0x700-0x7EF. Un liviano anterior a ~2006 no tiene CAN de diagnostico,
+     asi que ahi NO habia escaneo por modulo — solo los codigos de emisiones del
+     motor. El vehiculo quedaba con un modulo listado y todo lo demas invisible:
+     exactamente el falso-limpio que esta herramienta no se puede permitir.
+
+     En K-line el destino es UN byte (ISO 14230-3): cabecera
+     [formato][destino][origen], con formato = 0x80 | largo y origen = 0xF1 (el
+     equipo de diagnostico). Se le toca la puerta a cada destino con
+     StartCommunication (0x81), que es el saludo del propio protocolo: un modulo
+     presente contesta 0xC1 + dos bytes de llave.
+
+     Limites, dichos y no disimulados:
+       · solo en ISO 14230 (protocolos 4 y 5 del ELM). En ISO 9141-2 (protocolo
+         3) el direccionamiento por modulo no esta especificado asi, y adivinarlo
+         seria inventar.
+       · los codigos se piden con 18 00 FF 00 — el mismo servicio KWP2000 que ya
+         se usa para modulos viejos en CAN, con el mismo lector y la misma
+         advertencia sobre el byte de estado.
+       · NO alcanza a los modulos que hablan protocolo propietario de la marca.
+         En Mitsubishi de esta generacion (MUT-II) el ABS, SRS, 4x4, TPMS y el
+         ETACS van a 15625 baudios — y el ETACS por el pin 9, que ningun ELM327
+         cablea. Para esos hace falta MUT-III o equivalente. Se avisa, en vez de
+         dejar creer que "no contesto" es "no tiene fallas".
+
+     Escrito contra la norma, todavia SIN verificar en vehiculo. Mientras no se
+     pruebe enchufado, la interfaz lo dice. */
+  _KLINE_ORIGEN: 0xF1,
+
+  _klineHdr(destino, largo) {
+    const h = n => n.toString(16).toUpperCase().padStart(2, '0');
+    return `${h(0x80 | (largo & 0x3F))} ${h(destino)} ${h(this._KLINE_ORIGEN)}`;
+  },
+
+  /* Una consulta KWP2000 a un destino puntual. El ELM arma el checksum y la
+     temporizacion; aca solo se fija la cabecera y se manda el servicio. */
+  async _klinePedir(destino, tx, timeout = 2500) {
+    await this._cmd('ATSH ' + this._klineHdr(destino, tx.length), 2500).catch(() => {});
+    const cmd = tx.map(b => b.toString(16).padStart(2, '0')).join('').toUpperCase();
+    let r = null;
+    try { r = await this._cmd(cmd, timeout); } catch (_) { return null; }
+    /* BUS INIT / SEARCHING no son respuestas del modulo: son el ELM negociando.
+       Tomarlas por datos haria aparecer modulos que no existen. */
+    if (!r || /NO DATA|ERROR|UNABLE|STOPPED|BUFFER|BUS INIT|BUS BUSY|SEARCHING|CAN ERROR/i.test(r)) return null;
+    const hex = this._hexLines(r).join('');
+    if (hex.length < 2) return null;
+    const out = [];
+    for (let p = 0; p + 1 < hex.length; p += 2) out.push(parseInt(hex.substr(p, 2), 16));
+    return out.length ? out : null;
+  },
+
+  _klinePuedeModulos() {
+    return this._via === 'ble' && (this._protoNum === 4 || this._protoNum === 5);
+  },
+
+  /* Al terminar hay que dejar el adaptador hablando OBD-II otra vez. En CAN
+     alcanza con devolver la cabecera a 7DF; en K-line la cabecera por defecto
+     depende del protocolo negociado, asi que en vez de adivinarla se rehace la
+     autodeteccion: cuesta ~2 s y es la unica forma segura de no dejar el
+     monitor en vivo y el borrado de codigos apuntando a un modulo cualquiera. */
+  async _klineRestaurar() {
+    await this._cmd('ATSP0', 4000).catch(() => {});
+    await this._cmd('0100', 12000).catch(() => {});
+  },
+
+  async _barrerModulosKline(log) {
+    const hallados = [];
+    const antes = this._sinTraza;
+    this._sinTraza = true;                 // 255 puertas ahogarian la bitacora
+    try {
+      for (let dst = 0x01; dst <= 0xFF; dst++) {
+        if (dst === this._KLINE_ORIGEN) continue;        // ese somos nosotros
+        const r = await this._klinePedir(dst, [0x81], 1200);
+        /* 0xC1 = StartCommunication aceptada. Se cuenta tambien el rechazo
+           explicito (0x7F): un modulo que contesta "no" es un modulo que ESTA,
+           y darlo por ausente seria perderlo. */
+        if (r && (r[0] === 0xC1 || r[0] === 0x7F))
+          hallados.push({ dst, saludo: r[0] === 0xC1 });
+        if (log && (dst & 0x1F) === 0x1F)
+          log(`&nbsp;&nbsp;<span style="color:var(--text3)">…destino 0x${dst.toString(16).toUpperCase()} en K-line (${hallados.length} encontrados)</span>`);
+      }
+    } finally { this._sinTraza = antes; }
+    this._trazaNota(`barrido K-line 0x01-0xFF: ${hallados.length} modulo(s) — ` +
+      (hallados.map(h => '0x' + h.dst.toString(16).toUpperCase()).join(' ') || 'ninguno'));
+    return hallados;
+  },
+
+  async _escanearModulosKline(log) {
+    if (log) log('<b>Barriendo módulos en K-line (KWP2000)…</b> 255 destinos, ~1 min');
+    const hallados = await this._barrerModulosKline(log);
+    if (!hallados.length) {
+      if (log) log('Ningún módulo contestó el saludo KWP2000. En Mitsubishi de esta generación es lo esperable: ' +
+        'ABS, SRS, 4x4, TPMS y ETACS usan MUT-II (15625 baudios), que un ELM327 no puede hablar.');
+      return null;
+    }
+    if (log) log(`<b>${hallados.length} módulo(s) contestaron en K-line</b> — leyendo códigos de cada uno...`);
+    const res = [];
+    try {
+      for (const h of hallados) {
+        const d = await this._klinePedir(h.dst, [0x18, 0x00, 0xFF, 0x00], 2500);
+        const cods = this._dtcsKWP(d);
+        const nombre = this._nombreUDS(h.dst, cods);
+        res.push({ ecu: h.dst, resp: null, ext: false, kline: true, nombre,
+                   codigos: cods, respondio: !!d, servicio: '18 00 FF 00 (KWP2000)', nuevo: false });
+        if (log && cods.length)
+          log(`&nbsp;&nbsp;<b>${nombre}</b>: ${cods.length} código(s)`);
+      }
+    } finally { await this._klineRestaurar(); }
+
+    /* Mismas descripciones que el camino CAN: un codigo pelado obliga a irlo a
+       buscar a internet, que es justo lo que esto deberia evitar. */
+    const todos = res.flatMap(m => m.codigos.map(c => c.codigo.split('-')[0]));
+    let cat = null;
+    if (todos.length) { try { cat = await DB.getDTCCatalogo([...new Set(todos)]); } catch (_) {} }
+    for (const m of res)
+      for (const c of m.codigos) {
+        c.desc = this._descModulo(c.codigo, cat);
+        c.sistema = this._sistemaDTC(c.codigo);
+      }
+    return res;
+  },
+
   /* ── Modulos que no hablan UDS: KWP2000 (ISO 14230-3), servicio 0x18 ──
      Un modulo de 2003-2010 contesta el Tester Present del barrido — o sea que
      el escaneo lo encuentra — pero no conoce el servicio 0x19: devuelve
@@ -2053,7 +2226,10 @@ Modulos.diagnostico_obd = {
         if (!Array.isArray(ms) || !ms.length) continue;
         conMapa++;
         for (const m of ms) {
-          if (typeof m.req !== 'number') continue;
+          /* Un mapa de K-line no sirve para el barrido por CAN: sus "req" son
+             destinos de un byte, no IDs CAN. Preguntar por 0x18 en CAN es
+             preguntarle a nadie, y ademas ensuciaria la lista de faltantes. */
+          if (typeof m.req !== 'number' || m.kline) continue;
           const k = m.req + ':' + m.resp;
           const y = porDir.get(k);
           if (y) { y.visto++; continue; }
@@ -2246,7 +2422,9 @@ Modulos.diagnostico_obd = {
     return `<div class="card" style="padding:14px;margin-top:12px">
       <b style="font-size:12px">🗺 MAPA DE ACCESO — por dónde se le entra a este vehículo</b>
       <div style="font-size:11px;color:var(--text3);margin-top:2px">
-        CAN ${m.bits} bits · ${m.baud}k · ${m.modulos.length} módulo(s). Queda guardado: el próximo escaneo de
+        ${m.enlace === 'kline'
+          ? `K-line · ${UI.esc(m.protocolo || 'KWP2000')} · ${m.modulos.length} módulo(s)`
+          : `CAN ${m.bits} bits · ${m.baud}k · ${m.modulos.length} módulo(s)`}. Queda guardado: el próximo escaneo de
         este modelo pregunta primero acá y responde en segundos en vez de barrer 240 direcciones.
       </div>
       <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:7px;margin-top:8px">
@@ -2317,7 +2495,17 @@ Modulos.diagnostico_obd = {
      modelo. Sólo módulos que de verdad contestaron. */
   _mapaDeEscaneo(porModulo) {
     if (!Array.isArray(porModulo) || !porModulo.length) return null;
+    /* Un mapa de K-line con "CAN 11 bits / 500k" seria mentira, y ademas
+       inservible: el proximo escaneo del modelo leeria el mapa y volveria a
+       preguntar por CAN. El enlace se guarda como lo que es. */
+    if (porModulo.some(m => m.kline)) return {
+      enlace: 'kline', protocolo: this._protoNum === 4 ? 'ISO 14230 (init 5 baudios)' : 'ISO 14230 (init rápido)',
+      via: this._via,
+      modulos: porModulo.map(m => ({ req:m.ecu, resp:null, kline:true, nombre:m.nombre, servicio:m.servicio || null })),
+      faltantes: this._mapaFaltantes || [],
+    };
     return {
+      enlace: 'can',
       bits: this._canExt ? 29 : 11, baud: this._canBaud, via: this._via,
       modulos: porModulo.map(m => ({ req:m.ecu, resp:m.resp, ext:!!m.ext, nombre:m.nombre, servicio:m.servicio || null })),
       faltantes: this._mapaFaltantes || [],
@@ -3679,10 +3867,26 @@ Modulos.diagnostico_obd = {
       medir:'Mismo procedimiento que P0420, del lado del banco 2.' },
     P0442: { sev:'informativa', sint:'Casi sin síntomas, a veces olor a combustible.', causas:['Tapón de combustible flojo, mal roscado o con empaque vencido','Manguera del EVAP agrietada','Válvula de purga o de venteo','Canister fisurado'],
       medir:'Empezá por el tapón: es la causa más común y la más barata. Si no, prueba de humo en el sistema EVAP; a ojo no se encuentra una fuga pequeña.' },
-    P0455: { sev:'informativa', sint:'Olor a combustible, testigo encendido.', causas:['Tapón de combustible ausente o mal cerrado','Manguera del EVAP desconectada','Canister o válvula de venteo dañados'],
-      medir:'Fuga grande: normalmente se encuentra a la vista. Revisá el tapón y las mangueras del canister antes de la prueba de humo.' },
+    /* Sube a "atencion" y no queda en informativa a proposito. El codigo solo
+       dice "fuga grande de vapores", pero cuando viene con OLOR FUERTE — y mas
+       aun dentro de la cabina — lo que hay que descartar primero no es un vapor
+       sino combustible LIQUIDO, que con una fuente de ignicion es un incendio.
+       Dejarlo como informativa invita a devolver el vehiculo andando. */
+    P0455: { sev:'atencion', sint:'Olor a combustible, testigo encendido. Si el olor es FUERTE o se siente dentro de la cabina, tratalo como fuga de combustible líquido, no como un código de vapores.',
+      causas:['Tapón de combustible ausente, mal cerrado o con empaque vencido','Manguera del EVAP desconectada o partida','Canister o válvula de venteo dañados','Canister SATURADO de combustible líquido (deja de adsorber y empuja vapor y líquido hacia la purga)','Fuga en el tubo de llenado, su válvula de retención o la válvula de nivelación del tanque'],
+      medir:'ANTES de la prueba de humo, y con el vehículo afuera y sin fuentes de ignición: buscá combustible líquido — tanque, tubo de llenado, bomba y sus fittings, y el canister (si pesa o gotea, está saturado y hay que cambiarlo, no lavarlo). ' +
+        'Revisá si el modelo tiene campaña de fábrica por fuga de combustible: la pestaña de campañas lo consulta por marca/modelo/año. ' +
+        'Si no hay líquido, entonces sí: tapón, mangueras del canister y prueba de humo.' },
     P0456: { sev:'informativa', sint:'Testigo encendido, sin síntomas de manejo.', causas:['Empaque del tapón reseco','Fisura fina en manguera','Válvula de purga que no sella'],
       medir:'Fuga muy pequeña: solo aparece con prueba de humo. No cambies piezas a ciegas por este código.' },
+    P0441: { sev:'informativa', sint:'Sin síntomas de manejo; a veces ralentí inestable al arrancar en caliente.', causas:['Válvula de purga pegada abierta o cerrada','Manguera de purga tapada, partida o mal conectada','Sensor de presión del tanque fuera de rango','Canister saturado de combustible'],
+      medir:'Medí la purga con vacío: la válvula debe sellar sin alimentación y abrir con ella. Una purga pegada abierta mete vapor al múltiple en ralentí y también da mezcla rica.' },
+    P0443: { sev:'informativa', sint:'Testigo encendido, casi sin síntomas.', causas:['Bobina de la válvula de purga abierta o en corto','Conector o arnés de la purga','Alimentación o masa de la válvula'],
+      medir:'Es un código ELÉCTRICO, no de fuga: medí resistencia de la bobina y presencia de alimentación en el conector antes de cambiar la válvula. Si el circuito está bien, seguí el arnés hacia el ECM.' },
+    P0446: { sev:'informativa', sint:'Testigo encendido; a veces cuesta cargar combustible.', causas:['Válvula de venteo pegada o sucia','Filtro del venteo tapado (polvo o barro)','Manguera del venteo colapsada','Arnés de la válvula de venteo'],
+      medir:'El venteo es lo que deja entrar aire al tanque: si está tapado, el tanque hace vacío y la bomba de la gasolinera se corta. Revisalo sucio/tapado antes de condenar la válvula — en vehículo de terracería es causa común.' },
+    P0451: { sev:'informativa', sint:'Testigo encendido, sin síntomas.', causas:['Sensor de presión del tanque descalibrado','Conector con humedad o falso contacto','Manguera de referencia del sensor obstruida'],
+      medir:'Con el tapón abierto el sensor debe leer presión atmosférica. Una lectura que no se mueve al abrir el tapón es sensor o manguera, no fuga — no arranques cambiando canister.' },
     P0500: { sev:'atencion', sint:'Velocímetro errático o muerto, cambios bruscos de la caja.', causas:['Sensor de velocidad','Rueda fónica o corona dañada','Cableado','Módulo de ABS'],
       medir:'Si el vehículo toma la velocidad del ABS, revisá primero los códigos de ABS: el problema suele estar ahí y no en un sensor propio.' },
     P0506: { sev:'informativa', sint:'Ralentí bajo, el motor se apaga al frenar o en marcha lenta.', causas:['Cuerpo de aceleración sucio de carbón','Válvula IAC pegada','Fuga de vacío','Falta de aprendizaje del ralentí tras desconectar la batería'],
@@ -3870,11 +4074,12 @@ Modulos.diagnostico_obd = {
     UI.modal('📡 Nuevo Escaneo OBD-II', `
       <div class="form-group">
         <label class="form-label">Vehículo *</label>
-        <select class="form-select" id="obd-veh">
+        <select class="form-select" id="obd-veh" onchange="Modulos.diagnostico_obd._avisoAcceso(this.value)">
           <option value="">— Seleccionar vehículo —</option>
           ${this._vehiculos.map(v=>`<option value="${v.id}"${vehId===v.id?' selected':''}>${v.placa||'s/placa'} · ${v.marca||''} ${v.modelo||''} ${v.anio||''} ${v.clientes?`(${v.clientes.nombre})`:''}</option>`).join('')}
         </select>
       </div>
+      <div id="obd-aviso"></div>
       <div class="form-group">
         <label class="form-label">Conexión</label>
         <select class="form-select" id="obd-via" onchange="Modulos.diagnostico_obd._verApis()">
@@ -3916,6 +4121,9 @@ Modulos.diagnostico_obd = {
     this._api = null;
     this._verApis();
     this._cargarApis();
+    /* Si se entro desde la ficha de un vehiculo ya viene elegido: el aviso tiene
+       que estar ahi de entrada, no solo al cambiar la seleccion. */
+    if (vehId) this._avisoAcceso(vehId);
   },
 
   /* ── Costo del escaneo ───────────────────────────────────────────────────
@@ -3953,10 +4161,18 @@ Modulos.diagnostico_obd = {
      ningún .exe desde acá: darle al puente la capacidad de ejecutar programas
      abriría un agujero mucho peor que la molestia que ahorra. Si nada responde,
      se indica dónde está la herramienta del fabricante para abrirla a mano. */
+  /* Las dos ultimas son las que faltaban, y por eso un vehiculo anterior a ~2006
+     parecia "sin bus". Un liviano de esa epoca no diagnostica por CAN sino por
+     K-line (pin 7): ISO 9141-2 o ISO 14230/KWP2000. Si el adaptador no las
+     declara, este boton ahora lo dice en vez de dejar creer que el problema es
+     el cable o el switch. */
   _PROTOS_PRUEBA: [
     { p:'J1708',        et:'J1708/J1587 · camión antiguo' },
     { p:'J1939',        et:'J1939 · camión moderno' },
     { p:'CAN:Baud=500', et:'CAN 500k · vehículo liviano', req:'CAN' },
+    { p:'ISO15765',     et:'ISO 15765 · OBD-II sobre CAN', req:'ISO15765' },
+    { p:'ISO9141',      et:'ISO 9141-2 · K-line, liviano anterior a ~2006', req:'ISO9141' },
+    { p:'ISO14230',     et:'ISO 14230 / KWP2000 · K-line, liviano 2000-2008', req:'ISO14230' },
   ],
 
   /* Los mensajes que devuelve cada DLL vienen como salen del fabricante: con
@@ -4037,6 +4253,67 @@ Modulos.diagnostico_obd = {
     }
   },
 
+  /* ═══ Antes de conectar: qué se sabe de este vehículo ══════════════════════
+     "Revisá que tengamos todo para poder escanearla" no deberia ser una pregunta
+     que haya que hacer por chat. El año y la marca ya dicen por que enlace
+     diagnostica el vehiculo y hasta donde se va a llegar, y decirlo ANTES de
+     conectar evita la peor perdida de tiempo del taller: una hora revisando
+     cable, switch y conector cuando el problema era que se le preguntaba por
+     CAN a un vehiculo que solo habla K-line.
+
+     El corte del año no es arbitrario: CAN (ISO 15765-4) es obligatorio en
+     EEUU desde el modelo 2008, con entrada gradual desde 2003. Antes de eso lo
+     normal es K-line (pin 7): ISO 9141-2 o ISO 14230/KWP2000. */
+  _AVISOS_MARCA: {
+    /* Solo lo verificado. Mitsubishi de esta generacion diagnostica los modulos
+       que NO son de emisiones con MUT-II, que no es OBD-II: 15625 baudios, y el
+       ETACS por el pin 9 del conector. */
+    MITSUBISHI: { hasta: 2007, txt:
+      'En Mitsubishi de esta generación, por OBD-II estándar se llega al <b>motor</b> (y a la transmisión si comparte la línea). ' +
+      'El <b>ABS, SRS, 4x4, TPMS y ETACS/carrocería</b> hablan <b>MUT-II</b>, que no es OBD-II: van a <b>15625 baudios</b>, ' +
+      'y el ETACS por el <b>pin 9</b> del conector. Un ELM327 no cablea el pin 9 ni genera 15625 baudios, y el USB-Link por RP1210 tampoco. ' +
+      'Para esos módulos hace falta <b>MUT-III</b> (o un clon con su VCI) o un multimarca con cobertura Mitsubishi declarada.' },
+  },
+
+  _avisoAcceso(vehId) {
+    const cont = document.getElementById('obd-aviso');
+    if (!cont) return;
+    const v = (this._vehiculos || []).find(x => x.id === vehId);
+    if (!v) { cont.innerHTML = ''; return; }
+    const anio = parseInt(v.anio, 10) || null;
+    const av = [];
+
+    if (!anio) {
+      av.push({ n:'info', t:'Sin año registrado no se puede anticipar el enlace de diagnóstico. Cargalo en Vehículos para que este aviso sirva.' });
+    } else if (anio >= 2008) {
+      av.push({ n:'ok', t:`Modelo ${anio}: CAN obligatorio (ISO 15765-4). Sirve USB-Link o Bluetooth, y el escaneo por módulo llega completo.` });
+    } else if (anio >= 2003) {
+      av.push({ n:'warn', t:`Modelo ${anio}: está en la transición a CAN. Puede ser CAN o <b>K-line</b> (pin 7). ` +
+        'Si no contesta por USB, no es el cable: cambiá a <b>Bluetooth</b>, que es la única vía que habla ISO 9141-2 y KWP2000.' });
+    } else {
+      av.push({ n:'warn', t:`Modelo ${anio}: anterior a CAN, diagnostica por <b>K-line</b> (pin 7). ` +
+        'El USB-Link por RP1210 no arma tramas K-line en NexusPro — usá <b>Bluetooth</b> con el dongle ELM327.' });
+    }
+
+    const m = this._AVISOS_MARCA[String(v.marca || '').trim().toUpperCase()];
+    if (m && anio && anio <= m.hasta) av.push({ n:'warn', t:m.txt });
+
+    /* El VIN se usa para campañas de fábrica y para decodificar origen y año.
+       Uno de largo distinto a 17 no es un VIN: mejor decirlo aca que dejar que
+       NHTSA devuelva vacio y parezca "este vehiculo no tiene campañas". */
+    const vin = String(v.vin || '').trim();
+    if (vin && vin.length !== 17)
+      av.push({ n:'warn', t:`El VIN registrado (<code>${UI.esc(vin)}</code>) tiene <b>${vin.length} caracteres</b> y un VIN son 17. ` +
+        'Así no se puede decodificar ni consultar campañas de fábrica por VIN — revisalo contra la tarjeta de circulación. ' +
+        'Las campañas por marca/modelo/año sí van a funcionar.' });
+
+    const color = { ok:'--green', warn:'--amber', info:'--text3' };
+    cont.innerHTML = `<div style="margin-bottom:10px">${av.map(a => `
+      <div style="background:var(--surface2);color:var(--text);border-left:3px solid var(${color[a.n]});
+        border-radius:6px;padding:7px 10px;font-size:11.5px;line-height:1.55;margin-top:5px">
+        ${a.n === 'ok' ? '✅' : a.n === 'warn' ? '⚠️' : 'ℹ️'} ${a.t}</div>`).join('')}</div>`;
+  },
+
   /* Oculta el selector y la prueba en Bluetooth, donde no aplican */
   _verApis() {
     const via = document.getElementById('obd-via')?.value;
@@ -4060,7 +4337,10 @@ Modulos.diagnostico_obd = {
            camión que se tiene enfrente (J1708 para los viejos, J1939 para los
            nuevos). Es la información que hace útil al selector. */
         const protos = (a.protocolos || []).map(p => String(p).split(',')[0]);
-        const clave = protos.filter(p => /^(J1939|J1708|OBDII|CAN|ISO15765|J1850)$/i.test(p));
+        /* ISO9141/ISO14230 estaban fuera del filtro, asi que un adaptador que SI
+           sabe K-line se mostraba como si solo supiera CAN: justo el dato que
+           hace falta para saber si sirve para un vehiculo anterior a ~2006. */
+        const clave = protos.filter(p => /^(J1939|J1708|OBDII|CAN|ISO15765|ISO9141|ISO14230|J1850)$/i.test(p));
         const resumen = clave.length ? ` — ${clave.slice(0, 4).join(', ')}` : '';
         return `<option value="${UI.esc(a.api)}"${a.cargada ? ' selected' : ''}>${UI.esc(a.nombre || a.api)}${UI.esc(resumen)}</option>`;
       }).join(''));
@@ -4139,14 +4419,27 @@ Modulos.diagnostico_obd = {
          (TPMS, ABS, tracción, carrocería). Por USB siempre; por Bluetooth
          cuando el dongle acepta ATSH y el vehículo está en CAN de 11 bits. */
       let porModulo = null, mapaAcceso = null;
-      let modoBLE = false;
+      let modoBLE = false, viaKline = false;
       if (this._elmPuedeModulos()) {
         modoBLE = await this._elmModoModulo(true);
         if (!modoBLE) log('El dongle Bluetooth no acepta ATSH: no se puede escanear módulo por módulo con este adaptador.');
+      } else if (this._klinePuedeModulos()) {
+        /* Vehiculo de K-line: el barrido por CAN no aplica, pero el de KWP2000
+           si. Antes aca no se escaneaba nada y el vehiculo quedaba con un solo
+           modulo listado. */
+        viaKline = true;
       } else if (this._via === 'ble') {
-        log('Escaneo por módulo no disponible en este protocolo por Bluetooth (requiere CAN de 11 bits).');
+        log('Escaneo por módulo no disponible en este protocolo por Bluetooth ' +
+            `(protocolo ${this._protoNum}: requiere CAN de 11 bits, o ISO 14230/KWP2000 para el barrido en K-line).`);
       }
-      if (this._via === 'usb' || modoBLE) {
+
+      if (viaKline) {
+        this._mapaFaltantes = [];
+        porModulo = await this._escanearModulosKline(log)
+          .catch(e => { log(`No se pudo barrer módulos en K-line: ${e.message}`); return null; });
+        mapaAcceso = this._mapaDeEscaneo(porModulo);
+        if (mapaAcceso) log(`&nbsp;&nbsp;Mapa de acceso guardado: ${mapaAcceso.modulos.length} módulo(s) en K-line (KWP2000)`);
+      } else if (this._via === 'usb' || modoBLE) {
        try {
         log(`<b>Escaneando TODOS los módulos del vehículo...</b> (esto tarda ~${modoBLE ? 60 : 30} s)`);
         this._mapaFaltantes = [];
