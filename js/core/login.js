@@ -110,6 +110,7 @@ function renderLogin(vista='login') {
           <div style="font-size:48px;margin-bottom:8px">⚡</div>
           <h1>NEXUSPRO</h1>
           <p>${APP.slogan}</p>
+          <p class="app-version" style="font-size:10px;opacity:.6;margin-top:3px;letter-spacing:0;text-transform:none"></p>
         </div>
 
         <div class="form-group">
@@ -473,6 +474,8 @@ function renderLogin(vista='login') {
   };
 
   screen.innerHTML = vistas[vista] || vistas.login;
+  /* El render se lleva el texto de la versión: hay que volver a ponerlo */
+  if (typeof pintarVersion === 'function') pintarVersion();
 
   if (vista === 'nuevo-taller' && typeof TURNSTILE_SITE_KEY !== 'undefined' && TURNSTILE_SITE_KEY) {
     _cargarTurnstile();

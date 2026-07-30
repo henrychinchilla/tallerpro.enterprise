@@ -591,6 +591,7 @@ const App = {
       <div class="sidebar-brand">
         <div class="sidebar-brand-name">NEXUSPRO</div>
         <div class="sidebar-brand-sub">${APP.slogan}</div>
+        <div class="sidebar-brand-sub app-version" style="font-size:9.5px;opacity:.6;margin-top:2px;letter-spacing:0;text-transform:none"></div>
       </div>
       <div class="sidebar-tenant" onclick="App.toggleSidebar()" style="display:flex;align-items:center;gap:8px">
         ${Auth.tenant?.logo_base64 ? `<img src="${Auth.tenant.logo_base64}" alt="logo" style="width:28px;height:28px;border-radius:6px;object-fit:contain;background:var(--surface2);flex-shrink:0">` : ''}
@@ -622,6 +623,9 @@ const App = {
           <span style="font-size:10px;color:rgba(255,255,255,0.2)">© 2026</span>
         </div>
       </div>`;
+
+    /* El render se lleva el texto de la versión: hay que volver a ponerlo */
+    if (typeof pintarVersion === 'function') pintarVersion();
 
     /* Restaurar la posición del menú y mantenerla persistida */
     sidebar.scrollTop = scrollPrevio;

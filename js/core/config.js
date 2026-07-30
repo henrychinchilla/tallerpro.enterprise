@@ -12,6 +12,53 @@ const APP = {
   url:      'https://nexuspro.cmtelecommgt.com'
 };
 
+/* ── Versión en pantalla ────────────────────────────────────────────────────
+   La versión que se muestra la dice el SERVICE WORKER (su CACHE_VERSION), no
+   `APP.version` de acá arriba. Dos razones, y las dos importan:
+
+     · CACHE_VERSION es lo único que se sube en CADA despliegue — es la regla
+       del proyecto. `APP.version` se olvida y queda vieja (hoy dice 3.2.0 de
+       junio), así que mostrarla sería mentir con cara de dato.
+     · Es la versión del código que DE VERDAD se está ejecutando. Si el Service
+       Worker viejo todavía manda, acá se ve la versión vieja — y eso es
+       exactamente lo que hace falta saber: si el cambio ya llegó o no.
+
+   Un SW anterior a este cambio no sabe contestar; en ese caso no se muestra
+   nada, que es mejor que mostrar un número equivocado. Con una recarga ya
+   queda el SW nuevo y aparece. */
+let _versionSW = null;
+
+async function cargarVersion() {
+  try {
+    if (typeof navigator === 'undefined' || !navigator.serviceWorker) return null;
+    const reg = await navigator.serviceWorker.ready;
+    const sw = navigator.serviceWorker.controller || reg.active;
+    if (!sw) return null;
+    _versionSW = await new Promise(res => {
+      const ch = new MessageChannel();
+      ch.port1.onmessage = e => res((e.data && e.data.version) || null);
+      /* Sin este plazo, un SW que no contesta deja la promesa colgada para
+         siempre y con ella el `await` de quien la esperaba. */
+      setTimeout(() => res(null), 2000);
+      sw.postMessage('version', [ch.port2]);
+    });
+  } catch (_) { _versionSW = null; }
+  pintarVersion();
+  return _versionSW;
+}
+
+/* Rellena los huecos de versión que haya en pantalla. Se llama después de cada
+   render porque el login y el menú se redibujan enteros y se llevan el texto. */
+function pintarVersion() {
+  if (!_versionSW || typeof document === 'undefined') return;
+  for (const el of document.querySelectorAll('.app-version')) {
+    el.textContent = _versionSW;
+    el.title = 'Versión que se está ejecutando. Si no es la que acabás de desplegar, recargá la página.';
+  }
+}
+
+if (typeof navigator !== 'undefined' && navigator.serviceWorker) cargarVersion();
+
 /* Site key pública de Cloudflare Turnstile (anti-bots en "Crear nuevo taller").
    Se crea en dash.cloudflare.com → Turnstile (el secret va en los secrets de
    Supabase como TURNSTILE_SECRET). Vacía = el captcha no se muestra. */

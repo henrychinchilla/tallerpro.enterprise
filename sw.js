@@ -8,7 +8,7 @@
    Para forzar actualización: subir CACHE_VERSION.
 ═══════════════════════════════════════════════════════ */
 
-const CACHE_VERSION = 'v4.18.0-20260730';
+const CACHE_VERSION = 'v4.19.0-20260730';
 const CACHE_NAME = `nexuspro-${CACHE_VERSION}`;
 
 /* App shell — se precachea en install para que funcione offline */
@@ -156,4 +156,9 @@ self.addEventListener('fetch', event => {
 /* Permite a la página pedir activación inmediata de un SW nuevo */
 self.addEventListener('message', e => {
   if (e.data === 'skipWaiting') self.skipWaiting();
+  /* Le dice a la app qué versión está sirviendo DE VERDAD. Se contesta por el
+     puerto que manda quien pregunta (MessageChannel), no por broadcast: así el
+     que preguntó recibe su respuesta y nadie más se entera. */
+  if (e.data === 'version' && e.ports && e.ports[0])
+    e.ports[0].postMessage({ version: CACHE_VERSION });
 });
