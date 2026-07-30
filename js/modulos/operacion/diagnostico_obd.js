@@ -1527,6 +1527,7 @@ Modulos.diagnostico_obd = {
   /* Diálogo UDS punto a punto con UN módulo. El _isotp normal solo escucha
      0x7E8-0x7EF (las respuestas de emisiones), así que no sirve acá. */
   async _udsPedir(reqId, respId, tx, timeout = 2500) {
+    if (this._via === 'ble') return this._udsPedirELM(reqId, tx, timeout);
     let datos = null, len = 0, ok = false;
     this._canRx = (id, b) => {
       if (id !== respId || !b.length) return;
@@ -1551,30 +1552,110 @@ Modulos.diagnostico_obd = {
     return ok ? datos : null;
   },
 
+  /* ── El mismo escaneo por módulo, pero con un dongle Bluetooth ──────────
+     Decía "solo por USB — el ELM327 Bluetooth no deja dirigir tramas a una
+     dirección arbitraria". No es exacto: para eso está ATSH, que fija la
+     cabecera de envío. Y como la mayoría de los talleres no tiene un USB-Link
+     sino un dongle barato, el escaneo por módulo — el que encuentra el TPMS,
+     el ABS y la carrocería — no le llegaba a casi nadie.
+
+     Dos diferencias con el USB, y las dos se dicen en vez de disimularse:
+       · el ELM arma y desarma el ISO-TP solo, así que no se ve la dirección
+         desde la que contesta el módulo. Se guarda solo la de ida, que es la
+         que hace falta para volver a hablarle.
+       · el barrido de 29 bits queda solo para USB: en BLE la cabecera extendida
+         se fija distinto (ATSH de 6 dígitos + ATCP) y no está verificado.
+
+     Al terminar hay que devolver la cabecera a la dirección de difusión: si
+     queda apuntando al módulo de frenos, el monitor en vivo y el borrado de
+     códigos le hablan a los frenos. Por eso sólo se habilita en CAN de 11 bits,
+     donde la difusión es 7DF y la restauración es inequívoca. */
+  _elmPuedeModulos() {
+    return this._via === 'ble' && (this._protoNum === 6 || this._protoNum === 8);
+  },
+
+  async _elmModoModulo(encender) {
+    if (this._via !== 'ble') return true;
+    if (encender) {
+      /* ATST fija cuánto espera el ELM antes de contestar NO DATA. Por defecto
+         son ~200 ms: con 240 direcciones, casi un minuto de pura espera. */
+      await this._cmd('ATST 20', 3000).catch(() => {});
+      const r = await this._cmd('ATSH 7DF', 3000).catch(() => '');
+      return /OK/i.test(r || '');            // dongle sin ATSH: no se sigue
+    }
+    await this._cmd('ATSH 7DF', 3000).catch(() => {});   // volver a la difusión
+    await this._cmd('ATST 32', 3000).catch(() => {});
+    return true;
+  },
+
+  _hex3(req) { return req.toString(16).toUpperCase().padStart(3, '0'); },
+
+  /* Toca la puerta de UNA dirección. Devuelve {req,resp} si hay alguien.
+     Por BLE el ELM oculta la dirección de respuesta, así que resp va en null y
+     la interfaz lo dice en vez de inventarla. */
+  async _tocarPuerta(req) {
+    if (this._via === 'ble') {
+      await this._cmd('ATSH ' + this._hex3(req), 2500).catch(() => {});
+      let r = null;
+      try { r = await this._cmd('3E00', 1500); } catch (_) { return null; }
+      if (!r || /NO DATA|ERROR|UNABLE|STOPPED|BUFFER|BUS/i.test(r)) return null;
+      return this._hexLines(r).length ? { req, resp: null, ext: false } : null;
+    }
+    let capt = [];
+    this._canRx = (id, b) => { capt.push({ id, b }); };
+    try {
+      await this._canTx(req, [0x02, 0x3E, 0x00]).catch(() => {});
+      await new Promise(r => setTimeout(r, 70));
+    } finally { this._canRx = null; }
+    const c = capt.find(x => x.id !== req);
+    return c ? { req, resp: c.id, ext: false } : null;
+  },
+
+  /* UDS punto a punto por ELM327. El dongle arma el ISO-TP (incluido el control
+     de flujo), así que acá sólo se fija la cabecera y se manda el servicio.
+     La respuesta multilínea del ELM antepone el largo total y prefijos '0:',
+     '1:' — por eso no se asume que el primer byte sea el del servicio: se busca
+     la respuesta positiva (servicio+0x40) o la negativa (7F). */
+  async _udsPedirELM(req, tx, timeout = 3000) {
+    await this._cmd('ATSH ' + this._hex3(req), 2500).catch(() => {});
+    const cmd = tx.map(b => b.toString(16).padStart(2, '0')).join('').toUpperCase();
+    let r = null;
+    try { r = await this._cmd(cmd, timeout); } catch (_) { return null; }
+    if (!r || /NO DATA|ERROR|UNABLE|STOPPED|BUFFER/i.test(r)) return null;
+    /* Acá NO sirve _hexLines. En una respuesta larga el ELM antepone una línea
+       con el largo total ("014") y numera las siguientes ("0:", "1:"). Esa
+       línea son TRES caracteres hex — largo impar — así que al pegarla con el
+       resto corre todos los bytes medio byte y el 59 del servicio cae en una
+       posición impar: se pierde la respuesta entera. Se descarta quedándose
+       sólo con las líneas numeradas cuando las hay. */
+    const lineas = r.split(/[\r\n]+/).map(l => l.trim()).filter(Boolean);
+    const numeradas = lineas.filter(l => /^[0-9A-F]{1,2}:/i.test(l));
+    const hex = (numeradas.length ? numeradas : lineas)
+      .map(l => l.replace(/^[0-9A-F]{1,2}:/i, '').replace(/[^0-9A-Fa-f]/g, '').toUpperCase())
+      .join('');
+    const buscar = h => { for (let p = 0; p + 1 < hex.length; p += 2) if (hex.substr(p, 2) === h) return p; return -1; };
+    let i = buscar(((tx[0] + 0x40) & 0xFF).toString(16).padStart(2, '0').toUpperCase());
+    if (i < 0) i = buscar('7F');
+    if (i < 0) return null;
+    const out = [];
+    for (let p = i; p + 1 < hex.length; p += 2) out.push(parseInt(hex.substr(p, 2), 16));
+    return out.length ? out : null;
+  },
+
   /* Pregunta "¿hay alguien?" en cada dirección y anota quién contesta y desde
      qué ID responde. La relación pregunta→respuesta no es fija (vimos +0x20,
      +0x08 y saltos irregulares en el mismo vehículo), así que se escucha todo
      en vez de suponer el ID de vuelta. */
   async _barrerModulos(log) {
     const hallados = [];
-    let capt = [];
-    this._canRx = (id, b) => { capt.push({ id, b }); };
-    try {
-      for (let req = 0x700; req <= 0x7EF; req++) {
-        capt = [];
-        /* 3E 00 = Tester Present: es de solo lectura, no cambia nada en el
-           vehículo. Es la forma segura de preguntar si hay un módulo ahí. */
-        await this._canTx(req, [0x02, 0x3E, 0x00]).catch(() => {});
-        await new Promise(r => setTimeout(r, 70));
-        for (const c of capt) {
-          if (c.id === req) continue;
-          if (hallados.some(h => h.req === req && h.resp === c.id)) continue;
-          hallados.push({ req, resp: c.id, ext: false });
-        }
-        if (log && (req & 0x3F) === 0x3F)
-          log(`&nbsp;&nbsp;<span style="color:var(--text3)">…0x${req.toString(16).toUpperCase()} (${hallados.length} encontrados)</span>`);
-      }
-    } finally { this._canRx = null; }
+    /* 3E 00 = Tester Present: es de solo lectura, no cambia nada en el
+       vehículo. Es la forma segura de preguntar si hay un módulo ahí. */
+    for (let req = 0x700; req <= 0x7EF; req++) {
+      const h = await this._tocarPuerta(req);
+      if (h && !hallados.some(x => x.req === h.req && x.resp === h.resp)) hallados.push(h);
+      if (log && (req & 0x3F) === 0x3F)
+        log(`&nbsp;&nbsp;<span style="color:var(--text3)">…0x${req.toString(16).toUpperCase()} (${hallados.length} encontrados)</span>`);
+    }
     return hallados;
   },
 
@@ -1820,16 +1901,11 @@ Modulos.diagnostico_obd = {
            trama se arma distinta, asi que preguntar con el direccionamiento
            equivocado es no preguntar. */
         this._canExt = !!c.ext;
-        let capt = [];
-        this._canRx = (id, b) => { capt.push({ id, b }); };
-        try {
-          await this._canTx(c.req, [0x02, 0x3E, 0x00]).catch(() => {});
-          await new Promise(r => setTimeout(r, 70));
-        } finally { this._canRx = null; }
         /* Se acepta cualquier respuesta que no sea el eco de la propia pregunta:
            el id de vuelta no siempre es el mismo que la vez pasada. */
-        const r = capt.find(x => x.id === c.resp) || capt.find(x => x.id !== c.req);
-        if (r) vivos.push({ req: c.req, resp: r.id, ext: !!c.ext, servicio: c.servicio || null });
+        const r = await this._tocarPuerta(c.req);
+        if (r) vivos.push({ req: c.req, resp: r.resp != null ? r.resp : c.resp,
+                            ext: !!c.ext, servicio: c.servicio || null });
       }
     } finally { this._canExt = extPrev; }
     return vivos;
@@ -1860,7 +1936,7 @@ Modulos.diagnostico_obd = {
        que responden igual por ser los de emisiones: eso no es "encontre los
        modulos", es "encontre los de siempre". Solo entonces vale la pena
        gastar los ~18 s del segundo barrido. */
-    if (mods.length <= 2) {
+    if (mods.length <= 2 && this._via !== 'ble') {
       if (log) log('&nbsp;&nbsp;Pocos modulos en 11 bits — probando direccionamiento de 29 bits...');
       const b29 = await this._barrerModulos29(log);
       for (const b of b29)
@@ -3854,11 +3930,18 @@ Modulos.diagnostico_obd = {
          Se exige evidencia positiva de comunicación: módulos que respondieron,
          VIN, códigos, o el estado del Check Engine. */
       /* Escaneo por módulo: lo que encuentra las fallas que NO son de emisiones
-         (TPMS, ABS, tracción, carrocería). Solo por USB — el ELM327 Bluetooth
-         no deja dirigir tramas a una dirección arbitraria. */
+         (TPMS, ABS, tracción, carrocería). Por USB siempre; por Bluetooth
+         cuando el dongle acepta ATSH y el vehículo está en CAN de 11 bits. */
       let porModulo = null, mapaAcceso = null;
-      if (this._via === 'usb') {
-        log('<b>Escaneando TODOS los módulos del vehículo...</b> (esto tarda ~30 s)');
+      let modoBLE = false;
+      if (this._elmPuedeModulos()) {
+        modoBLE = await this._elmModoModulo(true);
+        if (!modoBLE) log('El dongle Bluetooth no acepta ATSH: no se puede escanear módulo por módulo con este adaptador.');
+      } else if (this._via === 'ble') {
+        log('Escaneo por módulo no disponible en este protocolo por Bluetooth (requiere CAN de 11 bits).');
+      }
+      if (this._via === 'usb' || modoBLE) {
+        log(`<b>Escaneando TODOS los módulos del vehículo...</b> (esto tarda ~${modoBLE ? 60 : 30} s)`);
         this._mapaFaltantes = [];
         /* Por dónde se le entró a este mismo modelo en escaneos anteriores. */
         const mapaPrev = await this._mapaConocido(vehId);
@@ -3877,6 +3960,9 @@ Modulos.diagnostico_obd = {
             ? `<b style="color:var(--amber)">${total} código(s) en ${conFallas.length} módulo(s)</b> además de los de emisiones`
             : `Los ${porModulo.length} módulos respondieron sin códigos`);
         }
+        /* Sin esto la cabecera queda apuntando al último módulo consultado y
+           todo lo que sigue — sensores en vivo, borrado — le habla a ese. */
+        if (modoBLE) await this._elmModoModulo(false);
       }
 
       const hubo = !!(modulos && modulos.length) || !!vin || codConf.length || codPend.length || mil
