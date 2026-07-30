@@ -10,6 +10,9 @@ Modulos.diagnostico_obd = {
   /* ═══════════ DRIVER BLE / ELM327 ═══════════ */
   _dev: null, _char: null, _buf: '', _resolve: null,
   _protoNum: 0, _liveTimer: null, _busy: false,
+  /* Callback activo mientras el adaptador esta en monitoreo continuo (ATMA).
+     Ver _monInicio: ahi el ELM no manda prompt y hay que leer por linea. */
+  _monLinea: null,
 
   /* Pares servicio/característica conocidos de adaptadores OBD BLE */
   /* Servicios BLE que se piden permiso para inspeccionar. No hace falta conocer
@@ -73,6 +76,18 @@ Modulos.diagnostico_obd = {
     await nt.startNotifications();
     nt.addEventListener('characteristicvaluechanged', e => {
       this._buf += new TextDecoder().decode(e.target.value);
+      /* Monitoreo continuo: el ELM327 NO manda '>' hasta que se lo detiene, asi
+         que esperar el prompt seria esperar para siempre. Mientras dura, cada
+         linea completa se entrega apenas llega. El try/catch es para que una
+         trama con basura no mate el listener y con el las que vienen atras. */
+      if (this._monLinea) {
+        let i;
+        while ((i = this._buf.search(/[\r\n]/)) >= 0) {
+          const l = this._buf.slice(0, i).trim();
+          this._buf = this._buf.slice(i + 1);
+          if (l) { try { this._monLinea(l); } catch (_) {} }
+        }
+      }
       if (this._buf.includes('>') && this._resolve) {
         const r = this._resolve; this._resolve = null;
         r(this._buf.replace(/>/g, '').trim());
@@ -190,11 +205,15 @@ Modulos.diagnostico_obd = {
         this._resolve = res;
         setTimeout(() => { if (this._resolve) { this._resolve = null; rej(new Error(`Sin respuesta a ${c}`)); } }, timeout);
       });
-      const data = new TextEncoder().encode(c + '\r');
-      if (this._char.properties.writeWithoutResponse) await this._char.writeValueWithoutResponse(data);
-      else await this._char.writeValue(data);
+      await this._escribirBLE(c + '\r');
       return await p;
     } finally { this._busy = false; }
+  },
+
+  async _escribirBLE(txt) {
+    const data = new TextEncoder().encode(txt);
+    if (this._char.properties.writeWithoutResponse) await this._char.writeValueWithoutResponse(data);
+    else await this._char.writeValue(data);
   },
 
   async _init(log) {
@@ -3024,12 +3043,124 @@ Modulos.diagnostico_obd = {
     return res;
   },
 
+  /* ═══ J1939 por Bluetooth — ELM327 en protocolo A ═════════════════════════
+     Hasta acá, leer un camión exigía el USB-Link por RP1210: un adaptador caro
+     y atado a una PC con Windows. Pero un ELM327 que declare SAE J1939 puede
+     poner el transceptor en 250k / 29 bits, que es el bus del camión, y volcar
+     las tramas por Bluetooth.
+
+     Lo único que hace falta es traducir el formato. El decodificador J1939 de
+     este módulo (PGN, SPN, FMI, DM1/DM2, transporte BAM, nombres de módulo)
+     está escrito contra la trama que entrega el RP1210, y ya funciona. Así que
+     acá NO se decodifica nada de nuevo: se le da al ELM la misma forma que trae
+     el RP1210 y se reusa entero.
+
+     Se monitorea con ATMA (todo el bus) y no con AT DM1 (sólo los códigos
+     activos) a propósito: el mismo volcado alimenta además los sensores, el
+     Address Claim y el VIN multipaquete. Un solo camino en vez de tres.
+
+     Escrito contra la norma J1939-21, TODAVÍA SIN PROBAR contra un camión. */
+  _j39BLE: false,
+
+  /* Una línea del ELM327 con cabecera: 8 hex de ID de 29 bits + los datos. */
+  _j39LineaELM(linea) {
+    if (!this._j39 || !linea) return null;
+    /* Lo que el ELM dice de sí mismo no son tramas del camión. Contarlas como
+       tales inventaría módulos que no existen. */
+    if (/NO DATA|ERROR|UNABLE|STOPPED|BUFFER|SEARCHING|BUS|^OK$|^>+$/i.test(linea.trim())) return null;
+    const hex = linea.replace(/[^0-9A-Fa-f]/g, '').toUpperCase();
+    /* 8 del ID + al menos un byte de datos, y en pares. Menos que eso es eco
+       del comando o ruido de la línea, no una trama. */
+    if (hex.length < 10 || hex.length % 2) return null;
+    const id = parseInt(hex.slice(0, 8), 16);
+    if (!Number.isFinite(id)) return null;
+    const prio = (id >>> 26) & 0x07;
+    const dp   = (id >>> 24) & 0x03;          // EDP + DP
+    const pf   = (id >>> 16) & 0xFF;          // PDU Format
+    const ps   = (id >>> 8)  & 0xFF;          // PDU Specific
+    const sa   = id & 0xFF;
+    /* La regla que más se equivoca: con PF < 240 el mensaje va DIRIGIDO y el PS
+       es la dirección del destinatario, que NO forma parte del PGN. Con PF ≥ 240
+       es difusión y el PS SÍ es parte del PGN. Al revés se inventan PGNs que no
+       existen y se pierden los que sí (el DM1 dirigido, entre ellos). */
+    const pgn = pf < 240 ? ((dp << 16) | (pf << 8)) : ((dp << 16) | (pf << 8) | ps);
+    const da  = pf < 240 ? ps : 0xFF;
+    const datos = [];
+    for (let p = 8; p + 1 < hex.length; p += 2) datos.push(parseInt(hex.substr(p, 2), 16));
+    /* Misma forma que entrega el RP1210: [ts×4][pgn×3][prio][origen][destino][datos] */
+    const trama = [0, 0, 0, 0, pgn & 0xFF, (pgn >> 8) & 0xFF, (pgn >> 16) & 0xFF, prio, sa, da, ...datos];
+    this._j39Frame(trama);
+    return trama;
+  },
+
+  /* Pone el adaptador a volcar el bus. Ojo: mientras dura, el ELM no contesta
+     comandos — hay que cortarlo con _monFin antes de preguntar nada. */
+  async _monInicio(onLinea, cmd = 'ATMA') {
+    if (this._monLinea) return;
+    while (this._busy) await new Promise(r => setTimeout(r, 50));
+    this._buf = '';
+    this._monLinea = onLinea;
+    this._trazar(cmd, '(monitoreo continuo)');
+    try { await this._escribirBLE(cmd + '\r'); }
+    catch (e) { this._monLinea = null; throw e; }
+  },
+
+  /* Cualquier carácter corta el monitoreo del ELM327. Se le da un respiro para
+     que termine de vaciar lo que traía: esas últimas tramas son datos buenos y
+     descartarlas perdería justo el final de la escucha. */
+  async _monFin() {
+    if (!this._monLinea) return;
+    try { await this._escribirBLE('\r'); } catch (_) {}
+    await new Promise(r => setTimeout(r, 300));
+    this._monLinea = null;
+    this._buf = '';
+  },
+
+  async _j39BleIniciar(log) {
+    if (log) log('Reiniciando adaptador (ATZ)...');
+    await this._cmd('ATZ', 8000);
+    for (const c of ['ATE0', 'ATL0', 'ATS0']) await this._cmd(c).catch(() => {});
+    /* Cabeceras SÍ: sin ellas no se sabe de qué módulo vino cada trama, que en
+       J1939 es la mitad de la información. Formateo automático NO: el ISO-TP del
+       ELM es de OBD-II y acá estorba — J1939 arma sus mensajes largos con su
+       propio transporte (BAM), que este módulo ya sabe rearmar. */
+    await this._cmd('ATH1').catch(() => {});
+    await this._cmd('ATCAF0').catch(() => {});
+    if (log) log('Seleccionando protocolo A (SAE J1939 · 250k · 29 bits)...');
+    const r = await this._cmd('ATSPA', 6000).catch(() => '');
+    if (!/OK/i.test(r))
+      throw new Error('Este adaptador Bluetooth no acepta el protocolo A (SAE J1939), así que no puede leer camiones. ' +
+        'Hace falta un ELM327 que declare J1939 — el Vgate vLinker MS lo declara — o el USB-Link por RP1210.');
+    this._protoNum = 10;   // 'A' = SAE J1939
+    return true;
+  },
+
   /* PGN 59904 (Request). Por omisión va a la dirección global (0xFF) y contesta
      el que quiera; con `da` se le pregunta a UN módulo concreto, que es la
      única forma de sacarle los códigos al que no difunde nada por su cuenta
      (pasa con varios TCM: solo hablan si se les pregunta directo). */
   _j39Solicitar(pgn, da = 0xFF) {
+    if (this._j39BLE) return this._j39SolicitarBLE(pgn, da);
     return this._puenteOp({ op:'enviar', datos:[0x00, 0xEA, 0x00, 6, 0xF9, da & 0xFF, pgn & 0xFF, (pgn >> 8) & 0xFF, (pgn >> 16) & 0xFF] });
+  },
+
+  async _j39SolicitarBLE(pgn, da = 0xFF) {
+    const h = n => (n & 0xFF).toString(16).toUpperCase().padStart(2, '0');
+    /* Si veníamos escuchando hay que cortar, preguntar y volver a escuchar: con
+       el adaptador volcando el bus, la respuesta llega mezclada con las tramas. */
+    const seguia = !!this._monLinea;
+    if (seguia) await this._monFin();
+    /* Request es PDU1: PF=0xEA, PS=destino, SA=0xF9 (herramienta de diagnóstico).
+       Los 5 bits altos del ID los pone ATCP; 0x18 son prioridad 6 con EDP y DP
+       en cero, que es lo que J1939 pide para una solicitud. */
+    await this._cmd('ATCP18', 3000).catch(() => {});
+    await this._cmd('ATSH EA' + h(da) + 'F9', 3000).catch(() => {});
+    /* El PGN pedido viaja en 3 bytes, el menos significativo primero. */
+    const r = await this._cmd(h(pgn) + h(pgn >> 8) + h(pgn >> 16), 3000).catch(() => null);
+    /* Tras transmitir, el ELM escucha un rato y devuelve lo que llegó: eso ya es
+       respuesta y se decodifica igual que una trama del monitoreo. */
+    if (r) for (const l of r.split(/[\r\n]+/)) this._j39LineaELM(l);
+    if (seguia) await this._monInicio(l => this._j39LineaELM(l));
   },
 
   _j39Esperar(pgn, ms) {
@@ -3058,25 +3189,39 @@ Modulos.diagnostico_obd = {
 
   async _escanearJ1939(vehId, btn, log) {
     try {
-      log('Conectando al puente USB local...');
-      await this._puenteConectar();
-      const est = await this._puenteEstado();
-      log(`Puente USB: <b>${est.dispositivo || 'RP1210'}</b> v${est.version || '?'} ✓`);
-      const c = await this._puenteOp({ op:'conectar', protocolo:`J1939:Baud=${this._j39Baud || 250}`, device:1 });
-      if (!c.ok) throw new Error(`El puente no pudo abrir el USB-Link: ${c.error || 'código ' + c.codigo}. ¿Está enchufado a la PC?`);
-      this._j39 = { datos:{}, pgns:{}, esperas:{}, sas:{}, dm1:{}, dm2:{}, tp:{}, claim:{}, vin:null, comp:null };
-      /* Reclamar la dirección de herramienta de diagnóstico (0xF9) en el bus.
-         El número de comando de RP1210 para esto no está verificado contra este
-         hardware, así que se prueban los dos candidatos y se reporta cuál pasó
-         en vez de fiarse de la memoria del spec. Escuchar DM1 no lo necesita
-         (el camión transmite solo), por eso fallar acá no rompe el escaneo. */
-      let claim = null;
-      for (const num of [19, 15]) {
-        const r = await this._puenteOp({ op:'comando', numero:num, datos:[0xF9, 0, 0, 0x60, 0, 0, 0, 0, 0x80, 0] }).catch(() => null);
-        if (r && r.ok) { claim = num; break; }
+      let est;
+      if (this._j39BLE) {
+        log('Conectando al adaptador Bluetooth...');
+        const nombre = await this._conectar();
+        est = { dispositivo: nombre };
+        log(`Adaptador: <b>${nombre}</b> ✓`);
+        await this._j39BleIniciar(log);
+        log('Protocolo A (SAE J1939) aceptado ✓');
+        this._j39 = { datos:{}, pgns:{}, esperas:{}, sas:{}, dm1:{}, dm2:{}, tp:{}, claim:{}, vin:null, comp:null };
+      } else {
+        log('Conectando al puente USB local...');
+        await this._puenteConectar();
+        est = await this._puenteEstado();
+        log(`Puente USB: <b>${est.dispositivo || 'RP1210'}</b> v${est.version || '?'} ✓`);
+        const c = await this._puenteOp({ op:'conectar', protocolo:`J1939:Baud=${this._j39Baud || 250}`, device:1 });
+        if (!c.ok) throw new Error(`El puente no pudo abrir el USB-Link: ${c.error || 'código ' + c.codigo}. ¿Está enchufado a la PC?`);
+        this._j39 = { datos:{}, pgns:{}, esperas:{}, sas:{}, dm1:{}, dm2:{}, tp:{}, claim:{}, vin:null, comp:null };
+        /* Reclamar la dirección de herramienta de diagnóstico (0xF9) en el bus.
+           El número de comando de RP1210 para esto no está verificado contra este
+           hardware, así que se prueban los dos candidatos y se reporta cuál pasó
+           en vez de fiarse de la memoria del spec. Escuchar DM1 no lo necesita
+           (el camión transmite solo), por eso fallar acá no rompe el escaneo. */
+        let claim = null;
+        for (const num of [19, 15]) {
+          const r = await this._puenteOp({ op:'comando', numero:num, datos:[0xF9, 0, 0, 0x60, 0, 0, 0, 0, 0x80, 0] }).catch(() => null);
+          if (r && r.ok) { claim = num; break; }
+        }
+        log(claim ? `Dirección de diagnóstico reclamada (comando ${claim}) ✓`
+                  : 'No se pudo reclamar dirección — se escucha igual (el camión transmite solo)');
       }
-      log(claim ? `Dirección de diagnóstico reclamada (comando ${claim}) ✓`
-                : 'No se pudo reclamar dirección — se escucha igual (el camión transmite solo)');
+      /* Por Bluetooth hay que pedirle al adaptador que vuelque el bus; por USB el
+         puente ya viene empujando las tramas por su cuenta. */
+      if (this._j39BLE) await this._monInicio(l => this._j39LineaELM(l));
       log('Escuchando el bus J1939 (el camión transmite solo)...');
       const j = this._j39;
       /* Los PGN lentos (odómetro, horas, DM1 de un módulo dormido) pueden tardar
@@ -3195,7 +3340,8 @@ Modulos.diagnostico_obd = {
       if (!j.total && !Object.keys(this._j39.claim).length) {
         throw new Error(
           'SIN COMUNICACIÓN CON EL BUS J1939 — no llegó ninguna trama, así que NO se puede afirmar que el camión no tenga fallas. ' +
-          'Revisá el cable en el conector, el switch en contacto y que el adaptador esté alimentado por los 12 V del vehículo.');
+          'Revisá el cable en el conector, el switch en contacto y que el adaptador esté alimentado por el vehículo. ' +
+          'OJO con los 24 V: un adaptador de 12 V enciende sus LED igual pero no abre el bus, y se puede dañar.');
       }
       /* La lista definitiva junta a los que se identificaron (Address Claim) con
          los que se oyeron difundiendo: un módulo puede aparecer por cualquiera
@@ -3209,8 +3355,9 @@ Modulos.diagnostico_obd = {
       this._logComparacion(comparacion, log);
 
       this._scan = { costo: this._costoEscaneo(vehId),
-                     vehiculo_id: vehId, vin, protocolo: 'J1939 (camión · USB)',
-                     adaptador: est.dispositivo || 'USB-Link (RP1210)', mil,
+                     vehiculo_id: vehId, vin,
+                     protocolo: `J1939 (camión · ${this._j39BLE ? 'Bluetooth' : 'USB'})`,
+                     adaptador: est.dispositivo || (this._j39BLE ? 'ELM327 (BLE)' : 'USB-Link (RP1210)'), mil,
                      dtcs, dtcs_pendientes: pend, datos: { ...this._j39.datos },
                      modulos: sas.map(s => ({ ecu: s, nombre: this._nombreSA(s) })),
                      freeze_frame: null, voltaje: this._voltajeDe(this._j39.datos), nhtsa,
@@ -3223,6 +3370,10 @@ Modulos.diagnostico_obd = {
       log(`<span style="color:var(--red)">✗ ${e.message}</span>`);
       UI.toast(e.message, 'error');
     } finally {
+      /* Cortar el volcado SIEMPRE, también si el escaneo reventó: un adaptador
+         que quedó en ATMA no contesta ningún comando, así que el próximo escaneo
+         arrancaría muerto sin motivo aparente. */
+      if (this._j39BLE) await this._monFin().catch(() => {});
       btn.disabled = false;
       /* El boton aparece aunque el escaneo se haya caido: es justo cuando la
          bitacora sirve. */
@@ -4085,6 +4236,7 @@ Modulos.diagnostico_obd = {
         <select class="form-select" id="obd-via" onchange="Modulos.diagnostico_obd._verApis()">
           <option value="auto">🔎 USB — detectar solo (recomendado: liviano o camión)</option>
           <option value="ble">📶 Bluetooth — ELM327 / Vgate / OBDLink (BLE)</option>
+          <option value="j1939ble">🚚 Bluetooth — camión J1939 (dongle con protocolo A)</option>
           <option value="j1939">🚚 USB — forzar camión J1939 (puente RP1210)</option>
           <option value="j1708">🚛 USB — forzar camión antiguo J1708/J1587 (MID/PID/FMI)</option>
           <option value="usb">🔌 USB — forzar vehículo liviano (puente RP1210)</option>
@@ -4317,7 +4469,7 @@ Modulos.diagnostico_obd = {
   /* Oculta el selector y la prueba en Bluetooth, donde no aplican */
   _verApis() {
     const via = document.getElementById('obd-via')?.value;
-    const usb = via !== 'ble';
+    const usb = via !== 'ble' && via !== 'j1939ble';
     const wrap = document.getElementById('obd-api-wrap');
     if (wrap) wrap.style.display = usb ? '' : 'none';
     const test = document.getElementById('obd-btn-test');
@@ -4363,6 +4515,12 @@ Modulos.diagnostico_obd = {
     const vehId = document.getElementById('obd-veh')?.value;
     if (!vehId) { UI.toast('Selecciona el vehículo a escanear', 'error'); return; }
     this._via = document.getElementById('obd-via')?.value || 'ble';
+    /* El camión por Bluetooth es transporte BLE con bus J1939. Se normaliza la
+       vía a 'ble' para que todo lo que pregunta por ella —el driver, el monitor
+       en vivo, la bitácora— siga viendo lo que de verdad hay del otro lado, y el
+       bus se lleva aparte en su propia bandera. */
+    this._j39BLE = this._via === 'j1939ble';
+    if (this._j39BLE) this._via = 'ble';
     this._api = (this._via !== 'ble' && document.getElementById('obd-api')?.value) || null;
     const btn = document.getElementById('obd-btn-scan');
     btn.disabled = true;
@@ -4375,7 +4533,7 @@ Modulos.diagnostico_obd = {
         UI.toast(e.message, 'error'); btn.disabled = false; return;
       }
     }
-    if (this._via === 'j1939') return this._escanearJ1939(vehId, btn, log);
+    if (this._via === 'j1939' || this._j39BLE) return this._escanearJ1939(vehId, btn, log);
     if (this._via === 'j1708') return this._escanearJ1587(vehId, btn, log);
     try {
       let nombre, protocolo;
