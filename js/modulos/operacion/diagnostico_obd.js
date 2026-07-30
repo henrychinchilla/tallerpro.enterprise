@@ -1412,12 +1412,27 @@ Modulos.diagnostico_obd = {
     for (let i = 3; i + 3 < d.length; i += 4) {
       const a = d[i], b = d[i+1], sub = d[i+2], st = d[i+3];
       if ((a === 0 && b === 0 && sub === 0) || (a === 0xFF && b === 0xFF)) continue;
+
+      /* Bits de estado (ISO 14229):
+           bit0 testFailed        — está fallando AHORA
+           bit2 pendingDTC        — falló en este ciclo, sin confirmar
+           bit3 confirmedDTC      — falla confirmada y guardada
+           bit6 testNotCompleted  — el monitor NO llegó a correr
+
+         Pedimos la máscara 0xFF, así que el módulo devuelve TODOS los códigos
+         que sabe reportar, no solo los que fallaron. El TCM de un Rogue
+         contestó ~60 entradas, todas con estado 0x40 (monitor sin correr): si
+         se mostraran como fallas, el reporte inventaría 60 averías que no
+         existen. Solo cuenta como falla lo que está activo, pendiente o
+         confirmado. */
+      const activo = !!(st & 0x01), pendiente = !!(st & 0x04), confirmado = !!(st & 0x08);
+      if (!activo && !pendiente && !confirmado) continue;
+
       const codigo = ['P','C','B','U'][a >> 6] + ((a >> 4) & 3) +
                      (a & 0x0F).toString(16).toUpperCase() + b.toString(16).padStart(2,'0').toUpperCase();
       const full = sub ? `${codigo}-${sub.toString(16).padStart(2,'0').toUpperCase()}` : codigo;
       if (out.some(x => x.codigo === full)) continue;
-      out.push({ codigo: full, base: codigo, estado: st,
-                 activo: !!(st & 0x01), confirmado: !!(st & 0x08) });
+      out.push({ codigo: full, base: codigo, estado: st, activo, pendiente, confirmado });
     }
     return out;
   },
