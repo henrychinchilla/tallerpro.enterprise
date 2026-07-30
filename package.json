@@ -9,7 +9,8 @@
     "preview": "npx --yes wrangler dev",
     "deploy": "npx --yes wrangler deploy",
     "electron": "npx --yes electron electron/main.js",
-    "build": "echo \"Sitio estático — no requiere build\""
+    "build": "echo \"Sitio estático — no requiere build\"",
+    "test": "node test/obd/run.js"
   },
   "keywords": [
     "taller",
