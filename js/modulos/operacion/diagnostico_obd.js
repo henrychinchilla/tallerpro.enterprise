@@ -1502,6 +1502,17 @@ Modulos.diagnostico_obd = {
   },
   _nombreUDS(req, codigos) {
     if (this._UDS_NOMBRES[req]) return this._UDS_NOMBRES[req];
+    /* En 29 bits lo que identifica al modulo es el byte de destino, no el id
+       entero: 0x18DA10F1 es "el modulo 0x10". La tabla de nombres es de
+       direcciones de 11 bits, asi que no aplica — se muestra el destino, que
+       es lo que se busca en la documentacion de la marca. */
+    if (req > 0x7FF) {
+      const dst = (req >> 8) & 0xFF;
+      const l = (codigos || []).map(c => c.codigo[0]);
+      const fam = l.length && l.every(x => x === l[0])
+        ? ({ C:'Chasis / frenos', B:'Carroceria', P:'Motor / transmision', U:'Red' })[l[0]] : null;
+      return `${fam || 'Modulo'} 0x${dst.toString(16).toUpperCase()} (29 bits)`;
+    }
     /* Sin nombre conocido, se deduce por el tipo de códigos que reporta: es más
        honesto que inventarle un nombre que podría ser de otra marca. */
     const l = (codigos || []).map(c => c.codigo[0]);
@@ -1558,12 +1569,47 @@ Modulos.diagnostico_obd = {
         for (const c of capt) {
           if (c.id === req) continue;
           if (hallados.some(h => h.req === req && h.resp === c.id)) continue;
-          hallados.push({ req, resp: c.id });
+          hallados.push({ req, resp: c.id, ext: false });
         }
         if (log && (req & 0x3F) === 0x3F)
           log(`&nbsp;&nbsp;<span style="color:var(--text3)">…0x${req.toString(16).toUpperCase()} (${hallados.length} encontrados)</span>`);
       }
     } finally { this._canRx = null; }
+    return hallados;
+  },
+
+  /* ── El mismo barrido, pero en 29 bits ──────────────────────────────────
+     El barrido de arriba recorre 0x700-0x7EF, que son direcciones de 11 bits.
+     Un vehículo que diagnostica con direccionamiento EXTENDIDO no tiene nada
+     en ese rango: la pregunta va a 0x18DA{destino}F1 y la respuesta vuelve por
+     0x18DAF1{destino} (F1 = el equipo de diagnóstico, ISO 15765-4). A esos
+     vehículos el barrido les devolvía cero módulos — no porque no tuvieran,
+     sino porque se les estaba tocando la puerta equivocada.
+
+     256 destinos posibles; se recorren todos porque el rango bajo (0x00-0x3F)
+     cubre motor y transmisión pero carrocería y chasis viven bastante más
+     arriba y cada marca los ubica distinto. */
+  async _barrerModulos29(log) {
+    const hallados = [];
+    let capt = [];
+    const extPrev = this._canExt;
+    this._canExt = true;
+    this._canRx = (id, b) => { capt.push({ id, b }); };
+    try {
+      for (let dst = 0x00; dst <= 0xFF; dst++) {
+        const req = (0x18DA0000 | (dst << 8) | 0xF1) >>> 0;
+        capt = [];
+        await this._canTx(req, [0x02, 0x3E, 0x00]).catch(() => {});
+        await new Promise(r => setTimeout(r, 70));
+        for (const c of capt) {
+          if (c.id === req) continue;
+          if (hallados.some(h => h.req === req && h.resp === c.id)) continue;
+          hallados.push({ req, resp: c.id, ext: true, dst });
+        }
+        if (log && (dst & 0x3F) === 0x3F)
+          log(`&nbsp;&nbsp;<span style="color:var(--text3)">…destino 0x${dst.toString(16).toUpperCase()} en 29 bits (${hallados.length} encontrados)</span>`);
+      }
+    } finally { this._canRx = null; this._canExt = extPrev; }
     return hallados;
   },
 
@@ -1716,7 +1762,7 @@ Modulos.diagnostico_obd = {
           const k = m.req + ':' + m.resp;
           const y = porDir.get(k);
           if (y) { y.visto++; continue; }
-          porDir.set(k, { req:m.req, resp:m.resp, nombre:m.nombre, servicio:m.servicio, visto:1 });
+          porDir.set(k, { req:m.req, resp:m.resp, ext:!!m.ext, nombre:m.nombre, servicio:m.servicio, visto:1 });
         }
       }
       if (!porDir.size) return null;
@@ -1729,18 +1775,25 @@ Modulos.diagnostico_obd = {
      modelo. Mismo Tester Present del barrido: es de solo lectura. */
   async _probarConocidas(conocidas) {
     const vivos = [];
-    for (const c of conocidas) {
-      let capt = [];
-      this._canRx = (id, b) => { capt.push({ id, b }); };
-      try {
-        await this._canTx(c.req, [0x02, 0x3E, 0x00]).catch(() => {});
-        await new Promise(r => setTimeout(r, 70));
-      } finally { this._canRx = null; }
-      /* Se acepta cualquier respuesta que no sea el eco de la propia pregunta:
-         el id de vuelta no siempre es el mismo que la vez pasada. */
-      const r = capt.find(x => x.id === c.resp) || capt.find(x => x.id !== c.req);
-      if (r) vivos.push({ req: c.req, resp: r.id });
-    }
+    const extPrev = this._canExt;
+    try {
+      for (const c of conocidas) {
+        /* El mapa guarda si a ese modulo se le habla en 11 o en 29 bits: la
+           trama se arma distinta, asi que preguntar con el direccionamiento
+           equivocado es no preguntar. */
+        this._canExt = !!c.ext;
+        let capt = [];
+        this._canRx = (id, b) => { capt.push({ id, b }); };
+        try {
+          await this._canTx(c.req, [0x02, 0x3E, 0x00]).catch(() => {});
+          await new Promise(r => setTimeout(r, 70));
+        } finally { this._canRx = null; }
+        /* Se acepta cualquier respuesta que no sea el eco de la propia pregunta:
+           el id de vuelta no siempre es el mismo que la vez pasada. */
+        const r = capt.find(x => x.id === c.resp) || capt.find(x => x.id !== c.req);
+        if (r) vivos.push({ req: c.req, resp: r.id, ext: !!c.ext });
+      }
+    } finally { this._canExt = extPrev; }
     return vivos;
   },
 
@@ -1764,6 +1817,21 @@ Modulos.diagnostico_obd = {
     for (const b of barrido)
       if (!mods.some(m => m.req === b.req && m.resp === b.resp)) mods.push(b);
 
+    /* Si en 11 bits no contesto casi nadie, el vehiculo puede estar
+       diagnosticando en 29 bits. Dos o menos son el motor y la transmision,
+       que responden igual por ser los de emisiones: eso no es "encontre los
+       modulos", es "encontre los de siempre". Solo entonces vale la pena
+       gastar los ~18 s del segundo barrido. */
+    if (mods.length <= 2) {
+      if (log) log('&nbsp;&nbsp;Pocos modulos en 11 bits — probando direccionamiento de 29 bits...');
+      const b29 = await this._barrerModulos29(log);
+      for (const b of b29)
+        if (!mods.some(m => m.req === b.req && m.resp === b.resp)) mods.push(b);
+      if (log) log(b29.length
+        ? `&nbsp;&nbsp;<b>${b29.length} modulo(s) en 29 bits</b> que el barrido de 11 bits no podia ver`
+        : '&nbsp;&nbsp;<span style="color:var(--text3)">Nada en 29 bits tampoco</span>');
+    }
+
     if (!mods.length) { if (log) log('Ningún módulo respondió al barrido por dirección'); return null; }
 
     /* Los que el mapa esperaba y hoy no contestaron. No es lo mismo que "este
@@ -1777,7 +1845,12 @@ Modulos.diagnostico_obd = {
     if (log) log(`<b>${mods.length} módulo(s) encontrados</b> — leyendo códigos de cada uno...`);
 
     const res = [];
+    const extPrev = this._canExt;
     for (const m of mods) {
+      /* Mezclamos modulos de 11 y de 29 bits en la misma lista, asi que la
+         trama se arma segun el modulo al que le toca, no segun como se
+         conecto el vehiculo. */
+      this._canExt = !!m.ext;
       let d = await this._udsPedir(m.req, m.resp, [0x19, 0x02, 0xFF], 2500);
       let cods = this._dtcsUDS(d);
       /* Con qué se le sacaron los códigos: al guardarlo en el mapa, el próximo
@@ -1800,7 +1873,7 @@ Modulos.diagnostico_obd = {
       }
 
       const nombre = this._nombreUDS(m.req, cods);
-      res.push({ ecu: m.req, resp: m.resp, nombre, codigos: cods, respondio: !!d, servicio,
+      res.push({ ecu: m.req, resp: m.resp, ext: !!m.ext, nombre, codigos: cods, respondio: !!d, servicio,
                  nuevo: !!conocidas.length && !conocidas.some(c => c.req === m.req) });
       if (log && cods.length) {
         const act = cods.filter(c => c.activo).length;
@@ -1808,6 +1881,8 @@ Modulos.diagnostico_obd = {
             (act ? ` <span style="color:var(--red)">(${act} activo${act > 1 ? 's' : ''})</span>` : ''));
       }
     }
+
+    this._canExt = extPrev;
 
     /* Descripciones: el catálogo de la base tiene 3.000+ códigos y no se estaba
        usando para estos. Un código pelado obliga a ir a buscarlo a internet,
@@ -1843,7 +1918,7 @@ Modulos.diagnostico_obd = {
             ${x.nuevo ? 'border-left:3px solid var(--cyan)' : ''}">
           <div style="font-size:12px;font-weight:600">${UI.esc(x.nombre || 'Módulo')}</div>
           <div style="font-size:10px;color:var(--text3);font-family:ui-monospace,Consolas,monospace">
-            ${hex(x.req)} → ${hex(x.resp)}${x.servicio ? ` · ${UI.esc(x.servicio)}` : ''}</div>
+            ${hex(x.req)} → ${hex(x.resp)}${x.ext ? ' · 29 bits' : ''}${x.servicio ? ` · ${UI.esc(x.servicio)}` : ''}</div>
         </div>`).join('')}
       </div>
       ${falt.length ? `<div style="margin-top:9px;background:var(--amber-dim);border:1px solid var(--amber-border);
@@ -1908,7 +1983,7 @@ Modulos.diagnostico_obd = {
     if (!Array.isArray(porModulo) || !porModulo.length) return null;
     return {
       bits: this._canExt ? 29 : 11, baud: this._canBaud, via: this._via,
-      modulos: porModulo.map(m => ({ req:m.ecu, resp:m.resp, nombre:m.nombre, servicio:m.servicio || null })),
+      modulos: porModulo.map(m => ({ req:m.ecu, resp:m.resp, ext:!!m.ext, nombre:m.nombre, servicio:m.servicio || null })),
       faltantes: this._mapaFaltantes || [],
     };
   },
