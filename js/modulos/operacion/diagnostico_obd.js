@@ -1683,15 +1683,107 @@ Modulos.diagnostico_obd = {
 
   /* Recorre todos los módulos y junta sus códigos. Es lo que convierte el
      escaneo de "emisiones" en un escaneo del vehículo entero. */
-  async _escanearModulos(log) {
-    const mods = await this._barrerModulos(log);
+  /* ═══════════ MAPA DE ACCESO POR MODELO ═══════════
+     Al Rogue se le entró barriendo 0x700-0x7EF con Tester Present. Funcionó,
+     pero ese barrido se repetía a ciegas en CADA escaneo — 240 direcciones,
+     medio minuto — y lo aprendido se tiraba al terminar.
+
+     Guardar por dónde se le entró a cada modelo convierte ese barrido en
+     conocimiento del taller: el próximo Rogue se pregunta primero donde ya se
+     sabe que hay alguien y contesta en segundos, y — lo que más importa — si un
+     módulo que en ese modelo SIEMPRE respondió hoy no responde, se avisa en vez
+     de darlo por ausente. Un módulo que desaparece del mapa está muerto,
+     desconectado o sin alimentación; sin el mapa, no aparecer y no existir se
+     ven exactamente igual.
+
+     El mapa se arma solo, con los escaneos del propio taller. Un módulo entra
+     al mapa del modelo apenas UN vehículo lo mostró: la dirección de un módulo
+     no es opinable como sí lo es la calibración, así que no hace falta mayoría
+     — pero se guarda en cuántos se vio, para poder decir "en 4 de 5". */
+  async _mapaConocido(vehId) {
+    try {
+      const v = (this._vehiculos || []).find(x => x.id === vehId);
+      if (!v || !v.marca || !v.modelo) return null;
+      const previos = await DB.getDiagnosticosPorModelo(v.marca, v.modelo, v.anio);
+      const porDir = new Map();
+      let conMapa = 0;
+      for (const d of previos) {
+        const ms = d.mapa_acceso && d.mapa_acceso.modulos;
+        if (!Array.isArray(ms) || !ms.length) continue;
+        conMapa++;
+        for (const m of ms) {
+          if (typeof m.req !== 'number') continue;
+          const k = m.req + ':' + m.resp;
+          const y = porDir.get(k);
+          if (y) { y.visto++; continue; }
+          porDir.set(k, { req:m.req, resp:m.resp, nombre:m.nombre, servicio:m.servicio, visto:1 });
+        }
+      }
+      if (!porDir.size) return null;
+      return { marca:v.marca, modelo:v.modelo, anio:v.anio, n: conMapa,
+               modulos: [...porDir.values()].sort((a, b) => b.visto - a.visto || a.req - b.req) };
+    } catch (e) { console.warn('_mapaConocido:', e.message); return null; }
+  },
+
+  /* Pregunta sólo a las direcciones que ya se sabe que contestan en este
+     modelo. Mismo Tester Present del barrido: es de solo lectura. */
+  async _probarConocidas(conocidas) {
+    const vivos = [];
+    for (const c of conocidas) {
+      let capt = [];
+      this._canRx = (id, b) => { capt.push({ id, b }); };
+      try {
+        await this._canTx(c.req, [0x02, 0x3E, 0x00]).catch(() => {});
+        await new Promise(r => setTimeout(r, 70));
+      } finally { this._canRx = null; }
+      /* Se acepta cualquier respuesta que no sea el eco de la propia pregunta:
+         el id de vuelta no siempre es el mismo que la vez pasada. */
+      const r = capt.find(x => x.id === c.resp) || capt.find(x => x.id !== c.req);
+      if (r) vivos.push({ req: c.req, resp: r.id });
+    }
+    return vivos;
+  },
+
+  async _escanearModulos(log, mapa) {
+    const conocidas = (mapa && mapa.modulos) || [];
+    let mods = [];
+
+    /* Primero el mapa conocido: da resultados en segundos y deja ver de una
+       cuáles de los módulos habituales del modelo faltan hoy. */
+    if (conocidas.length) {
+      if (log) log(`&nbsp;&nbsp;Mapa conocido de ${mapa.marca} ${mapa.modelo}${mapa.anio ? ' ' + mapa.anio : ''}: <b>${conocidas.length} módulo(s)</b> en ${mapa.n} escaneo(s) previo(s) — preguntando ahí primero...`);
+      mods = await this._probarConocidas(conocidas);
+      if (log) log(`&nbsp;&nbsp;${mods.length} de ${conocidas.length} del mapa respondieron`);
+    }
+
+    /* Y después el barrido completo igual: el mapa acelera, no reemplaza. Un
+       modelo puede traer un módulo que ningún escaneo anterior vio (versión
+       distinta, accesorio de fábrica), y darlo por inexistente porque no está
+       en el mapa sería exactamente el error que el mapa vino a evitar. */
+    const barrido = await this._barrerModulos(log);
+    for (const b of barrido)
+      if (!mods.some(m => m.req === b.req && m.resp === b.resp)) mods.push(b);
+
     if (!mods.length) { if (log) log('Ningún módulo respondió al barrido por dirección'); return null; }
+
+    /* Los que el mapa esperaba y hoy no contestaron. No es lo mismo que "este
+       modelo no lo trae": acá ya se sabe que sí lo trae. */
+    const faltantes = conocidas.filter(c => !mods.some(m => m.req === c.req));
+    if (log && faltantes.length)
+      log(`<span style="color:var(--amber)">⚠️ ${faltantes.length} módulo(s) del mapa NO respondieron: ` +
+          `${faltantes.map(f => f.nombre || '0x' + f.req.toString(16).toUpperCase()).join(', ')}` +
+          ` — en ${mapa.marca} ${mapa.modelo} sí contestan. Puede estar dañado, desconectado o sin alimentación.</span>`);
+
     if (log) log(`<b>${mods.length} módulo(s) encontrados</b> — leyendo códigos de cada uno...`);
 
     const res = [];
     for (const m of mods) {
       let d = await this._udsPedir(m.req, m.resp, [0x19, 0x02, 0xFF], 2500);
       let cods = this._dtcsUDS(d);
+      /* Con qué se le sacaron los códigos: al guardarlo en el mapa, el próximo
+         escaneo de este modelo sabe que a este módulo hay que abrirle sesión
+         extendida antes de preguntarle. */
+      let servicio = '19 02';
 
       /* Hay módulos que en sesión por defecto contestan "servicio no soportado"
          (7F 19 11) o devuelven la lista vacía, y solo entregan sus códigos en
@@ -1703,12 +1795,13 @@ Modulos.diagnostico_obd = {
         if (s && s[0] === 0x50) {
           const d2 = await this._udsPedir(m.req, m.resp, [0x19, 0x02, 0xFF], 2500);
           const c2 = this._dtcsUDS(d2);
-          if (c2.length) { d = d2; cods = c2; }
+          if (c2.length) { d = d2; cods = c2; servicio = '19 02 (sesión extendida)'; }
         }
       }
 
       const nombre = this._nombreUDS(m.req, cods);
-      res.push({ ecu: m.req, resp: m.resp, nombre, codigos: cods, respondio: !!d });
+      res.push({ ecu: m.req, resp: m.resp, nombre, codigos: cods, respondio: !!d, servicio,
+                 nuevo: !!conocidas.length && !conocidas.some(c => c.req === m.req) });
       if (log && cods.length) {
         const act = cods.filter(c => c.activo).length;
         log(`&nbsp;&nbsp;<b>${nombre}</b>: ${cods.length} código(s)` +
@@ -1728,7 +1821,96 @@ Modulos.diagnostico_obd = {
         c.sistema = this._sistemaDTC(c.codigo);
       }
     }
+    /* Los que el mapa esperaba y hoy faltaron viajan aparte: el resultado del
+       barrido es la lista de módulos, y meterle ausentes la volvería mentirosa. */
+    this._mapaFaltantes = faltantes.map(f => ({ req:f.req, nombre:f.nombre || null, visto:f.visto }));
     return res;
+  },
+
+  _mapaHTML(s) {
+    const m = s && s.mapa_acceso;
+    if (!m || !Array.isArray(m.modulos) || !m.modulos.length) return '';
+    const falt = m.faltantes || [];
+    const hex = n => '0x' + Number(n).toString(16).toUpperCase();
+    return `<div class="card" style="padding:14px;margin-top:12px">
+      <b style="font-size:12px">🗺 MAPA DE ACCESO — por dónde se le entra a este vehículo</b>
+      <div style="font-size:11px;color:var(--text3);margin-top:2px">
+        CAN ${m.bits} bits · ${m.baud}k · ${m.modulos.length} módulo(s). Queda guardado: el próximo escaneo de
+        este modelo pregunta primero acá y responde en segundos en vez de barrer 240 direcciones.
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:7px;margin-top:8px">
+        ${m.modulos.map(x => `<div style="background:var(--surface2);color:var(--text);border-radius:7px;padding:7px 9px;
+            ${x.nuevo ? 'border-left:3px solid var(--cyan)' : ''}">
+          <div style="font-size:12px;font-weight:600">${UI.esc(x.nombre || 'Módulo')}</div>
+          <div style="font-size:10px;color:var(--text3);font-family:ui-monospace,Consolas,monospace">
+            ${hex(x.req)} → ${hex(x.resp)}${x.servicio ? ` · ${UI.esc(x.servicio)}` : ''}</div>
+        </div>`).join('')}
+      </div>
+      ${falt.length ? `<div style="margin-top:9px;background:var(--amber-dim);border:1px solid var(--amber-border);
+        border-radius:6px;padding:7px 9px;font-size:11px;line-height:1.5;color:var(--text)">
+        <b>⚠️ ${falt.length} módulo(s) del mapa no respondieron:</b>
+        ${falt.map(f => UI.esc(f.nombre || hex(f.req))).join(', ')}.
+        En este modelo sí contestan, así que no es que el vehículo no los traiga: revisá alimentación, fusible
+        y conector antes de darlos por ausentes.</div>` : ''}
+    </div>`;
+  },
+
+  /* ═══════════ COBERTURA: qué vehículos sabe escanear el taller ═══════════
+     El mapa de un vehículo suelto sirve para ese vehículo. Juntos son otra
+     cosa: la lista de modelos a los que NexusPro ya sabe entrarle, con cuántos
+     módulos alcanza en cada uno. Es lo que hasta ahora no se podía contestar. */
+  async modalMapaVehiculos() {
+    UI.modal('🗺 Mapa de vehículos', `<div id="obd-mapa-lista" style="font-size:13px">Cargando mapas del taller...</div>
+      <div style="display:flex;justify-content:flex-end;margin-top:12px">
+        <button class="btn btn-ghost" onclick="UI.cerrarModal()">Cerrar</button></div>`, '760px');
+    const filas = await DB.getMapasVehiculos();
+    const el = document.getElementById('obd-mapa-lista');
+    const porModelo = new Map();
+    for (const f of filas) {
+      const v = f.vehiculos || {};
+      const clave = [v.marca || '?', v.modelo || '?', v.anio || ''].join(' ').trim();
+      const g = porModelo.get(clave) || { clave, escaneos:0, vehiculos:new Set(), dirs:new Map(),
+                                          bits:null, baud:null, ultimo:f.created_at };
+      g.escaneos++;
+      if (f.vehiculo_id) g.vehiculos.add(f.vehiculo_id);
+      const m = f.mapa_acceso || {};
+      if (g.bits == null) { g.bits = m.bits; g.baud = m.baud; }
+      for (const x of (m.modulos || [])) if (typeof x.req === 'number' && !g.dirs.has(x.req))
+        g.dirs.set(x.req, x.nombre || ('0x' + x.req.toString(16).toUpperCase()));
+      porModelo.set(clave, g);
+    }
+    const grupos = [...porModelo.values()].sort((a, b) => b.dirs.size - a.dirs.size);
+    const cuerpo = !grupos.length
+      ? `<p style="font-size:13px;color:var(--text3)">Todavía no hay ningún mapa. El mapa se arma solo:
+         cada escaneo por USB de un vehículo liviano guarda por dónde se le entró, y desde el segundo
+         del mismo modelo el escaneo empieza a usarlo.</p>`
+      : `<table class="table" style="font-size:12px">
+          <thead><tr><th>Modelo</th><th>Módulos que sabemos alcanzar</th><th style="text-align:center">Unidades</th><th style="text-align:center">Bus</th></tr></thead>
+          <tbody>${grupos.map(g => `<tr>
+            <td><b>${UI.esc(g.clave)}</b><div style="font-size:10px;color:var(--text3)">${g.escaneos} escaneo(s) · último ${UI.fecha(g.ultimo)}</div></td>
+            <td><span class="badge badge-cyan">${g.dirs.size}</span>
+              <div style="font-size:10.5px;color:var(--text3);margin-top:3px;line-height:1.5">${[...g.dirs.values()].map(n => UI.esc(n)).join(' · ')}</div></td>
+            <td style="text-align:center">${g.vehiculos.size}</td>
+            <td style="text-align:center;font-size:11px;white-space:nowrap">${g.bits ? `${g.bits} bits<br>${g.baud}k` : '—'}</td>
+          </tr>`).join('')}</tbody>
+        </table>
+        <div style="font-size:10.5px;color:var(--text3);margin-top:10px;line-height:1.5">
+          Cada fila es un modelo que el taller ya sabe escanear y hasta dónde llega. Se arma solo con los
+          escaneos propios — mejora con el uso y no depende de ninguna base de datos con licencia.
+          <b>Módulos alcanzados</b> es lo que contestó en ese modelo, no todo lo que el vehículo trae.
+        </div>`;
+    if (el) el.innerHTML = cuerpo;
+  },
+
+  /* El mapa que deja este escaneo, para que lo aproveche el próximo del mismo
+     modelo. Sólo módulos que de verdad contestaron. */
+  _mapaDeEscaneo(porModulo) {
+    if (!Array.isArray(porModulo) || !porModulo.length) return null;
+    return {
+      bits: this._canExt ? 29 : 11, baud: this._canBaud, via: this._via,
+      modulos: porModulo.map(m => ({ req:m.ecu, resp:m.resp, nombre:m.nombre, servicio:m.servicio || null })),
+      faltantes: this._mapaFaltantes || [],
+    };
   },
 
   /* ── Camiones por USB: J1939. El bus transmite solo (broadcast); DM1/DM2 dan
@@ -3212,6 +3394,7 @@ Modulos.diagnostico_obd = {
             ${anios.map(a=>`<option ${a===this._anio?'selected':''}>${a}</option>`).join('')}
           </select>
           <button class="btn btn-ghost" onclick="Modulos.diagnostico_obd.modalCampanas()">🔔 Campañas de fábrica</button>
+          <button class="btn btn-ghost" onclick="Modulos.diagnostico_obd.modalMapaVehiculos()" title="Qué vehículos sabe escanear el taller y hasta dónde llega en cada uno">🗺 Mapa de vehículos</button>
           <button class="btn btn-ghost" onclick="Modulos.diagnostico_obd.render()">↻ Actualizar</button>
           ${puedeEditar ? `<button class="btn btn-brand" onclick="Modulos.diagnostico_obd.modalEscanear()">📡 Nuevo Escaneo</button>` : ''}
         </div>
@@ -3528,10 +3711,20 @@ Modulos.diagnostico_obd = {
       /* Escaneo por módulo: lo que encuentra las fallas que NO son de emisiones
          (TPMS, ABS, tracción, carrocería). Solo por USB — el ELM327 Bluetooth
          no deja dirigir tramas a una dirección arbitraria. */
-      let porModulo = null;
+      let porModulo = null, mapaAcceso = null;
       if (this._via === 'usb') {
         log('<b>Escaneando TODOS los módulos del vehículo...</b> (esto tarda ~30 s)');
-        porModulo = await this._escanearModulos(log).catch(e => { log(`No se pudo barrer módulos: ${e.message}`); return null; });
+        this._mapaFaltantes = [];
+        /* Por dónde se le entró a este mismo modelo en escaneos anteriores. */
+        const mapaPrev = await this._mapaConocido(vehId);
+        porModulo = await this._escanearModulos(log, mapaPrev).catch(e => { log(`No se pudo barrer módulos: ${e.message}`); return null; });
+        mapaAcceso = this._mapaDeEscaneo(porModulo);
+        if (mapaAcceso) {
+          const nuevos = porModulo.filter(m => m.nuevo).length;
+          log(`&nbsp;&nbsp;Mapa de acceso guardado: ${mapaAcceso.modulos.length} módulo(s) en CAN ${mapaAcceso.bits} bits / ${mapaAcceso.baud}k` +
+              (nuevos ? ` — <b>${nuevos} que no estaban en el mapa del modelo</b>` : '') +
+              (mapaPrev ? '' : ' — primer mapa de este modelo'));
+        }
         if (porModulo) {
           const conFallas = porModulo.filter(m => m.codigos.length);
           const total = conFallas.reduce((n, m) => n + m.codigos.length, 0);
@@ -3636,7 +3829,7 @@ Modulos.diagnostico_obd = {
                      dtcs, dtcs_pendientes: pend, datos, freeze_frame: freeze,
                      monitores, modulos, por_modulo: porModulo, voltaje: this._voltajeDe(datos), nhtsa,
                      permanentes, readiness, norma_obd: normaObd, calibracion: calib,
-                     equipamiento: equipo, comparacion };
+                     equipamiento: equipo, comparacion, mapa_acceso: mapaAcceso };
       log('<b>Escaneo completo ✓</b>');
       this._renderResultado();
       document.getElementById('obd-btn-save').style.display = '';
@@ -3665,6 +3858,7 @@ Modulos.diagnostico_obd = {
       <div id="obd-campanas"></div>
       ${this._freezeHTML(s.freeze_frame)}
       ${this._porModuloHTML(s)}
+      ${this._mapaHTML(s)}
       ${this._costoHTML(s)}
       ${this._equipamientoHTML(s)}
       ${this._monitoresHTML(s.monitores)}
@@ -4504,7 +4698,7 @@ Modulos.diagnostico_obd = {
   /* Campos que dependen de una migración posterior a la tabla original. El
      código se despliega antes que la migración (son dos pasos distintos), así
      que un escaneo no puede perderse solo porque la columna todavía no exista.*/
-  _CAMPOS_NUEVOS: ['permanentes', 'readiness', 'norma_obd', 'calibracion', 'equipamiento', 'costo', 'por_modulo', 'comparacion'],
+  _CAMPOS_NUEVOS: ['permanentes', 'readiness', 'norma_obd', 'calibracion', 'equipamiento', 'costo', 'por_modulo', 'comparacion', 'mapa_acceso'],
 
   async guardarEscaneo() {
     if (!this._scan) return;
@@ -4551,6 +4745,7 @@ Modulos.diagnostico_obd = {
         ${this._historialHTML(d)}
         ${this._freezeHTML(d.freeze_frame)}
         ${this._porModuloHTML(d)}
+      ${this._mapaHTML(d)}
       ${this._costoHTML(d)}
       ${this._equipamientoHTML(d)}
       ${this._monitoresHTML(d.monitores)}
