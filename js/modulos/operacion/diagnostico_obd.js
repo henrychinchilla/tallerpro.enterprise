@@ -1422,6 +1422,79 @@ Modulos.diagnostico_obd = {
     return out;
   },
 
+  /* ── Qué significa cada código ────────────────────────────────────────────
+     Un código sin descripción no sirve de nada: hay que ir a buscarlo a
+     internet, que es exactamente lo que la herramienta debería ahorrar.
+
+     Los U0xxx y C0xxx de esta tabla son GENÉRICOS de la norma SAE J2012 y
+     valen para cualquier marca. Los C1xxx, B1xxx y U1xxx son de fabricante:
+     el mismo número significa cosas distintas en Nissan y en Toyota, así que
+     NO se traducen a ciegas — se indica el sistema al que pertenecen y se
+     ofrece el enlace para buscarlo con la marca del vehículo. */
+  _DTC_GEN: {
+    /* Pérdida de comunicación entre módulos (SAE, genéricos) */
+    U0001:'Bus de datos CAN de alta velocidad', U0073:'Bus de comunicación del módulo — apagado',
+    U0100:'Sin comunicación con la computadora del motor (ECM/PCM)',
+    U0101:'Sin comunicación con la computadora de transmisión (TCM)',
+    U0121:'Sin comunicación con el módulo de ABS',
+    U0126:'Sin comunicación con el sensor de ángulo de dirección',
+    U0128:'Sin comunicación con el módulo de freno de estacionamiento',
+    U0131:'Sin comunicación con la dirección asistida',
+    U0140:'Sin comunicación con el módulo de carrocería (BCM)',
+    U0151:'Sin comunicación con el módulo de airbag',
+    U0155:'Sin comunicación con el tablero de instrumentos',
+    U0164:'Sin comunicación con el módulo de climatización',
+    U0184:'Sin comunicación con el radio', U0199:'Sin comunicación con el módulo de puertas',
+    U0300:'Incompatibilidad de versiones de software entre módulos',
+    U0401:'Datos inválidos recibidos de la computadora del motor',
+    U0402:'Datos inválidos recibidos de la transmisión',
+    U0415:'Datos inválidos recibidos del ABS',
+    /* Chasis genéricos (SAE) */
+    C0035:'Sensor de velocidad — rueda delantera izquierda',
+    C0040:'Sensor de velocidad — rueda delantera derecha',
+    C0045:'Sensor de velocidad — rueda trasera izquierda',
+    C0050:'Sensor de velocidad — rueda trasera derecha',
+    C0051:'Sensor de ángulo de dirección', C0061:'Señal del ABS',
+    C0110:'Circuito de la bomba del ABS', C0121:'Válvula del ABS',
+    C0161:'Interruptor del pedal de freno',
+  },
+
+  /* Sistema al que pertenece un código, por su letra y rango. Cuando no se
+     puede decir QUÉ es exactamente, al menos se dice DÓNDE buscar. */
+  _sistemaDTC(cod) {
+    const l = cod[0], n = parseInt(cod.slice(1, 5), 10);
+    if (l === 'P') return 'Motor / transmisión';
+    if (l === 'U') return 'Red de comunicación entre módulos';
+    if (l === 'B') return 'Carrocería (luces, cierres, confort, airbag)';
+    if (l === 'C') {
+      if (n >= 1700 && n < 1800) return 'Presión de neumáticos (TPMS)';
+      if (n >= 1100 && n < 1300) return 'Frenos / ABS / tracción';
+      return 'Chasis (frenos, suspensión, dirección)';
+    }
+    return 'Sin clasificar';
+  },
+
+  /* Descripción de un código de módulo. Prioridad: catálogo de la base →
+     diccionario genérico SAE → diccionario de emisiones → sistema por rango. */
+  _descModulo(cod, cat) {
+    const base = cod.split('-')[0];
+    if (cat && cat[base]) return cat[base];
+    if (this._DTC_GEN[base]) return this._DTC_GEN[base];
+    const gen = this._descDTC(base, cat);
+    /* _descDTC devuelve el propio código cuando no lo conoce: eso no es una
+       descripción, así que se cae al sistema en vez de repetir el número. */
+    if (gen && gen !== base && !/^[PCBU]\d/.test(gen.trim())) return gen;
+    return null;
+  },
+
+  /* Marca+modelo hacen la diferencia: "C1707 Nissan" da la respuesta correcta,
+     "C1707" solo da ruido de veinte marcas distintas. */
+  _buscarDTC(cod, veh) {
+    const v = veh || {};
+    const q = [cod.split('-')[0], v.marca, v.modelo, v.anio].filter(Boolean).join(' ');
+    return 'https://www.google.com/search?q=' + encodeURIComponent(q + ' codigo falla');
+  },
+
   /* Recorre todos los módulos y junta sus códigos. Es lo que convierte el
      escaneo de "emisiones" en un escaneo del vehículo entero. */
   async _escanearModulos(log) {
@@ -1431,14 +1504,42 @@ Modulos.diagnostico_obd = {
 
     const res = [];
     for (const m of mods) {
-      const d = await this._udsPedir(m.req, m.resp, [0x19, 0x02, 0xFF], 2500);
-      const cods = this._dtcsUDS(d);
+      let d = await this._udsPedir(m.req, m.resp, [0x19, 0x02, 0xFF], 2500);
+      let cods = this._dtcsUDS(d);
+
+      /* Hay módulos que en sesión por defecto contestan "servicio no soportado"
+         (7F 19 11) o devuelven la lista vacía, y solo entregan sus códigos en
+         sesión extendida. Es el caso típico de tracción y carrocería: sin este
+         reintento parecen sanos cuando no lo están. */
+      const negó = d && d[0] === 0x7F;
+      if ((negó || !cods.length)) {
+        const s = await this._udsPedir(m.req, m.resp, [0x10, 0x03], 1500);
+        if (s && s[0] === 0x50) {
+          const d2 = await this._udsPedir(m.req, m.resp, [0x19, 0x02, 0xFF], 2500);
+          const c2 = this._dtcsUDS(d2);
+          if (c2.length) { d = d2; cods = c2; }
+        }
+      }
+
       const nombre = this._nombreUDS(m.req, cods);
       res.push({ ecu: m.req, resp: m.resp, nombre, codigos: cods, respondio: !!d });
       if (log && cods.length) {
         const act = cods.filter(c => c.activo).length;
         log(`&nbsp;&nbsp;<b>${nombre}</b>: ${cods.length} código(s)` +
             (act ? ` <span style="color:var(--red)">(${act} activo${act > 1 ? 's' : ''})</span>` : ''));
+      }
+    }
+
+    /* Descripciones: el catálogo de la base tiene 3.000+ códigos y no se estaba
+       usando para estos. Un código pelado obliga a ir a buscarlo a internet,
+       que es justo lo que la herramienta debería evitar. */
+    const todos = res.flatMap(m => m.codigos.map(c => c.codigo.split('-')[0]));
+    let cat = null;
+    if (todos.length) { try { cat = await DB.getDTCCatalogo([...new Set(todos)]); } catch (_) {} }
+    for (const m of res) {
+      for (const c of m.codigos) {
+        c.desc = this._descModulo(c.codigo, cat);
+        c.sistema = this._sistemaDTC(c.codigo);
       }
     }
     return res;
@@ -3541,6 +3642,10 @@ Modulos.diagnostico_obd = {
   _porModuloHTML(s) {
     const ms = s && s.por_modulo;
     if (!Array.isArray(ms) || !ms.length) return '';
+    /* La marca y el modelo hacen útil la búsqueda del código: sin eso el
+       enlace devuelve resultados de veinte fabricantes distintos. */
+    const veh = (s && s.vehiculos) ||
+                (this._vehiculos || []).find(v => v.id === (s && s.vehiculo_id)) || {};
     const conFallas = ms.filter(m => m.codigos && m.codigos.length);
     const total = conFallas.reduce((n, m) => n + m.codigos.length, 0);
     const activos = conFallas.reduce((n, m) => n + m.codigos.filter(c => c.activo).length, 0);
@@ -3553,18 +3658,31 @@ Modulos.diagnostico_obd = {
       ${total ? `<div style="font-size:12px;margin-top:8px"><b>${total} código(s)</b> en ${conFallas.length} módulo(s)${activos ? ` · <span style="color:var(--red)"><b>${activos} activo(s) ahora</b></span>` : ''}</div>` : ''}
       ${!total ? '<p style="color:var(--green);margin:8px 0 0;font-size:12px">✅ Ningún módulo reportó códigos</p>' : `
       <div style="margin-top:10px">${conFallas.map(m => `
-        <div style="margin-bottom:10px">
-          <div style="font-size:12px;font-weight:600">${UI.esc(m.nombre)}
+        <div style="margin-bottom:12px">
+          <div style="font-size:12px;font-weight:600;margin-bottom:4px">${UI.esc(m.nombre)}
             <span style="color:var(--text3);font-weight:400;font-family:ui-monospace,Consolas,monospace;font-size:10.5px"> · 0x${m.ecu.toString(16).toUpperCase()}</span></div>
-          <div style="margin-top:4px">${m.codigos.map(c => `
-            <span style="display:inline-block;margin:2px 4px 2px 0;padding:3px 9px;border-radius:6px;font-family:ui-monospace,Consolas,monospace;font-size:11.5px;
-              background:${c.activo ? 'rgba(239,68,68,.16)' : 'rgba(148,163,184,.14)'};
-              color:${c.activo ? 'var(--red)' : 'var(--text2)'}"
-              title="${c.activo ? 'Falla presente ahora' : 'Guardada — ocurrió antes'}">${UI.esc(c.codigo)}${c.activo ? ' ●' : ''}</span>`).join('')}</div>
+          ${m.codigos.map(c => `
+            <div style="display:flex;align-items:flex-start;gap:8px;padding:5px 0;border-bottom:1px solid var(--border)">
+              <span style="flex-shrink:0;padding:2px 8px;border-radius:6px;font-family:ui-monospace,Consolas,monospace;font-size:11.5px;font-weight:700;
+                background:${c.activo ? 'rgba(239,68,68,.16)' : 'rgba(148,163,184,.14)'};
+                color:${c.activo ? 'var(--red)' : 'var(--text2)'}">${UI.esc(c.codigo)}${c.activo ? ' ●' : ''}</span>
+              <span style="flex:1;font-size:11.5px;line-height:1.45">
+                ${c.desc
+                  ? UI.esc(c.desc)
+                  : `<span style="color:var(--text3)">${UI.esc(c.sistema || '')} — código propio del fabricante</span>`}
+                ${c.activo ? '<b style="color:var(--red)"> · presente ahora</b>' : '<span style="color:var(--text3)"> · guardada</span>'}
+              </span>
+              <a href="${this._buscarDTC(c.codigo, veh)}" target="_blank" rel="noopener"
+                 style="flex-shrink:0;font-size:11px;color:var(--cyan);text-decoration:none"
+                 title="Buscar este código para ${UI.esc([veh.marca, veh.modelo].filter(Boolean).join(' ') || 'este vehículo')}">🔎 buscar</a>
+            </div>`).join('')}
         </div>`).join('')}
       </div>
       <div style="font-size:10.5px;color:var(--text3);border-top:1px solid var(--border);padding-top:6px">
-        ● = falla presente en este momento. El resto quedó guardada de una ocurrencia anterior.
+        ● = falla presente en este momento; el resto quedó guardada de antes.
+        Los códigos C1xxx, B1xxx y U1xxx son <b>propios de cada marca</b>: el mismo número
+        significa cosas distintas en Nissan y en Toyota, por eso no se traducen a ciegas.
+        El botón <b>🔎 buscar</b> los consulta junto con la marca y el modelo.
       </div>`}
       ${ms.length > conFallas.length ? `<div style="font-size:10.5px;color:var(--text3);margin-top:6px">
         Sin códigos: ${ms.filter(m => !m.codigos.length).map(m => UI.esc(m.nombre)).join(' · ')}</div>` : ''}
