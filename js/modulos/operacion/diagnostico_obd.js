@@ -118,9 +118,12 @@ Modulos.diagnostico_obd = {
 
   /* Texto plano a proposito: se pega en WhatsApp o en un correo sin que se
      rompa nada, que es como va a llegar desde el taller. */
-  _trazaTexto() {
-    const s = this._scan || {};
-    const v = (this._vehiculos || []).find(x => x.id === s.vehiculo_id) || {};
+  _trazaTexto(guardado) {
+    const s = guardado || this._scan || {};
+    /* Un escaneo guardado trae el vehiculo adentro; el que esta en curso hay
+       que buscarlo en la lista. */
+    const v = s.vehiculos || (this._vehiculos || []).find(x => x.id === s.vehiculo_id) || {};
+    const traza = guardado ? (s.traza || []) : (this._traza || []);
     const L = [];
     L.push('NexusPro — bitacora tecnica del escaneo');
     L.push('fecha: ' + new Date().toISOString());
@@ -137,15 +140,22 @@ Modulos.diagnostico_obd = {
                ` "${m.nombre}" servicio=${m.servicio || '?'} codigos=${m.codigos.length}` +
                (m.codigos.length ? ' [' + m.codigos.map(c => c.codigo).join(' ') + ']' : ''));
     L.push('');
-    L.push(`--- dialogo (${(this._traza || []).length} entradas) ---`);
-    for (const t of (this._traza || []))
+    L.push(`--- dialogo (${traza.length} entradas) ---`);
+    for (const t of traza)
       L.push(t.nota ? '# ' + t.nota : `> ${t.q}\n< ${t.r}`);
-    if ((this._traza || []).length >= this._TRAZA_TOPE) L.push('# (cortado en el tope)');
+    if (traza.length >= this._TRAZA_TOPE) L.push('# (cortado en el tope)');
     return L.join('\n');
   },
 
-  async copiarTraza() {
-    const txt = this._trazaTexto();
+  /* Con id copia la de un escaneo ya guardado; sin id, la del que esta en curso. */
+  async copiarTraza(id) {
+    const guardado = id ? (this._data || []).find(x => x.id === id) : null;
+    if (id && !guardado) { UI.toast('No se encontro ese escaneo', 'error'); return; }
+    if (guardado && !(guardado.traza || []).length) {
+      UI.toast('Ese escaneo se guardo antes de que existiera la bitacora tecnica', 'warn');
+      return;
+    }
+    const txt = this._trazaTexto(guardado);
     try {
       await navigator.clipboard.writeText(txt);
       UI.toast('Bitacora tecnica copiada — pegala en el chat de soporte');
@@ -4249,7 +4259,11 @@ Modulos.diagnostico_obd = {
                      dtcs, dtcs_pendientes: pend, datos, freeze_frame: freeze,
                      monitores, modulos, por_modulo: porModulo, voltaje: this._voltajeDe(datos), nhtsa,
                      permanentes, readiness, norma_obd: normaObd, calibracion: calib,
-                     equipamiento: equipo, comparacion, mapa_acceso: mapaAcceso };
+                     equipamiento: equipo, comparacion, mapa_acceso: mapaAcceso,
+                     /* La bitacora viaja CON el escaneo: si se pierde al cerrar
+                        el modal, hay que volver a enchufar el vehiculo para
+                        conseguirla — que es justo lo que vino a evitar. */
+                     traza: this._traza || [] };
       log('<b>Escaneo completo ✓</b>');
       this._renderResultado();
       document.getElementById('obd-btn-save').style.display = '';
@@ -5129,7 +5143,7 @@ Modulos.diagnostico_obd = {
   /* Campos que dependen de una migración posterior a la tabla original. El
      código se despliega antes que la migración (son dos pasos distintos), así
      que un escaneo no puede perderse solo porque la columna todavía no exista.*/
-  _CAMPOS_NUEVOS: ['permanentes', 'readiness', 'norma_obd', 'calibracion', 'equipamiento', 'costo', 'por_modulo', 'comparacion', 'mapa_acceso'],
+  _CAMPOS_NUEVOS: ['permanentes', 'readiness', 'norma_obd', 'calibracion', 'equipamiento', 'costo', 'por_modulo', 'comparacion', 'mapa_acceso', 'traza'],
 
   async guardarEscaneo() {
     if (!this._scan) return;
@@ -5190,6 +5204,9 @@ Modulos.diagnostico_obd = {
       </div>
       <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px">
         ${!d.ia_analisis && (typeof moduloEnPlan !== 'function' || moduloEnPlan('ia')) ? `<button class="btn btn-cyan" onclick="Modulos.diagnostico_obd.analizarIA('${d.id}')">🤖 Analizar con IA</button>` : ''}
+        ${(d.traza || []).length ? `<button class="btn btn-ghost"
+          title="Copia el dialogo crudo con el vehiculo para mandarlo a soporte"
+          onclick="Modulos.diagnostico_obd.copiarTraza('${d.id}')">🧾 Bitácora técnica</button>` : ''}
         <button class="btn btn-ghost" onclick="UI.cerrarModal()">Cerrar</button>
         ${Modulos.btnAccion('imprimir', `Modulos.diagnostico_obd.imprimir('${d.id}')`, { label:'🖨 Imprimir' })}
       </div>`, '980px');
