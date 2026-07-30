@@ -1613,6 +1613,44 @@ Modulos.diagnostico_obd = {
     return hallados;
   },
 
+  /* ── Modulos que no hablan UDS: KWP2000 (ISO 14230-3), servicio 0x18 ──
+     Un modulo de 2003-2010 contesta el Tester Present del barrido — o sea que
+     el escaneo lo encuentra — pero no conoce el servicio 0x19: devuelve
+     "servicio no soportado" y quedaba listado como respondio-sin-codigos.
+     Ese es el falso-limpio que esta herramienta no se puede permitir: un modulo
+     con fallas reales declarado sano.
+
+     Peticion 18 00 FF 00 (todos los codigos, todos los grupos).
+     Respuesta   58 [cantidad] y despues 3 bytes por codigo: [alto][bajo][estado].
+
+     El NUMERO se decodifica igual que en modo 03 y es inequivoco. El byte de
+     estado NO se interpreta a proposito: en KWP2000 su significado varia entre
+     implementaciones y no esta verificado contra hardware. Decir "presente
+     ahora" o "guardada" a partir de un byte que no sabemos leer es exactamente
+     el error que ya se evito con las unidades del modo 06 y con los MID/FMI de
+     J1587. Se muestra el codigo — que es lo que se busca en el manual — y se
+     dice que el estado no se pudo leer. */
+  _dtcsKWP(d) {
+    if (!d || d[0] !== 0x58) return [];
+    /* Casi todas las implementaciones mandan el conteo despues del 0x58, pero
+       algunas van directo a los codigos. Se elige el desplazamiento que deja
+       una cantidad exacta de registros de 3 bytes en vez de suponer. */
+    let off = null;
+    if ((d.length - 2) % 3 === 0 && d.length >= 5) off = 2;
+    else if ((d.length - 1) % 3 === 0 && d.length >= 4) off = 1;
+    if (off === null) return [];
+    const out = [];
+    for (let i = off; i + 2 < d.length; i += 3) {
+      const hi = d[i], lo = d[i + 1];
+      if ((hi === 0 && lo === 0) || (hi === 0xFF && lo === 0xFF)) continue;
+      const codigo = this._decodeDTC(hi.toString(16).padStart(2, '0') + lo.toString(16).padStart(2, '0'));
+      if (!codigo || out.some(x => x.codigo === codigo)) continue;
+      out.push({ codigo, base: codigo, estado: d[i + 2],
+                 activo: false, pendiente: false, confirmado: false, estadoDesconocido: true });
+    }
+    return out;
+  },
+
   /* Respuesta a UDS 19 02: [59][02][máscara][DTC 3 bytes + estado]…
      El estado trae los bits que distinguen una falla presente AHORA de una
      guardada de antes — la diferencia entre mandar a revisar y no. */
@@ -1791,7 +1829,7 @@ Modulos.diagnostico_obd = {
         /* Se acepta cualquier respuesta que no sea el eco de la propia pregunta:
            el id de vuelta no siempre es el mismo que la vez pasada. */
         const r = capt.find(x => x.id === c.resp) || capt.find(x => x.id !== c.req);
-        if (r) vivos.push({ req: c.req, resp: r.id, ext: !!c.ext });
+        if (r) vivos.push({ req: c.req, resp: r.id, ext: !!c.ext, servicio: c.servicio || null });
       }
     } finally { this._canExt = extPrev; }
     return vivos;
@@ -1851,12 +1889,22 @@ Modulos.diagnostico_obd = {
          trama se arma segun el modulo al que le toca, no segun como se
          conecto el vehiculo. */
       this._canExt = !!m.ext;
-      let d = await this._udsPedir(m.req, m.resp, [0x19, 0x02, 0xFF], 2500);
-      let cods = this._dtcsUDS(d);
+      /* Si el mapa del modelo ya sabe que a este modulo hay que hablarle en
+         KWP2000, se empieza por ahi: probar primero lo que la vez pasada no
+         funciono es gastar dos consultas por gusto. */
+      let d = null, cods = [];
+      if (m.servicio && m.servicio.indexOf('KWP') >= 0) {
+        d = await this._udsPedir(m.req, m.resp, [0x18, 0x00, 0xFF, 0x00], 2000);
+        cods = this._dtcsKWP(d);
+      }
+      if (!cods.length) {
+        d = await this._udsPedir(m.req, m.resp, [0x19, 0x02, 0xFF], 2500);
+        cods = this._dtcsUDS(d);
+      }
       /* Con qué se le sacaron los códigos: al guardarlo en el mapa, el próximo
          escaneo de este modelo sabe que a este módulo hay que abrirle sesión
          extendida antes de preguntarle. */
-      let servicio = '19 02';
+      let servicio = (cods.length && d && d[0] === 0x58) ? '18 00 FF 00 (KWP2000)' : '19 02';
 
       /* Hay módulos que en sesión por defecto contestan "servicio no soportado"
          (7F 19 11) o devuelven la lista vacía, y solo entregan sus códigos en
@@ -1870,6 +1918,28 @@ Modulos.diagnostico_obd = {
           const c2 = this._dtcsUDS(d2);
           if (c2.length) { d = d2; cods = c2; servicio = '19 02 (sesión extendida)'; }
         }
+      }
+
+      /* Todavia sin codigos. Antes se daba por sano: ahora se le pregunta de
+         las otras dos formas que existen antes de afirmarlo.
+
+         19 0A pide TODOS los codigos que el modulo soporta, no solo los que
+         hacen match con una mascara. Mismo formato de respuesta que 19 02, asi
+         que lo lee el mismo parser — y el mismo filtro por bits de estado evita
+         el problema del TCM del Rogue, que contesto ~60 entradas con el monitor
+         sin correr. */
+      if (!cods.length) {
+        const dA = await this._udsPedir(m.req, m.resp, [0x19, 0x0A], 2000);
+        const cA = this._dtcsUDS(dA);
+        if (cA.length) { d = dA; cods = cA; servicio = '19 0A'; }
+      }
+      /* Y por ultimo KWP2000, para los modulos anteriores a UDS. Es de solo
+         lectura, y a un modulo que si habla UDS le resbala (contesta "servicio
+         no soportado"). */
+      if (!cods.length) {
+        const dK = await this._udsPedir(m.req, m.resp, [0x18, 0x00, 0xFF, 0x00], 2000);
+        const cK = this._dtcsKWP(dK);
+        if (cK.length) { d = dK; cods = cK; servicio = '18 00 FF 00 (KWP2000)'; }
       }
 
       const nombre = this._nombreUDS(m.req, cods);
@@ -4155,7 +4225,9 @@ Modulos.diagnostico_obd = {
                 ${c.desc
                   ? UI.esc(c.desc)
                   : `<span style="color:var(--text3)">${UI.esc(c.sistema || '')} — código propio del fabricante</span>`}
-                ${c.activo ? '<b style="color:var(--red)"> · presente ahora</b>' : '<span style="color:var(--text3)"> · guardada</span>'}
+                ${c.estadoDesconocido
+                  ? '<span style="color:var(--text3)" title="El modulo contesto en KWP2000: el numero del codigo es fiable, el byte de estado no esta verificado"> · estado no reportado</span>'
+                  : c.activo ? '<b style="color:var(--red)"> · presente ahora</b>' : '<span style="color:var(--text3)"> · guardada</span>'}
               </span>
               <a href="${this._buscarDTC(c.codigo, veh)}" target="_blank" rel="noopener"
                  style="flex-shrink:0;font-size:11px;color:var(--cyan);text-decoration:none"
@@ -4165,6 +4237,8 @@ Modulos.diagnostico_obd = {
       </div>
       <div style="font-size:10.5px;color:var(--text3);border-top:1px solid var(--border);padding-top:6px">
         ● = falla presente en este momento; el resto quedó guardada de antes.
+        <b>"Estado no reportado"</b> es un módulo viejo que contestó en KWP2000: el número del código es
+        fiable, pero su byte de estado no está verificado y por eso no se interpreta — confirmalo en el vehículo.
         Los códigos C1xxx, B1xxx y U1xxx son <b>propios de cada marca</b>: el mismo número
         significa cosas distintas en Nissan y en Toyota, por eso no se traducen a ciegas.
         El botón <b>🔎 buscar</b> los consulta junto con la marca y el modelo.
