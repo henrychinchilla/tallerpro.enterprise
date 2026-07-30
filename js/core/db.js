@@ -360,9 +360,9 @@ const DB = {
      Si la consulta falla (p. ej. faltan las columnas de la migración 095) se
      devuelve vacío: la comparación es un extra, no puede tumbar el escaneo. */
   async getDiagnosticosPorModelo(marca, modelo, anio) {
-    try {
+    const pedir = async cols => {
       let q = getSB().from('diagnosticos_obd')
-        .select('id,created_at,vehiculo_id,calibracion,readiness,modulos,vehiculos!inner(marca,modelo,anio)')
+        .select(cols)
         .eq('tenant_id', getTID())
         .eq('vehiculos.marca', marca)
         .eq('vehiculos.modelo', modelo)
@@ -370,9 +370,18 @@ const DB = {
         .limit(60);
       if (anio) q = q.eq('vehiculos.anio', anio);
       const { data, error } = await q;
-      if (error) { console.warn('getDiagnosticosPorModelo:', error.message); return []; }
+      if (error) throw new Error(error.message);
       return data || [];
-    } catch (e) { console.warn('getDiagnosticosPorModelo:', e.message); return []; }
+    };
+    const BASE = 'id,created_at,vehiculo_id,calibracion,readiness,modulos,vehiculos!inner(marca,modelo,anio)';
+    /* mapa_acceso llega con la migración 097 y el código se despliega antes:
+       sin el reintento, el día del deploy la comparación entera devolvería
+       vacío por una columna que todavía no existe. */
+    try { return await pedir(BASE + ',mapa_acceso'); }
+    catch (e) {
+      try { return await pedir(BASE); }
+      catch (e2) { console.warn('getDiagnosticosPorModelo:', e2.message); return []; }
+    }
   },
 
   /* Escaneos anteriores del MISMO vehículo, para comparar visita contra visita.
@@ -400,6 +409,22 @@ const DB = {
       try { return await pedir(BASE); }
       catch (e2) { console.warn('getDiagnosticosPorVehiculo:', e2.message); return []; }
     }
+  },
+
+  /* Todos los mapas de acceso del taller, para la pantalla de cobertura: qué
+     vehículos sabemos escanear y hasta dónde. Devuelve [] si la columna
+     todavía no existe (migración 097) en vez de romper la pantalla. */
+  async getMapasVehiculos() {
+    try {
+      const { data, error } = await getSB().from('diagnosticos_obd')
+        .select('id,created_at,vehiculo_id,mapa_acceso,protocolo,vehiculos!inner(marca,modelo,anio)')
+        .eq('tenant_id', getTID())
+        .not('mapa_acceso', 'is', null)
+        .order('created_at', { ascending:false })
+        .limit(300);
+      if (error) { console.warn('getMapasVehiculos:', error.message); return []; }
+      return data || [];
+    } catch (e) { console.warn('getMapasVehiculos:', e.message); return []; }
   },
 
   async upsertDiagnosticoOBD(fields) {
