@@ -1500,6 +1500,28 @@ Modulos.diagnostico_obd = {
     0x752:'Carrocería auxiliar', 0x758:'Presión de neumáticos (TPMS)',
     0x760:'Frenos / ABS', 0x765:'Carrocería (BCM)',
   },
+  /* El nombre que el modulo se da a si mismo (DID F197 "nombre del sistema",
+     y si no F18A "proveedor"). La tabla de direcciones sirve para las que la
+     norma fija, pero el resto salia como "Modulo 0x745" — y el propio modulo
+     sabe decir como se llama. Preguntarselo es una consulta mas por modulo y
+     convierte una lista de direcciones en una lista de nombres reales.
+
+     Solo se acepta texto legible y de largo razonable: varios modulos
+     contestan el DID con basura binaria o con relleno, y un nombre inventado
+     es peor que una direccion honesta. */
+  async _nombrePropio(m) {
+    for (const did of [0xF197, 0xF18A]) {
+      const d = await this._udsPedir(m.req, m.resp, [0x22, did >> 8, did & 0xFF], 1500);
+      if (!d || d[0] !== 0x62) continue;
+      const cuerpo = d.slice(3);                       // 62 + los 2 bytes del DID
+      if (!cuerpo.length) continue;
+      const txt = cuerpo.filter(x => x >= 32 && x < 127)
+                        .map(x => String.fromCharCode(x)).join('').trim();
+      if (txt.length >= 3 && txt.length <= 40 && /[A-Za-z]{3}/.test(txt)) return txt;
+    }
+    return null;
+  },
+
   _nombreUDS(req, codigos) {
     if (this._UDS_NOMBRES[req]) return this._UDS_NOMBRES[req];
     /* En 29 bits lo que identifica al modulo es el byte de destino, no el id
@@ -1732,6 +1754,46 @@ Modulos.diagnostico_obd = {
     return out;
   },
 
+  /* ── El tercer byte del codigo: QUE le pasa al circuito ─────────────────
+     Un codigo UDS son 3 bytes. Los dos primeros son el numero (C1707) y el
+     tercero es el TIPO DE FALLA (ISO 14229-1, DTCFailureType). Se mostraba
+     crudo — "C1707-04" — y ese sufijo no le dice nada a nadie, cuando es
+     justamente la mitad util del codigo: no es lo mismo un sensor con el cable
+     cortado que uno que manda una senal fuera de rango. Uno se arregla con un
+     empalme y el otro cambiando la pieza.
+
+     Solo van los tipos de los que hay certeza. Los que no estan en la tabla se
+     muestran con su numero y "ver manual", igual que ya se hace con los P1xxx
+     de fabricante y con los MID/FMI de J1587: el numero manda, la traduccion
+     acompana y nunca se inventa.
+
+     OJO: hay marcas que usan este byte a su manera. Por eso la descripcion se
+     muestra como lectura estandar, no como palabra final. */
+  _TIPO_FALLA: {
+    0x01:'falla electrica general',        0x02:'falla general de la senal',
+    0x11:'circuito en corto a tierra',     0x12:'circuito en corto a positivo',
+    0x13:'circuito abierto',               0x14:'circuito abierto o en corto a tierra',
+    0x15:'circuito abierto o en corto a positivo',
+    0x16:'voltaje por debajo del limite',  0x17:'voltaje por encima del limite',
+    0x1A:'resistencia por debajo del limite', 0x1B:'resistencia por encima del limite',
+    0x1C:'voltaje fuera de rango',
+    0x21:'senal por debajo del minimo',    0x22:'senal por encima del maximo',
+    0x23:'senal trabada en bajo',          0x24:'senal trabada en alto',
+    0x29:'senal invalida',                 0x2A:'senal erratica',
+    0x31:'sin senal',
+    0x49:'falla electronica interna del modulo',
+    0x62:'la senal no coincide con la de otro modulo',
+    0x64:'senal fuera de lo posible (implausible)',
+    0x92:'funcionamiento incorrecto',      0x96:'falla interna del componente',
+  },
+  _descTipoFalla(sub) {
+    if (sub == null) return null;
+    const t = this._TIPO_FALLA[sub];
+    const h = '0x' + sub.toString(16).padStart(2, '0').toUpperCase();
+    return t ? { txt: t, cierto: true, hex: h }
+             : { txt: `tipo de falla ${h} — ver manual de la marca`, cierto: false, hex: h };
+  },
+
   /* Respuesta a UDS 19 02: [59][02][máscara][DTC 3 bytes + estado]…
      El estado trae los bits que distinguen una falla presente AHORA de una
      guardada de antes — la diferencia entre mandar a revisar y no. */
@@ -1761,7 +1823,8 @@ Modulos.diagnostico_obd = {
                      (a & 0x0F).toString(16).toUpperCase() + b.toString(16).padStart(2,'0').toUpperCase();
       const full = sub ? `${codigo}-${sub.toString(16).padStart(2,'0').toUpperCase()}` : codigo;
       if (out.some(x => x.codigo === full)) continue;
-      out.push({ codigo: full, base: codigo, estado: st, activo, pendiente, confirmado });
+      out.push({ codigo: full, base: codigo, estado: st, activo, pendiente, confirmado,
+                 tipo: sub ? this._descTipoFalla(sub) : null });
     }
     return out;
   },
@@ -2018,7 +2081,14 @@ Modulos.diagnostico_obd = {
         if (cK.length) { d = dK; cods = cK; servicio = '18 00 FF 00 (KWP2000)'; }
       }
 
-      const nombre = this._nombreUDS(m.req, cods);
+      /* El nombre propio del modulo gana sobre la deduccion por direccion,
+         pero NO sobre las dos que la norma fija (motor y transmision): ahi la
+         tabla es mas clara para el mecanico que la cadena interna del ECU. */
+      let nombre = this._nombreUDS(m.req, cods);
+      if (!this._UDS_NOMBRES[m.req]) {
+        const propio = await this._nombrePropio(m).catch(() => null);
+        if (propio) nombre = propio;
+      }
       res.push({ ecu: m.req, resp: m.resp, ext: !!m.ext, nombre, codigos: cods, respondio: !!d, servicio,
                  nuevo: !!conocidas.length && !conocidas.some(c => c.req === m.req) });
       if (log && cods.length) {
@@ -4311,6 +4381,7 @@ Modulos.diagnostico_obd = {
                 ${c.desc
                   ? UI.esc(c.desc)
                   : `<span style="color:var(--text3)">${UI.esc(c.sistema || '')} — código propio del fabricante</span>`}
+                ${c.tipo ? `<span style="color:${c.tipo.cierto ? 'var(--text2)' : 'var(--text3)'}"> · ${UI.esc(c.tipo.txt)}</span>` : ''}
                 ${c.estadoDesconocido
                   ? '<span style="color:var(--text3)" title="El modulo contesto en KWP2000: el numero del codigo es fiable, el byte de estado no esta verificado"> · estado no reportado</span>'
                   : c.activo ? '<b style="color:var(--red)"> · presente ahora</b>' : '<span style="color:var(--text3)"> · guardada</span>'}
