@@ -2135,7 +2135,14 @@ Modulos.diagnostico_obd = {
     if (log) log(`<b>${mods.length} módulo(s) encontrados</b> — leyendo códigos de cada uno...`);
 
     const res = [];
+    /* try/finally y no una asignacion al final: si algo revienta en el bucle,
+       el llamador atrapa el error y SIGUE con el escaneo — pero _canExt quedaria
+       apuntando al direccionamiento del ultimo modulo y todas las tramas CAN
+       posteriores (sensores en vivo, borrado de codigos) saldrian mal armadas.
+       Un flag global que se corrompe en silencio es el peor tipo de error: no
+       falla donde se rompio. */
     const extPrev = this._canExt;
+    try {
     for (const m of mods) {
       /* Mezclamos modulos de 11 y de 29 bits en la misma lista, asi que la
          trama se arma segun el modulo al que le toca, no segun como se
@@ -2211,7 +2218,7 @@ Modulos.diagnostico_obd = {
       }
     }
 
-    this._canExt = extPrev;
+    } finally { this._canExt = extPrev; }
 
     /* Descripciones: el catálogo de la base tiene 3.000+ códigos y no se estaba
        usando para estos. Un código pelado obliga a ir a buscarlo a internet,
@@ -4140,6 +4147,7 @@ Modulos.diagnostico_obd = {
         log('Escaneo por módulo no disponible en este protocolo por Bluetooth (requiere CAN de 11 bits).');
       }
       if (this._via === 'usb' || modoBLE) {
+       try {
         log(`<b>Escaneando TODOS los módulos del vehículo...</b> (esto tarda ~${modoBLE ? 60 : 30} s)`);
         this._mapaFaltantes = [];
         /* Por dónde se le entró a este mismo modelo en escaneos anteriores. */
@@ -4159,9 +4167,12 @@ Modulos.diagnostico_obd = {
             ? `<b style="color:var(--amber)">${total} código(s) en ${conFallas.length} módulo(s)</b> además de los de emisiones`
             : `Los ${porModulo.length} módulos respondieron sin códigos`);
         }
-        /* Sin esto la cabecera queda apuntando al último módulo consultado y
-           todo lo que sigue — sensores en vivo, borrado — le habla a ese. */
+       } finally {
+        /* En finally y no al final del bloque: si esto se saltea, la cabecera
+           queda apuntando al último módulo consultado y todo lo que sigue
+           — sensores en vivo, borrado de códigos — le habla a ese. */
         if (modoBLE) await this._elmModoModulo(false);
+       }
       }
 
       const hubo = !!(modulos && modulos.length) || !!vin || codConf.length || codPend.length || mil
