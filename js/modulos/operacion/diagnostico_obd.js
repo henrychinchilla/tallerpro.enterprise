@@ -3711,6 +3711,17 @@ Modulos.diagnostico_obd = {
       </div>`}
       ${ms.length > conFallas.length ? `<div style="font-size:10.5px;color:var(--text3);margin-top:6px">
         Sin códigos: ${ms.filter(m => !m.codigos.length).map(m => UI.esc(m.nombre)).join(' · ')}</div>` : ''}
+      ${vivo ? `
+        <div style="margin-top:12px;border-top:1px solid var(--border);padding-top:10px">
+          <div style="font-size:11px;color:var(--text3);margin-bottom:6px">
+            <b>Ver datos de un módulo</b> — identificación y valores en vivo. Solo lectura.
+          </div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap">
+            ${ms.map(m => `<button class="btn btn-sm btn-ghost"
+              title="Identificación y datos que expone este módulo"
+              onclick="Modulos.diagnostico_obd.verModulo(${m.ecu})">📊 ${UI.esc(m.nombre)}</button>`).join('')}
+          </div>
+        </div>` : ''}
       ${vivo && total ? `
         <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;border-top:1px solid var(--border);padding-top:10px">
           <button class="btn btn-sm btn-danger" onclick="Modulos.diagnostico_obd.borrarPorModulo()">
@@ -4039,6 +4050,149 @@ Modulos.diagnostico_obd = {
       this._log(this._via === 'j1939' ? '🧹 Códigos borrados (DM11 + DM3) ✓' : '🧹 Códigos borrados (modo 04) ✓');
       UI.toast('Códigos borrados ✓');
     } catch (e) { UI.toast('No se pudo borrar: ' + e.message, 'error'); }
+  },
+
+  /* ═══════════ DATOS EN VIVO POR MÓDULO (UDS 22) ═══════════
+     El ABS conoce la velocidad de cada rueda, el TPMS la presión y temperatura
+     de cada sensor, el BCM el estado de puertas, luces y llaves. Todo eso se
+     lee con UDS 22 (ReadDataByIdentifier).
+
+     El límite honesto: los identificadores de datos en vivo son PROPIETARIOS de
+     cada fabricante. No existe un número estándar para "presión de la rueda
+     trasera izquierda" — Nissan usa uno, Toyota otro. Así que:
+
+       · Los identificadores de IDENTIFICACIÓN (0xF18x-0xF19x) sí son de la
+         norma ISO 14229 y se leen con su nombre correcto.
+       · Para los datos, se descubre QUÉ responde cada módulo y se muestra el
+         valor crudo con sus interpretaciones más probables. El mecánico ve el
+         número cambiar en tiempo real y lo relaciona con lo que hace el
+         vehículo — que es como se identifica un dato sin la tabla del
+         fabricante. Inventar la etiqueta sería peor que no ponerla. */
+
+  /* Identificadores estándar de la norma: mismos en cualquier marca */
+  _DID_ID: {
+    0xF186:'Sesión de diagnóstico activa', 0xF187:'Número de parte del fabricante',
+    0xF188:'Versión de software', 0xF189:'Versión de software (fabricante)',
+    0xF18A:'Identificador del proveedor', 0xF18B:'Fecha de fabricación del módulo',
+    0xF18C:'Número de serie del módulo', 0xF190:'VIN',
+    0xF191:'Número de parte del hardware', 0xF192:'Número de parte (proveedor)',
+    0xF193:'Versión de hardware', 0xF194:'Número de software (proveedor)',
+    0xF195:'Versión de software (proveedor)', 0xF197:'Nombre del sistema',
+    0xF19E:'Nombre del archivo ODX',
+  },
+
+  async _leerDID(req, resp, did) {
+    const d = await this._udsPedir(req, resp, [0x22, (did >> 8) & 0xFF, did & 0xFF], 1800);
+    if (!d || d[0] !== 0x62) return null;
+    /* Respuesta: [62][did hi][did lo][datos...] */
+    if (((d[1] << 8) | d[2]) !== did) return null;
+    return d.slice(3);
+  },
+
+  /* Un valor crudo puede ser texto, un número de 1/2 bytes, o varios campos.
+     Se ofrecen las lecturas plausibles en vez de elegir una y arriesgarse. */
+  _interpretarDID(b) {
+    if (!b || !b.length) return null;
+    const hex = b.map(x => x.toString(16).padStart(2, '0').toUpperCase()).join(' ');
+    const txt = b.every(x => x === 0 || (x >= 32 && x < 127))
+      ? b.map(x => x ? String.fromCharCode(x) : '').join('').trim() : '';
+    const lecturas = [];
+    if (txt && txt.length >= 3) lecturas.push(`texto: "${txt}"`);
+    if (b.length === 1) lecturas.push(`${b[0]}`);
+    if (b.length === 2) lecturas.push(`${(b[0] << 8) | b[1]}`);
+    if (b.length === 4) lecturas.push(`${((b[0] << 24) | (b[1] << 16) | (b[2] << 8) | b[3]) >>> 0}`);
+    if (b.length > 1 && b.length <= 8) lecturas.push('bytes: ' + b.join(', '));
+    return { hex, txt, lecturas };
+  },
+
+  /* Identificación del módulo: número de parte, software, serie. Sirve para
+     saber si dos vehículos iguales traen el mismo módulo, y para pedir el
+     repuesto correcto sin desmontarlo. */
+  async _identificarModulo(req, resp) {
+    const out = {};
+    for (const did of [0xF187, 0xF188, 0xF18C, 0xF191, 0xF193, 0xF18A]) {
+      const b = await this._leerDID(req, resp, did);
+      if (!b) continue;
+      const i = this._interpretarDID(b);
+      out[did] = { nombre: this._DID_ID[did], texto: i.txt || i.hex, hex: i.hex };
+    }
+    return Object.keys(out).length ? out : null;
+  },
+
+  /* Descubre qué datos expone un módulo. Se barren los rangos donde los
+     fabricantes suelen poner sus datos en vivo; los que contestan se muestran
+     con su valor crudo para poder observarlos cambiar. */
+  _RANGOS_DID: [[0x0100, 0x0140], [0x1000, 0x1040], [0xC100, 0xC140], [0xD100, 0xD140]],
+
+  async _explorarDatos(req, resp, log, tope = 24) {
+    const hallados = [];
+    for (const [ini, fin] of this._RANGOS_DID) {
+      for (let did = ini; did <= fin && hallados.length < tope; did++) {
+        const b = await this._leerDID(req, resp, did);
+        if (!b || !b.length) continue;
+        const i = this._interpretarDID(b);
+        hallados.push({ did, hex: i.hex, txt: i.txt, lecturas: i.lecturas, bytes: b });
+        if (log) log(`&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:var(--text3)">DID 0x${did.toString(16).toUpperCase()} → ${i.hex}</span>`);
+      }
+      if (hallados.length >= tope) break;
+    }
+    return hallados;
+  },
+
+  /* Abre la ficha de un módulo: identificación + datos que expone. */
+  async verModulo(ecu) {
+    const ms = (this._scan && this._scan.por_modulo) || [];
+    const m = ms.find(x => x.ecu === ecu);
+    if (!m) return;
+    if (this._via !== 'usb' || !this._listo) { UI.toast('Requiere el vehículo conectado por USB', 'error'); return; }
+
+    UI.modal(`📊 ${m.nombre}`, `<div id="mod-cuerpo" style="font-size:12.5px">
+      <p style="color:var(--text3)">Consultando el módulo…</p></div>`, '760px');
+    const pon = h => { const el = document.getElementById('mod-cuerpo'); if (el) el.innerHTML = h; };
+
+    try {
+      const ident = await this._identificarModulo(m.ecu, m.resp);
+      const datos = await this._explorarDatos(m.ecu, m.resp);
+      m.ident = ident; m.datos_uds = datos;
+
+      pon(`
+        <div style="font-size:11px;color:var(--text3);margin-bottom:10px">
+          Dirección 0x${m.ecu.toString(16).toUpperCase()} · responde en 0x${m.resp.toString(16).toUpperCase()}
+        </div>
+        ${ident ? `<div class="card" style="padding:12px;margin-bottom:10px">
+          <b style="font-size:12px">IDENTIFICACIÓN DEL MÓDULO</b>
+          <table class="table" style="margin-top:6px;font-size:12px"><tbody>
+            ${Object.values(ident).map(v => `<tr><td style="color:var(--text3)">${UI.esc(v.nombre)}</td>
+              <td style="font-family:ui-monospace,Consolas,monospace">${UI.esc(v.texto)}</td></tr>`).join('')}
+          </tbody></table>
+          <div style="font-size:10.5px;color:var(--text3);margin-top:4px">
+            Sirve para pedir el repuesto exacto sin desmontarlo, y para comparar contra otro vehículo igual.
+          </div>
+        </div>` : '<p style="color:var(--text3)">El módulo no expuso datos de identificación.</p>'}
+
+        ${datos.length ? `<div class="card" style="padding:12px">
+          <b style="font-size:12px">DATOS QUE EXPONE (${datos.length})</b>
+          <div style="font-size:10.5px;color:var(--text3);margin:2px 0 8px">
+            Los identificadores de datos son <b>propios de cada marca</b>: no se les pone etiqueta
+            inventada. Mirá cuál cambia al mover el volante, girar una rueda o abrir una puerta —
+            así se identifica cada dato sin la tabla del fabricante.
+          </div>
+          <table class="table" style="font-size:12px"><thead><tr>
+            <th>Identificador</th><th>Valor crudo</th><th>Lecturas posibles</th></tr></thead><tbody>
+            ${datos.map(d => `<tr>
+              <td style="font-family:ui-monospace,Consolas,monospace">0x${d.did.toString(16).toUpperCase()}</td>
+              <td style="font-family:ui-monospace,Consolas,monospace">${UI.esc(d.hex)}</td>
+              <td style="font-size:11.5px;color:var(--text2)">${UI.esc((d.lecturas || []).join('  ·  '))}</td>
+            </tr>`).join('')}
+          </tbody></table>
+        </div>` : '<p style="color:var(--text3)">No respondió a los identificadores de datos consultados.</p>'}
+
+        <div style="margin-top:10px;font-size:11px;color:var(--text3)">
+          Solo lectura: nada de esto modifica el vehículo.
+        </div>`);
+    } catch (e) {
+      pon(`<p style="color:var(--red)">No se pudo consultar el módulo: ${UI.esc(e.message)}</p>`);
+    }
   },
 
   /* ═══════════ BORRADO Y RESET POR MÓDULO ═══════════
