@@ -1478,7 +1478,14 @@ Modulos.diagnostico_obd = {
      diccionario genérico SAE → diccionario de emisiones → sistema por rango. */
   _descModulo(cod, cat) {
     const base = cod.split('-')[0];
-    if (cat && cat[base]) return cat[base];
+    /* getDTCCatalogo devuelve la FILA completa de la tabla, no un texto:
+       usarla directo imprimía "[object Object]" al lado de cada código. */
+    const fila = cat && cat[base];
+    if (fila) {
+      const t = typeof fila === 'string' ? fila
+              : (fila.descripcion_es || fila.descripcion || fila.desc || fila.texto || '');
+      if (t && String(t).trim()) return String(t).trim();
+    }
     if (this._DTC_GEN[base]) return this._DTC_GEN[base];
     const gen = this._descDTC(base, cat);
     /* _descDTC devuelve el propio código cuando no lo conoce: eso no es una
