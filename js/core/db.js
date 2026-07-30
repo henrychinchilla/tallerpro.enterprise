@@ -375,6 +375,33 @@ const DB = {
     } catch (e) { console.warn('getDiagnosticosPorModelo:', e.message); return []; }
   },
 
+  /* Escaneos anteriores del MISMO vehículo, para comparar visita contra visita.
+     Sin filtro de fecha a propósito: la visita anterior puede ser de hace
+     meses y es justamente la que interesa.
+     Se piden primero las columnas de las migraciones nuevas y, si la base
+     todavía no las tiene, se reintenta con las originales: la comparación de
+     los códigos de emisiones vale igual y no puede caerse por una columna
+     opcional. */
+  async getDiagnosticosPorVehiculo(vehiculoId, limite = 12) {
+    if (!vehiculoId) return [];
+    const pedir = async cols => {
+      const { data, error } = await getSB().from('diagnosticos_obd')
+        .select(cols)
+        .eq('tenant_id', getTID())
+        .eq('vehiculo_id', vehiculoId)
+        .order('created_at', { ascending:false })
+        .limit(limite);
+      if (error) throw new Error(error.message);
+      return data || [];
+    };
+    const BASE = 'id,created_at,dtcs,dtcs_pendientes,dtcs_borrados,mil';
+    try { return await pedir(BASE + ',permanentes,por_modulo'); }
+    catch (e) {
+      try { return await pedir(BASE); }
+      catch (e2) { console.warn('getDiagnosticosPorVehiculo:', e2.message); return []; }
+    }
+  },
+
   async upsertDiagnosticoOBD(fields) {
     const payload = { ...fields, tenant_id: getTID() };
     if (fields.id) {

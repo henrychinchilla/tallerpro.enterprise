@@ -225,6 +225,19 @@ Modulos.diagnostico_obd = {
     0x08:'Aire secundario', 0x10:'Refrigerante A/A', 0x20:'Sensor de oxígeno',
     0x40:'Calefactor de sonda', 0x80:'Sistema EGR',
   },
+  /* Los otros tres monitores viven en el byte B y quedaban afuera de la lista:
+     se mostraban 8 de los 11 que declara el vehículo. Son los CONTINUOS — el
+     ECU los corre todo el tiempo, no una vez por ciclo — y son justo los que
+     no completan cuando algo anda mal de verdad.
+     Van con bit:null a propósito: sus máscaras (0x01, 0x02, 0x04) son las
+     mismas que las del byte C, y el análisis de equipamiento busca por bit
+     (`find(m => m.bit === 0x01)` = catalizador). Con el bit puesto, el
+     catalizador pasaría a resolverse contra el monitor de fallo de encendido. */
+  _MON_CONTINUOS: [
+    { m:0x01, inc:0x10, nombre:'Fallo de encendido' },
+    { m:0x02, inc:0x20, nombre:'Sistema de combustible' },
+    { m:0x04, inc:0x40, nombre:'Componentes (sensores)' },
+  ],
 
   async _leerReadiness() {
     try {
@@ -237,6 +250,12 @@ Modulos.diagnostico_obd = {
       const diesel = !!(B & 0x08);
       const tabla = diesel ? this._MON_DIESEL : this._MON_GASOLINA;
       const monitores = [];
+      /* Byte B: soportado en el bit bajo, sin completar en el bit alto. */
+      for (const c of this._MON_CONTINUOS) {
+        const soportado = !!(B & c.m);
+        monitores.push({ nombre: c.nombre, bit: null, continuo: true,
+                         soportado, listo: soportado && !(B & c.inc) });
+      }
       for (const bit of Object.keys(tabla).map(Number)) {
         const soportado = !!(C & bit);
         /* En D, 1 = INCOMPLETO. Un monitor soportado y nunca completado también
@@ -488,6 +507,151 @@ Modulos.diagnostico_obd = {
       }
       return res;
     } catch (e) { console.warn('_compararConIguales:', e.message); return null; }
+  },
+
+  /* ═══════════ LA VISITA ANTERIOR DEL MISMO VEHÍCULO ═══════════
+     Comparar contra los iguales del taller contesta "¿le falta algo que sus
+     hermanos traen?". Falta la otra pregunta, la que el taller se hace apenas
+     enchufa el escáner: <b>¿volvió lo que reparamos la vez pasada?</b>
+     Eso no lo contesta el escaneo de hoy solo, y el de la visita anterior ya
+     está guardado — sólo que hasta ahora nadie lo leía.
+
+       reincidente — estaba, se fue, y volvió. Es el dato caro: decide si la
+                     reparación aguantó y si la garantía la paga el taller.
+       nuevo       — apareció después de la última visita.
+       resuelto    — estaba y hoy no está.
+
+     "Resuelto" pesa distinto según cómo se fue. Si en la visita anterior se
+     borraron los códigos, que hoy no aparezca puede ser reparación buena o que
+     todavía no se dio la condición que lo dispara. Se dice cuál de las dos se
+     sabe en vez de anotarse una reparación que quizás no ocurrió. */
+
+  /* Todos los códigos de un escaneo, de emisiones y por módulo, en un Map por
+     código. Un mismo código puede venir de dos módulos: gana el primero, pero
+     el módulo se guarda para poder decir dónde estaba. */
+  _codigosDe(s) {
+    const m = new Map();
+    if (!s) return m;
+    for (const d of (s.dtcs || []))
+      if (d && d.codigo && !m.has(d.codigo))
+        m.set(d.codigo, { codigo:d.codigo, modulo:d.modulo || this._nombreModulo(d.ecu), desc:d.desc || '' });
+    for (const mod of (s.por_modulo || []))
+      for (const c of (mod.codigos || []))
+        if (c && c.codigo && !m.has(c.codigo))
+          m.set(c.codigo, { codigo:c.codigo, modulo:mod.nombre || '', desc:c.desc || '' });
+    return m;
+  },
+
+  /* `hasta` = fecha del escaneo que se está comparando. Al escanear en vivo no
+     hay ninguna y se usa ahora; al abrir un escaneo guardado, la suya, para
+     que se compare contra el que de verdad lo precedió y no contra el último. */
+  async _compararConAnterior(vehId, actual, hasta) {
+    try {
+      if (!vehId) return null;
+      const ref = hasta ? new Date(hasta).getTime() : Date.now();
+      const previos = (await DB.getDiagnosticosPorVehiculo(vehId))
+        .filter(d => new Date(d.created_at).getTime() < ref);
+      if (!previos.length) return { primera: true };
+
+      const ant = previos[0];
+      const antes = this._codigosDe(ant), hoy = this._codigosDe(actual);
+      const dias = Math.max(0, Math.round((ref - new Date(ant.created_at).getTime()) / 86400000));
+      const permAntes = new Set((ant.permanentes || []).map(p => p.codigo));
+      const permHoy = new Set((actual.permanentes || []).map(p => p.codigo));
+
+      return {
+        previo_id: ant.id, fecha: ant.created_at, dias, n: previos.length,
+        reincidentes: [...hoy.values()].filter(c => antes.has(c.codigo)),
+        nuevos:       [...hoy.values()].filter(c => !antes.has(c.codigo)),
+        resueltos:    [...antes.values()].filter(c => !hoy.has(c.codigo)),
+        /* Un permanente que sigue ahí después de la reparación no es un código
+           más: significa que el monitor todavía no volvió a pasar, así que el
+           vehículo no está confirmado aunque el Check Engine esté apagado. */
+        perm_siguen: [...permHoy].filter(c => permAntes.has(c)),
+        borrados_antes: !!ant.dtcs_borrados,
+        mil_antes: !!ant.mil,
+      };
+    } catch (e) { console.warn('_compararConAnterior:', e.message); return null; }
+  },
+
+  /* El resultado va también a la bitácora del escaneo: el mecánico lo ve
+     mientras corre, sin esperar al reporte. */
+  _logComparacion(c, log) {
+    if (!c) { log('&nbsp;&nbsp;<span style="color:var(--text3)">Sin escaneos anteriores para comparar</span>'); return; }
+    if (c.primera) { log('&nbsp;&nbsp;<span style="color:var(--text3)">Primera visita de este vehículo — desde la próxima se compara</span>'); return; }
+    const cuando = c.dias === 0 ? 'hoy mismo' : c.dias === 1 ? 'hace 1 día' : `hace ${c.dias} días`;
+    log(`&nbsp;&nbsp;Última visita ${cuando}`);
+    if (c.reincidentes.length)
+      log(`<span style="color:var(--red)">🔁 <b>Volvieron ${c.reincidentes.length} código(s)</b>: ${c.reincidentes.map(x => x.codigo).join(', ')} — la reparación no aguantó</span>`);
+    if (c.nuevos.length)
+      log(`<span style="color:var(--amber)">🆕 ${c.nuevos.length} código(s) nuevo(s): ${c.nuevos.map(x => x.codigo).join(', ')}</span>`);
+    if (c.resueltos.length)
+      log(`<span style="color:var(--green)">✅ ${c.resueltos.length} código(s) ya no aparece(n): ${c.resueltos.map(x => x.codigo).join(', ')}</span>`);
+    if (!c.reincidentes.length && !c.nuevos.length && !c.resueltos.length)
+      log('&nbsp;&nbsp;<span style="color:var(--green)">Sin cambios respecto de la visita anterior</span>');
+  },
+
+  _historialHTML(s) {
+    const c = s && s.comparacion;
+    if (!c) return '';
+    if (c.primera) return `<div class="card" style="padding:14px;margin-top:12px">
+      <b style="font-size:12px">📆 PRIMERA VISITA DE ESTE VEHÍCULO</b>
+      <div style="font-size:11.5px;color:var(--text3);margin-top:3px">
+        No hay escaneo anterior con qué comparar. Desde la próxima entrada, acá va a decir qué código volvió,
+        cuál es nuevo y cuál se resolvió — que es lo que responde si la reparación aguantó.</div>
+    </div>`;
+
+    const cuando = c.dias === 0 ? 'hoy mismo' : c.dias === 1 ? 'hace 1 día' : `hace ${c.dias} días`;
+    const lista = (arr, color) => `<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:5px">
+      ${arr.map(x => `<span style="background:var(--${color}-dim);border:1px solid var(--${color}-border);color:var(--text);
+        border-radius:6px;padding:3px 8px;font-size:11.5px">
+        <b style="font-family:ui-monospace,Consolas,monospace">${UI.esc(x.codigo)}</b>${x.modulo ? ` <span style="color:var(--text3)">· ${UI.esc(x.modulo)}</span>` : ''}</span>`).join('')}
+    </div>`;
+
+    const rein = c.reincidentes || [], nuev = c.nuevos || [], resu = c.resueltos || [];
+    const col = rein.length ? 'red' : nuev.length ? 'amber' : 'green';
+    return `<div class="card" style="padding:14px;margin-top:12px;border-left:3px solid var(--${col})">
+      <b style="font-size:12px">📆 COMPARADO CON LA VISITA ANTERIOR (${cuando})</b>
+      <div style="font-size:11px;color:var(--text3);margin-top:2px">
+        ${UI.fecha(c.fecha)}${c.mil_antes ? ' · Check Engine estaba encendido' : ''}${c.borrados_antes ? ' · se borraron los códigos en esa visita' : ''}
+      </div>
+
+      ${rein.length ? `<div style="margin-top:10px">
+        <b style="font-size:11.5px;color:var(--red)">🔁 VOLVIERON ${rein.length} código(s)</b>
+        ${lista(rein, 'red')}
+        <div style="font-size:10.5px;color:var(--text3);margin-top:5px;line-height:1.5">
+          Estaban en la visita anterior y siguen. <b>La falla no quedó resuelta</b>: si se cambió una pieza por
+          este código, o no era la pieza o la causa está antes. Revisá la guía del código en vez de repetir el
+          mismo cambio.</div>
+      </div>` : ''}
+
+      ${nuev.length ? `<div style="margin-top:10px">
+        <b style="font-size:11.5px;color:var(--amber)">🆕 ${nuev.length} código(s) nuevo(s) desde entonces</b>
+        ${lista(nuev, 'amber')}
+      </div>` : ''}
+
+      ${resu.length ? `<div style="margin-top:10px">
+        <b style="font-size:11.5px;color:var(--green)">✅ ${resu.length} código(s) ya no aparece(n)</b>
+        ${lista(resu, 'green')}
+        ${c.borrados_antes ? `<div style="font-size:10.5px;color:var(--text3);margin-top:5px;line-height:1.5">
+          En la visita anterior se borraron los códigos, así que esto todavía <b>no confirma la reparación</b>:
+          un código que necesita cierta condición para volver a saltar puede tardar días en reaparecer.</div>` : ''}
+      </div>` : ''}
+
+      ${!rein.length && !nuev.length && !resu.length
+        ? '<div style="font-size:12px;color:var(--green);margin-top:8px">Sin cambios respecto de la visita anterior.</div>' : ''}
+
+      ${(c.perm_siguen || []).length ? `<div style="margin-top:10px;background:var(--amber-dim);border:1px solid var(--amber-border);
+        border-radius:6px;padding:7px 9px;font-size:11px;line-height:1.5;color:var(--text)">
+        <b>Siguen ${c.perm_siguen.length} código(s) permanente(s)</b> desde la visita anterior
+        (${c.perm_siguen.map(x => UI.esc(x)).join(', ')}). El ECU los suelta solo cuando el monitor vuelve a pasar:
+        mientras estén, la reparación no está confirmada por el propio vehículo.</div>` : ''}
+
+      <div style="font-size:10px;color:var(--text3);margin-top:8px;line-height:1.5">
+        Se comparan los códigos confirmados de emisiones y los del escaneo por módulo. Los pendientes no entran:
+        van y vienen solos y ensuciarían la comparación.
+      </div>
+    </div>`;
   },
 
   /* Lee un PID modo 01 y devuelve los bytes de datos */
@@ -1876,13 +2040,19 @@ Modulos.diagnostico_obd = {
       log(`${dtcs.length} falla(s) activa(s), ${pend.length} inactiva(s)`);
       if (!j.fallas.length) log('No se encontró ningún PID 194 en el tráfico — puede que el camión no tenga fallas, o que el formato de trama no sea el asumido');
 
+      /* Una flota entra al taller una y otra vez: saber si la falla ya estaba
+         la vez pasada vale acá tanto o más que en un liviano. */
+      log('Comparando con la visita anterior de esta unidad...');
+      const comparacion = await this._compararConAnterior(vehId, { dtcs });
+      this._logComparacion(comparacion, log);
+
       this._scan = {
         costo: this._costoEscaneo(vehId),
         vehiculo_id: vehId, vin: null, protocolo: 'J1708/J1587 (camión antiguo · USB)',
         adaptador: est.dispositivo || 'USB-Link (RP1210)', mil: dtcs.length > 0,
         dtcs, dtcs_pendientes: pend, datos: j.datos, freeze_frame: null, monitores: null,
         modulos: mids.map(m => ({ ecu: m, nombre: this._nombreMID1587(m) })),
-        voltaje: this._voltajeDe(j.datos), nhtsa: null,
+        voltaje: this._voltajeDe(j.datos), nhtsa: null, comparacion,
       };
       log('<b>Escaneo completo ✓</b>');
       this._renderResultado();
@@ -2247,12 +2417,17 @@ Modulos.diagnostico_obd = {
         .sort((a, b) => a - b);
       if (sas.length) log(`Módulos en el bus: ${sas.map(s => this._nombreSA(s)).join(' · ')}`);
 
+      log('Comparando con la visita anterior de esta unidad...');
+      const comparacion = await this._compararConAnterior(vehId, { dtcs });
+      this._logComparacion(comparacion, log);
+
       this._scan = { costo: this._costoEscaneo(vehId),
                      vehiculo_id: vehId, vin, protocolo: 'J1939 (camión · USB)',
                      adaptador: est.dispositivo || 'USB-Link (RP1210)', mil,
                      dtcs, dtcs_pendientes: pend, datos: { ...this._j39.datos },
                      modulos: sas.map(s => ({ ecu: s, nombre: this._nombreSA(s) })),
-                     freeze_frame: null, voltaje: this._voltajeDe(this._j39.datos), nhtsa };
+                     freeze_frame: null, voltaje: this._voltajeDe(this._j39.datos), nhtsa,
+                     comparacion };
       log('<b>Escaneo completo ✓</b>');
       this._renderResultado();
       document.getElementById('obd-btn-save').style.display = '';
@@ -3443,6 +3618,12 @@ Modulos.diagnostico_obd = {
         log(`<span style="color:${a.nivel === 'alto' ? 'var(--red)' : 'var(--amber)'}">${a.nivel === 'alto' ? '⛔' : '⚠️'} ${a.txt}</span>`);
       if (iguales && iguales.avisos) equipo.iguales = iguales;
 
+      /* Contra la visita anterior de ESTE vehículo: lo que dice si la
+         reparación de la vez pasada aguantó. */
+      log('Comparando con la visita anterior de este vehículo...');
+      const comparacion = await this._compararConAnterior(vehId, { dtcs, por_modulo: porModulo, permanentes });
+      this._logComparacion(comparacion, log);
+
       let nhtsa = null;
       if (vin) {
         log('Consultando VIN en base de datos NHTSA...');
@@ -3455,7 +3636,7 @@ Modulos.diagnostico_obd = {
                      dtcs, dtcs_pendientes: pend, datos, freeze_frame: freeze,
                      monitores, modulos, por_modulo: porModulo, voltaje: this._voltajeDe(datos), nhtsa,
                      permanentes, readiness, norma_obd: normaObd, calibracion: calib,
-                     equipamiento: equipo };
+                     equipamiento: equipo, comparacion };
       log('<b>Escaneo completo ✓</b>');
       this._renderResultado();
       document.getElementById('obd-btn-save').style.display = '';
@@ -3479,6 +3660,7 @@ Modulos.diagnostico_obd = {
       </div>` : ''}
       ${this._modulosHTML(s)}
       ${this._tablaDTCs(s)}
+      ${this._historialHTML(s)}
       <div id="obd-bitacora"></div>
       <div id="obd-campanas"></div>
       ${this._freezeHTML(s.freeze_frame)}
@@ -3543,12 +3725,21 @@ Modulos.diagnostico_obd = {
   /* Análisis del escaneo con Nexus (Edge Function ai-assistant ya existente) */
   _promptIA(s, veh) {
     const dat = Object.entries(s.datos||{}).map(([k,v])=>`${k}:${v}`).join(', ');
+    const c = s.comparacion;
     return `Analiza este escaneo OBD-II y explica en español sencillo para un mecánico: ` +
       `causa probable de cada código, cómo confirmar el diagnóstico y la reparación recomendada con su urgencia.\n` +
       `Vehículo: ${veh ? `${veh.marca||''} ${veh.modelo||''} ${veh.anio||''} placa ${veh.placa||''}` : 'no especificado'}\n` +
       `VIN: ${s.vin||'—'}\nCheck Engine: ${s.mil?'ENCENDIDO':'apagado'}\n` +
       `Códigos confirmados: ${(s.dtcs||[]).map(d=>`${d.codigo} (${d.desc})`).join('; ')||'ninguno'}\n` +
       `Códigos pendientes: ${(s.dtcs_pendientes||[]).map(d=>d.codigo).join('; ')||'ninguno'}\n` +
+      /* El histórico cambia el diagnóstico: un código que vuelve por segunda vez
+         no se atiende igual que uno que aparece por primera. */
+      (c && !c.primera
+        ? `Visita anterior hace ${c.dias} día(s) — códigos que VOLVIERON: ${(c.reincidentes||[]).map(x=>x.codigo).join(', ')||'ninguno'}; ` +
+          `nuevos desde entonces: ${(c.nuevos||[]).map(x=>x.codigo).join(', ')||'ninguno'}; ` +
+          `ya no aparecen: ${(c.resueltos||[]).map(x=>x.codigo).join(', ')||'ninguno'}` +
+          `${c.borrados_antes ? ' (en esa visita se borraron los códigos)' : ''}\n`
+        : '') +
       `Freeze frame: ${s.freeze_frame?JSON.stringify(s.freeze_frame):'—'}\nDatos en vivo: ${dat||'—'}`;
   },
 
@@ -4313,7 +4504,7 @@ Modulos.diagnostico_obd = {
   /* Campos que dependen de una migración posterior a la tabla original. El
      código se despliega antes que la migración (son dos pasos distintos), así
      que un escaneo no puede perderse solo porque la columna todavía no exista.*/
-  _CAMPOS_NUEVOS: ['permanentes', 'readiness', 'norma_obd', 'calibracion', 'equipamiento', 'costo', 'por_modulo'],
+  _CAMPOS_NUEVOS: ['permanentes', 'readiness', 'norma_obd', 'calibracion', 'equipamiento', 'costo', 'por_modulo', 'comparacion'],
 
   async guardarEscaneo() {
     if (!this._scan) return;
@@ -4357,6 +4548,7 @@ Modulos.diagnostico_obd = {
         <b>Check Engine:</b> ${d.mil?'🔴 Encendido':'✅ Apagado'} ${d.dtcs_borrados?' · 🧹 Códigos borrados tras el escaneo':''}</p>
         ${this._modulosHTML(d)}
         ${this._tablaDTCs(d)}
+        ${this._historialHTML(d)}
         ${this._freezeHTML(d.freeze_frame)}
         ${this._porModuloHTML(d)}
       ${this._costoHTML(d)}
@@ -4448,6 +4640,26 @@ Modulos.diagnostico_obd = {
           <tbody>${filas.map(f=>`<tr><td><b>${f.codigo}</b></td><td>${f.desc}</td><td>${f.tipo}</td></tr>`).join('')}</tbody></table>`
         : '<p style="color:green">Sin códigos de falla ✓</p>'}
       </div>
+      ${(() => {
+        /* La reincidencia va en el papel que se lleva el cliente: es la
+           diferencia entre "tiene esta falla" y "esta falla ya estaba la vez
+           pasada", y de eso depende quién paga el trabajo. */
+        const c = d.comparacion;
+        if (!c || c.primera) return '';
+        const l = arr => arr.map(x => x.codigo).join(', ');
+        const cuando = c.dias === 0 ? 'hoy mismo' : c.dias === 1 ? 'hace 1 día' : `hace ${c.dias} días`;
+        return `<div class="section"><b>COMPARADO CON LA VISITA ANTERIOR (${cuando} · ${UI.fecha(c.fecha)}):</b>
+          <table style="margin-top:8px"><tbody>
+            ${c.reincidentes.length ? `<tr><td>Volvieron</td><td class="mil-on">${l(c.reincidentes)}</td></tr>` : ''}
+            ${c.nuevos.length ? `<tr><td>Nuevos desde entonces</td><td><b>${l(c.nuevos)}</b></td></tr>` : ''}
+            ${c.resueltos.length ? `<tr><td>Ya no aparecen</td><td class="mil-off">${l(c.resueltos)}</td></tr>` : ''}
+            ${!c.reincidentes.length && !c.nuevos.length && !c.resueltos.length
+              ? '<tr><td colspan="2">Sin cambios respecto de la visita anterior.</td></tr>' : ''}
+          </tbody></table>
+          ${c.reincidentes.length ? '<p style="font-size:12px;margin:6px 0 0">Un código que vuelve indica que la causa sigue presente: la reparación anterior no resolvió el problema de fondo.</p>' : ''}
+          ${c.borrados_antes && c.resueltos.length ? '<p style="font-size:12px;margin:6px 0 0">En la visita anterior se borraron los códigos, así que un código que hoy no aparece todavía no confirma la reparación.</p>' : ''}
+        </div>`;
+      })()}
       ${fz.length ? `<div class="section"><b>FREEZE FRAME (al momento de la falla ${d.freeze_frame.dtc}):</b>
         <table style="margin-top:8px"><tbody>${fz.map(i=>`<tr><td>${i[0]}</td><td><b>${i[1]}${i[2]}</b></td></tr>`).join('')}</tbody></table>
       </div>` : ''}
