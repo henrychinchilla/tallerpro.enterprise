@@ -3668,6 +3668,9 @@ Modulos.diagnostico_obd = {
        enlace devuelve resultados de veinte fabricantes distintos. */
     const veh = (s && s.vehiculos) ||
                 (this._vehiculos || []).find(v => v.id === (s && s.vehiculo_id)) || {};
+    /* Borrar y reiniciar solo tienen sentido con el vehículo enchufado: al
+       abrir un escaneo guardado no hay a quién mandarle el comando. */
+    const vivo = s === this._scan && this._via === 'usb' && this._listo;
     const conFallas = ms.filter(m => m.codigos && m.codigos.length);
     const total = conFallas.reduce((n, m) => n + m.codigos.length, 0);
     const activos = conFallas.reduce((n, m) => n + m.codigos.filter(c => c.activo).length, 0);
@@ -3708,6 +3711,17 @@ Modulos.diagnostico_obd = {
       </div>`}
       ${ms.length > conFallas.length ? `<div style="font-size:10.5px;color:var(--text3);margin-top:6px">
         Sin códigos: ${ms.filter(m => !m.codigos.length).map(m => UI.esc(m.nombre)).join(' · ')}</div>` : ''}
+      ${vivo && total ? `
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;border-top:1px solid var(--border);padding-top:10px">
+          <button class="btn btn-sm btn-danger" onclick="Modulos.diagnostico_obd.borrarPorModulo()">
+            🧹 Borrar códigos de todos los módulos</button>
+          ${conFallas.map(m => `<button class="btn btn-sm btn-ghost" title="Reiniciar este módulo (no borra nada)"
+            onclick="Modulos.diagnostico_obd.resetModulo(${m.ecu})">🔄 ${UI.esc(m.nombre)}</button>`).join('')}
+        </div>
+        <div style="font-size:10.5px;color:var(--text3);margin-top:6px">
+          Borrar <b>no repara</b>: los códigos vuelven si la falla sigue. Se guarda el escaneo antes,
+          y se reinician los monitores de emisiones (puede reprobar una inspección hasta que vuelvan a correr).
+        </div>` : ''}
     </div>`;
   },
 
@@ -4025,6 +4039,121 @@ Modulos.diagnostico_obd = {
       this._log(this._via === 'j1939' ? '🧹 Códigos borrados (DM11 + DM3) ✓' : '🧹 Códigos borrados (modo 04) ✓');
       UI.toast('Códigos borrados ✓');
     } catch (e) { UI.toast('No se pudo borrar: ' + e.message, 'error'); }
+  },
+
+  /* ═══════════ BORRADO Y RESET POR MÓDULO ═══════════
+     El modo 04 de OBD-II solo llega a los módulos de emisiones. Las fallas del
+     ABS, del TPMS o de la carrocería NO se borran con él: hay que pedírselo a
+     cada módulo por su dirección con UDS 14 (ClearDiagnosticInformation).
+
+     Dos protecciones que no son opcionales:
+
+     1. El escaneo se GUARDA ANTES de borrar. Un código borrado sin registro es
+        evidencia perdida: si el cliente vuelve en dos semanas con el mismo
+        síntoma, sin ese registro no hay con qué comparar.
+
+     2. Borrar reinicia los monitores de disponibilidad. Un vehículo recién
+        borrado REPRUEBA una inspección de emisiones aunque esté sano, porque
+        los monitores no han corrido. Hay que decirlo antes, no después. */
+
+  async _guardarAntesDeBorrar() {
+    if (!this._scan || this._scan.id) return true;
+    try {
+      /* COPIA, no referencia: enseguida se vacían los códigos de cada módulo
+         para reflejar el borrado en pantalla, y con una referencia viva eso
+         vaciaría también lo que se está guardando. El registro tiene que
+         conservar lo que HABÍA — es justamente su razón de ser. */
+      const { nhtsa, ...fila } = JSON.parse(JSON.stringify(this._scan));
+      let { data, error } = await DB.upsertDiagnosticoOBD(fila);
+      if (error && /PGRST204|column|does not exist/i.test(error.message || '')) {
+        const base = { ...fila };
+        for (const c of this._CAMPOS_NUEVOS) delete base[c];
+        ({ data, error } = await DB.upsertDiagnosticoOBD(base));
+      }
+      if (error) return false;
+      if (data && data.id) this._scan.id = data.id;
+      return true;
+    } catch (_) { return false; }
+  },
+
+  /* Borra los códigos de UN módulo. UDS 14 FF FF FF = borrar todos los suyos. */
+  async _borrarModulo(req, resp) {
+    const r = await this._udsPedir(req, resp, [0x14, 0xFF, 0xFF, 0xFF], 3000);
+    if (r && r[0] === 0x54) return { ok: true };
+    /* Algunos módulos exigen sesión extendida para aceptar el borrado */
+    const s = await this._udsPedir(req, resp, [0x10, 0x03], 1500);
+    if (s && s[0] === 0x50) {
+      const r2 = await this._udsPedir(req, resp, [0x14, 0xFF, 0xFF, 0xFF], 3000);
+      if (r2 && r2[0] === 0x54) return { ok: true };
+      return { ok: false, motivo: r2 && r2[0] === 0x7F ? `rechazado (0x${(r2[2] || 0).toString(16)})` : 'sin respuesta' };
+    }
+    return { ok: false, motivo: r && r[0] === 0x7F ? `rechazado (0x${(r[2] || 0).toString(16)})` : 'sin respuesta' };
+  },
+
+  /* Borra los códigos de TODOS los módulos que reportaron fallas. */
+  async borrarPorModulo() {
+    const ms = (this._scan && this._scan.por_modulo) || [];
+    const conFallas = ms.filter(m => m.codigos && m.codigos.length);
+    if (!conFallas.length) { UI.toast('No hay códigos por módulo para borrar', 'info'); return; }
+    if (this._via !== 'usb') { UI.toast('El borrado por módulo requiere la conexión USB', 'error'); return; }
+
+    const total = conFallas.reduce((n, m) => n + m.codigos.length, 0);
+    const ok = await UI.confirmar(
+      `¿Borrar ${total} código(s) en ${conFallas.length} módulo(s)?<br><br>` +
+      `<b>${conFallas.map(m => UI.esc(m.nombre)).join(', ')}</b><br><br>` +
+      '<small>· Los códigos <b>vuelven</b> si la falla sigue: borrar no repara.<br>' +
+      '· Se reinician los monitores de emisiones: el vehículo puede <b>reprobar una inspección</b> hasta que vuelvan a correr.<br>' +
+      '· El escaneo se guarda antes, para no perder el registro de lo que había.<br>' +
+      '· El vehículo debe estar <b>detenido</b> y con el motor apagado.</small>',
+      'Borrar códigos de todos los módulos');
+    if (!ok) return;
+
+    const guardado = await this._guardarAntesDeBorrar();
+    this._log(guardado ? '💾 Escaneo guardado antes de borrar ✓'
+                       : '<span style="color:var(--amber)">No se pudo guardar el escaneo previo — se borra igual, pero sin registro</span>');
+
+    let bien = 0, mal = 0;
+    for (const m of conFallas) {
+      const r = await this._borrarModulo(m.ecu, m.resp);
+      if (r.ok) { bien++; this._log(`🧹 ${m.nombre}: borrado ✓`); m.codigos = []; }
+      else { mal++; this._log(`<span style="color:var(--amber)">⚠️ ${m.nombre}: no se pudo borrar (${r.motivo})</span>`); }
+    }
+    if (this._scan) this._scan.dtcs_borrados = true;
+    this._renderResultado();
+    UI.toast(mal ? `${bien} borrado(s), ${mal} rechazado(s)` : `${bien} módulo(s) borrados ✓`, mal ? 'warn' : 'success');
+    this._log('<b>Volvé a escanear para confirmar qué códigos regresaron.</b> Los que vuelven de inmediato son fallas presentes, no memoria vieja.');
+  },
+
+  /* Reinicio de un módulo (UDS 11 01 = hard reset). Es como desconectarle la
+     alimentación: vuelve a arrancar y reejecuta sus autodiagnósticos.
+     NO borra códigos ni adaptaciones — para eso está el borrado. */
+  async resetModulo(ecu) {
+    const ms = (this._scan && this._scan.por_modulo) || [];
+    const m = ms.find(x => x.ecu === ecu);
+    if (!m) return;
+    if (this._via !== 'usb') { UI.toast('El reinicio requiere la conexión USB', 'error'); return; }
+
+    const ok = await UI.confirmar(
+      `¿Reiniciar <b>${UI.esc(m.nombre)}</b>?<br><br>` +
+      '<small>Equivale a cortarle la alimentación un instante: el módulo arranca de nuevo y repite sus autodiagnósticos.<br><br>' +
+      '<b>El vehículo TIENE que estar detenido y con el motor apagado.</b> Reiniciar un módulo en marcha puede apagar el motor o dejar sin asistencia a la dirección o los frenos.<br><br>' +
+      'No borra códigos ni adaptaciones.</small>',
+      'Reiniciar módulo');
+    if (!ok) return;
+
+    try {
+      const r = await this._udsPedir(m.ecu, m.resp, [0x11, 0x01], 4000);
+      if (r && r[0] === 0x51) {
+        this._log(`🔄 ${m.nombre}: reiniciado ✓ — esperá unos segundos y volvé a escanear`);
+        UI.toast('Módulo reiniciado ✓');
+      } else if (r && r[0] === 0x7F) {
+        this._log(`<span style="color:var(--amber)">${m.nombre}: rechazó el reinicio (0x${(r[2] || 0).toString(16)})</span>`);
+        UI.toast('El módulo rechazó el reinicio', 'warn');
+      } else {
+        this._log(`<span style="color:var(--amber)">${m.nombre}: sin respuesta al reinicio</span>`);
+        UI.toast('Sin respuesta del módulo', 'warn');
+      }
+    } catch (e) { UI.toast('No se pudo reiniciar: ' + e.message, 'error'); }
   },
 
   /* Campos que dependen de una migración posterior a la tabla original. El
