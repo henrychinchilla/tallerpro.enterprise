@@ -12,18 +12,25 @@ const { execFileSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 
-const dir = __dirname;
-const suites = fs.readdirSync(dir)
-  .filter(f => f.endsWith('.js') && f !== 'run.js' && f !== 'harness.js')
-  .sort();
+/* Se recogen las suites de `test/obd/` y también las de `test/` a secas: no
+   todo lo que hay que cuidar es del módulo OBD, y `npm test` tiene que seguir
+   siendo UN solo comando — una suite que hay que acordarse de correr aparte es
+   una suite que nadie corre. */
+const esSuite = f => f.endsWith('.js') && f !== 'run.js' && f !== 'harness.js';
+const suites = [
+  ...fs.readdirSync(path.join(__dirname, '..')).filter(esSuite).sort()
+       .map(f => path.join(__dirname, '..', f)),
+  ...fs.readdirSync(__dirname).filter(esSuite).sort()
+       .map(f => path.join(__dirname, f)),
+];
 
 let fallaron = 0, totalPass = 0, totalFail = 0;
 
 for (const s of suites) {
-  console.log('\n── ' + s.replace('.js', '') + ' ──');
+  console.log('\n── ' + path.basename(s, '.js') + ' ──');
   let salida = '';
   try {
-    salida = execFileSync(process.execPath, [path.join(dir, s)], { encoding: 'utf8' });
+    salida = execFileSync(process.execPath, [s], { encoding: 'utf8' });
   } catch (e) {
     /* Código de salida distinto de 0: hubo FAIL, o el archivo se cayó. En los
        dos casos hay que mostrar lo que alcanzó a imprimir. */
