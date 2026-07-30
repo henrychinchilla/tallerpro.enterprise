@@ -85,7 +85,88 @@ Modulos.diagnostico_obd = {
 
   /* Envía un comando y espera la respuesta completa (termina en '>').
      Por USB se emula la respuesta del ELM327 para reusar todos los lectores. */
+  /* ═══════════ BITACORA TECNICA DEL ESCANEO ═══════════
+     Todo lo de este modulo se prueba contra un vehiculo real, y cuando algo
+     sale mal en el taller lo que llega es "no funciono" — que no alcanza para
+     arreglar nada. El log en pantalla esta escrito para el mecanico (que paso),
+     no para depurar (que se pidio y que contesto el bus).
+
+     Esta bitacora guarda el dialogo crudo: cada comando y su respuesta tal cual.
+     Con eso, un escaneo fallido en un vehiculo que no tengo enfrente se puede
+     leer igual — en que paso se corto, si el modulo nego el servicio, si
+     contesto basura o si directamente no contesto.
+
+     Tiene tope: un barrido son 240 direcciones y volcarlas todas ahoga lo unico
+     que importa. Por eso el barrido se resume en una linea y el detalle queda
+     para el dialogo con cada modulo, que es donde se rompen las cosas. */
+  _traza: null, _sinTraza: false, _TRAZA_TOPE: 400,
+
+  _trazar(peticion, respuesta) {
+    if (!this._traza || this._sinTraza) return;
+    if (this._traza.length >= this._TRAZA_TOPE) return;
+    const corto = v => {
+      if (v == null) return 'sin respuesta';
+      if (Array.isArray(v)) return v.map(x => x.toString(16).padStart(2, '0').toUpperCase()).join(' ');
+      return String(v).replace(/[\r\n]+/g, ' | ').trim().slice(0, 200);
+    };
+    this._traza.push({ q: corto(peticion), r: corto(respuesta) });
+  },
+
+  _trazaNota(txt) {
+    if (this._traza && this._traza.length < this._TRAZA_TOPE) this._traza.push({ nota: txt });
+  },
+
+  /* Texto plano a proposito: se pega en WhatsApp o en un correo sin que se
+     rompa nada, que es como va a llegar desde el taller. */
+  _trazaTexto() {
+    const s = this._scan || {};
+    const v = (this._vehiculos || []).find(x => x.id === s.vehiculo_id) || {};
+    const L = [];
+    L.push('NexusPro — bitacora tecnica del escaneo');
+    L.push('fecha: ' + new Date().toISOString());
+    L.push(`vehiculo: ${[v.marca, v.modelo, v.anio].filter(Boolean).join(' ') || '?'}  placa: ${v.placa || '?'}`);
+    L.push(`via: ${this._via}  protocolo: ${s.protocolo || '?'}  adaptador: ${s.adaptador || '?'}`);
+    L.push(`protoNum: ${this._protoNum}  canExt: ${this._canExt}  baud: ${this._canBaud}`);
+    L.push(`VIN: ${s.vin || '—'}  MIL: ${s.mil ? 'ON' : 'off'}  voltaje: ${s.voltaje || '—'}`);
+    const mp = s.mapa_acceso;
+    if (mp) L.push(`mapa: ${mp.modulos.length} modulo(s), ${mp.bits} bits` +
+                   (mp.faltantes && mp.faltantes.length ? `, ${mp.faltantes.length} faltante(s)` : ''));
+    if (Array.isArray(s.por_modulo))
+      for (const m of s.por_modulo)
+        L.push(`  modulo 0x${m.ecu.toString(16).toUpperCase()}${m.resp != null ? ' -> 0x' + m.resp.toString(16).toUpperCase() : ''}` +
+               ` "${m.nombre}" servicio=${m.servicio || '?'} codigos=${m.codigos.length}` +
+               (m.codigos.length ? ' [' + m.codigos.map(c => c.codigo).join(' ') + ']' : ''));
+    L.push('');
+    L.push(`--- dialogo (${(this._traza || []).length} entradas) ---`);
+    for (const t of (this._traza || []))
+      L.push(t.nota ? '# ' + t.nota : `> ${t.q}\n< ${t.r}`);
+    if ((this._traza || []).length >= this._TRAZA_TOPE) L.push('# (cortado en el tope)');
+    return L.join('\n');
+  },
+
+  async copiarTraza() {
+    const txt = this._trazaTexto();
+    try {
+      await navigator.clipboard.writeText(txt);
+      UI.toast('Bitacora tecnica copiada — pegala en el chat de soporte');
+    } catch (_) {
+      /* Sin permiso de portapapeles (pasa en http o si el navegador lo bloquea)
+         igual hay que poder sacarla: se abre en una ventana para copiarla a mano. */
+      const w = window.open('', '_blank');
+      if (w) { w.document.write('<pre style="white-space:pre-wrap;font-size:12px">' + UI.esc(txt) + '</pre>'); w.document.close(); }
+      else UI.toast('No se pudo copiar: permiti las ventanas emergentes', 'error');
+    }
+  },
+
   async _cmd(c, timeout = 6000) {
+    let r;
+    try { r = await this._cmdRaw(c, timeout); }
+    catch (e) { this._trazar(c, 'ERROR: ' + e.message); throw e; }
+    this._trazar(c, r);
+    return r;
+  },
+
+  async _cmdRaw(c, timeout = 6000) {
     if (this._via === 'usb') {
       while (this._busy) await new Promise(r => setTimeout(r, 50));
       this._busy = true;
@@ -1549,7 +1630,23 @@ Modulos.diagnostico_obd = {
   /* Diálogo UDS punto a punto con UN módulo. El _isotp normal solo escucha
      0x7E8-0x7EF (las respuestas de emisiones), así que no sirve acá. */
   async _udsPedir(reqId, respId, tx, timeout = 2500) {
-    if (this._via === 'ble') return this._udsPedirELM(reqId, tx, timeout);
+    const r = await this._udsPedirCAN(reqId, respId, tx, timeout);
+    /* Se traza aca y no adentro para que quede UNA entrada por consulta, con la
+       direccion delante: sin eso no se sabe a quien se le pregunto. */
+    if (!this._sinTraza)
+      this._trazar(`UDS 0x${reqId.toString(16).toUpperCase()} ${tx.map(b => b.toString(16).padStart(2,'0').toUpperCase()).join(' ')}`, r);
+    return r;
+  },
+
+  async _udsPedirCAN(reqId, respId, tx, timeout = 2500) {
+    if (this._via === 'ble') {
+      /* El camino ELM ya pasa por _cmd, que traza solo: se silencia para no
+         duplicar cada consulta en la bitacora. */
+      const antes = this._sinTraza;
+      this._sinTraza = true;
+      try { return await this._udsPedirELM(reqId, tx, timeout); }
+      finally { this._sinTraza = antes; }
+    }
     let datos = null, len = 0, ok = false;
     this._canRx = (id, b) => {
       if (id !== respId || !b.length) return;
@@ -1672,12 +1769,18 @@ Modulos.diagnostico_obd = {
     const hallados = [];
     /* 3E 00 = Tester Present: es de solo lectura, no cambia nada en el
        vehículo. Es la forma segura de preguntar si hay un módulo ahí. */
-    for (let req = 0x700; req <= 0x7EF; req++) {
-      const h = await this._tocarPuerta(req);
-      if (h && !hallados.some(x => x.req === h.req && x.resp === h.resp)) hallados.push(h);
-      if (log && (req & 0x3F) === 0x3F)
-        log(`&nbsp;&nbsp;<span style="color:var(--text3)">…0x${req.toString(16).toUpperCase()} (${hallados.length} encontrados)</span>`);
-    }
+    const antes = this._sinTraza;
+    this._sinTraza = true;          // 240 puertas ahogarian la bitacora
+    try {
+      for (let req = 0x700; req <= 0x7EF; req++) {
+        const h = await this._tocarPuerta(req);
+        if (h && !hallados.some(x => x.req === h.req && x.resp === h.resp)) hallados.push(h);
+        if (log && (req & 0x3F) === 0x3F)
+          log(`&nbsp;&nbsp;<span style="color:var(--text3)">…0x${req.toString(16).toUpperCase()} (${hallados.length} encontrados)</span>`);
+      }
+    } finally { this._sinTraza = antes; }
+    this._trazaNota(`barrido 11 bits 0x700-0x7EF: ${hallados.length} modulo(s) — ` +
+      (hallados.map(h => '0x' + h.req.toString(16).toUpperCase()).join(' ') || 'ninguno'));
     return hallados;
   },
 
@@ -2534,7 +2637,13 @@ Modulos.diagnostico_obd = {
     } catch (e) {
       log(`<span style="color:var(--red)">✗ ${e.message}</span>`);
       UI.toast(e.message, 'error');
-    } finally { btn.disabled = false; }
+    } finally {
+      btn.disabled = false;
+      /* El boton aparece aunque el escaneo se haya caido: es justo cuando la
+         bitacora sirve. */
+      const bt = document.getElementById('obd-btn-traza');
+      if (bt && this._traza && this._traza.length) bt.style.display = '';
+    }
   },
 
   /* Direcciones de origen J1939 (tabla de direcciones preferidas de la norma).
@@ -2908,7 +3017,13 @@ Modulos.diagnostico_obd = {
     } catch (e) {
       log(`<span style="color:var(--red)">✗ ${e.message}</span>`);
       UI.toast(e.message, 'error');
-    } finally { btn.disabled = false; }
+    } finally {
+      btn.disabled = false;
+      /* El boton aparece aunque el escaneo se haya caido: es justo cuando la
+         bitacora sirve. */
+      const bt = document.getElementById('obd-btn-traza');
+      if (bt && this._traza && this._traza.length) bt.style.display = '';
+    }
   },
 
   /* ═══════════ DESCRIPCIONES DTC EN ESPAÑOL ═══════════ */
@@ -3773,6 +3888,9 @@ Modulos.diagnostico_obd = {
         <button class="btn btn-ghost" id="obd-btn-test" title="Prueba cada adaptador instalado y dice cuál responde" onclick="Modulos.diagnostico_obd.probarAdaptador()" style="margin-right:auto">🔧 Probar adaptador</button>
         <button class="btn btn-ghost" onclick="Modulos.diagnostico_obd._cerrarEscaneo()">Cancelar</button>
         <button class="btn btn-brand" id="obd-btn-scan" onclick="Modulos.diagnostico_obd.escanear()">🔌 Conectar y Escanear</button>
+        <button class="btn btn-ghost" id="obd-btn-traza" style="display:none"
+          title="Copia el dialogo crudo con el vehiculo para mandarlo a soporte cuando algo no cuadre"
+          onclick="Modulos.diagnostico_obd.copiarTraza()">🧾 Bitácora técnica</button>
         <button class="btn btn-cyan" id="obd-btn-save" style="display:none" onclick="Modulos.diagnostico_obd.guardarEscaneo()">💾 Guardar</button>
       </div>`, '640px');
 
@@ -3951,6 +4069,7 @@ Modulos.diagnostico_obd = {
     this._api = (this._via !== 'ble' && document.getElementById('obd-api')?.value) || null;
     const btn = document.getElementById('obd-btn-scan');
     btn.disabled = true;
+    this._traza = [];   // bitacora tecnica: se reinicia con cada escaneo
     const log = m => this._log(m);
     if (this._via === 'auto') {
       try { this._via = await this._detectarVia(log); }
@@ -4138,7 +4257,13 @@ Modulos.diagnostico_obd = {
     } catch (e) {
       log(`<span style="color:var(--red)">✗ ${e.message}</span>`);
       UI.toast(e.message, 'error');
-    } finally { btn.disabled = false; }
+    } finally {
+      btn.disabled = false;
+      /* El boton aparece aunque el escaneo se haya caido: es justo cuando la
+         bitacora sirve. */
+      const bt = document.getElementById('obd-btn-traza');
+      if (bt && this._traza && this._traza.length) bt.style.display = '';
+    }
   },
 
   _renderResultado() {
