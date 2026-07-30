@@ -17,3 +17,6 @@ AGENTS.md
 
 tools/
 prueba-*.html
+
+# Pruebas del modulo OBD: no son parte del sitio
+test/
