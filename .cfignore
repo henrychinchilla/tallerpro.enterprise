@@ -1,3 +1,8 @@
+# OJO: este archivo es de Cloudflare PAGES. `wrangler deploy` (Workers con
+# assets.directory) NO lo lee, asi que lo de aca abajo SE SUBE igual.
+# Lo que de verdad excluye es `.assetsignore`; worker.js ademas responde 404.
+# Se conserva por si el proyecto vuelve a Pages, pero no confiar en el.
+#
 # Documentos SAT — no publicar en el CDN de Cloudflare
 *.pdf
 *.xls
@@ -18,5 +23,3 @@ AGENTS.md
 tools/
 prueba-*.html
 
-# Pruebas del modulo OBD: no son parte del sitio
-test/

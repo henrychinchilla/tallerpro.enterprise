@@ -21,6 +21,18 @@ schema_v3.sql
 .playwright-mcp/
 screenshots/*.html
 
+# Documentos sensibles: NO deben viajar al CDN.
+# worker.js ya los responde 404, pero eso es en tiempo de ejecucion — el archivo
+# igual se habia subido. Aca ni siquiera se sube.
+# (*.apk NO se excluye a proposito: descarga.js ofrece /nexuspro.apk para bajar.)
+*.pdf
+*.xls
+*.xlsx
+*.pptx
+
+# pruebas del modulo OBD: no son parte del sitio
+test/
+
 # herramientas de generación: no son parte del sitio
 tools/
 data/tsb/**/_modelos.json.map
