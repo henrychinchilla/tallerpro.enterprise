@@ -190,13 +190,117 @@ dos se ven idénticas desde el software y **ninguna se arregla con código**.
 
 **Dato observado por Henry que respalda esto:** el LED ámbar **sí enciende**
 cuando la app transmite en `OBD-II 11 bits / 500k` (CAN), y **no** en los pasos
-de K-line. Falta la confirmación limpia en dos fases (18 s sólo K-line, 18 s
-sólo CAN, mirando el LED) — quedó sin correr porque se desconectó el equipo.
+de K-line.
+
+**Confirmación en dos fases — HECHA el 2026-07-30, con el vehículo enchufado.**
+Dos tandas de 20 s de K-line puro (`ISO14230`, device 1), 187 peticiones
+transmitidas en total, eco apagado. Henry observando el adaptador:
+**el LED ámbar no encendió ninguna de las dos veces**, y no volvió ni una trama.
+Con el ámbar encendiendo en CAN y apagado en K-line, queda cerrado: el
+transceptor de K-line del USB-Link no llega al conector. **No hay nada más que
+probar por software.** Al Montero se entra por el dongle Bluetooth.
+
+Dos cosas más de esa sesión, para no repetirlas:
+
+- **El barrido del 30/07 no midió nada.** Sus ~80 combinaciones dieron
+  `Error RP1210 275` — el adaptador estaba colgado y ninguna petición salió.
+  **El 275 se cura desenchufando y volviendo a enchufar el USB-Link**; después
+  del reenchufe los 22 protocolos abren. Cualquier tanda con 275 en todo hay que
+  descartarla, no interpretarla.
+- **Device 146 (`ATEC-160 Baud`) queda cerrado**: sólo abre con el protocolo
+  `ATEC160BAUD` —los otros 21 dan `Error RP1210 134`, ID inválido— y tampoco
+  responde. Era una de las vías marcadas como "nunca se tocó".
 
 **De paso se encontró un defecto real:** el puente instalado en la PC estaba
 **9,5 KB desactualizado** (13.428 vs 22.885 bytes) y no conocía la operación
 `apis` — por eso la app no listaba adaptadores y daba un aviso equivocado sobre
 K-line. Se actualizó y se verificó corriendo.
+
+## 7. La captura de USB — qué hace la app, trama por trama (2026-07-30)
+
+Henry escaneó la camioneta **dos veces** con Wireshark grabando el bus USB. El
+archivo está en el repo: `docs/capturas/montero-2026-07-30.pcapng` — 1023 tramas,
+189,7 s (21:34:50 → 21:38:00), USBPcap, sin truncar.
+
+Esto ya no es "lo que creemos que manda la app": es lo que salió por el cable.
+
+**El adaptador**, por su propio string de identificación:
+`0f3f:f005` · `NEXIQ Technologies,Inc.- USB Link v02.500134\AE`. Cuatro endpoints
+bulk: `0x03`/`0x82` para identificarse, `0x05`/`0x84` para datos.
+
+### Los dos escaneos son `_detectarVia()`, paso por paso
+
+| t (s) | Protocolo | Qué hizo | Duración |
+|---|---|---|---|
+| 95,1 | `CAN:Baud=500` | 2 envíos | 5,1 s |
+| 101,9 | `CAN:Baud=250` | 2 envíos | 5,2 s |
+| 110,5 | `J1939:Baud=250` | sólo escuchar | 2,3 s (= `_hayTrafico(2200)`) |
+| 116,5 | `J1939:Baud=500` | sólo escuchar | 2,4 s |
+| 121,2 | `J1708` | sólo escuchar | hasta el error en pantalla |
+
+El segundo intento (t=149 a 189) repite los cinco pasos idénticos. La captura
+termina con el `J1708` todavía abierto.
+
+De paso quedó descifrado el byte del mensaje de conexión: **es el baudaje, no el
+protocolo** — `0xEA`=500k, `0xE9`=250k, `0xFE`=J1708. Por eso `CAN:Baud=500` y
+`J1939:Baud=500` comparten `0xEA`.
+
+### El LED ámbar, identificado: son estos cuatro envíos
+
+Los únicos 8 mensajes de datos en 190 s son 2 intentos × 2 baudajes × 2 anchos de
+ID. El formato interno del USB-Link es
+`[canal][00 00][ID de 4 bytes little-endian][8 bytes de datos]`:
+
+```
+01 ff 0f 00 70 00 00 | 00 00 df 07 | 02 01 00 00 00 00 00 00   → ID 0x7DF
+01 ff 0f 00 70 00 00 | f1 33 db 98 | 02 01 00 00 00 00 00 00   → ID 0x18DB33F1
+```
+
+`0x7DF` es la petición funcional OBD-II de 11 bits, `0x18DB33F1` la de 29 bits
+(el `0x98` lleva el bit 31, la marca de ID extendido) — exactamente lo que arma
+`_canTx()`. **El LED ámbar que vio Henry son los envíos de CAN 11 bits / 500k**,
+en t=95,08 y t=149,02. Queda confirmado a nivel de USB que el adaptador transmite
+CAN de verdad.
+
+### El vehículo no contestó nada, y eso ahora es un dato medido
+
+Las 375 tramas de entrada están todas clasificadas y no queda ninguna sin
+explicar: latido del adaptador cada 250 ms (`0a 00 · 01 00 · 03`), estado de 30
+bytes cada 1 s, acuses de conexión, y el eco de la propia transmisión. **Cero
+tramas del bus.**
+
+Que un Montero 2004 no conteste en CAN era lo esperado por el año. Ahora está
+**medido**: no hay CAN en los pines 6/14 de este vehículo. Deja de ser deducción.
+
+### Lo que la captura deja al descubierto
+
+**1. Por USB nunca se intenta K-line.** En 190 segundos y dos escaneos completos,
+los únicos protocolos abiertos fueron CAN, J1939 y J1708. `_detectarVia()` prueba
+esos cinco y tira el error. Para este vehículo el escaneo por USB **no puede
+funcionar por construcción**: nunca hace la pregunta correcta. Ya estaba dicho en
+la sección 1; acá se ve trama por trama.
+
+**2. Defecto real — la petición de 29 bits no vuelve nunca.** Los 4 envíos de 11
+bits (`0x7DF`) recibieron eco del adaptador a los **0,5 ms**, con marca de tiempo.
+Los 4 de 29 bits (`0x18DB33F1`) **no recibieron nada**: ni eco, ni error. 4 de 4,
+en los dos intentos y en los dos baudajes.
+
+La trama sale bien armada desde `_canTx()` — el ID y el flag de extendido están
+correctos en los bytes crudos del USB. O sea que el problema está del adaptador
+para adentro: lo más probable es que un canal `CAN` abierto sin configuración de
+ID extendido descarte la transmisión en silencio. **Al Montero no le afecta**
+(no es CAN), pero en un vehículo que sí sea **CAN de 29 bits el escaneo por USB
+diría «no responde» sin haber preguntado nunca**.
+
+Chequeo barato que lo confirma sin tocar código: en el próximo escaneo por USB,
+**contar los destellos del LED en cada baudaje**. Si es uno solo, y no dos
+separados por ~2,5 s, la petición de 29 bits no está saliendo al cable.
+
+### Qué NO es esta captura
+
+No es la corrida de `tools/montero-usblink.js` de la sección 6. Es el escaneo
+normal de la app. Las dos tandas de K-line puro con el LED apagado siguen siendo
+evidencia aparte, no registrada en este archivo.
 
 ---
 

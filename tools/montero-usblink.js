@@ -35,6 +35,20 @@ ws.onmessage = e => {
 };
 const esperar = ms => new Promise(r => setTimeout(r, ms));
 const hex = a => a.map(x => x.toString(16).padStart(2, '0')).join(' ');
+/* Busca una secuencia exacta dentro de la trama, sin importar en que posicion
+   caiga. Se usa para reconocer el eco sin depender del formato de cada
+   protocolo: J1850_104k mete dos bytes extra antes de los datos y por eso el
+   filtro viejo —que asumia posicion fija— lo dejo pasar. */
+const contiene = (trama, aguja) => {
+  for (let i = 0; i + aguja.length <= trama.length; i++) {
+    let igual = true;
+    for (let j = 0; j < aguja.length; j++) {
+      if (trama[i + j] !== aguja[j]) { igual = false; break; }
+    }
+    if (igual) return true;
+  }
+  return false;
+};
 const abierto = new Promise(res => { ws.onopen = res; });
 
 /* Los 22 protocolos del NXULNK32.INI, en orden de probabilidad para un
@@ -69,12 +83,20 @@ function peticiones(dst) {
 /* Comandos RP1210 candidatos a "despertar" el bus, con su longitud correcta */
 const INITS = [
   { n: 3,  d: [],      et: 'filtros a pasar' },
-  { n: 16, d: [0x01],  et: 'eco de transmision ON' },
+  /* Eco APAGADO. Con el eco encendido el USB-Link devuelve copia de lo que sale
+     y eso NO es el vehiculo contestando. El 30/07 casi lo cantamos como exito en
+     J1850_104k: llego "00 00 a7 24 01 00 01 81 33 f1 81", cuya cola es byte por
+     byte la peticion que acababamos de mandar. */
+  { n: 16, d: [0x00],  et: 'eco de transmision OFF' },
   { n: 8,  d: [0x01],  et: 'Set_J1708_Mode' },
   { n: 2,  d: [0x01],  et: 'Set_Message_Receive' },
 ];
 
 let hallazgos = [];
+/* Cuantos ecos se descartaron. Sirve de control: si es 0 en todo el barrido,
+   el adaptador quiza ni esta transmitiendo y un "sin respuesta" no significa
+   que el vehiculo callo. */
+let ecosDescartados = 0;
 
 async function probar(device, proto) {
   await op({ op: 'desconectar' }, 6000).catch(() => {});
@@ -88,18 +110,22 @@ async function probar(device, proto) {
   /* Escucha pasiva: si el bus habla solo, aparece aca */
   rx = [];
   await esperar(1200);
-  const espontaneas = rx.length;
+  const espontaneas = rx.filter(m => m[4] !== 0x01).length;
 
   for (const dst of DESTINOS) {
     for (const p of peticiones(dst)) {
       rx = [];
       await op({ op: 'enviar', datos: p.d }, 6000).catch(() => {});
       await esperar(700);
-      /* El eco del propio driver no es respuesta del vehiculo */
-      const reales = rx.filter(m => {
-        const b = m.slice(4);
-        return !(b[0] === 0x01 && b[1] === p.d[0]);
-      });
+      /* El eco del propio driver no es respuesta del vehiculo. Se descarta por
+         dos vias independientes, para que ninguna forma de trama se escape:
+           1. la bandera de eco del RP1210 (byte 4, despues de la marca de tiempo)
+           2. que la trama contenga, literal, lo que acabamos de transmitir
+         Con el eco apagado no deberia llegar ninguno; el filtro queda igual
+         porque un falso positivo aca cuesta un viaje al taller. */
+      const ecos = rx.filter(m => m[4] === 0x01 || contiene(m, p.d));
+      const reales = rx.filter(m => !(m[4] === 0x01 || contiene(m, p.d)));
+      ecosDescartados += ecos.length;
       if (reales.length) {
         console.log(`\n  *** RESPUESTA *** device=${device} proto=${proto} dst=0x${dst.toString(16)} ${p.et}`);
         reales.slice(0, 6).forEach(m => console.log('        ' + hex(m)));
@@ -154,6 +180,7 @@ async function probar(device, proto) {
   console.log(`\n═══ RESUMEN ═══`);
   console.log(`  combinaciones que abrieron: ${abren}   que no abrieron: ${cerrados}`);
   console.log(`  respuestas del vehiculo: ${hallazgos.length}`);
+  console.log(`  ecos propios descartados: ${ecosDescartados}`);
   if (!hallazgos.length) {
     console.log('\n  Ninguna combinacion del driver trajo respuesta.');
     console.log('  Queda una sola prueba, y es fisica, no de software:');
