@@ -1946,12 +1946,34 @@ Modulos.diagnostico_obd = {
     await this._cmd('0100', 12000).catch(() => {});
   },
 
-  async _barrerModulosKline(log) {
+  /* Destinos que la norma y la practica reservan para modulos de diagnostico.
+     Se prueban PRIMERO porque cubren la enorme mayoria de los vehiculos: barrer
+     los 255 a ciegas cuesta varios minutos, y en K-line cada puerta cerrada se
+     paga con el timeout completo. */
+  _KLINE_DESTINOS: [
+    0x10, 0x11, 0x12, 0x13, 0x18, 0x19,      // motor y variantes
+    0x33,                                     // direccion funcional OBD-II
+    0x28, 0x29, 0x2C,                         // frenos / ABS
+    0x38, 0x39,                               // carroceria
+    0x40, 0x41, 0x44, 0x45,                   // instrumentos / confort
+    0x50, 0x51, 0x58, 0x59,                   // airbag / seguridad
+    0x60, 0x61, 0x6A, 0x6B,                   // transmision / traccion
+    0x01, 0x02, 0x03, 0x05, 0x07, 0x08,       // bajos, usados por varias marcas
+  ],
+
+  /* `completo` recorre los 255. Es lo correcto cuando el vehiculo no aparece en
+     los destinos habituales, pero se pide a proposito: en el caso peor son
+     varios minutos y hay que decirlo antes, no dejar la pantalla quieta. */
+  async _barrerModulosKline(log, completo = false) {
     const hallados = [];
     const antes = this._sinTraza;
     this._sinTraza = true;                 // 255 puertas ahogarian la bitacora
+    const lista = completo
+      ? Array.from({ length: 0xFF }, (_, i) => i + 1)
+      : this._KLINE_DESTINOS;
     try {
-      for (let dst = 0x01; dst <= 0xFF; dst++) {
+      let n = 0;
+      for (const dst of lista) {
         if (dst === this._KLINE_ORIGEN) continue;        // ese somos nosotros
         const r = await this._klinePedir(dst, [0x81], 1200);
         /* 0xC1 = StartCommunication aceptada. Se cuenta tambien el rechazo
@@ -1959,18 +1981,29 @@ Modulos.diagnostico_obd = {
            y darlo por ausente seria perderlo. */
         if (r && (r[0] === 0xC1 || r[0] === 0x7F))
           hallados.push({ dst, saludo: r[0] === 0xC1 });
-        if (log && (dst & 0x1F) === 0x1F)
-          log(`&nbsp;&nbsp;<span style="color:var(--text3)">…destino 0x${dst.toString(16).toUpperCase()} en K-line (${hallados.length} encontrados)</span>`);
+        if (log && ++n % 8 === 0)
+          log(`&nbsp;&nbsp;<span style="color:var(--text3)">…${n} de ${lista.length} destinos (${hallados.length} encontrados)</span>`);
       }
     } finally { this._sinTraza = antes; }
-    this._trazaNota(`barrido K-line 0x01-0xFF: ${hallados.length} modulo(s) — ` +
+    this._trazaNota(`barrido K-line ${completo ? '0x01-0xFF' : 'destinos habituales'}: ` +
+      `${hallados.length} modulo(s) — ` +
       (hallados.map(h => '0x' + h.dst.toString(16).toUpperCase()).join(' ') || 'ninguno'));
     return hallados;
   },
 
   async _escanearModulosKline(log) {
-    if (log) log('<b>Barriendo módulos en K-line (KWP2000)…</b> 255 destinos, ~1 min');
-    const hallados = await this._barrerModulosKline(log);
+    const n = this._KLINE_DESTINOS.length;
+    if (log) log(`<b>Barriendo módulos en K-line (KWP2000)…</b> ${n} destinos habituales, ~${Math.ceil(n * 1.4 / 60)} min`);
+    let hallados = await this._barrerModulosKline(log);
+
+    /* Si en los habituales no aparece nadie, se recorren los 255 antes de dar
+       el vehículo por mudo: es lento, pero decir "no hay módulos" sin haber
+       preguntado en todas las puertas sería el mismo falso-limpio de siempre. */
+    if (!hallados.length) {
+      if (log) log('Ninguno en los destinos habituales — recorriendo los 255 (puede tardar varios minutos)…');
+      hallados = await this._barrerModulosKline(log, true);
+    }
+
     if (!hallados.length) {
       if (log) log('Ningún módulo contestó el saludo KWP2000. En Mitsubishi de esta generación es lo esperable: ' +
         'ABS, SRS, 4x4, TPMS y ETACS usan MUT-II (15625 baudios), que un ELM327 no puede hablar.');
@@ -1980,13 +2013,26 @@ Modulos.diagnostico_obd = {
     const res = [];
     try {
       for (const h of hallados) {
-        const d = await this._klinePedir(h.dst, [0x18, 0x00, 0xFF, 0x00], 2500);
+        /* Se vuelve a saludar ANTES de pedir los códigos. En KWP2000 la sesión
+           se cae sola tras unos segundos sin tráfico, y entre el barrido y este
+           momento pasaron minutos: sin re-saludar, el módulo contesta NO DATA y
+           quedaría listado como "sin códigos" teniéndolos. */
+        await this._klinePedir(h.dst, [0x81], 1200);
+        let d = await this._klinePedir(h.dst, [0x18, 0x00, 0xFF, 0x00], 2500);
+        /* Un segundo intento tras re-saludar: si el módulo cerró la sesión
+           justo en el medio, el primer pedido se pierde pero el siguiente entra. */
+        if (!d) {
+          await this._klinePedir(h.dst, [0x81], 1200);
+          d = await this._klinePedir(h.dst, [0x18, 0x00, 0xFF, 0x00], 2500);
+        }
         const cods = this._dtcsKWP(d);
         const nombre = this._nombreUDS(h.dst, cods);
         res.push({ ecu: h.dst, resp: null, ext: false, kline: true, nombre,
                    codigos: cods, respondio: !!d, servicio: '18 00 FF 00 (KWP2000)', nuevo: false });
-        if (log && cods.length)
-          log(`&nbsp;&nbsp;<b>${nombre}</b>: ${cods.length} código(s)`);
+        if (log) {
+          if (cods.length) log(`&nbsp;&nbsp;<b>${nombre}</b>: ${cods.length} código(s)`);
+          else if (!d) log(`&nbsp;&nbsp;<span style="color:var(--amber)">${nombre}: saludó pero no entregó códigos — no se puede afirmar que esté sano</span>`);
+        }
       }
     } finally { await this._klineRestaurar(); }
 
@@ -4559,27 +4605,25 @@ Modulos.diagnostico_obd = {
          (TPMS, ABS, tracción, carrocería). Por USB siempre; por Bluetooth
          cuando el dongle acepta ATSH y el vehículo está en CAN de 11 bits. */
       let porModulo = null, mapaAcceso = null;
-      let modoBLE = false, viaKline = false;
+      let modoBLE = false;
+      this._ofreceKline = false;
       if (this._elmPuedeModulos()) {
         modoBLE = await this._elmModoModulo(true);
         if (!modoBLE) log('El dongle Bluetooth no acepta ATSH: no se puede escanear módulo por módulo con este adaptador.');
       } else if (this._klinePuedeModulos()) {
-        /* Vehiculo de K-line: el barrido por CAN no aplica, pero el de KWP2000
-           si. Antes aca no se escaneaba nada y el vehiculo quedaba con un solo
-           modulo listado. */
-        viaKline = true;
+        /* Vehiculo pre-CAN: el OBD-II del motor responde y es lo que se viene a
+           buscar. El barrido por modulo de KWP2000 NO se corre solo: son ~40 s
+           mas en un vehiculo donde la mayoria de los modulos hablan protocolo
+           propietario y no van a contestar igual. Se ofrece como boton, para
+           quien lo quiera, en vez de cobrarselo a todos los escaneos. */
+        this._ofreceKline = true;
+        log('Escaneo OBD-II completo. <span style="color:var(--text3)">Si querés buscar además otros módulos, hay un botón al final del reporte.</span>');
       } else if (this._via === 'ble') {
         log('Escaneo por módulo no disponible en este protocolo por Bluetooth ' +
             `(protocolo ${this._protoNum}: requiere CAN de 11 bits, o ISO 14230/KWP2000 para el barrido en K-line).`);
       }
 
-      if (viaKline) {
-        this._mapaFaltantes = [];
-        porModulo = await this._escanearModulosKline(log)
-          .catch(e => { log(`No se pudo barrer módulos en K-line: ${e.message}`); return null; });
-        mapaAcceso = this._mapaDeEscaneo(porModulo);
-        if (mapaAcceso) log(`&nbsp;&nbsp;Mapa de acceso guardado: ${mapaAcceso.modulos.length} módulo(s) en K-line (KWP2000)`);
-      } else if (this._via === 'usb' || modoBLE) {
+      if (this._via === 'usb' || modoBLE) {
        try {
         log(`<b>Escaneando TODOS los módulos del vehículo...</b> (esto tarda ~${modoBLE ? 60 : 30} s)`);
         this._mapaFaltantes = [];
@@ -4930,9 +4974,44 @@ Modulos.diagnostico_obd = {
 
   /* Códigos por módulo. Va ARRIBA de la tabla de emisiones porque acá aparecen
      las fallas que el modo 03 no ve — y son las que el cliente está sintiendo. */
+  /* Botón para buscar módulos extra en un vehículo pre-CAN. Aparte del escaneo
+     normal a propósito: en estos vehículos la mayoría de los módulos hablan
+     protocolo propietario y no contestan, así que cobrarle ~40 s a todos los
+     escaneos por un resultado que casi siempre es "nadie" no vale la pena. */
+  _botonMasModulos() {
+    if (!this._ofreceKline || this._scan !== this._scanActual()) return '';
+    return `<div class="card" style="padding:14px;margin-top:12px">
+      <b style="font-size:12px">BUSCAR OTROS MÓDULOS</b>
+      <div style="font-size:11.5px;color:var(--text2);margin-top:4px">
+        Este vehículo es anterior al CAN de diagnóstico. El motor ya se leyó por OBD-II.
+        Se puede preguntar además por otros módulos (KWP2000), pero en esta generación
+        la mayoría —ABS, airbag, tracción, carrocería— usa protocolo propietario del
+        fabricante y no va a contestar. Tarda alrededor de un minuto.
+      </div>
+      <button class="btn btn-sm btn-ghost" style="margin-top:8px"
+        onclick="Modulos.diagnostico_obd.buscarMasModulos()">🔍 Buscar otros módulos</button>
+    </div>`;
+  },
+  _scanActual() { return this._scan; },
+
+  async buscarMasModulos() {
+    if (!this._scan) return;
+    if (!this._klinePuedeModulos()) { UI.toast('Solo aplica con el vehículo conectado por Bluetooth', 'error'); return; }
+    const log = m => this._log(m);
+    this._mapaFaltantes = [];
+    const porModulo = await this._escanearModulosKline(log)
+      .catch(e => { log(`No se pudo buscar módulos: ${e.message}`); return null; });
+    if (porModulo && porModulo.length) {
+      this._scan.por_modulo = porModulo;
+      this._scan.mapa_acceso = this._mapaDeEscaneo(porModulo);
+      this._ofreceKline = false;
+    }
+    this._renderResultado();
+  },
+
   _porModuloHTML(s) {
     const ms = s && s.por_modulo;
-    if (!Array.isArray(ms) || !ms.length) return '';
+    if (!Array.isArray(ms) || !ms.length) return this._botonMasModulos();
     /* La marca y el modelo hacen útil la búsqueda del código: sin eso el
        enlace devuelve resultados de veinte fabricantes distintos. */
     const veh = (s && s.vehiculos) ||

@@ -14,6 +14,12 @@ if errorlevel 1 (
   pause
   exit /b 1
 )
+rem Sonda de K-line por J2534: herramienta de diagnostico aparte, para vehiculos
+rem livianos anteriores a ~2006 (K-line, no CAN). Que falle NO debe romper la
+rem instalacion del puente, que es lo que la app necesita para escanear.
+curl -s -f -o "%DEST%\probar-kline.bat" %URL%/probar-kline.bat >nul 2>&1
+curl -s -f -o "%DEST%\probar-kline.ps1" %URL%/probar-kline.ps1 >nul 2>&1
+curl -s -f -o "%DEST%\NexusJ2534Kline.cs" %URL%/NexusJ2534Kline.cs >nul 2>&1
 echo Configurando arranque automatico con Windows (registro)...
 rem HKCU\...\Run: queda en el registro de la maquina y no pide permisos de admin.
 reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\Run" /v "NexusPro Puente OBD" /t REG_SZ /d "\"%PS32%\" -ExecutionPolicy Bypass -NoProfile -WindowStyle Hidden -File \"%DEST%\puente.ps1\"" /f >nul
@@ -27,5 +33,8 @@ netstat -ano | findstr ":17210" >nul || start "" "%PS32%" -ExecutionPolicy Bypas
 echo.
 echo LISTO. El puente ya esta corriendo, oculto, y arrancara solo con Windows.
 echo (El icono "Puente OBD USB" del escritorio es opcional, para verlo en modo visible.)
+echo.
+echo Extra: %DEST%\probar-kline.bat prueba K-line por J2534 en vehiculos
+echo livianos anteriores a ~2006 (Mitsubishi, Suzuki, etc). Se corre a mano.
 timeout /t 8 >nul
 endlocal

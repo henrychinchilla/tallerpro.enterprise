@@ -30,6 +30,10 @@ screenshots/*.html
 *.xlsx
 *.pptx
 
+# capturas de Wireshark: evidencia de diagnostico, no son parte del sitio
+docs/capturas/
+*.pcapng
+
 # pruebas del modulo OBD: no son parte del sitio
 test/
 

@@ -22,4 +22,6 @@ AGENTS.md
 
 tools/
 prueba-*.html
+docs/capturas/
+*.pcapng
 
