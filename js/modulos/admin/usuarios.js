@@ -107,10 +107,19 @@ Modulos.usuarios = {
     try {
       const factors = await Auth.listMFAFactors();
       const activeFactor = factors.find(f => f.status === 'verified');
-      if (activeFactor) {
+      if (activeFactor && Auth.mfaPausado()) {
         container.innerHTML = `
-          <div style="display:flex;align-items:center;gap:12px">
+          <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;justify-content:flex-end">
+            <span class="badge badge-amber">⏸ Pausado</span>
+            <span style="font-size:11px;color:var(--text3)">desde ${UI.fechaHora(Auth.user?.mfa_pausado_at)}</span>
+            <button class="btn btn-green btn-xs" onclick="Modulos.usuarios._reanudarMi2FA()">Reanudar 2FA</button>
+            <button class="btn btn-danger btn-xs" onclick="Modulos.usuarios._desactivarMi2FA('${activeFactor.id}')">Desactivar 2FA</button>
+          </div>`;
+      } else if (activeFactor) {
+        container.innerHTML = `
+          <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;justify-content:flex-end">
             <span class="badge badge-green">✓ Activo (TOTP)</span>
+            <button class="btn btn-amber btn-xs" onclick="Modulos.usuarios._pausarMi2FA()">Pausar 2FA</button>
             <button class="btn btn-danger btn-xs" onclick="Modulos.usuarios._desactivarMi2FA('${activeFactor.id}')">Desactivar 2FA</button>
           </div>`;
       } else {
@@ -198,12 +207,86 @@ Modulos.usuarios = {
     }
   },
 
+  /* ── PAUSAR 2FA ────────────────────────────────
+     Desactivar borra el factor en Supabase: se pierde el secreto y hay que
+     volver a escanear el QR. Pausar deja el autenticador intacto y sólo
+     salta el reto al entrar. Para encender la pausa hay que verificar un
+     código (eso sube la sesión a aal2, que es lo que exige el trigger de la
+     migración 099); reanudar es un clic. */
+  async _pausarMi2FA() {
+    UI.modal('⏸️ Pausar tu 2FA', `
+      <div style="padding:12px">
+        <div class="alert alert-amber" style="margin-bottom:14px">
+          <div class="alert-icon">ℹ️</div>
+          <div class="alert-body" style="font-size:12px">
+            Mientras esté pausado se entra <b>sólo con la contraseña</b>. Tu autenticador
+            queda enrolado: al reanudar sirve el mismo código, sin volver a escanear el QR.
+          </div>
+        </div>
+        <div class="form-group" style="text-align:left">
+          <label class="form-label">Código actual de tu autenticador (6 dígitos) *</label>
+          <input class="form-input" id="modal-pausa-code" type="text" placeholder="Ej. 123456" maxLength="6"
+                 style="font-size:18px;text-align:center;letter-spacing:6px;font-family:monospace"
+                 oninput="this.value=this.value.replace(/\\D/g,'')"
+                 onkeydown="if(event.key==='Enter')Modulos.usuarios._confirmarPausa2FA()">
+        </div>
+        <button class="btn btn-amber" style="width:100%" onclick="Modulos.usuarios._confirmarPausa2FA()">Aceptar y pausar 2FA</button>
+      </div>`, '420px');
+  },
+
+  async _confirmarPausa2FA() {
+    const code = document.getElementById('modal-pausa-code')?.value.trim();
+    if (!code || code.length !== 6) {
+      UI.toast('Ingresa el código de 6 dígitos', 'error');
+      return;
+    }
+    const factor = (await Auth.listMFAFactors()).find(f => f.status === 'verified');
+    if (!factor) {
+      UI.toast('No tienes un factor 2FA activo', 'error');
+      return;
+    }
+    UI.toast('Verificando código...', 'info');
+    const chal = await Auth.createMFAChallenge(factor.id);
+    if (!chal.ok) {
+      UI.toast('Error al solicitar el reto: ' + chal.error, 'error');
+      return;
+    }
+    const ver = await Auth.verifyMFAFactor(factor.id, chal.data.id, code);
+    if (!ver.ok) {
+      UI.toast('Código incorrecto o vencido', 'error');
+      return;
+    }
+    const res = await Auth.pausarMFA(true);
+    if (!res.ok) {
+      UI.toast('No se pudo pausar: ' + res.error, 'error');
+      return;
+    }
+    UI.toast('2FA pausado ⏸ — tu autenticador sigue enrolado', 'success');
+    UI.cerrarModal();
+    this._cargarMi2FAStatus();
+  },
+
+  async _reanudarMi2FA() {
+    const ok = await UI.confirmar('¿Reanudar tu 2FA? Volverá a pedirte el código de tu autenticador al iniciar sesión.', 'Reanudar');
+    if (!ok) return;
+    const res = await Auth.pausarMFA(false);
+    if (res.ok) {
+      UI.toast('2FA reanudado ✓', 'success');
+      this._cargarMi2FAStatus();
+    } else {
+      UI.toast('Error: ' + res.error, 'error');
+    }
+  },
+
   async _desactivarMi2FA(factorId) {
-    const ok = await UI.confirmar('¿Seguro que deseas desactivar tu autenticación de dos factores? Esto reducirá la seguridad de tu cuenta.', 'Desactivar');
+    const ok = await UI.confirmar('Desactivar BORRA tu autenticador: para volver a activarlo tendrás que escanear un QR nuevo. Si sólo quieres dejar de que te pida el código, usa "Pausar 2FA". ¿Desactivar de todos modos?', 'Desactivar');
     if (!ok) return;
     UI.toast('Desactivando 2FA...', 'info');
     const res = await Auth.unenrollMFAFactor(factorId);
     if (res.ok) {
+      /* Sin factor, una pausa vieja no debe sobrevivir: al re-enrolar
+         saltaría el reto en silencio. */
+      if (Auth.mfaPausado()) await Auth.pausarMFA(false);
       UI.toast('2FA Desactivado ✓', 'success');
       this._cargarMi2FAStatus();
     } else {

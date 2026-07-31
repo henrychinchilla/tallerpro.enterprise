@@ -803,12 +803,14 @@ let _mfaEnrollChallengeId = null;
 /* SEGURIDAD: si la cuenta tiene 2FA verificado, el reto es OBLIGATORIO.
    El viejo 'mfa_bypass' (localStorage) saltaba el reto para siempre — se
    elimina y se limpia de los navegadores donde quedó grabado. Lo único
-   posponible es la ACTIVACIÓN inicial (cuenta sin factor), nunca el reto. */
+   posponible es la ACTIVACIÓN inicial (cuenta sin factor), nunca el reto.
+   La ÚNICA excepción es la pausa (Auth.mfaPausado): vive en la BD y sólo se
+   enciende con un código verificado, no desde el navegador. */
 async function loginVerificarMFAYContinuar() {
   localStorage.removeItem('mfa_bypass');   // purga del bypass antiguo
   try {
     const mfa = await Auth.getMFAStatus();
-    if (mfa.nextLevel === 'aal2' && mfa.currentLevel === 'aal1') {
+    if (mfa.nextLevel === 'aal2' && mfa.currentLevel === 'aal1' && !Auth.mfaPausado()) {
       renderLogin('mfa-challenge');        // 2FA activo → código SIEMPRE
       return;
     }
@@ -817,6 +819,7 @@ async function loginVerificarMFAYContinuar() {
          verificar los factores reales antes de decidir (fail-closed) */
       const factors = await Auth.listMFAFactors();
       if (factors.some(f => f.status === 'verified')) {
+        if (Auth.mfaPausado()) { App.iniciar(); return; }
         renderLogin('mfa-challenge');
         return;
       }
