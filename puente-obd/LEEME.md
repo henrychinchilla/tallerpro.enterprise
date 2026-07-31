@@ -52,6 +52,40 @@ Desde entonces **no hay que correr nada a mano**: enchufas el USB-Link y escanea
 | "No se pudo cargar NXULNK32.dll" | Instala los drivers del USB-Link — **o usa otro adaptador**: el puente lista los RP1210 instalados y puede cargar cualquiera (ver abajo). |
 | El puente abre pero el vehículo no responde | Switch encendido, cable bien puesto. Prueba con la herramienta oficial `C:\NEXIQ\Test\CommCheck.exe`. |
 
+## Sonda de K-line por J2534 (`probar-kline.bat`)
+
+Herramienta **aparte del puente**, para vehículos livianos anteriores a ~2006 que
+diagnostican por **K-line** (ISO 9141-2 / ISO 14230), no por CAN — un Mitsubishi
+Montero 2004, por ejemplo.
+
+Por qué existe: **RP1210 no sabe hacer el init de capa física de K-line.** Sin ese
+saludo, un vehículo de esa época no contesta aunque el cable esté perfecto — y
+eso es exactamente lo que pasó en todas las pruebas contra el Montero. **J2534 sí
+lo tiene** (`FIVE_BAUD_INIT` y `FAST_INIT`), y el mismo USB-Link está registrado
+como dispositivo J2534 declarando ISO9141 e ISO14230. Mismo hardware, pila de
+driver distinta, y por primera vez el saludo correcto.
+
+Se corre a mano, con el vehículo enchufado y el switch en contacto:
+
+```
+%USERPROFILE%\NexusPro\puente-obd\probar-kline.bat
+```
+
+Imprime una **bitácora cruda**: qué dispositivos J2534 hay, el voltaje de batería
+que el adaptador lee del pin 16, si cada init entró, y el diálogo byte por byte.
+Eso es lo que sirve para decidir; el "total de respuestas" del final es sólo un
+resumen. **Mirá el LED ámbar del adaptador mientras corre.**
+
+| Lo que muestra | Qué significa |
+|---|---|
+| Lee el voltaje de batería | El adaptador está **eléctricamente vivo en el conector**. Descarta cable y alimentación. |
+| `FIVE_BAUD_INIT OK` o `FAST_INIT OK` | Hay transceptor de K-line y llega al pin 7. |
+| Voltaje OK pero los init fallan, LED apagado | El transceptor de K-line no llega al conector — confirmado por dos APIs independientes. |
+| Ni voltaje ni init | Cable o adaptador: desenchufar y volver a enchufar el USB-Link. |
+
+No modifica nada del vehículo: todo lo que manda son peticiones de lectura
+(modos 01 y 03 de OBD-II).
+
 ## Varios adaptadores en la misma PC
 
 Un taller que ya tiene software de fábrica (Cummins INSITE, Navistar ServiceMaxx,
