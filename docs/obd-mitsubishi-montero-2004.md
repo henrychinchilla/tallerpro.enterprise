@@ -129,6 +129,51 @@ guías para `P0441`, `P0443`, `P0446` y `P0451`.
 > lo que hace falta es la 🧾 **Bitácora técnica** del escaneo, no un "no funcionó":
 > ahí está el diálogo crudo con el vehículo.
 
+## 6. Prueba con el USB-Link enchufado al vehículo (2026-07-30)
+
+Se probó con el Montero enchufado, manejando el puente RP1210 **directo desde
+Node** —sin navegador ni despliegue— para no depender de la app.
+
+**Lo que el USB-Link SÍ hace:**
+
+- Abre K-line sin chistar: `ISO9141`, `ISO14230`, `KWP2000`, `KW2000`, `OBDII`.
+- El `.INI` trae **canales dedicados** por capa física, que hay que usar con su
+  protocolo exacto o da `ERR_INVALID_DEVICE`:
+  **70** = KWP2000 · **120** = KW2000 · **121** = ISO9141 · **134** = OBDII ·
+  135/136 = Ford/GM J1850.
+- **Transmite de verdad.** El comando **16 con `[01]`**
+  (`Set_Echo_Transmitted_Messages`) devuelve copia de lo que sale:
+  `00 21 4a bf | 01 | 82 33 f1 01 00 | 25` — timestamp, marca de eco, el mensaje,
+  y el **checksum que el driver agrega solo**.
+- **Formato de trama, descubierto por evidencia:** bajo `KWP2000` el driver
+  valida el mensaje ISO 14230 completo. `82 33 F1 01 00` pasa; `68 6A F1 01 00`
+  —mismo largo— da `ERR_MESSAGE_TOO_LONG`, porque lee el primer byte como
+  formato/largo. O sea: `[0x80|largo][destino][origen=0xF1][datos]`, sin
+  checksum (lo pone él).
+
+**Lo que NO pasa: el vehículo no contesta nunca.** ~80 combinaciones — 5
+protocolos, 4 canales dedicados, 7 direcciones de módulo (0x33, 0x10, 0x11,
+0x01, 0x12, 0x18, 0x00), 10 comandos RP1210 como candidatos a init, protocolos
+con parámetros, J1850 PWM/VPW, ALDL, con motor apagado **y** andando. En todas:
+eco sí, respuesta no.
+
+**El mismo conector le responde a un Thinkdiag al instante**, así que el pin 7
+del vehículo está vivo y el puerto está sano.
+
+**Conclusión:** el USB-Link es herramienta de camión y su K-line **no llega al
+conector** — o el cable no trae el pin 7, o el clon no tiene el transceptor. Las
+dos se ven idénticas desde el software y **ninguna se arregla con código**.
+
+**Dato observado por Henry que respalda esto:** el LED ámbar **sí enciende**
+cuando la app transmite en `OBD-II 11 bits / 500k` (CAN), y **no** en los pasos
+de K-line. Falta la confirmación limpia en dos fases (18 s sólo K-line, 18 s
+sólo CAN, mirando el LED) — quedó sin correr porque se desconectó el equipo.
+
+**De paso se encontró un defecto real:** el puente instalado en la PC estaba
+**9,5 KB desactualizado** (13.428 vs 22.885 bytes) y no conocía la operación
+`apis` — por eso la app no listaba adaptadores y daba un aviso equivocado sobre
+K-line. Se actualizó y se verificó corriendo.
+
 ---
 
 ### Fuentes

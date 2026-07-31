@@ -1464,49 +1464,35 @@ Modulos.diagnostico_obd = {
       if (tramas > 0) { log(`Bus J1708/J1587 activo (${tramas} tramas) — camión antiguo ✓`); return 'j1708'; }
     }
 
-    /* Ultimo sospechoso, y el que faltaba: un liviano anterior a ~2006 no tiene
-       CAN de diagnostico. Habla OBD-II igual, pero por K-line (pin 7). Que no
-       conteste en CAN no significa que no tenga bus — significa que se le esta
-       preguntando por el cable equivocado. */
-    const kl = await this._probarKlineUSB(log);
-    if (kl.abrio) throw new Error(
-      `Este vehículo no responde en CAN, y el adaptador SÍ puede abrir K-line (${kl.abrio}). ` +
-      'Es un liviano anterior a ~2006: diagnostica por K-line (pin 7), no por CAN. ' +
-      'NexusPro todavía no arma tramas K-line por USB/RP1210 — para este vehículo usá la opción ' +
-      '<b>Bluetooth</b> con el dongle ELM327, que sí habla ISO 9141-2 y KWP2000.');
-
-    throw new Error('No se detectó ningún bus: ni OBD-II (CAN 500k/250k), ni J1939 (250k/500k), ni J1708' +
-      (kl.declara ? '' : ', y este adaptador no declara K-line (ISO 9141-2 / ISO 14230)') + '. ' +
-      'Verificá que el switch esté en contacto y el cable bien puesto en el conector. ' +
-      'Si el vehículo es anterior a ~2006 es K-line: usá la opción <b>Bluetooth</b> con el dongle ELM327.');
+    throw new Error('No se detectó ningún bus: ni OBD-II (CAN 500k/250k), ni J1939 (250k/500k), ni J1708. ' +
+      this._AVISO_KLINE_USB);
   },
 
-  /* ── ¿Puede este adaptador abrir K-line? ────────────────────────────────
-     No lee códigos: contesta la única pregunta que importa cuando un liviano
-     viejo no responde en CAN — si el "no hay bus" es del vehículo o del
-     adaptador. Se distingue entre "no lo declara" (el USB-Link es de camión y
-     puede no traer K-line) y "lo declara pero no abrió" (ahí sí es el cable,
-     el pin 7 o el switch). */
-  async _probarKlineUSB(log) {
-    const out = { declara: false, abrio: null };
-    try {
-      const r = await this._puenteOp({ op:'apis' }, 4000).catch(() => null);
-      const yo = ((r && r.apis) || []).find(a => a.cargada) || null;
-      const soporta = ((yo && yo.protocolos) || []).map(p => String(p).split(',')[0].toUpperCase());
-      const candidatos = ['ISO14230', 'ISO9141'].filter(p => soporta.includes(p));
-      out.declara = candidatos.length > 0;
-      if (!out.declara) {
-        if (log) log('<span style="color:var(--text3)">Este adaptador no declara K-line (ISO 9141-2 / ISO 14230): no puede hablarle a un liviano anterior a ~2006.</span>');
-        return out;
-      }
-      for (const p of candidatos) {
-        if (log) log(`Probando K-line (${p}) — vehículo anterior a ~2006...`);
-        const c = await this._puenteOp({ op:'conectar', protocolo:p, device:1 }, 8000).catch(() => ({ ok:false }));
-        if (c.ok) { out.abrio = p; await this._puenteOp({ op:'desconectar' }, 5000).catch(() => {}); break; }
-      }
-    } catch (_) { /* el diagnostico es de cortesia: si falla, no tapa el error real */ }
-    return out;
-  },
+  /* ── Por qué el USB-Link no sirve para un liviano anterior a ~2006 ────────
+     Antes acá se probaba si el adaptador "podía abrir K-line" y, si abría, se
+     lo anunciaba como buena noticia. Era engañoso: el 2026-07-30, contra un
+     Mitsubishi Montero 2004 enchufado, se comprobó que **abrir no significa
+     nada**. El USB-Link abre ISO9141, ISO14230, KWP2000 y KW2000 —tanto en el
+     dispositivo genérico como en sus canales dedicados (70, 120, 121, 134)— y
+     además TRANSMITE de verdad: con el eco del driver encendido (comando 16)
+     se ve salir la trama con el checksum que él mismo agrega.
+
+     Y el vehículo no contesta nunca. Unas 80 combinaciones: 5 protocolos, 4
+     canales dedicados, 7 direcciones de módulo, 10 comandos de init, motor
+     apagado y andando. El mismo conector le responde a un Thinkdiag al
+     instante, así que el pin 7 del vehículo está vivo.
+
+     O sea: el USB-Link es una herramienta de camión y su K-line no llega al
+     conector — sea porque el cable no trae el pin 7, sea porque el clon no
+     tiene el transceptor. Las dos se ven idénticas desde el software y ninguna
+     se arregla con código. Por eso acá se dice la conclusión y no una prueba
+     que da falsas esperanzas. */
+  _AVISO_KLINE_USB:
+    'Si el vehículo es anterior a ~2006 diagnostica por <b>K-line (pin 7)</b>, y por USB no se va a poder: ' +
+    'está verificado contra un Montero 2004 que el USB-Link abre K-line y hasta transmite, pero el vehículo ' +
+    'nunca contesta — el canal K-line no llega al conector. ' +
+    'Para estos vehículos usá la opción <b>Bluetooth</b> con un dongle ELM327 que hable ISO 9141-2 y KWP2000. ' +
+    'Si no es ese el caso: revisá el switch en contacto y el cable bien puesto.',
 
   /* ── Vehículos livianos por USB: OBD-II sobre CAN crudo con ISO-TP propio ── */
   async _usbInit(log) {
@@ -1527,13 +1513,9 @@ Modulos.diagnostico_obd = {
     /* Antes se culpaba al cable y al switch. En un liviano anterior a ~2006 eso
        manda a revisar lo que esta bien: el vehiculo habla OBD-II, pero por
        K-line (pin 7), y por CAN no va a contestar nunca. */
-    const kl = await this._probarKlineUSB(log);
     throw new Error(`El vehículo no respondió por OBD-II en CAN ${this._canBaud}k. ` +
-      (kl.abrio
-        ? `El adaptador SÍ abrió K-line (${kl.abrio}): este vehículo es anterior a ~2006 y diagnostica por K-line (pin 7), no por CAN. NexusPro todavía no arma tramas K-line por USB/RP1210 — usá la opción <b>Bluetooth</b> con el dongle ELM327, que sí habla ISO 9141-2 y KWP2000.`
-        : `Si es un liviano anterior a ~2006 es K-line (pin 7) y por CAN no va a contestar: usá la opción <b>Bluetooth</b> con el dongle ELM327. ` +
-          (kl.declara ? '' : 'Este adaptador no declara K-line. ') +
-          `Si es camión, probá "Automático", que además busca J1939. Verificá switch en contacto y cable bien puesto.`));
+      this._AVISO_KLINE_USB +
+      ' Si es camión, probá "Automático", que además busca J1939.');
   },
 
   /* Emula un ELM327 sobre el puente: mismos comandos, misma respuesta hex */
