@@ -4605,27 +4605,25 @@ Modulos.diagnostico_obd = {
          (TPMS, ABS, tracción, carrocería). Por USB siempre; por Bluetooth
          cuando el dongle acepta ATSH y el vehículo está en CAN de 11 bits. */
       let porModulo = null, mapaAcceso = null;
-      let modoBLE = false, viaKline = false;
+      let modoBLE = false;
+      this._ofreceKline = false;
       if (this._elmPuedeModulos()) {
         modoBLE = await this._elmModoModulo(true);
         if (!modoBLE) log('El dongle Bluetooth no acepta ATSH: no se puede escanear módulo por módulo con este adaptador.');
       } else if (this._klinePuedeModulos()) {
-        /* Vehiculo de K-line: el barrido por CAN no aplica, pero el de KWP2000
-           si. Antes aca no se escaneaba nada y el vehiculo quedaba con un solo
-           modulo listado. */
-        viaKline = true;
+        /* Vehiculo pre-CAN: el OBD-II del motor responde y es lo que se viene a
+           buscar. El barrido por modulo de KWP2000 NO se corre solo: son ~40 s
+           mas en un vehiculo donde la mayoria de los modulos hablan protocolo
+           propietario y no van a contestar igual. Se ofrece como boton, para
+           quien lo quiera, en vez de cobrarselo a todos los escaneos. */
+        this._ofreceKline = true;
+        log('Escaneo OBD-II completo. <span style="color:var(--text3)">Si querés buscar además otros módulos, hay un botón al final del reporte.</span>');
       } else if (this._via === 'ble') {
         log('Escaneo por módulo no disponible en este protocolo por Bluetooth ' +
             `(protocolo ${this._protoNum}: requiere CAN de 11 bits, o ISO 14230/KWP2000 para el barrido en K-line).`);
       }
 
-      if (viaKline) {
-        this._mapaFaltantes = [];
-        porModulo = await this._escanearModulosKline(log)
-          .catch(e => { log(`No se pudo barrer módulos en K-line: ${e.message}`); return null; });
-        mapaAcceso = this._mapaDeEscaneo(porModulo);
-        if (mapaAcceso) log(`&nbsp;&nbsp;Mapa de acceso guardado: ${mapaAcceso.modulos.length} módulo(s) en K-line (KWP2000)`);
-      } else if (this._via === 'usb' || modoBLE) {
+      if (this._via === 'usb' || modoBLE) {
        try {
         log(`<b>Escaneando TODOS los módulos del vehículo...</b> (esto tarda ~${modoBLE ? 60 : 30} s)`);
         this._mapaFaltantes = [];
@@ -4976,9 +4974,44 @@ Modulos.diagnostico_obd = {
 
   /* Códigos por módulo. Va ARRIBA de la tabla de emisiones porque acá aparecen
      las fallas que el modo 03 no ve — y son las que el cliente está sintiendo. */
+  /* Botón para buscar módulos extra en un vehículo pre-CAN. Aparte del escaneo
+     normal a propósito: en estos vehículos la mayoría de los módulos hablan
+     protocolo propietario y no contestan, así que cobrarle ~40 s a todos los
+     escaneos por un resultado que casi siempre es "nadie" no vale la pena. */
+  _botonMasModulos() {
+    if (!this._ofreceKline || this._scan !== this._scanActual()) return '';
+    return `<div class="card" style="padding:14px;margin-top:12px">
+      <b style="font-size:12px">BUSCAR OTROS MÓDULOS</b>
+      <div style="font-size:11.5px;color:var(--text2);margin-top:4px">
+        Este vehículo es anterior al CAN de diagnóstico. El motor ya se leyó por OBD-II.
+        Se puede preguntar además por otros módulos (KWP2000), pero en esta generación
+        la mayoría —ABS, airbag, tracción, carrocería— usa protocolo propietario del
+        fabricante y no va a contestar. Tarda alrededor de un minuto.
+      </div>
+      <button class="btn btn-sm btn-ghost" style="margin-top:8px"
+        onclick="Modulos.diagnostico_obd.buscarMasModulos()">🔍 Buscar otros módulos</button>
+    </div>`;
+  },
+  _scanActual() { return this._scan; },
+
+  async buscarMasModulos() {
+    if (!this._scan) return;
+    if (!this._klinePuedeModulos()) { UI.toast('Solo aplica con el vehículo conectado por Bluetooth', 'error'); return; }
+    const log = m => this._log(m);
+    this._mapaFaltantes = [];
+    const porModulo = await this._escanearModulosKline(log)
+      .catch(e => { log(`No se pudo buscar módulos: ${e.message}`); return null; });
+    if (porModulo && porModulo.length) {
+      this._scan.por_modulo = porModulo;
+      this._scan.mapa_acceso = this._mapaDeEscaneo(porModulo);
+      this._ofreceKline = false;
+    }
+    this._renderResultado();
+  },
+
   _porModuloHTML(s) {
     const ms = s && s.por_modulo;
-    if (!Array.isArray(ms) || !ms.length) return '';
+    if (!Array.isArray(ms) || !ms.length) return this._botonMasModulos();
     /* La marca y el modelo hacen útil la búsqueda del código: sin eso el
        enlace devuelve resultados de veinte fabricantes distintos. */
     const veh = (s && s.vehiculos) ||

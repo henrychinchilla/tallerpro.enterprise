@@ -198,6 +198,25 @@ const { cargar, ok, fin } = require('./harness');
        !!res && res.some(m => m.codigos.length === 1));
   }
 
+  /* ── El barrido extra NO se cobra en cada escaneo ─────────────────────────
+     En un vehículo pre-CAN el motor responde por OBD-II y eso es lo que se
+     viene a buscar. Barrer módulos que en su mayoría hablan protocolo
+     propietario son ~40 s para un resultado que casi siempre es "nadie": se
+     ofrece como botón en vez de metérselo a todos los escaneos. */
+  {
+    const { M: MB } = cargar();
+    MB._via = 'ble'; MB._protoNum = 5;
+    MB._ofreceKline = true;
+    MB._scan = { por_modulo: null };
+    const h = MB._porModuloHTML(MB._scan);
+    ok('pre-CAN: ofrece buscar otros módulos como botón', /Buscar otros módulos/.test(h));
+    ok('pre-CAN: avisa que la mayoría no va a contestar', /protocolo propietario/.test(h));
+    ok('pre-CAN: dice cuánto tarda', /un minuto/.test(h));
+
+    MB._ofreceKline = false;
+    ok('sin vehículo pre-CAN no se ofrece el botón', MB._porModuloHTML({ por_modulo: null }) === '');
+  }
+
   /* Un módulo que saludó pero no entregó códigos NO puede darse por sano */
   {
     const { M: M9 } = cargar();
