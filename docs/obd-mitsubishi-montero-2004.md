@@ -129,6 +129,30 @@ guías para `P0441`, `P0443`, `P0446` y `P0451`.
 > lo que hace falta es la 🧾 **Bitácora técnica** del escaneo, no un "no funcionó":
 > ahí está el diálogo crudo con el vehículo.
 
+### Dos defectos corregidos en la auditoría previa (2026-07-30)
+
+Revisando el código **antes** de probarlo enchufado aparecieron dos problemas que
+habrían dado un resultado engañoso en el primer intento:
+
+1. **El barrido tardaba hasta 6 minutos, no «~1 min».** Recorría los 255 destinos
+   y en K-line cada puerta cerrada se paga con el timeout completo (1,2 s) más el
+   `ATSH`. Justo el caso del Montero, donde casi nada contesta: la pantalla habría
+   quedado quieta el tiempo suficiente para que cualquiera la diera por colgada.
+   Ahora se prueban primero **30 destinos habituales** (motor, ABS, carrocería,
+   airbag, transmisión, y la dirección funcional 0x33) y sólo si no aparece nadie
+   se recorren los 255, avisando que va a tardar.
+
+2. **La sesión KWP se cerraba antes de leer los códigos.** Se saludaba a los 255
+   destinos primero y recién después se pedían los códigos: para entonces habían
+   pasado minutos y en KWP2000 la sesión se cae sola sin tráfico. El módulo habría
+   contestado `NO DATA` y habría quedado listado como «sin códigos» teniéndolos —
+   el mismo falso-limpio, entrando por otra puerta. Ahora se **re-saluda a cada
+   módulo justo antes** de pedirle los códigos, con un segundo intento si el
+   primero se pierde, y el que saluda pero no entrega nada se marca
+   `respondio: false` en vez de darse por sano.
+
+Ocho pruebas nuevas cubren ambos casos (`test/obd/kline-modulos.js`).
+
 ## 6. Prueba con el USB-Link enchufado al vehículo (2026-07-30)
 
 Se probó con el Montero enchufado, manejando el puente RP1210 **directo desde

@@ -124,6 +124,93 @@ const { cargar, ok, fin } = require('./harness');
   ok('mapa conocido: descarta los destinos de K-line (no son IDs CAN)',
      !!conocido && conocido.modulos.length === 1 && conocido.modulos[0].req === 0x7E0);
 
+  /* ── Barrido corto primero: 255 puertas a ciegas son varios minutos ────────
+     En K-line cada destino que no contesta se paga con el timeout completo, así
+     que recorrer 0x01-0xFF de entrada deja la pantalla quieta ~6 minutos en el
+     caso peor — justo el caso del Montero, donde casi nada responde. */
+  {
+    const { M: M6 } = cargar();
+    M6._via = 'ble'; M6._protoNum = 5;
+    const vistos = [];
+    M6._cmd = async (cmd) => {
+      if (cmd.startsWith('ATSH')) { vistos.push(parseInt(cmd.split(' ')[2], 16)); return 'OK'; }
+      return 'NO DATA';
+    };
+    await M6._barrerModulosKline(null);
+    ok('barrido corto: no recorre los 255 destinos', vistos.length < 60);
+    ok('barrido corto: cubre el motor (0x10) y el ABS (0x28)',
+       vistos.includes(0x10) && vistos.includes(0x28));
+    ok('barrido corto: cubre la dirección funcional 0x33', vistos.includes(0x33));
+
+    vistos.length = 0;
+    await M6._barrerModulosKline(null, true);
+    ok('barrido completo: sí recorre los 255 cuando se pide', vistos.length > 240);
+  }
+
+  /* Si en los habituales no aparece nadie, hay que recorrer los 255 antes de
+     declarar el vehículo mudo. */
+  {
+    const { M: M7 } = cargar();
+    M7._via = 'ble'; M7._protoNum = 5;
+    const vistos = [];
+    M7._cmd = async (cmd) => {
+      if (cmd.startsWith('ATSH')) { vistos.push(parseInt(cmd.split(' ')[2], 16)); return 'OK'; }
+      if (cmd.startsWith('AT')) return 'OK';
+      /* Solo vive el 0xA5, que NO está entre los habituales */
+      const dst = vistos[vistos.length - 1];
+      if (dst === 0xA5) return cmd === '81' ? 'C1 EA 8F' : '58 01 57 07 24';
+      return 'NO DATA';
+    };
+    const res = await M7._escanearModulosKline(null);
+    ok('sin nadie en los habituales: recorre los 255 y encuentra al escondido',
+       !!res && res.length === 1 && res[0].ecu === 0xA5);
+  }
+
+  /* ── La sesión KWP se cae sola: hay que re-saludar antes de pedir códigos ──
+     Entre el barrido y la lectura pasan minutos. Sin re-saludar el módulo
+     contesta NO DATA y quedaría listado como "sin códigos" teniéndolos. */
+  {
+    const { M: M8 } = cargar();
+    M8._via = 'ble'; M8._protoNum = 5;
+    const orden = [];
+    let sesionViva = false;
+    M8._cmd = async (cmd) => {
+      if (cmd.startsWith('ATSH')) { orden.push('ATSH:' + cmd.split(' ')[2]); return 'OK'; }
+      if (cmd.startsWith('AT')) return 'OK';
+      orden.push(cmd);
+      const dst = (orden.filter(c => c.startsWith('ATSH:')).pop() || '').split(':')[1];
+      if (dst !== '18') return 'NO DATA';
+      if (cmd === '81') { sesionViva = true; return 'C1 EA 8F'; }
+      /* El módulo solo entrega códigos con la sesión abierta */
+      if (cmd === '1800FF00') return sesionViva ? '58 01 57 07 24' : 'NO DATA';
+      return 'NO DATA';
+    };
+    /* Se simula que la sesión murió tras el barrido */
+    const barrido = await M8._barrerModulosKline(null);
+    sesionViva = false;
+    orden.length = 0;
+    const res = await M8._escanearModulosKline(null);
+    const iSaludo = orden.indexOf('81');
+    const iCodigos = orden.indexOf('1800FF00');
+    ok('lectura K-line: vuelve a saludar antes de pedir códigos',
+       iSaludo >= 0 && iCodigos >= 0 && iSaludo < iCodigos);
+    ok('lectura K-line: con el re-saludo sí obtiene los códigos',
+       !!res && res.some(m => m.codigos.length === 1));
+  }
+
+  /* Un módulo que saludó pero no entregó códigos NO puede darse por sano */
+  {
+    const { M: M9 } = cargar();
+    M9._via = 'ble'; M9._protoNum = 5;
+    M9._cmd = async (cmd) => {
+      if (cmd.startsWith('AT')) return 'OK';
+      return cmd === '81' ? 'C1 EA 8F' : 'NO DATA';   // saluda siempre, nunca da códigos
+    };
+    const res = await M9._escanearModulosKline(null);
+    ok('K-line: el que saluda pero no entrega códigos queda marcado como no respondió',
+       !!res && res.length > 0 && res.every(m => m.respondio === false));
+  }
+
   fin();
 })();
 
