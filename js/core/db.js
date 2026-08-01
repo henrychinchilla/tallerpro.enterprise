@@ -523,6 +523,31 @@ const DB = {
     return { error };
   },
 
+  /* ── OPORTUNIDADES DEL DÍA (precios diarios del MAGA) ──
+     Las mismas filas que arma el correo diario: la pantalla y el correo no
+     pueden decir cosas distintas. */
+  async getOportunidadesMaga(umbral = 8, top = 8) {
+    const { data, error } = await getSB()
+      .rpc('maga_oportunidades_diarias', { p_fecha: null, p_umbral: umbral, p_top: top });
+    if (error) { console.error('maga_oportunidades_diarias:', error.message); return []; }
+    return data || [];
+  },
+
+  /* Config del resumen diario. Es del comercio: quién lo administra decide si
+     lo quiere y a qué correo le llega. */
+  async getReporteMagaCfg() {
+    const { data } = await getSB().from('tenants')
+      .select('email, email_reporte_maga, reporte_maga_diario').eq('id', getTID()).maybeSingle();
+    return data || {};
+  },
+
+  async guardarReporteMagaCfg(activo, email) {
+    const { error } = await getSB().from('tenants')
+      .update({ reporte_maga_diario: !!activo, email_reporte_maga: (email || '').trim() || null })
+      .eq('id', getTID());
+    return { error };
+  },
+
   /* ── BITÁCORA DE SOLUCIONES TÉCNICAS ──────────── */
   /* Lo que este taller ya resolvió para estos códigos o este modelo.
      Es la única fuente que cubre lo que ningún manual gringo trae (Hilux,

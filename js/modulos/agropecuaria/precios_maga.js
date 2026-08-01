@@ -75,9 +75,28 @@ Modulos.precios_maga = {
     await Promise.all([this._cargarEstac(), this._cargarSeguidos()]);
 
     const vistas = `<div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
+      <button class="btn btn-sm ${this._vista==='hoy'?'btn-cyan':'btn-ghost'}" onclick="Modulos.precios_maga._irVista('hoy')">📬 Oportunidades de hoy</button>
       <button class="btn btn-sm ${this._vista==='ventanas'?'btn-cyan':'btn-ghost'}" onclick="Modulos.precios_maga._irVista('ventanas')">🎯 Ventanas de este mes</button>
       <button class="btn btn-sm ${this._vista==='explorar'?'btn-cyan':'btn-ghost'}" onclick="Modulos.precios_maga._irVista('explorar')">🔍 Explorar productos</button>
     </div>`;
+
+    if (this._vista === 'hoy') {
+      const [ops, cfg] = await Promise.all([DB.getOportunidadesMaga(), DB.getReporteMagaCfg()]);
+      el.innerHTML = `
+        <div class="page-header">
+          <div>
+            <h1 class="page-title">📈 Precios de referencia (MAGA)</h1>
+            <p class="page-subtitle">// Precios diarios de La Terminal y el CENMA${ops[0]?.fecha ? ' · al ' + UI.fecha(ops[0].fecha) : ''}</p>
+          </div>
+        </div>
+        <div class="page-body">
+          ${Modulos.venta_granos?._tabsHTML ? Modulos.venta_granos._tabsHTML() : ''}
+          ${vistas}
+          ${this._configCorreoHTML(cfg)}
+          ${this._oportunidadesHTML(ops)}
+        </div>`;
+      return;
+    }
 
     if (this._vista === 'ventanas') {
       el.innerHTML = `
@@ -134,6 +153,79 @@ Modulos.precios_maga = {
   },
 
   _irVista(v) { this._vista = v; this.render(); },
+
+  /* ── OPORTUNIDADES DE HOY ─────────────────────────────
+     Las mismas filas que manda el correo diario (misma RPC), para que la
+     pantalla nunca contradiga al correo. */
+  _oportunidadesHTML(ops) {
+    if (!ops.length) return `<div class="card" style="padding:16px">
+      Todavía no hay oportunidades para mostrar. Los precios diarios del MAGA entran cada mañana;
+      si el ministerio no publicó, este espacio queda vacío hasta la siguiente actualización.</div>`;
+
+    const q = n => 'Q' + Number(n).toLocaleString('es-GT', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const bloque = (titulo, color, tipo, texto) => {
+      const lista = ops.filter(o => o.tipo === tipo);
+      if (!lista.length) return '';
+      return `<div class="card" style="padding:0;margin-bottom:12px">
+        <div style="padding:10px 12px;font-weight:800;font-size:13px;color:${color};border-bottom:1px solid var(--border)">${titulo}</div>
+        <div class="table-wrap"><table class="data-table">
+          <thead><tr><th>Producto</th><th>Mercado</th><th>Hoy</th><th>Referencia</th><th>Diferencia</th></tr></thead>
+          <tbody>${lista.map(o => `<tr>
+            <td><b>${UI.esc(o.producto)}</b>${this._seguidos.has(o.producto_id) ? ' ⭐' : ''}
+                <div style="font-size:11px;color:var(--text3)">${UI.esc(o.medida)}</div></td>
+            <td>${UI.esc(o.mercado)}</td>
+            <td><b>${q(o.precio)}</b></td>
+            <td>${q(o.referencia)}<div style="font-size:11px;color:var(--text3)">${UI.esc(o.origen_ref)}</div></td>
+            <td style="color:${color};font-weight:700">${Number(o.variacion) > 0 ? '+' : ''}${Number(o.variacion).toFixed(1)}%</td>
+          </tr>`).join('')}</tbody>
+        </table></div>
+        <div style="padding:8px 12px;font-size:11px;color:var(--text3)">${texto}</div>
+      </div>`;
+    };
+
+    return bloque('🟢 Más barato que de costumbre — conviene comprar', 'var(--green)', 'compra',
+             'Comparado con su propio promedio reciente. "mensual" significa que la serie diaria aún es corta y se comparó con el histórico del mes.')
+         + bloque('🔴 Más caro que de costumbre — conviene vender', 'var(--red)', 'venta',
+             'Mismo criterio, al revés: hoy está por encima de lo que suele costar.')
+         + bloque('🔵 Diferencia entre mercados — comprá donde está barato', 'var(--cyan)', 'brecha',
+             'El mismo producto, el mismo día, en los dos mercados mayoristas. La columna Referencia es el precio del mercado caro.');
+  },
+
+  /* Config del correo: es del CLIENTE que administra el negocio, no nuestra.
+     Sólo la ve quien puede tocar configuración del comercio. */
+  _configCorreoHTML(cfg) {
+    const rol = Auth.user?.rol;
+    if (!['admin', 'superadmin', 'gerente', 'gerente_fin'].includes(rol)) return '';
+    const correo = cfg.email_reporte_maga || cfg.email || '';
+    return `<div class="card" style="padding:12px;margin-bottom:12px;border-left:3px solid var(--cyan)">
+      <div style="font-weight:800;font-size:13px;margin-bottom:6px">📬 Resumen diario por correo</div>
+      <p style="font-size:12px;color:var(--text2);margin-bottom:10px">
+        Cada mañana, después de que el MAGA publica, le llega este mismo listado al correo de quien
+        administra el negocio. Se puede apagar cuando quieras.</p>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+        <label style="display:flex;align-items:center;gap:6px;font-size:13px">
+          <input type="checkbox" id="maga-rep-activo" ${cfg.reporte_maga_diario ? 'checked' : ''}> Recibirlo
+        </label>
+        <input class="form-input" id="maga-rep-email" type="email" style="flex:1;min-width:220px"
+               placeholder="correo@delnegocio.com" value="${UI.esc(correo)}">
+        <button class="btn btn-sm btn-cyan" onclick="Modulos.precios_maga._guardarCorreo()">Guardar</button>
+      </div>
+      <div style="font-size:11px;color:var(--text3);margin-top:6px">
+        Si lo dejás vacío se usa el correo del comercio${cfg.email ? ' (' + UI.esc(cfg.email) + ')' : ''}.
+      </div>
+    </div>`;
+  },
+
+  async _guardarCorreo() {
+    const activo = document.getElementById('maga-rep-activo')?.checked;
+    const email = document.getElementById('maga-rep-email')?.value || '';
+    if (activo && email.trim() && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email.trim())) {
+      UI.toast('Ese correo no parece válido', 'error'); return;
+    }
+    const { error } = await DB.guardarReporteMagaCfg(activo, email);
+    if (error) { UI.toast('No se pudo guardar: ' + error.message, 'error'); return; }
+    UI.toast(activo ? 'Listo: el resumen diario llegará a ese correo ✓' : 'Resumen diario apagado', 'success');
+  },
 
   /* ═══════════ SEGUIMIENTO Y CALENDARIO (fase 4) ═══════════
      La ventana de compra dura semanas y se pasa. Si hay que acordarse de abrir

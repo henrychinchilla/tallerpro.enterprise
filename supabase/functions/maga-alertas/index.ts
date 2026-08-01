@@ -93,6 +93,122 @@ function armarHTML(nombreComercio: string, mes: number, filas: any[]) {
   </div>`;
 }
 
+/* ── RESUMEN DIARIO DE OPORTUNIDADES ───────────────────────────
+   La alerta mensual mira estacionalidad (qué mes suele ser barato). Esto mira
+   HOY: qué se movió contra su propio promedio y dónde el mismo producto está
+   más barato en un mercado que en el otro.
+
+   El destinatario es del CLIENTE, no una casilla nuestra: sale de
+   tenants.email_reporte_maga y, si está vacío, del correo del comercio. Sólo
+   se le manda a quien lo activó (reporte_maga_diario). */
+function fmtQ(n: any) {
+  const v = Number(n);
+  return isFinite(v) ? "Q" + v.toLocaleString("es-GT", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "—";
+}
+
+function armarHTMLDiario(nombreComercio: string, fecha: string, filas: any[], seguidos: Set<number>) {
+  const compra = filas.filter((f) => f.tipo === "compra");
+  const venta = filas.filter((f) => f.tipo === "venta");
+  const brecha = filas.filter((f) => f.tipo === "brecha");
+
+  const estrella = (f: any) => (seguidos.has(f.producto_id) ? ' <span title="lo seguís">⭐</span>' : "");
+
+  const bloqueVar = (titulo: string, lista: any[], color: string, texto: (f: any) => string) =>
+    !lista.length ? "" : `
+      <h3 style="font-size:15px;margin:18px 0 6px;color:${color}">${titulo}</h3>
+      ${lista.map((f) => `
+        <div style="border-left:3px solid ${color};padding:8px 12px;margin-bottom:8px;background:#f6f8fa">
+          <div style="font-weight:700;font-size:14px">${esc(f.producto)}${estrella(f)}</div>
+          <div style="font-size:12px;color:#57606a">${esc(f.medida)} · ${esc(f.mercado)}</div>
+          <div style="font-size:13px;margin-top:4px">${texto(f)}</div>
+        </div>`).join("")}`;
+
+  const cuerpo = [
+    bloqueVar("🟢 Más barato que de costumbre — conviene comprar", compra, "#1a7f37",
+      (f) => `Hoy <b>${fmtQ(f.precio)}</b>, un <b>${Math.abs(Number(f.variacion)).toFixed(1)}% por debajo</b>
+              de su promedio (${fmtQ(f.referencia)}, serie ${esc(f.origen_ref)}).`),
+    bloqueVar("🔴 Más caro que de costumbre — conviene vender", venta, "#cf222e",
+      (f) => `Hoy <b>${fmtQ(f.precio)}</b>, un <b>${Number(f.variacion).toFixed(1)}% por encima</b>
+              de su promedio (${fmtQ(f.referencia)}, serie ${esc(f.origen_ref)}).`),
+    bloqueVar("🔵 Diferencia entre mercados — comprá donde está barato", brecha, "#0969da",
+      (f) => `<b>${fmtQ(f.precio)}</b> en ${esc(f.mercado)} contra <b>${fmtQ(f.referencia)}</b> en el otro mercado:
+              <b>${Math.abs(Number(f.variacion)).toFixed(1)}% de diferencia</b> el mismo día.`),
+  ].join("");
+
+  return `<div style="font-family:system-ui,Segoe UI,Arial,sans-serif;max-width:620px;color:#1f2328">
+    <h2 style="font-size:18px;margin:0 0 4px">Oportunidades del ${esc(fecha)}</h2>
+    <p style="font-size:13px;color:#57606a;margin:0 0 8px">
+      ${esc(nombreComercio)} — precios mayoristas de La Terminal y el CENMA publicados por el MAGA.
+      Los marcados con ⭐ son los que seguís.
+    </p>
+    ${cuerpo || '<p style="font-size:13px">Hoy no hubo movimientos que valga la pena avisar.</p>'}
+    <p style="font-size:11.5px;color:#57606a;margin-top:18px;border-top:1px solid #d0d7de;padding-top:10px">
+      Son precios de referencia mayorista del MAGA, no cotizaciones: sirven para decidir a quién
+      llamar, no para cerrar el trato sin confirmar. Cuando la serie diaria todavía es corta, la
+      comparación se hace contra el promedio mensual — eso lo dice cada línea.
+    </p>
+  </div>`;
+}
+
+async function resumenDiario(admin: any, body: any, apiKey: string | undefined, FROM: string) {
+  const dryRun = body.dry_run === true;
+  const toPrueba = typeof body.to_prueba === "string" && body.to_prueba.includes("@")
+    ? body.to_prueba.trim() : null;
+
+  const { data: filas, error } = await admin.rpc("maga_oportunidades_diarias", {
+    p_fecha: body.fecha ?? null,
+    p_umbral: Number(body.umbral) || 8,
+    p_top: Number(body.top) || 8,
+  });
+  if (error) throw new Error("maga_oportunidades_diarias: " + error.message);
+  const oportunidades = filas || [];
+
+  /* Sin oportunidades no se manda nada: un correo diario que dice "nada hoy"
+     se vuelve ruido y termina en spam. */
+  if (!oportunidades.length) {
+    return json({ ok: true, modo: "diario", fecha: null, oportunidades: 0, comercios: 0, resultado: [] });
+  }
+  const fecha = oportunidades[0].fecha;
+
+  const { data: comercios, error: eT } = await admin.from("tenants")
+    .select("id,name,email,email_reporte_maga")
+    .eq("reporte_maga_diario", true);
+  if (eT) throw new Error("leer comercios: " + eT.message);
+
+  const { data: seg } = await admin.from("maga_seguimiento").select("tenant_id,producto_id");
+  const seguidosPorTenant = new Map<string, Set<number>>();
+  (seg || []).forEach((s: any) => {
+    const set = seguidosPorTenant.get(s.tenant_id) || new Set<number>();
+    set.add(s.producto_id); seguidosPorTenant.set(s.tenant_id, set);
+  });
+
+  const resultado: any[] = [];
+  for (const t of comercios || []) {
+    const destino = toPrueba || t.email_reporte_maga || t.email;
+    if (!destino) { resultado.push({ tenant_id: t.id, email: null, enviado: false, error: "sin correo configurado" }); continue; }
+    const seguidos = seguidosPorTenant.get(t.id) || new Set<number>();
+    const html = armarHTMLDiario(t.name || "Tu comercio", fecha, oportunidades, seguidos);
+    if (dryRun) { resultado.push({ tenant_id: t.id, email: destino, oportunidades: oportunidades.length, enviado: false }); continue; }
+    const r = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        from: FROM, to: destino,
+        subject: `Oportunidades del día — ${oportunidades.length} en granos y productos agrícolas`,
+        html,
+      }),
+    });
+    let detalle: any = null;
+    try { detalle = await r.json(); } catch { detalle = null; }
+    resultado.push({ tenant_id: t.id, email: destino, oportunidades: oportunidades.length,
+                     enviado: r.ok, estado: r.status, id: detalle?.id ?? null,
+                     error: r.ok ? null : (detalle?.message ?? detalle?.error?.message ?? null) });
+  }
+
+  return json({ ok: true, modo: "diario", fecha, dry_run: dryRun, to_prueba: toPrueba,
+                oportunidades: oportunidades.length, comercios: resultado.length, resultado });
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
   const url = Deno.env.get("SUPABASE_URL")!;
@@ -113,6 +229,10 @@ Deno.serve(async (req) => {
     if (!apiKey && !dryRun) {
       return json({ error: "El correo aún no está configurado (falta RESEND_API_KEY)." }, 503);
     }
+
+    /* Resumen diario de oportunidades: misma función para no duplicar la
+       autorización ni el envío por Resend. */
+    if (body.modo === "diario") return await resumenDiario(admin, body, apiKey, FROM);
 
     const { data: filas, error } = await admin.rpc("maga_alertas_ventana", { p_mes: mes, p_anios: 5 });
     if (error) throw new Error("maga_alertas_ventana: " + error.message);
