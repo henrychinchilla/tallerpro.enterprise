@@ -378,6 +378,30 @@ const Auth = {
     } catch(e) {
       return { ok: false, error: e.message };
     }
+  },
+
+  /* ── PAUSA DE 2FA ──────────────────────────────
+     Pausar ≠ desactivar: desactivar borra el factor TOTP (se pierde el
+     secreto y toca volver a escanear el QR); pausar lo deja enrolado y sólo
+     salta el reto al entrar. Único punto que decide si se pide el código:
+     lo consultan el ruteo del login y App.iniciar(). */
+  mfaPausado() {
+    return Auth.user?.mfa_pausado === true;
+  },
+
+  /* Activar la pausa exige sesión aal2 (código del autenticador verificado
+     en esta sesión): lo obliga el trigger trg_guard_mfa_pausa (mig 099), no
+     esta función — así vale igual si alguien llama a la API directo.
+     Reanudar no pide nada. */
+  async pausarMFA(pausar) {
+    if (!Auth.user?.id) return { ok: false, error: 'Sin sesión' };
+    const { error } = await getSB().from('usuarios')
+      .update({ mfa_pausado: pausar })
+      .eq('id', Auth.user.id);
+    if (error) return { ok: false, error: error.message };
+    Auth.user.mfa_pausado = pausar;
+    Auth.user.mfa_pausado_at = pausar ? new Date().toISOString() : null;
+    return { ok: true };
   }
 };
 
