@@ -597,6 +597,41 @@ const POS = {
     this._pintarGrid();
   },
 
+  /* La bascula sirve para lo que se vende POR PESO. Un filtro de aceite se
+     cuenta en piezas: ponerle el boton solo estorbaria. */
+  _pesable(linea) {
+    const porPeso = ['kg', 'libra', 'lb', 'quintal', 'arroba', 'gramo', 'g', 'tonelada', 'onza'];
+    return typeof Bascula !== 'undefined' && Bascula.disponible()
+        && porPeso.includes(String(linea.unidad || '').toLowerCase());
+  },
+
+  /* Toma el peso de la bascula y lo pone como cantidad. Espera a que la
+     lectura sea ESTABLE: un peso tomado mientras el grano se acomoda es un
+     peso equivocado, y en granos eso es plata. */
+  async pesar(id) {
+    const l = this._cart.find(x => x.id === id);
+    if (!l) return;
+    if (typeof Bascula === 'undefined' || !Bascula.disponible()) {
+      UI.toast('Este navegador no lee básculas. Escribí el peso a mano.', 'warn'); return;
+    }
+    if (!Bascula._puerto) {
+      const r = await Bascula.conectar();
+      if (r.cancelado) return;
+      if (!r.ok) { UI.toast('No se pudo conectar: ' + r.error, 'error'); return; }
+      UI.toast('Báscula conectada ⚖️', 'success');
+    }
+    UI.toast('Poné el producto en la báscula...', 'info');
+    Bascula.onLectura = (lectura, estable) => {
+      if (!estable) return;                       // se espera a que se asiente
+      const cant = Bascula.aUnidad(lectura, String(l.unidad || 'kg').toLowerCase());
+      Bascula.onLectura = null;
+      if (cant === null) { UI.toast('La báscula da peso y este artículo no se vende por peso.', 'warn'); return; }
+      if (cant <= 0) { UI.toast('La báscula marca cero o tara.', 'warn'); return; }
+      this.setCant(id, cant);
+      UI.toast(`Pesado: ${cant} ${l.unidad}`, 'success');
+    };
+  },
+
   cambiarCant(id, delta) {
     const l = this._cart.find(x=>x.id===id);
     if (!l) return;
@@ -661,6 +696,7 @@ const POS = {
                    onclick="this.select()"
                    title="Se puede escribir: 12.5 quintales, 3.75 libras de gas">
             ${l.unidad ? `<span style="font-size:10.5px;color:var(--text3);min-width:38px">${l.unidad}</span>` : ''}
+            ${POS._pesable(l) ? `<button class="btn btn-ghost" style="padding:2px 6px;font-size:13px" title="Tomar el peso de la báscula" onclick="POS.pesar('${l.id}')">⚖️</button>` : ''}
             <button class="btn btn-ghost" style="width:26px;height:26px;border-radius:50%;padding:0;display:flex;align-items:center;justify-content:center;font-size:16px;line-height:1;border:1px solid var(--border)" onclick="POS.cambiarCant('${l.id}',1)">+</button>
           </div>
           <div style="width:84px;text-align:right;font-weight:900;font-size:14px" class="text-amber pos-line-total">${UI.q(l.cant*l.precio)}</div>

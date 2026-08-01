@@ -8,7 +8,7 @@
    Para forzar actualización: subir CACHE_VERSION.
 ═══════════════════════════════════════════════════════ */
 
-const CACHE_VERSION = 'v4.38.0-20260801';
+const CACHE_VERSION = 'v4.39.0-20260801';
 const CACHE_NAME = `nexuspro-${CACHE_VERSION}`;
 
 /* App shell — se precachea en install para que funcione offline */
@@ -22,6 +22,7 @@ const PRECACHE = [
   '/js/core/config.js',
   '/js/core/ui.js',
   '/js/core/giros.js',
+  '/js/core/bascula.js',
   '/js/core/db.js',
   '/js/core/auth.js',
   '/js/core/app.js',
