@@ -523,6 +523,15 @@ const DB = {
     return { error };
   },
 
+  /* Mayoreo (MAGA) contra menudeo (supermercados) por kg. Sólo devuelve lo
+     que se pudo comparar de verdad: mismo producto crudo, presentación de 1 kg
+     o más. Las filas que no cumplen no se muestran en vez de mentir. */
+  async getMercadoVsMayoreo() {
+    const { data, error } = await getSB().rpc('mercado_vs_mayoreo', { p_fecha: null });
+    if (error) { console.error('mercado_vs_mayoreo:', error.message); return []; }
+    return data || [];
+  },
+
   /* ── INSUMOS PARA FÓRMULAS DE ALIMENTO ────────────
      Precios propios del comercio: el MAGA sólo publica maíz, maicillo y soya;
      melaza, minerales y premezclas los pone cada quien con lo que le cuestan. */

@@ -81,7 +81,7 @@ Modulos.precios_maga = {
     </div>`;
 
     if (this._vista === 'hoy') {
-      const [ops, cfg] = await Promise.all([DB.getOportunidadesMaga(), DB.getReporteMagaCfg()]);
+      const [ops, cfg, vs] = await Promise.all([DB.getOportunidadesMaga(), DB.getReporteMagaCfg(), DB.getMercadoVsMayoreo()]);
       el.innerHTML = `
         <div class="page-header">
           <div>
@@ -94,6 +94,7 @@ Modulos.precios_maga = {
           ${vistas}
           ${this._configCorreoHTML(cfg)}
           ${this._oportunidadesHTML(ops)}
+          ${this._vsMenudeoHTML(vs)}
         </div>`;
       return;
     }
@@ -189,6 +190,35 @@ Modulos.precios_maga = {
              'Mismo criterio, al revés: hoy está por encima de lo que suele costar.')
          + bloque('🔵 Diferencia entre mercados — comprá donde está barato', 'var(--cyan)', 'brecha',
              'El mismo producto, el mismo día, en los dos mercados mayoristas. La columna Referencia es el precio del mercado caro.');
+  },
+
+  /* Mayoreo vs góndola. El margen es la razón de ser del negocio: si el
+     quintal está a Q11.57/kg y el supermercado vende a Q19, ahí hay negocio.
+     Se muestra de dónde salió cada precio para que se pueda verificar. */
+  _vsMenudeoHTML(vs) {
+    if (!vs?.length) return '';
+    const q = n => 'Q' + Number(n).toLocaleString('es-GT', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    return `<div class="card" style="padding:0;margin-bottom:12px">
+      <div style="padding:10px 12px;font-weight:800;font-size:13px;border-bottom:1px solid var(--border)">
+        🏪 Mayoreo contra supermercado
+        <span style="font-weight:400;font-size:11px;color:var(--text3)">— precio por kilo, producto crudo y presentación de 1 kg o más</span>
+      </div>
+      <div class="table-wrap"><table class="data-table">
+        <thead><tr><th>Producto</th><th>Mayoreo (MAGA)</th><th>Góndola</th><th>Dónde</th><th>Diferencia</th></tr></thead>
+        <tbody>${vs.map(v => `<tr>
+          <td><b>${UI.esc(v.producto_maga)}</b><div style="font-size:11px;color:var(--text3)">${UI.esc(v.menudeo_nombre)}</div></td>
+          <td>${q(v.mayoreo_kg)}<div style="font-size:11px;color:var(--text3)">${UI.fecha(v.fecha_mayoreo)}</div></td>
+          <td>${q(v.menudeo_kg)}<div style="font-size:11px;color:var(--text3)">${UI.fecha(v.fecha_menudeo)}</div></td>
+          <td style="font-size:12px">${UI.esc(v.fuente)}</td>
+          <td style="font-weight:700;color:var(--green)">+${Number(v.margen_pct).toFixed(1)}%</td>
+        </tr>`).join('')}</tbody>
+      </table></div>
+      <div style="padding:8px 12px;font-size:11px;color:var(--text3)">
+        Sólo aparece lo que se pudo comparar de verdad: se descartan harinas, refritos y bolsas
+        chicas, porque comparar un derivado o un empaque de 400 g contra el quintal da un margen
+        que no existe.
+      </div>
+    </div>`;
   },
 
   /* Config del correo: es del CLIENTE que administra el negocio, no nuestra.
