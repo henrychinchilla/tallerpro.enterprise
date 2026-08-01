@@ -113,5 +113,62 @@ ok('el sorgo avisa por los taninos', /tanino/i.test(F._ING.sorgo.aviso || ''));
     }
 }
 
+/* ── De dónde sale cada precio ───────────────────────────────────────────
+   El orden importa y es plata: si el precio del supermercado le ganara al
+   que cargó el comercio, el costeo se llenaría de números de góndola —que
+   son presentación de cocina— y cotizaría carísimo. Y si un tentativo se
+   mostrara como firme, nadie sabría que hay que corregirlo. */
+{
+  F._insumos = [];
+  F._ref = { 'Maíz amarillo, de primera': { precio: 200 } };
+  F._mercado = { melaza: { precio_kg: 37.87, nombre: 'Melaza X 500 g', fuente: 'walmart.com.gt', fecha: '2026-08-01' } };
+
+  const maiz = F._precioQq('maiz');
+  ok('el maíz toma el precio del MAGA', maiz.q === 200 && maiz.fuente === 'MAGA');
+  ok('el del MAGA va como firme', maiz.firme === true);
+
+  const mel = F._precioQq('melaza');
+  ok('la melaza cae al menudeo cuando no hay otro', mel.fuente === 'menudeo');
+  ok('el menudeo NO es firme: hay que poder distinguirlo', mel.firme === false);
+  /* Q37.87/kg × 45.36 kg = Q1,717 el quintal: absurdo para melaza forrajera,
+     y justamente por eso tiene que verse marcado y editable. */
+  ok('el menudeo se convierte de kg a quintal', Math.abs(mel.q - 37.87 * 100 * 0.45359237) < 0.02);
+  ok('el menudeo dice de dónde salió', /walmart/.test(mel.detalle || ''));
+
+  /* Ahora el comercio carga SU precio: tiene que ganarle a los dos. */
+  F._insumos = [{ id: '1', nombre: 'Melaza de caña', precio_quintal: 220 }];
+  const mel2 = F._precioQq('melaza');
+  ok('el precio propio le gana al menudeo', mel2.q === 220 && mel2.fuente === 'tuyo' && mel2.firme === true);
+  F._insumos = [{ id: '2', nombre: 'Maíz amarillo', precio_quintal: 180 }];
+  ok('el precio propio también le gana al MAGA', F._precioQq('maiz').q === 180);
+
+  F._insumos = [];
+  ok('sin ninguna fuente devuelve null y no inventa', F._precioQq('premezcla') === null);
+}
+
+/* ── Cuántos animales come un quintal ────────────────────────────────── */
+{
+  F._unidad = 'lb';
+  const pollo = F._ESPECIES.aves.formulas[0];          // consumo 0.06 kg/día
+  const html = F._rendimiento(pollo, 500, true);
+  const animales = Math.floor((100 * 0.45359237) / pollo.consumo);
+  ok('un quintal da para 755 pollos en un día', animales === 755);
+  ok('lo dice en pantalla', html.includes(String(animales)) && /pollos/.test(html));
+  ok('y calcula el costo por animal al día', /Q0\.66 por pollo/.test(html));
+
+  const vaca = F._ESPECIES.bovinos.formulas[0];        // 6 kg/día
+  ok('una vaca se come 7 quintales al mes, no 700',
+     Math.floor((100 * 0.45359237) / vaca.consumo) === 7);
+
+  /* Sin costo completo no se inventa el costo por animal, pero sí se dice
+     cuántos animales come: eso no depende del precio. */
+  const sinCosto = F._rendimiento(pollo, 0, false);
+  ok('sin precios completos igual dice cuántos animales', /755/.test(sinCosto));
+  ok('pero no muestra costo por animal inventado', !/por pollo al d/.test(sinCosto));
+
+  ok('las 10 fórmulas tienen consumo y animal',
+     especies.every(([, d]) => d.formulas.every(f => f.consumo > 0 && f.animal)));
+}
+
 console.log(`   ${pasadas} pasadas, ${fallidas} fallidas`);
 if (fallidas) process.exitCode = 1;

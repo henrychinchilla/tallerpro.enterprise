@@ -22,6 +22,7 @@ Modulos.formulas_alimento = {
   _especie: 'aves',
   _insumos: [],      // precios propios del comercio (agro_insumos)
   _ref: {},          // precios del día del MAGA
+  _mercado: {},      // menudeo consultado en supermercados (TENTATIVO)
 
   /* En Guatemala el alimento se pesa en libras, no en kilos: la libra es la
      unidad de la báscula del agroservicio. Por eso arranca en libras y la
@@ -76,17 +77,17 @@ Modulos.formulas_alimento = {
     maiz_b:    { label: 'Maíz blanco',          maga: 'Maíz blanco, de primera' },
     sorgo:     { label: 'Sorgo (maicillo)',     maga: 'Sorgo blanco, de primera',
                  aviso: 'Los taninos del sorgo bajan la digestibilidad: en aves conviene no pasar del 50% del maíz que sustituye.' },
-    soya:      { label: 'Pasta de soya (44-48% PC)',
+    soya:      { label: 'Pasta de soya (44-48% PC)', mercado: 'soya',
                  aviso: 'Es pasta/torta de extracción, NO grano crudo: la soya sin tostar trae inhibidores de tripsina y frena el crecimiento.' },
-    melaza:    { label: 'Melaza de caña',
+    melaza:    { label: 'Melaza de caña', mercado: 'melaza',
                  aviso: 'Aglutina y da palatabilidad, pero pasarse afloja el estiércol. En aves rara vez más del 5%.' },
-    salvado:   { label: 'Salvado / afrecho de trigo' },
-    avena:     { label: 'Avena en grano' },
+    salvado:   { label: 'Salvado / afrecho de trigo', mercado: 'salvado de trigo' },
+    avena:     { label: 'Avena en grano', mercado: 'avena' },
     aceite:    { label: 'Aceite vegetal' },
-    h_pescado: { label: 'Harina de pescado' },
-    carbonato: { label: 'Carbonato de calcio' },
+    h_pescado: { label: 'Harina de pescado', mercado: 'harina de pescado' },
+    carbonato: { label: 'Carbonato de calcio', mercado: 'carbonato de calcio' },
     fosfato:   { label: 'Fosfato dicálcico' },
-    sal:       { label: 'Sal común' },
+    sal:       { label: 'Sal común', mercado: 'sal' },
     premezcla: { label: 'Premezcla vitamínico-mineral' },
     metionina: { label: 'DL-Metionina' },
     lisina:    { label: 'L-Lisina' },
@@ -100,33 +101,33 @@ Modulos.formulas_alimento = {
     aves: {
       label: '🐔 Gallinas y pollos', icon: '🐔',
       formulas: [
-        { nombre: 'Pollo de engorde — inicio (0-3 sem)', ing: { maiz: 56, soya: 34, aceite: 3, carbonato: 1.5, fosfato: 1.8, sal: 0.4, premezcla: 0.5, metionina: 0.3, lisina: 0.2, h_pescado: 2.3 } },
-        { nombre: 'Pollo de engorde — finalizador',      ing: { maiz: 62, soya: 28, aceite: 4, carbonato: 1.3, fosfato: 1.5, sal: 0.4, premezcla: 0.5, metionina: 0.2, lisina: 0.1, salvado: 2 } },
-        { nombre: 'Gallina ponedora',                    ing: { maiz: 60, soya: 24, carbonato: 9, fosfato: 1.5, sal: 0.4, premezcla: 0.5, metionina: 0.2, salvado: 4.4 } },
+        { nombre: 'Pollo de engorde — inicio (0-3 sem)', consumo: 0.06, animal: 'pollo', ing: { maiz: 56, soya: 34, aceite: 3, carbonato: 1.5, fosfato: 1.8, sal: 0.4, premezcla: 0.5, metionina: 0.3, lisina: 0.2, h_pescado: 2.3 } },
+        { nombre: 'Pollo de engorde — finalizador', consumo: 0.16, animal: 'pollo',      ing: { maiz: 62, soya: 28, aceite: 4, carbonato: 1.3, fosfato: 1.5, sal: 0.4, premezcla: 0.5, metionina: 0.2, lisina: 0.1, salvado: 2 } },
+        { nombre: 'Gallina ponedora', consumo: 0.115, animal: 'gallina',                    ing: { maiz: 60, soya: 24, carbonato: 9, fosfato: 1.5, sal: 0.4, premezcla: 0.5, metionina: 0.2, salvado: 4.4 } },
       ],
     },
     porcinos: {
       label: '🐖 Cerdos', icon: '🐖',
       formulas: [
-        { nombre: 'Cerdo — iniciación',  ing: { maiz: 62, soya: 26, melaza: 4, h_pescado: 3, carbonato: 1, fosfato: 1.2, sal: 0.4, premezcla: 0.4, lisina: 0.2, salvado: 1.8 } },
-        { nombre: 'Cerdo — desarrollo',  ing: { maiz: 66, soya: 22, melaza: 5, salvado: 3.5, carbonato: 1, fosfato: 1, sal: 0.4, premezcla: 0.4, lisina: 0.2, aceite: 0.5 } },
-        { nombre: 'Cerdo — engorde',     ing: { maiz: 70, soya: 18, melaza: 5, salvado: 4, carbonato: 1, fosfato: 0.9, sal: 0.4, premezcla: 0.4, lisina: 0.3 } },
+        { nombre: 'Cerdo — iniciación', consumo: 1.0, animal: 'cerdo',  ing: { maiz: 62, soya: 26, melaza: 4, h_pescado: 3, carbonato: 1, fosfato: 1.2, sal: 0.4, premezcla: 0.4, lisina: 0.2, salvado: 1.8 } },
+        { nombre: 'Cerdo — desarrollo', consumo: 2.0, animal: 'cerdo',  ing: { maiz: 66, soya: 22, melaza: 5, salvado: 3.5, carbonato: 1, fosfato: 1, sal: 0.4, premezcla: 0.4, lisina: 0.2, aceite: 0.5 } },
+        { nombre: 'Cerdo — engorde', consumo: 3.0, animal: 'cerdo',     ing: { maiz: 70, soya: 18, melaza: 5, salvado: 4, carbonato: 1, fosfato: 0.9, sal: 0.4, premezcla: 0.4, lisina: 0.3 } },
       ],
     },
     bovinos: {
       label: '🐄 Bovinos', icon: '🐄',
       nota: 'Concentrado para complementar el forraje, no para reemplazarlo: el rumen necesita fibra larga (pasto, ensilaje o heno) o se acidifica.',
       formulas: [
-        { nombre: 'Vaca lechera — concentrado', ing: { maiz: 40, sorgo: 12, soya: 16, melaza: 9, salvado: 18, carbonato: 1.6, sal: 1, premezcla: 0.6, urea: 0.8, fosfato: 1 } },
-        { nombre: 'Engorde — concentrado',      ing: { maiz: 45, sorgo: 15, soya: 12, melaza: 10, salvado: 13, carbonato: 1.6, sal: 1, premezcla: 0.5, urea: 1, fosfato: 0.9 } },
+        { nombre: 'Vaca lechera — concentrado', consumo: 6.0, animal: 'vaca', ing: { maiz: 40, sorgo: 12, soya: 16, melaza: 9, salvado: 18, carbonato: 1.6, sal: 1, premezcla: 0.6, urea: 0.8, fosfato: 1 } },
+        { nombre: 'Engorde — concentrado', consumo: 5.0, animal: 'novillo',      ing: { maiz: 45, sorgo: 15, soya: 12, melaza: 10, salvado: 13, carbonato: 1.6, sal: 1, premezcla: 0.5, urea: 1, fosfato: 0.9 } },
       ],
     },
     equinos: {
       label: '🐴 Caballos', icon: '🐴',
       nota: 'El caballo NO es rumiante: nada de urea, y los cambios de ración se hacen en 7-10 días para no provocar cólico.',
       formulas: [
-        { nombre: 'Caballo — mantenimiento', ing: { avena: 45, maiz: 18, salvado: 17, soya: 8, melaza: 8, carbonato: 1.2, sal: 1, premezcla: 0.8, aceite: 1 } },
-        { nombre: 'Caballo — trabajo',       ing: { avena: 40, maiz: 24, salvado: 14, soya: 10, melaza: 8, carbonato: 1.2, sal: 1, premezcla: 0.8, aceite: 1 } },
+        { nombre: 'Caballo — mantenimiento', consumo: 2.5, animal: 'caballo', ing: { avena: 45, maiz: 18, salvado: 17, soya: 8, melaza: 8, carbonato: 1.2, sal: 1, premezcla: 0.8, aceite: 1 } },
+        { nombre: 'Caballo — trabajo', consumo: 4.5, animal: 'caballo',       ing: { avena: 40, maiz: 24, salvado: 14, soya: 10, melaza: 8, carbonato: 1.2, sal: 1, premezcla: 0.8, aceite: 1 } },
       ],
     },
   },
@@ -135,9 +136,10 @@ Modulos.formulas_alimento = {
     const el = document.getElementById('page-content');
     UI.loading(el);
     const nombresMaga = [...new Set(Object.values(this._ING).map(i => i.maga).filter(Boolean))];
-    [this._insumos, this._ref] = await Promise.all([
+    [this._insumos, this._ref, this._mercado] = await Promise.all([
       DB.getAgroInsumos(),
       DB.getRefDiariaMaga(nombresMaga).catch(() => ({})),
+      DB.getPreciosMercado().catch(() => ({})),
     ]);
 
     const esp = this._ESPECIES[this._especie];
@@ -185,17 +187,68 @@ Modulos.formulas_alimento = {
   _precioQq(clave) {
     const def = this._ING[clave];
     if (!def) return null;
-    if (def.maga && this._ref[def.maga]) return { q: this._ref[def.maga].precio, fuente: 'MAGA' };
+
+    /* El precio que cargó el comercio manda sobre todo: es lo que de verdad
+       paga. Después el MAGA, que es mayorista y del día. De último el
+       menudeo, que es sólo un punto de partida. */
     const propio = this._insumos.find(i => i.nombre === def.label);
-    return propio ? { q: Number(propio.precio_quintal), fuente: 'propio' } : null;
+    if (propio) return { q: Number(propio.precio_quintal), fuente: 'tuyo', firme: true };
+
+    if (def.maga && this._ref[def.maga]) return { q: this._ref[def.maga].precio, fuente: 'MAGA', firme: true };
+
+    /* TENTATIVO. El supermercado vende presentacion de cocina, no de finca:
+       la melaza sale ~Q37/kg cuando la forrajera anda por Q3-5. Sirve para
+       tener una nocion y arrancar, NO para cotizar. Por eso viaja marcado y
+       con el precio listo para corregir de un clic. */
+    const m = def.mercado && this._mercado[def.mercado];
+    if (m) {
+      return {
+        q: +(m.precio_kg * 100 * this._LB_KG).toFixed(2),
+        fuente: 'menudeo', firme: false,
+        detalle: m.nombre + ' · ' + m.fuente + ' · ' + m.fecha,
+      };
+    }
+    return null;
+  },
+
+  /* Toma el precio tentativo y abre el editor con ese numero puesto, para
+     ajustarlo al que realmente paga. Un clic entre "nocion" y "dato". */
+  _ajustar(clave) {
+    const def = this._ING[clave];
+    const p = this._precioQq(clave);
+    this.modalInsumo(null, { nombre: def ? def.label : '', precio: p ? p.q : '', nota: p && p.detalle ? p.detalle : '' });
+  },
+
+  /* A cuantos animales les da un quintal en un dia. Es la cuenta que hace el
+     productor de cabeza y la que decide la compra. */
+  _rendimiento(f, costoQq, completo) {
+    if (!f.consumo) return '';
+    const animales = (100 * this._LB_KG) / f.consumo;
+    const racion = this._unidad === 'kg'
+      ? f.consumo.toFixed(2) + ' kg'
+      : (f.consumo / this._LB_KG < 1
+          ? (f.consumo * 1000).toFixed(0) + ' g'
+          : (f.consumo / this._LB_KG).toFixed(2) + ' lb');
+    const porAnimal = completo ? costoQq / animales : null;
+    return `<div style="padding:9px 12px;border-top:1px solid var(--border);font-size:12.5px;background:var(--surface2)">
+      🐾 Un quintal alimenta <b>${Math.floor(animales)} ${UI.esc(f.animal)}${Math.floor(animales) === 1 ? '' : 's'}</b> por un día
+      <span style="color:var(--text3)">(ración de ${racion} por animal al día)</span>
+      ${porAnimal !== null ? ' · <b style="color:var(--green)">Q' + porAnimal.toFixed(2) + ' por ' + UI.esc(f.animal) + ' al día</b>' : ''}
+      <div style="font-size:11px;color:var(--text3);margin-top:3px">
+        El consumo es un promedio de la etapa: varía con el peso, el clima y la genética.
+        Pesá lo que realmente comen una semana y ajustá.
+      </div>
+    </div>`;
   },
 
   _formulaHTML(f) {
     const filas = Object.entries(f.ing);
-    let costo = 0, faltan = [];
+    let costo = 0, faltan = [], tentativos = [];
     filas.forEach(([k, pct]) => {
       const p = this._precioQq(k);
-      if (p) costo += p.q * (pct / 100); else faltan.push(this._ING[k]?.label || k);
+      if (!p) { faltan.push(this._ING[k]?.label || k); return; }
+      costo += p.q * (pct / 100);
+      if (!p.firme) tentativos.push(this._ING[k]?.label || k);
     });
     const avisos = filas.map(([k]) => this._ING[k]?.aviso).filter(Boolean);
     const total = filas.reduce((s, [, p]) => s + p, 0);
@@ -207,7 +260,8 @@ Modulos.formulas_alimento = {
           ${faltan.length
             ? `<span class="badge badge-amber">Costo incompleto</span>`
             : `<div style="font-size:16px;font-weight:800;color:var(--green)">Q${costo.toFixed(2)}<span style="font-size:11px;color:var(--text3)">/quintal</span></div>
-               <div style="font-size:11px;color:var(--text3)">Q${this._costoUnitario(costo).valor.toFixed(2)} ${this._costoUnitario(costo).etiqueta}</div>`}
+               <div style="font-size:11px;color:var(--text3)">Q${this._costoUnitario(costo).valor.toFixed(2)} ${this._costoUnitario(costo).etiqueta}</div>
+               ${tentativos.length ? '<div style="font-size:10.5px;color:var(--amber)">estimado — lleva precios tentativos</div>' : ''}`}
         </div>
       </div>
       <div class="table-wrap"><table class="data-table">
@@ -219,7 +273,12 @@ Modulos.formulas_alimento = {
               <td>${UI.esc(this._ING[k]?.label || k)}${this._ING[k]?.aviso ? ' <span title="tiene advertencia">⚠️</span>' : ''}</td>
               <td>${pct}%</td>
               <td>${this._masa(pct)}</td>
-              <td>${p ? `Q${p.q.toFixed(2)} <span style="font-size:10px;color:var(--text3)">${p.fuente}</span>` : '<span style="color:var(--amber)">falta precio</span>'}</td>
+              <td>${p
+                ? `Q${p.q.toFixed(2)}
+                   <span style="font-size:10px;color:${p.firme ? 'var(--text3)' : 'var(--amber)'}">${p.firme ? p.fuente : 'tentativo · menudeo'}</span>
+                   ${p.firme ? '' : `<button class="btn btn-xs btn-ghost" style="margin-left:4px" title="${UI.esc(p.detalle || '')}" onclick="Modulos.formulas_alimento._ajustar('${k}')">ajustar</button>`}`
+                : `<span style="color:var(--amber)">falta precio</span>
+                   <button class="btn btn-xs btn-ghost" onclick="Modulos.formulas_alimento._ajustar('${k}')">poner</button>`}</td>
               <td>${p ? 'Q' + (p.q * pct / 100).toFixed(2) : '—'}</td>
             </tr>`;
           }).join('')}
@@ -227,6 +286,12 @@ Modulos.formulas_alimento = {
               <td style="font-weight:800">${faltan.length ? '—' : 'Q' + costo.toFixed(2)}</td></tr>
         </tbody>
       </table></div>
+      ${this._rendimiento(f, costo, !faltan.length)}
+      ${tentativos.length ? `<div style="padding:8px 12px;font-size:11.5px;color:var(--amber)">
+        ⚠️ Precio <b>tentativo</b> en: ${UI.esc(tentativos.join(', '))}. Salen del supermercado, que vende
+        presentación de cocina y no de finca — dan una noción, pero casi siempre están por encima
+        del precio de insumo. Tocá <b>ajustar</b> y poné el tuyo para que el costo sea real.
+      </div>` : ''}
       ${faltan.length ? `<div style="padding:8px 12px;font-size:11.5px;color:var(--amber)">
         Falta el precio de: <b>${UI.esc(faltan.join(', '))}</b>. Cargalos con “＋ Precio de insumo” y el costo se calcula solo.
       </div>` : ''}
@@ -283,8 +348,10 @@ Modulos.formulas_alimento = {
     </div>`;
   },
 
-  modalInsumo(id = null) {
-    const i = id ? this._insumos.find(x => x.id === id) : null;
+  modalInsumo(id = null, precargar = null) {
+    const i = id ? this._insumos.find(x => x.id === id) : (precargar
+      ? { nombre: precargar.nombre, precio_quintal: precargar.precio, nota: precargar.nota }
+      : null);
     const sugeridos = Object.values(this._ING).filter(x => !x.maga).map(x => x.label);
     UI.modal(`${i ? '✏️ Editar' : '＋ Nuevo'} precio de insumo`, `
       <div class="form-group">

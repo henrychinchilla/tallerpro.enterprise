@@ -532,6 +532,26 @@ const DB = {
     return data || [];
   },
 
+  /* Precio de menudeo más barato por término, del último día con datos.
+     Sirve como punto de partida TENTATIVO para costear fórmulas: el
+     supermercado vende presentaciones de cocina, no de finca, así que casi
+     siempre está muy por encima del precio de insumo. Se muestra marcado. */
+  async getPreciosMercado() {
+    const { data, error } = await getSB().from('mercado_precios')
+      .select('termino,precio_kg,nombre,fuente,fecha')
+      .not('precio_kg', 'is', null)
+      .order('fecha', { ascending: false }).limit(600);
+    if (error) { console.error('mercado_precios:', error.message); return {}; }
+    const out = {};
+    (data || []).forEach(r => {
+      const a = out[r.termino];
+      if (!a || r.fecha > a.fecha || (r.fecha === a.fecha && Number(r.precio_kg) < Number(a.precio_kg))) {
+        out[r.termino] = { precio_kg: Number(r.precio_kg), nombre: r.nombre, fuente: r.fuente, fecha: r.fecha };
+      }
+    });
+    return out;
+  },
+
   /* ── INSUMOS PARA FÓRMULAS DE ALIMENTO ────────────
      Precios propios del comercio: el MAGA sólo publica maíz, maicillo y soya;
      melaza, minerales y premezclas los pone cada quien con lo que le cuestan. */
