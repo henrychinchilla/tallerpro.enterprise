@@ -4,11 +4,57 @@
 Modulos.venta_granos = {
   _data: [], _clientes: [], _proveedores: [], _filtroGrano: '',
 
+  /* "Maicillo" es como se le dice al sorgo en Guatemala: quien busca maicillo
+     no encontraba nada aunque el grano ya estaba. Se nombra con las dos
+     palabras en vez de agregar un tipo duplicado que partiría el historial. */
   _TIPOS_GRANO: {
-    maiz:'Maíz', frijol:'Frijol', trigo:'Trigo',
-    sorgo:'Sorgo', cebada:'Cebada', otros:'Otros Granos'
+    maiz:'Maíz', frijol:'Frijol', arroz:'Arroz', trigo:'Trigo',
+    sorgo:'Sorgo (maicillo)', soya:'Soya', cebada:'Cebada',
+    ajonjoli:'Ajonjolí', otros:'Otros Granos'
+  },
+
+  /* Producto del MAGA que sirve de referencia para cada grano cuando el
+     comercio no mapeó el suyo a mano (maga_mapeo_grano). Es por NOMBRE y no
+     por id: los ids del catálogo cambian si el MAGA reordena su archivo.
+     El trigo no está a propósito — el MAGA no lo publica. */
+  _REF_MAGA: {
+    maiz:     'Maíz blanco, de primera',
+    frijol:   'Frijol negro, de primera',
+    arroz:    'Arroz oro, blanco de primera',
+    sorgo:    'Sorgo blanco, de primera',
+    soya:     'Soya amarilla, de primera',
+    cebada:   'Cebada, de primera',
+    ajonjoli: 'Ajonjolí sin descortezar, de primera',
   },
   _ESTADOS: { cotizado:'Cotizado', pendiente:'Pendiente', vendido:'Vendido', entregado:'Entregado', cancelado:'Cancelado' },
+  _ref: {},
+
+  /* Barra con el precio mayorista del día para los granos que el comercio
+     mueve. Es referencia para negociar, no el precio de venta: por eso dice
+     de dónde salió (mercado y fecha) en vez de mostrar un número pelado. */
+  _refMagaHTML() {
+    const filas = Object.entries(this._REF_MAGA)
+      .map(([tipo, nombre]) => ({ tipo, nombre, r: this._ref?.[nombre] }))
+      .filter(x => x.r);
+    if (!filas.length) return '';
+    const fecha = filas[0].r.fecha;
+    return `<div class="card" style="padding:10px 12px;margin-bottom:14px;border-left:3px solid var(--green)">
+      <div style="font-size:12px;font-weight:800;margin-bottom:6px">
+        🌾 Referencia mayorista MAGA · ${UI.fecha(fecha)}
+        <span style="font-weight:400;color:var(--text3)">— el más barato del día entre La Terminal y el CENMA</span>
+      </div>
+      <div style="display:flex;gap:14px;flex-wrap:wrap">
+        ${filas.map(x => `<div style="font-size:12px">
+          <b>${UI.esc(this._TIPOS_GRANO[x.tipo] || x.tipo)}</b>
+          <span style="color:var(--green);font-weight:700">Q${x.r.precio.toLocaleString('es-GT',{minimumFractionDigits:2})}</span>
+          <span style="color:var(--text3)">/${UI.esc(x.r.medida)} · ${UI.esc(x.r.mercado)}</span>
+        </div>`).join('')}
+      </div>
+      <div style="font-size:11px;color:var(--text3);margin-top:6px">
+        El MAGA no publica trigo. Los precios diarios entran cada mañana.
+      </div>
+    </div>`;
+  },
   _colorEstado(e) { return { cotizado:'gray', pendiente:'amber', vendido:'cyan', entregado:'green', cancelado:'red' }[e]||'gray'; },
 
   /* La referencia de precios del MAGA vive como pestaña de este módulo y no como
@@ -43,6 +89,10 @@ Modulos.venta_granos = {
       DB.getProveedores()
     ]);
 
+    /* Referencia del MAGA al día. Si falla, la pantalla sigue: es un apoyo
+       para decidir el precio, no un requisito para registrar la venta. */
+    this._ref = await DB.getRefDiariaMaga(Object.values(this._REF_MAGA)).catch(() => ({}));
+
     const pendientes = this._data.filter(v=>['cotizado','pendiente'].includes(v.estado)).length;
     const vendidos = this._data.filter(v=>v.estado==='vendido').length;
     const totalKg = this._data.reduce((s,v)=>s+(Number(v.cantidad_kg)||0),0);
@@ -64,6 +114,7 @@ Modulos.venta_granos = {
           ${UI.kpiCard({ icon:'📦', clase:'amber', label:'Total (kg)', value: totalKg, format:'number' })}
           ${UI.kpiCard({ icon:'💰', clase:'green', label:'Ingresos', value: ingresoTotal, money:true })}
         </div>
+        ${this._refMagaHTML()}
         <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap">
           <button class="btn btn-sm ${!filtroGrano?'btn-cyan':'btn-ghost'}" onclick="Modulos.venta_granos.render('')">Todos</button>
           ${Object.entries(this._TIPOS_GRANO).map(([k,l])=>`<button class="btn btn-sm ${filtroGrano===k?'btn-cyan':'btn-ghost'}" onclick="Modulos.venta_granos.render('${k}')">${l}</button>`).join('')}
