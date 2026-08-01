@@ -40,8 +40,15 @@ const FUENTES = [
    términos que existan también en el catálogo del MAGA, porque la gracia es
    comparar las dos puntas. */
 const TERMINOS = [
+  /* Básicos que también cotiza el MAGA: sirven para el margen mayoreo/menudeo */
   "frijol negro", "maiz blanco", "arroz", "azucar", "aceite",
   "harina de maiz", "avena", "soya", "sal", "huevos",
+  /* Insumos de las fórmulas de alimento. El supermercado NO vende melaza ni
+     premezcla en presentación de finca, así que muchos de estos van a volver
+     vacíos o con empaque de cocina — por eso el precio que salga de acá se
+     marca TENTATIVO en pantalla y se puede corregir a mano. */
+  "melaza", "salvado de trigo", "afrecho", "harina de soya", "harina de pescado",
+  "carbonato de calcio", "sal comun",
 ];
 
 const cors = {
