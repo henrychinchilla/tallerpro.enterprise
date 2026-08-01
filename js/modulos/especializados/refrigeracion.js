@@ -39,6 +39,7 @@ Modulos.refrigeracion = {
         <div><h1 class="page-title">❄️ Refrigeración y A/C</h1>
         <p class="page-subtitle">// ${this._data.length} servicios registrados</p></div>
         <div class="page-actions">
+          <button class="btn btn-ghost" onclick="Modulos.inventario.abrirGiro('refrigeracion')" title="Ver y cargar sólo los artículos de este giro">📦 Refrigerantes y repuestos</button>
           <button class="btn btn-amber" onclick="Modulos.refrigeracion.modalForm()">＋ Nuevo Servicio</button>
         </div>
       </div>

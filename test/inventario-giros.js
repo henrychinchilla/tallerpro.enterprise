@@ -135,5 +135,24 @@ const ok = (n, c) => { if (c) { pasadas++; console.log('PASS — ' + n); } else 
   ok('y NO aparecen los de granos', !/inv-g-humedad_pct/.test(htmlCapturado));
 }
 
+/* ── Entrada desde un módulo vertical ───────────────────────────────────
+   "Que cada módulo tenga su inventario": el de granos entra y ve granos, no
+   repuestos de motor. Sin partir la tabla — el catálogo sigue siendo uno. */
+{
+  let navegado = null, html = '';
+  ctx.App = { navegarA: (p) => { navegado = p; } };
+  ctx.UI.modal = (t, h) => { html = h; };
+  INV._giroFiltro = '';
+  INV.abrirGiro('granos');
+  ok('el vertical deja el filtro puesto en su giro', INV._giroFiltro === 'granos');
+  ok('y manda a la pantalla de inventario', navegado === 'inventario');
+
+  /* Y al crear desde ahi, el articulo nace con ese giro: si naciera con el
+     del comercio, en un negocio con dos rubros se clasificaria mal siempre. */
+  INV.modalForm(null, INV._giroFiltro);
+  ok('crear desde el vertical hereda su giro', /value="granos" selected/.test(html));
+  INV._giroFiltro = '';
+}
+
 console.log(`   ${pasadas} pasadas, ${fallidas} fallidas`);
 if (fallidas) process.exitCode = 1;

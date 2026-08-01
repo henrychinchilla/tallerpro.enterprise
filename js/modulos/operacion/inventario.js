@@ -88,7 +88,7 @@ Modulos.inventario = {
           <button class="btn btn-ghost" onclick="Modulos.inventario.importar()">⬆ Importar</button>
           <button class="btn btn-ghost" onclick="Modulos.inventario.historial()">📜 Movimientos</button>
           <button class="btn btn-ghost" onclick="window.print()">🖨 Imprimir</button>
-          <button class="btn btn-amber" onclick="Modulos.inventario.modalForm()">＋ Nuevo Artículo</button>
+          <button class="btn btn-amber" onclick="Modulos.inventario.modalForm(null, Modulos.inventario._giroFiltro || null)">＋ Nuevo Artículo</button>
         </div>
       </div>
       <div class="page-body">
@@ -128,6 +128,16 @@ Modulos.inventario = {
         </div>
       </div>`;
     this._filtrarLocal();
+  },
+
+  /* Entrada desde un modulo vertical: abre el inventario ya filtrado a SU
+     giro. Es lo que pidio Henry —"que cada modulo tenga su inventario"— sin
+     partir la tabla: el catalogo sigue siendo uno solo, pero el de granos
+     entra y ve granos, no repuestos de motor. */
+  async abrirGiro(giro) {
+    this._giroFiltro = giro;
+    if (typeof App !== 'undefined' && App.navegarA) App.navegarA('inventario');
+    else await this.render();
   },
 
   modalForm(id=null, giroForzado=null) {

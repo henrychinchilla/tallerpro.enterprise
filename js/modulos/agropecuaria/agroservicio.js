@@ -33,6 +33,7 @@ Modulos.agroservicio = {
         <div><h1 class="page-title">🌾 Agroservicio</h1>
         <p class="page-subtitle">// ${this._data.length} servicios/productos registrados</p></div>
         <div class="page-actions">
+          <button class="btn btn-ghost" onclick="Modulos.inventario.abrirGiro('agroservicio')" title="Ver y cargar sólo los artículos de este giro">📦 Inventario del agroservicio</button>
           <button class="btn btn-amber" onclick="Modulos.agroservicio.modalForm()">＋ Nuevo Servicio</button>
         </div>
       </div>

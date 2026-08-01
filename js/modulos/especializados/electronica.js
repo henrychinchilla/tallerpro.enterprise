@@ -29,6 +29,7 @@ Modulos.electronica = {
         <div><h1 class="page-title">🔌 Reparación Electrónica</h1>
         <p class="page-subtitle">// ${this._data.length} órdenes registradas</p></div>
         <div class="page-actions">
+          <button class="btn btn-ghost" onclick="Modulos.inventario.abrirGiro('electronica')" title="Ver y cargar sólo los artículos de este giro">📦 Repuestos de electrónica</button>
           <button class="btn btn-amber" onclick="Modulos.electronica.modalForm()">＋ Nuevo Equipo</button>
         </div>
       </div>
