@@ -591,15 +591,28 @@ const App = {
       });
       if (datos.length < App._MIN_FILAS_BUSCADOR) return;   // una lista vacía no se busca
 
-      /* Respetar al módulo que ya trae su propio buscador (Clientes) para no
-         dejar dos cajas peleando sobre la misma tabla.
-         OJO: la marca es `.search-bar`, la clase que usa el proyecto. Antes acá
-         decía además `input[type=text]`, y eso se comía el buscador de la
-         SEGUNDA tabla de cada página: el input que encontraba era el que este
-         mismo código le había puesto a la primera. Por eso Finanzas, RRHH o
-         Usuarios quedaban con buscador en una tabla y sin él en la otra. */
+      /* Respetar al módulo que YA trae su propio buscador, para no dejar dos
+         cajas sobre la misma tabla (Inventario, Órdenes, Proveedores, Bodegas,
+         Facturación, Bitácora, Precios MAGA y Clientes tienen el suyo).
+
+         Dos formas de equivocarse acá, y ya caímos en las dos:
+         · Buscar `input[type=text]` en el selector NO los encuentra: esos
+           campos se escriben `<input class="form-input" placeholder="🔍 Buscar…">`,
+           sin atributo `type`. Por eso Inventario terminó con dos cajas.
+           Se mira la PROPIEDAD `.type`, que vale 'text' aunque el atributo
+           falte. Los filtros de fecha o cantidad (`type=date|number`) no
+           cuentan como buscador, así que esas páginas sí reciben el suyo.
+         · Contar mis propias cajas: el input que este código le puso a la
+           primera tabla hacía que la SEGUNDA se quedara sin buscador. Por eso
+           se excluye todo lo que viva dentro de `.buscador-auto`. */
       const contenedor = tabla.closest('.page-body') || tabla.parentElement;
-      if (contenedor && contenedor.querySelector('.search-bar')) return;
+      const TEXTO = ['', 'text', 'search'];
+      const yaTieneBuscadorPropio = contenedor && (
+        contenedor.querySelector('.search-bar') ||
+        Array.from(contenedor.querySelectorAll('input')).some(inp =>
+          TEXTO.includes((inp.type || '').toLowerCase()) && !inp.closest('.buscador-auto'))
+      );
+      if (yaTieneBuscadorPropio) return;
 
       tabla.dataset.buscador = '1';
       const clave = App.paginaActual + '#' + i;
