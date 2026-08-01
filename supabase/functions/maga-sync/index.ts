@@ -125,6 +125,98 @@ function parseCSV(texto: string): string[][] {
   return filas;
 }
 
+/* ── SINCRONIZACIÓN DIARIA ─────────────────────────────────────
+   La página de datos abiertos arma la lista de archivos diarios por AJAX
+   (js/datosabiertosdiarios.js): un POST devuelve los nombres y el archivo
+   cuelga de /diarios/individuales/. Sólo quedan expuestos los últimos días,
+   así que esto corre a diario y no reconstruye historia.
+
+   El nombre trae acentos ("agrícolas") y hay que codificarlo al pedirlo, si
+   no el servidor responde 404. */
+async function descubrirDiarios(): Promise<string[]> {
+  const r = await fetch(`${BASE}/diarios/dadindividuales.php`, { method: "POST" });
+  if (!r.ok) throw new Error(`El MAGA no listó los archivos diarios (HTTP ${r.status})`);
+  const lista = await r.json();
+  return (Array.isArray(lista) ? lista : []).filter((n: string) => /\.json$/i.test(n)).sort();
+}
+
+async function sincronizarDiario(admin: any, body: any) {
+  const archivos = body.archivo ? [body.archivo] : await descubrirDiarios();
+  if (!archivos.length) throw new Error("El MAGA no publicó ningún archivo diario JSON");
+
+  /* Por defecto sólo el más reciente; { dias: 4 } rellena lo que haya quedado
+     sin bajar si el cron falló un día. */
+  const cuantos = Math.max(1, Math.min(Number(body.dias) || 1, archivos.length));
+  const aBajar = archivos.slice(-cuantos);
+
+  const productos = new Map<string, string>();
+  const lecturas: { nombre: string; medida: string; mercado: string; fecha: string; precio: number; actor: string }[] = [];
+  let sinPrecio = 0;
+
+  for (const archivo of aBajar) {
+    const url = `${BASE}/diarios/individuales/${encodeURIComponent(archivo)}`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`No se pudo bajar ${archivo} (HTTP ${res.status})`);
+    const filas = await res.json();
+    for (const f of Array.isArray(filas) ? filas : []) {
+      /* Precio null es normal: el producto se cotiza pero ese día no hubo
+         registro. Se cuenta y se descarta; guardar 0 mentiría. */
+      const precio = parseFloat(String(f.Precio ?? "").trim());
+      if (!isFinite(precio) || precio <= 0) { sinPrecio++; continue; }
+      const nombre = String(f.Producto || "").trim();
+      const medida = String(f.Medida || "").trim();
+      const mercado = String(f.Mercado || "").trim();
+      const fecha = String(f.Fecha || "").trim().slice(0, 10);
+      if (!nombre || !medida || !mercado || !fecha) continue;
+      productos.set(nombre + "||" + medida, medida);
+      lecturas.push({ nombre, medida, mercado, fecha, precio, actor: String(f.Actor || "").trim() });
+    }
+  }
+
+  /* Mismo catálogo que la serie mensual: un producto seguido en una vista es
+     el mismo en la otra. */
+  const filasProd = [...productos.keys()].map((k) => {
+    const [nombre, medida] = k.split("||");
+    return { nombre, medida, categoria: categoria(nombre), kg_equiv: kgEquivalente(medida) };
+  });
+  for (let i = 0; i < filasProd.length; i += 500) {
+    const { error } = await admin.from("maga_productos")
+      .upsert(filasProd.slice(i, i + 500), { onConflict: "nombre,medida" });
+    if (error) throw new Error("upsert productos: " + error.message);
+  }
+  const { data: catalogo, error: eCat } = await admin.from("maga_productos").select("id,nombre,medida,kg_equiv");
+  if (eCat) throw new Error("leer catálogo: " + eCat.message);
+  const idPorClave = new Map<string, { id: number; kg: number | null }>();
+  (catalogo || []).forEach((p: any) => idPorClave.set(p.nombre + "||" + p.medida, { id: p.id, kg: p.kg_equiv }));
+
+  /* Dedup por (producto, mercado, fecha): el upsert falla si el mismo lote
+     trae dos veces la misma clave ("ON CONFLICT DO UPDATE command cannot
+     affect row a second time"). Se queda la última lectura. */
+  const porClave = new Map<string, any>();
+  for (const l of lecturas) {
+    const ref = idPorClave.get(l.nombre + "||" + l.medida);
+    if (!ref) continue;
+    porClave.set([ref.id, l.mercado, l.fecha].join("||"), {
+      producto_id: ref.id, mercado: l.mercado, fecha: l.fecha, precio: l.precio,
+      precio_kg: ref.kg ? +(l.precio / ref.kg).toFixed(4) : null,
+      actor: l.actor || null,
+    });
+  }
+  const filasPrecio = [...porClave.values()];
+  for (let i = 0; i < filasPrecio.length; i += 1000) {
+    const { error } = await admin.from("maga_precios_diarios")
+      .upsert(filasPrecio.slice(i, i + 1000), { onConflict: "producto_id,mercado,fecha" });
+    if (error) throw new Error("upsert precios diarios: " + error.message);
+  }
+
+  const fechas = [...new Set(filasPrecio.map((f) => f.fecha))].sort();
+  return json({
+    ok: true, modo: "diario", archivos: aBajar, fechas,
+    leidas: lecturas.length + sinPrecio, sin_precio: sinPrecio,
+    productos: filasProd.length, precios: filasPrecio.length,
+  });
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
   const url = Deno.env.get("SUPABASE_URL")!;
@@ -137,6 +229,12 @@ Deno.serve(async (req) => {
 
   try {
     const body = await req.json().catch(() => ({}));
+
+    /* Modo diario: archivo del día, JSON suelto y chico (~186 lecturas).
+       Va acá y no en otra función para no duplicar la autorización, el
+       catálogo de productos ni las tablas de equivalencia en kg. */
+    if (body.modo === "diario") return await sincronizarDiario(admin, body);
+
     const anioDesde = Number(body.anio_desde) || 1990;
     const anioHasta = Number(body.anio_hasta) || 2100;
 
