@@ -523,6 +523,31 @@ const DB = {
     return { error };
   },
 
+  /* Precio mayorista más reciente de una lista de productos del MAGA.
+     Devuelve el MÁS BARATO del último día con datos: para comprar, ese es el
+     número que importa, y el mercado se devuelve para saber dónde. */
+  async getRefDiariaMaga(nombres = []) {
+    if (!nombres.length) return {};
+    const sb = getSB();
+    const { data: prods } = await sb.from('maga_productos').select('id,nombre,medida').in('nombre', nombres);
+    if (!prods?.length) return {};
+    const ids = prods.map(p => p.id);
+    const { data: precios } = await sb.from('maga_precios_diarios')
+      .select('producto_id,precio,fecha,mercado')
+      .in('producto_id', ids).order('fecha', { ascending: false }).limit(500);
+    const porProducto = {};
+    (precios || []).forEach(r => {
+      const p = prods.find(x => x.id === r.producto_id);
+      if (!p) return;
+      const actual = porProducto[p.nombre];
+      /* Sólo el último día con datos; dentro de ese día, el más barato. */
+      if (!actual || r.fecha > actual.fecha || (r.fecha === actual.fecha && Number(r.precio) < Number(actual.precio))) {
+        porProducto[p.nombre] = { precio: Number(r.precio), fecha: r.fecha, mercado: r.mercado, medida: p.medida };
+      }
+    });
+    return porProducto;
+  },
+
   /* ── OPORTUNIDADES DEL DÍA (precios diarios del MAGA) ──
      Las mismas filas que arma el correo diario: la pantalla y el correo no
      pueden decir cosas distintas. */
