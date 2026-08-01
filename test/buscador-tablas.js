@@ -23,7 +23,7 @@ function cargarApp() {
   ctx.window = ctx;
   vm.createContext(ctx);
   vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'js', 'core', 'app.js'), 'utf8'), ctx);
-  return vm.runInContext('App', ctx);
+  return { App: vm.runInContext('App', ctx), ctx };
 }
 
 /* Doble de una fila: sólo lo que el filtro toca. */
@@ -33,7 +33,7 @@ const visibles = filas => filas.filter(f => f.style.display !== 'none').map(f =>
 let pasadas = 0, fallidas = 0;
 const ok = (n, c) => { if (c) { pasadas++; console.log('PASS — ' + n); } else { fallidas++; console.log('FAIL — ' + n); } };
 
-const App = cargarApp();
+const { App, ctx } = cargarApp();
 
 /* ── Normalización ──────────────────────────────────────────────────────── */
 ok('ignora mayúsculas', App._normalizarBusqueda('MÓVIL') === App._normalizarBusqueda('móvil'));
@@ -88,8 +88,78 @@ ok('null no revienta', App._normalizarBusqueda(null) === '');
   ok('al limpiar vuelve (si no, la lista se ve vacía sin estarlo)', visibles(filas).length === 1);
 }
 
-/* ── Umbral: listas de 1-2 filas no llevan buscador ─────────────────────── */
-ok('el mínimo de filas es explícito', App._MIN_FILAS_BUSCADOR === 3);
+/* ── Inyección: DOM mínimo ──────────────────────────────────────────────
+   Esto es lo que faltaba y por eso se desplegó roto: las pruebas de arriba
+   sólo miran el FILTRO, y los dos defectos estaban en decidir DÓNDE poner la
+   caja. Con 2 vehículos cargados no salía (mínimo de 3 filas), y en las
+   páginas con dos tablas la segunda se quedaba sin buscador porque la regla
+   de "no pisar el buscador que ya existe" encontraba el que este mismo
+   código le había puesto a la primera. */
+function nodo(tag, clase = '', hijos = []) {
+  const n = {
+    /* className tiene que ser mutable: el código bajo prueba crea el div y
+       recién después le pone la clase (barra.className = 'buscador-auto'). */
+    tag, className: clase, hijos, padre: null, dataset: {}, style: {}, attrs: {},
+    classList: { contains: c => String(n.className || '').split(/\s+/).includes(c) },
+    hasAttribute: a => a in n.attrs,
+    addEventListener: () => {}, append: (...e) => e.forEach(x => { x.padre = n; n.hijos.push(x); }),
+    insertAdjacentElement(pos, el) {                    // sólo 'beforebegin'
+      const p = n.padre, i = p.hijos.indexOf(n);
+      p.hijos.splice(i, 0, el); el.padre = p; return el;
+    },
+    closest(sel) {
+      const clases = sel.split(',').map(s => s.trim().replace('.', ''));
+      let c = n;
+      while (c) { if (clases.some(k => c.classList.contains(k))) return c; c = c.padre; }
+      return null;
+    },
+    querySelector(sel) { return n.querySelectorAll(sel)[0] || null; },
+    querySelectorAll(sel) {
+      const quiere = sel.split(',').map(s => s.trim());
+      const res = [];
+      (function baja(x) {
+        for (const h of x.hijos) {
+          if (quiere.some(q => q.startsWith('.') ? h.classList.contains(q.slice(1)) : h.tag === q)) res.push(h);
+          baja(h);
+        }
+      })(n);
+      return res;
+    },
+  };
+  hijos.forEach(h => { h.padre = n; });
+  Object.defineProperty(n, 'tBodies', { get: () => n.querySelectorAll('tbody') });
+  Object.defineProperty(n, 'rows', { get: () => n.querySelectorAll('tr') });
+  Object.defineProperty(n, 'cells', { get: () => n.querySelectorAll('td') });
+  return n;
+}
+const tabla = n => nodo('table', 'data-table', [nodo('tbody', '', Array.from({ length: n }, (_, i) =>
+  nodo('tr', '', [nodo('td', ''), nodo('td', '')])))]);
+
+function montar(hijosDePageBody) {
+  const body = nodo('div', 'page-body', hijosDePageBody);
+  const page = nodo('div', '', [body]);
+  App._busquedaTabla = {};
+  ctx.document = { getElementById: id => (id === 'page-content' ? page : null), createElement: t => nodo(t) };
+  App._ponerBuscadores();
+  return page.querySelectorAll('.buscador-auto').length;
+}
+
+{
+  const doc = ctx.document;
+  ok('una tabla de 5 filas recibe buscador', montar([tabla(5)]) === 1);
+  ok('una tabla de 2 filas TAMBIÉN (con 2 vehículos tiene que salir)', montar([tabla(2)]) === 1);
+  ok('una de 1 fila también', montar([tabla(1)]) === 1);
+  ok('DOS tablas en la misma página reciben DOS buscadores', montar([tabla(4), tabla(4)]) === 2);
+  ok('el módulo que ya trae su .search-bar (Clientes) no recibe otro',
+     montar([nodo('div', 'search-bar', [nodo('input')]), tabla(6)]) === 0);
+  ok('no se inyecta dos veces sobre la misma tabla', (() => {
+    const t = tabla(4); montar([t]); const antes = t.dataset.buscador; App._ponerBuscadores();
+    return antes === '1';
+  })());
+  ctx.document = doc;
+}
+
+ok('basta una fila para que aparezca', App._MIN_FILAS_BUSCADOR === 1);
 
 /* ── El filtro no sobrevive al cambio de módulo ─────────────────────────── */
 {
