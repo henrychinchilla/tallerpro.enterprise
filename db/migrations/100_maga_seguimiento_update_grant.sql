@@ -1,0 +1,29 @@
+-- ═══════════════════════════════════════════════════════════════
+-- NexusPro Enterprise — Migración 100
+-- "Seguir" en Ventajas del mes moría con permission denied
+--
+-- Síntoma: el botón ☆ Seguir de Precios MAGA devolvía
+--   "No se pudo guardar: permission denied for table maga_seguimiento".
+--
+-- Causa: la tabla se creó otorgando a `authenticated` SELECT, INSERT y
+-- DELETE — pero NO UPDATE. Y `DB.seguirProductoMaga()` guarda con
+-- `.upsert(..., { onConflict: 'tenant_id,producto_id' })`, que en Postgres es
+-- INSERT ... ON CONFLICT DO UPDATE: exige el privilegio UPDATE aunque la fila
+-- no exista todavía. Con INSERT solo, Postgres rechaza la sentencia entera
+-- antes siquiera de mirar si hay conflicto.
+--
+-- Es el mismo tropiezo de la migración 094 (GRANT a anon y no a authenticated),
+-- otra vez: el GRANT se revisa por tabla y no por operación. Un `upsert` en el
+-- cliente son DOS privilegios en la base.
+--
+-- Se otorga sólo UPDATE (los otros tres ya estaban). A propósito NO se toca
+-- `anon` ni se da TRUNCATE. Las filas siguen protegidas por la política
+-- tenant_isolation, que ya existe y no cambia: cada comercio ve y edita
+-- únicamente su propio seguimiento.
+--
+-- Barrido hecho al aplicarla: maga_seguimiento era la ÚNICA tabla del esquema
+-- con INSERT pero sin UPDATE para authenticated.
+-- Idempotente.
+-- ═══════════════════════════════════════════════════════════════
+
+grant update on public.maga_seguimiento to authenticated;
