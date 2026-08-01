@@ -29,6 +29,7 @@ Modulos.peleteria = {
         <div><h1 class="page-title">👜 Peletería</h1>
         <p class="page-subtitle">// ${this._data.length} pedidos registrados</p></div>
         <div class="page-actions">
+          <button class="btn btn-ghost" onclick="Modulos.inventario.abrirGiro('peleteria')" title="Ver y cargar sólo los artículos de este giro">📦 Materiales de peletería</button>
           <button class="btn btn-amber" onclick="Modulos.peleteria.modalForm()">＋ Nuevo Pedido</button>
         </div>
       </div>

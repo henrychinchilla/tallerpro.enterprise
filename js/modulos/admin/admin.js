@@ -42,7 +42,11 @@ Modulos.admin = {
 
     if (this._tab==='overview') {
       const [counts, fiscal] = await Promise.all([this._getCounts(), DB.getConfigFiscal().catch(()=>({}))]);
-      const regimenLabel = fiscal?.regimen_iva === 'pequeno' ? 'Pequeño Contribuyente (5%)' : fiscal?.regimen_iva === 'general' ? 'General (IVA 12%)' : (fiscal?.regimen_iva||'No configurado');
+      /* Del catalogo y no de dos ifs: con cinco regimenes, encadenar
+         ternarios garantiza que el proximo quede sin etiqueta. */
+      const regimenLabel = fiscal?.regimen_iva
+        ? (REGIMENES_SAT[fiscal.regimen_iva]?.label || fiscal.regimen_iva)
+        : 'No configurado';
       const isrLabel = fiscal?.tasa_isr >= 0.25 ? 'Sobre Utilidades (25%)' : fiscal?.tasa_isr >= 0.07 ? 'Opcional Simplificado (7%)' : fiscal?.tasa_isr >= 0.05 ? 'Opcional Simplificado (5%)' : '—';
       el.innerHTML = `
         <div class="grid-2" style="margin-bottom:20px">

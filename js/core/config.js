@@ -706,3 +706,70 @@ function calcularISR(salarioMensual) {
     : GT.isr_tramo2_fijo + (imponible - GT.isr_tramo1_limite) * GT.isr_tramo2_tasa;
   return isrAnual / 12;
 }
+
+/* ═══════════════════════════════════════════════════════
+   REGÍMENES TRIBUTARIOS DE GUATEMALA (SAT)
+
+   El alta de un comercio sólo ofrecía dos —General y Pequeño Contribuyente—
+   y faltaban los que creó el Decreto 7-2019, incluido el AGROPECUARIO, que es
+   justo el de una venta de granos.
+
+   Las tasas son las vigentes; aun así la pantalla dice que se confirmen con
+   el contador, porque el régimen se elige por actividad y por techo de
+   facturación, no sólo por la tasa.
+
+   OJO al agregar uno nuevo: la app decidía "¿es simplificado?" preguntando si
+   el código empieza con "peque". Con 'agropecuario' eso daba FALSO y le
+   facturaba 12% a quien paga 5%. Por eso ahora la tasa sale de esta tabla y
+   no del nombre del código.
+═══════════════════════════════════════════════════════ */
+const REGIMENES_SAT = {
+  general: {
+    label: 'Régimen General (IVA 12%)',
+    tasa_iva: 0.12, simplificado: false,
+    detalle: 'IVA 12% con derecho a crédito fiscal. El ISR se declara aparte: sobre utilidades (25%) u opcional simplificado (5% / 7%).',
+  },
+  pequeno: {
+    label: 'Pequeño Contribuyente (5%)',
+    tasa_iva: 0.05, simplificado: true, techo_anual: 150000,
+    detalle: '5% sobre ingresos brutos, sin crédito fiscal. Hasta Q150,000 al año.',
+  },
+  pequeno_electronico: {
+    label: 'Pequeño Contribuyente Electrónico (4%)',
+    tasa_iva: 0.04, simplificado: true, techo_anual: 150000,
+    detalle: '4% en vez de 5% si se paga dentro de los primeros 10 días hábiles del mes y se factura electrónicamente (Decreto 7-2019).',
+  },
+  agropecuario: {
+    label: 'Contribuyente Agropecuario (5%)',
+    tasa_iva: 0.05, simplificado: true, techo_anual: 3000000,
+    detalle: 'Para producción y comercialización agropecuaria, hasta Q3,000,000 al año (Decreto 7-2019).',
+  },
+  agropecuario_electronico: {
+    label: 'Agropecuario Electrónico (4%)',
+    tasa_iva: 0.04, simplificado: true, techo_anual: 3000000,
+    detalle: 'La variante electrónica del agropecuario: 4% pagando dentro de los primeros 10 días hábiles (Decreto 7-2019).',
+  },
+};
+
+/* Régimen del comercio, tolerante con lo que ya está guardado. */
+function regimenSAT(id) {
+  return REGIMENES_SAT[String(id || 'general').toLowerCase()] || REGIMENES_SAT.general;
+}
+
+/* ¿Paga tasa reducida sobre ingresos en vez de IVA 12% con crédito fiscal?
+   Reemplaza al viejo `regimen.startsWith('peque')`, que dejaba fuera a los
+   agropecuarios y les cobraba 12% en vez de 5%. */
+function regimenSimplificado(id) {
+  return regimenSAT(id).simplificado === true;
+}
+
+function tasaIVARegimen(id) {
+  return regimenSAT(id).tasa_iva;
+}
+
+if (typeof window !== 'undefined') {
+  window.REGIMENES_SAT = REGIMENES_SAT;
+  window.regimenSAT = regimenSAT;
+  window.regimenSimplificado = regimenSimplificado;
+  window.tasaIVARegimen = tasaIVARegimen;
+}

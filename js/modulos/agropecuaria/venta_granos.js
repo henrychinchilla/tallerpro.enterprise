@@ -104,6 +104,7 @@ Modulos.venta_granos = {
         <div><h1 class="page-title">🌽 Venta de Granos</h1>
         <p class="page-subtitle">// ${this._data.length} transacciones registradas</p></div>
         <div class="page-actions">
+          <button class="btn btn-ghost" onclick="Modulos.inventario.abrirGiro('granos')" title="Ver y cargar sólo los artículos de este giro">📦 Inventario de granos</button>
           <button class="btn btn-amber" onclick="Modulos.venta_granos.modalForm()">＋ Nueva Transacción</button>
         </div>
       </div>

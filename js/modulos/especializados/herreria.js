@@ -233,6 +233,7 @@ Modulos.herreria = {
         <div><h1 class="page-title">⚒️ Herrería y Ventanería</h1>
         <p class="page-subtitle">// ${this._data.length} proyectos registrados</p></div>
         <div class="page-actions">
+          <button class="btn btn-ghost" onclick="Modulos.inventario.abrirGiro('herreria')" title="Ver y cargar sólo los artículos de este giro">📦 Materiales de herrería</button>
           <button class="btn btn-amber" onclick="Modulos.herreria.modalForm()">＋ Nuevo Proyecto</button>
         </div>
       </div>

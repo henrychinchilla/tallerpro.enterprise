@@ -1,6 +1,61 @@
 /* NexusPro v3.0 — inventario/index.js */
 Modulos.inventario = {
-  _data: [], _bodegas: [], _proveedores: [], _img: '',
+  _data: [], _bodegas: [], _proveedores: [], _img: '', _giroFiltro: '',
+
+  /* Los giros que le tocan a este comercio, segun sus modulos activos. Un
+     taller ve mecanico; El Granjero ve granos. 'general' siempre esta. */
+  _giros() {
+    return (typeof girosDelTenant === 'function')
+      ? girosDelTenant(Auth.tenant?.modulos_activos)
+      : ['mecanico', 'general'];
+  },
+  _giroDe(item) {
+    const gs = this._giros();
+    const g = item?.tipo_item;
+    /* Un articulo puede venir de otro giro (o sin clasificar): se respeta lo
+       que tiene, y si no, el primero del comercio. */
+    return (g && GIROS[g]) ? g : gs[0];
+  },
+  _perfil(giro) { return (typeof GIROS !== 'undefined' && GIROS[giro]) || { unidades: ['unidad'], categorias: [], campos: [], label: giro, icon: '' }; },
+
+  /* Campos propios del giro. Los del taller son COLUMNAS de la tabla (la app
+     nacio asi); el resto vive en `atributos` jsonb. */
+  _camposGiroHTML(giro, item) {
+    const perfil = this._perfil(giro);
+    if (!perfil.campos.length) return '';
+    const val = (c) => {
+      const v = c.col ? item[c.id] : (item.atributos || {})[c.id];
+      return (v === null || v === undefined) ? '' : String(v);
+    };
+    const campo = (c) => {
+      const id = 'inv-g-' + c.id;
+      const v = UI.esc(val(c));
+      const ayuda = c.ayuda ? `<div style="font-size:10.5px;color:var(--text3);margin-top:3px">${UI.esc(c.ayuda)}</div>` : '';
+      let control;
+      if (c.tipo === 'lista') {
+        control = `<select class="form-select" id="${id}"><option value=""></option>` +
+          c.opciones.map(o => `<option ${val(c) === o ? 'selected' : ''}>${UI.esc(o)}</option>`).join('') + '</select>';
+      } else if (c.tipo === 'fecha') {
+        control = `<input class="form-input" id="${id}" type="date" value="${v}">`;
+      } else if (c.tipo === 'entero') {
+        control = `<input class="form-input" id="${id}" type="number" step="1" value="${v}" placeholder="${UI.esc(c.ph || '')}">`;
+      } else if (c.tipo === 'decimal') {
+        control = `<input class="form-input" id="${id}" type="number" step="0.001" value="${v}" placeholder="${UI.esc(c.ph || '')}">`;
+      } else {
+        control = `<input class="form-input" id="${id}" value="${v}" placeholder="${UI.esc(c.ph || '')}">`;
+      }
+      return `<div class="form-group"><label class="form-label">${UI.esc(c.label)}</label>${control}${ayuda}</div>`;
+    };
+    return `<div style="border-top:1px solid var(--border);padding-top:10px;margin-top:4px">
+      <div style="font-size:11px;color:var(--text3);font-weight:700;text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">
+        ${perfil.icon} Datos de ${UI.esc(perfil.label)}
+      </div>
+      <div class="form-row" style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        ${perfil.campos.map(campo).join('')}
+      </div>
+    </div>`;
+  },
+
   async render(busca='') {
     const el = document.getElementById('page-content');
     UI.loading(el);
@@ -16,6 +71,10 @@ Modulos.inventario = {
         <div><h1 class="page-title">📦 Inventario</h1>
         <p class="page-subtitle">// ${this._data.length} artículos${bajoStock.length>0?` · <span class="text-red">⚠️ ${bajoStock.length} bajo mínimo</span>`:''}</p></div>
         <div class="page-actions" style="display:flex;gap:8px;flex-wrap:wrap">
+          ${this._giros().length > 1 ? `<select class="form-select" id="inv-filtro-giro" style="width:180px" onchange="Modulos.inventario._filtrarLocal()">
+            <option value="">Todos los giros</option>
+            ${this._giros().map(g => `<option value="${g}" ${this._giroFiltro === g ? 'selected' : ''}>${this._perfil(g).icon} ${this._perfil(g).label}</option>`).join('')}
+          </select>` : ''}
           <select class="form-select" id="inv-filtro-cat" style="width:170px" onchange="Modulos.inventario._filtrarLocal()">
             <option value="">Todas las categorías</option>
             ${cats.map(c=>`<option value="${c}">${c}</option>`).join('')}
@@ -29,7 +88,7 @@ Modulos.inventario = {
           <button class="btn btn-ghost" onclick="Modulos.inventario.importar()">⬆ Importar</button>
           <button class="btn btn-ghost" onclick="Modulos.inventario.historial()">📜 Movimientos</button>
           <button class="btn btn-ghost" onclick="window.print()">🖨 Imprimir</button>
-          <button class="btn btn-amber" onclick="Modulos.inventario.modalForm()">＋ Nuevo Artículo</button>
+          <button class="btn btn-amber" onclick="Modulos.inventario.modalForm(null, Modulos.inventario._giroFiltro || null)">＋ Nuevo Artículo</button>
         </div>
       </div>
       <div class="page-body">
@@ -44,7 +103,7 @@ Modulos.inventario = {
                 const thumb = i.imagen_url
                   ? `<img src="${i.imagen_url}" alt="" onclick="event.stopPropagation();Modulos.inventario._lightbox('${i.id}')" style="width:34px;height:34px;border-radius:6px;object-fit:cover;border:1px solid var(--border);cursor:zoom-in;flex-shrink:0">`
                   : `<div style="width:34px;height:34px;border-radius:6px;background:var(--surface2);display:flex;align-items:center;justify-content:center;color:var(--text3);flex-shrink:0">📦</div>`;
-                return `<tr data-categoria="${i.categoria||'General'}" data-bajo="${bajo}" style="${bajo?'background:var(--red-dim)':''}">
+                return `<tr data-categoria="${i.categoria||'General'}" data-giro="${i.tipo_item||'general'}" data-bajo="${bajo}" style="${bajo?'background:var(--red-dim)':''}">
                   <td class="mono-sm">${i.codigo||'—'}</td>
                   <td><div style="display:flex;align-items:center;gap:8px">${thumb}<div><b>${i.nombre}</b>${i.descripcion?`<br><small class="text-muted">${i.descripcion}</small>`:''}</div></div></td>
                   <td><span class="badge badge-gray">${i.categoria||'General'}</span></td>
@@ -71,13 +130,39 @@ Modulos.inventario = {
     this._filtrarLocal();
   },
 
-  modalForm(id=null) {
+  /* Entrada desde un modulo vertical: abre el inventario ya filtrado a SU
+     giro. Es lo que pidio Henry —"que cada modulo tenga su inventario"— sin
+     partir la tabla: el catalogo sigue siendo uno solo, pero el de granos
+     entra y ve granos, no repuestos de motor. */
+  async abrirGiro(giro) {
+    this._giroFiltro = giro;
+    if (typeof App !== 'undefined' && App.navegarA) App.navegarA('inventario');
+    else await this.render();
+  },
+
+  modalForm(id=null, giroForzado=null) {
     const item = id ? this._data.find(x=>x.id===id) : {};
     const esEdicion = !!id;
     this._img = item.imagen_url || '';
-    const cats = [...new Set(this._data.map(i=>i.categoria).filter(Boolean))].sort();
+    const giro = giroForzado || this._giroDe(item);
+    const perfil = this._perfil(giro);
+    const gs = this._giros();
+    /* Las categorias del giro primero (son las que corresponden), y despues
+       las que el comercio ya haya escrito, sin repetir. */
+    const cats = [...new Set([...(perfil.categorias || []),
+                              ...this._data.map(i=>i.categoria).filter(Boolean)])];
 
     UI.modal(`${esEdicion?'✏️ Editar':'＋ Nuevo'} Artículo`, `
+      ${gs.length > 1 ? `<div class="form-group">
+        <label class="form-label">Tipo de artículo *</label>
+        <select class="form-select" id="inv-giro"
+                onchange="Modulos.inventario.modalForm(${id ? `'${id}'` : 'null'}, this.value)">
+          ${gs.map(g => `<option value="${g}" ${g === giro ? 'selected' : ''}>${Modulos.inventario._perfil(g).icon} ${Modulos.inventario._perfil(g).label}</option>`).join('')}
+        </select>
+        <div style="font-size:10.5px;color:var(--text3);margin-top:3px">
+          Decide qué campos y qué unidades se piden. Un quintal de maíz y un repuesto de motor no llevan lo mismo.
+        </div>
+      </div>` : `<input type="hidden" id="inv-giro" value="${giro}">`}
       ${esEdicion?'<div class="alert alert-amber" style="margin-bottom:12px"><div class="alert-icon">⚠️</div><div class="alert-body" style="font-size:11px">Los cambios reemplazarán la información actual del artículo.</div></div>':''}
 
       <!-- Foto del producto -->
@@ -120,7 +205,7 @@ Modulos.inventario = {
       <div class="form-row">
         <div class="form-group"><label class="form-label">Unidad</label>
           <select class="form-select" id="inv-unidad">
-            ${['pieza','unidad','litro','galón','kg','metro','par','juego','caja'].map(u=>`<option ${item.unidad_medida===u?'selected':''}>${u}</option>`).join('')}
+            ${perfil.unidades.map(u=>`<option ${item.unidad_medida===u?'selected':''}>${u}</option>`).join('')}
           </select></div>
         <div class="form-group"><label class="form-label">Bodega</label>
           <select class="form-select" id="inv-bodega">
@@ -129,10 +214,11 @@ Modulos.inventario = {
           </select></div>
       </div>
       <div class="form-row">
-        <div class="form-group"><label class="form-label">Stock Actual</label>
-          <input class="form-input" id="inv-stock" type="number" value="${item.stock||0}" min="0"></div>
+        <div class="form-group"><label class="form-label">Stock Actual (${UI.esc(item.unidad_medida || perfil.unidades[0])})</label>
+          <input class="form-input" id="inv-stock" type="number" step="0.001" value="${item.stock||0}" min="0">
+          <div style="font-size:10.5px;color:var(--text3);margin-top:3px">Admite decimales: 12.5 quintales, 3.75 kg de gas.</div></div>
         <div class="form-group"><label class="form-label">Stock Mínimo</label>
-          <input class="form-input" id="inv-min" type="number" value="${item.min_stock||5}" min="0"></div>
+          <input class="form-input" id="inv-min" type="number" step="0.001" value="${item.min_stock||5}" min="0"></div>
       </div>
       <div class="form-row">
         ${puedeVerCosto()?`<div class="form-group"><label class="form-label">Precio Costo (Q)</label>
@@ -140,14 +226,6 @@ Modulos.inventario = {
         <div class="form-group"><label class="form-label">Precio Venta (Q)</label>
           <input class="form-input" id="inv-venta" type="number" value="${item.precio_venta||0}" min="0" step="0.01" oninput="Modulos.inventario._hintPrecio()">
           <div id="inv-hint-precio" style="font-size:10.5px;margin-top:3px"></div></div>
-      </div>
-      <div class="form-row">
-        <div class="form-group"><label class="form-label">No. de parte OEM</label>
-          <input class="form-input" id="inv-oem" value="${item.num_parte_oem||''}" placeholder="OEM / referencia fabricante"></div>
-        <div class="form-group"><label class="form-label">Estado del artículo</label>
-          <select class="form-select" id="inv-estado">
-            ${['nuevo','usado','remanufacturado'].map(s=>`<option ${item.estado_articulo===s?'selected':''}>${s}</option>`).join('')}
-          </select></div>
       </div>
       <div class="form-row">
         <div class="form-group"><label class="form-label">Stock máximo</label>
@@ -166,23 +244,7 @@ Modulos.inventario = {
         </div>
       </div>
 
-      <div style="border-top:1px solid var(--border);padding-top:10px;margin-top:4px">
-        <div style="font-size:11px;color:var(--text3);font-weight:700;text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">🚗 Compatibilidad con vehículos</div>
-        <div class="form-row">
-          <div class="form-group"><label class="form-label">Marca compatible</label>
-            <input class="form-input" id="inv-cmarca" value="${item.compat_marca||''}" placeholder="Toyota, Honda..."></div>
-          <div class="form-group"><label class="form-label">Modelo compatible</label>
-            <input class="form-input" id="inv-cmodelo" value="${item.compat_modelo||''}" placeholder="Corolla, Civic..."></div>
-        </div>
-        <div class="form-row">
-          <div class="form-group"><label class="form-label">Año desde</label>
-            <input class="form-input" id="inv-canioini" type="number" value="${item.compat_anio_ini||''}" placeholder="2010"></div>
-          <div class="form-group"><label class="form-label">Año hasta</label>
-            <input class="form-input" id="inv-caniofin" type="number" value="${item.compat_anio_fin||''}" placeholder="2018"></div>
-        </div>
-        <div class="form-group"><label class="form-label">Motor compatible</label>
-          <input class="form-input" id="inv-cmotor" value="${item.compat_motor||''}" placeholder="1.8L, 2.0 Turbo..."></div>
-      </div>
+      ${Modulos.inventario._camposGiroHTML(giro, item)}
 
       <div class="form-group"><label class="form-label">Descripción</label>
         <textarea class="form-input" id="inv-desc" rows="2">${item.descripcion||''}</textarea></div>
@@ -226,20 +288,35 @@ Modulos.inventario = {
       precio_venta:  parseFloat(document.getElementById('inv-venta')?.value)||0,
       descripcion:   document.getElementById('inv-desc')?.value||null,
       imagen_url:    this._img || null,
-      num_parte_oem: document.getElementById('inv-oem')?.value.trim()||null,
-      estado_articulo: document.getElementById('inv-estado')?.value||'nuevo',
       max_stock:     parseFloat(document.getElementById('inv-max')?.value)||null,
       peso_kg:       parseFloat(document.getElementById('inv-peso')?.value)||null,
       ubicacion:     document.getElementById('inv-ubic')?.value.trim()||null,
       ancho_cm:      parseFloat(document.getElementById('inv-ancho')?.value)||null,
       alto_cm:       parseFloat(document.getElementById('inv-alto')?.value)||null,
       largo_cm:      parseFloat(document.getElementById('inv-largo')?.value)||null,
-      compat_marca:  document.getElementById('inv-cmarca')?.value.trim()||null,
-      compat_modelo: document.getElementById('inv-cmodelo')?.value.trim()||null,
-      compat_anio_ini: parseInt(document.getElementById('inv-canioini')?.value)||null,
-      compat_anio_fin: parseInt(document.getElementById('inv-caniofin')?.value)||null,
-      compat_motor:  document.getElementById('inv-cmotor')?.value.trim()||null
     };
+
+    /* Campos del giro. Los del taller son columnas reales; los demas van al
+       jsonb. Si el articulo cambia de giro, las columnas del taller se
+       limpian: dejar "motor 1.8L" en un quintal de maiz es peor que perderlo,
+       porque despues nadie sabe si es dato o basura. */
+    const giro = document.getElementById('inv-giro')?.value || this._giroDe({});
+    fields.tipo_item = giro;
+    const perfil = this._perfil(giro);
+    const atributos = {};
+    const COLS_TALLER = ['num_parte_oem','estado_articulo','compat_marca','compat_modelo',
+                         'compat_anio_ini','compat_anio_fin','compat_motor'];
+    COLS_TALLER.forEach(c => { fields[c] = null; });
+    perfil.campos.forEach(c => {
+      const el = document.getElementById('inv-g-' + c.id);
+      if (!el) return;
+      let v = (el.value || '').trim();
+      if (v === '') { if (c.col) fields[c.id] = null; return; }
+      if (c.tipo === 'entero')  v = parseInt(v) || null;
+      if (c.tipo === 'decimal') v = parseFloat(v);
+      if (c.col) fields[c.id] = v; else atributos[c.id] = v;
+    });
+    fields.atributos = atributos;
     /* El costo solo se toca si el usuario puede verlo (si no, se preserva) */
     const costoEl = document.getElementById('inv-costo');
     if (costoEl) fields.precio_costo = parseFloat(costoEl.value)||0;
@@ -462,6 +539,8 @@ Modulos.inventario = {
   _filtrarLocal() {
     const busca = (document.getElementById('inv-busca')?.value||'').trim().toLowerCase();
     const cat = document.getElementById('inv-filtro-cat')?.value||'';
+    const giro = document.getElementById('inv-filtro-giro')?.value||'';
+    this._giroFiltro = giro;
     const stock = document.getElementById('inv-filtro-stock')?.value||'';
 
     const rows = document.querySelectorAll('.data-table tbody tr');
@@ -470,14 +549,16 @@ Modulos.inventario = {
 
     rows.forEach(row => {
       const rowCat = row.getAttribute('data-categoria') || '';
+      const rowGiro = row.getAttribute('data-giro') || '';
       const rowBajo = row.getAttribute('data-bajo') === 'true';
       const text = row.innerText.toLowerCase();
 
       const matchBusca = !busca || text.includes(busca);
       const matchCat = !cat || rowCat === cat;
+      const matchGiro = !giro || rowGiro === giro;
       const matchStock = !stock || (stock === 'bajo' && rowBajo) || (stock === 'ok' && !rowBajo);
 
-      if (matchBusca && matchCat && matchStock) {
+      if (matchBusca && matchCat && matchGiro && matchStock) {
         row.style.display = '';
         totalVisibles++;
         if (rowBajo) bajoVisibles++;

@@ -247,10 +247,10 @@ function renderLogin(vista='login') {
 
         <div class="form-group">
           <label class="form-label">Régimen ante la SAT *</label>
-          <select class="form-select" id="nt-regimen">
-            <option value="general">Régimen General (IVA 12%)</option>
-            <option value="pequeno">Pequeño Contribuyente (IVA 5%)</option>
+          <select class="form-select" id="nt-regimen" onchange="document.getElementById('nt-regimen-det').textContent=(REGIMENES_SAT[this.value]||{}).detalle||''">
+            ${Object.entries(REGIMENES_SAT).map(([id, r]) => `<option value="${id}">${r.label}</option>`).join('')}
           </select>
+          <div id="nt-regimen-det" style="font-size:11px;color:var(--text2);margin-top:4px">${REGIMENES_SAT.general.detalle}</div>
           <div style="font-size:11px;color:var(--text3);margin-top:4px">Podrás cambiarlo después en Contabilidad → SAT.</div>
         </div>
 
@@ -411,10 +411,10 @@ function renderLogin(vista='login') {
         </div>
         <div class="form-group">
           <label class="form-label">Régimen ante la SAT *</label>
-          <select class="form-select" id="ntg-regimen">
-            <option value="general">Régimen General (IVA 12%)</option>
-            <option value="pequeno">Pequeño Contribuyente (IVA 5%)</option>
+          <select class="form-select" id="ntg-regimen" onchange="document.getElementById('ntg-regimen-det').textContent=(REGIMENES_SAT[this.value]||{}).detalle||''">
+            ${Object.entries(REGIMENES_SAT).map(([id, r]) => `<option value="${id}">${r.label}</option>`).join('')}
           </select>
+          <div id="ntg-regimen-det" style="font-size:11px;color:var(--text2);margin-top:4px">${REGIMENES_SAT.general.detalle}</div>
         </div>
 
         <div class="legal-disclaimer-box" style="background:rgba(255, 193, 7, 0.05);border:1px solid rgba(255, 193, 7, 0.25);border-radius:8px;padding:12px;margin-bottom:12px;font-size:11.5px;line-height:1.6;color:var(--text2);text-align:left">
