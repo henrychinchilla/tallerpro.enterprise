@@ -1,5 +1,32 @@
 /* NexusPro v3.0 — proveedores/index.js */
 Modulos.proveedores = {
+  /* Los giros del comercio, igual que en Inventario: el catalogo vive en
+     giros.js y no duplicado aca. */
+  _giros() {
+    return (typeof girosDelTenant === 'function')
+      ? girosDelTenant(Auth.tenant?.modulos_activos)
+      : ['mecanico', 'general'];
+  },
+
+  /* Categorias de proveedor. Las del giro elegido primero; si no se eligio
+     ninguno, las de todos los giros del comercio — porque un proveedor puede
+     surtir de todo y no hay que obligarlo a mentir. */
+  _categorias(giro) {
+    const de = (g) => ((typeof GIROS !== 'undefined' && GIROS[g]) ? GIROS[g].categorias : []);
+    const base = giro ? de(giro) : this._giros().flatMap(de);
+    return [...new Set([...base, 'Servicios externos', 'Distribuidora general', 'Courier / transporte', 'Otro'])];
+  },
+
+  /* Al cambiar el giro se repintan las categorias, conservando la elegida si
+     sigue existiendo: cambiar de giro no deberia borrar lo ya escrito. */
+  _cambiarGiro(giro) {
+    const sel = document.getElementById('prov-cat');
+    if (!sel) return;
+    const actual = sel.value;
+    const cats = this._categorias(giro);
+    sel.innerHTML = cats.map(c => `<option ${c === actual ? 'selected' : ''}>${c}</option>`).join('');
+  },
+
   _data: [],
   _busca: '',
   _view: localStorage.getItem('tp_prov_view') || 'cards',   // 'cards' | 'lista'
@@ -98,18 +125,17 @@ Modulos.proveedores = {
           <div id="prov-nit-status" style="margin-top:4px;min-height:14px"></div></div>
       </div>
       <div class="form-row">
+        <div class="form-group"><label class="form-label">Giro que surte</label>
+          <select class="form-select" id="prov-giro" onchange="Modulos.proveedores._cambiarGiro(this.value)">
+            <option value="">Cualquiera</option>
+            ${Modulos.proveedores._giros().map(g => `<option value="${g}" ${p.giro===g?'selected':''}>${(GIROS[g]||{}).icon||''} ${(GIROS[g]||{}).label||g}</option>`).join('')}
+          </select>
+          <div style="font-size:10.5px;color:var(--text3);margin-top:3px">
+            Un proveedor de granos no surte compresores. Filtra las categorías y, más adelante, lo que se le puede comprar.
+          </div></div>
         <div class="form-group"><label class="form-label">Categoría</label>
           <select class="form-select" id="prov-cat">
-            ${[
-              'Repuestos Automotriz','Aceites y Lubricantes',
-              'Refrigerantes y Gases','Compresores y Partes A/C',
-              'Componentes Electrónicos','Celulares y Accesorios','Electrodomésticos y Partes',
-              'Materiales Herrería','Material PVC y Aluminio','Vidrio y Cancel',
-              'Materiales Peletería','Cuero y Telas',
-              'Herramientas y Equipos','Pinturas y Acabados','Soldadura',
-              'Ferretería','Servicios Externos','Distribuidora General',
-              'Courier / Transporte','Otro',
-            ].map(c=>`<option ${p.categoria===c?'selected':''}>${c}</option>`).join('')}
+            ${Modulos.proveedores._categorias(p.giro).map(c=>`<option ${p.categoria===c?'selected':''}>${c}</option>`).join('')}
           </select></div>
         <div class="form-group"><label class="form-label">Persona de Contacto</label>
           <input class="form-input" id="prov-contacto" value="${p.contacto||''}"></div>
@@ -150,6 +176,7 @@ Modulos.proveedores = {
       nombre,
       nit:       document.getElementById('prov-nit')?.value.trim()||null,
       categoria: document.getElementById('prov-cat')?.value,
+      giro:      document.getElementById('prov-giro')?.value || null,
       contacto:  document.getElementById('prov-contacto')?.value||null,
       telefono:  document.getElementById('prov-tel')?.value||null,
       email:     document.getElementById('prov-email')?.value||null,
