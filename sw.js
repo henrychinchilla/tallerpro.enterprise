@@ -8,7 +8,7 @@
    Para forzar actualización: subir CACHE_VERSION.
 ═══════════════════════════════════════════════════════ */
 
-const CACHE_VERSION = 'v4.28.0-20260801';
+const CACHE_VERSION = 'v4.29.0-20260801';
 const CACHE_NAME = `nexuspro-${CACHE_VERSION}`;
 
 /* App shell — se precachea en install para que funcione offline */
@@ -63,6 +63,7 @@ const PRECACHE = [
   '/js/modulos/admin/admin.js',
   '/js/modulos/admin/superadmin.js',
   '/js/modulos/agropecuaria/precios_maga.js',
+  '/js/modulos/agropecuaria/formulas_alimento.js',
   '/js/modulos/admin/respaldos.js',
   '/pos.html',
   '/js/pos/pos.js',
