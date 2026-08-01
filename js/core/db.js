@@ -523,6 +523,29 @@ const DB = {
     return { error };
   },
 
+  /* ── INSUMOS PARA FÓRMULAS DE ALIMENTO ────────────
+     Precios propios del comercio: el MAGA sólo publica maíz, maicillo y soya;
+     melaza, minerales y premezclas los pone cada quien con lo que le cuestan. */
+  async getAgroInsumos() {
+    const { data, error } = await getSB().from('agro_insumos')
+      .select('*').eq('tenant_id', getTID()).order('nombre');
+    if (error) { console.error('agro_insumos:', error.message); return []; }
+    return data || [];
+  },
+
+  async guardarAgroInsumo({ id, nombre, precio_quintal, nota }) {
+    const sb = getSB();
+    const fila = { tenant_id: getTID(), nombre, precio_quintal, nota, updated_at: new Date().toISOString() };
+    if (id) {
+      const { error } = await sb.from('agro_insumos').update(fila).eq('id', id);
+      return { error };
+    }
+    /* upsert por (tenant, nombre): volver a cargar un insumo que ya existe
+       actualiza su precio en vez de reventar con "duplicate key". */
+    const { error } = await sb.from('agro_insumos').upsert(fila, { onConflict: 'tenant_id,nombre' });
+    return { error };
+  },
+
   /* Precio mayorista más reciente de una lista de productos del MAGA.
      Devuelve el MÁS BARATO del último día con datos: para comprar, ese es el
      número que importa, y el mercado se devuelve para saber dónde. */

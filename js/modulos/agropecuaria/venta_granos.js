@@ -73,13 +73,14 @@ Modulos.venta_granos = {
   _tabsHTML() {
     const b = (tab, txt) => `<button class="btn btn-sm ${this._tab===tab?'btn-cyan':'btn-ghost'}" onclick="Modulos.venta_granos._irTab('${tab}')">${txt}</button>`;
     return `<div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
-      ${b('ventas','🌽 Transacciones')}${b('referencia','📈 Precios de referencia')}${b('comparar','📊 Mi precio vs mercado')}
+      ${b('ventas','🌽 Transacciones')}${b('referencia','📈 Precios de referencia')}${b('comparar','📊 Mi precio vs mercado')}${b('formulas','🧪 Fórmulas de alimento')}
     </div>`;
   },
 
   async render(filtroGrano='') {
     if (this._tab === 'referencia') return Modulos.precios_maga.render();
     if (this._tab === 'comparar')   return Modulos.precios_maga.renderComparacion();
+    if (this._tab === 'formulas')   return Modulos.formulas_alimento.render();
     const el = document.getElementById('page-content');
     UI.loading(el);
     this._filtroGrano = filtroGrano;
