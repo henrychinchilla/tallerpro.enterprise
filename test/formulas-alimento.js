@@ -73,5 +73,45 @@ ok('el sorgo avisa por los taninos', /tanino/i.test(F._ING.sorgo.aviso || ''));
   ok('la pasta de soya NO toma el precio del grano de soya', !F._ING.soya.maga);
 }
 
+/* ── Libras / kilos / gramos ────────────────────────────────────────────
+   En Guatemala se pesa en libras. Lo que hay que cuidar es que la conversión
+   no mienta en la báscula: un ingrediente mal convertido descuadra la mezcla
+   y, en el caso de los aditivos, la sobredosis es el riesgo. */
+{
+  ok('arranca en libras, que es como se pesa acá', F._unidad === 'lb');
+
+  F._unidad = 'lb';
+  /* El quintal son 100 libras exactas: el % ES la libra. Sin cuentas. */
+  ok('56% = 56 libras por quintal', F._masa(56) === '56.00 lb');
+  ok('1% = 1 libra', F._masa(1) === '1.00 lb');
+  /* Media libra de premezcla nadie la pesa en libras: en gramos sí. */
+  ok('las inclusiones chicas pasan a gramos (0.2% = 91 g)', F._masa(0.2) === '91 g');
+  ok('0.5% también sale en gramos', /g$/.test(F._masa(0.5)));
+
+  F._unidad = 'kg';
+  ok('56% = 25.40 kg por quintal', F._masa(56) === '25.40 kg');
+  ok('en kilos las chicas también salen en gramos', F._masa(0.2) === '91 g');
+  /* El mismo ingrediente pesa lo mismo, se muestre como se muestre. */
+  const enLb = 56 * 0.45359237, enKg = 100 * 0.45359237 * 56 / 100;
+  ok('libras y kilos describen la MISMA masa', Math.abs(enLb - enKg) < 1e-9);
+
+  F._unidad = 'lb';
+  const cl = F._costoUnitario(500);
+  ok('Q500 el quintal = Q5.00 la libra', Math.abs(cl.valor - 5) < 1e-9 && cl.etiqueta === 'por libra');
+  F._unidad = 'kg';
+  const ck = F._costoUnitario(500);
+  ok('Q500 el quintal = Q11.02 el kilo', Math.abs(ck.valor - 11.0231) < 0.001 && ck.etiqueta === 'por kg');
+  ok('la libra siempre cuesta menos que el kilo', cl.valor < ck.valor);
+
+  /* Una fórmula completa tiene que dar el quintal: si la suma de los
+     ingredientes no da 100 lb, la mezcla no cierra. */
+  F._unidad = 'lb';
+  for (const [esp, def] of especies)
+    for (const f of def.formulas) {
+      const lb = Object.values(f.ing).reduce((s, p) => s + p, 0);
+      ok(`${esp} · "${f.nombre}" cierra el quintal (${lb.toFixed(1)} lb)`, Math.abs(lb - 100) <= 1);
+    }
+}
+
 console.log(`   ${pasadas} pasadas, ${fallidas} fallidas`);
 if (fallidas) process.exitCode = 1;
