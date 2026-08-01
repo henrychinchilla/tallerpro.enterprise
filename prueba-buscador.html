@@ -57,5 +57,26 @@ function pintarDosTablas(n) {
     </div>`;
 }
 
+
+/* Inventario y compañía: buscador propio SIN clase .search-bar y SIN type */
+function pintarInventario(n) {
+  const filas = Array.from({length:n},(_,i)=>`<tr><td>Filtro aceite ${i}</td><td>FA-${i}</td><td>Q${i}5.00</td></tr>`).join('');
+  document.getElementById('page-content').innerHTML = `
+    <div class="page-body">
+      <input class="form-input" id="inv-busca" placeholder="🔍 Buscar nombre, código o marca...">
+      <div class="table-wrap"><table class="data-table">
+        <thead><tr><th>Nombre</th><th>Código</th><th>Precio</th></tr></thead>
+        <tbody>${filas}</tbody></table></div>
+    </div>`;
+}
+/* Página con filtro de FECHA: sí debe recibir buscador */
+function pintarConFecha(n) {
+  const filas = Array.from({length:n},(_,i)=>`<tr><td>Mov ${i}</td><td>0${i}/07</td></tr>`).join('');
+  document.getElementById('page-content').innerHTML = `
+    <div class="page-body">
+      <input class="form-input" type="date" id="desde">
+      <div class="table-wrap"><table class="data-table"><tbody>${filas}</tbody></table></div>
+    </div>`;
+}
 window.contar = () => document.querySelectorAll('#page-content .buscador-auto').length;
 </script></body></html>

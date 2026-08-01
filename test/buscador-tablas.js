@@ -152,6 +152,23 @@ function montar(hijosDePageBody) {
   ok('DOS tablas en la misma página reciben DOS buscadores', montar([tabla(4), tabla(4)]) === 2);
   ok('el módulo que ya trae su .search-bar (Clientes) no recibe otro',
      montar([nodo('div', 'search-bar', [nodo('input')]), tabla(6)]) === 0);
+
+  /* Inventario, Órdenes, Proveedores, Bodegas, Facturación, Bitácora y MAGA
+     arman su buscador SIN la clase .search-bar y SIN atributo type:
+     <input class="form-input" id="inv-busca" placeholder="🔍 Buscar...">.
+     Por no detectarlos, Inventario salió con dos cajas. */
+  const inputTipo = t => { const n = nodo('input'); if (t) n.type = t; return n; };
+  ok('un input de texto SIN atributo type ya cuenta como buscador propio (Inventario)',
+     montar([inputTipo(null), tabla(6)]) === 0);
+  ok('idem si declara type=text', montar([inputTipo('text'), tabla(6)]) === 0);
+  /* Pero un filtro de fecha o de cantidad NO es un buscador: esas páginas
+     sí tienen que recibir el suyo. */
+  ok('un filtro de fecha no bloquea el buscador', montar([inputTipo('date'), tabla(6)]) === 1);
+  ok('un campo numérico tampoco', montar([inputTipo('number'), tabla(6)]) === 1);
+  /* Y la caja que pone este mismo código no puede contar como "buscador
+     propio", o volvemos al bug de la segunda tabla. */
+  ok('mis propias cajas no se cuentan: dos tablas siguen recibiendo dos',
+     montar([tabla(3), tabla(3)]) === 2);
   ok('no se inyecta dos veces sobre la misma tabla', (() => {
     const t = tabla(4); montar([t]); const antes = t.dataset.buscador; App._ponerBuscadores();
     return antes === '1';
