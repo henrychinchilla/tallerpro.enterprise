@@ -119,7 +119,7 @@ Modulos.usuarios = {
         container.innerHTML = `
           <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;justify-content:flex-end">
             <span class="badge badge-green">✓ Activo (TOTP)</span>
-            <button class="btn btn-amber btn-xs" onclick="Modulos.usuarios._pausarMi2FA()">Pausar 2FA</button>
+            ${'mfa_pausado' in (Auth.user || {}) ? `<button class="btn btn-amber btn-xs" onclick="Modulos.usuarios._pausarMi2FA()">Pausar 2FA</button>` : ''}
             <button class="btn btn-danger btn-xs" onclick="Modulos.usuarios._desactivarMi2FA('${activeFactor.id}')">Desactivar 2FA</button>
           </div>`;
       } else {
