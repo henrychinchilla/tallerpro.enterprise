@@ -8,7 +8,7 @@
 const POS = {
   _prod: [], _clientes: [], _cart: [], _cliente: null,
   _metodo: 'Efectivo', _descuento: 0, _canje: 0, _tarjetaDatos: null,
-  _busca: '', _cat: '', _envioData: null, _ventasHoy: [], _caja: null, _terminal: null, _procesandoSesion: false,
+  _busca: '', _cat: '', _giro: '', _envioData: null, _ventasHoy: [], _caja: null, _terminal: null, _procesandoSesion: false,
   _ROLES_OK: ['superadmin','admin','gerente_tal','gerente_fin','recepcionista','vendedor'],
 
   async iniciar() {
@@ -477,6 +477,7 @@ const POS = {
             <!-- Categorías Horizontal Slider -->
             <div class="pos-cat-slider">
               <div class="pos-cat-pill ${!this._cat ? 'active' : ''}" onclick="POS._cat='';POS._onCatChange(this)">📦 Todo</div>
+              ${POS._girosPOS().map(g => `<div class="pos-cat-pill ${this._giro===g?'active':''}" onclick="POS.setGiro('${g}', this)">${(GIROS[g]||{}).icon||''} ${(GIROS[g]||{}).label||g}</div>`).join('')}
               ${this._cats().map(c=>`
                 <div class="pos-cat-pill ${this._cat===c?'active':''}" onclick="POS._cat='${c}';POS._onCatChange(this)">${c}</div>
               `).join('')}
@@ -524,6 +525,7 @@ const POS = {
     const b = this._busca.trim().toLowerCase();
     return this._prod.filter(p => {
       if (this._cat && p.categoria !== this._cat) return false;
+      if (this._giro && (p.tipo_item || 'general') !== this._giro) return false;
       if (!b) return true;
       return (p.nombre||'').toLowerCase().includes(b)
           || (p.codigo||'').toLowerCase().includes(b)
@@ -573,12 +575,54 @@ const POS = {
     this._pintarCart();
   },
 
+  /* Los giros que el comercio maneja DE VERDAD, mirando lo que hay cargado en
+     el catalogo y no la teoria: si nunca cargo nada de electronica, ese filtro
+     solo estorbaria. Con un solo giro no se muestra nada — el POS de un taller
+     no tiene por que llenarse de botones. */
+  _girosPOS() {
+    const usados = [...new Set((this._prod || []).map(p => p.tipo_item || 'general'))]
+      .filter(g => typeof GIROS !== 'undefined' && GIROS[g]);
+    return usados.length > 1 ? usados : [];
+  },
+
+  setGiro(g, el) {
+    const apagar = this._giro === g;             // volver a tocarlo lo apaga
+    this._giro = apagar ? '' : g;
+    this._cat = '';                              // giro y categoria no se pisan
+    /* Se marca la pastilla a mano, igual que _onCatChange: repintar la pagina
+       entera por un filtro perderia el carrito a medio armar. */
+    document.querySelectorAll('.pos-cat-pill').forEach(p => p.classList.remove('active'));
+    if (!apagar && el) el.classList.add('active');
+    else document.querySelector('.pos-cat-pill')?.classList.add('active');
+    this._pintarGrid();
+  },
+
   cambiarCant(id, delta) {
     const l = this._cart.find(x=>x.id===id);
     if (!l) return;
-    l.cant += delta;
+    /* Redondeo a milesimas: sumar decimales en coma flotante deja colas como
+       0.30000000000000004, que en pantalla se ve como un error del sistema. */
+    l.cant = Math.round((l.cant + delta) * 1000) / 1000;
     if (l.cant <= 0) { this._cart = this._cart.filter(x=>x.id!==id); }
     else if (l.cant > (l.stock||0)) { l.cant = l.stock; UI.toast('Límite de stock','warn'); }
+    this._pintarCart();
+  },
+
+  /* Escribir la cantidad, no sumar de uno en uno. Un quintal de maiz se vende
+     por 12.5, y el gas refrigerante por 3.75 libras: con los botones +/- eso
+     no se puede teclear. parseFloat y no parseInt — con parseInt, "12.5"
+     entraba como 12 y el comercio regalaba media unidad en cada venta. */
+  setCant(id, valor) {
+    const l = this._cart.find(x=>x.id===id);
+    if (!l) return;
+    let n = parseFloat(String(valor).replace(',', '.'));
+    if (!isFinite(n) || n <= 0) { this._cart = this._cart.filter(x=>x.id!==id); this._pintarCart(); return; }
+    /* Se redondea a milesimas: es la precision de la balanza y la de la
+       columna en la base (numeric(14,3)). Guardar mas decimales de los que la
+       base guarda haria que el total en pantalla no cuadre con el guardado. */
+    n = Math.round(n * 1000) / 1000;
+    if (n > (l.stock || 0)) { n = l.stock; UI.toast('Límite de stock','warn'); }
+    l.cant = n;
     this._pintarCart();
   },
 
@@ -611,7 +655,12 @@ const POS = {
           </div>
           <div style="display:flex;align-items:center;gap:6px">
             <button class="btn btn-ghost" style="width:26px;height:26px;border-radius:50%;padding:0;display:flex;align-items:center;justify-content:center;font-size:16px;line-height:1;border:1px solid var(--border)" onclick="POS.cambiarCant('${l.id}',-1)">−</button>
-            <span style="min-width:24px;text-align:center;font-weight:900;font-size:14px">${l.cant}</span>
+            <input class="pos-line-cant" type="number" step="0.001" min="0" value="${l.cant}"
+                   style="width:64px;text-align:center;font-weight:900;font-size:14px;padding:2px 4px;border:1px solid var(--border);border-radius:6px;background:var(--surface2);color:var(--text)"
+                   onchange="POS.setCant('${l.id}', this.value)"
+                   onclick="this.select()"
+                   title="Se puede escribir: 12.5 quintales, 3.75 libras de gas">
+            ${l.unidad ? `<span style="font-size:10.5px;color:var(--text3);min-width:38px">${l.unidad}</span>` : ''}
             <button class="btn btn-ghost" style="width:26px;height:26px;border-radius:50%;padding:0;display:flex;align-items:center;justify-content:center;font-size:16px;line-height:1;border:1px solid var(--border)" onclick="POS.cambiarCant('${l.id}',1)">+</button>
           </div>
           <div style="width:84px;text-align:right;font-weight:900;font-size:14px" class="text-amber pos-line-total">${UI.q(l.cant*l.precio)}</div>
