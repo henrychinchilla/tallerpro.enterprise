@@ -300,6 +300,12 @@
 .search-bar { position: relative; }
 .search-bar .form-input { padding-left: 14px; }
 
+/* Buscador que App._ponerBuscadores() inyecta sobre cada tabla */
+.buscador-auto { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+.buscador-auto .form-input { flex: 1; min-width: 0; }
+.buscador-auto-info { font-size: 11px; color: var(--text3); white-space: nowrap; }
+@media print { .buscador-auto { display: none !important; } }
+
 /* ── TABS ────────────────────────────────────────── */
 .tabs {
   display: flex; gap: 4px; border-bottom: 1px solid var(--border);

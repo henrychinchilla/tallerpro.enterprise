@@ -22,7 +22,7 @@ const App = {
 
   /* ── INICIAR APP ──────────────────────────────── */
   async iniciar() {
-    App._initEmojiFix();
+    App._initRenderHooks();
     localStorage.removeItem('mfa_bypass');   // purga del bypass antiguo (hueco de seguridad)
 
     /* SEGURIDAD 2FA: cuenta con factor verificado → el reto es OBLIGATORIO.
@@ -514,11 +514,116 @@ const App = {
       }
     });
   },
-  _initEmojiFix() {
+  /* Un solo observador para los retoques que van sobre CUALQUIER render:
+     los emojis de los títulos y el buscador de las tablas. */
+  _initRenderHooks() {
     if (App._emojiObs) return;
-    App._emojiObs = new MutationObserver(() => App._fixEmojiGradiente());
+    App._emojiObs = new MutationObserver(() => { App._fixEmojiGradiente(); App._ponerBuscadores(); });
     App._emojiObs.observe(document.body, { childList: true, subtree: true });
     App._fixEmojiGradiente();
+    App._ponerBuscadores();
+  },
+
+  /* ── BUSCADOR AUTOMÁTICO EN LAS TABLAS ───────────────
+     De 31 módulos con listado, sólo Clientes tenía buscador — y el suyo va
+     por consulta a la BD (DB.getClientes(busca)). Copiar eso a mano en los
+     otros 30 son 30 oportunidades de olvidarse de uno, que es exactamente
+     cómo quedaron así. Por eso el buscador se inyecta solo, encima de toda
+     tabla que haya en la página, sin tocar ningún módulo: los que existen
+     hoy y los que se agreguen mañana.
+
+     Filtra las filas YA renderizadas, no vuelve a consultar. Consecuencia
+     que hay que tener presente: en los listados por mes (Compras, OBD,
+     Contabilidad…) busca dentro del mes cargado, no en todo el historial —
+     para eso está el selector de mes/año, que sigue igual. */
+  _MIN_FILAS_BUSCADOR: 3,
+  _busquedaTabla: {},
+
+  _normalizarBusqueda(s) {
+    return String(s == null ? '' : s).toLowerCase()
+      .normalize('NFD').replace(/[\u0300-\u036f]/g, '');   // "Movil" encuentra "Movil" con tilde
+  },
+
+  /* Puro a propósito (recibe las filas, no las busca): es lo que se prueba.
+     Varias palabras = todas deben aparecer ("nissan 2017"). Devuelve cuántas
+     filas de datos quedaron visibles. */
+  _filtrarFilas(filas, q) {
+    const terminos = App._normalizarBusqueda(q).trim().split(/\s+/).filter(Boolean);
+    let visibles = 0;
+    for (const tr of filas) {
+      /* La fila de "Sin registros" no se filtra: estorba mientras se busca
+         y tiene que volver cuando se limpia la búsqueda. */
+      if (tr.dataset && tr.dataset.sinFiltro === '1') {
+        tr.style.display = terminos.length ? 'none' : '';
+        continue;
+      }
+      const texto = App._normalizarBusqueda(tr.textContent);
+      const coincide = terminos.every(t => texto.includes(t));
+      tr.style.display = coincide ? '' : 'none';
+      if (coincide) visibles++;
+    }
+    return visibles;
+  },
+
+  _filasDe(tabla) {
+    const tbody = tabla.tBodies && tabla.tBodies[0];
+    return tbody ? Array.from(tbody.rows) : [];
+  },
+
+  _ponerBuscadores() {
+    const zona = document.getElementById('page-content');
+    if (!zona) return;
+
+    zona.querySelectorAll('table').forEach((tabla, i) => {
+      if (tabla.dataset.buscador) return;
+
+      const filas = App._filasDe(tabla);
+      /* Fila de estado vacío: una sola celda con colspan. Se marca para que
+         el filtro la trate aparte y no cuente como registro. */
+      const datos = filas.filter(tr => {
+        const vacia = tr.cells.length === 1 && tr.cells[0].hasAttribute('colspan');
+        if (vacia) tr.dataset.sinFiltro = '1';
+        return !vacia;
+      });
+      if (datos.length < App._MIN_FILAS_BUSCADOR) return;   // 1-2 filas se leen de un vistazo
+
+      /* Respetar al módulo que ya trae su propio buscador (Clientes) para no
+         dejar dos cajas de búsqueda peleando sobre la misma tabla. */
+      const contenedor = tabla.closest('.page-body') || tabla.parentElement;
+      if (contenedor && contenedor.querySelector('.search-bar, input[type="text"], input[type="search"]')) return;
+
+      tabla.dataset.buscador = '1';
+      const clave = App.paginaActual + '#' + i;
+
+      const barra = document.createElement('div');
+      barra.className = 'buscador-auto';
+      const input = document.createElement('input');
+      input.className = 'form-input';
+      input.type = 'search';
+      input.placeholder = '🔍 Buscar en la lista...';
+      const info = document.createElement('span');
+      info.className = 'buscador-auto-info';
+      barra.append(input, info);
+
+      const aplicar = () => {
+        const visibles = App._filtrarFilas(App._filasDe(tabla), input.value);
+        App._busquedaTabla[clave] = input.value;
+        info.textContent = !input.value.trim() ? ''
+          : visibles ? `${visibles} de ${datos.length}`
+          : 'sin coincidencias';
+        info.style.color = input.value.trim() && !visibles ? 'var(--red)' : 'var(--text3)';
+      };
+      input.addEventListener('input', aplicar);
+
+      /* El buscador va afuera de la tarjeta/scroll de la tabla, no adentro. */
+      const ancla = tabla.closest('.table-wrap, .card') || tabla;
+      ancla.insertAdjacentElement('beforebegin', barra);
+
+      /* Un guardado o un borrado repintan la tabla entera: recuperar lo que
+         estaba escrito, o el filtro se perdería en cada acción. */
+      const previa = App._busquedaTabla[clave];
+      if (previa) { input.value = previa; aplicar(); }
+    });
   },
 
   /* ── SIDEBAR ──────────────────────────────────── */
@@ -671,6 +776,7 @@ const App = {
 
     App.paginaActual = pagina;
     App._subColapsado = false;
+    App._busquedaTabla = {};   // el filtro sobrevive al repintado, no al cambio de módulo
     /* Sincronizar la sub-sección activa con la pestaña interna del módulo */
     const def = MODULOS.find(m => m.id === pagina);
     const modulo = window.Modulos?.[pagina];
