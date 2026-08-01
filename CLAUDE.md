@@ -29,13 +29,26 @@ Al terminar cambios OK: commit + push a `main` y `npm run deploy`, automáticame
   auto-recarga al detectar SW nuevo, pero depende de que `CACHE_VERSION` cambie.
 
 ## 5. Migraciones de BD
-- Archivos en `db/migrations/NNN_*.sql` con número correlativo.
-- Aplicar vía MCP de Supabase (`apply_migration`), proyecto `oanguccrxleznozumpbi`.
-- Siempre guardar el `.sql` en el repo aunque se aplique por MCP.
+- Archivos en `db/migrations/NNN_*.sql` con número correlativo. Siempre guardar el `.sql`
+  en el repo aunque se aplique por otra vía.
+- **Aplicarlas con el CLI, que ya está autenticado en esta máquina** (no hace falta pedirle
+  nada a Henry):
+  ```
+  npx supabase link --project-ref oanguccrxleznozumpbi --yes
+  npx supabase db query --linked -f db/migrations/NNN_x.sql
+  ```
+  `db query --linked` va por la Management API: no pide la contraseña de la BD y no toca
+  el historial de migraciones (nada de `db push`, que intentaría reaplicar las 99 viejas).
+- El MCP de Supabase pide OAuth por navegador y su enlace ha devuelto
+  "Unrecognized client_id" (2026-07-31): no es el camino, usar el CLI.
+- Verificar SIEMPRE contra la BD después de aplicar (`information_schema`, `pg_trigger`),
+  y si la migración trae reglas de seguridad, probarlas con un `do $$ ... $$` que termine
+  en `raise exception` para que la transacción se aborte y no escriba nada.
 
 ## 6. Datos / integridad
 - Importaciones idempotentes (upsert con `onConflict`), nunca crear duplicados.
-- Excluir del CDN archivos sensibles vía `.cfignore` (*.pdf, *.xls, *.xlsx).
+- Excluir del CDN archivos sensibles vía `.assetsignore` (*.pdf, *.xls, *.xlsx).
+  OJO: `wrangler deploy` **ignora** `.cfignore` — ese archivo no excluye nada.
 
 ---
 Memoria extendida del proyecto: `C:\Users\henry\.claude\projects\D--tallerpro-enterprise\memory\MEMORY.md`
