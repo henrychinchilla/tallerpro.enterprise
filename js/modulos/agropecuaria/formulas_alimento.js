@@ -23,6 +23,51 @@ Modulos.formulas_alimento = {
   _insumos: [],      // precios propios del comercio (agro_insumos)
   _ref: {},          // precios del día del MAGA
 
+  /* En Guatemala el alimento se pesa en libras, no en kilos: la libra es la
+     unidad de la báscula del agroservicio. Por eso arranca en libras y la
+     preferencia se recuerda.
+
+     Un detalle que simplifica todo: el quintal son 100 libras EXACTAS, así que
+     el porcentaje de inclusión ES la libra por quintal — 56% = 56 lb. No hay
+     conversión que equivocar. */
+  _LB_KG: 0.45359237,
+  _unidad: (typeof localStorage !== 'undefined' && localStorage.getItem('tp_unidad_formulas')) || 'lb',
+
+  _setUnidad(u) {
+    this._unidad = u;
+    try { localStorage.setItem('tp_unidad_formulas', u); } catch (_) {}
+    this.render();
+  },
+
+  /* Cantidad de un ingrediente en un quintal de alimento, en la unidad
+     elegida. Las inclusiones chicas (premezcla, metionina) se muestran en
+     GRAMOS: "0.20 lb" no se pesa, 91 g sí — y es como viene la bolsa. */
+  _masa(pct) {
+    if (this._unidad === 'kg') {
+      const kg = 100 * this._LB_KG * pct / 100;
+      return kg < 0.5 ? `${(kg * 1000).toFixed(0)} g` : `${kg.toFixed(2)} kg`;
+    }
+    const lb = pct;                                   // quintal = 100 lb
+    return lb < 1 ? `${(lb * this._LB_KG * 1000).toFixed(0)} g` : `${lb.toFixed(2)} lb`;
+  },
+
+  /* Costo por unidad de peso a partir del costo por quintal. */
+  _costoUnitario(costoQq) {
+    return this._unidad === 'kg'
+      ? { valor: costoQq / (100 * this._LB_KG), etiqueta: 'por kg' }
+      : { valor: costoQq / 100,                  etiqueta: 'por libra' };
+  },
+
+  _selectorUnidadHTML() {
+    const b = (u, txt) => `<button class="btn btn-sm ${this._unidad === u ? 'btn-cyan' : 'btn-ghost'}"
+      onclick="Modulos.formulas_alimento._setUnidad('${u}')">${txt}</button>`;
+    return `<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+      <span style="font-size:12px;color:var(--text3)">Pesos en:</span>
+      ${b('lb', 'Libras')}${b('kg', 'Kilos')}
+      <span style="font-size:11px;color:var(--text3)">— las cantidades chicas salen en gramos</span>
+    </div>`;
+  },
+
   /* Ingredientes. `maga` = nombre exacto del producto en el catálogo del MAGA
      (los tres que publica); el resto se costea con el precio que carga el
      comercio, porque nadie los publica abiertamente. */
@@ -49,7 +94,8 @@ Modulos.formulas_alimento = {
                  aviso: '⚠️ SÓLO RUMIANTES. En cerdos, aves y caballos es tóxica. Incorporar bien mezclada y nunca de golpe.' },
   },
 
-  /* Porcentajes de inclusión sobre 100 kg de alimento. Suman ~100. */
+  /* Porcentajes de inclusión. Suman 100, y como el quintal son 100 libras,
+     cada porcentaje se lee directo como libras por quintal. */
   _ESPECIES: {
     aves: {
       label: '🐔 Gallinas y pollos', icon: '🐔',
@@ -115,10 +161,13 @@ Modulos.formulas_alimento = {
             usted compró. Verifique siempre las advertencias de cada ingrediente.
           </div>
         </div>
-        <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap">
+        <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;justify-content:space-between;align-items:center">
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
           ${Object.entries(this._ESPECIES).map(([k, v]) =>
             `<button class="btn btn-sm ${this._especie === k ? 'btn-cyan' : 'btn-ghost'}"
                      onclick="Modulos.formulas_alimento._irEspecie('${k}')">${v.label}</button>`).join('')}
+          </div>
+          ${this._selectorUnidadHTML()}
         </div>
         ${esp.nota ? `<div class="card" style="padding:10px 12px;margin-bottom:12px;border-left:3px solid var(--cyan);font-size:12px">${UI.esc(esp.nota)}</div>` : ''}
         ${esp.formulas.map(f => this._formulaHTML(f)).join('')}
@@ -158,18 +207,18 @@ Modulos.formulas_alimento = {
           ${faltan.length
             ? `<span class="badge badge-amber">Costo incompleto</span>`
             : `<div style="font-size:16px;font-weight:800;color:var(--green)">Q${costo.toFixed(2)}<span style="font-size:11px;color:var(--text3)">/quintal</span></div>
-               <div style="font-size:11px;color:var(--text3)">Q${(costo / 45.36).toFixed(2)} por kg</div>`}
+               <div style="font-size:11px;color:var(--text3)">Q${this._costoUnitario(costo).valor.toFixed(2)} ${this._costoUnitario(costo).etiqueta}</div>`}
         </div>
       </div>
       <div class="table-wrap"><table class="data-table">
-        <thead><tr><th>Ingrediente</th><th>%</th><th>kg por quintal</th><th>Precio qq</th><th>Costo</th></tr></thead>
+        <thead><tr><th>Ingrediente</th><th>%</th><th>${this._unidad === 'kg' ? 'Kilos' : 'Libras'} por quintal</th><th>Precio qq</th><th>Costo</th></tr></thead>
         <tbody>
           ${filas.map(([k, pct]) => {
             const p = this._precioQq(k);
             return `<tr>
               <td>${UI.esc(this._ING[k]?.label || k)}${this._ING[k]?.aviso ? ' <span title="tiene advertencia">⚠️</span>' : ''}</td>
               <td>${pct}%</td>
-              <td>${(45.36 * pct / 100).toFixed(2)} kg</td>
+              <td>${this._masa(pct)}</td>
               <td>${p ? `Q${p.q.toFixed(2)} <span style="font-size:10px;color:var(--text3)">${p.fuente}</span>` : '<span style="color:var(--amber)">falta precio</span>'}</td>
               <td>${p ? 'Q' + (p.q * pct / 100).toFixed(2) : '—'}</td>
             </tr>`;
