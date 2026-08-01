@@ -536,7 +536,11 @@ const App = {
      que hay que tener presente: en los listados por mes (Compras, OBD,
      Contabilidad…) busca dentro del mes cargado, no en todo el historial —
      para eso está el selector de mes/año, que sigue igual. */
-  _MIN_FILAS_BUSCADOR: 3,
+  /* Basta UNA fila para que aparezca el buscador. Estuvo en 3 y fue un error:
+     con dos vehículos cargados la caja no salía y el módulo parecía no tenerla.
+     El pedido fue "en todos los módulos"; que aparezca o no según cuántos
+     registros haya es impredecible, y lo impredecible se lee como roto. */
+  _MIN_FILAS_BUSCADOR: 1,
   _busquedaTabla: {},
 
   _normalizarBusqueda(s) {
@@ -585,12 +589,17 @@ const App = {
         if (vacia) tr.dataset.sinFiltro = '1';
         return !vacia;
       });
-      if (datos.length < App._MIN_FILAS_BUSCADOR) return;   // 1-2 filas se leen de un vistazo
+      if (datos.length < App._MIN_FILAS_BUSCADOR) return;   // una lista vacía no se busca
 
       /* Respetar al módulo que ya trae su propio buscador (Clientes) para no
-         dejar dos cajas de búsqueda peleando sobre la misma tabla. */
+         dejar dos cajas peleando sobre la misma tabla.
+         OJO: la marca es `.search-bar`, la clase que usa el proyecto. Antes acá
+         decía además `input[type=text]`, y eso se comía el buscador de la
+         SEGUNDA tabla de cada página: el input que encontraba era el que este
+         mismo código le había puesto a la primera. Por eso Finanzas, RRHH o
+         Usuarios quedaban con buscador en una tabla y sin él en la otra. */
       const contenedor = tabla.closest('.page-body') || tabla.parentElement;
-      if (contenedor && contenedor.querySelector('.search-bar, input[type="text"], input[type="search"]')) return;
+      if (contenedor && contenedor.querySelector('.search-bar')) return;
 
       tabla.dataset.buscador = '1';
       const clave = App.paginaActual + '#' + i;

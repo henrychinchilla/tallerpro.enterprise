@@ -1,0 +1,61 @@
+<!doctype html><html><head><meta charset="utf-8"><title>harness</title></head><body>
+<div id="page-content"></div>
+<script src="js/core/app.js"></script>
+<script>
+window.__errores = [];
+window.onerror = (m,f,l) => window.__errores.push(m + ' @' + l);
+
+/* Módulo tipo Vehículos: .page-body > .table-wrap > table.data-table */
+function pintarVehiculos(n) {
+  const filas = [];
+  for (let i = 0; i < n; i++) filas.push(`<tr><td>P-${i}23ABC</td><td>Nissan</td><td>Rogue</td><td>201${i}</td></tr>`);
+  document.getElementById('page-content').innerHTML = `
+    <div class="page-header"><h1 class="page-title">🚗 Vehículos</h1></div>
+    <div class="page-body">
+      <div class="table-wrap"><table class="data-table">
+        <thead><tr><th>Placa</th><th>Marca</th><th>Modelo</th><th>Año</th></tr></thead>
+        <tbody>${filas.join('')}</tbody>
+      </table></div>
+    </div>`;
+}
+
+/* Módulo tipo Diagnóstico OBD: .page-body > .card > table.table + selects de mes */
+function pintarOBD(n) {
+  const filas = [];
+  for (let i = 0; i < n; i++) filas.push(`<tr><td>0${i}/07/2026</td><td>Montero</td><td>VIN${i}</td></tr>`);
+  document.getElementById('page-content').innerHTML = `
+    <div class="page-header"><select class="form-select"><option>Julio</option></select></div>
+    <div class="page-body">
+      <div class="card" style="padding:0"><table class="table">
+        <thead><tr><th>Fecha</th><th>Vehículo</th><th>VIN</th></tr></thead>
+        <tbody>${filas.join('')}</tbody>
+      </table></div>
+    </div>`;
+}
+
+/* Módulo tipo Clientes: YA trae su buscador (input sin atributo type) */
+function pintarClientes(n) {
+  const filas = [];
+  for (let i = 0; i < n; i++) filas.push(`<tr><td>Cliente ${i}</td><td>NIT${i}</td></tr>`);
+  document.getElementById('page-content').innerHTML = `
+    <div class="page-body">
+      <div class="search-bar"><input class="form-input" id="cli-busca" placeholder="🔍 Buscar nombre, NIT..."></div>
+      <div class="table-wrap"><table class="data-table">
+        <thead><tr><th>Nombre</th><th>NIT</th></tr></thead>
+        <tbody>${filas.join('')}</tbody>
+      </table></div>
+    </div>`;
+}
+
+/* Dos tablas en la misma página (Finanzas, RRHH…) */
+function pintarDosTablas(n) {
+  const f = k => Array.from({length:n}, (_,i)=>`<tr><td>${k}-${i}</td><td>Q${i}00</td></tr>`).join('');
+  document.getElementById('page-content').innerHTML = `
+    <div class="page-body">
+      <div class="card"><table class="data-table"><tbody>${f('ing')}</tbody></table></div>
+      <div class="card"><table class="data-table"><tbody>${f('egr')}</tbody></table></div>
+    </div>`;
+}
+
+window.contar = () => document.querySelectorAll('#page-content .buscador-auto').length;
+</script></body></html>
