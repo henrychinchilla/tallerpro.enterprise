@@ -26,17 +26,22 @@ const App = {
     localStorage.removeItem('mfa_bypass');   // purga del bypass antiguo (hueco de seguridad)
 
     /* SEGURIDAD 2FA: cuenta con factor verificado → el reto es OBLIGATORIO.
-       La activación inicial (cuenta sin factor) sí es posponible. */
+       La activación inicial (cuenta sin factor) sí es posponible, y el reto
+       sólo se salta si el usuario pausó su 2FA (Auth.mfaPausado: bandera en
+       la BD que exige un código verificado para encenderse, mig 099). */
     if (typeof Auth !== 'undefined' && Auth.getMFAStatus) {
       try {
         const mfa = await Auth.getMFAStatus();
-        if (mfa.nextLevel === 'aal2' && mfa.currentLevel === 'aal1') {
+        if (mfa.nextLevel === 'aal2' && mfa.currentLevel === 'aal1' && !Auth.mfaPausado()) {
           document.getElementById('app')?.classList.remove('visible');
           document.getElementById('login-screen')?.style.removeProperty('display');
           if (typeof renderLogin === 'function') renderLogin('mfa-challenge');
           return;
         }
-        if (mfa.currentLevel === 'aal1' && localStorage.getItem('mfa_enroll_later') !== 'true') {
+        /* Ojo: con el 2FA pausado el nivel también es aal1 — sin este guard
+           la pantalla de enrolamiento saldría a quien YA tiene su factor. */
+        if (mfa.currentLevel === 'aal1' && !Auth.mfaPausado() &&
+            localStorage.getItem('mfa_enroll_later') !== 'true') {
           document.getElementById('app')?.classList.remove('visible');
           document.getElementById('login-screen')?.style.removeProperty('display');
           if (typeof renderLogin === 'function') renderLogin('mfa-enroll');
