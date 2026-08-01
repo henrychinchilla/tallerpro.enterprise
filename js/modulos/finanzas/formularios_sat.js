@@ -99,7 +99,7 @@ Modulos.contabilidad.sat = {
   /* Formularios aplicables según régimen fiscal (LAT Decreto 10-2012 + IVA 27-92).
      Siempre incluidos: SAT-1331, SAT-2085, SAT-1431 (aplican a todos los regímenes). */
   _formsParaRegimen(fiscal) {
-    const pequeno   = (fiscal?.regimen_iva||'general').toLowerCase().startsWith('peque');
+    const pequeno   = regimenSimplificado(fiscal?.regimen_iva||'general');
     const utilidades= (Number(fiscal?.tasa_isr)||0.05) >= 0.2;
     if (pequeno) {
       return [
@@ -201,7 +201,7 @@ Modulos.contabilidad.sat = {
     let tenant = {};
     try { tenant = await DB.getTenant() || {}; } catch(e) {}
     const fiscal = Modulos.contabilidad._fiscal || await DB.getConfigFiscalFresh().catch(()=>({})) || {};
-    const pequeno    = (fiscal.regimen_iva||'general').toLowerCase().startsWith('peque');
+    const pequeno    = regimenSimplificado(fiscal.regimen_iva||'general');
     const utilidades = (Number(fiscal.tasa_isr)||0.05) >= 0.2;
     const regimenLabel = pequeno ? 'Pequeño Contribuyente (IVA 5%)' : utilidades ? 'Régimen Sobre Utilidades (ISR 25%)' : 'Régimen Opcional Simplificado (ISR 5%/7%)';
 
@@ -301,7 +301,7 @@ Modulos.contabilidad.sat = {
   /* ── CAMBIO DE RÉGIMEN FISCAL con aviso legal ── */
   async modalCambiarRegimen() {
     const fiscal = Modulos.contabilidad._fiscal || await DB.getConfigFiscalFresh().catch(()=>({})) || {};
-    const pequeno    = (fiscal.regimen_iva||'general').toLowerCase().startsWith('peque');
+    const pequeno    = regimenSimplificado(fiscal.regimen_iva||'general');
     const utilidades = (Number(fiscal.tasa_isr)||0.05) >= 0.2;
     const regimenActual = pequeno ? 'Pequeño Contribuyente' : utilidades ? 'Sobre Utilidades (25%)' : 'Opcional Simplificado (5%/7%)';
 
@@ -376,7 +376,7 @@ Modulos.contabilidad.sat = {
     /* SAT: General → Pequeño requiere autorización previa en el RTU y no es
        retroactivo. Pequeño → General siempre procede. Se advierte pero se
        respeta la decisión del cliente. */
-    const eraPequeno = (fiscal.regimen_iva||'general').toLowerCase().startsWith('peque');
+    const eraPequeno = regimenSimplificado(fiscal.regimen_iva||'general');
     if (!eraPequeno && regimen_iva === 'pequeno') {
       if (!confirm('⚠️ Cambiar de Régimen General a Pequeño Contribuyente requiere:\n\n' +
         '• Actualización de datos en el RTU (Agencia Virtual SAT) y autorización.\n' +

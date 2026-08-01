@@ -193,7 +193,7 @@ Modulos.contabilidad = {
     UI.loading(el);
     const { mes, anio, periodo } = this._rango();
     const nombreMes = new Date(anio, mes-1, 1).toLocaleDateString('es-GT',{month:'long',year:'numeric'});
-    const pequeno = (this._fiscal?.regimen_iva||'general').toLowerCase().startsWith('peque');
+    const pequeno = regimenSimplificado(this._fiscal?.regimen_iva||'general');
     const utilidades = (Number(this._fiscal?.tasa_isr)||0.05) >= 0.2;
 
 
@@ -436,7 +436,7 @@ Modulos.contabilidad = {
       const obligaciones = await DB.getObligaciones(anio);
       const hoy = new Date().toISOString().slice(0,10);
       const utilidades = (Number(this._fiscal?.tasa_isr)||0.05) >= 0.2;
-      const pequeno    = (this._fiscal?.regimen_iva||'general').toLowerCase().startsWith('peque');
+      const pequeno    = regimenSimplificado(this._fiscal?.regimen_iva||'general');
       /* ISR anual: vence 31 de marzo del año siguiente */
       const venceAnual = `${anio+1}-03-31`;
       const alertaAnual = utilidades && hoy >= `${anio}-10-01`; /* aviso desde oct */
@@ -502,7 +502,7 @@ Modulos.contabilidad = {
   /* ── Registrar obligaciones ── */
   async registrarObligacion(tipo) {
     const { mes, anio, periodo } = this._rango();
-    const pequeno = (this._fiscal?.regimen_iva||'general').toLowerCase().startsWith('peque');
+    const pequeno = regimenSimplificado(this._fiscal?.regimen_iva||'general');
     let monto, vence, notas;
     if (tipo === 'IVA') {
       const d = await this._ivaConArrastre();
