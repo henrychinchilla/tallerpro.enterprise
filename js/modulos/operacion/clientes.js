@@ -117,6 +117,8 @@ Modulos.clientes = {
           </div>
         </div>
       </div>
+      ${esEdicion ? this._htmlDocumentos(id) : `
+      <div class="form-group" style="font-size:11px;color:var(--text3)">📎 Guarda el cliente primero para poder adjuntar DPI, licencia o pasaporte.</div>`}
       ${!esEdicion?`
       <div class="card" style="background:var(--amber-dim);border-color:var(--amber-border);margin-top:4px">
         <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px">
@@ -131,6 +133,42 @@ Modulos.clientes = {
           ${esEdicion?'Guardar Cambios':'Crear Cliente'}
         </button>
       </div>`,'640px');
+    if (esEdicion) Docs.render('cliente', id, 'cli-docs');
+  },
+
+  /* DPI, licencia (tenencia/portación) o pasaporte — foto o PDF. Vive en el
+     cliente en general (no solo en Armería) porque cualquier vertical puede
+     necesitar identificar a alguien; Armería es quien más lo exige hoy. */
+  _DOCS_CLIENTE: {
+    dpi: { icon: '🪪', label: 'DPI' },
+    licencia_arma: { icon: '📋', label: 'Licencia (tenencia/portación)' },
+    pasaporte: { icon: '📘', label: 'Pasaporte' },
+  },
+
+  _htmlDocumentos(id) {
+    return `
+      <div class="form-group" style="background:var(--card2);border-radius:8px;padding:10px 12px">
+        <label class="form-label">📎 Documentos de identificación</label>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">
+          ${Object.entries(this._DOCS_CLIENTE).map(([tipo, d]) => `
+            <button type="button" class="btn btn-sm btn-ghost" onclick="document.getElementById('cli-doc-${tipo}').click()">${d.icon} Subir ${d.label}</button>
+            <input type="file" id="cli-doc-${tipo}" accept="image/*,application/pdf" style="display:none"
+              onchange="Modulos.clientes._subirDoc('${id}','${tipo}','${d.label}',this)">
+          `).join('')}
+        </div>
+        <div id="cli-docs"></div>
+      </div>`;
+  },
+
+  async _subirDoc(clienteId, tipo, titulo, inputEl) {
+    const file = inputEl.files?.[0];
+    if (!file) return;
+    UI.toast('Subiendo...', 'info');
+    const { error } = await Docs.subirArchivo('cliente', clienteId, tipo, titulo, file);
+    inputEl.value = '';
+    if (error) { UI.toast('Error: ' + error.message, 'error'); return; }
+    UI.toast(`${titulo} subido ✓`);
+    Docs.render('cliente', clienteId, 'cli-docs');
   },
 
   async guardar(id='') {
