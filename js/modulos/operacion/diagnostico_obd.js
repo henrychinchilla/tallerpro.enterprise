@@ -1094,6 +1094,27 @@ Modulos.diagnostico_obd = {
       .toUpperCase().replace(/[^A-Z0-9]+/g, '-').replace(/^-+|-+$/g, '') || '_';
   },
 
+  /* El índice de boletines viene de NHTSA, así que trae el nombre con que el
+     vehículo se vendió en EE.UU. En Guatemala circula el MISMO carro con el
+     nombre de otro mercado: la Rogue es la X-Trail, la NP300 es la Frontier.
+     Sin esta tabla el taller escribe el nombre de acá y se queda sin boletines
+     — que es peor que no tenerlos, porque parece que el modelo no tiene.
+
+     Solo van equivalencias donde es literalmente la misma plataforma. Un
+     boletín de otro vehículo manda al mecánico por el camino equivocado, así
+     que ante la duda NO se agrega (por eso no está Tracker→Trailblazer: el
+     Tracker viejo era el Vitara y el TrailBlazer 2002-2009 otra camioneta).
+     El filtro por año de _tsbBuscar tapa el resto: si la equivalencia solo
+     vale para cierta generación, los años que no cuadran salen solos. */
+  _tsbAliasMercado: {
+    'NISSAN':     { 'X-TRAIL':'ROGUE', 'QASHQAI':'ROGUE-SPORT',
+                    'NAVARA':'FRONTIER', 'NP300':'FRONTIER' },
+    'MITSUBISHI': { 'ASX':'OUTLANDER-SPORT' },   // ASX = RVR = Outlander Sport
+    'KIA':        { 'CERATO':'FORTE' },
+    'SUZUKI':     { 'VITARA':'GRAND-VITARA' },
+    'ISUZU':      { 'ELF':'N-SERIES', 'FORWARD':'F-SERIES' }
+  },
+
   /* El taller escribe "Corolla XLI 1.8" y el catálogo dice "COROLLA": hay que
      resolver el nombre contra el índice de modelos antes de pedir el archivo. */
   async _tsbModelo(marcaSlug, modelo) {
@@ -1108,6 +1129,17 @@ Modulos.diagnostico_obd = {
     if (!lista || !lista.length) return null;
     const mo = this._tsbSlug(modelo);
     if (lista.includes(mo)) return mo;
+    /* Nombre de otro mercado: se traduce antes de rendirse. Se acepta tanto
+       "X-Trail" como "X-Trail 2.5 SL", y solo si el destino existe en el índice
+       (si NHTSA cambia el nombre, preferimos quedarnos sin boletín que servir
+       uno inventado). */
+    const alias = this._tsbAliasMercado[marcaSlug];
+    if (alias) {
+      const k = Object.keys(alias)
+        .filter(a => mo === a || mo.startsWith(a + '-'))
+        .sort((a, b) => b.length - a.length)[0];
+      if (k && lista.includes(alias[k])) return alias[k];
+    }
     /* Prioridad: que el nombre del catálogo esté contenido en lo que escribió el
        taller (COROLLA dentro de COROLLA-XLI-1-8), y de esos el más largo. Solo si
        no hay ninguno se acepta al revés, y ahí el más corto: con "SILVERADO" a
