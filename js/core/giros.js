@@ -152,6 +152,26 @@ const GIROS = {
     ],
   },
 
+  armeria: {
+    label: 'Armería', icon: '🎯',
+    modulos: ['armeria'],
+    /* Un arma es pieza única (número de serie propio); la munición se cuenta
+       por caja o por cartucho suelto. No hay quintal ni metro aquí. */
+    unidades: ['pieza', 'caja', 'unidad'],
+    categorias: ['Arma corta (pistola/revólver)', 'Arma larga (rifle/escopeta)',
+                 'Munición', 'Accesorios y repuestos', 'Equipo de limpieza y protección'],
+    campos: [
+      { id: 'tipo_arma', label: 'Tipo', tipo: 'lista',
+        opciones: ['pistola', 'revólver', 'rifle', 'escopeta', 'munición', 'accesorio', 'no aplica'] },
+      { id: 'marca',        label: 'Marca',  tipo: 'texto', ph: 'Glock, Smith & Wesson, Remington...' },
+      { id: 'modelo',       label: 'Modelo', tipo: 'texto' },
+      { id: 'calibre',      label: 'Calibre', tipo: 'texto', ph: '9mm, .38 Special, .22LR, 12 gauge...' },
+      { id: 'numero_serie', label: 'Número de serie', tipo: 'texto',
+        ayuda: 'DIGECAM exige el número de serie de cada arma en toda venta; sin él no se puede registrar en SIDIGECAM.' },
+      { id: 'pais_origen',  label: 'País de origen', tipo: 'texto' },
+    ],
+  },
+
   ferreteria: {
     label: 'Ferretería', icon: '🔩',
     modulos: [],

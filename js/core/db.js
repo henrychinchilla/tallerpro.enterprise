@@ -966,6 +966,41 @@ const DB = {
      pagos_agroservicio sin actualizar anticipo/saldo, así que dejarlo vivo era
      una trampa para volver a sobrescribir abonos. */
 
+  /* ── ARMERÍA (venta y compra, con cumplimiento DIGECAM) ── */
+  async getArmeriaOperaciones(filtros={}) {
+    let q = getSB().from('armeria_operaciones')
+      .select('*, clientes(nombre,tel), proveedores(nombre), facturas(num)')
+      .eq('tenant_id', getTID()).order('fecha',{ascending:false});
+    if (filtros.tipo) q = q.eq('tipo', filtros.tipo);
+    const { data } = await q;
+    return (data||[]).map(r=>({ ...r, factura_num: r.facturas?.num||null }));
+  },
+
+  /* Munición ya vendida a este DPI en el mes en curso (excluyendo la
+     operación que se está editando, si aplica) — para el tope legal de
+     200/250 cartuchos mensuales. Suma en JS: el volumen por comercio no
+     justifica una función agregada en el servidor. */
+  async getConsumoMunicionMes(dpi, excluirId = null) {
+    if (!dpi) return 0;
+    const desde = new Date(); desde.setDate(1); desde.setHours(0, 0, 0, 0);
+    let q = getSB().from('armeria_operaciones').select('id,cantidad')
+      .eq('tenant_id', getTID()).eq('tipo', 'venta').eq('categoria', 'munición')
+      .eq('contraparte_dpi', dpi).gte('fecha', desde.toISOString());
+    const { data } = await q;
+    return (data || []).filter(r => r.id !== excluirId).reduce((s, r) => s + (Number(r.cantidad) || 0), 0);
+  },
+
+  async upsertArmeriaOperacion(fields) {
+    const payload = { ...fields, tenant_id: getTID(), updated_at: new Date().toISOString() };
+    if (fields.id) {
+      const { error } = await getSB().from('armeria_operaciones').update(payload).eq('id', fields.id);
+      return { error };
+    }
+    payload.num = await this.siguienteNum('ARM', 'ARM', 'armeria_operaciones');
+    const { data, error } = await getSB().from('armeria_operaciones').insert(payload).select().single();
+    return { data, error };
+  },
+
   /* ── VENTA DE GRANOS ─────────────────────────────── */
   async getVentaGranos(filtros={}) {
     let q = getSB().from('venta_granos').select('*, clientes(nombre), proveedores(nombre)')
