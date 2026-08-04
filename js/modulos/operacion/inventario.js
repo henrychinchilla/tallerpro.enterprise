@@ -1,6 +1,9 @@
 /* NexusPro v3.0 — inventario/index.js */
 Modulos.inventario = {
   _data: [], _bodegas: [], _proveedores: [], _img: '', _giroFiltro: '',
+  /* Catálogo editable de los campos que lo declaran (ver `catalogo` en
+     giros.js). Hoy solo armería lo usa; se carga una vez por render. */
+  _catalogo: null,
 
   /* Los giros que le tocan a este comercio, segun sus modulos activos. Un
      taller ve mecanico; El Granjero ve granos. 'general' siempre esta. */
@@ -47,6 +50,14 @@ Modulos.inventario = {
         control = `<input class="form-input" id="${id}" type="number" step="1" value="${v}" placeholder="${UI.esc(c.ph || '')}">`;
       } else if (c.tipo === 'decimal') {
         control = `<input class="form-input" id="${id}" type="number" step="0.001" value="${v}" placeholder="${UI.esc(c.ph || '')}">`;
+      } else if (c.catalogo) {
+        /* Lista desplegable EDITABLE: <datalist> deja elegir de la lista o
+           escribir uno nuevo, que se guarda al grabar el artículo. Nativo del
+           navegador — no hace falta librería ni un <select> que obligue a
+           mantener una lista cerrada. */
+        const opciones = this._catalogo?.[c.catalogo] || [];
+        control = `<input class="form-input" id="${id}" list="${id}-dl" value="${v}" placeholder="${UI.esc(c.ph || '')}">` +
+          `<datalist id="${id}-dl">${opciones.map(o => `<option value="${UI.esc(o)}">`).join('')}</datalist>`;
       } else {
         control = `<input class="form-input" id="${id}" value="${v}" placeholder="${UI.esc(c.ph || '')}">`;
       }
@@ -65,9 +76,12 @@ Modulos.inventario = {
   async render(busca='') {
     const el = document.getElementById('page-content');
     UI.loading(el);
-    const [data, bodegas, proveedores] = await Promise.all([
-      DB.getInventario(null), DB.getBodegas(), DB.getProveedores().catch(()=>[])
+    const [data, bodegas, proveedores, catalogo] = await Promise.all([
+      DB.getInventario(null), DB.getBodegas(), DB.getProveedores().catch(()=>[]),
+      /* Solo si el comercio tiene armería: es el único giro con catálogo. */
+      this._giros().includes('armeria') ? DB.getCatalogoArmeria().catch(()=>null) : Promise.resolve(null),
     ]);
+    this._catalogo = catalogo;
     /* Filtro real, no cosmético: un artículo de un giro que el rol no puede
        ver ni siquiera entra a this._data (antes solo se ocultaba la fila ya
        pintada — quedaba en el DOM y en memoria). */
@@ -343,6 +357,20 @@ Modulos.inventario = {
     if (id) fields.id = id;
     const {error} = await DB.upsertInventario(fields);
     if (error) { UI.toast('Error: '+error.message,'error'); return; }
+
+    /* Lo que el usuario escribió y no estaba en el catálogo queda disponible
+       la próxima vez, igual que al registrar una operación de armería. */
+    const conCatalogo = perfil.campos.filter(c => c.catalogo);
+    if (conCatalogo.length && DB.agregarCatalogoArmeria) {
+      const nuevos = {};
+      conCatalogo.forEach(c => {
+        const v = (c.col ? fields[c.id] : atributos[c.id]) || '';
+        if (v) nuevos[c.catalogo] = v;
+      });
+      await DB.agregarCatalogoArmeria(nuevos).catch(()=>{});
+      this._catalogo = null;   // se recarga en el próximo render
+    }
+
     UI.cerrarModal(); UI.toast(id?'Actualizado ✓':'Artículo creado ✓');
     this.render();
   },

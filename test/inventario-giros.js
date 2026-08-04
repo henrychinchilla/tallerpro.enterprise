@@ -65,6 +65,25 @@ const ok = (n, c) => { if (c) { pasadas++; console.log('PASS — ' + n); } else 
   ok('y la fecha de vencimiento del producto', /type="date"/.test(agro));
 
   ok('el giro general no inventa campos', INV._camposGiroHTML('general', {}) === '');
+
+  /* Armería: los campos con `catalogo` se pintan como lista desplegable
+     editable (datalist), no como texto suelto. Antes eran texto plano y no
+     había forma de elegir una marca ya usada — de ahí "no tiene dropdown". */
+  INV._catalogo = { marca: ['Glock', 'Beretta'], modelo: ['17'], calibre: ['9mm'], pais: ['Austria'] };
+  const arm = INV._camposGiroHTML('armeria', {});
+  ok('armería pinta datalist para marca', /id="inv-g-marca-dl"/.test(arm));
+  ok('...y para modelo, calibre y país',
+     /id="inv-g-modelo-dl"/.test(arm) && /id="inv-g-calibre-dl"/.test(arm) && /id="inv-g-pais_origen-dl"/.test(arm));
+  ok('el input de marca queda ligado a su datalist', /id="inv-g-marca" list="inv-g-marca-dl"/.test(arm));
+  ok('las opciones del catálogo llegan al datalist', /<option value="Glock">/.test(arm));
+  ok('el número de serie NO lleva catálogo (es único por arma)', !/id="inv-g-numero_serie-dl"/.test(arm));
+
+  /* Sin catálogo cargado no debe reventar ni perder el campo: sólo queda sin
+     sugerencias (ej. un comercio recién activado). */
+  INV._catalogo = null;
+  const armSin = INV._camposGiroHTML('armeria', {});
+  ok('sin catálogo el campo sigue existiendo, sólo sin opciones',
+     /id="inv-g-marca"/.test(armSin) && /id="inv-g-marca-dl"><\/datalist>/.test(armSin));
 }
 
 /* ── Los valores guardados vuelven al formulario ────────────────────────── */

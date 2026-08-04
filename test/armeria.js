@@ -116,6 +116,30 @@ ok('una navaja tampoco', !ARM._esArma('arma_blanca'));
                     contraparte_licencia_num: 'L1', contraparte_dpi: 'D1' }).ok);
 }
 
+/* ── Modelos filtrados por marca ─────────────────────────────────────────
+   El catálogo de modelos faltaba por completo en la mig 114: el <datalist>
+   quedaba vacío y se veía como "el modelo no tiene dropdown". Además una
+   lista plana no sirve — al elegir Glock no deben salir modelos Remington. */
+{
+  ARM._catalogo = {
+    marca: ['Glock', 'Remington'],
+    modelo: ['17', '19', '870', '700'],
+    modeloPorMarca: { Glock: ['17', '19'], Remington: ['870', '700'] },
+    calibre: ['9mm'], pais: ['Austria'],
+  };
+  ok('con Glock elegido, sólo salen modelos Glock',
+     JSON.stringify(ARM._opcionesModelo('Glock')) === JSON.stringify(['17', '19']));
+  ok('con Remington, sólo los suyos',
+     JSON.stringify(ARM._opcionesModelo('Remington')) === JSON.stringify(['870', '700']));
+  ok('sin marca elegida se ofrecen todos (mejor que un dropdown vacío)',
+     ARM._opcionesModelo('').length === 4);
+  ok('una marca nueva no deja el dropdown vacío: cae a la lista completa',
+     ARM._opcionesModelo('MarcaQueNoExiste').length === 4);
+  ok('espacios alrededor de la marca no rompen el filtro',
+     JSON.stringify(ARM._opcionesModelo('  Glock  ')) === JSON.stringify(['17', '19']));
+  ARM._catalogo = null;
+}
+
 /* ── Avisos legales por categoría ───────────────────────────────────────── */
 {
   ok('el gas comprimido avisa que está exento por el art. 68',
