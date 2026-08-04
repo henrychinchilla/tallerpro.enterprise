@@ -9,6 +9,12 @@ Modulos.inventario = {
       ? girosDelTenant(Auth.tenant?.modulos_activos)
       : ['mecanico', 'general'];
   },
+  /* Igual que _giros() pero solo los que el rol en sesión puede ver — el
+     comercio puede tener varios giros activos aunque este usuario no tenga
+     permiso sobre todos (ej. mecánico no debería ver el giro de armería). */
+  _girosVisibles() {
+    return this._giros().filter(g => typeof giroVisible !== 'function' || giroVisible(g));
+  },
   _giroDe(item) {
     const gs = this._giros();
     const g = item?.tipo_item;
@@ -59,9 +65,16 @@ Modulos.inventario = {
   async render(busca='') {
     const el = document.getElementById('page-content');
     UI.loading(el);
-    [this._data, this._bodegas, this._proveedores] = await Promise.all([
+    const [data, bodegas, proveedores] = await Promise.all([
       DB.getInventario(null), DB.getBodegas(), DB.getProveedores().catch(()=>[])
     ]);
+    /* Filtro real, no cosmético: un artículo de un giro que el rol no puede
+       ver ni siquiera entra a this._data (antes solo se ocultaba la fila ya
+       pintada — quedaba en el DOM y en memoria). */
+    const visibles = this._girosVisibles();
+    this._data = data.filter(i => visibles.includes(this._giroDe(i)));
+    this._bodegas = bodegas; this._proveedores = proveedores;
+    if (this._giroFiltro && !visibles.includes(this._giroFiltro)) this._giroFiltro = '';
     const bajoStock = this._data.filter(i=>i.stock<=i.min_stock);
     const verCosto = puedeVerCosto();
     const cats = [...new Set(this._data.map(i=>i.categoria).filter(Boolean))].sort();
@@ -71,9 +84,9 @@ Modulos.inventario = {
         <div><h1 class="page-title">📦 Inventario</h1>
         <p class="page-subtitle">// ${this._data.length} artículos${bajoStock.length>0?` · <span class="text-red">⚠️ ${bajoStock.length} bajo mínimo</span>`:''}</p></div>
         <div class="page-actions" style="display:flex;gap:8px;flex-wrap:wrap">
-          ${this._giros().length > 1 ? `<select class="form-select" id="inv-filtro-giro" style="width:180px" onchange="Modulos.inventario._filtrarLocal()">
+          ${this._girosVisibles().length > 1 ? `<select class="form-select" id="inv-filtro-giro" style="width:180px" onchange="Modulos.inventario._filtrarLocal()">
             <option value="">Todos los giros</option>
-            ${this._giros().map(g => `<option value="${g}" ${this._giroFiltro === g ? 'selected' : ''}>${this._perfil(g).icon} ${this._perfil(g).label}</option>`).join('')}
+            ${this._girosVisibles().map(g => `<option value="${g}" ${this._giroFiltro === g ? 'selected' : ''}>${this._perfil(g).icon} ${this._perfil(g).label}</option>`).join('')}
           </select>` : ''}
           <select class="form-select" id="inv-filtro-cat" style="width:170px" onchange="Modulos.inventario._filtrarLocal()">
             <option value="">Todas las categorías</option>
@@ -144,9 +157,16 @@ Modulos.inventario = {
     const item = id ? this._data.find(x=>x.id===id) : {};
     const esEdicion = !!id;
     this._img = item.imagen_url || '';
-    const giro = giroForzado || this._giroDe(item);
+    const gs = this._girosVisibles();
+    /* giroForzado viene de código de confianza (el propio módulo llamando a
+       su inventario), no de un <select> abierto a cualquier valor — se
+       valida solo contra visibilidad por rol, no contra "está activo en el
+       tenant" (eso ya lo decide quien llama). Si el rol no puede ver ese
+       giro, cae al primero que sí puede ver — nunca se queda mostrando uno
+       vedado. */
+    const candidato = giroForzado || this._giroDe(item);
+    const giro = (typeof giroVisible !== 'function' || giroVisible(candidato)) ? candidato : (gs[0] || 'general');
     const perfil = this._perfil(giro);
-    const gs = this._giros();
     /* Las categorias del giro primero (son las que corresponden), y despues
        las que el comercio ya haya escrito, sin repetir. */
     const cats = [...new Set([...(perfil.categorias || []),
