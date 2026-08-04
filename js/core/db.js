@@ -966,6 +966,27 @@ const DB = {
      pagos_agroservicio sin actualizar anticipo/saldo, así que dejarlo vivo era
      una trampa para volver a sobrescribir abonos. */
 
+  /* ── ARMERÍA (venta y compra, con cumplimiento DIGECAM) ── */
+  async getArmeriaOperaciones(filtros={}) {
+    let q = getSB().from('armeria_operaciones')
+      .select('*, clientes(nombre,tel), proveedores(nombre), facturas(num)')
+      .eq('tenant_id', getTID()).order('fecha',{ascending:false});
+    if (filtros.tipo) q = q.eq('tipo', filtros.tipo);
+    const { data } = await q;
+    return (data||[]).map(r=>({ ...r, factura_num: r.facturas?.num||null }));
+  },
+
+  async upsertArmeriaOperacion(fields) {
+    const payload = { ...fields, tenant_id: getTID(), updated_at: new Date().toISOString() };
+    if (fields.id) {
+      const { error } = await getSB().from('armeria_operaciones').update(payload).eq('id', fields.id);
+      return { error };
+    }
+    payload.num = await this.siguienteNum('ARM', 'ARM', 'armeria_operaciones');
+    const { data, error } = await getSB().from('armeria_operaciones').insert(payload).select().single();
+    return { data, error };
+  },
+
   /* ── VENTA DE GRANOS ─────────────────────────────── */
   async getVentaGranos(filtros={}) {
     let q = getSB().from('venta_granos').select('*, clientes(nombre), proveedores(nombre)')
