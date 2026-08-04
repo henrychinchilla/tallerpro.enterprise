@@ -920,96 +920,16 @@ Modulos.ordenes = {
   },
 
   /* ── MODAL FORM ───────────────────────────── */
-  _onTipoServicioChange(subTipoVal = '', detalleVal = '') {
-    const tipo = document.getElementById('ot-tipo-servicio')?.value || 'vehicular';
-    const cliId = document.getElementById('ot-cli')?.value || null;
-    const container = document.getElementById('ot-dinamico-container');
-    if (!container) return;
-
-    let html = '';
-    if (tipo === 'vehicular') {
-      html = `<div class="form-group"><label class="form-label">Vehículo del cliente *</label>
-        <select class="form-select" id="ot-veh">
-          ${this._opcionesVehiculo(cliId, detalleVal || null)}
-        </select></div>`;
-    } else if (tipo === 'electronica') {
-      html = `<div class="form-row">
-        <div class="form-group"><label class="form-label">Tipo de Equipo *</label>
-          <select class="form-select" id="ot-elec-tipo">
-            ${['celular','tablet','laptop','computadora','tv','consola','audio','smartwatch','monitor','impresora','gpu','otro'].map(t=>`
-              <option value="${t}" ${subTipoVal.toLowerCase()===t?'selected':''}>${t.charAt(0).toUpperCase()+t.slice(1)}</option>
-            `).join('')}
-          </select></div>
-        <div class="form-group"><label class="form-label">Marca / Modelo / Serie *</label>
-          <input class="form-input" id="ot-elec-marca" type="text" placeholder="Ej. Samsung S23 - SN: 12345" value="${detalleVal}"></div>
-      </div>`;
-    } else if (tipo === 'herreria') {
-      html = `<div class="form-row">
-        <div class="form-group"><label class="form-label">Tipo de Estructura / Trabajo *</label>
-          <select class="form-select" id="ot-her-tipo">
-            ${['porton','baranda','escalera','estructura_metalica','techo_metalico','reja_seguridad','pergola','mueble_forja','puerta_seguridad','otro'].map(t=>`
-              <option value="${t}" ${subTipoVal.toLowerCase()===t?'selected':''}>${t.replace('_',' ').charAt(0).toUpperCase()+t.replace('_',' ').slice(1)}</option>
-            `).join('')}
-          </select></div>
-        <div class="form-group"><label class="form-label">Medidas / Detalles *</label>
-          <input class="form-input" id="ot-her-medidas" type="text" placeholder="Ej. 3.50 x 2.10 metros - Hierro negro" value="${detalleVal}"></div>
-      </div>`;
-    } else if (tipo === 'peleteria') {
-      html = `<div class="form-row">
-        <div class="form-group"><label class="form-label">Tipo de Producto *</label>
-          <select class="form-select" id="ot-pel-tipo">
-            ${['cinturon','bolso','cartera','billetera','calzado','mochila','chamarra','talabarteria','funda','otro'].map(t=>`
-              <option value="${t}" ${subTipoVal.toLowerCase()===t?'selected':''}>${t.charAt(0).toUpperCase()+t.slice(1)}</option>
-            `).join('')}
-          </select></div>
-        <div class="form-group"><label class="form-label">Material / Color *</label>
-          <input class="form-input" id="ot-pel-material" type="text" placeholder="Ej. Cuero de res cafe" value="${detalleVal}"></div>
-      </div>`;
-    } else if (tipo === 'refrigeracion') {
-      html = `<div class="form-row">
-        <div class="form-group"><label class="form-label">Sistema a Atender *</label>
-          <select class="form-select" id="ot-ref-tipo">
-            ${['ac_vehicular','ac_domiciliar','ac_industrial','refrigeracion_comercial','camara_fria','congelador','chiller','otro'].map(t=>`
-              <option value="${t}" ${subTipoVal.toLowerCase()===t?'selected':''}>${t.replace('_',' ').charAt(0).toUpperCase()+t.replace('_',' ').slice(1)}</option>
-            `).join('')}
-          </select></div>
-        <div class="form-group"><label class="form-label">Tipo de Gas Refrigerante</label>
-          <select class="form-select" id="ot-ref-gas">
-            ${['R134a','R410A','R22','R404A','R32','R600a','Otro'].map(g=>`
-              <option value="${g}" ${detalleVal.includes(g)?'selected':''}>${g}</option>
-            `).join('')}
-          </select></div>
-      </div>`;
-    } else if (tipo === 'agroservicio') {
-      html = `<div class="form-row">
-        <div class="form-group"><label class="form-label">Tipo de Servicio *</label>
-          <select class="form-select" id="ot-agro-tipo">
-            ${['fumigacion','control_plagas','fertilizacion','asesoria','siembra','cosecha','analisis_suelo','otro'].map(t=>`
-              <option value="${t}" ${subTipoVal.toLowerCase()===t?'selected':''}>${t.replace('_',' ').charAt(0).toUpperCase()+t.replace('_',' ').slice(1)}</option>
-            `).join('')}
-          </select></div>
-        <div class="form-group"><label class="form-label">Cultivo / Detalles de Área *</label>
-          <input class="form-input" id="ot-agro-detalles" type="text" placeholder="Ej. Cultivo de café - 3 Hectáreas" value="${detalleVal}"></div>
-      </div>`;
-    } else if (tipo === 'venta_granos') {
-      html = `<div class="form-row">
-        <div class="form-group"><label class="form-label">Cereal / Grano *</label>
-          <select class="form-select" id="ot-granos-tipo">
-            ${['maiz_amarillo','maiz_blanco','frijol_negro','frijol_colorado','sorgo','trigo','cafe_pergamino','otro'].map(t=>`
-              <option value="${t}" ${subTipoVal.toLowerCase()===t?'selected':''}>${t.replace('_',' ').charAt(0).toUpperCase()+t.replace('_',' ').slice(1)}</option>
-            `).join('')}
-          </select></div>
-        <div class="form-group"><label class="form-label">Cantidad Quintales (qq) *</label>
-          <input class="form-input" id="ot-granos-qq" type="number" min="0" placeholder="Ej. 120" value="${detalleVal.replace(' qq','')}"></div>
-      </div>`;
-    } else if (tipo === 'general') {
-      html = `<div class="form-group"><label class="form-label">Identificador / Referencia del Trabajo *</label>
-        <input class="form-input" id="ot-general-ref" type="text" placeholder="Ej. Reparación de equipo hidráulico" value="${detalleVal}"></div>`;
-    }
-    container.innerHTML = html;
-  },
-
   async modalForm(id=null, vehiculoId=null) {
+    /* La OT es exclusiva de vehículos: si se abre sin haber pasado antes por
+       render() (ej. desde el botón "＋ OT" de Vehículos), estos venían vacíos
+       y el selector de cliente aparecía sin opciones — no era que fallara el
+       select, era que no tenía qué mostrar. */
+    if (!this._clientes.length) {
+      [this._vehiculos, this._clientes, this._mecanicos] = await Promise.all([
+        DB.getVehiculos(), DB.getClientes(), DB.getEmpleados()
+      ]);
+    }
     let o = id ? (this._data.find(x=>x.id===id)||await DB.getOrden(id)) : {};
     /* OT nueva desde un vehículo: preseleccionar su cliente y vehículo */
     if (!id && vehiculoId) {
@@ -1019,42 +939,6 @@ Modulos.ordenes = {
     const esEdicion = !!id;
     this._fotos = [];
 
-    // Parse existing service type and details from diagnostico column if edit mode
-    let tipoServicio = 'vehicular';
-    let subTipoVal = '';
-    let detalleVal = '';
-
-    if (o.diagnostico && o.diagnostico.startsWith('[')) {
-      const match = o.diagnostico.match(/^\[([^\]]+)\]\s*(.*)$/);
-      if (match) {
-        const mod = match[1].trim();
-        const rest = match[2].trim();
-        if (mod === 'Electrónica') tipoServicio = 'electronica';
-        else if (mod === 'Herrería') tipoServicio = 'herreria';
-        else if (mod === 'Peletería') tipoServicio = 'peleteria';
-        else if (mod === 'Refrigeración') tipoServicio = 'refrigeracion';
-        else if (mod === 'Agroservicio') tipoServicio = 'agroservicio';
-        else if (mod === 'Granos') tipoServicio = 'venta_granos';
-        else if (mod === 'General') tipoServicio = 'general';
-
-        const parts = rest.split(' · ');
-        if (parts.length >= 2) {
-          subTipoVal = parts[0].trim();
-          detalleVal = parts.slice(1).join(' · ').trim();
-        } else {
-          detalleVal = rest;
-        }
-      }
-    } else if (!id && !moduloEnPlan('vehiculos')) {
-      if (moduloEnPlan('electronica')) tipoServicio = 'electronica';
-      else if (moduloEnPlan('herreria')) tipoServicio = 'herreria';
-      else if (moduloEnPlan('peleteria')) tipoServicio = 'peleteria';
-      else if (moduloEnPlan('refrigeracion')) tipoServicio = 'refrigeracion';
-      else if (moduloEnPlan('agroservicio')) tipoServicio = 'agroservicio';
-      else if (moduloEnPlan('venta_granos')) tipoServicio = 'venta_granos';
-      else tipoServicio = 'general';
-    }
-
     UI.modal(`${esEdicion?'✏️ Editar':'＋ Nueva'} Orden de Trabajo`, `
       ${esEdicion?'<div class="alert alert-amber" style="margin-bottom:12px"><div class="alert-icon">⚠️</div><div class="alert-body" style="font-size:11px">Los cambios reemplazarán la información actual de la orden.</div></div>':''}
       <div class="form-row">
@@ -1063,19 +947,11 @@ Modulos.ordenes = {
             <option value="">Seleccionar cliente...</option>
             ${this._clientes.map(c=>`<option value="${c.id}" ${o.cliente_id===c.id?'selected':''}>${c.nombre}${c.nit?` — NIT ${c.nit}`:''}</option>`).join('')}
           </select></div>
-        <div class="form-group"><label class="form-label">Tipo de Servicio / Proyecto *</label>
-          <select class="form-select" id="ot-tipo-servicio" onchange="Modulos.ordenes._onTipoServicioChange()">
-            ${moduloEnPlan('vehiculos') ? `<option value="vehicular" ${tipoServicio==='vehicular'?'selected':''}>🔧 Mecánica / Vehicular</option>` : ''}
-            ${moduloEnPlan('electronica') ? `<option value="electronica" ${tipoServicio==='electronica'?'selected':''}>🔌 Electrónica & Electrodomésticos</option>` : ''}
-            ${moduloEnPlan('herreria') ? `<option value="herreria" ${tipoServicio==='herreria'?'selected':''}>⚒️ Herrería y Estructuras</option>` : ''}
-            ${moduloEnPlan('peleteria') ? `<option value="peleteria" ${tipoServicio==='peleteria'?'selected':''}>👜 Peletería & Cueros</option>` : ''}
-            ${moduloEnPlan('refrigeracion') ? `<option value="refrigeracion" ${tipoServicio==='refrigeracion'?'selected':''}>❄️ Refrigeración y A/C</option>` : ''}
-            ${moduloEnPlan('agroservicio') ? `<option value="agroservicio" ${tipoServicio==='agroservicio'?'selected':''}>🌾 Agroservicio / Fumigación</option>` : ''}
-            ${moduloEnPlan('venta_granos') ? `<option value="venta_granos" ${tipoServicio==='venta_granos'?'selected':''}>🌽 Comercialización de Granos</option>` : ''}
-            <option value="general" ${tipoServicio==='general'?'selected':''}>⚙️ Servicio General</option>
+        <div class="form-group"><label class="form-label">Vehículo del cliente *</label>
+          <select class="form-select" id="ot-veh">
+            ${this._opcionesVehiculo(o.cliente_id, o.vehiculo_id || null)}
           </select></div>
       </div>
-      <div id="ot-dinamico-container"></div>
       <div id="ot-cli-info">${this._clienteInfoHtml(o.cliente_id)}</div>
       <div class="form-group"><label class="form-label">Encargado asignado</label>
         <select class="form-select" id="ot-mec">
@@ -1118,8 +994,6 @@ Modulos.ordenes = {
           ${esEdicion?'Guardar Cambios':'Crear OT'}
         </button>
       </div>`,'640px');
-
-    this._onTipoServicioChange(subTipoVal, o.vehiculo_id || detalleVal);
   },
 
   _agregarFotos(input) {
@@ -1144,56 +1018,14 @@ Modulos.ordenes = {
     if (!cliId)  { UI.toast('Selecciona un cliente','error'); return; }
     if (!desc)   { UI.toast('La descripción es obligatoria','error'); return; }
 
-    const tipoServicio = document.getElementById('ot-tipo-servicio')?.value || 'vehicular';
-    let vehId = null;
-    let diagnostico = '';
-
-    if (tipoServicio === 'vehicular') {
-      vehId = document.getElementById('ot-veh')?.value || null;
-      if (!vehId) { UI.toast('Selecciona el vehículo del cliente','error'); return; }
-    } else {
-      if (tipoServicio === 'electronica') {
-        const sub = document.getElementById('ot-elec-tipo')?.value || '';
-        const det = document.getElementById('ot-elec-marca')?.value.trim() || '';
-        if (!det) { UI.toast('Ingresa la marca y modelo del equipo','error'); return; }
-        diagnostico = `[Electrónica] ${sub.charAt(0).toUpperCase() + sub.slice(1)} · ${det}`;
-      } else if (tipoServicio === 'herreria') {
-        const sub = document.getElementById('ot-her-tipo')?.value || '';
-        const det = document.getElementById('ot-her-medidas')?.value.trim() || '';
-        if (!det) { UI.toast('Ingresa las medidas / detalles del trabajo','error'); return; }
-        diagnostico = `[Herrería] ${sub.charAt(0).toUpperCase() + sub.slice(1)} · ${det}`;
-      } else if (tipoServicio === 'peleteria') {
-        const sub = document.getElementById('ot-pel-tipo')?.value || '';
-        const det = document.getElementById('ot-pel-material')?.value.trim() || '';
-        if (!det) { UI.toast('Ingresa el material / detalles del producto','error'); return; }
-        diagnostico = `[Peletería] ${sub.charAt(0).toUpperCase() + sub.slice(1)} · ${det}`;
-      } else if (tipoServicio === 'refrigeracion') {
-        const sub = document.getElementById('ot-ref-tipo')?.value || '';
-        const gas = document.getElementById('ot-ref-gas')?.value || '';
-        diagnostico = `[Refrigeración] ${sub.charAt(0).toUpperCase() + sub.slice(1)} · Gas: ${gas}`;
-      } else if (tipoServicio === 'agroservicio') {
-        const sub = document.getElementById('ot-agro-tipo')?.value || '';
-        const det = document.getElementById('ot-agro-detalles')?.value.trim() || '';
-        if (!det) { UI.toast('Ingresa los detalles de cultivo o área','error'); return; }
-        diagnostico = `[Agroservicio] ${sub.charAt(0).toUpperCase() + sub.slice(1)} · ${det}`;
-      } else if (tipoServicio === 'venta_granos') {
-        const sub = document.getElementById('ot-granos-tipo')?.value || '';
-        const det = document.getElementById('ot-granos-qq')?.value || '';
-        if (!det) { UI.toast('Ingresa la cantidad de quintales','error'); return; }
-        diagnostico = `[Granos] ${sub.charAt(0).toUpperCase() + sub.slice(1)} · ${det} qq`;
-      } else if (tipoServicio === 'general') {
-        const det = document.getElementById('ot-general-ref')?.value.trim() || '';
-        if (!det) { UI.toast('Ingresa el identificador / referencia','error'); return; }
-        diagnostico = `[General] Servicio · ${det}`;
-      }
-    }
+    const vehId = document.getElementById('ot-veh')?.value || null;
+    if (!vehId) { UI.toast('Selecciona el vehículo del cliente','error'); return; }
 
     const fields = {
       vehiculo_id:    vehId,
       cliente_id:     cliId,
       mecanico_id:    document.getElementById('ot-mec')?.value||null,
       descripcion:    desc,
-      diagnostico:    diagnostico || null,
       estado:         document.getElementById('ot-estado')?.value||'recibido',
       prioridad:      document.getElementById('ot-prio')?.value||'media',
       fecha_estimada: document.getElementById('ot-fecha')?.value||null,
