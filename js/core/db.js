@@ -990,6 +990,49 @@ const DB = {
     return (data || []).filter(r => r.id !== excluirId).reduce((s, r) => s + (Number(r.cantidad) || 0), 0);
   },
 
+  /* Artículos del inventario del giro armería — para poder vender DESDE el
+     inventario y no tecleando el arma a mano. Es lo que hace la venta
+     trazable: la operación queda apuntando al artículo que salió. */
+  async getInventarioArmeria() {
+    const { data } = await getSB().from('inventario')
+      .select('id,nombre,codigo,stock,unidad_medida,precio_venta,categoria,atributos')
+      .eq('tenant_id', getTID()).eq('tipo_item', 'armeria')
+      .order('nombre');
+    return data || [];
+  },
+
+  /* Mueve el stock por una operación de armería y deja el movimiento en el
+     historial. Venta = salida, compra = entrada. El art. 58 de la Ley de
+     Armas exige que el inventario físico cuadre exacto (si no, cierre del
+     establecimiento), así que una venta que no descuenta stock no es un
+     detalle cosmético: descuadra el libro que revisa DIGECAM. */
+  async moverStockArmeria(op, revertir = false) {
+    if (!op?.inventario_id) return false;
+    const cant = Number(op.cantidad) || 0;
+    if (cant <= 0) return false;
+    const { data: inv } = await getSB().from('inventario')
+      .select('stock').eq('id', op.inventario_id).eq('tenant_id', getTID()).maybeSingle();
+    if (!inv) return false;
+
+    const esSalida = (op.tipo === 'venta') !== revertir;   // revertir invierte el signo
+    const nuevo = esSalida
+      ? Math.max(0, Number(inv.stock) - cant)
+      : Number(inv.stock) + cant;
+
+    await getSB().from('inventario')
+      .update({ stock: nuevo, updated_at: new Date().toISOString() })
+      .eq('id', op.inventario_id);
+    await this.movimientoInventario({
+      inventario_id: op.inventario_id,
+      tipo: esSalida ? 'salida' : 'entrada',
+      cantidad: cant,
+      referencia: op.num || 'ARM',
+      notas: `${revertir ? 'Reversión de ' : ''}${op.tipo === 'venta' ? 'venta' : 'compra'} de armería${op.numero_serie ? ' · serie ' + op.numero_serie : ''}`,
+      fecha: new Date().toISOString().slice(0, 10),
+    });
+    return true;
+  },
+
   async upsertArmeriaOperacion(fields) {
     const payload = { ...fields, tenant_id: getTID(), updated_at: new Date().toISOString() };
     if (fields.id) {

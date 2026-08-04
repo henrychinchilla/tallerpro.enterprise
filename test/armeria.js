@@ -12,6 +12,8 @@ const path = require('path');
 const ctx = { console, Modulos: {} };
 ctx.window = ctx;
 vm.createContext(ctx);
+/* ley-armas.js primero: el módulo saca de ahí los topes legales. */
+vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'js', 'core', 'ley-armas.js'), 'utf8'), ctx);
 vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'js', 'modulos', 'especializados', 'armeria.js'), 'utf8'), ctx);
 const ARM = ctx.Modulos.armeria;
 
@@ -32,16 +34,41 @@ ok('vender munición sin licencia del comprador se rechaza',
    ARM._validar({ ...base, categoria: 'munición', contraparte_licencia_num: '', contraparte_dpi: 'D1' }).ok === false);
 ok('vender munición con licencia pero SIN DPI se rechaza',
    ARM._validar({ ...base, categoria: 'munición', contraparte_licencia_num: 'TEN-1', contraparte_dpi: '' }).ok === false);
-ok('vender munición CON licencia y DPI pasa', ARM._validar({ ...base, categoria: 'munición', contraparte_licencia_num: 'TEN-1', contraparte_dpi: 'D1' }).ok);
+/* Munición necesita además NIT y dirección (art. 60) — ver el bloque de
+   abajo dedicado a eso; acá sólo se comprueba el caso completo. */
+ok('vender munición CON licencia, DPI, NIT y dirección pasa',
+   ARM._validar({ ...base, categoria: 'munición', contraparte_licencia_num: 'TEN-1', contraparte_dpi: 'D1',
+                  contraparte_nit: '123456-7', contraparte_direccion: 'Zona 1' }).ok);
 ok('vender un accesorio NO exige licencia ni DPI (la ley no los pide)',
    ARM._validar({ ...base, categoria: 'accesorio', contraparte_licencia_num: '', contraparte_dpi: '' }).ok);
 ok('COMPRAR (no vender) munición a un proveedor no exige licencia ni DPI',
    ARM._validar({ tipo: 'compra', proveedor_id: 'p1', categoria: 'munición', cantidad: 1, precio_unit: 10 }).ok);
 
-/* ── Tope legal de munición por mes ──────────────────────────────────── */
+/* ── Tope legal de munición por mes (art. 60, texto literal de la ley) ───
+   "hasta doscientas cincuenta (250) unidades de munición POR CADA UNA de las
+   armas debidamente registradas en su licencia de portación o doscientas
+   (200) unidades con su registro de tenencia". El "por cada arma" es lo que
+   la versión anterior tenía mal: trataba 250 como un tope plano. */
 ok('tenencia: 200 cartuchos al mes', ARM._limiteMunicionMes('tenencia') === 200);
-ok('portación: 250 cartuchos al mes', ARM._limiteMunicionMes('portación') === 250);
+ok('portación con 1 arma: 250', ARM._limiteMunicionMes('portación', 1) === 250);
+ok('portación con 2 armas: 500 (250 por cada una)', ARM._limiteMunicionMes('portación', 2) === 500);
+ok('portación con 3 armas: 750', ARM._limiteMunicionMes('portación', 3) === 750);
+ok('el art. 72 topa la licencia en 3 armas: pedir 9 no da 2250',
+   ARM._limiteMunicionMes('portación', 9) === 750);
+ok('tenencia NO se multiplica por armas (la ley sólo lo dice de portación)',
+   ARM._limiteMunicionMes('tenencia', 3) === 200);
 ok('sin licencia reconocida, tope 0 (no debería llegar aquí sin licencia)', ARM._limiteMunicionMes('') === 0);
+
+/* ── Art. 60: la factura de munición necesita NIT y dirección ──────────── */
+{
+  const baseMun = { ...base, categoria: 'munición', contraparte_licencia_num: 'TEN-1', contraparte_dpi: 'D1' };
+  ok('vender munición sin NIT ni dirección se rechaza', ARM._validar(baseMun).ok === false);
+  ok('el mensaje cita el artículo 60', /art\.?\s*60/i.test(ARM._validar(baseMun).error || ''));
+  ok('con NIT y dirección sí pasa',
+     ARM._validar({ ...baseMun, contraparte_nit: '123456-7', contraparte_direccion: 'Zona 1' }).ok);
+  ok('un arma NO exige NIT/dirección (el art. 60 es de munición)',
+     ARM._validar({ ...base, categoria: 'pistola', numero_serie: 'X1', contraparte_licencia_num: 'L1', contraparte_dpi: 'D1' }).ok);
+}
 
 /* ── Contraparte según tipo ──────────────────────────────────────────── */
 ok('una venta sin cliente se rechaza', ARM._validar({ ...base, cliente_id: '' }).ok === false);
