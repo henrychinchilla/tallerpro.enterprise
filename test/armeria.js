@@ -81,10 +81,53 @@ ok('una compra a un proveedor (sin cliente) es válida',
 ok('cantidad cero se rechaza', ARM._validar({ ...base, cantidad: 0 }).ok === false);
 ok('precio negativo se rechaza', ARM._validar({ ...base, precio_unit: -1 }).ok === false);
 
-/* ── Clasificación de qué es "arma" ──────────────────────────────────── */
-ok('pistola, revólver, rifle y escopeta son armas',
-   ['pistola', 'revólver', 'rifle', 'escopeta'].every(c => ARM._esArma(c)));
+/* ── Clasificación de qué es "arma de fuego" ─────────────────────────── */
+ok('pistola, revólver, rifle, escopeta y deportiva son armas de fuego',
+   ['pistola', 'revólver', 'rifle', 'escopeta', 'deportiva'].every(c => ARM._esArma(c)));
 ok('munición y accesorio NO son armas', !ARM._esArma('munición') && !ARM._esArma('accesorio'));
+ok('el gas comprimido NO es arma de fuego (no lleva serie registrable)', !ARM._esArma('gas_comprimido'));
+ok('una navaja tampoco', !ARM._esArma('arma_blanca'));
+
+/* ── Lo que la ley EXIME de licencia ─────────────────────────────────────
+   Art. 68: el gas comprimido hasta 5.5mm tiene "tenencia sin registro y
+   traslado sin licencia". Art. 13: la navaja de uso personal tampoco lleva
+   licencia. Pedirles papeles sería inventar un requisito legal — que es
+   justo lo que hacía la versión anterior al tratar todo lo que no fuera
+   accesorio como si necesitara licencia. */
+{
+  const sinPapeles = { tipo: 'venta', cliente_id: 'c1', cantidad: 1, precio_unit: 500,
+                       contraparte_licencia_num: '', contraparte_dpi: '' };
+  ok('vender balines/gas comprimido NO exige licencia ni DPI (art. 68)',
+     ARM._validar({ ...sinPapeles, categoria: 'gas_comprimido' }).ok);
+  ok('vender una navaja NO exige licencia ni DPI (art. 13)',
+     ARM._validar({ ...sinPapeles, categoria: 'arma_blanca' }).ok);
+  ok('un accesorio tampoco', ARM._validar({ ...sinPapeles, categoria: 'accesorio' }).ok);
+  ok('gas comprimido tampoco exige número de serie',
+     ARM._validar({ ...sinPapeles, categoria: 'gas_comprimido', numero_serie: '' }).ok);
+
+  /* Pero el arma deportiva SÍ es arma de fuego (art. 11): serie + licencia. */
+  ok('un arma deportiva SÍ exige licencia y DPI (es arma de fuego, art. 11)',
+     ARM._validar({ ...sinPapeles, categoria: 'deportiva', numero_serie: 'S1' }).ok === false);
+  ok('un arma deportiva SÍ exige número de serie',
+     ARM._validar({ ...sinPapeles, categoria: 'deportiva', contraparte_licencia_num: 'L1',
+                    contraparte_dpi: 'D1', numero_serie: '' }).ok === false);
+  ok('deportiva completa pasa',
+     ARM._validar({ ...sinPapeles, categoria: 'deportiva', numero_serie: 'S1',
+                    contraparte_licencia_num: 'L1', contraparte_dpi: 'D1' }).ok);
+}
+
+/* ── Avisos legales por categoría ───────────────────────────────────────── */
+{
+  ok('el gas comprimido avisa que está exento por el art. 68',
+     /art\.?\s*68/i.test(ARM._avisoCategoria('gas_comprimido')));
+  ok('el aviso del gas menciona el límite de 5.5mm',
+     /5\.5\s*mm/i.test(ARM._avisoCategoria('gas_comprimido')));
+  ok('la navaja advierte que las automáticas están prohibidas',
+     /autom[áa]tica/i.test(ARM._avisoCategoria('arma_blanca')));
+  ok('la navaja menciona el límite de 10cm de hoja',
+     /10\s*cm/i.test(ARM._avisoCategoria('arma_blanca')));
+  ok('un accesorio no genera aviso', ARM._avisoCategoria('accesorio') === '');
+}
 
 console.log(`\n${pasadas} pasadas, ${fallidas} fallidas`);
 process.exitCode = fallidas ? 1 : 0;

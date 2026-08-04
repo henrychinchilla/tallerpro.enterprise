@@ -990,6 +990,30 @@ const DB = {
     return (data || []).filter(r => r.id !== excluirId).reduce((s, r) => s + (Number(r.cantidad) || 0), 0);
   },
 
+  /* Catálogo de marcas/modelos/calibres/países de armería. Crece solo: lo
+     que el usuario escriba y no exista se agrega, así el siguiente ya lo
+     encuentra en la lista en vez de volver a teclearlo (y en vez de que
+     queden "Glock", "GLOCK" y "glock" como tres marcas distintas). */
+  async getCatalogoArmeria() {
+    const { data } = await getSB().from('armeria_catalogo')
+      .select('tipo,valor').eq('tenant_id', getTID()).order('valor');
+    const out = { marca: [], modelo: [], calibre: [], pais: [] };
+    for (const r of (data || [])) (out[r.tipo] ||= []).push(r.valor);
+    return out;
+  },
+
+  /* Agrega al catálogo los valores nuevos de una operación. Silencioso a
+     propósito: si falla, la operación ya se guardó y no vale la pena
+     molestar al usuario — sólo se pierde la sugerencia futura. */
+  async agregarCatalogoArmeria(valores) {
+    const filas = Object.entries(valores)
+      .filter(([, v]) => String(v || '').trim())
+      .map(([tipo, v]) => ({ tenant_id: getTID(), tipo, valor: String(v).trim() }));
+    if (!filas.length) return;
+    await getSB().from('armeria_catalogo')
+      .upsert(filas, { onConflict: 'tenant_id,tipo,valor', ignoreDuplicates: true });
+  },
+
   /* Artículos del inventario del giro armería — para poder vender DESDE el
      inventario y no tecleando el arma a mano. Es lo que hace la venta
      trazable: la operación queda apuntando al artículo que salió. */

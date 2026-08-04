@@ -156,18 +156,30 @@ const GIROS = {
     label: 'Armería', icon: '🎯',
     modulos: ['armeria'],
     /* Un arma es pieza única (número de serie propio); la munición se cuenta
-       por caja o por cartucho suelto. No hay quintal ni metro aquí. */
-    unidades: ['pieza', 'caja', 'unidad'],
-    categorias: ['Arma corta (pistola/revólver)', 'Arma larga (rifle/escopeta)',
-                 'Munición', 'Accesorios y repuestos', 'Equipo de limpieza y protección'],
+       por caja o por cartucho suelto. El par existe por los guantes y las
+       botas de camping, que se venden así. No hay quintal ni metro aquí. */
+    unidades: ['pieza', 'caja', 'unidad', 'par', 'juego'],
+    /* La tienda no vende sólo armas: vive también de la tienda de campo
+       (chalecos, camping, aventura). Las categorías siguen la clasificación
+       de la Ley de Armas donde ésta aplica (arts. 9, 11, 12, 13) y se
+       vuelven normales donde no. */
+    categorias: [
+      'Arma corta (pistola/revólver)', 'Arma larga (rifle/escopeta)',
+      'Arma deportiva', 'Aire/gas comprimido (balines)', 'Arma blanca (navajas/cuchillos)',
+      'Munición', 'Balines y postas', 'Gas CO2 y aire',
+      'Chalecos y protección', 'Fundas y portacargadores', 'Miras y ópticas',
+      'Repuestos y accesorios', 'Limpieza y mantenimiento',
+      'Camping y aventura', 'Herramientas', 'Ropa y gorras',
+    ],
     campos: [
       { id: 'tipo_arma', label: 'Tipo', tipo: 'lista',
-        opciones: ['pistola', 'revólver', 'rifle', 'escopeta', 'munición', 'accesorio', 'no aplica'] },
-      { id: 'marca',        label: 'Marca',  tipo: 'texto', ph: 'Glock, Smith & Wesson, Remington...' },
+        opciones: ['pistola', 'revólver', 'rifle', 'escopeta', 'deportiva',
+                   'gas comprimido', 'arma blanca', 'munición', 'accesorio', 'no aplica'] },
+      { id: 'marca',        label: 'Marca',  tipo: 'texto', ph: 'Glock, Smith & Wesson, Gamo...' },
       { id: 'modelo',       label: 'Modelo', tipo: 'texto' },
-      { id: 'calibre',      label: 'Calibre', tipo: 'texto', ph: '9mm, .38 Special, .22LR, 12 gauge...' },
+      { id: 'calibre',      label: 'Calibre', tipo: 'texto', ph: '9mm, .38 Special, 5.5mm, 12 gauge...' },
       { id: 'numero_serie', label: 'Número de serie', tipo: 'texto',
-        ayuda: 'DIGECAM exige el número de serie de cada arma en toda venta; sin él no se puede registrar en SIDIGECAM.' },
+        ayuda: 'Obligatorio en armas de fuego: el art. 82 g) prohíbe las que no lo traen. Balines, navajas y accesorios no llevan.' },
       { id: 'pais_origen',  label: 'País de origen', tipo: 'texto' },
     ],
   },

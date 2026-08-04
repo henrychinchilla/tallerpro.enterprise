@@ -18,13 +18,32 @@
    de venta_granos.js (lista única con tipo venta/compra).
    ═══════════════════════════════════════════════════════════════════════════ */
 Modulos.armeria = {
-  _data: [], _clientes: [], _proveedores: [], _inventario: [], _filtroTipo: '', _tab: 'operaciones',
+  _data: [], _clientes: [], _proveedores: [], _inventario: [], _catalogo: null,
+  _filtroTipo: '', _tab: 'operaciones',
 
+  /* Las categorías siguen la clasificación de la Ley de Armas, porque de ella
+     depende qué papeles hay que pedir. Meter todo como "arma" obligaba a
+     pedir licencia para una pistola de balines, que la ley exime. */
   _CATEGORIAS: {
-    pistola: 'Pistola', 'revólver': 'Revólver', rifle: 'Rifle', escopeta: 'Escopeta',
-    'munición': 'Munición', accesorio: 'Accesorio',
+    pistola:        'Pistola',
+    'revólver':     'Revólver',
+    rifle:          'Rifle',
+    escopeta:       'Escopeta',
+    deportiva:      'Arma deportiva (art. 11)',
+    gas_comprimido: 'Aire/gas comprimido ≤5.5mm (art. 68 — sin licencia)',
+    arma_blanca:    'Arma blanca / navaja (art. 13)',
+    'munición':     'Munición',
+    accesorio:      'Accesorio / equipo',
   },
   _LICENCIAS: { tenencia: 'Tarjeta de tenencia', 'portación': 'Licencia de portación' },
+
+  /* Armas de fuego: las únicas con número de serie registrable ante DIGECAM
+     y las únicas que pasan por el trámite del art. 59. */
+  _ARMAS_FUEGO: ['pistola', 'revólver', 'rifle', 'escopeta', 'deportiva'],
+  /* Lo que exige licencia + DPI al venderlo: armas de fuego (art. 59) y
+     munición (art. 60). El resto NO — art. 68 exime al gas comprimido, y
+     el art. 13 no pide licencia para una navaja de uso personal. */
+  _REQUIERE_LICENCIA: ['pistola', 'revólver', 'rifle', 'escopeta', 'deportiva', 'munición'],
 
   /* Estados del art. 59: vender un arma NO es entregarla. El vendedor remite
      documentación y arma a DIGECAM, que en ≤5 días hábiles devuelve la
@@ -41,8 +60,21 @@ Modulos.armeria = {
              entregado:'green', cancelado:'red' }[e] || 'gray';
   },
 
-  /* Solo el arma en sí lleva número de serie propio. */
-  _esArma(categoria) { return ['pistola', 'revólver', 'rifle', 'escopeta'].includes(categoria); },
+  /* Solo el arma de fuego lleva número de serie registrable. */
+  _esArma(categoria) { return this._ARMAS_FUEGO.includes(categoria); },
+  _requiereLicencia(categoria) { return this._REQUIERE_LICENCIA.includes(categoria); },
+
+  /* Aviso legal por categoría — lo que el vendedor tiene que saber ANTES de
+     cerrar la venta, no después de una inspección. */
+  _avisoCategoria(categoria) {
+    return {
+      gas_comprimido: '✅ Art. 68: tenencia sin registro y traslado sin licencia, siempre que la munición no pase de 5.5mm (.22). Si pasa de ahí, deja de estar exenta.',
+      arma_blanca:    '⚠️ Art. 13: la navaja de bolsillo con hoja ≤10cm es de uso personal. Las navajas AUTOMÁTICAS de cualquier longitud son de uso bélico y están prohibidas a particulares (art. 13 c). Las de hoja >10cm no automáticas sólo se usan en áreas extraurbanas.',
+      deportiva:      'ℹ️ Art. 11: arma deportiva (competencia o cacería). Es arma de fuego: lleva número de serie y el trámite del art. 59.',
+      'munición':     '⚠️ Art. 60: sólo del calibre registrado en la licencia del comprador, con tope mensual, y la factura debe llevar su NIT, dirección y firma.',
+      accesorio:      '',
+    }[categoria] || '';
+  },
 
   /* Tope mensual de munición — art. 60, vía ley-armas.js. Son 250 por CADA
      arma registrada en la licencia de portación (art. 72: hasta 3), o 200 con
@@ -62,14 +94,17 @@ Modulos.armeria = {
     if (f.tipo === 'compra' && !f.cliente_id && !f.proveedor_id) return { ok: false, error: 'Selecciona a quién se le compra (cliente o proveedor)' };
     if (!f.categoria) return { ok: false, error: 'Selecciona la categoría del artículo' };
     if (this._esArma(f.categoria) && !String(f.numero_serie || '').trim()) {
-      return { ok: false, error: 'El número de serie es obligatorio en armas — sin él no se puede registrar la venta ante DIGECAM (y el art. 82 g) prohíbe las armas sin número de registro)' };
+      return { ok: false, error: 'El número de serie es obligatorio en armas de fuego — sin él no se puede registrar la venta ante DIGECAM (y el art. 82 g) prohíbe las armas sin número de registro)' };
     }
-    if (f.tipo === 'venta' && f.categoria !== 'accesorio') {
+    /* Sólo armas de fuego y munición piden licencia+DPI. El gas comprimido
+       ≤5.5mm está exento por el art. 68 y una navaja de uso personal por el
+       art. 13 — pedirles papeles sería inventar un requisito. */
+    if (f.tipo === 'venta' && this._requiereLicencia(f.categoria)) {
       if (!String(f.contraparte_licencia_num || '').trim()) {
-        return { ok: false, error: 'Para vender armas o munición hay que registrar la tarjeta de tenencia o licencia de portación del comprador (art. 60 para munición; art. 59 para armas)' };
+        return { ok: false, error: 'Para vender armas de fuego o munición hay que registrar la tarjeta de tenencia o licencia de portación del comprador (art. 59 para armas; art. 60 para munición)' };
       }
       if (!String(f.contraparte_dpi || '').trim()) {
-        return { ok: false, error: 'El DPI del comprador es obligatorio en venta de armas o munición (art. 59: fotocopia legalizada del documento de identificación personal)' };
+        return { ok: false, error: 'El DPI del comprador es obligatorio en venta de armas de fuego o munición (art. 59: fotocopia legalizada del documento de identificación personal)' };
       }
     }
     /* Art. 60: la factura de munición debe llevar además dirección y NIT. */
@@ -286,6 +321,8 @@ Modulos.armeria = {
     if (!this._clientes.length) this._clientes = await DB.getClientes();
     if (!this._proveedores.length) this._proveedores = await DB.getProveedores();
     if (!this._inventario.length) this._inventario = await DB.getInventarioArmeria().catch(() => []);
+    if (!this._catalogo) this._catalogo = await DB.getCatalogoArmeria().catch(() => ({}));
+    const cat = this._catalogo || {};
     const esEdicion = !!id;
     const tipo = o.tipo || 'venta';
 
@@ -309,11 +346,12 @@ Modulos.armeria = {
       </div>
       <div class="form-row" id="arm-grupo-cliente">
         <div class="form-group"><label class="form-label">Cliente ${tipo === 'venta' ? '*' : '(si el vendedor es particular)'}</label>
-          <select class="form-select" id="arm-cliente">
+          <select class="form-select" id="arm-cliente" onchange="Modulos.armeria._verificarCliente(this.value)">
             <option value="">— Selecciona —</option>
             ${this._clientes.map(c => `<option value="${c.id}" ${o.cliente_id === c.id ? 'selected' : ''}>${UI.esc(c.nombre)}</option>`).join('')}
           </select>
-          <div style="font-size:10.5px;color:var(--text3);margin-top:2px">¿Cliente nuevo? <a href="#" onclick="event.preventDefault();Modulos.armeria._nuevoCliente()" style="color:var(--cyan)">Crearlo aquí</a> con su DPI y licencia.</div></div>
+          <div style="font-size:10.5px;color:var(--text3);margin-top:2px">¿Cliente nuevo? <a href="#" onclick="event.preventDefault();Modulos.armeria._nuevoCliente()" style="color:var(--cyan)">Crearlo aquí</a> con su DPI, licencia y recibo de servicios.</div>
+          <div id="arm-cliente-check" style="font-size:11px;margin-top:6px"></div></div>
         <div class="form-group" id="arm-grupo-proveedor" style="${tipo === 'venta' ? 'display:none' : ''}"><label class="form-label">Proveedor (si es compra a mayorista)</label>
           <select class="form-select" id="arm-proveedor">
             <option value="">— Selecciona —</option>
@@ -335,22 +373,31 @@ Modulos.armeria = {
         </div>
       </div>
 
+      <div id="arm-aviso-categoria" style="font-size:12px;padding:8px 10px;border-radius:6px;margin-bottom:10px;display:none"></div>
+
       <div class="form-row">
         <div class="form-group"><label class="form-label">Marca</label>
-          <input class="form-input" id="arm-marca" value="${UI.esc(o.marca || '')}" placeholder="Glock, Smith &amp; Wesson, Remington..."></div>
+          <input class="form-input" id="arm-marca" list="arm-dl-marca" value="${UI.esc(o.marca || '')}" placeholder="Escribe o elige — si no está, se agrega">
+          <datalist id="arm-dl-marca">${(cat.marca || []).map(v => `<option value="${UI.esc(v)}">`).join('')}</datalist></div>
         <div class="form-group"><label class="form-label">Modelo</label>
-          <input class="form-input" id="arm-modelo" value="${UI.esc(o.modelo || '')}"></div>
+          <input class="form-input" id="arm-modelo" list="arm-dl-modelo" value="${UI.esc(o.modelo || '')}" placeholder="Escribe o elige">
+          <datalist id="arm-dl-modelo">${(cat.modelo || []).map(v => `<option value="${UI.esc(v)}">`).join('')}</datalist></div>
         <div class="form-group"><label class="form-label">Calibre</label>
-          <input class="form-input" id="arm-calibre" value="${UI.esc(o.calibre || '')}" placeholder="9mm, .38, .22LR, 12 gauge...">
+          <input class="form-input" id="arm-calibre" list="arm-dl-calibre" value="${UI.esc(o.calibre || '')}" placeholder="Escribe o elige">
+          <datalist id="arm-dl-calibre">${(cat.calibre || []).map(v => `<option value="${UI.esc(v)}">`).join('')}</datalist>
           <div style="font-size:10.5px;color:var(--text3);margin-top:2px">Art. 60: sólo se vende munición del calibre registrado en la licencia del comprador.</div></div>
       </div>
       <div class="form-row">
         <div class="form-group" id="arm-grupo-serie"><label class="form-label">Número de serie <span id="arm-serie-req" style="color:var(--red)">${this._esArma(o.categoria) ? '*' : ''}</span></label>
           <input class="form-input" id="arm-serie" value="${UI.esc(o.numero_serie || '')}"
-            style="font-family:monospace" placeholder="Obligatorio en armas">
+            style="font-family:monospace" placeholder="Obligatorio en armas de fuego">
           <div style="font-size:11px;color:var(--text3);margin-top:2px">Art. 82 g): están prohibidas las armas sin número de registro o con el registro borrado/alterado.</div></div>
         <div class="form-group"><label class="form-label">País de origen</label>
-          <input class="form-input" id="arm-origen" value="${UI.esc(o.pais_origen || '')}"></div>
+          <input class="form-input" id="arm-origen" list="arm-dl-pais" value="${UI.esc(o.pais_origen || '')}" placeholder="Escribe o elige">
+          <datalist id="arm-dl-pais">${(cat.pais || []).map(v => `<option value="${UI.esc(v)}">`).join('')}</datalist></div>
+      </div>
+      <div style="font-size:11px;color:var(--text3);margin:-4px 0 10px">
+        💡 Marca, modelo, calibre y país salen de un catálogo que crece solo: si escribís uno que no está, queda guardado para la próxima.
       </div>
       <div class="form-row">
         <div class="form-group"><label class="form-label">Cantidad *</label>
@@ -361,7 +408,7 @@ Modulos.armeria = {
           <input class="form-input" id="arm-total" type="number" readonly value="${o.total || 0}" style="background:var(--card2);font-weight:700"></div>
       </div>
       <div style="background:var(--card2);border-radius:8px;padding:10px 12px;margin:8px 0">
-        <div style="font-size:12px;font-weight:700;margin-bottom:8px">⚖️ Datos del comprador/vendedor que exige la ley</div>
+        <div id="arm-bloque-licencia" style="font-size:12px;font-weight:700;margin-bottom:8px">⚖️ Datos del comprador/vendedor que exige la ley</div>
         <div class="form-row">
           <div class="form-group"><label class="form-label">DPI</label>
             <input class="form-input" id="arm-dpi" value="${UI.esc(o.contraparte_dpi || '')}" placeholder="0000 00000 0000" style="font-family:monospace"></div>
@@ -410,6 +457,8 @@ Modulos.armeria = {
         <button class="btn btn-amber" onclick="Modulos.armeria.guardar('${id || ''}')">${esEdicion ? 'Guardar Cambios' : 'Crear Operación'}</button>
       </div>`, '820px');
     this._infoTope();
+    this._toggleSerie();   // pinta el aviso legal de la categoría ya elegida
+    if (o.cliente_id) this._verificarCliente(o.cliente_id);
   },
 
   /* Copia los datos del artículo del inventario al formulario: el arma se
@@ -450,6 +499,27 @@ Modulos.armeria = {
     const categoria = document.getElementById('arm-categoria')?.value;
     const req = document.getElementById('arm-serie-req');
     if (req) req.textContent = this._esArma(categoria) ? '*' : '';
+
+    /* Aviso legal de la categoría: lo que el vendedor necesita saber antes
+       de cerrar, no después. */
+    const av = document.getElementById('arm-aviso-categoria');
+    if (av) {
+      const txt = this._avisoCategoria(categoria);
+      av.style.display = txt ? '' : 'none';
+      av.textContent = txt;
+      const alerta = txt.startsWith('⚠️');
+      av.style.background = alerta ? 'var(--red-dim, #fee)' : 'var(--card2)';
+      av.style.borderLeft = `3px solid ${alerta ? 'var(--red)' : 'var(--cyan)'}`;
+      av.style.color = 'var(--text)';
+    }
+
+    /* Sin licencia obligatoria, el bloque de papeles del comprador deja de
+       ser un requisito y se marca como opcional. */
+    const req2 = this._requiereLicencia(categoria);
+    const lbl = document.getElementById('arm-bloque-licencia');
+    if (lbl) lbl.textContent = req2
+      ? '⚖️ Datos del comprador/vendedor que exige la ley'
+      : '⚖️ Datos del comprador (esta categoría no exige licencia)';
   },
 
   _calcTotal() {
@@ -457,6 +527,59 @@ Modulos.armeria = {
     const precio = parseFloat(document.getElementById('arm-precio')?.value) || 0;
     const t = document.getElementById('arm-total');
     if (t) t.value = (cant * precio).toFixed(2);
+  },
+
+  /* Qué le falta al expediente del cliente para venderle legalmente. Se
+     muestra al elegirlo, no al intentar guardar: si le falta el recibo de
+     servicios, el vendedor tiene que pedírselo mientras lo tiene enfrente,
+     no descubrirlo cuando el cliente ya se fue.
+
+     El DPI/pasaporte y la licencia salen del art. 59; la verificación de
+     domicilio con recibo de servicios es política del negocio (la ley pide
+     la dirección — arts. 59 y 60 — pero no dice cómo comprobarla), y Henry
+     la quiere obligatoria. */
+  _CHECK_DOCS: {
+    dpi: 'DPI (o pasaporte si es extranjero)',
+    licencia_arma: 'Licencia de tenencia o portación',
+    recibo_servicios: 'Recibo de servicios que verifique la dirección',
+  },
+
+  async _verificarCliente(clienteId) {
+    const cont = document.getElementById('arm-cliente-check');
+    if (!cont) return;
+    if (!clienteId) { cont.innerHTML = ''; return; }
+    cont.innerHTML = '<span style="color:var(--text3)">Verificando expediente…</span>';
+
+    const cli = this._clientes.find(c => c.id === clienteId);
+    const docs = await Docs.listar('cliente', clienteId).catch(() => []);
+    const tipos = new Set(docs.map(d => d.tipo));
+
+    const falta = [];
+    /* El DPI se da por cubierto si subió pasaporte (extranjero). */
+    if (!tipos.has('dpi') && !tipos.has('pasaporte')) falta.push(this._CHECK_DOCS.dpi);
+    if (!tipos.has('licencia_arma')) falta.push(this._CHECK_DOCS.licencia_arma);
+    if (!tipos.has('recibo_servicios')) falta.push(this._CHECK_DOCS.recibo_servicios);
+    if (!String(cli?.direccion || '').trim()) falta.push('Dirección completa');
+    if (!cli?.vivienda) falta.push('Indicar si la vivienda es propia o rentada');
+
+    cont.innerHTML = falta.length
+      ? `<div style="background:var(--card2);border-left:3px solid var(--amber);border-radius:6px;padding:8px 10px">
+           <b>⚠️ Al expediente le falta:</b>
+           <ul style="margin:4px 0 4px 16px">${falta.map(f => `<li>${UI.esc(f)}</li>`).join('')}</ul>
+           <a href="#" onclick="event.preventDefault();Modulos.armeria._completarCliente('${clienteId}')" style="color:var(--cyan)">Completarlo ahora →</a>
+         </div>`
+      : '<span style="color:var(--green)">✅ Expediente completo (DPI/pasaporte, licencia, recibo de servicios y domicilio).</span>';
+  },
+
+  /* Abre la ficha del cliente para completarla y vuelve a la operación. */
+  _completarCliente(clienteId) {
+    UI.cerrarModal();
+    if (Modulos.clientes?.modalForm) {
+      Modulos.clientes._data = this._clientes;
+      Modulos.clientes.modalForm(clienteId, () => {
+        DB.getClientes().then(cs => { this._clientes = cs; this.modalForm(); });
+      });
+    }
   },
 
   /* Alta rápida de cliente sin salir de la operación — Henry pidió poder
@@ -526,6 +649,14 @@ Modulos.armeria = {
     if (previa?.inventario_id) await DB.moverStockArmeria(previa, true);
     const op = { ...fields, num: saved?.num || previa?.num };
     if (op.inventario_id) await DB.moverStockArmeria(op, false);
+
+    /* Lo que el usuario escribió y no estaba en el catálogo, queda para la
+       próxima vez. Es lo que evita el "Glock / GLOCK / glock". */
+    await DB.agregarCatalogoArmeria({
+      marca: fields.marca, modelo: fields.modelo,
+      calibre: fields.calibre, pais: fields.pais_origen,
+    }).catch(() => {});
+    this._catalogo = null;   // se recarga al abrir el próximo formulario
 
     UI.cerrarModal();
     UI.toast(id ? 'Operación actualizada ✓' : 'Operación creada ✓');
