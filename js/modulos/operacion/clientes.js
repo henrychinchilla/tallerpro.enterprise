@@ -93,8 +93,17 @@ Modulos.clientes = {
         <div class="form-group"><label class="form-label">Email</label>
           <input class="form-input" id="cli-email" value="${c.email||''}" type="email"></div>
       </div>
-      <div class="form-group"><label class="form-label">Dirección</label>
-        <input class="form-input" id="cli-dir" value="${c.direccion||''}"></div>
+      <div class="form-row">
+        <div class="form-group" style="flex:2"><label class="form-label">Dirección completa</label>
+          <input class="form-input" id="cli-dir" value="${c.direccion||''}" placeholder="Calle, avenida, número de casa, zona, municipio, departamento"></div>
+        <div class="form-group"><label class="form-label">La vivienda es</label>
+          <select class="form-select" id="cli-vivienda">
+            <option value="">— No indicado —</option>
+            <option value="propia"   ${c.vivienda==='propia'?'selected':''}>🏠 Propia</option>
+            <option value="rentada"  ${c.vivienda==='rentada'?'selected':''}>🔑 Rentada</option>
+            <option value="familiar" ${c.vivienda==='familiar'?'selected':''}>👪 Familiar / prestada</option>
+          </select></div>
+      </div>
       <div class="form-group"><label class="form-label">Notas</label>
         <textarea class="form-input" id="cli-notas" rows="2">${c.notas||''}</textarea></div>
       <div class="form-group">
@@ -150,7 +159,8 @@ Modulos.clientes = {
   _DOCS_CLIENTE: {
     dpi: { icon: '🪪', label: 'DPI' },
     licencia_arma: { icon: '📋', label: 'Licencia (tenencia/portación)' },
-    pasaporte: { icon: '📘', label: 'Pasaporte' },
+    pasaporte: { icon: '📘', label: 'Pasaporte (extranjeros)' },
+    recibo_servicios: { icon: '🧾', label: 'Recibo de servicios (agua/luz/teléfono)' },
   },
 
   _htmlDocumentos(id) {
@@ -190,6 +200,7 @@ Modulos.clientes = {
       nit:            document.getElementById('cli-nit')?.value.trim()||null,
       email:          document.getElementById('cli-email')?.value.trim()||null,
       direccion:      document.getElementById('cli-dir')?.value.trim()||null,
+      vivienda:       document.getElementById('cli-vivienda')?.value || null,
       notas:          document.getElementById('cli-notas')?.value.trim()||null,
       nombre_empresa: tipo==='empresa'?document.getElementById('cli-empresa')?.value.trim():null,
       representante:  tipo==='empresa'?document.getElementById('cli-representante')?.value.trim():null,
