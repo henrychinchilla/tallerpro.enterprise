@@ -377,11 +377,13 @@ Modulos.armeria = {
 
       <div class="form-row">
         <div class="form-group"><label class="form-label">Marca</label>
-          <input class="form-input" id="arm-marca" list="arm-dl-marca" value="${UI.esc(o.marca || '')}" placeholder="Escribe o elige — si no está, se agrega">
+          <input class="form-input" id="arm-marca" list="arm-dl-marca" value="${UI.esc(o.marca || '')}"
+                 placeholder="Escribe o elige — si no está, se agrega" oninput="Modulos.armeria._filtrarModelos()">
           <datalist id="arm-dl-marca">${(cat.marca || []).map(v => `<option value="${UI.esc(v)}">`).join('')}</datalist></div>
         <div class="form-group"><label class="form-label">Modelo</label>
           <input class="form-input" id="arm-modelo" list="arm-dl-modelo" value="${UI.esc(o.modelo || '')}" placeholder="Escribe o elige">
-          <datalist id="arm-dl-modelo">${(cat.modelo || []).map(v => `<option value="${UI.esc(v)}">`).join('')}</datalist></div>
+          <datalist id="arm-dl-modelo">${this._opcionesModelo(o.marca).map(v => `<option value="${UI.esc(v)}">`).join('')}</datalist>
+          <div id="arm-modelo-hint" style="font-size:10.5px;color:var(--text3);margin-top:2px"></div></div>
         <div class="form-group"><label class="form-label">Calibre</label>
           <input class="form-input" id="arm-calibre" list="arm-dl-calibre" value="${UI.esc(o.calibre || '')}" placeholder="Escribe o elige">
           <datalist id="arm-dl-calibre">${(cat.calibre || []).map(v => `<option value="${UI.esc(v)}">`).join('')}</datalist>
@@ -458,6 +460,7 @@ Modulos.armeria = {
       </div>`, '820px');
     this._infoTope();
     this._toggleSerie();   // pinta el aviso legal de la categoría ya elegida
+    this._filtrarModelos();
     if (o.cliente_id) this._verificarCliente(o.cliente_id);
   },
 
@@ -475,6 +478,32 @@ Modulos.armeria = {
     const cat = document.getElementById('arm-categoria');
     if (cat && !cat.value && a.tipo_arma && this._CATEGORIAS[a.tipo_arma]) { cat.value = a.tipo_arma; this._toggleSerie(); }
     this._calcTotal();
+  },
+
+  /* Modelos que corresponden a una marca. Sin marca elegida se muestran
+     todos (mejor eso que un dropdown vacío, que es justo lo que se veía
+     cuando el catálogo de modelos no existía). */
+  _opcionesModelo(marca) {
+    const cat = this._catalogo || {};
+    const m = String(marca || '').trim();
+    const propios = m ? (cat.modeloPorMarca?.[m] || []) : [];
+    return propios.length ? propios : (cat.modelo || []);
+  },
+
+  /* Al escribir la marca, el dropdown de modelo se reduce a los de esa
+     marca — elegir Glock no debe ofrecer un Remington 870. */
+  _filtrarModelos() {
+    const marca = document.getElementById('arm-marca')?.value || '';
+    const dl = document.getElementById('arm-dl-modelo');
+    const hint = document.getElementById('arm-modelo-hint');
+    if (!dl) return;
+    const cat = this._catalogo || {};
+    const propios = cat.modeloPorMarca?.[String(marca).trim()] || [];
+    const lista = this._opcionesModelo(marca);
+    dl.innerHTML = lista.map(v => `<option value="${UI.esc(v)}">`).join('');
+    if (hint) hint.textContent = propios.length
+      ? `${propios.length} modelo(s) de ${marca}`
+      : (marca ? 'Marca nueva: escribe el modelo y queda guardado para la próxima.' : '');
   },
 
   /* Muestra el tope legal de munición según la licencia elegida (art. 60). */

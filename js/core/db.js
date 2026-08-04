@@ -996,22 +996,34 @@ const DB = {
      queden "Glock", "GLOCK" y "glock" como tres marcas distintas). */
   async getCatalogoArmeria() {
     const { data } = await getSB().from('armeria_catalogo')
-      .select('tipo,valor').eq('tenant_id', getTID()).order('valor');
-    const out = { marca: [], modelo: [], calibre: [], pais: [] };
-    for (const r of (data || [])) (out[r.tipo] ||= []).push(r.valor);
+      .select('tipo,valor,padre').eq('tenant_id', getTID()).order('valor');
+    /* Los modelos se devuelven con su marca para poder filtrarlos: al elegir
+       Glock deben salir modelos Glock, no los 164 de todas las marcas. */
+    const out = { marca: [], modelo: [], calibre: [], pais: [], modeloPorMarca: {} };
+    for (const r of (data || [])) {
+      (out[r.tipo] ||= []).push(r.valor);
+      if (r.tipo === 'modelo' && r.padre) (out.modeloPorMarca[r.padre] ||= []).push(r.valor);
+    }
     return out;
   },
 
-  /* Agrega al catálogo los valores nuevos de una operación. Silencioso a
-     propósito: si falla, la operación ya se guardó y no vale la pena
-     molestar al usuario — sólo se pierde la sugerencia futura. */
+  /* Agrega al catálogo los valores nuevos de una operación. El modelo se
+     guarda con su marca. Silencioso a propósito: si falla, la operación ya
+     se guardó y no vale la pena molestar al usuario — sólo se pierde la
+     sugerencia futura. */
   async agregarCatalogoArmeria(valores) {
+    const marca = String(valores.marca || '').trim() || null;
     const filas = Object.entries(valores)
       .filter(([, v]) => String(v || '').trim())
-      .map(([tipo, v]) => ({ tenant_id: getTID(), tipo, valor: String(v).trim() }));
+      .map(([tipo, v]) => ({
+        tenant_id: getTID(), tipo, valor: String(v).trim(),
+        padre: tipo === 'modelo' ? marca : null,
+      }));
     if (!filas.length) return;
-    await getSB().from('armeria_catalogo')
-      .upsert(filas, { onConflict: 'tenant_id,tipo,valor', ignoreDuplicates: true });
+    /* Sin onConflict explícito: la unicidad es un índice sobre una expresión
+       (coalesce(padre,'')) que PostgREST no puede nombrar. Los duplicados los
+       absorbe el .catch — insertar es idempotente en la práctica. */
+    await getSB().from('armeria_catalogo').insert(filas).then(() => {}, () => {});
   },
 
   /* Artículos del inventario del giro armería — para poder vender DESDE el

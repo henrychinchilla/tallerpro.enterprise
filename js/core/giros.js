@@ -175,12 +175,15 @@ const GIROS = {
       { id: 'tipo_arma', label: 'Tipo', tipo: 'lista',
         opciones: ['pistola', 'revólver', 'rifle', 'escopeta', 'deportiva',
                    'gas comprimido', 'arma blanca', 'munición', 'accesorio', 'no aplica'] },
-      { id: 'marca',        label: 'Marca',  tipo: 'texto', ph: 'Glock, Smith & Wesson, Gamo...' },
-      { id: 'modelo',       label: 'Modelo', tipo: 'texto' },
-      { id: 'calibre',      label: 'Calibre', tipo: 'texto', ph: '9mm, .38 Special, 5.5mm, 12 gauge...' },
+      /* `catalogo` hace que el campo se muestre con lista desplegable editable
+         (datalist) alimentada por armeria_catalogo, en vez de texto suelto —
+         así no quedan "Glock", "GLOCK" y "glock" como tres marcas. */
+      { id: 'marca',        label: 'Marca',  tipo: 'texto', catalogo: 'marca', ph: 'Escribe o elige' },
+      { id: 'modelo',       label: 'Modelo', tipo: 'texto', catalogo: 'modelo', ph: 'Escribe o elige' },
+      { id: 'calibre',      label: 'Calibre', tipo: 'texto', catalogo: 'calibre', ph: 'Escribe o elige' },
       { id: 'numero_serie', label: 'Número de serie', tipo: 'texto',
         ayuda: 'Obligatorio en armas de fuego: el art. 82 g) prohíbe las que no lo traen. Balines, navajas y accesorios no llevan.' },
-      { id: 'pais_origen',  label: 'País de origen', tipo: 'texto' },
+      { id: 'pais_origen',  label: 'País de origen', tipo: 'texto', catalogo: 'pais', ph: 'Escribe o elige' },
     ],
   },
 
