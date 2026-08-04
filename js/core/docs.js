@@ -150,12 +150,16 @@ const Docs = {
     return { blob, sha256 };
   },
 
-  /* Sube a Storage + registra en documentos */
-  async guardar(entidad, entidadId, tipo, titulo, blob, sha256, firmantesMeta) {
+  _EXT_POR_TIPO: { 'application/pdf':'pdf', 'image/jpeg':'jpg', 'image/png':'png', 'image/webp':'webp' },
+
+  /* Sube a Storage + registra en documentos. contentType por defecto 'application/pdf'
+     para no romper firmarYGuardar(), que siempre generó PDF con jsPDF. */
+  async guardar(entidad, entidadId, tipo, titulo, blob, sha256, firmantesMeta, contentType = 'application/pdf') {
     const tid = getTID();
     const ts = new Date().toISOString().replace(/[:.]/g,'-');
-    const path = `${tid}/${entidad}/${entidadId||'gen'}-${tipo||'doc'}-${ts}.pdf`;
-    const { error: upErr } = await getSB().storage.from('documentos').upload(path, blob, { contentType:'application/pdf', upsert:false });
+    const ext = this._EXT_POR_TIPO[contentType] || 'pdf';
+    const path = `${tid}/${entidad}/${entidadId||'gen'}-${tipo||'doc'}-${ts}.${ext}`;
+    const { error: upErr } = await getSB().storage.from('documentos').upload(path, blob, { contentType, upsert:false });
     if (upErr) return { error: upErr };
     const { data, error } = await getSB().from('documentos').insert({
       tenant_id: tid, entidad, entidad_id: entidadId||null, tipo, titulo,
@@ -163,6 +167,30 @@ const Docs = {
       created_by: Auth.user?.id || null
     }).select().single();
     return { data, error };
+  },
+
+  /* Subir una foto o PDF tal cual (DPI, licencia, pasaporte...) sin pasar por
+     el flujo de firma en pantalla — es un adjunto, no un documento firmado. */
+  async subirArchivo(entidad, entidadId, tipo, titulo, file) {
+    if (!file) return { error: { message: 'Selecciona un archivo' } };
+    if (!this._EXT_POR_TIPO[file.type]) return { error: { message: 'Solo se aceptan foto (JPG/PNG/WEBP) o PDF' } };
+    if (file.size > 15 * 1024 * 1024) return { error: { message: 'El archivo pesa más de 15MB' } };
+    const buf = await file.arrayBuffer();
+    const hash = await crypto.subtle.digest('SHA-256', buf);
+    const sha256 = Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2, '0')).join('');
+    return this.guardar(entidad, entidadId, tipo, titulo, file, sha256, [], file.type);
+  },
+
+  /* Borra de Storage y de la tabla. Un documento mal subido no se "edita": se
+     reemplaza (eliminar + volver a subir), como cualquier adjunto de archivo. */
+  async eliminar(docId, storagePath) {
+    const ok = await UI.confirmar('¿Eliminar este documento? Esta acción no se puede deshacer.', 'Eliminar');
+    if (!ok) return false;
+    await getSB().storage.from('documentos').remove([storagePath]);
+    const { error } = await getSB().from('documentos').delete().eq('id', docId);
+    if (error) { UI.toast('No se pudo eliminar: ' + error.message, 'error'); return false; }
+    UI.toast('Documento eliminado ✓');
+    return true;
   },
 
   /* Flujo completo: captura firmas → PDF → sube → registra */
@@ -197,13 +225,19 @@ const Docs = {
     const cont = document.getElementById(contId);
     if (!cont) return;
     const docs = await this.listar(entidad, entidadId);
-    if (!docs.length) { cont.innerHTML = '<div class="text-muted" style="font-size:12px">Sin documentos firmados.</div>'; return; }
-    cont.innerHTML = docs.map(d => `
+    if (!docs.length) { cont.innerHTML = '<div class="text-muted" style="font-size:12px">Sin documentos adjuntos.</div>'; return; }
+    cont.innerHTML = docs.map(d => {
+      const esImagen = /\.(jpe?g|png|webp)$/i.test(d.storage_path);
+      return `
       <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--border);font-size:12px">
-        <div><b>📄 ${d.titulo||d.tipo||'Documento'}</b>
-          <div style="color:var(--text3);font-size:11px">${(d.firmantes||[]).map(f=>`${f.rol}: ${f.nombre||'—'}`).join(' · ')} · ${UI.fechaHora(d.created_at)}</div>
+        <div><b>${esImagen ? '📷' : '📄'} ${d.titulo||d.tipo||'Documento'}</b>
+          <div style="color:var(--text3);font-size:11px">${(d.firmantes||[]).map(f=>`${f.rol}: ${f.nombre||'—'}`).join(' · ')}${(d.firmantes||[]).length ? ' · ' : ''}${UI.fechaHora(d.created_at)}</div>
         </div>
-        <button class="btn btn-sm btn-cyan" onclick="Docs.abrir('${d.storage_path}')">Ver PDF</button>
-      </div>`).join('');
+        <div style="display:flex;gap:4px">
+          <button class="btn btn-sm btn-cyan" onclick="Docs.abrir('${d.storage_path}')">${esImagen ? 'Ver foto' : 'Ver PDF'}</button>
+          <button class="btn btn-sm btn-danger" onclick="Docs.eliminar('${d.id}','${d.storage_path}').then(ok=>{if(ok)Docs.render('${entidad}','${entidadId}','${contId}')})" title="Eliminar">🗑️</button>
+        </div>
+      </div>`;
+    }).join('');
   }
 };
