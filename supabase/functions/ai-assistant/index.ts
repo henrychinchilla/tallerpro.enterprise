@@ -43,21 +43,58 @@ const MOD_CONOCIMIENTO: Record<string, string> = {
   cotizaciones: "📋 COTIZACIONES (COT-NNNN): Sistema universal para todos los rubros — se aprueban, rechazan, vencen o convierten en Orden de Trabajo/Proyecto.",
   inventario:   "📦 INVENTARIO: Stock de repuestos y materiales, alertas de mínimo, movimientos.",
   clientes:     "👥 CLIENTES: Registro, historial de servicio, fidelización y contacto.",
+  armeria:      "🎯 ARMERÍA (ARM-NNNN): venta y compra de armas y municiones. Conoces la Ley de Armas y Municiones de Guatemala (Decreto 15-2009) y los trámites de DIGECAM — licencia de comercialización para la armería, licencias de tenencia y portación del cliente, requisitos para comprar/vender un arma, y el límite legal de venta de munición (200 cartuchos/mes con tenencia, 250/mes con portación, según reportaje de Prensa Libre — la ley no cita el artículo en esa nota). NUNCA inventes un requisito legal del que no estés seguro: dilo y sugiere verificar directo con DIGECAM (digecam.mil.gt) antes de tratarlo como definitivo.",
+  agroservicio: "🌱 AGROSERVICIO: fertilizantes, semillas, plaguicidas, herbicidas, fungicidas, alimento balanceado, veterinario. Conoces fórmulas de alimentación animal (bovinos, cerdos, aves, caballos).",
+  venta_granos: "🌽 VENTA DE GRANOS: maíz, frijol, arroz, sorgo/maicillo, soya, trigo. Conoces las referencias de precio del MAGA (mayoreo y menudeo) y fórmulas de alimentación animal. Si preguntan por información de mercado que no tengas de memoria (precio de hoy en otra plaza, noticias del sector), usa la búsqueda web en vez de adivinar.",
 };
 
-/* Construye la identidad y conocimiento de Beto según módulos activos del tenant.
-   Si modulos=[] (sin override) → experto en todo (comportamiento legacy). */
-function buildBetoPersona(nombre: string, modulos: string[]): string {
-  const tiene = (m: string) => !modulos.length || modulos.includes(m);
-  const tieneMec  = tiene("ordenes") || tiene("vehiculos");
-  const tieneHer  = tiene("herreria");
-  const tienePel  = tiene("peleteria");
-  const tieneElec = tiene("electronica");
-  const tieneRef  = tiene("refrigeracion");
-  const nEspec    = [tieneHer, tienePel, tieneElec, tieneRef].filter(Boolean).length;
+/* Mapa mínimo rol→módulos que Beto puede tocar. Espejo deliberadamente
+   acotado de PERMISOS en js/core/config.js (esa es la fuente de verdad real
+   del menú); una Edge Function Deno no puede importar ese archivo de
+   navegador sin agregar infraestructura nueva (ver _shared/, no existe hoy
+   en este repo). Si cambian los roles en config.js, actualizar esto también
+   — test/permisos-ia-sync.js compara ambos y falla si se desalinean. */
+const PERMISOS_MIN: Record<string, string[]> = {
+  superadmin:    ["*"],
+  admin:         ["*"],
+  gerente_tal:   ["clientes", "vehiculos", "diagnostico_obd", "bitacora", "ordenes", "cotizaciones", "herreria", "peleteria", "electronica", "refrigeracion", "armeria", "agroservicio", "venta_granos", "inventario"],
+  gerente_fin:   [],
+  recepcionista: ["clientes", "vehiculos", "ordenes", "cotizaciones", "herreria", "peleteria", "electronica", "refrigeracion", "armeria", "agroservicio", "venta_granos"],
+  vendedor:      ["clientes", "vehiculos", "venta_granos"],
+  mecanico:      ["vehiculos", "diagnostico_obd", "bitacora", "ordenes", "cotizaciones", "herreria", "peleteria", "electronica", "refrigeracion", "inventario"],
+  contador:      ["venta_granos"],
+  bodeguero:     ["venta_granos", "inventario"],
+  limpieza:      [],
+  conserje:      [],
+  cliente:       [],
+};
+
+/* Cruza lo que el TENANT tiene activo con lo que el ROL puede tocar. '*'
+   (superadmin/admin) no restringe nada más allá de lo que el tenant activó. */
+function modulosPermitidosPorRol(rol: string | undefined, modulosActivos: string[]): string[] {
+  const permitidos = PERMISOS_MIN[rol || "recepcionista"] ?? [];
+  if (permitidos.includes("*")) return modulosActivos;
+  return modulosActivos.filter((m) => permitidos.includes(m));
+}
+
+/* Construye la identidad y conocimiento de Beto según los módulos que el rol
+   en sesión puede tocar. `sinRestriccion` es SOLO el caso legacy de un tenant
+   sin modulos_activos configurado (taller sin multi-negocio) — no confundir
+   con "el rol no tiene módulos": un rol restringido a [] (ej. limpieza) debe
+   quedar SIN conocimiento, nunca caer al fallback de "experto en todo". */
+function buildBetoPersona(nombre: string, modulos: string[], sinRestriccion = false): string {
+  const tiene = (m: string) => sinRestriccion || modulos.includes(m);
+  const tieneMec     = tiene("ordenes") || tiene("vehiculos");
+  const tieneHer     = tiene("herreria");
+  const tienePel     = tiene("peleteria");
+  const tieneElec    = tiene("electronica");
+  const tieneRef     = tiene("refrigeracion");
+  const tieneArmeria = tiene("armeria");
+  const tieneAgro    = tiene("agroservicio") || tiene("venta_granos");
+  const nEspec = [tieneHer, tienePel, tieneElec, tieneRef, tieneArmeria, tieneAgro].filter(Boolean).length;
 
   let identidad: string;
-  if (!modulos.length) {
+  if (sinRestriccion) {
     identidad = `Eres ${nombre}, el asistente de NexusPro. Eres experto en mecánica automotriz y en todos los servicios especializados de la plataforma.`;
   } else if (tieneMec && nEspec === 0) {
     identidad = `Eres ${nombre}, el asistente mecánico de NexusPro. Trato amable y directo, de mecánico a mecánico.`;
@@ -69,22 +106,31 @@ function buildBetoPersona(nombre: string, modulos: string[]): string {
     identidad = `Eres ${nombre}, asistente experto en reparación electrónica y electrodomésticos de NexusPro. Diagnosticas y asesoras en celulares, laptops, TVs, refrigeradoras, lavadoras y todo tipo de aparatos eléctricos.`;
   } else if (!tieneMec && tieneRef && nEspec === 1) {
     identidad = `Eres ${nombre}, asistente experto en refrigeración y aire acondicionado de NexusPro. Conoces gases refrigerantes, presiones, diagnóstico de fugas y sistemas A/C.`;
+  } else if (!tieneMec && tieneArmeria && nEspec === 1) {
+    identidad = `Eres ${nombre}, asistente experto en armería de NexusPro. Conoces a fondo la Ley de Armas y Municiones de Guatemala (Decreto 15-2009) y los trámites de DIGECAM: licencias de tenencia y portación, requisitos para comprar/vender armas y municiones, y el límite legal de venta de munición. Asesoras con precisión legal — cuando algo requiera verificación directa con DIGECAM, dilo en vez de inventarlo.`;
+  } else if (!tieneMec && tieneAgro && nEspec === 1) {
+    identidad = `Eres ${nombre}, asistente experto en agro y venta de granos de NexusPro. Conoces precios de mercado, fórmulas de alimentación animal y las referencias del MAGA. Cuando la pregunta necesite información actual que no tengas (precio de hoy en otra plaza, noticias del sector), usa la búsqueda web en vez de adivinar.`;
+  } else if (!sinRestriccion && !modulos.length) {
+    identidad = `Eres ${nombre}, el asistente de NexusPro. Tu rol actual no tiene ninguna área de conocimiento de negocio asignada — si te preguntan algo, dilo claramente y no improvises fuera de tu alcance.`;
   } else {
     identidad = `Eres ${nombre}, asistente de NexusPro para negocios de servicio en Guatemala. Eres experto en los servicios que maneja este negocio.`;
   }
 
-  const modsActivos = Object.keys(MOD_CONOCIMIENTO).filter(m => tiene(m));
+  const modsActivos = Object.keys(MOD_CONOCIMIENTO).filter((m) => tiene(m));
+  const limiteAlcance = sinRestriccion ? "" : `
+
+LÍMITE DE ALCANCE: Solo puedes hablar de las ÁREAS DE CONOCIMIENTO Y SERVICIO de arriba (y de atención al cliente general). Si te preguntan sobre otra área del negocio que no está en esa lista — por ejemplo finanzas, nómina/RRHH, u otro giro que no manejas — responde que no tienes acceso a esa información con tu rol actual, sin inventar datos ni dar rodeos.`;
   return `${identidad}
 Hablas en español guatemalteco, claro y directo. La moneda es el Quetzal (Q).
 
 ÁREAS DE CONOCIMIENTO Y SERVICIO:
-${modsActivos.map(m => MOD_CONOCIMIENTO[m]).join("\n")}
+${modsActivos.length ? modsActivos.map((m) => MOD_CONOCIMIENTO[m]).join("\n") : "(ninguna asignada a tu rol)"}
 
-REGLA IMPORTANTE: Responde SIEMPRE preguntas técnicas sobre diagnóstico, fallas y reparación de cualquier equipo dentro de tus áreas de conocimiento — aunque ese equipo específico no esté registrado como orden en el sistema. Tu expertise técnica va más allá de lo que está en la base de datos del negocio.`;
+REGLA IMPORTANTE: Responde SIEMPRE preguntas técnicas sobre diagnóstico, fallas y reparación de cualquier equipo dentro de tus áreas de conocimiento — aunque ese equipo específico no esté registrado como orden en el sistema. Tu expertise técnica va más allá de lo que está en la base de datos del negocio.${limiteAlcance}`;
 }
 
 /* Persona base como fallback (todo incluido) */
-const BASE_GT = buildBetoPersona(NOMBRE, []);
+const BASE_GT = buildBetoPersona(NOMBRE, [], true);
 
 const SUGERENCIA_RECURSOS = `
 Cuando la consulta sea sobre una falla, código DTC, procedimiento de reparación o
@@ -303,6 +349,7 @@ Deno.serve(async (req) => {
   let userContent = "";
   let messagesPayload: any[] = [];
   let sistemaPrompt = PROMPTS[modo]; // puede ser sobreescrito por persona dinámica en chat/insights
+  let modsDelRol: string[] = []; // módulos que este rol puede tocar (para gating de web_search)
 
   if (modo === "tarjeta") {
     const base64Data = body.imagen_base64;
@@ -341,14 +388,18 @@ Deno.serve(async (req) => {
     ];
   } else if (modo === "chat" || modo === "insights") {
 
-    // Persona adaptativa: obtener módulos activos del tenant
+    // Persona adaptativa: módulos del tenant, cruzados con lo que el ROL puede
+    // tocar. Antes solo miraba el tenant — un mecánico veía en Beto TODO lo
+    // que el comercio tuviera activo (ej. armería), sin importar su rol.
     let personaDinamica = BASE_GT;
     {
       const { data: tnMods } = await asCaller.from("tenants")
         .select("modulos_activos, plan").eq("id", tenantId).maybeSingle();
-      const mods: string[] = Array.isArray(tnMods?.modulos_activos) && tnMods.modulos_activos.length
+      const modsTenant: string[] = Array.isArray(tnMods?.modulos_activos) && tnMods.modulos_activos.length
         ? tnMods.modulos_activos : [];
-      personaDinamica = buildBetoPersona(NOMBRE, mods);
+      const sinRestriccionTenant = modsTenant.length === 0; // legacy: taller sin multi-negocio configurado
+      modsDelRol = sinRestriccionTenant ? modsTenant : modulosPermitidosPorRol(rol, modsTenant);
+      personaDinamica = buildBetoPersona(NOMBRE, modsDelRol, sinRestriccionTenant);
     }
 
     // Historial de las últimas 3 conversaciones para dar contexto continuo a Beto
@@ -387,6 +438,17 @@ Deno.serve(async (req) => {
   }
 
   // ── Llamar a Claude (fetch directo) ──
+  /* Búsqueda web real (no solo sugerir un enlace de YouTube/Google, que es lo
+     que hace SUGERENCIA_RECURSOS): solo para los giros que la pidieron —
+     armería para verificar trámites DIGECAM vigentes, granos para precios y
+     noticias de mercado que el snapshot no trae. No se prende para todos:
+     cada búsqueda tiene costo. max_uses:3 acota el gasto por consulta.
+     ponytail: tool_type básico (web_search_20250305), compatible con Haiku
+     (el modelo por defecto) — subir a la variante con filtrado dinámico si
+     algún tenant usa un modelo Opus/Sonnet y se justifica el costo extra. */
+  const necesitaBusquedaWeb = (modo === "chat" || modo === "insights") &&
+    (modsDelRol.includes("armeria") || modsDelRol.includes("agroservicio") || modsDelRol.includes("venta_granos"));
+
   try {
     const r = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
@@ -406,6 +468,7 @@ Deno.serve(async (req) => {
         }),
         system: sistemaPrompt,
         messages: messagesPayload,
+        ...(necesitaBusquedaWeb ? { tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 3 }] } : {}),
       }),
     });
 
