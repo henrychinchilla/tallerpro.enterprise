@@ -22,19 +22,26 @@ const base = { tipo: 'venta', cliente_id: 'c1', categoria: 'accesorio', cantidad
 
 /* ── Serie obligatoria en armas ──────────────────────────────────────── */
 ok('una funda (accesorio) no exige número de serie', ARM._validar({ ...base }).ok);
-ok('una pistola SIN serie se rechaza', ARM._validar({ ...base, categoria: 'pistola', numero_serie: '', contraparte_licencia_num: 'L1' }).ok === false);
-ok('una pistola CON serie y licencia pasa', ARM._validar({ ...base, categoria: 'pistola', numero_serie: 'ABC123', contraparte_licencia_num: 'L1' }).ok);
+ok('una pistola SIN serie se rechaza', ARM._validar({ ...base, categoria: 'pistola', numero_serie: '', contraparte_licencia_num: 'L1', contraparte_dpi: 'D1' }).ok === false);
+ok('una pistola CON serie, licencia y DPI pasa', ARM._validar({ ...base, categoria: 'pistola', numero_serie: 'ABC123', contraparte_licencia_num: 'L1', contraparte_dpi: 'D1' }).ok);
 ok('un rifle sin serie da el mensaje de DIGECAM, no uno genérico',
-   /serie/i.test(ARM._validar({ ...base, categoria: 'rifle', contraparte_licencia_num: 'L1' }).error || ''));
+   /serie/i.test(ARM._validar({ ...base, categoria: 'rifle', contraparte_licencia_num: 'L1', contraparte_dpi: 'D1' }).error || ''));
 
-/* ── Licencia obligatoria al VENDER arma o munición (no en accesorios) ── */
+/* ── Licencia y DPI obligatorios al VENDER arma o munición (no accesorios) */
 ok('vender munición sin licencia del comprador se rechaza',
-   ARM._validar({ ...base, categoria: 'munición', contraparte_licencia_num: '' }).ok === false);
-ok('vender munición CON licencia pasa', ARM._validar({ ...base, categoria: 'munición', contraparte_licencia_num: 'TEN-1' }).ok);
-ok('vender un accesorio NO exige licencia (la ley no la pide)',
-   ARM._validar({ ...base, categoria: 'accesorio', contraparte_licencia_num: '' }).ok);
-ok('COMPRAR (no vender) munición a un proveedor no exige licencia del comprador',
+   ARM._validar({ ...base, categoria: 'munición', contraparte_licencia_num: '', contraparte_dpi: 'D1' }).ok === false);
+ok('vender munición con licencia pero SIN DPI se rechaza',
+   ARM._validar({ ...base, categoria: 'munición', contraparte_licencia_num: 'TEN-1', contraparte_dpi: '' }).ok === false);
+ok('vender munición CON licencia y DPI pasa', ARM._validar({ ...base, categoria: 'munición', contraparte_licencia_num: 'TEN-1', contraparte_dpi: 'D1' }).ok);
+ok('vender un accesorio NO exige licencia ni DPI (la ley no los pide)',
+   ARM._validar({ ...base, categoria: 'accesorio', contraparte_licencia_num: '', contraparte_dpi: '' }).ok);
+ok('COMPRAR (no vender) munición a un proveedor no exige licencia ni DPI',
    ARM._validar({ tipo: 'compra', proveedor_id: 'p1', categoria: 'munición', cantidad: 1, precio_unit: 10 }).ok);
+
+/* ── Tope legal de munición por mes ──────────────────────────────────── */
+ok('tenencia: 200 cartuchos al mes', ARM._limiteMunicionMes('tenencia') === 200);
+ok('portación: 250 cartuchos al mes', ARM._limiteMunicionMes('portación') === 250);
+ok('sin licencia reconocida, tope 0 (no debería llegar aquí sin licencia)', ARM._limiteMunicionMes('') === 0);
 
 /* ── Contraparte según tipo ──────────────────────────────────────────── */
 ok('una venta sin cliente se rechaza', ARM._validar({ ...base, cliente_id: '' }).ok === false);

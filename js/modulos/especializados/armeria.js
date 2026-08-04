@@ -26,6 +26,15 @@ Modulos.armeria = {
   /* Solo el arma en sí lleva número de serie propio. */
   _esArma(categoria) { return ['pistola', 'revólver', 'rifle', 'escopeta'].includes(categoria); },
 
+  /* Tope legal de venta de munición por mes (Ley de Armas y Municiones,
+     según reportaje de Prensa Libre — la ley no cita el artículo en esa
+     nota; confirmar directo con DIGECAM antes de tomarlo como definitivo).
+     Sin licencia no se puede vender munición (ver _validar), así que ese
+     caso no debería llegar aquí. */
+  _limiteMunicionMes(tipoLicencia) {
+    return { tenencia: 200, 'portación': 250 }[tipoLicencia] || 0;
+  },
+
   /* Validación pura (sin DOM), para poder probarla sin levantar un modal.
      Refleja EXACTAMENTE lo que exige la migración (constraints de la BD);
      así el usuario ve el error claro en vez de un 23514 genérico de Postgres. */
@@ -37,8 +46,13 @@ Modulos.armeria = {
     if (this._esArma(f.categoria) && !String(f.numero_serie || '').trim()) {
       return { ok: false, error: 'El número de serie es obligatorio en armas — DIGECAM lo exige para registrar la venta en SIDIGECAM' };
     }
-    if (f.tipo === 'venta' && f.categoria !== 'accesorio' && !String(f.contraparte_licencia_num || '').trim()) {
-      return { ok: false, error: 'Para vender armas o munición hay que registrar la tarjeta de tenencia o licencia de portación del comprador (Ley de Armas y Municiones, venta de munición incluida)' };
+    if (f.tipo === 'venta' && f.categoria !== 'accesorio') {
+      if (!String(f.contraparte_licencia_num || '').trim()) {
+        return { ok: false, error: 'Para vender armas o munición hay que registrar la tarjeta de tenencia o licencia de portación del comprador (Ley de Armas y Municiones, venta de munición incluida)' };
+      }
+      if (!String(f.contraparte_dpi || '').trim()) {
+        return { ok: false, error: 'El DPI del comprador es obligatorio en venta de armas o munición — SIDIGECAM lo exige junto con la licencia' };
+      }
     }
     if (!(Number(f.cantidad) > 0)) return { ok: false, error: 'La cantidad debe ser mayor a cero' };
     if (Number(f.precio_unit) < 0) return { ok: false, error: 'El precio no puede ser negativo' };
@@ -127,6 +141,7 @@ Modulos.armeria = {
         <div><div style="font-size:11px;color:var(--text3)">País de origen</div><div>${o.pais_origen || '—'}</div></div>
         <div><div style="font-size:11px;color:var(--text3)">Cantidad</div><div>${UI.numero ? UI.numero(o.cantidad) : o.cantidad}</div></div>
         <div><div style="font-size:11px;color:var(--text3)">Total</div><div style="font-weight:700;color:var(--green)">${UI.q(o.total)}</div></div>
+        <div><div style="font-size:11px;color:var(--text3)">DPI</div><div class="mono-sm">${o.contraparte_dpi || '—'}</div></div>
         <div><div style="font-size:11px;color:var(--text3)">Licencia de la contraparte</div><div>${o.contraparte_licencia_tipo ? `${this._LICENCIAS[o.contraparte_licencia_tipo]} · ${o.contraparte_licencia_num || '—'}${o.contraparte_licencia_vencimiento ? ' · vence ' + UI.fecha(o.contraparte_licencia_vencimiento) : ''}` : '—'}</div></div>
         <div><div style="font-size:11px;color:var(--text3)">Foto / Huella en el local</div><div>${o.foto_tomada ? '📷 sí' : '📷 no'} · ${o.huella_tomada ? '👆 sí' : '👆 no'}</div></div>
         <div><div style="font-size:11px;color:var(--text3)">DIGECAM</div><div>${o.notificado_digecam ? `✅ Notificado${o.fecha_notificacion_digecam ? ' el ' + UI.fecha(o.fecha_notificacion_digecam) : ''}${o.folio_notificacion_digecam ? ' · folio ' + o.folio_notificacion_digecam : ''}` : '⚠️ Pendiente de notificar'}</div></div>
@@ -199,6 +214,8 @@ Modulos.armeria = {
       <div style="background:var(--card2);border-radius:8px;padding:10px 12px;margin:8px 0">
         <div style="font-size:12px;font-weight:700;margin-bottom:8px">⚖️ Cumplimiento DIGECAM de la contraparte</div>
         <div class="form-row">
+          <div class="form-group"><label class="form-label">DPI del comprador/vendedor</label>
+            <input class="form-input" id="arm-dpi" value="${o.contraparte_dpi || ''}" placeholder="0000 00000 0000" style="font-family:monospace"></div>
           <div class="form-group"><label class="form-label">Licencia presentada</label>
             <select class="form-select" id="arm-lic-tipo">
               <option value="">— Ninguna (solo accesorios) —</option>
@@ -209,6 +226,7 @@ Modulos.armeria = {
           <div class="form-group"><label class="form-label">Vence</label>
             <input class="form-input" id="arm-lic-vence" type="date" value="${o.contraparte_licencia_vencimiento || ''}"></div>
         </div>
+        <div style="font-size:11px;color:var(--text3);margin-top:2px">DPI y licencia son obligatorios para vender armas o munición (no para accesorios) — es lo que SIDIGECAM registra del comprador.</div>
         <div style="display:flex;gap:16px;margin-top:6px">
           <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer">
             <input type="checkbox" id="arm-foto" ${o.foto_tomada ? 'checked' : ''}> Foto tomada en el local</label>
@@ -268,6 +286,7 @@ Modulos.armeria = {
       pais_origen: document.getElementById('arm-origen')?.value || null,
       cantidad: parseFloat(document.getElementById('arm-cantidad')?.value) || 0,
       precio_unit: parseFloat(document.getElementById('arm-precio')?.value) || 0,
+      contraparte_dpi: document.getElementById('arm-dpi')?.value || null,
       contraparte_licencia_tipo: document.getElementById('arm-lic-tipo')?.value || null,
       contraparte_licencia_num: document.getElementById('arm-lic-num')?.value || null,
       contraparte_licencia_vencimiento: document.getElementById('arm-lic-vence')?.value || null,
@@ -282,6 +301,16 @@ Modulos.armeria = {
 
     const v = this._validar(fields);
     if (!v.ok) { UI.toast(v.error, 'error'); return; }
+
+    if (fields.tipo === 'venta' && fields.categoria === 'munición') {
+      const limite = this._limiteMunicionMes(fields.contraparte_licencia_tipo);
+      const yaVendido = await DB.getConsumoMunicionMes(fields.contraparte_dpi, id || null);
+      const nuevoTotal = yaVendido + fields.cantidad;
+      if (limite && nuevoTotal > limite) {
+        UI.toast(`Excede el tope legal: este DPI ya lleva ${yaVendido} cartuchos este mes y el límite con ${this._LICENCIAS[fields.contraparte_licencia_tipo].toLowerCase()} es ${limite}/mes (máximo ${Math.max(0, limite - yaVendido)} más)`, 'error');
+        return;
+      }
+    }
 
     if (id) fields.id = id;
     const { error } = await DB.upsertArmeriaOperacion(fields);
@@ -327,6 +356,7 @@ Modulos.armeria = {
     const filas = this._data.map(o => `<tr>
       <td>${o.num || '—'}</td><td>${o.tipo === 'compra' ? 'Compra' : 'Venta'}</td>
       <td>${o.clientes?.nombre || o.proveedores?.nombre || '—'}</td>
+      <td>${o.contraparte_dpi || '—'}</td>
       <td>${this._CATEGORIAS[o.categoria] || o.categoria}</td>
       <td>${[o.marca, o.modelo, o.calibre].filter(Boolean).join(' ')}</td>
       <td>${o.numero_serie || '—'}</td>
@@ -345,8 +375,8 @@ Modulos.armeria = {
     </style></head><body>
     <h2>NexusPro — Libro de Registro de Armería</h2>
     <p>Generado ${hoy} · ${this._data.length} operaciones</p>
-    <table><thead><tr><th>No.</th><th>Tipo</th><th>Contraparte</th><th>Categoría</th><th>Marca/Modelo/Calibre</th><th>Serie</th><th>Licencia</th><th>Total</th><th>DIGECAM</th><th>Fecha</th></tr></thead>
-    <tbody>${filas || '<tr><td colspan="10">Sin operaciones</td></tr>'}</tbody></table>
+    <table><thead><tr><th>No.</th><th>Tipo</th><th>Contraparte</th><th>DPI</th><th>Categoría</th><th>Marca/Modelo/Calibre</th><th>Serie</th><th>Licencia</th><th>Total</th><th>DIGECAM</th><th>Fecha</th></tr></thead>
+    <tbody>${filas || '<tr><td colspan="11">Sin operaciones</td></tr>'}</tbody></table>
     </body></html>`;
     const w = window.open('', '_blank', 'width=900,height=700');
     w.document.write(html);
@@ -379,13 +409,38 @@ Modulos.armeria = {
 
         <p><b>Munición:</b> se puede vender con solo mostrar la tarjeta de tenencia o la licencia de portación del arma — no requiere un trámite de licencia aparte.</p>
 
-        <p><b>Licencia de portación (del cliente):</b> vigencia de 1 a 3 años, renovable. Requiere datos personales completos, datos del arma (marca/modelo/calibre/largo de cañón/número de serie) y declaración jurada de no padecer enfermedades mentales ni ser desertor.</p>
+        <p><b>⚠️ Tope legal de venta de munición por mes</b> (este módulo lo controla automáticamente por DPI al guardar una venta):</p>
+        <ul style="margin:4px 0 8px 18px">
+          <li><b>200 cartuchos/mes</b> a quien presenta tarjeta de <b>tenencia</b></li>
+          <li><b>250 cartuchos/mes</b> a quien presenta licencia de <b>portación</b></li>
+          <li>Venta libre solo dentro de un polígono de tiro, para uso ahí mismo (no aplica a mostrador)</li>
+        </ul>
+        <p style="font-size:11px;color:var(--text3);margin-top:-4px">Cifra según reportaje de Prensa Libre sobre la ley (no cita el número de artículo) — confirmar directo con DIGECAM. La armería debe llevar, además, un libro con cuánta munición y a quién se le vendió: es lo que genera 🖨️ Libro de registro con el DPI de cada comprador.</p>
+
+        <p><b>Licencia de portación (del cliente) — requisitos para tramitarla</b> (útil para orientar a un cliente, no lo tramita esta app):</p>
+        <ul style="margin:4px 0 8px 18px">
+          <li>Nombre completo, edad, estado civil, nacionalidad, profesión, residencia, DPI y lugar para notificaciones</li>
+          <li>Carecer de antecedentes penales y policiales vigentes</li>
+          <li>Declaración jurada ante notario: no padecer enfermedad mental, no ser desertor del Ejército ni haber abandonado empleo en la PNC</li>
+          <li>Certificación de evaluación teórica, práctica y psicológica aprobada</li>
+          <li>Datos del arma a registrar: marca, modelo, calibre, largo de cañón, número de serie</li>
+          <li>Vigencia de la licencia: 1 a 3 años, renovable</li>
+        </ul>
+        <p style="font-size:11px;color:var(--text3);margin-top:-4px">Guatemala emite el DPI a partir de los 18 años (RENAP) — exigir DPI ya filtra mayoría de edad; la ley no precisó un número de edad distinto en las fuentes consultadas.</p>
 
         <p><b>Compraventa entre particulares</b> (fuera de una armería, vía notario): el testimonio de la escritura debe presentarse a DIGECAM dentro de 8 días de celebrado el contrato; el notario debe avisar del contrato dentro de 15 días.</p>
 
         <p><b>Prohibido:</b> armas de guerra, automáticas, de uso exclusivo del Ejército, munición de guerra (explosiva, incendiaria, perforante, expansiva prohibida), armas con número de serie alterado o borrado.</p>
 
-        <p style="color:var(--text3);font-size:11px;margin-top:10px">Este resumen es orientativo y no sustituye asesoría legal ni la verificación directa con DIGECAM (digecam.mil.gt) antes de operar. Fuentes: Decreto 15-2009 y su reglamento (Acuerdo Gubernativo 85-2011); trámites y cifras de costos/plazos tomados de portales de trámites — confirmar vigencia antes de usarlos como requisito del negocio.</p>
+        <p><b>Formatos oficiales de referencia</b> (para ver el trámite tal como lo pide el gobierno, no una copia hecha por esta app):</p>
+        <ul style="margin:4px 0 8px 18px;font-size:12px">
+          <li>Registro de tenencia con contrato de compraventa (persona individual): tramites.gob.gt/servicio/1640</li>
+          <li>Evaluación y primera licencia de portación de arma de fuego: tramites.gob.gt/servicio/1642</li>
+          <li>Renovación de licencia de portación: tramites.gob.gt/servicio/1643</li>
+          <li>Licencia de compraventa (armería): catálogo de trámites de DIGECAM, digecam.mil.gt/web/tramites.php</li>
+        </ul>
+
+        <p style="color:var(--text3);font-size:11px;margin-top:10px">Este resumen es orientativo y no sustituye asesoría legal ni la verificación directa con DIGECAM (digecam.mil.gt) antes de operar. Fuentes: Decreto 15-2009 y su reglamento (Acuerdo Gubernativo 85-2011); trámites y cifras de costos/plazos/límites tomados de portales de trámites y prensa — confirmar vigencia antes de usarlos como requisito del negocio.</p>
       </div>
       <div class="modal-footer">
         <button class="btn btn-ghost" onclick="UI.cerrarModal()">Cerrar</button>

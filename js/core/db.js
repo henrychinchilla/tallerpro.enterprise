@@ -976,6 +976,20 @@ const DB = {
     return (data||[]).map(r=>({ ...r, factura_num: r.facturas?.num||null }));
   },
 
+  /* Munición ya vendida a este DPI en el mes en curso (excluyendo la
+     operación que se está editando, si aplica) — para el tope legal de
+     200/250 cartuchos mensuales. Suma en JS: el volumen por comercio no
+     justifica una función agregada en el servidor. */
+  async getConsumoMunicionMes(dpi, excluirId = null) {
+    if (!dpi) return 0;
+    const desde = new Date(); desde.setDate(1); desde.setHours(0, 0, 0, 0);
+    let q = getSB().from('armeria_operaciones').select('id,cantidad')
+      .eq('tenant_id', getTID()).eq('tipo', 'venta').eq('categoria', 'munición')
+      .eq('contraparte_dpi', dpi).gte('fecha', desde.toISOString());
+    const { data } = await q;
+    return (data || []).filter(r => r.id !== excluirId).reduce((s, r) => s + (Number(r.cantidad) || 0), 0);
+  },
+
   async upsertArmeriaOperacion(fields) {
     const payload = { ...fields, tenant_id: getTID(), updated_at: new Date().toISOString() };
     if (fields.id) {
