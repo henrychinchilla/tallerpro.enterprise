@@ -8,7 +8,7 @@
    Para forzar actualización: subir CACHE_VERSION.
 ═══════════════════════════════════════════════════════ */
 
-const CACHE_VERSION = 'v4.43.0-20260804';
+const CACHE_VERSION = 'v4.44.0-20260804';
 const CACHE_NAME = `nexuspro-${CACHE_VERSION}`;
 
 /* App shell — se precachea en install para que funcione offline */
@@ -22,6 +22,7 @@ const PRECACHE = [
   '/js/core/config.js',
   '/js/core/ui.js',
   '/js/core/giros.js',
+  '/js/core/ley-armas.js',
   '/js/core/bascula.js',
   '/js/core/db.js',
   '/js/core/auth.js',
@@ -49,6 +50,7 @@ const PRECACHE = [
   '/js/modulos/especializados/peleteria.js',
   '/js/modulos/especializados/electronica.js',
   '/js/modulos/especializados/refrigeracion.js',
+  '/js/modulos/especializados/armeria.js',
   '/js/modulos/finanzas/presupuesto.js',
   '/js/modulos/finanzas/contabilidad.js',
   '/js/modulos/finanzas/formularios_sat.js',

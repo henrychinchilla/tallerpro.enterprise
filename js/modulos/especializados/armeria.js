@@ -1,21 +1,24 @@
 /* ═══════════════════════════════════════════════════════════════════════════
    NexusPro v3.0 — especializados/armeria.js
    Módulo vertical: Armería. Venta y compra de armas y municiones con los
-   datos de cumplimiento que exige DIGECAM en cada transacción.
+   datos de cumplimiento que exige la Ley de Armas y Municiones de Guatemala.
+
+   El texto literal de la ley vive en js/core/ley-armas.js y es la fuente de
+   verdad de este módulo: los topes, los requisitos y los plazos salen de ahí,
+   no de números escritos a mano acá.
+
+   ⚠️ NOMBRE vs LEY: para el Decreto 15-2009 una "armería" es el taller que
+   REPARA armas (art. 85) y tiene PROHIBIDO venderlas (art. 88). El negocio
+   que vende es un "establecimiento de compraventa" (arts. 55-56). Este módulo
+   cubre las dos cosas porque un negocio real suele tener ambas licencias,
+   pero son trámites distintos ante DIGECAM y el módulo lo advierte.
 
    No usa Modulos._especialOT (proyecto con anticipo/estado): la venta de un
-   arma es una entrega directa, no un trabajo por fases. Sigue el patrón de
-   venta_granos.js — lista única con tipo venta/compra — porque es el mismo
-   caso: comercialización directa de un artículo físico, no fabricación.
-
-   Marco legal — Decreto 15-2009, Ley de Armas y Municiones (LAM) arts. 79-90,
-   reglamentado por el Acuerdo Gubernativo 85-2011. Ver modalAsesoria() para
-   el resumen con fuentes. La app NO se conecta a SIDIGECAM (sin API pública):
-   este módulo lleva el control interno, pero la notificación real a DIGECAM
-   sigue siendo responsabilidad del taller.
+   arma no es un trabajo por fases sino una entrega regulada — sigue el patrón
+   de venta_granos.js (lista única con tipo venta/compra).
    ═══════════════════════════════════════════════════════════════════════════ */
 Modulos.armeria = {
-  _data: [], _clientes: [], _proveedores: [], _filtroTipo: '',
+  _data: [], _clientes: [], _proveedores: [], _inventario: [], _filtroTipo: '', _tab: 'operaciones',
 
   _CATEGORIAS: {
     pistola: 'Pistola', 'revólver': 'Revólver', rifle: 'Rifle', escopeta: 'Escopeta',
@@ -23,16 +26,31 @@ Modulos.armeria = {
   },
   _LICENCIAS: { tenencia: 'Tarjeta de tenencia', 'portación': 'Licencia de portación' },
 
+  /* Estados del art. 59: vender un arma NO es entregarla. El vendedor remite
+     documentación y arma a DIGECAM, que en ≤5 días hábiles devuelve la
+     autorización de entrega y la tarjeta de tenencia. */
+  _ESTADOS: {
+    documentos_recibidos: 'Documentos recibidos',
+    enviado_digecam:      'Enviado a DIGECAM',
+    autorizado:           'Autorizado para entrega',
+    entregado:            'Entregado',
+    cancelado:            'Cancelado',
+  },
+  _colorEstado(e) {
+    return { documentos_recibidos:'gray', enviado_digecam:'amber', autorizado:'cyan',
+             entregado:'green', cancelado:'red' }[e] || 'gray';
+  },
+
   /* Solo el arma en sí lleva número de serie propio. */
   _esArma(categoria) { return ['pistola', 'revólver', 'rifle', 'escopeta'].includes(categoria); },
 
-  /* Tope legal de venta de munición por mes (Ley de Armas y Municiones,
-     según reportaje de Prensa Libre — la ley no cita el artículo en esa
-     nota; confirmar directo con DIGECAM antes de tomarlo como definitivo).
-     Sin licencia no se puede vender munición (ver _validar), así que ese
-     caso no debería llegar aquí. */
-  _limiteMunicionMes(tipoLicencia) {
-    return { tenencia: 200, 'portación': 250 }[tipoLicencia] || 0;
+  /* Tope mensual de munición — art. 60, vía ley-armas.js. Son 250 por CADA
+     arma registrada en la licencia de portación (art. 72: hasta 3), o 200 con
+     registro de tenencia. */
+  _limiteMunicionMes(tipoLicencia, armasRegistradas = 1) {
+    return (typeof topeMunicionMensual === 'function')
+      ? topeMunicionMensual(tipoLicencia, armasRegistradas)
+      : 0;
   },
 
   /* Validación pura (sin DOM), para poder probarla sin levantar un modal.
@@ -44,14 +62,20 @@ Modulos.armeria = {
     if (f.tipo === 'compra' && !f.cliente_id && !f.proveedor_id) return { ok: false, error: 'Selecciona a quién se le compra (cliente o proveedor)' };
     if (!f.categoria) return { ok: false, error: 'Selecciona la categoría del artículo' };
     if (this._esArma(f.categoria) && !String(f.numero_serie || '').trim()) {
-      return { ok: false, error: 'El número de serie es obligatorio en armas — DIGECAM lo exige para registrar la venta en SIDIGECAM' };
+      return { ok: false, error: 'El número de serie es obligatorio en armas — sin él no se puede registrar la venta ante DIGECAM (y el art. 82 g) prohíbe las armas sin número de registro)' };
     }
     if (f.tipo === 'venta' && f.categoria !== 'accesorio') {
       if (!String(f.contraparte_licencia_num || '').trim()) {
-        return { ok: false, error: 'Para vender armas o munición hay que registrar la tarjeta de tenencia o licencia de portación del comprador (Ley de Armas y Municiones, venta de munición incluida)' };
+        return { ok: false, error: 'Para vender armas o munición hay que registrar la tarjeta de tenencia o licencia de portación del comprador (art. 60 para munición; art. 59 para armas)' };
       }
       if (!String(f.contraparte_dpi || '').trim()) {
-        return { ok: false, error: 'El DPI del comprador es obligatorio en venta de armas o munición — SIDIGECAM lo exige junto con la licencia' };
+        return { ok: false, error: 'El DPI del comprador es obligatorio en venta de armas o munición (art. 59: fotocopia legalizada del documento de identificación personal)' };
+      }
+    }
+    /* Art. 60: la factura de munición debe llevar además dirección y NIT. */
+    if (f.tipo === 'venta' && f.categoria === 'munición') {
+      if (!String(f.contraparte_nit || '').trim() || !String(f.contraparte_direccion || '').trim()) {
+        return { ok: false, error: 'El art. 60 exige que la factura de munición lleve el NIT y la dirección del comprador — regístralos antes de guardar' };
       }
     }
     if (!(Number(f.cantidad) > 0)) return { ok: false, error: 'La cantidad debe ser mayor a cero' };
@@ -61,20 +85,35 @@ Modulos.armeria = {
 
   _colorTipo(t) { return t === 'compra' ? 'purple' : 'cyan'; },
 
+  _tabsHTML() {
+    const b = (tab, txt) => `<button class="btn btn-sm ${this._tab === tab ? 'btn-cyan' : 'btn-ghost'}" onclick="Modulos.armeria._irTab('${tab}')">${txt}</button>`;
+    return `<div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
+      ${b('operaciones', '🎯 Operaciones')}${b('ley', '⚖️ Ley de Armas y Municiones')}
+    </div>`;
+  },
+
+  _irTab(tab) {
+    this._tab = tab;
+    return tab === 'ley' ? this.renderLey() : this.render(this._filtroTipo);
+  },
+
   async render(filtroTipo = '') {
+    if (this._tab === 'ley') return this.renderLey();
     const el = document.getElementById('page-content');
     UI.loading(el);
     this._filtroTipo = filtroTipo;
-    [this._data, this._clientes, this._proveedores] = await Promise.all([
+    [this._data, this._clientes, this._proveedores, this._inventario] = await Promise.all([
       DB.getArmeriaOperaciones(filtroTipo ? { tipo: filtroTipo } : {}),
       DB.getClientes(),
       DB.getProveedores(),
+      DB.getInventarioArmeria().catch(() => []),
     ]);
 
     const ventas = this._data.filter(o => o.tipo === 'venta');
     const compras = this._data.filter(o => o.tipo === 'compra');
     const ingresoVentas = ventas.reduce((s, o) => s + (Number(o.total) || 0), 0);
     const pendientesDigecam = this._data.filter(o => !o.notificado_digecam).length;
+    const enTramite = this._data.filter(o => ['documentos_recibidos', 'enviado_digecam', 'autorizado'].includes(o.estado)).length;
 
     el.innerHTML = `
       <div class="page-header">
@@ -82,22 +121,23 @@ Modulos.armeria = {
         <p class="page-subtitle">// ${this._data.length} operaciones registradas</p></div>
         <div class="page-actions">
           <button class="btn btn-ghost" onclick="Modulos.inventario.abrirGiro('armeria')" title="Ver y cargar sólo los artículos de este giro">📦 Inventario de armería</button>
-          <button class="btn btn-ghost" onclick="Modulos.armeria.modalAsesoria()">⚖️ Asesoría DIGECAM</button>
           <button class="btn btn-ghost" onclick="Modulos.armeria.imprimirLibro()">🖨️ Libro de registro</button>
           <button class="btn btn-amber" onclick="Modulos.armeria.modalForm()">＋ Nueva Operación</button>
         </div>
       </div>
       <div class="page-body">
+        ${this._tabsHTML()}
         <div class="kpi-grid" style="margin-bottom:16px">
           ${UI.kpiCard({ icon: '🔺', clase: 'cyan', label: 'Ventas', value: ventas.length })}
           ${UI.kpiCard({ icon: '🔽', clase: 'purple', label: 'Compras', value: compras.length })}
           ${UI.kpiCard({ icon: '💰', clase: 'green', label: 'Ingreso en ventas', value: ingresoVentas, money: true })}
-          ${UI.kpiCard({ icon: pendientesDigecam ? '⚠️' : '✅', clase: pendientesDigecam ? 'red' : 'green', label: 'Sin notificar a DIGECAM', value: pendientesDigecam })}
+          ${UI.kpiCard({ icon: enTramite ? '⏳' : '✅', clase: enTramite ? 'amber' : 'green', label: 'Armas en trámite DIGECAM', value: enTramite })}
         </div>
         <div style="background:var(--card2);border-left:3px solid var(--amber);border-radius:8px;padding:10px 12px;margin-bottom:14px;font-size:12px">
-          ⚖️ Este módulo lleva el control interno de cumplimiento (número de serie, licencia del comprador).
-          <b>No sustituye el registro en SIDIGECAM</b>: esa notificación la hace el taller directo con DIGECAM.
-          Ver <a href="#" onclick="event.preventDefault();Modulos.armeria.modalAsesoria()" style="color:var(--cyan)">Asesoría DIGECAM</a>.
+          ⚖️ Este módulo lleva el control interno de cumplimiento. <b>No sustituye el registro en el sistema de DIGECAM</b>
+          (art. 56: el establecimiento debe estar conectado en línea al sistema informático de DIGECAM).
+          ${pendientesDigecam ? `<b style="color:var(--red)"> · ${pendientesDigecam} operación(es) sin marcar como notificadas.</b>` : ''}
+          Consulta la ley en la pestaña <a href="#" onclick="event.preventDefault();Modulos.armeria._irTab('ley')" style="color:var(--cyan)">⚖️ Ley de Armas y Municiones</a>.
         </div>
         <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap">
           <button class="btn btn-sm ${!filtroTipo ? 'btn-cyan' : 'btn-ghost'}" onclick="Modulos.armeria.render('')">Todas</button>
@@ -105,15 +145,16 @@ Modulos.armeria = {
           <button class="btn btn-sm ${filtroTipo === 'compra' ? 'btn-cyan' : 'btn-ghost'}" onclick="Modulos.armeria.render('compra')">🔽 Compras</button>
         </div>
         <div class="table-wrap"><table class="data-table">
-          <thead><tr><th>No.</th><th>Tipo</th><th>Contraparte</th><th>Artículo</th><th>Serie</th><th>Total</th><th>DIGECAM</th><th>Fecha</th><th>Acciones</th></tr></thead>
+          <thead><tr><th>No.</th><th>Tipo</th><th>Contraparte</th><th>Artículo</th><th>Serie</th><th>Total</th><th>Trámite</th><th>DIGECAM</th><th>Fecha</th><th>Acciones</th></tr></thead>
           <tbody>
             ${this._data.map(o => `<tr>
               <td class="mono-sm"><b>${o.num || '—'}</b></td>
               <td><span class="badge badge-${this._colorTipo(o.tipo)}">${o.tipo === 'compra' ? '🔽 Compra' : '🔺 Venta'}</span></td>
               <td>${o.clientes?.nombre || o.proveedores?.nombre || '—'}</td>
               <td><span class="badge badge-gray">${this._CATEGORIAS[o.categoria] || o.categoria}</span><div style="font-size:11px;color:var(--text3)">${[o.marca, o.modelo, o.calibre].filter(Boolean).join(' · ') || '—'}</div></td>
-              <td class="mono-sm">${o.numero_serie || '—'}</td>
+              <td class="mono-sm">${o.numero_serie || '—'}${o.inventario_id ? '<div style="font-size:10px;color:var(--green)">📦 del inventario</div>' : ''}</td>
               <td class="mono-sm" style="font-weight:700">${UI.q(o.total)}</td>
+              <td><span class="badge badge-${this._colorEstado(o.estado)}">${this._ESTADOS[o.estado] || o.estado || '—'}</span></td>
               <td>${o.notificado_digecam
                 ? `<span class="badge badge-green" title="${o.folio_notificacion_digecam ? 'Folio ' + o.folio_notificacion_digecam : ''}">✅ Notificado</span>`
                 : `<button class="btn btn-sm btn-ghost" onclick="Modulos.armeria._accionNotificar('${o.id}')" title="Marcar como notificado a DIGECAM">⚠️ Pendiente</button>`}</td>
@@ -121,44 +162,130 @@ Modulos.armeria = {
               <td><div style="display:flex;gap:4px;flex-wrap:wrap">
                 ${Modulos.btnAccion('ver', `Modulos.armeria.verDetalle('${o.id}')`)}
                 ${Modulos.btnAccion('editar', `Modulos.armeria.modalForm('${o.id}')`)}
-                ${Modulos.btnAccion('eliminar', `Modulos.eliminarRegistro('armeria_operaciones','${o.id}','la operación ${o.num || ''}',()=>Modulos.armeria.render(Modulos.armeria._filtroTipo))`)}
+                ${Modulos.btnAccion('eliminar', `Modulos.armeria.eliminar('${o.id}')`)}
               </div></td>
-            </tr>`).join('') || '<tr><td colspan="9" style="text-align:center;padding:24px;color:var(--text3)">Sin operaciones. Registra la primera con "＋ Nueva Operación".</td></tr>'}
+            </tr>`).join('') || '<tr><td colspan="10" style="text-align:center;padding:24px;color:var(--text3)">Sin operaciones. Registra la primera con "＋ Nueva Operación".</td></tr>'}
           </tbody>
         </table></div>
       </div>`;
   },
 
+  /* ── Consulta de la ley dentro de la app ─────────────────────────────────
+     Henry pidió poder consultar la ley sin salir del sistema. El texto es
+     literal (ver js/core/ley-armas.js), no un resumen. */
+  _busquedaLey: '',
+
+  renderLey() {
+    const el = document.getElementById('page-content');
+    const ley = window.LEY_ARMAS;
+    if (!ley) { el.innerHTML = '<div class="page-body">No se pudo cargar el texto de la ley.</div>'; return; }
+    const arts = (typeof buscarLeyArmas === 'function') ? buscarLeyArmas(this._busquedaLey) : ley.articulos;
+
+    el.innerHTML = `
+      <div class="page-header">
+        <div><h1 class="page-title">⚖️ ${ley.nombre}</h1>
+        <p class="page-subtitle">// ${ley.decreto} · reglamento: ${ley.reglamento}</p></div>
+        <div class="page-actions">
+          <button class="btn btn-ghost" onclick="window.print()">🖨 Imprimir</button>
+          <button class="btn btn-amber" onclick="Modulos.armeria._irTab('operaciones')">← Volver a operaciones</button>
+        </div>
+      </div>
+      <div class="page-body">
+        ${this._tabsHTML()}
+        <div style="background:var(--card2);border-left:3px solid var(--cyan);border-radius:8px;padding:10px 12px;margin-bottom:14px;font-size:12px">
+          📖 Texto <b>literal</b> de los artículos que le tocan a un negocio de armas. Se incluyen los artículos
+          aplicables al mostrador, no la ley completa (151 artículos).
+          <div style="margin-top:6px;color:var(--text3)">
+            ⚠️ Para la ley completa y sus reformas, consultá la fuente oficial: Congreso de la República
+            (congreso.gob.gt) y DIGECAM (digecam.mil.gt). Esta consulta es de apoyo, no sustituye asesoría legal.
+          </div>
+        </div>
+        <input class="form-input" id="ley-busca" style="margin-bottom:14px"
+               placeholder="🔍 Buscar por número de artículo, título o texto (ej. 'munición', '60', 'portación')..."
+               value="${UI.esc(this._busquedaLey)}"
+               oninput="Modulos.armeria._buscarLey(this.value)">
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px">
+          <button class="btn btn-sm ${!this._busquedaLey ? 'btn-cyan' : 'btn-ghost'}" onclick="Modulos.armeria._buscarLey('')">Todos</button>
+          ${Object.entries(ley.temas).map(([k, t]) =>
+            `<button class="btn btn-sm btn-ghost" onclick="Modulos.armeria._buscarLeyTema('${k}')">${t.icon} ${t.label}</button>`).join('')}
+        </div>
+        <div style="font-size:12px;color:var(--text3);margin-bottom:10px">${arts.length} artículo(s)</div>
+        ${arts.map(a => `
+          <div class="card" style="margin-bottom:12px;padding:14px">
+            <div style="display:flex;align-items:baseline;gap:8px;margin-bottom:8px;flex-wrap:wrap">
+              <span class="badge badge-${a.clave ? 'amber' : 'gray'}">Artículo ${a.num}</span>
+              <b style="font-size:14px">${UI.esc(a.titulo)}</b>
+              ${a.clave ? '<span style="font-size:11px;color:var(--amber)">⭐ de uso diario</span>' : ''}
+              <span style="font-size:11px;color:var(--text3);margin-left:auto">${ley.temas[a.tema]?.icon || ''} ${ley.temas[a.tema]?.label || a.tema}</span>
+            </div>
+            <div style="white-space:pre-wrap;font-size:13px;line-height:1.6">${UI.esc(a.texto)}</div>
+          </div>`).join('') || '<div style="color:var(--text3);padding:20px;text-align:center">Sin resultados para esa búsqueda.</div>'}
+      </div>`;
+    const inp = document.getElementById('ley-busca');
+    if (inp && this._busquedaLey) { inp.focus(); inp.setSelectionRange(inp.value.length, inp.value.length); }
+  },
+
+  _buscarLey(q) { this._busquedaLey = q; this.renderLey(); },
+  _buscarLeyTema(tema) {
+    const t = window.LEY_ARMAS?.temas?.[tema];
+    this._busquedaLey = '';
+    this.renderLey();
+    /* Filtra por tema sin pasar por el buscador de texto (el tema no siempre
+       aparece escrito en el artículo). */
+    const arts = window.LEY_ARMAS.articulos.filter(a => a.tema === tema);
+    const el = document.getElementById('page-content');
+    const cont = el.querySelector('.page-body');
+    if (!cont || !arts.length) return;
+    const ley = window.LEY_ARMAS;
+    cont.innerHTML = cont.innerHTML.split('<div style="font-size:12px;color:var(--text3);margin-bottom:10px">')[0] +
+      `<div style="font-size:12px;color:var(--text3);margin-bottom:10px">${t.icon} ${t.label} — ${arts.length} artículo(s)</div>` +
+      arts.map(a => `
+        <div class="card" style="margin-bottom:12px;padding:14px">
+          <div style="display:flex;align-items:baseline;gap:8px;margin-bottom:8px;flex-wrap:wrap">
+            <span class="badge badge-${a.clave ? 'amber' : 'gray'}">Artículo ${a.num}</span>
+            <b style="font-size:14px">${UI.esc(a.titulo)}</b>
+            <span style="font-size:11px;color:var(--text3);margin-left:auto">${ley.temas[a.tema]?.icon || ''} ${ley.temas[a.tema]?.label || a.tema}</span>
+          </div>
+          <div style="white-space:pre-wrap;font-size:13px;line-height:1.6">${UI.esc(a.texto)}</div>
+        </div>`).join('');
+  },
+
   async verDetalle(id) {
     const o = this._data.find(x => x.id === id); if (!o) return;
+    const invNombre = o.inventario_id ? (this._inventario.find(i => i.id === o.inventario_id)?.nombre || 'artículo del inventario') : null;
     UI.modal(`📋 Operación ${o.num || ''}`, `
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px">
         <div><div style="font-size:11px;color:var(--text3)">Tipo</div><div><span class="badge badge-${this._colorTipo(o.tipo)}">${o.tipo === 'compra' ? '🔽 Compra' : '🔺 Venta'}</span></div></div>
+        <div><div style="font-size:11px;color:var(--text3)">Estado del trámite</div><div><span class="badge badge-${this._colorEstado(o.estado)}">${this._ESTADOS[o.estado] || o.estado || '—'}</span></div></div>
         <div><div style="font-size:11px;color:var(--text3)">Contraparte</div><div style="font-weight:700">${o.clientes?.nombre || o.proveedores?.nombre || '—'}</div></div>
         <div><div style="font-size:11px;color:var(--text3)">Categoría</div><div>${this._CATEGORIAS[o.categoria] || o.categoria}</div></div>
         <div><div style="font-size:11px;color:var(--text3)">Marca / Modelo / Calibre</div><div>${[o.marca, o.modelo, o.calibre].filter(Boolean).join(' · ') || '—'}</div></div>
         <div><div style="font-size:11px;color:var(--text3)">Número de serie</div><div class="mono-sm">${o.numero_serie || '—'}</div></div>
+        <div><div style="font-size:11px;color:var(--text3)">Trazabilidad</div><div>${invNombre ? `📦 ${UI.esc(invNombre)}` : '<span style="color:var(--amber)">sin vincular al inventario</span>'}</div></div>
         <div><div style="font-size:11px;color:var(--text3)">País de origen</div><div>${o.pais_origen || '—'}</div></div>
-        <div><div style="font-size:11px;color:var(--text3)">Cantidad</div><div>${UI.numero ? UI.numero(o.cantidad) : o.cantidad}</div></div>
+        <div><div style="font-size:11px;color:var(--text3)">Cantidad</div><div>${o.cantidad}</div></div>
         <div><div style="font-size:11px;color:var(--text3)">Total</div><div style="font-weight:700;color:var(--green)">${UI.q(o.total)}</div></div>
         <div><div style="font-size:11px;color:var(--text3)">DPI</div><div class="mono-sm">${o.contraparte_dpi || '—'}</div></div>
+        <div><div style="font-size:11px;color:var(--text3)">NIT</div><div class="mono-sm">${o.contraparte_nit || '—'}</div></div>
+        <div style="grid-column:1/-1"><div style="font-size:11px;color:var(--text3)">Dirección</div><div>${o.contraparte_direccion || '—'}</div></div>
         <div><div style="font-size:11px;color:var(--text3)">Licencia de la contraparte</div><div>${o.contraparte_licencia_tipo ? `${this._LICENCIAS[o.contraparte_licencia_tipo]} · ${o.contraparte_licencia_num || '—'}${o.contraparte_licencia_vencimiento ? ' · vence ' + UI.fecha(o.contraparte_licencia_vencimiento) : ''}` : '—'}</div></div>
+        <div><div style="font-size:11px;color:var(--text3)">Armas en la licencia</div><div>${o.contraparte_armas_registradas || 1} (tope munición: ${this._limiteMunicionMes(o.contraparte_licencia_tipo, o.contraparte_armas_registradas)}/mes)</div></div>
         <div><div style="font-size:11px;color:var(--text3)">Foto / Huella en el local</div><div>${o.foto_tomada ? '📷 sí' : '📷 no'} · ${o.huella_tomada ? '👆 sí' : '👆 no'}</div></div>
         <div><div style="font-size:11px;color:var(--text3)">DIGECAM</div><div>${o.notificado_digecam ? `✅ Notificado${o.fecha_notificacion_digecam ? ' el ' + UI.fecha(o.fecha_notificacion_digecam) : ''}${o.folio_notificacion_digecam ? ' · folio ' + o.folio_notificacion_digecam : ''}` : '⚠️ Pendiente de notificar'}</div></div>
-        <div><div style="font-size:11px;color:var(--text3)">Fecha</div><div>${UI.fecha(o.fecha)}</div></div>
       </div>
-      ${o.notas ? `<div style="background:var(--card2);padding:10px;border-radius:6px;margin-bottom:12px;font-size:13px">${o.notas}</div>` : ''}
+      ${o.notas ? `<div style="background:var(--card2);padding:10px;border-radius:6px;margin-bottom:12px;font-size:13px">${UI.esc(o.notas)}</div>` : ''}
       <div class="modal-footer">
         <button class="btn btn-ghost" onclick="UI.cerrarModal()">Cerrar</button>
         ${!o.notificado_digecam ? `<button class="btn btn-cyan" onclick="UI.cerrarModal();Modulos.armeria._accionNotificar('${o.id}')">⚠️ Marcar notificado</button>` : ''}
         <button class="btn btn-amber" onclick="UI.cerrarModal();Modulos.armeria.modalForm('${o.id}')">✏️ Editar</button>
-      </div>`, '640px');
+      </div>`, '680px');
   },
 
   async modalForm(id = null) {
     const o = id ? this._data.find(x => x.id === id) || {} : {};
     if (!this._clientes.length) this._clientes = await DB.getClientes();
     if (!this._proveedores.length) this._proveedores = await DB.getProveedores();
+    if (!this._inventario.length) this._inventario = await DB.getInventarioArmeria().catch(() => []);
     const esEdicion = !!id;
     const tipo = o.tipo || 'venta';
 
@@ -174,34 +301,56 @@ Modulos.armeria = {
             <option value="">— Selecciona —</option>
             ${Object.entries(this._CATEGORIAS).map(([k, l]) => `<option value="${k}" ${o.categoria === k ? 'selected' : ''}>${l}</option>`).join('')}
           </select></div>
+        <div class="form-group"><label class="form-label">Estado del trámite</label>
+          <select class="form-select" id="arm-estado">
+            ${Object.entries(this._ESTADOS).map(([k, l]) => `<option value="${k}" ${(o.estado || 'entregado') === k ? 'selected' : ''}>${l}</option>`).join('')}
+          </select>
+          <div style="font-size:10.5px;color:var(--text3);margin-top:2px">Art. 59: un arma se remite a DIGECAM y sólo se entrega con su autorización (≤5 días hábiles).</div></div>
       </div>
       <div class="form-row" id="arm-grupo-cliente">
         <div class="form-group"><label class="form-label">Cliente ${tipo === 'venta' ? '*' : '(si el vendedor es particular)'}</label>
           <select class="form-select" id="arm-cliente">
             <option value="">— Selecciona —</option>
-            ${this._clientes.map(c => `<option value="${c.id}" ${o.cliente_id === c.id ? 'selected' : ''}>${c.nombre}</option>`).join('')}
-          </select></div>
+            ${this._clientes.map(c => `<option value="${c.id}" ${o.cliente_id === c.id ? 'selected' : ''}>${UI.esc(c.nombre)}</option>`).join('')}
+          </select>
+          <div style="font-size:10.5px;color:var(--text3);margin-top:2px">¿Cliente nuevo? <a href="#" onclick="event.preventDefault();Modulos.armeria._nuevoCliente()" style="color:var(--cyan)">Crearlo aquí</a> con su DPI y licencia.</div></div>
         <div class="form-group" id="arm-grupo-proveedor" style="${tipo === 'venta' ? 'display:none' : ''}"><label class="form-label">Proveedor (si es compra a mayorista)</label>
           <select class="form-select" id="arm-proveedor">
             <option value="">— Selecciona —</option>
-            ${this._proveedores.map(p => `<option value="${p.id}" ${o.proveedor_id === p.id ? 'selected' : ''}>${p.nombre}</option>`).join('')}
+            ${this._proveedores.map(p => `<option value="${p.id}" ${o.proveedor_id === p.id ? 'selected' : ''}>${UI.esc(p.nombre)}</option>`).join('')}
           </select></div>
       </div>
+
+      <div class="form-group" style="background:var(--card2);border-radius:8px;padding:10px 12px">
+        <label class="form-label">📦 Artículo del inventario (trazabilidad)</label>
+        <select class="form-select" id="arm-inventario" onchange="Modulos.armeria._desdeInventario(this.value)">
+          <option value="">— Sin vincular (se teclea a mano) —</option>
+          ${this._inventario.map(i => `<option value="${i.id}" ${o.inventario_id === i.id ? 'selected' : ''}>${UI.esc(i.nombre)} · stock ${i.stock} ${UI.esc(i.unidad_medida || '')}</option>`).join('')}
+        </select>
+        <div style="font-size:11px;color:var(--text3);margin-top:4px">
+          Vincular la operación al artículo hace que el <b>stock se mueva solo</b> y que el arma se pueda rastrear
+          desde que entró hasta quién se la llevó. El art. 58 exige que el inventario físico cuadre exacto:
+          una diferencia sin aclarar en 8 días cierra el establecimiento 15 días.
+          ${this._inventario.length ? '' : '<br><b style="color:var(--amber)">Todavía no hay artículos del giro armería en el inventario.</b>'}
+        </div>
+      </div>
+
       <div class="form-row">
         <div class="form-group"><label class="form-label">Marca</label>
-          <input class="form-input" id="arm-marca" value="${o.marca || ''}" placeholder="Glock, Smith &amp; Wesson, Remington..."></div>
+          <input class="form-input" id="arm-marca" value="${UI.esc(o.marca || '')}" placeholder="Glock, Smith &amp; Wesson, Remington..."></div>
         <div class="form-group"><label class="form-label">Modelo</label>
-          <input class="form-input" id="arm-modelo" value="${o.modelo || ''}"></div>
+          <input class="form-input" id="arm-modelo" value="${UI.esc(o.modelo || '')}"></div>
         <div class="form-group"><label class="form-label">Calibre</label>
-          <input class="form-input" id="arm-calibre" value="${o.calibre || ''}" placeholder="9mm, .38, .22LR, 12 gauge..."></div>
+          <input class="form-input" id="arm-calibre" value="${UI.esc(o.calibre || '')}" placeholder="9mm, .38, .22LR, 12 gauge...">
+          <div style="font-size:10.5px;color:var(--text3);margin-top:2px">Art. 60: sólo se vende munición del calibre registrado en la licencia del comprador.</div></div>
       </div>
       <div class="form-row">
         <div class="form-group" id="arm-grupo-serie"><label class="form-label">Número de serie <span id="arm-serie-req" style="color:var(--red)">${this._esArma(o.categoria) ? '*' : ''}</span></label>
-          <input class="form-input" id="arm-serie" value="${o.numero_serie || ''}"
-            style="font-family:monospace" placeholder="Obligatorio en armas — lo exige DIGECAM">
-          <div style="font-size:11px;color:var(--text3);margin-top:2px">DIGECAM exige el número de serie de cada arma para registrar la venta en SIDIGECAM.</div></div>
+          <input class="form-input" id="arm-serie" value="${UI.esc(o.numero_serie || '')}"
+            style="font-family:monospace" placeholder="Obligatorio en armas">
+          <div style="font-size:11px;color:var(--text3);margin-top:2px">Art. 82 g): están prohibidas las armas sin número de registro o con el registro borrado/alterado.</div></div>
         <div class="form-group"><label class="form-label">País de origen</label>
-          <input class="form-input" id="arm-origen" value="${o.pais_origen || ''}"></div>
+          <input class="form-input" id="arm-origen" value="${UI.esc(o.pais_origen || '')}"></div>
       </div>
       <div class="form-row">
         <div class="form-group"><label class="form-label">Cantidad *</label>
@@ -212,21 +361,31 @@ Modulos.armeria = {
           <input class="form-input" id="arm-total" type="number" readonly value="${o.total || 0}" style="background:var(--card2);font-weight:700"></div>
       </div>
       <div style="background:var(--card2);border-radius:8px;padding:10px 12px;margin:8px 0">
-        <div style="font-size:12px;font-weight:700;margin-bottom:8px">⚖️ Cumplimiento DIGECAM de la contraparte</div>
+        <div style="font-size:12px;font-weight:700;margin-bottom:8px">⚖️ Datos del comprador/vendedor que exige la ley</div>
         <div class="form-row">
-          <div class="form-group"><label class="form-label">DPI del comprador/vendedor</label>
-            <input class="form-input" id="arm-dpi" value="${o.contraparte_dpi || ''}" placeholder="0000 00000 0000" style="font-family:monospace"></div>
+          <div class="form-group"><label class="form-label">DPI</label>
+            <input class="form-input" id="arm-dpi" value="${UI.esc(o.contraparte_dpi || '')}" placeholder="0000 00000 0000" style="font-family:monospace"></div>
+          <div class="form-group"><label class="form-label">NIT</label>
+            <input class="form-input" id="arm-nit" value="${UI.esc(o.contraparte_nit || '')}" placeholder="Art. 60 (munición)"></div>
+          <div class="form-group"><label class="form-label">Dirección</label>
+            <input class="form-input" id="arm-direccion" value="${UI.esc(o.contraparte_direccion || '')}" placeholder="Art. 60 (munición)"></div>
+        </div>
+        <div class="form-row">
           <div class="form-group"><label class="form-label">Licencia presentada</label>
-            <select class="form-select" id="arm-lic-tipo">
+            <select class="form-select" id="arm-lic-tipo" onchange="Modulos.armeria._infoTope()">
               <option value="">— Ninguna (solo accesorios) —</option>
               ${Object.entries(this._LICENCIAS).map(([k, l]) => `<option value="${k}" ${o.contraparte_licencia_tipo === k ? 'selected' : ''}>${l}</option>`).join('')}
             </select></div>
           <div class="form-group"><label class="form-label">Número de licencia</label>
-            <input class="form-input" id="arm-lic-num" value="${o.contraparte_licencia_num || ''}"></div>
+            <input class="form-input" id="arm-lic-num" value="${UI.esc(o.contraparte_licencia_num || '')}"></div>
           <div class="form-group"><label class="form-label">Vence</label>
             <input class="form-input" id="arm-lic-vence" type="date" value="${o.contraparte_licencia_vencimiento || ''}"></div>
+          <div class="form-group"><label class="form-label">Armas en la licencia</label>
+            <select class="form-select" id="arm-armas-reg" onchange="Modulos.armeria._infoTope()">
+              ${[1, 2, 3].map(n => `<option value="${n}" ${(o.contraparte_armas_registradas || 1) === n ? 'selected' : ''}>${n}</option>`).join('')}
+            </select></div>
         </div>
-        <div style="font-size:11px;color:var(--text3);margin-top:2px">DPI y licencia son obligatorios para vender armas o munición (no para accesorios) — es lo que SIDIGECAM registra del comprador.</div>
+        <div id="arm-tope-info" style="font-size:11px;color:var(--cyan);margin-top:6px"></div>
         <div style="display:flex;gap:16px;margin-top:6px">
           <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer">
             <input type="checkbox" id="arm-foto" ${o.foto_tomada ? 'checked' : ''}> Foto tomada en el local</label>
@@ -245,21 +404,48 @@ Modulos.armeria = {
           <input class="form-input" id="arm-fecha" type="date" value="${(o.fecha || new Date().toISOString()).slice(0, 10)}"></div>
       </div>
       <div class="form-group"><label class="form-label">Notas</label>
-        <textarea class="form-input" id="arm-notas" rows="2">${o.notas || ''}</textarea></div>
+        <textarea class="form-input" id="arm-notas" rows="2">${UI.esc(o.notas || '')}</textarea></div>
       <div class="modal-footer">
         <button class="btn btn-ghost" onclick="UI.cerrarModal()">Cancelar</button>
         <button class="btn btn-amber" onclick="Modulos.armeria.guardar('${id || ''}')">${esEdicion ? 'Guardar Cambios' : 'Crear Operación'}</button>
-      </div>`, '760px');
+      </div>`, '820px');
+    this._infoTope();
   },
 
-  /* Muestra/oculta cliente vs. proveedor según el tipo de operación. */
+  /* Copia los datos del artículo del inventario al formulario: el arma se
+     describe una sola vez (al darla de alta) y de ahí en adelante se reusa. */
+  _desdeInventario(invId) {
+    if (!invId) return;
+    const it = this._inventario.find(i => i.id === invId);
+    if (!it) return;
+    const a = it.atributos || {};
+    const set = (id, v) => { const el = document.getElementById(id); if (el && v != null && v !== '') el.value = v; };
+    set('arm-marca', a.marca); set('arm-modelo', a.modelo); set('arm-calibre', a.calibre);
+    set('arm-serie', a.numero_serie); set('arm-origen', a.pais_origen);
+    set('arm-precio', it.precio_venta);
+    const cat = document.getElementById('arm-categoria');
+    if (cat && !cat.value && a.tipo_arma && this._CATEGORIAS[a.tipo_arma]) { cat.value = a.tipo_arma; this._toggleSerie(); }
+    this._calcTotal();
+  },
+
+  /* Muestra el tope legal de munición según la licencia elegida (art. 60). */
+  _infoTope() {
+    const cont = document.getElementById('arm-tope-info'); if (!cont) return;
+    const tipoLic = document.getElementById('arm-lic-tipo')?.value || '';
+    const n = parseInt(document.getElementById('arm-armas-reg')?.value, 10) || 1;
+    if (!tipoLic) { cont.textContent = 'Sin licencia sólo se pueden vender accesorios (art. 60).'; return; }
+    const tope = this._limiteMunicionMes(tipoLic, n);
+    cont.textContent = tipoLic === 'portación'
+      ? `Art. 60: hasta ${tope} cartuchos al mes (250 × ${n} arma(s) registrada(s) en la licencia).`
+      : `Art. 60: hasta ${tope} cartuchos al mes con registro de tenencia.`;
+  },
+
   _toggleContraparte() {
     const tipo = document.getElementById('arm-tipo')?.value;
     const grupoProv = document.getElementById('arm-grupo-proveedor');
     if (grupoProv) grupoProv.style.display = tipo === 'compra' ? '' : 'none';
   },
 
-  /* Marca visualmente el número de serie como obligatorio si la categoría es un arma. */
   _toggleSerie() {
     const categoria = document.getElementById('arm-categoria')?.value;
     const req = document.getElementById('arm-serie-req');
@@ -273,11 +459,25 @@ Modulos.armeria = {
     if (t) t.value = (cant * precio).toFixed(2);
   },
 
+  /* Alta rápida de cliente sin salir de la operación — Henry pidió poder
+     crear el cliente de la armería con su DPI/licencia desde acá. */
+  _nuevoCliente() {
+    UI.cerrarModal();
+    if (Modulos.clientes?.modalForm) {
+      Modulos.clientes.modalForm(null, () => {
+        /* Al guardar, refresca la lista y vuelve a abrir la operación. */
+        DB.getClientes().then(cs => { this._clientes = cs; this.modalForm(); });
+      });
+    }
+  },
+
   async guardar(id = '') {
     const fields = {
       tipo: document.getElementById('arm-tipo')?.value || 'venta',
+      estado: document.getElementById('arm-estado')?.value || 'entregado',
       cliente_id: document.getElementById('arm-cliente')?.value || null,
       proveedor_id: document.getElementById('arm-proveedor')?.value || null,
+      inventario_id: document.getElementById('arm-inventario')?.value || null,
       categoria: document.getElementById('arm-categoria')?.value || '',
       marca: document.getElementById('arm-marca')?.value || null,
       modelo: document.getElementById('arm-modelo')?.value || null,
@@ -287,9 +487,12 @@ Modulos.armeria = {
       cantidad: parseFloat(document.getElementById('arm-cantidad')?.value) || 0,
       precio_unit: parseFloat(document.getElementById('arm-precio')?.value) || 0,
       contraparte_dpi: document.getElementById('arm-dpi')?.value || null,
+      contraparte_nit: document.getElementById('arm-nit')?.value || null,
+      contraparte_direccion: document.getElementById('arm-direccion')?.value || null,
       contraparte_licencia_tipo: document.getElementById('arm-lic-tipo')?.value || null,
       contraparte_licencia_num: document.getElementById('arm-lic-num')?.value || null,
       contraparte_licencia_vencimiento: document.getElementById('arm-lic-vence')?.value || null,
+      contraparte_armas_registradas: parseInt(document.getElementById('arm-armas-reg')?.value, 10) || 1,
       foto_tomada: !!document.getElementById('arm-foto')?.checked,
       huella_tomada: !!document.getElementById('arm-huella')?.checked,
       forma_pago: document.getElementById('arm-forma')?.value || 'efectivo',
@@ -303,34 +506,58 @@ Modulos.armeria = {
     if (!v.ok) { UI.toast(v.error, 'error'); return; }
 
     if (fields.tipo === 'venta' && fields.categoria === 'munición') {
-      const limite = this._limiteMunicionMes(fields.contraparte_licencia_tipo);
+      const limite = this._limiteMunicionMes(fields.contraparte_licencia_tipo, fields.contraparte_armas_registradas);
       const yaVendido = await DB.getConsumoMunicionMes(fields.contraparte_dpi, id || null);
       const nuevoTotal = yaVendido + fields.cantidad;
       if (limite && nuevoTotal > limite) {
-        UI.toast(`Excede el tope legal: este DPI ya lleva ${yaVendido} cartuchos este mes y el límite con ${this._LICENCIAS[fields.contraparte_licencia_tipo].toLowerCase()} es ${limite}/mes (máximo ${Math.max(0, limite - yaVendido)} más)`, 'error');
+        UI.toast(`Excede el tope del art. 60: este DPI ya lleva ${yaVendido} cartuchos este mes y el límite con ${this._LICENCIAS[fields.contraparte_licencia_tipo].toLowerCase()} es ${limite}/mes (máximo ${Math.max(0, limite - yaVendido)} más). Para vender más, el comprador necesita permiso especial de DIGECAM.`, 'error');
         return;
       }
     }
 
+    const previa = id ? this._data.find(x => x.id === id) : null;
     if (id) fields.id = id;
-    const { error } = await DB.upsertArmeriaOperacion(fields);
+    const { data: saved, error } = await DB.upsertArmeriaOperacion(fields);
     if (error) { UI.toast('Error: ' + error.message, 'error'); return; }
+
+    /* Trazabilidad: mueve el stock. Al editar se revierte el movimiento
+       anterior antes de aplicar el nuevo, si no una corrección de cantidad
+       descuadraría el inventario — justo lo que el art. 58 castiga. */
+    if (previa?.inventario_id) await DB.moverStockArmeria(previa, true);
+    const op = { ...fields, num: saved?.num || previa?.num };
+    if (op.inventario_id) await DB.moverStockArmeria(op, false);
+
     UI.cerrarModal();
     UI.toast(id ? 'Operación actualizada ✓' : 'Operación creada ✓');
     this.render(this._filtroTipo);
   },
 
-  /* Registrar que la notificación a DIGECAM ya se hizo (control interno;
-     la app no envía nada a SIDIGECAM — no hay API pública). */
+  /* Eliminar devuelve el stock: borrar una venta sin reponer el artículo
+     dejaría el inventario corto contra el conteo físico. */
+  async eliminar(id) {
+    const o = this._data.find(x => x.id === id); if (!o) return;
+    const ok = await UI.confirmar(
+      `¿Eliminar la operación <b>${o.num || ''}</b>?${o.inventario_id ? ' Se revertirá el movimiento de inventario.' : ''} Esta acción no se puede deshacer.`,
+      'Eliminar');
+    if (!ok) return;
+    if (o.inventario_id) await DB.moverStockArmeria(o, true);
+    const exito = await DB.deleteRegistro('armeria_operaciones', id);
+    if (exito) { UI.toast('Eliminado ✓'); this.render(this._filtroTipo); }
+    else UI.toast('No se pudo eliminar', 'error');
+  },
+
   async _accionNotificar(id) {
     const o = this._data.find(x => x.id === id); if (!o) return;
     UI.modal('⚠️ Marcar como notificado a DIGECAM', `
-      <div style="font-size:13px;color:var(--text3);margin-bottom:12px">Operación <b>${o.num || ''}</b> — registra la fecha y el folio con que el taller reportó esta transacción a DIGECAM.</div>
+      <div style="font-size:13px;color:var(--text3);margin-bottom:12px">Operación <b>${o.num || ''}</b> — registra la fecha y el folio con que el negocio reportó esta transacción a DIGECAM.</div>
+      <div style="background:var(--card2);border-radius:8px;padding:10px;margin-bottom:12px;font-size:12px">
+        📅 Recordá que el art. 60 obliga a remitir a DIGECAM <b>un informe y copia de la factura de venta cada fin de mes calendario</b> por las municiones vendidas.
+      </div>
       <div class="form-row">
         <div class="form-group"><label class="form-label">Fecha de notificación</label>
           <input class="form-input" id="arm-not-fecha" type="date" value="${new Date().toISOString().slice(0, 10)}"></div>
         <div class="form-group"><label class="form-label">Folio / referencia</label>
-          <input class="form-input" id="arm-not-folio" placeholder="Número de trámite, folio SIDIGECAM..."></div>
+          <input class="form-input" id="arm-not-folio" placeholder="Número de trámite, folio DIGECAM..."></div>
       </div>
       <div class="modal-footer">
         <button class="btn btn-ghost" onclick="UI.cerrarModal()">Cancelar</button>
@@ -348,102 +575,49 @@ Modulos.armeria = {
     this.render(this._filtroTipo);
   },
 
-  /* Libro de registro imprimible: lo que un inspector de DIGECAM pide ver
-     en cualquier visita. No es el libro oficial de DIGECAM (ese lo define
-     DIGECAM), es el respaldo que este módulo puede ofrecer de una vez. */
+  /* Libro de registro imprimible — el respaldo que pide un inspector.
+     El libro oficial lo define y autoriza DIGECAM (art. 86); esto es el
+     registro interno que este módulo puede entregar de una vez. */
   imprimirLibro() {
     const hoy = new Date().toLocaleDateString('es-GT');
     const filas = this._data.map(o => `<tr>
       <td>${o.num || '—'}</td><td>${o.tipo === 'compra' ? 'Compra' : 'Venta'}</td>
       <td>${o.clientes?.nombre || o.proveedores?.nombre || '—'}</td>
       <td>${o.contraparte_dpi || '—'}</td>
+      <td>${o.contraparte_nit || '—'}</td>
       <td>${this._CATEGORIAS[o.categoria] || o.categoria}</td>
       <td>${[o.marca, o.modelo, o.calibre].filter(Boolean).join(' ')}</td>
       <td>${o.numero_serie || '—'}</td>
+      <td>${o.cantidad || ''}</td>
       <td>${o.contraparte_licencia_num || '—'}</td>
       <td>${UI.q(o.total)}</td>
+      <td>${this._ESTADOS[o.estado] || o.estado || '—'}</td>
       <td>${o.notificado_digecam ? 'Sí' : 'No'}</td>
       <td>${UI.fecha(o.fecha)}</td>
     </tr>`).join('');
     const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Libro de Registro — Armería</title>
     <style>
-      body{font-family:Arial,sans-serif;margin:0;padding:20px;font-size:11px}
+      body{font-family:Arial,sans-serif;margin:0;padding:20px;font-size:10px}
       h2{margin:0 0 4px}
       table{width:100%;border-collapse:collapse;margin-top:12px}
-      th,td{border:1px solid #999;padding:4px 6px;text-align:left}
+      th,td{border:1px solid #999;padding:4px 5px;text-align:left}
       th{background:#eee}
+      .nota{margin-top:14px;font-size:9px;color:#555;border-top:1px dashed #ccc;padding-top:8px}
     </style></head><body>
-    <h2>NexusPro — Libro de Registro de Armería</h2>
+    <h2>${(window.Auth?.tenant?.name) || 'NexusPro'} — Libro de Registro de Armas y Municiones</h2>
     <p>Generado ${hoy} · ${this._data.length} operaciones</p>
-    <table><thead><tr><th>No.</th><th>Tipo</th><th>Contraparte</th><th>DPI</th><th>Categoría</th><th>Marca/Modelo/Calibre</th><th>Serie</th><th>Licencia</th><th>Total</th><th>DIGECAM</th><th>Fecha</th></tr></thead>
-    <tbody>${filas || '<tr><td colspan="11">Sin operaciones</td></tr>'}</tbody></table>
+    <table><thead><tr><th>No.</th><th>Tipo</th><th>Contraparte</th><th>DPI</th><th>NIT</th><th>Categoría</th><th>Marca/Modelo/Calibre</th><th>Serie</th><th>Cant.</th><th>Licencia</th><th>Total</th><th>Trámite</th><th>DIGECAM</th><th>Fecha</th></tr></thead>
+    <tbody>${filas || '<tr><td colspan="14">Sin operaciones</td></tr>'}</tbody></table>
+    <div class="nota">
+      Registro interno generado por NexusPro. El libro de control oficial debe ser autorizado por la DIGECAM
+      (art. 86 del Decreto 15-2009) y de su movimiento debe rendirse informe por escrito cada fin de mes.
+      El art. 60 obliga además a remitir a DIGECAM informe y copia de la factura de venta de municiones cada fin de mes calendario.
+    </div>
     </body></html>`;
-    const w = window.open('', '_blank', 'width=900,height=700');
+    const w = window.open('', '_blank', 'width=1000,height=700');
     w.document.write(html);
     w.document.close();
     w.focus();
     setTimeout(() => w.print(), 400);
-  },
-
-  /* Asesoría legal estática: resumen de la Ley de Armas y Municiones y los
-     trámites DIGECAM que le tocan a una armería. Contenido fijo con fuentes
-     citadas — no es un asesor dinámico, es referencia rápida para el
-     mostrador. Las cifras de trámites (costos, plazos, inversión) vienen de
-     fuentes secundarias (prensa/portales de trámites), no del texto legal:
-     verificar directo en digecam.mil.gt antes de tomarlas como definitivas. */
-  modalAsesoria() {
-    UI.modal('⚖️ Asesoría DIGECAM — Ley de Armas y Municiones', `
-      <div style="font-size:13px;line-height:1.6">
-        <p><b>Base legal:</b> Decreto 15-2009, Ley de Armas y Municiones (LAM) — arts. 79 a 90 regulan la licencia de comercialización/compraventa. Reglamento: Acuerdo Gubernativo 85-2011. DIGECAM (Dirección General de Control de Armas y Municiones, Ministerio de la Defensa) es la única entidad que emite licencias de tenencia y portación, autoriza importación/venta y hace pruebas balísticas.</p>
-
-        <p><b>Licencia de la armería (comercialización/compraventa):</b> solo se otorga a personas jurídicas (sociedad mercantil con patente de comercio y NIT vigentes). Vender, intermediar o almacenar armas/municiones con fines comerciales sin esta licencia es delito (6 a 10 años de prisión). El trámite exige inspección física del local y aprobación de la Comisión Interinstitucional de Armas.</p>
-
-        <p><b>En cada venta, DIGECAM/SIDIGECAM exige registrar:</b></p>
-        <ul style="margin:4px 0 8px 18px">
-          <li>Datos del comprador: nombre, DPI, dirección, teléfono, foto y huella tomadas en el local</li>
-          <li>Número y vigencia de su licencia (tarjeta de tenencia o licencia de portación)</li>
-          <li>Datos del arma: marca, modelo, calibre, número de serie, país de origen, tipo</li>
-          <li>Datos de la munición si aplica: calibre, marca, cantidad, lote</li>
-          <li>Número de factura y forma de pago, fecha y hora de la entrega</li>
-        </ul>
-
-        <p><b>Munición:</b> se puede vender con solo mostrar la tarjeta de tenencia o la licencia de portación del arma — no requiere un trámite de licencia aparte.</p>
-
-        <p><b>⚠️ Tope legal de venta de munición por mes</b> (este módulo lo controla automáticamente por DPI al guardar una venta):</p>
-        <ul style="margin:4px 0 8px 18px">
-          <li><b>200 cartuchos/mes</b> a quien presenta tarjeta de <b>tenencia</b></li>
-          <li><b>250 cartuchos/mes</b> a quien presenta licencia de <b>portación</b></li>
-          <li>Venta libre solo dentro de un polígono de tiro, para uso ahí mismo (no aplica a mostrador)</li>
-        </ul>
-        <p style="font-size:11px;color:var(--text3);margin-top:-4px">Cifra según reportaje de Prensa Libre sobre la ley (no cita el número de artículo) — confirmar directo con DIGECAM. La armería debe llevar, además, un libro con cuánta munición y a quién se le vendió: es lo que genera 🖨️ Libro de registro con el DPI de cada comprador.</p>
-
-        <p><b>Licencia de portación (del cliente) — requisitos para tramitarla</b> (útil para orientar a un cliente, no lo tramita esta app):</p>
-        <ul style="margin:4px 0 8px 18px">
-          <li>Nombre completo, edad, estado civil, nacionalidad, profesión, residencia, DPI y lugar para notificaciones</li>
-          <li>Carecer de antecedentes penales y policiales vigentes</li>
-          <li>Declaración jurada ante notario: no padecer enfermedad mental, no ser desertor del Ejército ni haber abandonado empleo en la PNC</li>
-          <li>Certificación de evaluación teórica, práctica y psicológica aprobada</li>
-          <li>Datos del arma a registrar: marca, modelo, calibre, largo de cañón, número de serie</li>
-          <li>Vigencia de la licencia: 1 a 3 años, renovable</li>
-        </ul>
-        <p style="font-size:11px;color:var(--text3);margin-top:-4px">Guatemala emite el DPI a partir de los 18 años (RENAP) — exigir DPI ya filtra mayoría de edad; la ley no precisó un número de edad distinto en las fuentes consultadas.</p>
-
-        <p><b>Compraventa entre particulares</b> (fuera de una armería, vía notario): el testimonio de la escritura debe presentarse a DIGECAM dentro de 8 días de celebrado el contrato; el notario debe avisar del contrato dentro de 15 días.</p>
-
-        <p><b>Prohibido:</b> armas de guerra, automáticas, de uso exclusivo del Ejército, munición de guerra (explosiva, incendiaria, perforante, expansiva prohibida), armas con número de serie alterado o borrado.</p>
-
-        <p><b>Formatos oficiales de referencia</b> (para ver el trámite tal como lo pide el gobierno, no una copia hecha por esta app):</p>
-        <ul style="margin:4px 0 8px 18px;font-size:12px">
-          <li>Registro de tenencia con contrato de compraventa (persona individual): tramites.gob.gt/servicio/1640</li>
-          <li>Evaluación y primera licencia de portación de arma de fuego: tramites.gob.gt/servicio/1642</li>
-          <li>Renovación de licencia de portación: tramites.gob.gt/servicio/1643</li>
-          <li>Licencia de compraventa (armería): catálogo de trámites de DIGECAM, digecam.mil.gt/web/tramites.php</li>
-        </ul>
-
-        <p style="color:var(--text3);font-size:11px;margin-top:10px">Este resumen es orientativo y no sustituye asesoría legal ni la verificación directa con DIGECAM (digecam.mil.gt) antes de operar. Fuentes: Decreto 15-2009 y su reglamento (Acuerdo Gubernativo 85-2011); trámites y cifras de costos/plazos/límites tomados de portales de trámites y prensa — confirmar vigencia antes de usarlos como requisito del negocio.</p>
-      </div>
-      <div class="modal-footer">
-        <button class="btn btn-ghost" onclick="UI.cerrarModal()">Cerrar</button>
-      </div>`, '640px');
   },
 };

@@ -53,9 +53,14 @@ Modulos.clientes = {
       </div>`;
   },
 
-  async modalForm(id=null) {
+  /* onGuardado: callback opcional para quien abre el alta desde otro módulo
+     (ej. Armería crea el cliente sin perder la operación que estaba llenando). */
+  _onGuardado: null,
+
+  async modalForm(id=null, onGuardado=null) {
     const c = id ? this._data.find(x=>x.id===id) : {};
     const esEdicion = !!id;
+    if (onGuardado !== null) this._onGuardado = onGuardado;
     UI.modal(`${esEdicion?'✏️ Editar':'＋ Nuevo'} Cliente`, `
       ${esEdicion?'<div class="alert alert-amber" style="margin-bottom:12px"><div class="alert-icon">⚠️</div><div class="alert-body" style="font-size:11px">Los cambios reemplazarán la información actual del cliente.</div></div>':''}
       <div style="display:flex;gap:12px;margin-bottom:12px">
@@ -118,7 +123,10 @@ Modulos.clientes = {
         </div>
       </div>
       ${esEdicion ? this._htmlDocumentos(id) : `
-      <div class="form-group" style="font-size:11px;color:var(--text3)">📎 Guarda el cliente primero para poder adjuntar DPI, licencia o pasaporte.</div>`}
+      <div class="form-group" style="background:var(--card2);border-radius:8px;padding:10px 12px;font-size:12px;color:var(--text2)">
+        📎 <b>Documentos de identificación</b> (DPI, licencia de tenencia/portación, pasaporte)<br>
+        <span style="font-size:11px;color:var(--text3)">Al guardar, el formulario se queda abierto para que los adjuntes de una vez — el archivo necesita que el cliente ya exista.</span>
+      </div>`}
       ${!esEdicion?`
       <div class="card" style="background:var(--amber-dim);border-color:var(--amber-border);margin-top:4px">
         <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px">
@@ -199,7 +207,7 @@ Modulos.clientes = {
 
     const tracking = !id && document.getElementById('cli-tracking')?.checked;
 
-    const { error } = await DB.upsertCliente(fields);
+    const { data: guardado, error } = await DB.upsertCliente(fields);
     if (error) { UI.toast('Error: '+error.message,'error'); return; }
 
     /* Acceso de seguimiento: usuario = email, contraseña = su teléfono */
@@ -227,7 +235,21 @@ Modulos.clientes = {
 
     UI.cerrarModal();
     UI.toast(id?'Cliente actualizado ✓':'Cliente creado ✓');
-    this.render();
+
+    /* Quien nos abrió desde otro módulo (ej. Armería) sigue su flujo con el
+       cliente ya creado, en vez de perder la operación a medio llenar. */
+    const cb = this._onGuardado;
+    if (cb) { this._onGuardado = null; await this.render(); cb(guardado || null); return; }
+
+    /* Cliente NUEVO: reabrir en modo edición para adjuntar DPI, licencia o
+       pasaporte de una vez. Adjuntar necesita el id, que hasta ahora no
+       existía — por eso antes sólo se podían subir "después", y Henry no
+       encontraba cómo crear un cliente de armería completo. */
+    await this.render();
+    if (!id && guardado?.id) {
+      UI.toast('Ahora podés adjuntar su DPI, licencia o pasaporte 📎', 'info');
+      this.modalForm(guardado.id);
+    }
   },
 
   async eliminar(id, nombre) {
