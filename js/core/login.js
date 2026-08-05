@@ -158,6 +158,7 @@ function renderLogin(vista='login') {
 
         <div style="text-align:center;margin-top:16px;padding-top:16px;border-top:1px solid var(--border)">
           <span style="font-size:12px;color:var(--text3)">¿Primera vez? Crea tu negocio y estrena 30 días de prueba gratis.</span>
+          <div style="font-size:11px;color:var(--text3);margin-top:10px">© 2026 CM INVESTMENTS · Todos los derechos reservados</div>
         </div>
       </div>`,
 
@@ -242,6 +243,10 @@ function renderLogin(vista='login') {
               <input type="radio" id="tipo-ferreteria" name="tipo" value="ferreteria">
               <div><div style="font-weight:700;font-size:13px">🔩 Ferretería</div></div>
             </label>
+            <label style="display:flex;align-items:center;gap:8px;padding:10px;border:2px solid var(--border);border-radius:8px;cursor:pointer;transition:all .2s" onclick="document.getElementById('tipo-armeria').checked=true;this.parentElement.querySelectorAll('label').forEach(l=>l.style.background='');this.style.background='var(--cyan-alpha)'">
+              <input type="radio" id="tipo-armeria" name="tipo" value="armeria">
+              <div><div style="font-weight:700;font-size:13px">🎯 Armería</div></div>
+            </label>
           </div>
         </div>
 
@@ -251,14 +256,22 @@ function renderLogin(vista='login') {
             ${Object.entries(REGIMENES_SAT).map(([id, r]) => `<option value="${id}">${r.label}</option>`).join('')}
           </select>
           <div id="nt-regimen-det" style="font-size:11px;color:var(--text2);margin-top:4px">${REGIMENES_SAT.general.detalle}</div>
-          <div style="font-size:11px;color:var(--text3);margin-top:4px">Podrás cambiarlo después en Contabilidad → SAT.</div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Régimen de ISR *</label>
+          <select class="form-select" id="nt-isr" onchange="document.getElementById('nt-isr-det').textContent=(REGIMENES_ISR[this.value]||{}).detalle||''">
+            ${Object.entries(REGIMENES_ISR).map(([id, r]) => `<option value="${id}">${r.label}</option>`).join('')}
+          </select>
+          <div id="nt-isr-det" style="font-size:11px;color:var(--text2);margin-top:4px">${REGIMENES_ISR.opcional_simplificado.detalle}</div>
+          <div style="font-size:11px;color:var(--text3);margin-top:4px">El ISR es un impuesto aparte del IVA: el IVA es 12% (o 5% en Pequeño Contribuyente) y el 25% corresponde al ISR sobre utilidades. Podrás cambiar ambos después en Contabilidad → SAT.</div>
         </div>
 
         <div id="nt-turnstile" style="margin-bottom:12px"></div>
 
         <div class="legal-disclaimer-box" style="background:rgba(255, 193, 7, 0.05);border:1px solid rgba(255, 193, 7, 0.25);border-radius:8px;padding:12px;margin-bottom:12px;font-size:11.5px;line-height:1.6;color:var(--text2);text-align:left">
           <div style="font-weight:700;color:var(--amber);margin-bottom:6px;display:flex;align-items:center;gap:6px">
-            🛡️ Blindaje de Protección Legal y Privacidad
+            🛡️ Protección Legal y Privacidad
           </div>
           Al crear tu cuenta en NexusPro, confirmas tu consentimiento explícito sobre nuestros términos. Esto incluye la <b>política de cero reembolsos</b> ante suscripciones activas y la <b>suspensión inmediata de cuenta</b> ante disputas bancarias o contracargos falsos. Así mismo, aceptas las condiciones internacionales de <b>protección de código fuente</b>, marcas y propiedad intelectual de la aplicación.
         </div>
@@ -416,10 +429,18 @@ function renderLogin(vista='login') {
           </select>
           <div id="ntg-regimen-det" style="font-size:11px;color:var(--text2);margin-top:4px">${REGIMENES_SAT.general.detalle}</div>
         </div>
+        <div class="form-group">
+          <label class="form-label">Régimen de ISR *</label>
+          <select class="form-select" id="ntg-isr" onchange="document.getElementById('ntg-isr-det').textContent=(REGIMENES_ISR[this.value]||{}).detalle||''">
+            ${Object.entries(REGIMENES_ISR).map(([id, r]) => `<option value="${id}">${r.label}</option>`).join('')}
+          </select>
+          <div id="ntg-isr-det" style="font-size:11px;color:var(--text2);margin-top:4px">${REGIMENES_ISR.opcional_simplificado.detalle}</div>
+          <div style="font-size:11px;color:var(--text3);margin-top:4px">El ISR es un impuesto aparte del IVA: el IVA es 12% (o 5% en Pequeño Contribuyente) y el 25% corresponde al ISR sobre utilidades. Podrás cambiar ambos después en Contabilidad → SAT.</div>
+        </div>
 
         <div class="legal-disclaimer-box" style="background:rgba(255, 193, 7, 0.05);border:1px solid rgba(255, 193, 7, 0.25);border-radius:8px;padding:12px;margin-bottom:12px;font-size:11.5px;line-height:1.6;color:var(--text2);text-align:left">
           <div style="font-weight:700;color:var(--amber);margin-bottom:6px;display:flex;align-items:center;gap:6px">
-            🛡️ Blindaje de Protección Legal y Privacidad
+            🛡️ Protección Legal y Privacidad
           </div>
           Al crear tu cuenta en NexusPro, confirmas tu consentimiento explícito sobre nuestros términos. Esto incluye la <b>política de cero reembolsos</b> ante suscripciones activas y la <b>suspensión inmediata de cuenta</b> ante disputas bancarias o contracargos falsos. Así mismo, aceptas las condiciones internacionales de <b>protección de código fuente</b>, marcas y propiedad intelectual de la aplicación.
         </div>
@@ -612,6 +633,10 @@ async function loginRegistrarTallerGoogle() {
     agroservicio: ['clientes','agroservicio','inventario','proveedores','compras'],
     venta_granos: ['clientes','venta_granos','inventario','facturacion','bancos'],
     ferreteria: ['clientes','pos','inventario','bodegas','proveedores','compras','facturacion','bancos','contabilidad'],
+    /* La armería vende bajo control de DIGECAM: necesita su módulo más
+       clientes (expediente con DPI/licencia), inventario y proveedores
+       (trazabilidad del arma en la compra y en la venta) y cotizaciones. */
+    armeria: ['clientes','armeria','inventario','proveedores','compras','cotizaciones','pos','facturacion','bancos','contabilidad'],
     otro: modulos_base
   };
   const modulos_activos = modulos_map[tipo] || modulos_base;
@@ -619,7 +644,8 @@ async function loginRegistrarTallerGoogle() {
   UI.toast('Registrando tu comercio...', 'info');
   const { data, error } = await getSB().functions.invoke('registrar-comercio-google', {
     body: { nombre_comercio: nombre, nit, telefono: tel, tipo_negocio: tipo, modulos_activos,
-            regimen_iva: document.getElementById('ntg-regimen')?.value || 'general' }
+            regimen_iva: document.getElementById('ntg-regimen')?.value || 'general',
+            regimen_isr: document.getElementById('ntg-isr')?.value || 'opcional_simplificado' }
   });
 
   let msg = data?.error || null;
@@ -682,6 +708,10 @@ async function loginRegistrarTaller() {
     agroservicio: ['clientes','agroservicio','inventario','proveedores','compras'],
     venta_granos: ['clientes','venta_granos','inventario','facturacion','bancos'],
     ferreteria: ['clientes','pos','inventario','bodegas','proveedores','compras','facturacion','bancos','contabilidad'],
+    /* La armería vende bajo control de DIGECAM: necesita su módulo más
+       clientes (expediente con DPI/licencia), inventario y proveedores
+       (trazabilidad del arma en la compra y en la venta) y cotizaciones. */
+    armeria: ['clientes','armeria','inventario','proveedores','compras','cotizaciones','pos','facturacion','bancos','contabilidad'],
     otro: modulos_base
   };
   const modulos_activos = modulos_map[tipo] || modulos_base;
@@ -690,7 +720,8 @@ async function loginRegistrarTaller() {
   const { data, error } = await getSB().functions.invoke('registrar-taller', {
     body: { nombre_taller: nombre, nit, nombre_admin: admin, email, telefono: tel, password: pass,
             tipo_negocio: tipo, modulos_activos, turnstile_token,
-            regimen_iva: document.getElementById('nt-regimen')?.value || 'general' }
+            regimen_iva: document.getElementById('nt-regimen')?.value || 'general',
+            regimen_isr: document.getElementById('nt-isr')?.value || 'opcional_simplificado' }
   });
 
   let msg = data?.error || null;
@@ -772,6 +803,10 @@ async function loginGuardarTipoNegocio() {
     agroservicio: ['clientes','agroservicio','inventario','proveedores','compras'],
     venta_granos: ['clientes','venta_granos','inventario','facturacion','bancos'],
     ferreteria: ['clientes','pos','inventario','bodegas','proveedores','compras','facturacion','bancos','contabilidad'],
+    /* La armería vende bajo control de DIGECAM: necesita su módulo más
+       clientes (expediente con DPI/licencia), inventario y proveedores
+       (trazabilidad del arma en la compra y en la venta) y cotizaciones. */
+    armeria: ['clientes','armeria','inventario','proveedores','compras','cotizaciones','pos','facturacion','bancos','contabilidad'],
     otro: modulos_base
   };
 

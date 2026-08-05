@@ -19,6 +19,29 @@ const SUPERADMIN_EMAIL = Deno.env.get("SAAS_ADMIN_EMAIL") ?? "henry.chinchilla@g
 const MAX_SOLICITUDES = 3;
 const TEL_RE = /^\+?[\d\s-]{8,15}$/;
 
+/* Regímenes fiscales — espejo de REGIMENES_SAT / REGIMENES_ISR en
+   js/core/config.js. Se copia en vez de importarse porque cada Edge Function
+   se despliega sola y no hay carpeta _shared. Si allá cambia una tasa, hay que
+   cambiarla aquí también.
+
+   Antes esto era `body.regimen_iva === "pequeno" ? "pequeno" : "general"`, que
+   silenciosamente convertía en "general" (IVA 12%) a quien eligiera cualquiera
+   de los otros tres regímenes, y dejaba a TODO comercio nuevo con ISR al 5%
+   aunque tributara sobre utilidades (25%). */
+const TASA_IVA: Record<string, number> = {
+  general: 0.12, pequeno: 0.05, pequeno_electronico: 0.04,
+  agropecuario: 0.05, agropecuario_electronico: 0.04,
+};
+const TASA_ISR: Record<string, number> = { opcional_simplificado: 0.05, utilidades: 0.25 };
+
+function resolverRegimenes(body: Record<string, unknown>) {
+  const iva = TASA_IVA[String(body.regimen_iva ?? "")] !== undefined
+    ? String(body.regimen_iva) : "general";
+  const isr = TASA_ISR[String(body.regimen_isr ?? "")] !== undefined
+    ? String(body.regimen_isr) : "opcional_simplificado";
+  return { regimenIva: iva, tasaIva: TASA_IVA[iva], regimenIsr: isr, tasaIsr: TASA_ISR[isr] };
+}
+
 const cors = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -110,10 +133,10 @@ Deno.serve(async (req) => {
   }).select().single();
   if (tErr || !tenant) return json({ error: "No se pudo crear el comercio: " + (tErr?.message ?? "") }, 400);
 
-  const regimenIva = body.regimen_iva === "pequeno" ? "pequeno" : "general";
+  const { regimenIva, tasaIva, regimenIsr, tasaIsr } = resolverRegimenes(body);
   await admin.from("config_fiscal").insert({
-    tenant_id: tenant.id, regimen_iva: regimenIva,
-    tasa_iva: regimenIva === "pequeno" ? 0.05 : 0.12, tasa_isr: 0.05,
+    tenant_id: tenant.id, regimen_iva: regimenIva, tasa_iva: tasaIva,
+    regimen_isr: regimenIsr, tasa_isr: tasaIsr,
   }).then(() => {}, () => {});
 
   const { error: insErr } = await admin.from("usuarios").upsert({

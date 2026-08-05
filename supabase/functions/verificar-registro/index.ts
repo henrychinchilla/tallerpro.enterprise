@@ -130,10 +130,21 @@ Deno.serve(async (req) => {
        <p style="color:#94a3b8">Ocurrió un problema al crear tu comercio. Intenta de nuevo o contáctanos.</p>`, "#dc2626");
   }
 
-  const regimenIva = sol.regimen_iva === "pequeno" ? "pequeno" : "general";
+  /* Los regímenes que el usuario eligió al registrarse. Antes se colapsaban a
+     "pequeno"/"general" (perdiendo Agropecuario y las variantes electrónicas)
+     y el ISR se fijaba en 5% para todos, aunque tributaran sobre utilidades.
+     Tablas espejo de REGIMENES_SAT / REGIMENES_ISR en js/core/config.js. */
+  const TASA_IVA: Record<string, number> = {
+    general: 0.12, pequeno: 0.05, pequeno_electronico: 0.04,
+    agropecuario: 0.05, agropecuario_electronico: 0.04,
+  };
+  const TASA_ISR: Record<string, number> = { opcional_simplificado: 0.05, utilidades: 0.25 };
+  const regimenIva = TASA_IVA[sol.regimen_iva] !== undefined ? sol.regimen_iva : "general";
+  const regimenIsr = TASA_ISR[sol.regimen_isr] !== undefined ? sol.regimen_isr : "opcional_simplificado";
   await admin.from("config_fiscal").insert({
-    tenant_id: tenant.id, regimen_iva: regimenIva,
-    tasa_iva: regimenIva === "pequeno" ? 0.05 : 0.12, tasa_isr: 0.05,
+    tenant_id: tenant.id,
+    regimen_iva: regimenIva, tasa_iva: TASA_IVA[regimenIva],
+    regimen_isr: regimenIsr, tasa_isr: TASA_ISR[regimenIsr],
   }).then(() => {}, () => {});
 
   if (sol.auth_user_id) {

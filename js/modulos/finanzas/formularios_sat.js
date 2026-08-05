@@ -301,9 +301,13 @@ Modulos.contabilidad.sat = {
   /* ── CAMBIO DE RÉGIMEN FISCAL con aviso legal ── */
   async modalCambiarRegimen() {
     const fiscal = Modulos.contabilidad._fiscal || await DB.getConfigFiscalFresh().catch(()=>({})) || {};
-    const pequeno    = regimenSimplificado(fiscal.regimen_iva||'general');
-    const utilidades = (Number(fiscal.tasa_isr)||0.05) >= 0.2;
-    const regimenActual = pequeno ? 'Pequeño Contribuyente' : utilidades ? 'Sobre Utilidades (25%)' : 'Opcional Simplificado (5%/7%)';
+    const ivaActual = REGIMENES_SAT[fiscal.regimen_iva] ? fiscal.regimen_iva : 'general';
+    const pequeno   = regimenSimplificado(ivaActual);
+    /* El régimen de ISR ahora se guarda con nombre. Los comercios viejos solo
+       tienen la tasa, así que se deduce de ella (0.25 = sobre utilidades). */
+    const isrActual = REGIMENES_ISR[fiscal.regimen_isr] ? fiscal.regimen_isr
+                    : ((Number(fiscal.tasa_isr)||0.05) >= 0.2 ? 'utilidades' : 'opcional_simplificado');
+    const regimenActual = `${REGIMENES_SAT[ivaActual].label} · ISR ${REGIMENES_ISR[isrActual].label}`;
 
     UI.modal('⚠️ Cambio de Régimen Fiscal', `
       <div class="alert alert-amber" style="margin-bottom:16px">
@@ -327,24 +331,20 @@ Modulos.contabilidad.sat = {
         <div class="form-group">
           <label class="form-label">Régimen IVA</label>
           <select class="form-select" id="cfr-iva">
-            <option value="general" ${!pequeno?'selected':''}>General (IVA 12%)</option>
-            <option value="pequeno" ${pequeno?'selected':''}>Pequeño Contribuyente (IVA 5% plano)</option>
+            ${Object.entries(REGIMENES_SAT).map(([id, r]) =>
+              `<option value="${id}" ${id===ivaActual?'selected':''}>${r.label}</option>`).join('')}
           </select>
         </div>
         <div class="form-group">
           <label class="form-label">Régimen ISR</label>
           <select class="form-select" id="cfr-isr">
-            <option value="0.05" ${!utilidades?'selected':''}>Opcional Simplificado (5% hasta Q30,000 · 7% excedente)</option>
-            <option value="0.25" ${utilidades?'selected':''}>Sobre Utilidades / Actividades Lucrativas (25%)</option>
+            ${Object.entries(REGIMENES_ISR).map(([id, r]) =>
+              `<option value="${id}" ${id===isrActual?'selected':''}>${r.label}</option>`).join('')}
           </select>
         </div>
       </div>
-      <div class="form-group">
-        <label class="form-label">Tasa IVA</label>
-        <select class="form-select" id="cfr-tiva">
-          <option value="0.12" ${!pequeno?'selected':''}>12% (Régimen General)</option>
-          <option value="0.05" ${pequeno?'selected':''}>5% (Pequeño Contribuyente)</option>
-        </select>
+      <div style="font-size:11px;color:var(--text3);margin:-4px 0 10px">
+        El IVA y el ISR son impuestos distintos: la tasa de IVA la fija el régimen de arriba (12% en el general) y el 25% corresponde al ISR sobre utilidades, no al IVA.
       </div>
       <div class="form-group" style="margin-top:12px">
         <label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:13px;font-weight:700">
@@ -367,9 +367,12 @@ Modulos.contabilidad.sat = {
   },
 
   async _guardarRegimen() {
-    const regimen_iva    = document.getElementById('cfr-iva')?.value || 'general';
-    const tasa_isr       = parseFloat(document.getElementById('cfr-isr')?.value) || 0.05;
-    const tasa_iva       = parseFloat(document.getElementById('cfr-tiva')?.value) || 0.12;
+    /* La tasa ya no se pregunta aparte: la determina el régimen, y tenerlas
+       como dos campos sueltos permitía guardar "Pequeño Contribuyente" con
+       IVA 12%. resolverRegimenes() las deriva del catálogo. */
+    const regimenes = resolverRegimenes(document.getElementById('cfr-iva')?.value,
+                                        document.getElementById('cfr-isr')?.value);
+    const { regimen_iva, tasa_iva, regimen_isr, tasa_isr } = regimenes;
     const es_importadora = document.getElementById('cfr-importadora')?.checked || false;
     const fiscal = Modulos.contabilidad._fiscal || {};
 
@@ -377,15 +380,15 @@ Modulos.contabilidad.sat = {
        retroactivo. Pequeño → General siempre procede. Se advierte pero se
        respeta la decisión del cliente. */
     const eraPequeno = regimenSimplificado(fiscal.regimen_iva||'general');
-    if (!eraPequeno && regimen_iva === 'pequeno') {
-      if (!confirm('⚠️ Cambiar de Régimen General a Pequeño Contribuyente requiere:\n\n' +
+    if (!eraPequeno && regimenSimplificado(regimen_iva)) {
+      if (!confirm(`⚠️ Cambiar del Régimen General a ${REGIMENES_SAT[regimen_iva].label} requiere:\n\n` +
         '• Actualización de datos en el RTU (Agencia Virtual SAT) y autorización.\n' +
-        '• Ingresos anuales que no superen Q465,381.25 (límite 2025, Decreto 31-2024).\n' +
+        `• Ingresos anuales que no superen ${UI.q(REGIMENES_SAT[regimen_iva].techo_anual)}.\n` +
         '• Surte efecto a partir del período siguiente — NUNCA retroactivo.\n\n' +
         '¿Confirmas que ya realizaste (o realizarás) este trámite ante la SAT y deseas continuar?')) return;
     }
 
-    const nuevo = { ...fiscal, regimen_iva, tasa_isr, tasa_iva, es_importadora };
+    const nuevo = { ...fiscal, regimen_iva, tasa_iva, regimen_isr, tasa_isr, es_importadora };
     const ok = await DB.saveConfigFiscal(nuevo);
     if (!ok) { UI.toast('Error al guardar la configuración fiscal','error'); return; }
     Modulos.contabilidad._fiscal = nuevo;

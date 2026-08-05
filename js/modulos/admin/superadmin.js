@@ -413,11 +413,16 @@ Modulos.superadmin = {
         <div class="form-group"><label class="form-label">Suscripción vence</label>
           <input class="form-input" id="nt-vence" type="date" value="${venceDefault}"></div>
       </div>
-      <div class="form-group"><label class="form-label">Régimen ante la SAT</label>
-        <select class="form-select" id="nt-regimen">
-          <option value="general">Régimen General (IVA 12%)</option>
-          <option value="pequeno">Pequeño Contribuyente (IVA 5%)</option>
-        </select></div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Régimen de IVA</label>
+          <select class="form-select" id="nt-regimen">
+            ${Object.entries(REGIMENES_SAT).map(([id, r]) => `<option value="${id}">${r.label}</option>`).join('')}
+          </select></div>
+        <div class="form-group"><label class="form-label">Régimen de ISR</label>
+          <select class="form-select" id="nt-isr">
+            ${Object.entries(REGIMENES_ISR).map(([id, r]) => `<option value="${id}">${r.label}</option>`).join('')}
+          </select></div>
+      </div>
       <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:10px;margin-top:4px">
         <input type="checkbox" id="nt-demo" onchange="Modulos.superadmin._toggleDemoNuevo(this.checked)">
         <span>🎁 Crear como <b>DEMO</b> — prueba gratis 30 días, sin cobro (precio Q0 y vence en 30 días)</span>
@@ -492,11 +497,9 @@ Modulos.superadmin = {
     });
     if (tErr || !tenant) { UI.toast('Error creando el comercio: '+(tErr?.message||''),'error'); reactivar(); return; }
 
-    /* 1b. Config fiscal con el régimen SAT elegido */
-    const regimen = v('nt-regimen')==='pequeno' ? 'pequeno' : 'general';
+    /* 1b. Config fiscal con los regímenes de IVA e ISR elegidos */
     await getSB().from('config_fiscal').insert({
-      tenant_id: tenant.id, regimen_iva: regimen,
-      tasa_iva: regimen==='pequeno' ? 0.05 : 0.12, tasa_isr: 0.05
+      tenant_id: tenant.id, ...resolverRegimenes(v('nt-regimen'), v('nt-isr'))
     }).then(()=>{},()=>{});
 
     /* 2. Crear el usuario admin dentro del nuevo tenant (Edge crear-usuario) */

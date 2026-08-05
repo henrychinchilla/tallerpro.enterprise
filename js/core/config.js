@@ -747,14 +747,19 @@ const REGIMENES_SAT = {
     tasa_iva: 0.12, simplificado: false,
     detalle: 'IVA 12% con derecho a crédito fiscal. El ISR se declara aparte: sobre utilidades (25%) u opcional simplificado (5% / 7%).',
   },
+  /* techo_anual del pequeño contribuyente: lo subió el Decreto 31-2024 a 125
+     salarios mínimos (Q465,381.25 para 2025). Antes decía Q150,000, el límite
+     viejo, y contradecía el aviso de Contabilidad → SAT, que ya citaba la
+     cifra nueva. Se recalcula cada año con el salario mínimo: confírmelo con
+     su contador antes de tomarlo como definitivo. */
   pequeno: {
     label: 'Pequeño Contribuyente (5%)',
-    tasa_iva: 0.05, simplificado: true, techo_anual: 150000,
-    detalle: '5% sobre ingresos brutos, sin crédito fiscal. Hasta Q150,000 al año.',
+    tasa_iva: 0.05, simplificado: true, techo_anual: 465381.25,
+    detalle: '5% sobre ingresos brutos, sin crédito fiscal. Hasta Q465,381.25 al año (125 salarios mínimos, Decreto 31-2024).',
   },
   pequeno_electronico: {
     label: 'Pequeño Contribuyente Electrónico (4%)',
-    tasa_iva: 0.04, simplificado: true, techo_anual: 150000,
+    tasa_iva: 0.04, simplificado: true, techo_anual: 465381.25,
     detalle: '4% en vez de 5% si se paga dentro de los primeros 10 días hábiles del mes y se factura electrónicamente (Decreto 7-2019).',
   },
   agropecuario: {
@@ -768,6 +773,61 @@ const REGIMENES_SAT = {
     detalle: 'La variante electrónica del agropecuario: 4% pagando dentro de los primeros 10 días hábiles (Decreto 7-2019).',
   },
 };
+
+/* ── RÉGIMEN DE ISR ────────────────────────────────────────────────────────
+   OJO: el ISR es un impuesto DISTINTO del IVA y con su propio régimen.
+   En Guatemala el IVA es 12% (o las tasas reducidas de arriba); NO existe un
+   IVA del 25%. El 25% es la tasa del ISR sobre utilidades — de ahí viene la
+   confusión, y por eso acá se declara aparte y con nombre propio en vez de
+   quedar escondido en el texto de ayuda del régimen general.
+
+   Base legal: Ley de Actualización Tributaria, Decreto 10-2012.
+     · Sobre Utilidades — 25% sobre la renta imponible (la utilidad).
+     · Opcional Simplificado — 5% sobre los primeros Q30,000 de ingresos
+       del mes y 7% sobre el excedente, calculado sobre INGRESOS, no sobre
+       utilidad (por eso los gastos no deducen).
+   El cambio de régimen se solicita a la SAT en diciembre (art. 51). */
+const REGIMENES_ISR = {
+  opcional_simplificado: {
+    label: 'Opcional Simplificado sobre Ingresos (5% / 7%)',
+    tramo1: 30000, tasa1: 0.05, tasa2: 0.07, sobre: 'ingresos',
+    detalle: '5% sobre los primeros Q30,000 de ingresos del mes y 7% sobre el excedente. Se calcula sobre ingresos brutos: los gastos NO deducen.',
+  },
+  utilidades: {
+    label: 'Sobre Utilidades de Actividades Lucrativas (25%)',
+    tasa: 0.25, sobre: 'utilidad',
+    detalle: '25% sobre la renta imponible (utilidad). Los gastos SÍ deducen. Pagos trimestrales por cierre parcial o sobre una renta imponible estimada del 8% de los ingresos brutos del trimestre.',
+  },
+};
+
+/* Tasa de ISR que corresponde a un ingreso mensual dado. En el opcional
+   simplificado la tasa depende del monto (5% hasta Q30,000, 7% arriba), así
+   que no es un número fijo: se calcula. */
+function tasaISR(regimenId, ingresoMensual = 0) {
+  const r = REGIMENES_ISR[String(regimenId || '').toLowerCase()];
+  if (!r) return 0;
+  if (r.sobre === 'utilidad') return r.tasa;
+  return (Number(ingresoMensual) || 0) > r.tramo1 ? r.tasa2 : r.tasa1;
+}
+
+/* La fila de config_fiscal que corresponde a un par de regímenes elegido.
+   Existe porque el alta del comercio se hace desde cuatro lados (registro por
+   correo, registro con Google, alta desde el Panel SaaS y el respaldo de
+   auth.js) y los cuatro venían fijando el ISR en 5% y colapsando los cinco
+   regímenes de IVA a dos: quien elegía "Agropecuario" terminaba guardado
+   como "general" con IVA 12%. */
+function resolverRegimenes(regimenIva, regimenIsr) {
+  const iva = REGIMENES_SAT[regimenIva] ? regimenIva : 'general';
+  const isr = REGIMENES_ISR[regimenIsr] ? regimenIsr : 'opcional_simplificado';
+  return {
+    regimen_iva: iva,
+    tasa_iva: REGIMENES_SAT[iva].tasa_iva,
+    regimen_isr: isr,
+    /* En el simplificado se guarda el tramo base (5%); el 7% del excedente lo
+       calcula tasaISR() según los ingresos del mes, porque depende del monto. */
+    tasa_isr: tasaISR(isr, 0),
+  };
+}
 
 /* Régimen del comercio, tolerante con lo que ya está guardado. */
 function regimenSAT(id) {
@@ -787,7 +847,10 @@ function tasaIVARegimen(id) {
 
 if (typeof window !== 'undefined') {
   window.REGIMENES_SAT = REGIMENES_SAT;
+  window.REGIMENES_ISR = REGIMENES_ISR;
   window.regimenSAT = regimenSAT;
   window.regimenSimplificado = regimenSimplificado;
   window.tasaIVARegimen = tasaIVARegimen;
+  window.tasaISR = tasaISR;
+  window.resolverRegimenes = resolverRegimenes;
 }
