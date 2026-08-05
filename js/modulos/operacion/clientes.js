@@ -57,6 +57,29 @@ Modulos.clientes = {
      (ej. Armería crea el cliente sin perder la operación que estaba llenando). */
   _onGuardado: null,
 
+  /* Edad cumplida a partir de la fecha de nacimiento. No se guarda en la BD:
+     una edad guardada queda vencida el día del cumpleaños, y una declaración
+     jurada con la edad equivocada es un documento con un dato falso.
+     Se compara mes y día, no se divide por 365.25 — con años bisiestos eso
+     se equivoca justo alrededor del cumpleaños, que es cuando importa. */
+  edadDe(fechaNacimiento, hoy = new Date()) {
+    if (!fechaNacimiento) return null;
+    const n = new Date(fechaNacimiento + (String(fechaNacimiento).length === 10 ? 'T00:00:00' : ''));
+    if (isNaN(n)) return null;
+    let edad = hoy.getFullYear() - n.getFullYear();
+    const cumpleEsteAnio = new Date(hoy.getFullYear(), n.getMonth(), n.getDate());
+    if (hoy < cumpleEsteAnio) edad--;          // aún no cumple este año
+    return (edad >= 0 && edad < 150) ? edad : null;
+  },
+
+  _mostrarEdad() {
+    const el = document.getElementById('cli-edad'); if (!el) return;
+    const edad = this.edadDe(document.getElementById('cli-fnac')?.value);
+    el.textContent = edad == null ? ''
+      : `${edad} años${edad < 18 ? ' — menor de edad' : ''}`;
+    el.style.color = (edad != null && edad < 18) ? 'var(--red)' : 'var(--cyan)';
+  },
+
   async modalForm(id=null, onGuardado=null) {
     const c = id ? this._data.find(x=>x.id===id) : {};
     const esEdicion = !!id;
@@ -92,6 +115,34 @@ Modulos.clientes = {
           <input class="form-input" id="cli-tel" value="${c.tel||''}" placeholder="5501-1234"></div>
         <div class="form-group"><label class="form-label">Email</label>
           <input class="form-input" id="cli-email" value="${c.email||''}" type="email"></div>
+      </div>
+
+      <!-- Datos que exige una declaración jurada (art. 55 a) de la Ley de
+           Armas y art. 17 b) de su reglamento: edad, estado civil,
+           nacionalidad, profesión y DPI). Guardados acá, el documento sale
+           lleno en vez de con rayas para escribir a mano cada vez. -->
+      <div style="background:var(--card2);border-radius:8px;padding:10px 12px;margin-bottom:12px">
+        <div style="font-size:12px;font-weight:700;margin-bottom:8px">🪪 Datos personales (para declaraciones juradas y trámites)</div>
+        <div class="form-row">
+          <div class="form-group"><label class="form-label">DPI</label>
+            <input class="form-input" id="cli-dpi" value="${c.dpi||''}" placeholder="0000 00000 0000" style="font-family:monospace"></div>
+          <div class="form-group"><label class="form-label">Fecha de nacimiento</label>
+            <input class="form-input" id="cli-fnac" type="date" value="${c.fecha_nacimiento||''}"
+                   max="${new Date().toISOString().slice(0,10)}" onchange="Modulos.clientes._mostrarEdad()">
+            <div id="cli-edad" style="font-size:11px;color:var(--cyan);margin-top:2px"></div></div>
+          <div class="form-group"><label class="form-label">Estado civil</label>
+            <select class="form-select" id="cli-estado-civil">
+              <option value="">— No indicado —</option>
+              ${['soltero(a)','casado(a)','unido(a)','divorciado(a)','viudo(a)']
+                .map(e=>`<option value="${e}" ${c.estado_civil===e?'selected':''}>${e}</option>`).join('')}
+            </select></div>
+        </div>
+        <div class="form-row">
+          <div class="form-group"><label class="form-label">Profesión u oficio</label>
+            <input class="form-input" id="cli-profesion" value="${c.profesion||''}" placeholder="Comerciante, ingeniero, agricultor..."></div>
+          <div class="form-group"><label class="form-label">Nacionalidad</label>
+            <input class="form-input" id="cli-nacionalidad" value="${c.nacionalidad||''}" placeholder="Guatemalteca"></div>
+        </div>
       </div>
       <div class="form-row">
         <div class="form-group" style="flex:2"><label class="form-label">Dirección completa</label>
@@ -151,6 +202,7 @@ Modulos.clientes = {
         </button>
       </div>`,'640px');
     if (esEdicion) Docs.render('cliente', id, 'cli-docs');
+    this._mostrarEdad();
   },
 
   /* DPI, licencia (tenencia/portación) o pasaporte — foto o PDF. Vive en el
@@ -201,6 +253,11 @@ Modulos.clientes = {
       email:          document.getElementById('cli-email')?.value.trim()||null,
       direccion:      document.getElementById('cli-dir')?.value.trim()||null,
       vivienda:       document.getElementById('cli-vivienda')?.value || null,
+      dpi:            document.getElementById('cli-dpi')?.value.trim()||null,
+      fecha_nacimiento: document.getElementById('cli-fnac')?.value || null,
+      estado_civil:   document.getElementById('cli-estado-civil')?.value || null,
+      profesion:      document.getElementById('cli-profesion')?.value.trim()||null,
+      nacionalidad:   document.getElementById('cli-nacionalidad')?.value.trim()||null,
       notas:          document.getElementById('cli-notas')?.value.trim()||null,
       nombre_empresa: tipo==='empresa'?document.getElementById('cli-empresa')?.value.trim():null,
       representante:  tipo==='empresa'?document.getElementById('cli-representante')?.value.trim():null,

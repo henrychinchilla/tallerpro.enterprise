@@ -144,10 +144,16 @@ Object.assign(Modulos.armeria, {
     const meses = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
     const fechaLetras = `${hoy.getDate()} de ${meses[hoy.getMonth()]} de ${hoy.getFullYear()}`;
 
+    /* La edad se DERIVA de la fecha de nacimiento en el momento de generar
+       el documento. Guardarla la dejaría vencida cada cumpleaños, y esto se
+       firma bajo juramento: un dato viejo acá es un dato falso. */
+    const edad = (Modulos.clientes?.edadDe)
+      ? Modulos.clientes.edadDe(cli.fecha_nacimiento, hoy) : null;
+
     const identificacion = `
-      <p>Yo, ${L(cli.nombre, 300)}, de ${L(null, 60)} años de edad,
-      ${L(null, 90)} (estado civil), guatemalteco(a)${cli.nacionalidad ? '' : ''},
-      de profesión u oficio ${L(null, 180)}, con residencia en
+      <p>Yo, ${L(cli.nombre, 300)}, de ${L(edad != null ? String(edad) : null, 60)} años de edad,
+      ${L(cli.estado_civil, 90)} (estado civil), de nacionalidad ${L(cli.nacionalidad || 'guatemalteca', 130)},
+      de profesión u oficio ${L(cli.profesion, 180)}, con residencia en
       ${L(cli.direccion, 340)}${cli.vivienda ? ` (vivienda ${UI.esc(cli.vivienda)})` : ''},
       me identifico con el Documento Personal de Identificación (DPI)
       número ${L(o.contraparte_dpi || cli.dpi, 200)} extendido por el Registro Nacional
@@ -221,6 +227,14 @@ Object.assign(Modulos.armeria, {
     <style>
       @page { margin: 2.5cm; }
       body{font-family:'Times New Roman',Georgia,serif;font-size:12.5px;line-height:1.7;margin:0;color:#000}
+      /* La barra de edición no debe salir impresa: es andamio, no documento. */
+      .barra{position:sticky;top:0;background:#fffbe6;border-bottom:1px solid #e0d9b0;padding:8px 12px;
+             font-family:Arial,sans-serif;font-size:12px;display:flex;gap:10px;align-items:center;z-index:9}
+      .barra button{font-family:Arial,sans-serif;font-size:12px;padding:5px 12px;border:1px solid #999;
+             border-radius:5px;background:#fff;cursor:pointer}
+      .doc{padding:0 4px}
+      .doc:focus{outline:2px dashed #c9a227;outline-offset:6px}
+      @media print { .barra{display:none} .doc:focus{outline:none} }
       .enc{text-align:center;margin-bottom:18px}
       .enc h1{font-size:15px;margin:0 0 4px;text-transform:uppercase;letter-spacing:.5px}
       .enc .base{font-size:10.5px;color:#444}
@@ -232,6 +246,12 @@ Object.assign(Modulos.armeria, {
       .pie{margin-top:26px;font-size:9.5px;color:#666;border-top:1px dashed #bbb;padding-top:8px}
       .sello{margin-top:34px;border:1px dashed #999;height:110px;padding:6px;font-size:10px;color:#777}
     </style></head><body>
+    <div class="barra">
+      <b>✏️ Podés corregir cualquier dato haciendo clic sobre él.</b>
+      <span style="color:#666">Los cambios son sólo para esta impresión — no se guardan en la ficha del cliente.</span>
+      <button onclick="window.print()" style="margin-left:auto">🖨️ Imprimir</button>
+    </div>
+    <div class="doc" contenteditable="true" spellcheck="false">
     <div class="enc">
       <h1>${d.label}</h1>
       <div class="base">Fundamento: ${d.base}</div>
@@ -264,12 +284,16 @@ Object.assign(Modulos.armeria, {
       prepara el formato con los datos registrados; <b>la fe pública la otorga el notario</b>.
       Verifique el contenido antes de firmar.
     </div>
+    </div>
     </body></html>`;
 
-    const w = window.open('', '_blank', 'width=860,height=760');
+    const w = window.open('', '_blank', 'width=880,height=800');
+    if (!w) { UI.toast('Permití las ventanas emergentes para generar el documento', 'error'); return; }
     w.document.write(html);
     w.document.close();
     w.focus();
-    setTimeout(() => w.print(), 400);
+    /* NO se imprime solo: Henry pidió poder editar antes. La barra tiene su
+       propio botón de imprimir, y el documento es editable hasta que la
+       persona decida. Imprimir de una haría inútil la edición. */
   },
 });
