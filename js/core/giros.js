@@ -184,6 +184,23 @@ const GIROS = {
       { id: 'numero_serie', label: 'Número de serie', tipo: 'texto',
         ayuda: 'Obligatorio en armas de fuego: el art. 82 g) prohíbe las que no lo traen. Balines, navajas y accesorios no llevan.' },
       { id: 'pais_origen',  label: 'País de origen', tipo: 'texto', catalogo: 'pais', ph: 'Escribe o elige' },
+      /* Largo del cañón y conversiones NO son opcionales por gusto: los pide
+         la ley por su nombre. Van en la tarjeta de tenencia que extiende
+         DIGECAM (art. 63) y en la solicitud de licencia de portación
+         (art. 72 a) 2). El comprador los necesita para su trámite. */
+      { id: 'largo_canon', label: 'Largo del cañón (pulgadas)', tipo: 'decimal', ph: '4.02',
+        ayuda: 'Lo exigen el art. 63 (tarjeta de tenencia) y el art. 72 (licencia de portación). En escopetas de dos cañones, anotar ambos.' },
+      { id: 'conversiones_calibre', label: 'Conversiones de calibre', tipo: 'texto', ph: 'Ej. .22LR con kit de conversión',
+        ayuda: 'La ley pide identificar "las conversiones de calibres que tuviere" (arts. 63 y 72). Dejar vacío si no tiene.' },
+      /* Cómo se ve y de qué está hecha: es lo que el cliente pregunta y lo
+         que distingue dos armas del mismo modelo en la vitrina. */
+      { id: 'color',   label: 'Color', tipo: 'texto', catalogo: 'color', ph: 'Escribe o elige' },
+      { id: 'acabado', label: 'Acabado', tipo: 'texto', catalogo: 'acabado', ph: 'Cromado, pavonado, policromado...' },
+      { id: 'material', label: 'Material del armazón', tipo: 'lista',
+        opciones: ['polímero', 'acero al carbono', 'acero inoxidable', 'aluminio / aleación',
+                   'titanio', 'madera', 'mixto', 'no aplica'] },
+      { id: 'capacidad_cargador', label: 'Capacidad del cargador', tipo: 'entero', ph: '15',
+        ayuda: 'Ojo: el art. 82 i) prohíbe portar cargadores para más cartuchos de los que el arma trae de fábrica.' },
     ],
   },
 

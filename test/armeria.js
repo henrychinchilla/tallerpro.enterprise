@@ -185,6 +185,55 @@ ok('una navaja tampoco', !ARM._esArma('arma_blanca'));
   ok('sin artículo no revienta', ARM._fichaInventarioHTML(null) === '');
   ok('un artículo sin atributos tampoco',
      typeof ARM._fichaInventarioHTML({ nombre: 'X', stock: 1 }) === 'string');
+
+  /* Color, acabado y material — lo que el cliente pregunta y lo que
+     distingue dos armas del mismo modelo en la vitrina. */
+  const completa = ARM._fichaInventarioHTML({ ...item, atributos: {
+    ...item.atributos, color: 'Bicolor (two-tone)', acabado: 'Cromado',
+    material: 'polímero', largo_canon: 4.02, capacidad_cargador: 15,
+    conversiones_calibre: '.22LR con kit',
+  }});
+  ok('la ficha muestra el color', /Bicolor \(two-tone\)/.test(completa));
+  ok('muestra el acabado (cromada, policromada...)', /Cromado/.test(completa));
+  ok('muestra el material del armazón (polímero)', /pol[íi]mero/.test(completa));
+  ok('muestra la capacidad del cargador', /15 cartuchos/.test(completa));
+
+  /* Datos que la ley nombra por su nombre — arts. 63 (tarjeta de tenencia)
+     y 72 a) 2 (solicitud de licencia de portación). El comprador los
+     necesita para su trámite, así que el vendedor debe tenerlos a mano. */
+  ok('muestra el largo del cañón con sus comillas de pulgadas (art. 63/72)', /4\.02"/.test(completa));
+  ok('muestra las conversiones de calibre (art. 63/72)', /\.22LR con kit/.test(completa));
+
+  /* Un arma sin esos datos no debe imprimir etiquetas vacías. */
+  ok('sin color/acabado no aparecen esas etiquetas',
+     !/Color:/.test(ficha) && !/Acabado:/.test(ficha));
+  ok('sin largo de cañón no aparece un "undefined\\""', !/undefined/.test(ficha));
+}
+
+/* ── El largo del cañón llega al libro de registro ────────────────────────
+   Es dato que un inspector puede pedir, así que el libro lo trae de la
+   ficha del inventario cuando la operación está vinculada. */
+{
+  ctx.UI.fecha = v => String(v || '');
+  const abierto = [];
+  ctx.window.open = () => ({ document: { write: (h) => abierto.push(h), close() {} }, focus() {}, print() {} });
+  ctx.setTimeout = (fn) => { try { fn(); } catch (_) {} };
+
+  ARM._inventario = [{ id: 'i9', nombre: 'Glock 19', atributos: { largo_canon: 4.02 } }];
+  ARM._data = [{ num: 'ARM-1', tipo: 'venta', categoria: 'pistola', marca: 'Glock',
+                 modelo: '19', calibre: '9mm', numero_serie: 'S1', cantidad: 1,
+                 total: 8500, inventario_id: 'i9', estado: 'entregado', fecha: '2026-08-04' }];
+  ARM.imprimirLibro();
+  const libro = abierto[0] || '';
+  ok('el libro incluye la columna Cañón en la cabecera', /<th>Cañón<\/th>/.test(libro));
+  ok('y el valor del largo del cañón de la ficha vinculada', /4\.02"/.test(libro));
+
+  /* Una operación sin vincular no inventa el dato: pone guión. */
+  ARM._data = [{ ...ARM._data[0], inventario_id: null }];
+  abierto.length = 0;
+  ARM.imprimirLibro();
+  ok('sin artículo vinculado el libro no inventa el cañón', /<td>—<\/td>/.test(abierto[0] || ''));
+  ARM._data = []; ARM._inventario = [];
 }
 
 /* ── Avisos legales por categoría ───────────────────────────────────────── */
