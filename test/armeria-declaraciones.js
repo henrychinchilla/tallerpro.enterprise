@@ -119,6 +119,30 @@ ARM._data = [{ id: 'op1', num: 'ARM-2026-0001', cliente_id: 'c1', inventario_id:
   ok('muestra los datos del cliente vinculado', /Juan Pérez López/.test(menu));
 }
 
+/* ── Declaración A DEMANDA, sin venta de por medio ───────────────────────
+   Un cliente puede necesitar sólo la declaración: la del art. 72 es para
+   tramitar la licencia de portación de un arma que YA tiene, y ahí no hay
+   compra alguna. Amarrar las declaraciones a una operación dejaba ese caso
+   sin salida — que es justo lo que Henry preguntó. */
+{
+  ARM._data = [];   // sin ninguna operación registrada
+  ARM._clientes = [{ id: 'c1', nombre: 'Juan Pérez López', nit: '9876543-2',
+                     direccion: '5a calle 3-40 zona 1, Guatemala', dpi: '1234567890101' }];
+
+  ARM.modalDeclaraciones();
+  ok('se puede abrir el menú sin ninguna operación', /Declaraci[óo]n jurada de ingresos/.test(impreso));
+  ok('ofrece elegir el cliente cuando no hay venta', /<select/.test(impreso) && /Juan Pérez López/.test(impreso));
+  ok('explica que no hace falta una venta', /No hace falta una venta/.test(impreso));
+
+  /* Elegido el cliente, el documento sale con SUS datos aunque no haya venta. */
+  ARM.imprimirDeclaracion('portacion', '', 'c1');
+  ok('la declaración de portación sale con los datos del cliente elegido',
+     /Juan Pérez López/.test(impreso));
+  ok('...y con su DPI, tomado de la ficha del cliente', /1234567890101/.test(impreso));
+  ok('...sin inventar una operación que no existe', !/Arma objeto de la operaci[óo]n/.test(impreso));
+  ok('sigue citando el artículo 72', /art[íi]culo 72/i.test(impreso));
+}
+
 /* ── Sin cliente vinculado no revienta: sale para llenar a mano ──────────── */
 {
   ARM._data = [{ id: 'op2', num: 'ARM-2', cliente_id: null }];

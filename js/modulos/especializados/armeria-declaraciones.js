@@ -47,20 +47,42 @@ Object.assign(Modulos.armeria, {
     },
   },
 
-  /* Menú para elegir qué declaración generar a partir de una operación. */
-  modalDeclaraciones(operacionId) {
-    const o = this._data.find(x => x.id === operacionId);
-    const cli = o ? this._clientes.find(c => c.id === o.cliente_id) : null;
+  /* Menú de declaraciones. Se puede abrir de dos formas:
+       · desde una operación (trae los datos de esa venta), o
+       · suelto, eligiendo el cliente —  porque un cliente puede necesitar
+         una declaración SIN comprar nada. La del art. 72, por ejemplo, es
+         para tramitar su licencia de portación de un arma que YA tiene:
+         no hay venta de por medio. Amarrar las declaraciones a una venta
+         dejaba ese caso sin salida.
+     `clienteId` permite elegir el cliente cuando no hay operación. */
+  modalDeclaraciones(operacionId, clienteId) {
+    const o = operacionId ? this._data.find(x => x.id === operacionId) : null;
+    const cli = o ? this._clientes.find(c => c.id === o.cliente_id)
+                  : (clienteId ? this._clientes.find(c => c.id === clienteId) : null);
+    const dpi = o?.contraparte_dpi || cli?.dpi;
 
     UI.modal('📄 Declaraciones juradas', `
+      ${!o ? `<div class="form-group">
+        <label class="form-label">Cliente</label>
+        <select class="form-select" onchange="Modulos.armeria.modalDeclaraciones('', this.value)">
+          <option value="">— Sin cliente (documento en blanco) —</option>
+          ${this._clientes.map(c => `<option value="${c.id}" ${cli?.id === c.id ? 'selected' : ''}>${UI.esc(c.nombre)}</option>`).join('')}
+        </select>
+        <div style="font-size:11px;color:var(--text3);margin-top:3px">
+          No hace falta una venta: un cliente puede necesitar sólo la declaración (por ejemplo, para tramitar
+          su licencia de portación de un arma que ya tiene).
+        </div>
+      </div>` : ''}
+
       ${cli ? `<div style="background:var(--card2);border-radius:8px;padding:10px 12px;margin-bottom:12px;font-size:13px">
         <b>${UI.esc(cli.nombre)}</b>
         <div style="font-size:11px;color:var(--text3)">
-          DPI: ${UI.esc(o.contraparte_dpi || '—')} · NIT: ${UI.esc(cli.nit || o.contraparte_nit || '—')}
+          DPI: ${UI.esc(dpi || '—')} · NIT: ${UI.esc(cli.nit || o?.contraparte_nit || '—')}
           ${cli.direccion ? '<br>' + UI.esc(cli.direccion) : ''}
         </div>
+        ${o ? `<div style="font-size:11px;color:var(--cyan);margin-top:4px">Operación ${UI.esc(o.num || '')}</div>` : ''}
       </div>` : `<div style="background:var(--card2);border-left:3px solid var(--amber);border-radius:6px;padding:10px;margin-bottom:12px;font-size:12px">
-        Sin cliente vinculado: los documentos saldrán con los espacios en blanco para llenarlos a mano.
+        Sin cliente seleccionado: los documentos saldrán con los espacios en blanco para llenarlos a mano.
       </div>`}
 
       ${Object.entries(this._DECLARACIONES).map(([k, d]) => `
@@ -72,7 +94,7 @@ Object.assign(Modulos.armeria, {
               <div style="font-size:11.5px;margin-top:5px">${d.cuando}</div>
             </div>
             <button class="btn btn-sm btn-cyan" style="flex-shrink:0"
-              onclick="Modulos.armeria.imprimirDeclaracion('${k}','${operacionId || ''}')">🖨️ Generar</button>
+              onclick="Modulos.armeria.imprimirDeclaracion('${k}','${operacionId || ''}','${cli?.id || ''}')">🖨️ Generar</button>
           </div>
         </div>`).join('')}
 
@@ -86,10 +108,12 @@ Object.assign(Modulos.armeria, {
   },
 
   /* Genera el documento imprimible. `tipo` es una clave de _DECLARACIONES. */
-  imprimirDeclaracion(tipo, operacionId) {
+  imprimirDeclaracion(tipo, operacionId, clienteId) {
     const d = this._DECLARACIONES[tipo]; if (!d) return;
-    const o = this._data.find(x => x.id === operacionId) || {};
-    const cli = this._clientes.find(c => c.id === o.cliente_id) || {};
+    const o = (operacionId ? this._data.find(x => x.id === operacionId) : null) || {};
+    /* El cliente puede venir de la operación o elegirse suelto (declaración
+       a demanda, sin venta). */
+    const cli = this._clientes.find(c => c.id === (o.cliente_id || clienteId)) || {};
     const t = window.Auth?.tenant || {};
     const inv = o.inventario_id ? this._inventario.find(i => i.id === o.inventario_id) : null;
     const a = inv?.atributos || {};

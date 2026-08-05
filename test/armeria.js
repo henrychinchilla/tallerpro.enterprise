@@ -34,11 +34,13 @@ ok('vender munición sin licencia del comprador se rechaza',
    ARM._validar({ ...base, categoria: 'munición', contraparte_licencia_num: '', contraparte_dpi: 'D1' }).ok === false);
 ok('vender munición con licencia pero SIN DPI se rechaza',
    ARM._validar({ ...base, categoria: 'munición', contraparte_licencia_num: 'TEN-1', contraparte_dpi: '' }).ok === false);
-/* Munición necesita además NIT y dirección (art. 60) — ver el bloque de
+/* Munición necesita además NIT y dirección (art. 60 de la ley) y el código
+   de autorización de DIGECAM (art. 21 del reglamento) — ver el bloque de
    abajo dedicado a eso; acá sólo se comprueba el caso completo. */
-ok('vender munición CON licencia, DPI, NIT y dirección pasa',
+ok('vender munición con TODO lo que piden ley y reglamento pasa',
    ARM._validar({ ...base, categoria: 'munición', contraparte_licencia_num: 'TEN-1', contraparte_dpi: 'D1',
-                  contraparte_nit: '123456-7', contraparte_direccion: 'Zona 1' }).ok);
+                  contraparte_nit: '123456-7', contraparte_direccion: 'Zona 1',
+                  codigo_autorizacion_digecam: 'AUT-123' }).ok);
 ok('vender un accesorio NO exige licencia ni DPI (la ley no los pide)',
    ARM._validar({ ...base, categoria: 'accesorio', contraparte_licencia_num: '', contraparte_dpi: '' }).ok);
 ok('COMPRAR (no vender) munición a un proveedor no exige licencia ni DPI',
@@ -64,8 +66,17 @@ ok('sin licencia reconocida, tope 0 (no debería llegar aquí sin licencia)', AR
   const baseMun = { ...base, categoria: 'munición', contraparte_licencia_num: 'TEN-1', contraparte_dpi: 'D1' };
   ok('vender munición sin NIT ni dirección se rechaza', ARM._validar(baseMun).ok === false);
   ok('el mensaje cita el artículo 60', /art\.?\s*60/i.test(ARM._validar(baseMun).error || ''));
-  ok('con NIT y dirección sí pasa',
-     ARM._validar({ ...baseMun, contraparte_nit: '123456-7', contraparte_direccion: 'Zona 1' }).ok);
+  const conNitDir = { ...baseMun, contraparte_nit: '123456-7', contraparte_direccion: 'Zona 1' };
+  /* Art. 21 del REGLAMENTO: además hace falta el código que devuelve DIGECAM
+     tras verificar el cupo en su sistema en línea. El conteo local de la app
+     no basta — el cliente pudo comprar munición en otra armería. */
+  ok('sin el código de autorización de DIGECAM no pasa', ARM._validar(conNitDir).ok === false);
+  ok('el mensaje cita el art. 21 del Reglamento', /art\.?\s*21/i.test(ARM._validar(conNitDir).error || ''));
+  ok('con NIT, dirección y código de DIGECAM sí pasa',
+     ARM._validar({ ...conNitDir, codigo_autorizacion_digecam: 'AUT-123' }).ok);
+  ok('un arma NO exige código de munición (el art. 21 es de munición)',
+     ARM._validar({ ...base, categoria: 'pistola', numero_serie: 'X1',
+                    contraparte_licencia_num: 'L1', contraparte_dpi: 'D1' }).ok);
   ok('un arma NO exige NIT/dirección (el art. 60 es de munición)',
      ARM._validar({ ...base, categoria: 'pistola', numero_serie: 'X1', contraparte_licencia_num: 'L1', contraparte_dpi: 'D1' }).ok);
 }

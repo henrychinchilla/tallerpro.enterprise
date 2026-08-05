@@ -16,6 +16,7 @@ ctx.window = ctx;
 vm.createContext(ctx);
 vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'js', 'core', 'ley-armas.js'), 'utf8'), ctx);
 const { LEY_ARMAS, topeMunicionMensual, buscarLeyArmas } = ctx;
+ctx.articulosLeyArmas = ctx.articulosLeyArmas || ctx.window.articulosLeyArmas;
 
 let pasadas = 0, fallidas = 0;
 const ok = (n, c) => { if (c) { pasadas++; console.log('PASS — ' + n); } else { fallidas++; console.log('FAIL — ' + n); } };
@@ -88,12 +89,53 @@ ok('el art. 58 exige inventario exacto y castiga la diferencia con cierre',
 ok('el art. 82 prohíbe armas sin número de registro o alterado',
    /sin número de registro o registro borrado, alterado o tachado/.test(art(82).texto));
 
+/* ── Reglamento (Acuerdo Gubernativo 85-2011) ────────────────────────────
+   La ley delega en el reglamento las obligaciones del día a día. El art. 21
+   es el más importante del módulo entero: obliga a verificar el cupo de
+   munición EN EL SISTEMA DE DIGECAM antes de cada venta, no en los propios
+   registros — porque el cliente pudo comprar en otra armería. */
+{
+  const reg = (n) => LEY_ARMAS.articulosReglamento.find(a => a.num === n);
+  ok('el reglamento está incluido', Array.isArray(LEY_ARMAS.articulosReglamento) && LEY_ARMAS.articulosReglamento.length > 0);
+  ok('todos los artículos del reglamento se marcan como tales',
+     LEY_ARMAS.articulosReglamento.every(a => a.reglamento === true));
+  ok('los de la ley NO se marcan como reglamento',
+     LEY_ARMAS.articulos.every(a => !a.reglamento));
+
+  const a21 = reg(21);
+  ok('incluye el art. 21 del reglamento', !!a21);
+  ok('el art. 21 manda verificar EN LÍNEA con DIGECAM antes de cada venta',
+     /previo a cada venta/.test(a21.texto) && /sistema en línea con DIGECAM/.test(a21.texto));
+  ok('...y obtener un código de autorización', /código de autorización de venta/.test(a21.texto));
+  ok('...que debe anotarse en la factura', /anotarse en la factura de venta/.test(a21.texto));
+
+  ok('el art. 20 exige conexión TODOS LOS DÍAS al sistema de DIGECAM',
+     /todos los días conectados en línea/.test(reg(20).texto));
+  ok('el art. 22 lista las medidas de seguridad físicas del local',
+     /caja fuerte o bóveda/i.test(reg(22).texto) && /extinguidor/i.test(reg(22).texto));
+  ok('el art. 23 explica el permiso especial para más munición',
+     /permiso especial/i.test(reg(23).texto));
+  ok('el art. 17 fija la vigencia de la licencia en 5 años',
+     /vigencia de cinco \(5\) años/.test(reg(17).texto));
+
+  /* Ley y reglamento se consultan juntos pero sin confundirse: son
+     numeraciones distintas y un "art. 21" no significa lo mismo en cada uno. */
+  const todos = ctx.articulosLeyArmas();
+  ok('la consulta combina ley y reglamento',
+     todos.length === LEY_ARMAS.articulos.length + LEY_ARMAS.articulosReglamento.length);
+  ok('cada artículo sabe de qué fuente viene',
+     todos.every(a => a.fuente === 'ley' || a.fuente === 'reglamento'));
+  ok('buscar "21" trae el del reglamento sin borrar los de la ley',
+     buscarLeyArmas('21').some(a => a.num === 21 && a.reglamento));
+}
+
 /* ── Buscador ────────────────────────────────────────────────────────────── */
 {
   ok('buscar "60" encuentra el artículo 60', buscarLeyArmas('60').some(a => a.num === 60));
   ok('buscar "munición" encuentra el art. 60', buscarLeyArmas('munición').some(a => a.num === 60));
   ok('buscar por título funciona', buscarLeyArmas('Portación').some(a => a.num === 70));
-  ok('sin búsqueda devuelve todo', buscarLeyArmas('').length === LEY_ARMAS.articulos.length);
+  ok('sin búsqueda devuelve todo (ley + reglamento)',
+     buscarLeyArmas('').length === LEY_ARMAS.articulos.length + LEY_ARMAS.articulosReglamento.length);
   ok('una búsqueda sin resultados devuelve lista vacía, no revienta',
      Array.isArray(buscarLeyArmas('zzzzz-no-existe')) && buscarLeyArmas('zzzzz-no-existe').length === 0);
 }
