@@ -450,12 +450,17 @@ Modulos.armeria = {
         </div>
         <div class="form-group" id="arm-grupo-codigo">
           <label class="form-label">Código de autorización DIGECAM (venta de munición)</label>
-          <input class="form-input" id="arm-codigo-digecam" value="${UI.esc(o.codigo_autorizacion_digecam || '')}"
-                 style="font-family:monospace" placeholder="El que devuelve DIGECAM por sistema o teléfono">
+          <div style="display:flex;gap:6px">
+            <input class="form-input" id="arm-codigo-digecam" value="${UI.esc(o.codigo_autorizacion_digecam || '')}"
+                   style="font-family:monospace;flex:1" placeholder="El que devuelve DIGECAM por sistema o teléfono">
+            <button type="button" class="btn btn-ghost" onclick="Modulos.armeria._copiarConsultaDigecam()"
+                    title="Copiar los datos para pegarlos en el sistema de DIGECAM">📋 Copiar datos</button>
+          </div>
           <div style="font-size:11px;color:var(--text3);margin-top:2px">
             Art. 21 del Reglamento: <b>antes de cada venta</b> de munición hay que verificar en el sistema en línea
             de DIGECAM que el comprador no haya excedido su límite mensual, y obtener este código —
-            que además <b>debe anotarse en la factura</b>.
+            que además <b>debe anotarse en la factura</b>. El botón copia los datos del comprador para no
+            volver a teclearlos en el sistema de DIGECAM.
           </div>
         </div>
         <div id="arm-tope-info" style="font-size:11px;color:var(--cyan);margin-top:6px"></div>
@@ -630,6 +635,42 @@ Modulos.armeria = {
     cont.innerHTML = `${base}<br><span style="color:var(--amber)">⚠️ El conteo de la app sólo ve las ventas de este negocio.
       El art. 21 del Reglamento obliga a verificar el cupo en el sistema en línea de DIGECAM antes de cada venta —
       el cliente pudo haber comprado en otra armería.</span>`;
+  },
+
+  /* Arma el texto de la consulta a DIGECAM con los datos que ya están en el
+     formulario. No consulta nada — DIGECAM no expone una API pública, así
+     que la verificación del art. 21 la hace la persona en el sistema al que
+     el negocio ya debe estar conectado (art. 20) o por teléfono. Lo único
+     que la app puede hacer es que no haya que teclear todo de nuevo. */
+  _textoConsultaDigecam() {
+    const g = (id) => document.getElementById(id)?.value || '';
+    const lic = g('arm-lic-tipo');
+    const cli = this._clientes.find(c => c.id === g('arm-cliente'));
+    return [
+      'CONSULTA DE CUPO DE MUNICIÓN — DIGECAM (art. 21 AG 85-2011)',
+      `Comprador: ${cli?.nombre || '—'}`,
+      `DPI: ${g('arm-dpi') || '—'}`,
+      `NIT: ${g('arm-nit') || '—'}`,
+      `Licencia: ${this._LICENCIAS[lic] || '—'} No. ${g('arm-lic-num') || '—'}`,
+      `Armas registradas en la licencia: ${g('arm-armas-reg') || '1'}`,
+      `Calibre a vender: ${g('arm-calibre') || '—'}`,
+      `Cantidad solicitada: ${g('arm-cantidad') || '—'} cartuchos`,
+      `Tope legal según licencia: ${this._limiteMunicionMes(lic, parseInt(g('arm-armas-reg'), 10) || 1) || '—'}/mes`,
+    ].join('\n');
+  },
+
+  async _copiarConsultaDigecam() {
+    const txt = this._textoConsultaDigecam();
+    try {
+      await navigator.clipboard.writeText(txt);
+      UI.toast('Datos copiados — pegalos en el sistema de DIGECAM');
+    } catch (_) {
+      /* Sin permiso de portapapeles (pasa en http o si el navegador lo
+         bloquea): se abre en una ventana para copiarlos a mano. */
+      const w = window.open('', '_blank', 'width=520,height=420');
+      if (w) { w.document.write('<pre style="white-space:pre-wrap;font-size:13px">' + UI.esc(txt) + '</pre>'); w.document.close(); }
+      else UI.toast('No se pudo copiar: permití las ventanas emergentes', 'error');
+    }
   },
 
   _toggleContraparte() {
