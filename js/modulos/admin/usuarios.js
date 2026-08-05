@@ -34,13 +34,13 @@ Modulos.usuarios = {
                     <div style="display:flex;align-items:center;gap:8px">
                       <span style="font-size:20px">${u.avatar||'👤'}</span>
                       <div>
-                        <div style="font-weight:700">${u.nombre}</div>
+                        <div style="font-weight:700">${UI.esc(u.nombre)}</div>
                         <div style="font-size:10px;color:var(--text3)">${u.ultimo_login ? 'Último: '+UI.fecha(u.ultimo_login) : 'Sin ingresos'}</div>
                       </div>
                     </div>
                   </td>
                   <td><span class="badge badge-${ROLES[u.rol]?.color||'gray'}">${ROLES[u.rol]?.icon||''} ${ROLES[u.rol]?.label||u.rol}</span></td>
-                  <td style="font-size:12px">${u.email}</td>
+                  <td style="font-size:12px">${UI.esc(u.email)}</td>
                   <td>${u.telefono||'—'}</td>
                   <td>
                     <span class="badge badge-${modulosActivos>0?'cyan':'gray'}">${modulosActivos} módulos</span>
@@ -50,8 +50,8 @@ Modulos.usuarios = {
                   <td>
                     <div style="display:flex;gap:4px">
                       <button class="btn btn-sm btn-cyan" onclick="Modulos.usuarios.modalEditar('${u.id}')">✏️ Editar</button>
-                      <button class="btn btn-sm btn-ghost" onclick="Modulos.usuarios.modalReset('${u.id}','${u.nombre}')">🔑</button>
-                  <button class="btn btn-sm btn-danger" onclick="Modulos.usuarios.eliminar('${u.id}','${u.nombre}')" title="Eliminar">🗑️</button>
+                      <button class="btn btn-sm btn-ghost" onclick="Modulos.usuarios.modalReset('${u.id}','${UI.esc(u.nombre)}')">🔑</button>
+                  <button class="btn btn-sm btn-danger" onclick="Modulos.usuarios.eliminar('${u.id}','${UI.esc(u.nombre)}')" title="Eliminar">🗑️</button>
                     </div>
                   </td>
                 </tr>`;

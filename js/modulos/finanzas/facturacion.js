@@ -43,7 +43,7 @@ Modulos.facturacion = {
             <tbody>
               ${this._data.map(f=>`<tr>
                 <td class="mono-sm"><b>${f.fel_serie?`${f.fel_serie}-${f.fel_numero||''}`:(f.num||'—')}</b></td>
-                <td>${f.nombre_receptor||f.clientes?.nombre||'CF'}</td>
+                <td>${UI.esc(f.nombre_receptor||f.clientes?.nombre||'CF')}</td>
                 <td class="mono-sm">${f.nit||f.clientes?.nit||'CF'}</td>
                 <td>${UI.fecha(f.fecha)}</td>
                 <td class="mono-sm">${UI.q(f.subtotal)}</td>
@@ -94,7 +94,7 @@ Modulos.facturacion = {
         <div class="form-group"><label class="form-label">📋 Importar de OT <span style="font-size:10px;color:var(--text3)">(trae ítems automáticamente)</span></label>
           <select class="form-select" id="fel-ot" onchange="Modulos.facturacion._importarDeOT(this.value)">
             <option value="">— Sin OT —</option>
-            ${this._ordenes.filter(o=>o.estado!=='cancelado').map(o=>`<option value="${o.id}" ${(f.ot_id||f.orden_id)===o.id?'selected':''}>${o.num} · ${o.clientes?.nombre||''} · ${UI.q(o.total)}${o.anticipo>0?` (anticipo: ${UI.q(o.anticipo)})`:''}</option>`).join('')}
+            ${this._ordenes.filter(o=>o.estado!=='cancelado').map(o=>`<option value="${o.id}" ${(f.ot_id||f.orden_id)===o.id?'selected':''}>${o.num} · ${UI.esc(o.clientes?.nombre||'')} · ${UI.q(o.total)}${o.anticipo>0?` (anticipo: ${UI.q(o.anticipo)})`:''}</option>`).join('')}
           </select></div>
         <div class="form-group"><label class="form-label">📋 Importar de Cotización aprobada</label>
           <select class="form-select" id="fel-cot" onchange="Modulos.facturacion._importarDeCotizacion(this.value)">

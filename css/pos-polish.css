@@ -1,0 +1,166 @@
+/* ============================================================
+   NexusPro POS — capa de presentación
+   Portada del sistema visual del POS de DoctorPro (css/polish.css):
+   chips de categoría con conteo, tarjetas de producto con badge de stock,
+   barra de atajos de teclado y tipografías Plus Jakarta Sans / Outfit.
+
+   Es ADITIVA y AISLADA: borrar este archivo devuelve el POS a su aspecto
+   anterior sin tocar una línea de lógica. Todo deriva de las variables del
+   tema (--surface, --border, --text…), así que sigue el tema claro/oscuro
+   que el usuario tenga puesto en vez de fijar colores a mano.
+   ============================================================ */
+
+.pos-shell,
+.pos-shell input,
+.pos-shell select,
+.pos-shell button {
+  font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+}
+/* Los números y títulos en Outfit: es la que da el aire de "caja" del POS de
+   DoctorPro, y a tamaño grande se lee mejor de lejos que la de cuerpo. */
+.pos-shell h1, .pos-shell h2,
+.fpos-precio, .fpos-total-monto, .fpos-cambio, .pos-mbar {
+  font-family: 'Outfit', 'Plus Jakarta Sans', sans-serif;
+}
+
+/* ---- BUSCADOR --------------------------------------------------------- */
+.fpos-search {
+  display: flex; gap: 8px; align-items: center;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 10px; padding: 4px 12px; flex: 1;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, .03);
+  transition: border-color .15s, box-shadow .15s;
+}
+.fpos-search:focus-within {
+  border-color: var(--amber);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--amber) 18%, transparent);
+}
+.fpos-search input {
+  border: none !important; background: transparent !important;
+  box-shadow: none !important; padding: 8px 2px !important; flex: 1;
+  color: var(--text); font-size: 14px;
+}
+.fpos-search input:focus { outline: none !important; }
+
+/* ---- CHIPS DE CATEGORÍA (con conteo) ---------------------------------- */
+.fpos-chips {
+  display: flex; gap: 8px; overflow-x: auto;
+  padding: 2px 0 10px; scrollbar-width: none;
+}
+.fpos-chips::-webkit-scrollbar { display: none; }
+.fpos-chip {
+  flex-shrink: 0; cursor: pointer; white-space: nowrap;
+  border: 1px solid var(--border); background: var(--surface);
+  color: var(--text2); border-radius: 100px;
+  padding: 7px 14px; font-size: 12.5px; font-weight: 600;
+  transition: all .15s ease-in-out;
+}
+.fpos-chip:hover {
+  background: color-mix(in srgb, var(--amber) 8%, var(--surface));
+  border-color: color-mix(in srgb, var(--amber) 30%, var(--border));
+}
+.fpos-chip.on {
+  background: var(--amber); border-color: var(--amber); color: #fff;
+  box-shadow: 0 4px 12px color-mix(in srgb, var(--amber) 35%, transparent);
+}
+/* El conteo va dentro del chip: dice cuántos artículos hay ahí antes de
+   tocarlo, que es lo que evita el viaje en falso a una categoría vacía. */
+.fpos-chip small {
+  background: color-mix(in srgb, var(--text) 8%, transparent);
+  color: var(--text3); padding: 2px 7px; border-radius: 100px;
+  font-size: 10px; margin-left: 6px; font-weight: 700;
+}
+.fpos-chip.on small { background: rgba(255, 255, 255, .28); color: #fff; }
+
+/* ---- TARJETAS DE PRODUCTO --------------------------------------------- */
+.fpos-grid {
+  display: grid; gap: 12px;
+  grid-template-columns: repeat(auto-fill, minmax(158px, 1fr));
+}
+.fpos-card {
+  border: 1px solid var(--border); border-radius: 12px; overflow: hidden;
+  background: var(--surface); cursor: pointer; position: relative;
+  display: flex; flex-direction: column;
+  transition: transform .2s ease-in-out, box-shadow .2s ease-in-out, border-color .2s;
+}
+.fpos-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, .09);
+  border-color: color-mix(in srgb, var(--amber) 40%, var(--border));
+}
+.fpos-card:active { transform: translateY(0); }
+/* Agotado: no se puede tocar y se nota que no se puede. */
+.fpos-card.off { cursor: not-allowed; opacity: .5; }
+.fpos-card.off:hover { transform: none; box-shadow: none; border-color: var(--border); }
+
+.fpos-thumb {
+  width: 100%; height: 104px; object-fit: cover;
+  background: var(--surface2); display: flex;
+  align-items: center; justify-content: center; font-size: 32px;
+}
+.fpos-body { padding: 10px 11px 11px; display: flex; flex-direction: column; gap: 7px; flex: 1; }
+.fpos-nombre {
+  font-weight: 700; font-size: 12.5px; line-height: 1.35; color: var(--text);
+  /* Dos líneas y corta: los nombres largos de repuesto descuadraban la rejilla. */
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+  overflow: hidden; min-height: 34px;
+}
+.fpos-meta { font-size: 10.5px; color: var(--text3); margin-top: -3px; }
+.fpos-pie { display: flex; justify-content: space-between; align-items: center; gap: 6px; margin-top: auto; }
+.fpos-precio { font-weight: 800; font-size: 15px; color: var(--amber); letter-spacing: -.01em; }
+
+/* ---- BADGE DE STOCK ---------------------------------------------------- */
+.fpos-stock {
+  font-size: 9.5px; font-weight: 700; border-radius: 5px;
+  padding: 2px 6px; white-space: nowrap; text-transform: uppercase;
+  letter-spacing: .02em;
+}
+.fpos-stock.ok   { background: #dcfce7; color: #15803d; border: 1px solid #bbf7d0; }
+.fpos-stock.low  { background: #fef3c7; color: #b45309; border: 1px solid #fde68a; }
+.fpos-stock.out  { background: #fee2e2; color: #b91c1c; border: 1px solid #fecaca; }
+/* En tema oscuro los pasteles se apagan para no encandilar, conservando el
+   mismo código de color (verde/ámbar/rojo). */
+:root[data-theme="dark"] .fpos-stock.ok  { background: rgba(34,197,94,.16);  color: #4ade80; border-color: rgba(34,197,94,.35); }
+:root[data-theme="dark"] .fpos-stock.low { background: rgba(245,158,11,.16); color: #fbbf24; border-color: rgba(245,158,11,.35); }
+:root[data-theme="dark"] .fpos-stock.out { background: rgba(239,68,68,.16);  color: #f87171; border-color: rgba(239,68,68,.35); }
+
+/* ---- BARRA DE ATAJOS --------------------------------------------------- */
+.fpos-teclas {
+  display: flex; gap: 14px; align-items: center; flex-wrap: wrap;
+  padding: 9px 2px 2px; margin-top: 4px;
+  border-top: 1px solid var(--border);
+  font-size: 11px; color: var(--text3);
+}
+.fpos-teclas kbd {
+  background: var(--surface2); border: 1px solid var(--border);
+  border-bottom-width: 2px; border-radius: 4px;
+  color: var(--text2); font-family: inherit; font-size: 10px;
+  font-weight: 700; padding: 2px 6px; margin-right: 4px;
+  display: inline-block; line-height: 1.3;
+}
+/* En teléfono no hay teclado físico: la barra sobra y ocupa alto útil. */
+@media (max-width: 920px) { .fpos-teclas { display: none; } }
+
+/* ---- BOTÓN DE COBRO ---------------------------------------------------- */
+.fpos-cobrar {
+  transition: transform .15s ease-in-out, box-shadow .15s ease-in-out, background .15s;
+}
+.fpos-cobrar:not(:disabled):hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(22, 163, 74, .42);
+}
+.fpos-cobrar:not(:disabled):active { transform: translateY(0); }
+
+@media (prefers-reduced-motion: reduce) {
+  .fpos-card, .fpos-card:hover, .fpos-cobrar, .fpos-cobrar:not(:disabled):hover {
+    transform: none; transition: none;
+  }
+}
+
+/* ---- RESPONSIVO -------------------------------------------------------- */
+@media (max-width: 600px) {
+  .fpos-grid { grid-template-columns: repeat(auto-fill, minmax(132px, 1fr)); gap: 10px; }
+  .fpos-thumb { height: 84px; }
+  .fpos-nombre { font-size: 12px; min-height: 32px; }
+  .fpos-precio { font-size: 14px; }
+}

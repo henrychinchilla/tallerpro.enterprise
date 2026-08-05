@@ -104,7 +104,7 @@ const App = {
             return `<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;background:var(--surface2);border-left:3px solid var(--${vencida?'red':'amber'});border-radius:0 8px 8px 0;padding:10px">
               <div>
                 <div style="font-weight:700;font-size:13px">🏛️ ${o.tipo} · ${o.periodo}</div>
-                <div style="font-size:11px;color:var(--text3)">${o.notas||''}</div>
+                <div style="font-size:11px;color:var(--text3)">${UI.esc(o.notas||'')}</div>
               </div>
               <div style="text-align:right">
                 <div class="mono-sm" style="font-weight:800;color:var(--amber)">${UI.q(o.monto_calculado)}</div>
@@ -1209,8 +1209,10 @@ Modulos.eliminarRegistro = async function (tabla, id, nombre, cb) {
     UI.toast('No tienes permiso para eliminar en este módulo', 'error');
     return;
   }
+  /* El nombre llega desde el onclick de la fila, o sea desde un dato guardado:
+     va escapado porque UI.confirmar lo pinta como HTML. */
   const ok = await UI.confirmar(
-    `¿Eliminar <b>${nombre || 'este registro'}</b>? Esta acción no se puede deshacer.`,
+    `¿Eliminar <b>${UI.esc(nombre || 'este registro')}</b>? Esta acción no se puede deshacer.`,
     'Eliminar'
   );
   if (!ok) return;

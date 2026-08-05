@@ -69,7 +69,7 @@ Modulos.proveedores = {
         <div class="card" style="cursor:pointer" onclick="Modulos.proveedores.modalForm('${p.id}')">
           <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">
             <div>
-              <div style="font-weight:800;font-size:14px">${p.nombre}</div>
+              <div style="font-weight:800;font-size:14px">${UI.esc(p.nombre)}</div>
               <span class="badge badge-gray" style="margin-top:4px">${p.categoria||'General'}</span>
             </div>
             <span class="badge badge-${p.activo?'green':'red'}">${p.activo?'Activo':'Inactivo'}</span>
@@ -82,7 +82,7 @@ Modulos.proveedores = {
           </div>
           <div style="display:flex;gap:4px;margin-top:10px" onclick="event.stopPropagation()">
             ${Modulos.btnAccion('editar', `Modulos.proveedores.modalForm('${p.id}')`)}
-            ${Modulos.btnAccion('eliminar', `Modulos.eliminarRegistro('proveedores','${p.id}','${(p.nombre||'').replace(/'/g,"\\'")}',()=>Modulos.proveedores.render(Modulos.proveedores._busca))`)}
+            ${Modulos.btnAccion('eliminar', `Modulos.eliminarRegistro('proveedores','${p.id}','${UI.jsAttr(p.nombre||'')}',()=>Modulos.proveedores.render(Modulos.proveedores._busca))`)}
           </div>
         </div>`).join('')||'<div style="color:var(--text3);padding:24px">Sin proveedores registrados</div>'}
     </div>`;
@@ -93,16 +93,16 @@ Modulos.proveedores = {
       <thead><tr><th>Proveedor</th><th>Categoría</th><th>NIT</th><th>Contacto</th><th>Teléfono</th><th>Email</th><th>Estado</th><th>Acciones</th></tr></thead>
       <tbody>
         ${filtrados.map(p=>`<tr>
-          <td style="font-weight:700">${p.nombre}</td>
+          <td style="font-weight:700">${UI.esc(p.nombre)}</td>
           <td><span class="badge badge-gray">${p.categoria||'General'}</span></td>
           <td class="mono-sm">${p.nit||'—'}</td>
           <td>${p.contacto||'—'}</td>
           <td class="mono-sm">${p.telefono||'—'}</td>
-          <td style="font-size:12px">${p.email||'—'}</td>
+          <td style="font-size:12px">${UI.esc(p.email||'—')}</td>
           <td><span class="badge badge-${p.activo?'green':'red'}">${p.activo?'Activo':'Inactivo'}</span></td>
           <td><div style="display:flex;gap:4px">
             ${Modulos.btnAccion('editar', `Modulos.proveedores.modalForm('${p.id}')`)}
-            ${Modulos.btnAccion('eliminar', `Modulos.eliminarRegistro('proveedores','${p.id}','${(p.nombre||'').replace(/'/g,"\\'")}',()=>Modulos.proveedores.render(Modulos.proveedores._busca))`)}
+            ${Modulos.btnAccion('eliminar', `Modulos.eliminarRegistro('proveedores','${p.id}','${UI.jsAttr(p.nombre||'')}',()=>Modulos.proveedores.render(Modulos.proveedores._busca))`)}
           </div></td>
         </tr>`).join('')||'<tr><td colspan="8" style="text-align:center;padding:24px;color:var(--text3)">Sin proveedores registrados</td></tr>'}
       </tbody>

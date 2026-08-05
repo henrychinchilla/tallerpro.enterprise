@@ -53,9 +53,9 @@ Modulos.agroservicio = {
           <tbody>
             ${this._data.map(p=>`<tr>
               <td class="mono-sm"><b>${p.num||'—'}</b></td>
-              <td>${p.clientes?.nombre||'—'}</td>
+              <td>${UI.esc(p.clientes?.nombre||'—')}</td>
               <td><span class="badge badge-green">${this._TIPOS[p.tipo_servicio]||p.tipo_servicio}</span>${p.cantidad>1?` ×${p.cantidad}`:''}<div style="font-size:11px;color:var(--text3)">${p.tipo_inicio==='directo'?'⚡ Directo':'📋 Cotización'}</div></td>
-              <td style="font-size:12px;max-width:200px">${p.descripcion||'—'}</td>
+              <td style="font-size:12px;max-width:200px">${UI.esc(p.descripcion||'—')}</td>
               <td class="mono-sm">${p.fecha_entrega?UI.fecha(p.fecha_entrega):'—'}</td>
               <td class="mono-sm">${UI.q(p.precio_venta)}</td>
               <td class="mono-sm ${p.anticipo>0?'text-green':''}">${UI.q(p.anticipo)}</td>

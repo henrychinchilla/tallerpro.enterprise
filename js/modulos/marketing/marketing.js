@@ -41,15 +41,15 @@ Modulos.marketing = {
                 <span class="badge badge-${c.tipo==='servicios'?'cyan':'amber'}">${c.tipo}</span>
                 <span class="badge badge-${c.activo?'green':'gray'}">${c.activo?'Activo':'Inactivo'}</span>
               </div>
-              <div style="font-weight:900;font-size:18px;letter-spacing:-0.4px;line-height:1.2;margin-bottom:6px;font-family:'Outfit','Inter',sans-serif">${c.nombre}</div>
-              <div style="font-size:12px;color:var(--text2);margin-bottom:16px;min-height:36px">${c.descripcion||'Sin descripción.'}</div>
+              <div style="font-weight:900;font-size:18px;letter-spacing:-0.4px;line-height:1.2;margin-bottom:6px;font-family:'Outfit','Inter',sans-serif">${UI.esc(c.nombre)}</div>
+              <div style="font-size:12px;color:var(--text2);margin-bottom:16px;min-height:36px">${UI.esc(c.descripcion||'Sin descripción.')}</div>
               <div style="background:var(--surface2);border-radius:12px;padding:12px;margin-bottom:16px">
                 <div style="font-size:11px;color:var(--text3);text-decoration:line-through;margin-bottom:2px">Precio Regular: ${UI.q(c.precio_regular)}</div>
                 <div style="font-size:22px;font-weight:900;color:var(--amber);font-family:'Outfit','Inter',sans-serif">${UI.q(c.precio_combo)}</div>
               </div>
               <div style="display:flex;gap:4px">
                 ${Modulos.btnAccion('editar', `Modulos.marketing.modalCombo('${c.id}')`)}
-                ${Modulos.btnAccion('eliminar', `Modulos.eliminarRegistro('combos','${c.id}','${(c.nombre||'').replace(/'/g,"\\'")}',()=>Modulos.marketing._renderTab())`)}
+                ${Modulos.btnAccion('eliminar', `Modulos.eliminarRegistro('combos','${c.id}','${UI.jsAttr(c.nombre||'')}',()=>Modulos.marketing._renderTab())`)}
               </div>
             </div>`;
           }).join('')||'<div class="text-muted">Sin combos creados</div>'}
@@ -78,10 +78,10 @@ Modulos.marketing = {
                 <div style="width:70%;padding-left:20px;display:flex;flex-direction:column;justify-content:space-between">
                   <div>
                     <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:4px;margin-bottom:4px">
-                      <div style="font-weight:900;font-size:15px;color:var(--text);line-height:1.2;font-family:'Outfit',sans-serif">${p.nombre}</div>
+                      <div style="font-weight:900;font-size:15px;color:var(--text);line-height:1.2;font-family:'Outfit',sans-serif">${UI.esc(p.nombre)}</div>
                       <span class="badge badge-${vigente?'green':'gray'}" style="font-size:8px;padding:2px 6px">${vigente?'Vigente':'Inactiva'}</span>
                     </div>
-                    <div style="font-size:11px;color:var(--text2);margin-bottom:12px">${p.descripcion||'Sin descripción.'}</div>
+                    <div style="font-size:11px;color:var(--text2);margin-bottom:12px">${UI.esc(p.descripcion||'Sin descripción.')}</div>
                   </div>
                   <div>
                     <div style="font-size:9px;color:var(--text3);margin-bottom:8px">
@@ -89,7 +89,7 @@ Modulos.marketing = {
                     </div>
                     <div style="display:flex;gap:4px">
                       ${Modulos.btnAccion('editar', `Modulos.marketing.modalPromo('${p.id}')`)}
-                      ${Modulos.btnAccion('eliminar', `Modulos.eliminarRegistro('promociones','${p.id}','${(p.nombre||'').replace(/'/g,"\\'")}',()=>Modulos.marketing._renderTab())`)}
+                      ${Modulos.btnAccion('eliminar', `Modulos.eliminarRegistro('promociones','${p.id}','${UI.jsAttr(p.nombre||'')}',()=>Modulos.marketing._renderTab())`)}
                     </div>
                   </div>
                 </div>
@@ -185,7 +185,7 @@ Modulos.marketing = {
           <tbody>${inscritos.map(c=>{
             const tier = nextTierInfo(c.puntos_saldo||0);
             return `<tr>
-            <td><b>${c.nombre}</b></td><td class="mono-sm">${c.tel||'—'}</td>
+            <td><b>${UI.esc(c.nombre)}</b></td><td class="mono-sm">${c.tel||'—'}</td>
             <td class="mono-sm text-amber"><b>${(c.puntos_saldo||0).toLocaleString()}</b> pts</td>
             <td class="mono-sm text-green">${UI.q((c.puntos_saldo||0)/tasa)}</td>
             <td>
@@ -199,7 +199,7 @@ Modulos.marketing = {
                 </div>
               </div>
             </td>
-            <td><button class="btn btn-sm btn-ghost" onclick="Modulos.marketing.verPuntos('${c.id}','${(c.nombre||').replace(/'/g,"\\'")}')">📜 Ver</button></td>
+            <td><button class="btn btn-sm btn-ghost" onclick="Modulos.marketing.verPuntos('${c.id}','${UI.jsAttr(c.nombre||'')}')">📜 Ver</button></td>
           </tr>`;}).join('')||'<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--text3)">Aún no hay clientes inscritos. Actívalo en la ficha del cliente.</td></tr>'}</tbody>
         </table></div>`;
     }
@@ -337,7 +337,7 @@ Modulos.marketing = {
     UI.modal(`📜 Puntos — ${nombre}`, `
       <div class="table-wrap" style="max-height:360px;overflow-y:auto"><table class="data-table">
         <thead><tr><th>Fecha</th><th>Movimiento</th><th>Puntos</th></tr></thead>
-        <tbody>${movs.map(m=>`<tr><td class="mono-sm">${UI.fecha(m.fecha)}</td><td>${m.motivo||m.tipo}${m.referencia?` <small class="text-muted">(${UI.esc(m.referencia)})</small>`:''}</td><td class="mono-sm ${m.puntos>=0?'text-green':'text-red'}">${m.puntos>=0?'+':''}${m.puntos}</td></tr>`).join('')||'<tr><td colspan="3" style="text-align:center;color:var(--text3);padding:16px">Sin movimientos</td></tr>'}</tbody>
+        <tbody>${movs.map(m=>`<tr><td class="mono-sm">${UI.fecha(m.fecha)}</td><td>${UI.esc(m.motivo||m.tipo)}${m.referencia?` <small class="text-muted">(${UI.esc(m.referencia)})</small>`:''}</td><td class="mono-sm ${m.puntos>=0?'text-green':'text-red'}">${m.puntos>=0?'+':''}${m.puntos}</td></tr>`).join('')||'<tr><td colspan="3" style="text-align:center;color:var(--text3);padding:16px">Sin movimientos</td></tr>'}</tbody>
       </table></div>
       <div class="modal-footer"><button class="btn btn-ghost" onclick="UI.cerrarModal()">Cerrar</button></div>`);
   },

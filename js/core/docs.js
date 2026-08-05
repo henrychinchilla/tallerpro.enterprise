@@ -231,7 +231,7 @@ const Docs = {
       return `
       <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--border);font-size:12px">
         <div><b>${esImagen ? '📷' : '📄'} ${UI.esc(d.titulo||d.tipo||'Documento')}</b>
-          <div style="color:var(--text3);font-size:11px">${(d.firmantes||[]).map(f=>`${f.rol}: ${f.nombre||'—'}`).join(' · ')}${(d.firmantes||[]).length ? ' · ' : ''}${UI.fechaHora(d.created_at)}</div>
+          <div style="color:var(--text3);font-size:11px">${(d.firmantes||[]).map(f=>`${UI.esc(f.rol)}: ${UI.esc(f.nombre||'—')}`).join(' · ')}${(d.firmantes||[]).length ? ' · ' : ''}${UI.fechaHora(d.created_at)}</div>
         </div>
         <div style="display:flex;gap:4px">
           <button class="btn btn-sm btn-cyan" onclick="Docs.abrir('${d.storage_path}')">${esImagen ? 'Ver foto' : 'Ver PDF'}</button>

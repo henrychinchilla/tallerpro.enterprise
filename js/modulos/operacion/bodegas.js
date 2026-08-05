@@ -45,14 +45,14 @@ Modulos.bodegas = {
               <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px">
                 <div>
                   <div style="font-size:28px;margin-bottom:4px">🏭</div>
-                  <div style="font-weight:800;font-size:15px">${b.nombre}</div>
+                  <div style="font-weight:800;font-size:15px">${UI.esc(b.nombre)}</div>
                   ${b.direccion?`<div style="font-size:11px;color:var(--text3)">📍 ${UI.esc(b.direccion)}</div>`:''}
                   ${b.responsable?`<div style="font-size:11px;color:var(--text3)">👤 ${b.responsable}</div>`:''}
                 </div>
                 <span class="badge badge-${b.activa?'green':'gray'}">${b.activa?'Activa':'Inactiva'}</span>
               </div>
               <div style="display:flex;flex-direction:column;gap:6px">
-                <button class="btn btn-cyan btn-sm" onclick="Modulos.bodegas.verInventario('${b.id}','${b.nombre}')">
+                <button class="btn btn-cyan btn-sm" onclick="Modulos.bodegas.verInventario('${b.id}','${UI.esc(b.nombre)}')">
                   📦 Ver Inventario
                 </button>
                 <button class="btn btn-ghost btn-sm" onclick="Modulos.traslados.nuevaSolicitud('${b.id}')">
@@ -61,7 +61,7 @@ Modulos.bodegas = {
                 <button class="btn btn-ghost btn-sm" onclick="Modulos.bodegas.modalBodega('${b.id}')">
                   ✏️ Editar Bodega
                 </button>
-                <button class="btn btn-danger btn-sm" onclick="Modulos.bodegas.eliminarBodega('${b.id}','${b.nombre}')" title="Eliminar">
+                <button class="btn btn-danger btn-sm" onclick="Modulos.bodegas.eliminarBodega('${b.id}','${UI.esc(b.nombre)}')" title="Eliminar">
                   🗑️ Eliminar
                 </button>
               </div>
@@ -109,14 +109,14 @@ Modulos.bodegas = {
                 const bajo = i.stock <= i.min_stock;
                 return `<tr style="${bajo?'background:var(--red-dim)':''}">
                   <td class="mono-sm">${i.codigo||'—'}</td>
-                  <td><b>${i.nombre}</b></td>
+                  <td><b>${UI.esc(i.nombre)}</b></td>
                   <td><span class="badge badge-gray">${i.categoria||'General'}</span></td>
                   <td class="mono-sm ${bajo?'text-red':'text-green'}"><b>${i.stock}</b> ${i.unidad_medida||''}</td>
                   <td class="mono-sm text-muted">${i.min_stock}</td>
                   ${verCosto?`<td class="mono-sm">${UI.q(i.precio_costo)}</td>`:''}
                   <td class="mono-sm text-amber">${UI.q(i.precio_venta)}</td>
                   <td><div style="display:flex;gap:4px">
-                    <button class="btn btn-sm btn-ghost" onclick="Modulos.bodegas.modalMovimiento('${i.id}','${i.nombre}',${i.stock})">± Stock</button>
+                    <button class="btn btn-sm btn-ghost" onclick="Modulos.bodegas.modalMovimiento('${i.id}','${UI.esc(i.nombre)}',${i.stock})">± Stock</button>
                     <button class="btn btn-sm btn-ghost" onclick="Modulos.traslados.nuevaSolicitud('${bodegaId||''}')" title="Solicitar traslado">🔄</button>
                   </div></td>
                 </tr>`;

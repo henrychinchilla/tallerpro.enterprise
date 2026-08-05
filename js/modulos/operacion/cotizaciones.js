@@ -51,7 +51,7 @@ Modulos.cotizaciones = {
               const estadoMostrar = vencida ? 'vencida' : c.estado;
               return `<tr>
                 <td class="mono-sm">${c.num||'—'}</td>
-                <td>${c.clientes?.nombre||'—'}</td>
+                <td>${UI.esc(c.clientes?.nombre||'—')}</td>
                 <td><span class="badge badge-gray">${this._origenLabel(c.modulo_origen)}</span></td>
                 <td class="mono-sm">${UI.fecha(c.fecha)}</td>
                 <td class="mono-sm ${vencida?'text-red':''}">${vence?UI.fecha(vence):'—'}${vencida?' ⚠️':''}</td>

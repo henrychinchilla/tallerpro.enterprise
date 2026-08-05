@@ -87,7 +87,7 @@ Modulos.envios = {
         ${!e.archivado && ['entregado','cerrado'].includes(e.estado)?`<button class="btn btn-sm btn-ghost" onclick="Modulos.envios.archivar('${e.id}',true)" title="Archivar">🗄️</button>`:''}
         ${e.archivado?`<button class="btn btn-sm btn-ghost" onclick="Modulos.envios.archivar('${e.id}',false)" title="Desarchivar">↩️</button>`:''}
         ${Modulos.btnAccion('editar', `Modulos.envios.modalForm('${e.id}')`, {stop:false})}
-        ${Modulos.btnAccion('eliminar', `Modulos.eliminarRegistro('envios','${e.id}','${(e.descripcion||'').replace(/'/g,"\\'")}',()=>Modulos.envios.render())`, {stop:false})}
+        ${Modulos.btnAccion('eliminar', `Modulos.eliminarRegistro('envios','${e.id}','${UI.jsAttr(e.descripcion||'')}',()=>Modulos.envios.render())`, {stop:false})}
       </div></td>
     </tr>`;
   },

@@ -132,7 +132,7 @@ Modulos.inventario = {
                   : `<div style="width:34px;height:34px;border-radius:6px;background:var(--surface2);display:flex;align-items:center;justify-content:center;color:var(--text3);flex-shrink:0">📦</div>`;
                 return `<tr data-categoria="${i.categoria||'General'}" data-giro="${i.tipo_item||'general'}" data-bajo="${bajo}" style="${bajo?'background:var(--red-dim)':''}">
                   <td class="mono-sm">${i.codigo||'—'}</td>
-                  <td><div style="display:flex;align-items:center;gap:8px">${thumb}<div><b>${i.nombre}</b>${i.descripcion?`<br><small class="text-muted">${UI.esc(i.descripcion)}</small>`:''}</div></div></td>
+                  <td><div style="display:flex;align-items:center;gap:8px">${thumb}<div><b>${UI.esc(i.nombre)}</b>${i.descripcion?`<br><small class="text-muted">${UI.esc(i.descripcion)}</small>`:''}</div></div></td>
                   <td><span class="badge badge-gray">${i.categoria||'General'}</span></td>
                   <td class="mono-sm ${bajo?'text-red':'text-green'}"><b>${i.stock}</b> ${i.unidad_medida||''}</td>
                   <td class="mono-sm text-muted">${i.min_stock}</td>
@@ -145,8 +145,8 @@ Modulos.inventario = {
                   })()}</td>
                   <td><div style="display:flex;gap:4px">
                     <button class="btn btn-sm btn-cyan" onclick="Modulos.inventario.modalForm('${i.id}')" title="Editar">✏️ Editar</button>
-                    <button class="btn btn-sm btn-ghost" onclick="Modulos.inventario.modalMovimiento('${i.id}','${i.nombre}',${i.stock})" title="Movimiento de stock">±</button>
-                    <button class="btn btn-sm btn-danger" onclick="Modulos.inventario.eliminar('${i.id}','${i.nombre}')" title="Eliminar">🗑️</button>
+                    <button class="btn btn-sm btn-ghost" onclick="Modulos.inventario.modalMovimiento('${i.id}','${UI.esc(i.nombre)}',${i.stock})" title="Movimiento de stock">±</button>
+                    <button class="btn btn-sm btn-danger" onclick="Modulos.inventario.eliminar('${i.id}','${UI.esc(i.nombre)}')" title="Eliminar">🗑️</button>
                   </div></td>
                 </tr>`;
               }).join('')||`<tr><td colspan="${verCosto?8:7}" style="text-align:center;padding:24px;color:var(--text3)">Sin artículos registrados</td></tr>`}
@@ -534,10 +534,10 @@ Modulos.inventario = {
             const signo = m.tipo==='salida' ? '-' : (m.tipo==='entrada'||m.tipo==='devolucion') ? '+' : '';
             return `<tr>
               <td class="mono-sm">${new Date(m.created_at).toLocaleString('es-GT')}</td>
-              <td><b>${m.inventario?.nombre||'—'}</b>${m.inventario?.codigo?`<br><small class="text-muted">${m.inventario.codigo}</small>`:''}</td>
+              <td><b>${UI.esc(m.inventario?.nombre||'—')}</b>${m.inventario?.codigo?`<br><small class="text-muted">${m.inventario.codigo}</small>`:''}</td>
               <td><span class="badge badge-${t[0]}">${t[1]}</span></td>
               <td class="mono-sm">${signo}${m.cantidad} ${m.inventario?.unidad_medida||''}</td>
-              <td class="mono-sm">${m.referencia||'—'}${m.notas?`<br><small class="text-muted">${UI.esc(m.notas)}</small>`:''}</td>
+              <td class="mono-sm">${UI.esc(m.referencia||'—')}${m.notas?`<br><small class="text-muted">${UI.esc(m.notas)}</small>`:''}</td>
               <td>${m.usuario_nombre||'—'}</td>
             </tr>`;
           }).join('')||'<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--text3)">Sin movimientos registrados</td></tr>'}

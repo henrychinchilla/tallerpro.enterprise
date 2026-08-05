@@ -57,14 +57,14 @@ Modulos.ordenes = {
           ${this._data.map(o=>`<tr onclick="Modulos.ordenes.verDetalle('${o.id}')" style="cursor:pointer">
             <td class="mono-sm"><b style="color:var(--amber)">${o.num}</b></td>
             <td>${o.vehiculos ? `${o.vehiculos.placa}<br><small class="text-muted">${UI.esc(o.vehiculos.marca)} ${UI.esc(o.vehiculos.modelo)}</small>` : `<span class="badge badge-gray" style="font-size:11px">${o.diagnostico || 'Servicio / Proyecto'}</span>`}</td>
-            <td>${o.clientes?.nombre||'—'}</td>
+            <td>${UI.esc(o.clientes?.nombre||'—')}</td>
             <td onclick="event.stopPropagation()">
               <select class="badge" style="border:none;background:transparent;cursor:pointer;font-size:11px;color:var(--text)"
                       onchange="Modulos.ordenes.cambiarEstado('${o.id}',this.value)">
                 ${Object.entries(ESTADOS_OT).map(([k,v])=>`<option value="${k}" ${o.estado===k?'selected':''}>${v.label}</option>`).join('')}
               </select>
             </td>
-            <td>${o.empleados?.nombre||'—'}</td>
+            <td>${UI.esc(o.empleados?.nombre||'—')}</td>
             <td>${UI.fecha(o.fecha_ingreso)}</td>
             <td class="mono-sm text-amber">${UI.q(o.total)}</td>
             <td onclick="event.stopPropagation()">
@@ -93,7 +93,7 @@ Modulos.ordenes = {
           ${ots.map(o=>`<div class="card" style="margin-bottom:10px;cursor:pointer;border-left:3px solid var(--${info.color})"
               onclick="Modulos.ordenes.verDetalle('${o.id}')">
             <div class="mono-sm text-amber">${o.num}</div>
-            <div style="font-size:12px;margin:4px 0">${o.vehiculos ? `${o.vehiculos.placa} · ${o.vehiculos.marca}` : (o.diagnostico || 'Servicio / Proyecto')}</div>
+            <div style="font-size:12px;margin:4px 0">${o.vehiculos ? `${UI.esc(o.vehiculos.placa)} · ${UI.esc(o.vehiculos.marca)}` : UI.esc(o.diagnostico || 'Servicio / Proyecto')}</div>
             <div style="font-size:11px;color:var(--text3)">${UI.esc(o.clientes?.nombre||'')}</div>
             <div style="display:flex;justify-content:space-between;margin-top:6px;font-size:11px">
               <span>${UI.esc(o.empleados?.nombre||'Sin asignar')}</span>
@@ -168,7 +168,7 @@ Modulos.ordenes = {
                      title="Marcar como ejecutado"
                      style="accent-color:var(--green);width:16px;height:16px;flex-shrink:0">
               <div style="flex:1">
-                <div style="font-weight:600;${item.ejecutado?'text-decoration:line-through;color:var(--text3)':''}">${item.descripcion}</div>
+                <div style="font-weight:600;${item.ejecutado?'text-decoration:line-through;color:var(--text3)':''}">${UI.esc(item.descripcion)}</div>
                 <div style="color:var(--text3);font-size:11px">${item.tipo} · Cant: ${item.cantidad} · Unit: ${UI.q(item.precio_unit)}</div>
                 ${item.es_extra?`<span style="font-size:10px;background:var(--amber-dim);color:var(--amber);padding:1px 6px;border-radius:4px">Extra</span>`:''}
               </div>
@@ -433,7 +433,7 @@ Modulos.ordenes = {
           return `<div style="padding:10px;border:1px solid var(--border);border-radius:8px;margin-bottom:8px;font-size:12px">
             <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
               <div style="flex:1">
-                <div style="font-weight:700">${t.descripcion}${t.proveedor?` <span class="text-muted">· ${t.proveedor}</span>`:''}</div>
+                <div style="font-weight:700">${UI.esc(t.descripcion)}${t.proveedor?` <span class="text-muted">· ${t.proveedor}</span>`:''}</div>
                 <div style="color:var(--text3);margin-top:2px">
                   Costo: ${UI.q(base)} ${t.comision_monto>0?`· Comisión: ${UI.q(t.comision_monto)} (${t.comision_pct||0}%)`:''} · <b class="text-amber">Total cliente: ${UI.q(t.total_cliente)}</b>
                 </div>
@@ -451,7 +451,7 @@ Modulos.ordenes = {
               ${(['autorizado','en_proceso','completado'].includes(t.estado) && !t.cargado_ot) ? `<button class="btn btn-sm btn-amber" onclick="Modulos.ordenes.cargarTrabajoAOT('${ordenId}','${t.id}')" title="Agregar el costo a la OT/factura">🧾 Cargar a OT</button>`:''}
               ${t.estado!=='rechazado' ? `<button class="btn btn-sm btn-ghost" onclick="Modulos.ordenes.envioDeTrabajo('${ordenId}','${t.id}')" title="Registrar envío al proveedor">🚚 Envío</button>`:''}
               <button class="btn btn-sm btn-ghost" onclick="Modulos.ordenes.modalTrabajoExterno('${ordenId}','${t.id}')" title="Editar">✏️</button>
-              <button class="btn btn-sm btn-danger" onclick="Modulos.eliminarRegistro('trabajos_externos','${t.id}','${(t.descripcion||'').replace(/'/g,"\\'")}',()=>Modulos.ordenes.verDetalle('${ordenId}'))" title="Eliminar">🗑️</button>
+              <button class="btn btn-sm btn-danger" onclick="Modulos.eliminarRegistro('trabajos_externos','${t.id}','${UI.jsAttr(t.descripcion||'')}',()=>Modulos.ordenes.verDetalle('${ordenId}'))" title="Eliminar">🗑️</button>
             </div>
           </div>`;
         }).join('') : '<div style="padding:10px;text-align:center;color:var(--text3);font-size:12px">Sin trabajos externos. Úsalo para enviar piezas al torno, subcontratar trabajos, etc.</div>'}
@@ -851,7 +851,7 @@ Modulos.ordenes = {
           NIT: ${o.clientes?.nit||'CF'}<br>
           Tel: ${o.clientes?.tel||'—'}<br><br>
           <b>${o.vehiculos ? 'VEHÍCULO' : 'DETALLE / SERVICIO'}</b><br>
-          ${o.vehiculos ? `${o.vehiculos.placa} · ${o.vehiculos.marca} ${o.vehiculos.modelo} ${o.vehiculos.anio||''}` : (o.diagnostico || 'Servicio / Proyecto')}
+          ${o.vehiculos ? `${UI.esc(o.vehiculos.placa)} · ${UI.esc(o.vehiculos.marca)} ${UI.esc(o.vehiculos.modelo)} ${UI.esc(o.vehiculos.anio||'')}` : UI.esc(o.diagnostico || 'Servicio / Proyecto')}
         </div>
       </div>
 
@@ -945,7 +945,7 @@ Modulos.ordenes = {
         <div class="form-group"><label class="form-label">Cliente *</label>
           <select class="form-select" id="ot-cli" onchange="Modulos.ordenes._onClienteChange()">
             <option value="">Seleccionar cliente...</option>
-            ${this._clientes.map(c=>`<option value="${c.id}" ${o.cliente_id===c.id?'selected':''}>${c.nombre}${c.nit?` — NIT ${c.nit}`:''}</option>`).join('')}
+            ${this._clientes.map(c=>`<option value="${c.id}" ${o.cliente_id===c.id?'selected':''}>${UI.esc(c.nombre)}${c.nit?` — NIT ${c.nit}`:''}</option>`).join('')}
           </select></div>
         <div class="form-group"><label class="form-label">Vehículo del cliente *</label>
           <select class="form-select" id="ot-veh">
@@ -956,7 +956,7 @@ Modulos.ordenes = {
       <div class="form-group"><label class="form-label">Encargado asignado</label>
         <select class="form-select" id="ot-mec">
           <option value="">Sin asignar</option>
-          ${this._mecanicos.filter(e=>e.activo!==false).map(e=>`<option value="${e.id}" ${o.mecanico_id===e.id?'selected':''}>${e.nombre}${e.cargo?` — ${e.cargo}`:''}</option>`).join('')}
+          ${this._mecanicos.filter(e=>e.activo!==false).map(e=>`<option value="${e.id}" ${o.mecanico_id===e.id?'selected':''}>${UI.esc(e.nombre)}${e.cargo?` — ${e.cargo}`:''}</option>`).join('')}
         </select></div>
       <div class="form-group"><label class="form-label">Descripción del Trabajo *</label>
         <textarea class="form-input" id="ot-desc" rows="3" placeholder="Descripción general del trabajo a realizar...">${UI.esc(o.descripcion||'')}</textarea></div>

@@ -53,7 +53,7 @@ Modulos.bancos = {
               <div class="bank-card-top">
                 <div>
                   <div class="bank-card-bank">${b.banco||'Banco'} · ${b.tipo||'cuenta'}</div>
-                  <div class="bank-card-name">${b.nombre}</div>
+                  <div class="bank-card-name">${UI.esc(b.nombre)}</div>
                   ${(b.predeterminada_ingresos||b.predeterminada_egresos)?`<div style="margin-top:4px;display:flex;gap:4px;flex-wrap:wrap">${b.predeterminada_ingresos?'<span class="badge badge-green" style="font-size:9px">📥 Ingresos</span>':''}${b.predeterminada_egresos?'<span class="badge badge-amber" style="font-size:9px">📤 Egresos</span>':''}</div>`:''}
                 </div>
                 <div class="bank-card-chip"></div>
@@ -67,7 +67,7 @@ Modulos.bancos = {
                 <span style="font-size:10px;opacity:.8">${b._movs||0} movimiento(s) · ver →</span>
                 <div class="bank-card-actions" onclick="event.stopPropagation()">
                   ${Modulos.btnAccion('editar', `Modulos.bancos.modalBanco('${b.id}')`)}
-                  ${Modulos.btnAccion('eliminar', `Modulos.eliminarRegistro('bancos','${b.id}','${(b.nombre||'').replace(/'/g,"\\'")}',()=>Modulos.bancos.render())`)}
+                  ${Modulos.btnAccion('eliminar', `Modulos.eliminarRegistro('bancos','${b.id}','${UI.jsAttr(b.nombre||'')}',()=>Modulos.bancos.render())`)}
                 </div>
               </div>
             </div>`).join('')||'<div class="text-muted" style="padding:24px">Sin cuentas bancarias registradas. Crea la primera con “＋ Nueva Cuenta”.</div>'}
@@ -152,7 +152,7 @@ Modulos.bancos = {
                 <td>${UI.fecha(m.fecha)}</td>
                 <td>${m.concepto}</td>
                 <td><span class="badge badge-${esEntrada(m.tipo)?'green':'red'}">${m.tipo}</span></td>
-                <td class="mono-sm">${m.referencia||'—'}</td>
+                <td class="mono-sm">${UI.esc(m.referencia||'—')}</td>
                 <td class="mono-sm ${esEntrada(m.tipo)?'text-green':'text-red'}">
                   ${esEntrada(m.tipo)?'+':'-'}${UI.q(m.monto)}
                 </td>

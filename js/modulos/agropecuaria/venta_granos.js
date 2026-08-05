@@ -127,7 +127,7 @@ Modulos.venta_granos = {
             ${this._data.map(v=>`<tr>
               <td class="mono-sm"><b>${v.num||'—'}</b></td>
               <td><span class="badge badge-green">${this._TIPOS_GRANO[v.tipo_grano]||v.tipo_grano}</span></td>
-              <td>${v.clientes?.nombre||v.proveedores?.nombre||'—'}</td>
+              <td>${UI.esc(v.clientes?.nombre||v.proveedores?.nombre||'—')}</td>
               <td class="mono-sm">${UI.numero(v.cantidad_kg)}</td>
               <td class="mono-sm">${UI.q(v.precio_kg)}</td>
               <td class="mono-sm" style="font-weight:700">${UI.q(v.total)}</td>

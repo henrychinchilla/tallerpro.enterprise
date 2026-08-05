@@ -61,7 +61,7 @@ Modulos.refrigeracion = {
           <tbody>
             ${lista.map(s=>`<tr>
               <td class="mono-sm"><b>${s.num||'—'}</b></td>
-              <td>${s.clientes?.nombre||'—'}</td>
+              <td>${UI.esc(s.clientes?.nombre||'—')}</td>
               <td><span class="badge badge-gray">${this._SISTEMAS[s.tipo_sistema]||s.tipo_sistema}</span>${s.vehiculos?`<div style="font-size:11px;color:var(--text3)">${s.vehiculos.placa}</div>`:''}<div style="font-size:11px;color:var(--text3)">${s.tipo_inicio==='directo'?'⚡ Directo':'📋 Cotización'}</div></td>
               <td>${this._SERVICIOS[s.tipo_servicio]||s.tipo_servicio}</td>
               <td class="mono-sm">${UI.fecha(s.fecha_servicio)}${s.proxima_revision?`<div style="font-size:11px;color:var(--${s.proxima_revision<hoy?'red':(s.proxima_revision<=en30?'amber':'text3')})" title="Próxima revisión">🔔 ${UI.fecha(s.proxima_revision)}</div>`:''}</td>
