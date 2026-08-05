@@ -486,6 +486,12 @@ Modulos.armeria = {
     const specs = [
       ['Tipo', this._CATEGORIAS[a.tipo_arma] || a.tipo_arma],
       ['Marca', a.marca || it.marca], ['Modelo', a.modelo], ['Calibre', a.calibre],
+      ['Color', a.color], ['Acabado', a.acabado], ['Material', a.material],
+      /* Largo del cañón: lo lleva la tarjeta de tenencia (art. 63) y la
+         solicitud de portación (art. 72). El cliente lo va a necesitar. */
+      ['Cañón', a.largo_canon ? `${a.largo_canon}"` : null],
+      ['Capacidad', a.capacidad_cargador ? `${a.capacidad_cargador} cartuchos` : null],
+      ['Conversiones', a.conversiones_calibre],
       ['Origen', a.pais_origen], ['Categoría', it.categoria],
       ['Ubicación', it.ubicacion],
     ].filter(([, v]) => v);
@@ -821,13 +827,20 @@ Modulos.armeria = {
      registro interno que este módulo puede entregar de una vez. */
   imprimirLibro() {
     const hoy = new Date().toLocaleDateString('es-GT');
-    const filas = this._data.map(o => `<tr>
+    const filas = this._data.map(o => {
+      /* El largo del cañón vive en la ficha del inventario; el libro lo trae
+         de ahí porque es dato que la ley nombra (arts. 63 y 72) y un
+         inspector lo puede pedir. */
+      const inv = o.inventario_id ? this._inventario.find(i => i.id === o.inventario_id) : null;
+      const canon = inv?.atributos?.largo_canon;
+      return `<tr>
       <td>${o.num || '—'}</td><td>${o.tipo === 'compra' ? 'Compra' : 'Venta'}</td>
       <td>${o.clientes?.nombre || o.proveedores?.nombre || '—'}</td>
       <td>${o.contraparte_dpi || '—'}</td>
       <td>${o.contraparte_nit || '—'}</td>
       <td>${this._CATEGORIAS[o.categoria] || o.categoria}</td>
       <td>${[o.marca, o.modelo, o.calibre].filter(Boolean).join(' ')}</td>
+      <td>${canon ? canon + '"' : '—'}</td>
       <td>${o.numero_serie || '—'}</td>
       <td>${o.cantidad || ''}</td>
       <td>${o.contraparte_licencia_num || '—'}</td>
@@ -835,7 +848,8 @@ Modulos.armeria = {
       <td>${this._ESTADOS[o.estado] || o.estado || '—'}</td>
       <td>${o.notificado_digecam ? 'Sí' : 'No'}</td>
       <td>${UI.fecha(o.fecha)}</td>
-    </tr>`).join('');
+    </tr>`;
+    }).join('');
     const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Libro de Registro — Armería</title>
     <style>
       body{font-family:Arial,sans-serif;margin:0;padding:20px;font-size:10px}
@@ -847,8 +861,8 @@ Modulos.armeria = {
     </style></head><body>
     <h2>${(window.Auth?.tenant?.name) || 'NexusPro'} — Libro de Registro de Armas y Municiones</h2>
     <p>Generado ${hoy} · ${this._data.length} operaciones</p>
-    <table><thead><tr><th>No.</th><th>Tipo</th><th>Contraparte</th><th>DPI</th><th>NIT</th><th>Categoría</th><th>Marca/Modelo/Calibre</th><th>Serie</th><th>Cant.</th><th>Licencia</th><th>Total</th><th>Trámite</th><th>DIGECAM</th><th>Fecha</th></tr></thead>
-    <tbody>${filas || '<tr><td colspan="14">Sin operaciones</td></tr>'}</tbody></table>
+    <table><thead><tr><th>No.</th><th>Tipo</th><th>Contraparte</th><th>DPI</th><th>NIT</th><th>Categoría</th><th>Marca/Modelo/Calibre</th><th>Cañón</th><th>Serie</th><th>Cant.</th><th>Licencia</th><th>Total</th><th>Trámite</th><th>DIGECAM</th><th>Fecha</th></tr></thead>
+    <tbody>${filas || '<tr><td colspan="15">Sin operaciones</td></tr>'}</tbody></table>
     <div class="nota">
       Registro interno generado por NexusPro. El libro de control oficial debe ser autorizado por la DIGECAM
       (art. 86 del Decreto 15-2009) y de su movimiento debe rendirse informe por escrito cada fin de mes.
