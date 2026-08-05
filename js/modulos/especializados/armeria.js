@@ -128,17 +128,344 @@ Modulos.armeria = {
   _tabsHTML() {
     const b = (tab, txt) => `<button class="btn btn-sm ${this._tab === tab ? 'btn-cyan' : 'btn-ghost'}" onclick="Modulos.armeria._irTab('${tab}')">${txt}</button>`;
     return `<div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
-      ${b('operaciones', '🎯 Operaciones')}${b('ley', '⚖️ Ley de Armas y Municiones')}
+      ${b('operaciones', '🎯 Operaciones')}${b('municiones', '📦 Entrega de municiones')}${b('ley', '⚖️ Ley de Armas y Municiones')}
     </div>`;
   },
 
   _irTab(tab) {
     this._tab = tab;
-    return tab === 'ley' ? this.renderLey() : this.render(this._filtroTipo);
+    if (tab === 'ley') return this.renderLey();
+    if (tab === 'municiones') return this.renderMuniciones();
+    return this.render(this._filtroTipo);
+  },
+
+  /* ══ ENTREGA DE MUNICIONES ═══════════════════════════════════════════════
+     Se puede vender un combo de 1,000 cartuchos; lo que la ley limita es lo
+     que el cliente se LLEVA cada mes (art. 60: 200 con tenencia, 250 por arma
+     registrada con portación, hasta 3 armas = 750). Lo no retirado queda como
+     SALDO A FAVOR y se entrega por partes, con comprobante en cada retiro. */
+  async renderMuniciones() {
+    const el = document.getElementById('page-content');
+    UI.loading(el);
+    const [saldos, entregas] = await Promise.all([
+      DB.getMunicionSaldos().catch(() => []),
+      DB.getMunicionEntregas().catch(() => []),
+    ]);
+    this._saldos = saldos; this._entregas = entregas;
+
+    /* Mes activo por defecto; los anteriores quedan como historial (regla 3). */
+    const hoy = new Date();
+    const delMes = entregas.filter(e => {
+      const d = new Date(e.fecha + 'T00:00:00');
+      return d.getMonth() === hoy.getMonth() && d.getFullYear() === hoy.getFullYear();
+    });
+
+    const filaSaldo = s => `
+      <tr>
+        <td><b>${UI.esc(s.clientes?.nombre || '—')}</b>
+            <div style="font-size:11px;color:var(--text3)">DPI ${UI.esc(s.clientes?.dpi || '—')}</div></td>
+        <td>${UI.esc(s.calibre)}</td>
+        <td class="mono-sm">${s.comprado}</td>
+        <td class="mono-sm">${s.entregado}</td>
+        <td class="mono-sm"><b style="color:var(--cyan)">${s.saldo}</b></td>
+        <td style="text-align:right">
+          <button class="btn btn-sm btn-cyan" onclick="Modulos.armeria.modalEntrega('${s.cliente_id}','${UI.esc(s.calibre)}')">
+            📦 Entregar
+          </button>
+        </td>
+      </tr>`;
+
+    const filaEntrega = e => `
+      <tr>
+        <td class="mono-sm">${UI.esc(e.num)}</td>
+        <td class="mono-sm">${UI.fecha(e.fecha)}</td>
+        <td>${UI.esc(e.clientes?.nombre || '—')}</td>
+        <td>${UI.esc(e.calibre)}</td>
+        <td class="mono-sm"><b>${e.cantidad}</b></td>
+        <td><span class="badge badge-${e.licencia_tipo === 'portación' ? 'cyan' : 'gray'}">${UI.esc(e.licencia_tipo)}</span></td>
+        <td class="mono-sm">${UI.esc(e.codigo_autorizacion_digecam || '—')}</td>
+        <td style="text-align:right;white-space:nowrap">
+          ${Modulos.btnAccion('imprimir', `Modulos.armeria.imprimirComprobante('${e.id}')`)}
+          ${Modulos.btnAccion('eliminar', `Modulos.armeria.eliminarEntrega('${e.id}')`)}
+        </td>
+      </tr>`;
+
+    el.innerHTML = `
+      <div class="page-header"><h1 class="page-title">🎯 Armería</h1></div>
+      <div class="page-body">
+        ${this._tabsHTML()}
+
+        <div class="alert alert-amber" style="margin-bottom:16px">
+          <div class="alert-icon">⚖️</div>
+          <div class="alert-body" style="font-size:12px;line-height:1.6">
+            <b>Tope mensual del art. 60 (Decreto 15-2009):</b> 200 cartuchos con <b>tenencia</b>
+            y 250 <b>por arma registrada</b> con <b>portación</b> (hasta 3 armas según el art. 72,
+            o sea 750). El tope es sobre lo que el cliente <b>se lleva</b>, no sobre lo que compra:
+            por eso un combo grande es legal si se entrega por partes.
+            <div style="margin-top:6px;color:var(--amber)">
+              ⚠️ <b>Este conteo es una referencia parcial.</b> La cuota del art. 60 es
+              <b>nacional por persona</b> y esta app solo ve las entregas de <i>este</i> comercio:
+              si el cliente ya compró en otra armería este mes, aquí no se sabe.
+              El control real es el <b>código de autorización de DIGECAM</b>, que se pide en cada entrega
+              (reglamento AG 85-2011, art. 21).
+            </div>
+          </div>
+        </div>
+
+        <div class="card" style="margin-bottom:20px">
+          <div class="card-sub mb-3">💳 Saldo a favor — munición comprada y no retirada</div>
+          ${saldos.length ? `
+          <div class="table-wrap"><table class="data-table">
+            <thead><tr><th>Cliente</th><th>Calibre</th><th>Comprado</th><th>Entregado</th><th>Saldo</th><th></th></tr></thead>
+            <tbody>${saldos.map(filaSaldo).join('')}</tbody>
+          </table></div>`
+          : `<div class="empty-state">Ningún cliente tiene saldo pendiente. El saldo aparece solo al registrar una venta de munición en <b>Operaciones</b>.</div>`}
+        </div>
+
+        <div class="card">
+          <div style="display:flex;justify-content:space-between;align-items:center" class="mb-3">
+            <div class="card-sub" style="margin-bottom:0">📋 Entregas de ${UI.esc(hoy.toLocaleDateString('es-GT',{month:'long',year:'numeric'}))}</div>
+            <button class="btn btn-sm btn-ghost" onclick="Modulos.armeria._verHistorialEntregas()">📅 Ver historial</button>
+          </div>
+          ${delMes.length ? `
+          <div class="table-wrap"><table class="data-table">
+            <thead><tr><th>Comprobante</th><th>Fecha</th><th>Cliente</th><th>Calibre</th><th>Cant.</th><th>Licencia</th><th>Cód. DIGECAM</th><th></th></tr></thead>
+            <tbody>${delMes.map(filaEntrega).join('')}</tbody>
+          </table></div>`
+          : '<div class="empty-state">Sin entregas este mes.</div>'}
+        </div>
+      </div>`;
+  },
+
+  _verHistorialEntregas() {
+    const todas = this._entregas || [];
+    if (!todas.length) { UI.toast('Todavía no hay entregas registradas', 'info'); return; }
+    UI.modal('📅 Historial completo de entregas', `
+      <div class="table-wrap" style="max-height:60vh;overflow:auto"><table class="data-table">
+        <thead><tr><th>Comprobante</th><th>Fecha</th><th>Cliente</th><th>Calibre</th><th>Cant.</th><th>Cód. DIGECAM</th></tr></thead>
+        <tbody>${todas.map(e => `<tr>
+          <td class="mono-sm">${UI.esc(e.num)}</td>
+          <td class="mono-sm">${UI.fecha(e.fecha)}</td>
+          <td>${UI.esc(e.clientes?.nombre || '—')}</td>
+          <td>${UI.esc(e.calibre)}</td>
+          <td class="mono-sm">${e.cantidad}</td>
+          <td class="mono-sm">${UI.esc(e.codigo_autorizacion_digecam || '—')}</td>
+        </tr>`).join('')}</tbody>
+      </table></div>
+      <div class="modal-footer"><button class="btn btn-ghost" onclick="UI.cerrarModal()">Cerrar</button></div>
+    `, '820px');
+  },
+
+  async modalEntrega(clienteId, calibre) {
+    const s = (this._saldos || []).find(x => x.cliente_id === clienteId && x.calibre === calibre);
+    if (!s) { UI.toast('No se encontró el saldo de ese cliente', 'error'); return; }
+    const yaMes = await DB.getEntregadoMes(clienteId).catch(() => 0);
+
+    UI.modal('📦 Entregar munición', `
+      <div class="alert alert-cyan" style="margin-bottom:14px">
+        <div class="alert-body" style="font-size:12px">
+          <b>${UI.esc(s.clientes?.nombre || '—')}</b> · DPI ${UI.esc(s.clientes?.dpi || '—')}<br>
+          Saldo de ${UI.esc(calibre)}: <b style="font-size:15px">${s.saldo}</b> cartuchos ·
+          ya retirados este mes: <b>${yaMes}</b>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Tipo de licencia *</label>
+          <select class="form-select" id="ent-lic" onchange="Modulos.armeria._recalcTope()">
+            <option value="tenencia">Tenencia (200 al mes)</option>
+            <option value="portación">Portación (250 por arma)</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Armas registradas *</label>
+          <select class="form-select" id="ent-armas" onchange="Modulos.armeria._recalcTope()">
+            <option value="1">1 arma</option><option value="2">2 armas</option><option value="3">3 armas</option>
+          </select>
+          <div style="font-size:11px;color:var(--text3);margin-top:4px">Máximo 3 (art. 72).</div>
+        </div>
+      </div>
+      <div id="ent-tope" style="font-size:12px;padding:8px 10px;border-radius:6px;background:var(--surface2);color:var(--text2);margin-bottom:12px"></div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Cantidad a entregar *</label>
+          <input class="form-input" id="ent-cant" type="number" min="1" max="${s.saldo}"
+                 value="" placeholder="Ej. 100" oninput="Modulos.armeria._recalcTope()">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Fecha *</label>
+          <input class="form-input" id="ent-fecha" type="date" value="${new Date().toISOString().slice(0,10)}">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">No. de licencia</label>
+          <input class="form-input" id="ent-licnum" placeholder="Como aparece en el documento">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Vence la licencia</label>
+          <input class="form-input" id="ent-licvence" type="date">
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Código de autorización DIGECAM</label>
+        <input class="form-input" id="ent-digecam" placeholder="El que respalda la cuota nacional del cliente">
+        <div style="font-size:11px;color:var(--text3);margin-top:4px">
+          Es el control real: sin él, el conteo de esta app solo cubre lo comprado <b>aquí</b>.
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Recibido por</label>
+        <input class="form-input" id="ent-recibido" placeholder="Nombre de quien retira y firma">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Notas</label>
+        <input class="form-input" id="ent-notas" placeholder="Opcional">
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" onclick="UI.cerrarModal()">Cancelar</button>
+        <button class="btn btn-cyan" onclick="Modulos.armeria.guardarEntrega('${clienteId}','${UI.esc(calibre)}')">
+          📦 Registrar entrega e imprimir
+        </button>
+      </div>
+    `, '640px');
+
+    this._entregaCtx = { yaMes, saldo: s.saldo };
+    this._recalcTope();
+  },
+
+  /* Avisa ANTES de guardar. La validación de verdad la hace el trigger de la
+     base: si esta cuenta y aquella no coincidieran, manda la base. */
+  _recalcTope() {
+    const ctx = this._entregaCtx || { yaMes: 0, saldo: 0 };
+    const lic = document.getElementById('ent-lic')?.value || 'tenencia';
+    const armas = Number(document.getElementById('ent-armas')?.value) || 1;
+    const cant = Number(document.getElementById('ent-cant')?.value) || 0;
+    const tope = topeMunicionMensual(lic, armas);
+    const queda = Math.max(0, tope - ctx.yaMes);
+    const box = document.getElementById('ent-tope');
+    if (!box) return;
+
+    let msg = `Tope del mes con <b>${lic}</b> y ${armas} arma(s): <b>${tope}</b> · ya retirados <b>${ctx.yaMes}</b> · puede llevarse <b>${queda}</b>.`;
+    let color = 'var(--text2)', fondo = 'var(--surface2)';
+    if (cant > 0 && cant > queda) {
+      msg = `⛔ Se pasa del tope: ${ctx.yaMes} + ${cant} = ${ctx.yaMes + cant}, y el máximo del mes es ${tope}.`;
+      color = 'var(--red)'; fondo = 'rgba(239,68,68,.08)';
+    } else if (cant > ctx.saldo) {
+      msg = `⛔ Solo hay ${ctx.saldo} cartuchos de saldo.`;
+      color = 'var(--red)'; fondo = 'rgba(239,68,68,.08)';
+    } else if (cant > 0) {
+      msg += ` <span style="color:var(--green)">✓ Cabe en el tope.</span>`;
+    }
+    box.innerHTML = msg; box.style.color = color; box.style.background = fondo;
+  },
+
+  async guardarEntrega(clienteId, calibre) {
+    const v = id => document.getElementById(id)?.value?.trim() || '';
+    const cantidad = Number(v('ent-cant')) || 0;
+    if (cantidad <= 0) { UI.toast('Indica cuántos cartuchos se entregan', 'error'); return; }
+
+    const { data, error } = await DB.registrarEntregaMunicion({
+      cliente_id: clienteId,
+      calibre,
+      cantidad,
+      fecha: v('ent-fecha') || new Date().toISOString().slice(0, 10),
+      licencia_tipo: v('ent-lic') || 'tenencia',
+      licencia_num: v('ent-licnum') || null,
+      licencia_vencimiento: v('ent-licvence') || null,
+      armas_registradas: Number(v('ent-armas')) || 1,
+      codigo_autorizacion_digecam: v('ent-digecam') || null,
+      recibido_por: v('ent-recibido') || null,
+      notas: v('ent-notas') || null,
+    });
+
+    if (error) {
+      /* El trigger explica el motivo (tope o saldo); se muestra tal cual en vez
+         de un "no se pudo guardar" que obliga a adivinar. */
+      UI.toast(error.message || 'No se pudo registrar la entrega', 'error', 8000);
+      return;
+    }
+    UI.cerrarModal();
+    UI.toast(`✓ Entrega ${data.num} registrada`, 'success');
+    this.imprimirComprobante(data.id, data);
+    await this.renderMuniciones();
+  },
+
+  async eliminarEntrega(id) {
+    const e = (this._entregas || []).find(x => x.id === id);
+    if (!confirm(`¿Eliminar el comprobante ${e?.num || ''}?\n\nLos ${e?.cantidad || ''} cartuchos vuelven al saldo del cliente.`)) return;
+    const ok = await DB.eliminarEntregaMunicion(id);
+    UI.toast(ok ? 'Entrega eliminada, saldo devuelto' : 'No se pudo eliminar', ok ? 'success' : 'error');
+    if (ok) await this.renderMuniciones();
+  },
+
+  /* Comprobante de entrega: el papel que se lleva el cliente y el respaldo del
+     comercio de que la entrega fue dentro del tope. */
+  imprimirComprobante(id, entrega = null) {
+    const e = entrega || (this._entregas || []).find(x => x.id === id);
+    if (!e) { UI.toast('No se encontró la entrega', 'error'); return; }
+    const t = Auth.tenant || {};
+    const tope = topeMunicionMensual(e.licencia_tipo, e.armas_registradas);
+
+    const w = window.open('', '_blank');
+    if (!w) { UI.toast('El navegador bloqueó la ventana de impresión', 'error'); return; }
+    w.document.write(`<!DOCTYPE html><html lang="es"><head><meta charset="utf-8">
+      <title>Comprobante ${UI.esc(e.num)}</title>
+      <style>
+        body{font-family:system-ui,Arial,sans-serif;max-width:700px;margin:24px auto;color:#111;line-height:1.55}
+        h1{font-size:19px;margin:0 0 2px} .sub{color:#666;font-size:12px;margin-bottom:18px}
+        table{width:100%;border-collapse:collapse;margin:14px 0}
+        td{padding:7px 6px;border-bottom:1px solid #e5e7eb;font-size:13px;vertical-align:top}
+        td.k{color:#666;width:38%}
+        .caja{border:2px solid #111;border-radius:8px;padding:14px;margin:16px 0;text-align:center}
+        .caja .n{font-size:34px;font-weight:800;line-height:1}
+        .legal{font-size:10.5px;color:#555;border-top:1px solid #e5e7eb;padding-top:10px;margin-top:18px}
+        .firmas{display:flex;gap:40px;margin-top:44px}
+        .firma{flex:1;border-top:1px solid #111;padding-top:5px;font-size:11px;text-align:center;color:#444}
+        @media print{body{margin:0}}
+      </style></head><body>
+      <h1>${UI.esc(t.name || 'Armería')}</h1>
+      <div class="sub">NIT ${UI.esc(t.nit || '—')} · Comprobante de entrega de munición <b>${UI.esc(e.num)}</b></div>
+
+      <table>
+        <tr><td class="k">Fecha de entrega</td><td>${UI.fecha(e.fecha)}</td></tr>
+        <tr><td class="k">Cliente</td><td><b>${UI.esc(e.clientes?.nombre || '—')}</b></td></tr>
+        <tr><td class="k">DPI</td><td>${UI.esc(e.clientes?.dpi || '—')}</td></tr>
+        <tr><td class="k">Licencia</td><td>${UI.esc(e.licencia_tipo)}${e.licencia_num ? ' No. ' + UI.esc(e.licencia_num) : ''}${e.licencia_vencimiento ? ' · vence ' + UI.fecha(e.licencia_vencimiento) : ''}</td></tr>
+        <tr><td class="k">Armas registradas</td><td>${e.armas_registradas}</td></tr>
+        <tr><td class="k">Calibre</td><td>${UI.esc(e.calibre)}</td></tr>
+        <tr><td class="k">Código autorización DIGECAM</td><td>${UI.esc(e.codigo_autorizacion_digecam || '— no registrado —')}</td></tr>
+      </table>
+
+      <div class="caja">
+        <div style="font-size:11px;color:#666;text-transform:uppercase;letter-spacing:.05em">Cartuchos entregados</div>
+        <div class="n">${e.cantidad}</div>
+      </div>
+
+      <div class="legal">
+        Entrega amparada en el <b>artículo 60 del Decreto 15-2009</b> (Ley de Armas y Municiones):
+        hasta <b>200 cartuchos</b> al mes con licencia de tenencia y <b>250 por arma registrada</b>
+        con licencia de portación, con un máximo de tres armas conforme al artículo 72
+        (tope aplicable a esta entrega: <b>${tope}</b> cartuchos).
+        <br><br>
+        Este comprobante acredita la entrega física realizada por <b>${UI.esc(t.name || '')}</b>.
+        El cumplimiento de la cuota mensual <b>a nivel nacional</b> corresponde verificarlo ante
+        DIGECAM (reglamento, Acuerdo Gubernativo 85-2011, artículo 21); el registro de este
+        comercio abarca únicamente las entregas realizadas por él.
+      </div>
+
+      <div class="firmas">
+        <div class="firma">${UI.esc(e.recibido_por || '')}<br>Recibí conforme (cliente)</div>
+        <div class="firma">Entregó — ${UI.esc(t.name || '')}</div>
+      </div>
+      <script>window.onload=function(){window.print()}<\/script>
+      </body></html>`);
+    w.document.close();
   },
 
   async render(filtroTipo = '') {
     if (this._tab === 'ley') return this.renderLey();
+    if (this._tab === 'municiones') return this.renderMuniciones();
     const el = document.getElementById('page-content');
     UI.loading(el);
     this._filtroTipo = filtroTipo;

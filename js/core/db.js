@@ -990,6 +990,60 @@ const DB = {
     return (data || []).filter(r => r.id !== excluirId).reduce((s, r) => s + (Number(r.cantidad) || 0), 0);
   },
 
+  /* ── MUNICIÓN: saldo a favor y entregas ──
+     La armería puede vender un combo de 1,000 cartuchos, pero el art. 60 limita
+     lo que el cliente se LLEVA cada mes (200 con tenencia, 250 por arma con
+     portación). Lo no retirado queda como saldo y se entrega por partes. */
+  async getMunicionSaldos(clienteId = null) {
+    let q = getSB().from('armeria_municion_saldos')
+      .select('*, clientes(nombre,tel,dpi)')
+      .eq('tenant_id', getTID()).gt('saldo', 0).order('updated_at', { ascending: false });
+    if (clienteId) q = q.eq('cliente_id', clienteId);
+    const { data } = await q;
+    return data || [];
+  },
+
+  async getMunicionEntregas(filtros = {}) {
+    let q = getSB().from('armeria_municion_entregas')
+      .select('*, clientes(nombre,tel,dpi), usuarios(nombre)')
+      .eq('tenant_id', getTID()).order('fecha', { ascending: false });
+    if (filtros.cliente_id) q = q.eq('cliente_id', filtros.cliente_id);
+    if (filtros.desde) q = q.gte('fecha', filtros.desde);
+    if (filtros.hasta) q = q.lte('fecha', filtros.hasta);
+    const { data } = await q;
+    return data || [];
+  },
+
+  /* Lo ya entregado a este cliente en el mes en curso, sumando TODOS los
+     calibres: el tope del art. 60 es sobre cartuchos, no por calibre. */
+  async getEntregadoMes(clienteId, fecha = null) {
+    if (!clienteId) return 0;
+    const base = fecha ? new Date(fecha + 'T00:00:00') : new Date();
+    const ini = new Date(base.getFullYear(), base.getMonth(), 1);
+    const fin = new Date(base.getFullYear(), base.getMonth() + 1, 0);
+    const iso = d => d.toISOString().slice(0, 10);
+    const { data } = await getSB().from('armeria_municion_entregas')
+      .select('cantidad').eq('tenant_id', getTID()).eq('cliente_id', clienteId)
+      .gte('fecha', iso(ini)).lte('fecha', iso(fin));
+    return (data || []).reduce((s, r) => s + (Number(r.cantidad) || 0), 0);
+  },
+
+  /* El guardián real vive en la BD (trigger fn_armeria_validar_entrega): acá
+     solo se manda la fila y se devuelve el mensaje que da Postgres si la
+     rechaza, para que la pantalla diga por qué y no un "error" pelado. */
+  async registrarEntregaMunicion(fields) {
+    const num = await this.siguienteNum('ARMENT', 'ENT', 'armeria_municion_entregas');
+    const { data, error } = await getSB().from('armeria_municion_entregas')
+      .insert({ ...fields, tenant_id: getTID(), num, entregado_por: Auth.user?.id || null })
+      .select('*, clientes(nombre,tel,dpi)').single();
+    return { data, error };
+  },
+
+  async eliminarEntregaMunicion(id) {
+    const { error } = await getSB().from('armeria_municion_entregas').delete().eq('id', id);
+    return !error;
+  },
+
   /* Catálogo de marcas/modelos/calibres/países de armería. Crece solo: lo
      que el usuario escriba y no exista se agrega, así el siguiente ya lo
      encuentra en la lista en vez de volver a teclearlo (y en vez de que
