@@ -94,9 +94,7 @@ Modulos.clientes = {
        y esto alimenta una declaración jurada.
      · El prompt le ordena devolver null en lo que no lea con claridad; acá
        se respeta: un null no llena nada. */
-  async _leerDocumento(inputEl, cual) {
-    const file = inputEl.files?.[0];
-    inputEl.value = '';
+  async _leerDocumento(file, cual) {
     if (!file) return;
     const aviso = document.getElementById('cli-lectura-aviso');
     const pintar = (html, color) => { if (aviso) { aviso.innerHTML = html; aviso.style.color = color || 'var(--text3)'; } };
@@ -144,8 +142,10 @@ Modulos.clientes = {
     pintar(partes.join('<br>'));
   },
 
-  _leerDPI(el)    { return this._leerDocumento(el, 'dpi'); },
-  _leerRecibo(el) { return this._leerDocumento(el, 'recibo'); },
+  /* Atajos por nombre — la lectura la dispara _subirDoc, pero se dejan
+     expuestos para poder probarlos y para quien quiera leer sin archivar. */
+  _leerDPI(file)    { return this._leerDocumento(file, 'dpi'); },
+  _leerRecibo(file) { return this._leerDocumento(file, 'recibo'); },
 
   _mostrarEdad() {
     const el = document.getElementById('cli-edad'); if (!el) return;
@@ -156,10 +156,16 @@ Modulos.clientes = {
   },
 
   async modalForm(id=null, onGuardado=null) {
-    const c = id ? this._data.find(x=>x.id===id) : {};
+    /* `|| {}`: si el id no está en la lista cargada (otro módulo abrió la
+       ficha con una lista distinta), el formulario sale vacío en vez de
+       tumbar la pantalla con "cannot read properties of undefined". */
+    const c = (id ? this._data.find(x=>x.id===id) : {}) || {};
     const esEdicion = !!id;
     const armeria = this._pideDatosArmeria();
     if (onGuardado !== null) this._onGuardado = onGuardado;
+    /* Al abrir una ficha se descarta lo pendiente de otra: si no, una foto
+       tomada para un cliente terminaría adjuntada al siguiente. */
+    if (!esEdicion) this._docsPendientes = {};
     UI.modal(`${esEdicion?'✏️ Editar':'＋ Nuevo'} Cliente`, `
       ${esEdicion?'<div class="alert alert-amber" style="margin-bottom:12px"><div class="alert-icon">⚠️</div><div class="alert-body" style="font-size:11px">Los cambios reemplazarán la información actual del cliente.</div></div>':''}
       <div style="display:flex;gap:12px;margin-bottom:12px">
@@ -200,20 +206,10 @@ Modulos.clientes = {
            Sólo se piden si el comercio vende armas. -->
       ${!armeria ? '' : `
       <div style="background:var(--card2);border-radius:8px;padding:10px 12px;margin-bottom:12px">
-        <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;flex-wrap:wrap">
-          <div style="font-size:12px;font-weight:700">🪪 Datos personales (para declaraciones juradas y trámites)</div>
-          <div style="margin-left:auto;display:flex;gap:6px">
-            <button type="button" class="btn btn-sm btn-cyan" onclick="document.getElementById('cli-foto-dpi').click()">
-              📷 Leer del DPI</button>
-            <input type="file" id="cli-foto-dpi" accept="image/*" style="display:none"
-                   onchange="Modulos.clientes._leerDPI(this)">
-            <button type="button" class="btn btn-sm btn-ghost" onclick="document.getElementById('cli-foto-recibo').click()">
-              🧾 Leer dirección del recibo</button>
-            <input type="file" id="cli-foto-recibo" accept="image/*" style="display:none"
-                   onchange="Modulos.clientes._leerRecibo(this)">
-          </div>
+        <div style="font-size:12px;font-weight:700;margin-bottom:2px">🪪 Datos personales (para declaraciones juradas y trámites)</div>
+        <div style="font-size:11px;color:var(--text3);margin-bottom:8px">
+          Se llenan solos al adjuntar el DPI y el recibo de servicios ahí abajo 👇
         </div>
-        <div id="cli-lectura-aviso" style="font-size:11px;margin-bottom:8px"></div>
         <div class="form-row">
           <div class="form-group"><label class="form-label">DPI</label>
             <input class="form-input" id="cli-dpi" value="${c.dpi||''}" placeholder="0000 00000 0000" style="font-family:monospace"></div>
@@ -277,11 +273,7 @@ Modulos.clientes = {
           </div>
         </div>
       </div>
-      ${!armeria ? '' : (esEdicion ? this._htmlDocumentos(id) : `
-      <div class="form-group" style="background:var(--card2);border-radius:8px;padding:10px 12px;font-size:12px;color:var(--text2)">
-        📎 <b>Documentos de identificación</b> (DPI, licencia de tenencia/portación, pasaporte, recibo de servicios)<br>
-        <span style="font-size:11px;color:var(--text3)">Al guardar, el formulario se queda abierto para que los adjuntes de una vez — el archivo necesita que el cliente ya exista.</span>
-      </div>`)}
+      ${!armeria ? '' : `<div id="cli-docs-box">${this._htmlDocumentos(id)}</div>`}
       ${!esEdicion?`
       <div class="card" style="background:var(--amber-dim);border-color:var(--amber-border);margin-top:4px">
         <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px">
@@ -310,30 +302,79 @@ Modulos.clientes = {
     recibo_servicios: { icon: '🧾', label: 'Recibo de servicios (agua/luz/teléfono)' },
   },
 
+  /* Una sola subida por documento: se ARCHIVA el archivo y, si el documento
+     trae datos aprovechables, se LEEN de una vez. Antes había dos caminos
+     separados —un botón para leer y otro para adjuntar— y el usuario tenía
+     que dar la misma foto dos veces. */
+  _LECTOR_DOC: { dpi: 'dpi', pasaporte: 'dpi', recibo_servicios: 'recibo' },
+
+  /* Fotos tomadas antes de que el cliente exista. Un cliente nuevo todavía
+     no tiene id, y el archivo se guarda en una carpeta con ese id — así que
+     se retienen acá y se suben apenas se crea. Sin esto habría que tomar la
+     foto otra vez después de guardar. */
+  _docsPendientes: {},
+
   _htmlDocumentos(id) {
+    const pend = Object.keys(this._docsPendientes || {});
     return `
       <div class="form-group" style="background:var(--card2);border-radius:8px;padding:10px 12px">
         <label class="form-label">📎 Documentos de identificación</label>
-        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">
-          ${Object.entries(this._DOCS_CLIENTE).map(([tipo, d]) => `
-            <button type="button" class="btn btn-sm btn-ghost" onclick="document.getElementById('cli-doc-${tipo}').click()">${d.icon} Subir ${d.label}</button>
-            <input type="file" id="cli-doc-${tipo}" accept="image/*,application/pdf" style="display:none"
-              onchange="Modulos.clientes._subirDoc('${id}','${tipo}','${d.label}',this)">
-          `).join('')}
+        <div style="font-size:11px;color:var(--text3);margin-bottom:8px">
+          Se archiva el documento y, del DPI y del recibo, se leen los datos automáticamente.
+          ${id ? '' : 'Se adjuntan al guardar el cliente.'}
         </div>
+        ${Object.entries(this._DOCS_CLIENTE).map(([tipo, d]) => `
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;flex-wrap:wrap">
+            <span style="font-size:12px;min-width:210px">${d.icon} ${d.label}
+              ${this._LECTOR_DOC[tipo] ? '<span style="color:var(--cyan);font-size:10px">· se lee solo</span>' : ''}</span>
+            <button type="button" class="btn btn-sm btn-cyan" onclick="document.getElementById('cli-doc-${tipo}-cam').click()">📷 Cámara</button>
+            <button type="button" class="btn btn-sm btn-ghost" onclick="document.getElementById('cli-doc-${tipo}-gal').click()">📂 Archivo</button>
+            ${pend.includes(tipo) ? '<span style="font-size:11px;color:var(--green)">✓ listo para adjuntar</span>' : ''}
+            <input type="file" id="cli-doc-${tipo}-cam" accept="image/*" capture="environment" style="display:none"
+              onchange="Modulos.clientes._subirDoc('${id || ''}','${tipo}',this)">
+            <input type="file" id="cli-doc-${tipo}-gal" accept="image/*,application/pdf" style="display:none"
+              onchange="Modulos.clientes._subirDoc('${id || ''}','${tipo}',this)">
+          </div>`).join('')}
+        <div id="cli-lectura-aviso" style="font-size:11px;margin:6px 0"></div>
         <div id="cli-docs"></div>
       </div>`;
   },
 
-  async _subirDoc(clienteId, tipo, titulo, inputEl) {
+  async _subirDoc(clienteId, tipo, inputEl) {
     const file = inputEl.files?.[0];
-    if (!file) return;
-    UI.toast('Subiendo...', 'info');
-    const { error } = await Docs.subirArchivo('cliente', clienteId, tipo, titulo, file);
     inputEl.value = '';
-    if (error) { UI.toast('Error: ' + error.message, 'error'); return; }
-    UI.toast(`${titulo} subido ✓`);
-    Docs.render('cliente', clienteId, 'cli-docs');
+    if (!file) return;
+    const titulo = this._DOCS_CLIENTE[tipo]?.label || tipo;
+
+    /* 1. Archivar. Si el cliente aún no existe, se retiene para subirlo
+          apenas se cree — así la foto se toma una sola vez. */
+    if (clienteId) {
+      UI.toast('Subiendo…', 'info');
+      const { error } = await Docs.subirArchivo('cliente', clienteId, tipo, titulo, file);
+      if (error) { UI.toast('Error: ' + error.message, 'error'); return; }
+      UI.toast(`${titulo} archivado ✓`);
+      Docs.render('cliente', clienteId, 'cli-docs');
+    } else {
+      this._docsPendientes[tipo] = { file, titulo };
+      UI.toast(`${titulo} listo — se adjunta al guardar`);
+      const cont = document.getElementById('cli-docs-box');
+      if (cont) cont.innerHTML = this._htmlDocumentos('');
+    }
+
+    /* 2. Leer, si este documento trae datos. Va después de archivar: si la
+          lectura falla, el archivo ya quedó guardado igual. */
+    const lector = this._LECTOR_DOC[tipo];
+    if (lector && file.type?.startsWith('image/')) await this._leerDocumento(file, lector);
+  },
+
+  /* Sube lo que quedó pendiente de un cliente recién creado. */
+  async _subirPendientes(clienteId) {
+    const pend = this._docsPendientes || {};
+    this._docsPendientes = {};
+    for (const [tipo, { file, titulo }] of Object.entries(pend)) {
+      await Docs.subirArchivo('cliente', clienteId, tipo, titulo, file).catch(() => {});
+    }
+    return Object.keys(pend).length;
   },
 
   async guardar(id='') {
@@ -407,23 +448,24 @@ Modulos.clientes = {
       }
     }
 
+    /* Las fotos tomadas antes de que el cliente existiera se adjuntan ahora
+       que ya tiene id. Así la foto se toma UNA vez, no una para leerla y
+       otra para archivarla. */
+    const nuevoId = id || guardado?.id;
+    let adjuntados = 0;
+    if (nuevoId && Object.keys(this._docsPendientes || {}).length) {
+      adjuntados = await this._subirPendientes(nuevoId);
+    }
+
     UI.cerrarModal();
-    UI.toast(id?'Cliente actualizado ✓':'Cliente creado ✓');
+    UI.toast(id ? 'Cliente actualizado ✓'
+                : `Cliente creado ✓${adjuntados ? ` · ${adjuntados} documento(s) adjuntado(s)` : ''}`);
 
     /* Quien nos abrió desde otro módulo (ej. Armería) sigue su flujo con el
        cliente ya creado, en vez de perder la operación a medio llenar. */
     const cb = this._onGuardado;
     if (cb) { this._onGuardado = null; await this.render(); cb(guardado || null); return; }
-
-    /* Cliente NUEVO: reabrir en modo edición para adjuntar DPI, licencia o
-       pasaporte de una vez. Adjuntar necesita el id, que hasta ahora no
-       existía — por eso antes sólo se podían subir "después", y Henry no
-       encontraba cómo crear un cliente de armería completo. */
     await this.render();
-    if (!id && guardado?.id) {
-      UI.toast('Ahora podés adjuntar su DPI, licencia o pasaporte 📎', 'info');
-      this.modalForm(guardado.id);
-    }
   },
 
   async eliminar(id, nombre) {
