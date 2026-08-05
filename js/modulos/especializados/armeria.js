@@ -262,6 +262,17 @@ Modulos.armeria = {
     if (!s) { UI.toast('No se encontró el saldo de ese cliente', 'error'); return; }
     const yaMes = await DB.getEntregadoMes(clienteId).catch(() => 0);
 
+    /* La licencia se trae de la ficha del cliente (migración 127) en vez de
+       pedirla otra vez. Sigue siendo editable: la entrega guarda SU copia como
+       evidencia del día, así que si el cliente renueva, el comprobante viejo
+       debe seguir diciendo lo que había entonces. */
+    const cli = (this._clientes || []).find(c => c.id === clienteId) || {};
+    const lic = cli.licencia_tipo || 'tenencia';
+    const armas = Math.min(3, Math.max(1, Number(cli.armas_registradas) || 1));
+    const dias = Modulos.clientes?.diasLicencia
+      ? Modulos.clientes.diasLicencia(cli.licencia_vencimiento) : null;
+    const sel = (v, x) => v === x ? 'selected' : '';
+
     UI.modal('📦 Entregar munición', `
       <div class="alert alert-cyan" style="margin-bottom:14px">
         <div class="alert-body" style="font-size:12px">
@@ -270,22 +281,36 @@ Modulos.armeria = {
           ya retirados este mes: <b>${yaMes}</b>
         </div>
       </div>
+      ${dias !== null && dias < 0 ? `
+      <div style="background:rgba(239,68,68,.08);border-left:3px solid var(--red);border-radius:6px;padding:9px 11px;margin-bottom:12px;color:var(--red);font-size:12px">
+        ⛔ <b>La licencia de este cliente venció hace ${Math.abs(dias)} día(s)</b> (${UI.fecha(cli.licencia_vencimiento)}).
+        Una licencia vencida no habilita entregarle munición.
+      </div>` : (dias !== null && dias <= 30 ? `
+      <div style="background:rgba(245,158,11,.08);border-left:3px solid var(--amber);border-radius:6px;padding:9px 11px;margin-bottom:12px;color:var(--amber);font-size:12px">
+        ⚠️ La licencia vence en <b>${dias} día(s)</b> (${UI.fecha(cli.licencia_vencimiento)}).
+      </div>` : '')}
       <div class="form-row">
         <div class="form-group">
           <label class="form-label">Tipo de licencia *</label>
           <select class="form-select" id="ent-lic" onchange="Modulos.armeria._recalcTope()">
-            <option value="tenencia">Tenencia (200 al mes)</option>
-            <option value="portación">Portación (250 por arma)</option>
+            <option value="tenencia"  ${sel(lic,'tenencia')}>Tenencia (200 al mes)</option>
+            <option value="portación" ${sel(lic,'portación')}>Portación (250 por arma)</option>
           </select>
         </div>
         <div class="form-group">
           <label class="form-label">Armas registradas *</label>
           <select class="form-select" id="ent-armas" onchange="Modulos.armeria._recalcTope()">
-            <option value="1">1 arma</option><option value="2">2 armas</option><option value="3">3 armas</option>
+            ${[1,2,3].map(n=>`<option value="${n}" ${armas===n?'selected':''}>${n} arma${n===1?'':'s'}</option>`).join('')}
           </select>
           <div style="font-size:11px;color:var(--text3);margin-top:4px">Máximo 3 (art. 72).</div>
         </div>
       </div>
+      ${cli.licencia_tipo ? `<div style="font-size:11px;color:var(--text3);margin:-6px 0 10px">
+        Traído de la ficha del cliente. Si lo corregís acá, el cambio queda en <b>este</b> comprobante
+        (la ficha no se toca): así un comprobante viejo sigue diciendo lo que había ese día.
+      </div>` : `<div style="font-size:11px;color:var(--amber);margin:-6px 0 10px">
+        Este cliente no tiene licencia guardada en su ficha. Cargala en su expediente para que se traiga sola.
+      </div>`}
       <div id="ent-tope" style="font-size:12px;padding:8px 10px;border-radius:6px;background:var(--surface2);color:var(--text2);margin-bottom:12px"></div>
       <div class="form-row">
         <div class="form-group">
@@ -301,11 +326,11 @@ Modulos.armeria = {
       <div class="form-row">
         <div class="form-group">
           <label class="form-label">No. de licencia</label>
-          <input class="form-input" id="ent-licnum" placeholder="Como aparece en el documento">
+          <input class="form-input" id="ent-licnum" value="${UI.esc(cli.licencia_num || '')}" placeholder="Como aparece en el documento">
         </div>
         <div class="form-group">
           <label class="form-label">Vence la licencia</label>
-          <input class="form-input" id="ent-licvence" type="date">
+          <input class="form-input" id="ent-licvence" type="date" value="${cli.licencia_vencimiento || ''}">
         </div>
       </div>
       <div class="form-group">
@@ -1085,14 +1110,30 @@ Modulos.armeria = {
     if (!hay('recibo_servicios')) falta.push(this._CHECK_DOCS.recibo_servicios);
     if (!String(cli?.direccion || '').trim()) falta.push('Dirección completa');
     if (!cli?.vivienda) falta.push('Indicar si la vivienda es propia o rentada');
+    if (!cli?.licencia_tipo) falta.push('Tipo de licencia (tenencia o portación) en la ficha del cliente');
 
-    cont.innerHTML = falta.length
+    /* Una licencia VENCIDA no es un dato faltante: es un impedimento legal, y
+       se avisa aparte y en rojo para que no se pierda entre la lista. */
+    const dias = Modulos.clientes?.diasLicencia
+      ? Modulos.clientes.diasLicencia(cli?.licencia_vencimiento) : null;
+    const avisoVence = dias === null ? ''
+      : dias < 0
+        ? `<div style="background:rgba(239,68,68,.08);border-left:3px solid var(--red);border-radius:6px;padding:8px 10px;margin-bottom:6px;color:var(--red)">
+             ⛔ <b>La licencia venció hace ${Math.abs(dias)} día(s).</b> No habilita comprar arma ni munición.
+           </div>`
+        : dias <= 30
+          ? `<div style="background:rgba(245,158,11,.08);border-left:3px solid var(--amber);border-radius:6px;padding:8px 10px;margin-bottom:6px;color:var(--amber)">
+               ⚠️ La licencia vence en <b>${dias} día(s)</b>.
+             </div>`
+          : '';
+
+    cont.innerHTML = avisoVence + (falta.length
       ? `<div style="background:var(--card2);border-left:3px solid var(--amber);border-radius:6px;padding:8px 10px">
            <b>⚠️ Al expediente le falta:</b>
            <ul style="margin:4px 0 4px 16px">${falta.map(f => `<li>${UI.esc(f)}</li>`).join('')}</ul>
            <a href="#" onclick="event.preventDefault();Modulos.armeria._completarCliente('${clienteId}')" style="color:var(--cyan)">Completarlo ahora →</a>
          </div>`
-      : '<span style="color:var(--green)">✅ Expediente completo (DPI y licencia por ambas caras, recibo de servicios y domicilio).</span>';
+      : '<span style="color:var(--green)">✅ Expediente completo (DPI y licencia por ambas caras, recibo de servicios, domicilio y licencia vigente).</span>');
   },
 
   /* Abre la ficha del cliente para completarla y vuelve a la operación. */

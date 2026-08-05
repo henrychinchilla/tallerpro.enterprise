@@ -108,7 +108,12 @@ Modulos.clientes = {
     }).catch(() => null);
     if (!base64) { pintar('⚠️ No se pudo leer el archivo.', 'var(--red)'); return; }
 
-    const r = cual === 'dpi' ? await IA.escanearDPI(base64) : await IA.escanearRecibo(base64);
+    const lectores = {
+      dpi:      () => IA.escanearDPI(base64),
+      recibo:   () => IA.escanearRecibo(base64),
+      licencia: () => IA.escanearLicencia(base64),
+    };
+    const r = await (lectores[cual] || lectores.dpi)();
     if (!r?.ok) { pintar('⚠️ ' + (r?.error || 'No se pudo leer el documento.'), 'var(--red)'); return; }
 
     let datos;
@@ -117,11 +122,21 @@ Modulos.clientes = {
       datos = JSON.parse(String(r.texto || '').replace(/```json|```/g, '').trim());
     } catch (_) { pintar('⚠️ El documento no se leyó con claridad. Escribí los datos a mano.', 'var(--red)'); return; }
 
-    const mapa = cual === 'dpi'
-      ? { 'cli-dpi': datos.cui, 'cli-nombre': datos.nombre_completo, 'cli-fnac': datos.fecha_nacimiento,
-          'cli-estado-civil': datos.estado_civil, 'cli-nacionalidad': datos.nacionalidad,
-          'cli-lugar-nac': datos.lugar_nacimiento }
-      : { 'cli-dir': datos.direccion };
+    const mapas = {
+      /* La dirección del DPI sólo viene en el diseño nuevo; en el anterior es
+         null y el recibo de servicios sigue siendo la fuente. */
+      dpi: { 'cli-dpi': datos.cui, 'cli-nombre': datos.nombre_completo, 'cli-fnac': datos.fecha_nacimiento,
+             'cli-estado-civil': datos.estado_civil, 'cli-nacionalidad': datos.nacionalidad,
+             'cli-lugar-nac': datos.lugar_nacimiento, 'cli-dir': datos.direccion },
+      recibo: { 'cli-dir': datos.direccion },
+      /* El tipo de licencia decide cuánta munición se puede entregar (art. 60),
+         así que si la IA no lo distinguió manda null y el campo queda vacío
+         para que alguien lo ponga a conciencia. */
+      licencia: { 'cli-lic-tipo': datos.tipo, 'cli-lic-num': datos.numero,
+                  'cli-lic-vence': datos.fecha_vencimiento,
+                  'cli-armas-reg': datos.armas_registradas },
+    };
+    const mapa = mapas[cual] || mapas.dpi;
 
     const llenados = [], distintos = [];
     for (const [idEl, valor] of Object.entries(mapa)) {
@@ -134,8 +149,13 @@ Modulos.clientes = {
     }
     this._mostrarEdad();
 
+    const nombreDoc = { dpi: 'DPI', recibo: 'recibo', licencia: 'licencia' }[cual] || 'documento';
     const partes = [];
-    if (llenados.length) partes.push(`<span style="color:var(--green)">✅ ${llenados.length} campo(s) llenados desde el ${cual === 'dpi' ? 'DPI' : 'recibo'}.</span>`);
+    if (llenados.length) partes.push(`<span style="color:var(--green)">✅ ${llenados.length} campo(s) llenados desde el ${nombreDoc}.</span>`);
+    /* El tipo de licencia es el dato del que depende el tope de munición: si no
+       se pudo leer, hay que decirlo fuerte y no dejar que pase inadvertido. */
+    if (cual === 'licencia' && !datos.tipo)
+      partes.push('<span style="color:var(--red)">⚠️ No se pudo distinguir si es de <b>tenencia</b> o de <b>portación</b>. Elegilo a mano: de eso depende cuánta munición se le puede entregar.</span>');
     if (distintos.length) partes.push(`<span style="color:var(--amber)">⚠️ No se tocó lo que ya estaba escrito. Diferencias: ${distintos.join(' · ')}</span>`);
     if (!partes.length) partes.push('<span style="color:var(--amber)">El documento no aportó datos nuevos.</span>');
     partes.push('<span style="color:var(--text3)">Revisá siempre contra el documento físico antes de guardar: esto alimenta una declaración jurada.</span>');
@@ -144,8 +164,37 @@ Modulos.clientes = {
 
   /* Atajos por nombre — la lectura la dispara _subirDoc, pero se dejan
      expuestos para poder probarlos y para quien quiera leer sin archivar. */
-  _leerDPI(file)    { return this._leerDocumento(file, 'dpi'); },
-  _leerRecibo(file) { return this._leerDocumento(file, 'recibo'); },
+  /* Días que le quedan a una licencia. Devuelve null si no hay fecha, negativo
+     si ya venció. Se compara en hora LOCAL: construir la fecha con toISOString
+     en UTC-6 corre el día y una licencia que vence hoy aparecería vencida. */
+  diasLicencia(vence, hoy = new Date()) {
+    if (!vence) return null;
+    const f = new Date(String(vence).slice(0, 10) + 'T00:00:00');
+    if (isNaN(f)) return null;
+    const h = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate());
+    return Math.round((f - h) / 86400000);
+  },
+
+  _avisarLicencia() {
+    const box = document.getElementById('cli-lic-aviso');
+    if (!box) return;
+    const d = this.diasLicencia(document.getElementById('cli-lic-vence')?.value);
+    if (d === null) { box.innerHTML = ''; return; }
+    if (d < 0) {
+      box.innerHTML = `⛔ <b>La licencia venció hace ${Math.abs(d)} día(s).</b> Una licencia vencida no habilita comprar arma ni munición.`;
+      box.style.color = 'var(--red)';
+    } else if (d <= 30) {
+      box.innerHTML = `⚠️ Vence en <b>${d} día(s)</b>. Conviene avisarle al cliente que la renueve.`;
+      box.style.color = 'var(--amber)';
+    } else {
+      box.innerHTML = `✅ Vigente — le quedan ${d} días.`;
+      box.style.color = 'var(--green)';
+    }
+  },
+
+  _leerDPI(file)      { return this._leerDocumento(file, 'dpi'); },
+  _leerRecibo(file)   { return this._leerDocumento(file, 'recibo'); },
+  _leerLicencia(file) { return this._leerDocumento(file, 'licencia'); },
 
   _mostrarEdad() {
     const el = document.getElementById('cli-edad'); if (!el) return;
@@ -246,6 +295,36 @@ Modulos.clientes = {
             <option value="familiar" ${c.vivienda==='familiar'?'selected':''}>👪 Familiar / prestada</option>
           </select></div>`}
       </div>
+      ${!armeria ? '' : `
+      <div class="form-group" style="background:var(--card2);border-radius:8px;padding:10px 12px">
+        <label class="form-label">🔫 Licencia de arma (DIGECAM)</label>
+        <div style="font-size:11px;color:var(--text3);margin-bottom:8px">
+          Se llena sola al subir el <b>anverso de la licencia</b> abajo. De estos datos sale el tope
+          mensual de munición del art. 60, y quedan copiados en cada entrega como evidencia del día.
+        </div>
+        <div class="form-row">
+          <div class="form-group"><label class="form-label">Tipo</label>
+            <select class="form-select" id="cli-lic-tipo">
+              <option value="">— No indicado —</option>
+              <option value="tenencia"  ${c.licencia_tipo==='tenencia'?'selected':''}>🏠 Tenencia (200 al mes)</option>
+              <option value="portación" ${c.licencia_tipo==='portación'?'selected':''}>🚶 Portación (250 por arma)</option>
+            </select></div>
+          <div class="form-group"><label class="form-label">No. de licencia</label>
+            <input class="form-input" id="cli-lic-num" value="${UI.esc(c.licencia_num||'')}" placeholder="Como aparece impreso"></div>
+        </div>
+        <div class="form-row">
+          <div class="form-group"><label class="form-label">Vence</label>
+            <input class="form-input" id="cli-lic-vence" type="date" value="${c.licencia_vencimiento||''}"
+                   onchange="Modulos.clientes._avisarLicencia()"></div>
+          <div class="form-group"><label class="form-label">Armas registradas</label>
+            <select class="form-select" id="cli-armas-reg">
+              <option value="">— No indicado —</option>
+              ${[1,2,3].map(n=>`<option value="${n}" ${Number(c.armas_registradas)===n?'selected':''}>${n} arma${n===1?'':'s'}</option>`).join('')}
+            </select>
+            <div style="font-size:11px;color:var(--text3);margin-top:3px">Máximo 3 (art. 72).</div></div>
+        </div>
+        <div id="cli-lic-aviso" style="font-size:11.5px;margin-top:4px"></div>
+      </div>`}
       <div class="form-group"><label class="form-label">Notas</label>
         <textarea class="form-input" id="cli-notas" rows="2">${UI.esc(c.notas||'')}</textarea></div>
       <div class="form-group">
@@ -290,6 +369,7 @@ Modulos.clientes = {
       </div>`,'640px');
     if (esEdicion) Docs.render('cliente', id, 'cli-docs');
     this._mostrarEdad();
+    this._avisarLicencia();
   },
 
   /* DPI, licencia (tenencia/portación) o pasaporte — foto o PDF. Vive en el
@@ -326,14 +406,11 @@ Modulos.clientes = {
   _LECTOR_DOC: {
     dpi_frente: 'dpi',
     pasaporte: 'dpi',
+    licencia_frente: 'licencia',
     recibo_servicios: 'recibo',
-    /* dpi_reverso NO se lee: sus datos ya vinieron del anverso. Mandarlo al
+    /* Los REVERSOS no se leen: sus datos ya vinieron del anverso. Mandarlos al
        lector gastaría una llamada de IA para devolver nulos, y peor: si
-       devolviera algo mal leído, sobrescribiría lo bueno.
-       La LICENCIA tampoco se lee todavía: sus datos (tipo, número,
-       vencimiento, armas registradas) no viven en la ficha del cliente sino en
-       cada operación y entrega, así que no habría dónde volcarlos. Se archiva
-       por las dos caras, que es lo que pide el expediente. */
+       devolviera algo mal leído, sobrescribiría lo bueno. */
   },
 
   /* Documentos que exige el expediente de una armería (art. 59 y 72 de la Ley
@@ -453,6 +530,11 @@ Modulos.clientes = {
     siExiste('cli-profesion', 'profesion');
     siExiste('cli-nacionalidad', 'nacionalidad');
     siExiste('cli-lugar-nac', 'lugar_nacimiento');
+    siExiste('cli-lic-tipo', 'licencia_tipo', v => v || null);
+    siExiste('cli-lic-num', 'licencia_num');
+    siExiste('cli-lic-vence', 'licencia_vencimiento', v => v || null);
+    /* Entero o null: mandar '' a una columna integer revienta el insert. */
+    siExiste('cli-armas-reg', 'armas_registradas', v => (v ? Number(v) : null));
 
     if (id) fields.id = id;
 
