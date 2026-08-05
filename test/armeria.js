@@ -140,6 +140,53 @@ ok('una navaja tampoco', !ARM._esArma('arma_blanca'));
   ARM._catalogo = null;
 }
 
+/* ── Ficha del arma que se está vendiendo ────────────────────────────────
+   Dos pistolas de la misma marca se distinguen sólo por el número de serie.
+   Ver la foto y las características antes de entregar evita el error más
+   caro que puede cometer una armería: entregar el arma equivocada. */
+{
+  ctx.UI = { esc: v => String(v ?? ''), q: v => 'Q' + Number(v || 0).toFixed(2) };
+  const item = {
+    id: 'i1', nombre: 'Glock 19 Gen5', codigo: 'ARM-001', codigo_barras: '7501',
+    stock: 3, unidad_medida: 'pieza', precio_venta: 8500, categoria: 'Arma corta (pistola/revólver)',
+    imagen_url: 'data:image/png;base64,AAA', descripcion: 'Pistola semiautomática',
+    ubicacion: 'Vitrina 2',
+    atributos: { tipo_arma: 'pistola', marca: 'Glock', modelo: '19', calibre: '9mm',
+                 numero_serie: 'ABC123', pais_origen: 'Austria' },
+  };
+  const ficha = ARM._fichaInventarioHTML(item);
+  ok('la ficha muestra la foto del inventario', /<img src="data:image\/png;base64,AAA"/.test(ficha));
+  ok('muestra el nombre y el código', /Glock 19 Gen5/.test(ficha) && /ARM-001/.test(ficha));
+  ok('muestra las características (marca, modelo, calibre, origen)',
+     /Glock/.test(ficha) && /9mm/.test(ficha) && /Austria/.test(ficha));
+  ok('muestra la ubicación física para ir a buscarla', /Vitrina 2/.test(ficha));
+  ok('muestra el stock y el precio', /Stock: 3/.test(ficha) && /Q8500\.00/.test(ficha));
+
+  /* Con 3 unidades del mismo modelo, cada arma tiene SU serie: la de la
+     ficha es sólo referencia. Callarlo llevaría a registrar la venta con el
+     número de serie de otra arma — y ese es el dato que va a DIGECAM. */
+  ok('avisa que cada unidad tiene su propio número de serie', /PROPIO n[úu]mero de serie/.test(ficha));
+
+  const unaSola = ARM._fichaInventarioHTML({ ...item, stock: 1 });
+  ok('con una sola unidad no molesta con ese aviso', !/PROPIO n[úu]mero de serie/.test(unaSola));
+
+  const accesorio = ARM._fichaInventarioHTML({
+    ...item, stock: 5, atributos: { tipo_arma: 'accesorio', marca: 'Fobus' } });
+  ok('un accesorio con varias unidades tampoco (no lleva serie)',
+     !/PROPIO n[úu]mero de serie/.test(accesorio));
+
+  const sinFoto = ARM._fichaInventarioHTML({ ...item, imagen_url: null });
+  ok('sin foto usa un marcador, no una imagen rota', !/<img/.test(sinFoto) && /🎯/.test(sinFoto));
+
+  const agotado = ARM._fichaInventarioHTML({ ...item, stock: 0 });
+  ok('stock cero se marca en rojo', /badge-red/.test(agotado));
+  ok('con stock disponible se marca en verde', /badge-green/.test(ficha));
+
+  ok('sin artículo no revienta', ARM._fichaInventarioHTML(null) === '');
+  ok('un artículo sin atributos tampoco',
+     typeof ARM._fichaInventarioHTML({ nombre: 'X', stock: 1 }) === 'string');
+}
+
 /* ── Avisos legales por categoría ───────────────────────────────────────── */
 {
   ok('el gas comprimido avisa que está exento por el art. 68',

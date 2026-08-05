@@ -287,8 +287,10 @@ Modulos.armeria = {
 
   async verDetalle(id) {
     const o = this._data.find(x => x.id === id); if (!o) return;
-    const invNombre = o.inventario_id ? (this._inventario.find(i => i.id === o.inventario_id)?.nombre || 'artículo del inventario') : null;
+    const item = o.inventario_id ? this._inventario.find(i => i.id === o.inventario_id) : null;
+    const invNombre = o.inventario_id ? (item?.nombre || 'artículo del inventario') : null;
     UI.modal(`📋 Operación ${o.num || ''}`, `
+      ${item ? this._fichaInventarioHTML(item) : ''}
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px">
         <div><div style="font-size:11px;color:var(--text3)">Tipo</div><div><span class="badge badge-${this._colorTipo(o.tipo)}">${o.tipo === 'compra' ? '🔽 Compra' : '🔺 Venta'}</span></div></div>
         <div><div style="font-size:11px;color:var(--text3)">Estado del trámite</div><div><span class="badge badge-${this._colorEstado(o.estado)}">${this._ESTADOS[o.estado] || o.estado || '—'}</span></div></div>
@@ -371,6 +373,8 @@ Modulos.armeria = {
           una diferencia sin aclarar en 8 días cierra el establecimiento 15 días.
           ${this._inventario.length ? '' : '<br><b style="color:var(--amber)">Todavía no hay artículos del giro armería en el inventario.</b>'}
         </div>
+        <div id="arm-ficha-inv"></div>
+        <div id="arm-aviso-stock"></div>
       </div>
 
       <div id="arm-aviso-categoria" style="font-size:12px;padding:8px 10px;border-radius:6px;margin-bottom:10px;display:none"></div>
@@ -403,7 +407,7 @@ Modulos.armeria = {
       </div>
       <div class="form-row">
         <div class="form-group"><label class="form-label">Cantidad *</label>
-          <input class="form-input" id="arm-cantidad" type="number" min="1" step="1" value="${o.cantidad || 1}" onchange="Modulos.armeria._calcTotal()"></div>
+          <input class="form-input" id="arm-cantidad" type="number" min="1" step="1" value="${o.cantidad || 1}" onchange="Modulos.armeria._calcTotal()" oninput="Modulos.armeria._avisoStock()"></div>
         <div class="form-group"><label class="form-label">Precio unitario (Q) *</label>
           <input class="form-input" id="arm-precio" type="number" min="0" step="0.01" value="${o.precio_unit || 0}" onchange="Modulos.armeria._calcTotal()"></div>
         <div class="form-group"><label class="form-label">Total (Q)</label>
@@ -461,23 +465,100 @@ Modulos.armeria = {
     this._infoTope();
     this._toggleSerie();   // pinta el aviso legal de la categoría ya elegida
     this._filtrarModelos();
+    /* Al editar una operación ya vinculada, la ficha se pinta de una vez
+       (sin volver a copiar los datos: los de la operación ya son los buenos). */
+    if (o.inventario_id) {
+      const it = this._inventario.find(i => i.id === o.inventario_id);
+      const cont = document.getElementById('arm-ficha-inv');
+      if (it && cont) cont.innerHTML = this._fichaInventarioHTML(it);
+      this._avisoStock();
+    }
     if (o.cliente_id) this._verificarCliente(o.cliente_id);
   },
 
-  /* Copia los datos del artículo del inventario al formulario: el arma se
-     describe una sola vez (al darla de alta) y de ahí en adelante se reusa. */
+  /* Ficha visual del artículo: foto + características, para confirmar de un
+     vistazo que se está entregando el arma correcta. En un negocio donde dos
+     pistolas de la misma marca se distinguen sólo por el número de serie,
+     ver la foto antes de entregar evita el error más caro posible. */
+  _fichaInventarioHTML(it) {
+    if (!it) return '';
+    const a = it.atributos || {};
+    const specs = [
+      ['Tipo', this._CATEGORIAS[a.tipo_arma] || a.tipo_arma],
+      ['Marca', a.marca || it.marca], ['Modelo', a.modelo], ['Calibre', a.calibre],
+      ['Origen', a.pais_origen], ['Categoría', it.categoria],
+      ['Ubicación', it.ubicacion],
+    ].filter(([, v]) => v);
+
+    const stock = Number(it.stock) || 0;
+    const esArmaFuego = this._ARMAS_FUEGO.includes(a.tipo_arma);
+    const foto = it.imagen_url
+      ? `<img src="${UI.esc(it.imagen_url)}" alt="" style="width:96px;height:96px;object-fit:cover;border-radius:8px;border:1px solid var(--border);flex-shrink:0">`
+      : `<div style="width:96px;height:96px;border-radius:8px;background:var(--card2);display:flex;align-items:center;justify-content:center;font-size:32px;color:var(--text3);flex-shrink:0">🎯</div>`;
+
+    return `<div style="display:flex;gap:12px;background:var(--card2);border-radius:8px;padding:10px 12px;margin-top:8px">
+      ${foto}
+      <div style="flex:1;min-width:0">
+        <div style="font-weight:700;font-size:14px">${UI.esc(it.nombre)}</div>
+        <div style="font-size:11px;color:var(--text3);margin-bottom:6px">
+          ${UI.esc(it.codigo || '')}${it.codigo_barras ? ' · ' + UI.esc(it.codigo_barras) : ''}
+        </div>
+        ${it.descripcion ? `<div style="font-size:12px;margin-bottom:6px">${UI.esc(it.descripcion)}</div>` : ''}
+        <div style="display:flex;gap:10px;flex-wrap:wrap;font-size:12px">
+          ${specs.map(([k, v]) => `<span><span style="color:var(--text3)">${k}:</span> <b>${UI.esc(v)}</b></span>`).join('')}
+        </div>
+        <div style="margin-top:6px;font-size:12px">
+          <span class="badge badge-${stock > 0 ? 'green' : 'red'}">Stock: ${stock} ${UI.esc(it.unidad_medida || '')}</span>
+          <span style="margin-left:8px;color:var(--green);font-weight:700">${UI.q(it.precio_venta)}</span>
+        </div>
+        ${a.numero_serie ? `<div style="font-size:11px;margin-top:6px;font-family:monospace">Serie en ficha: ${UI.esc(a.numero_serie)}</div>` : ''}
+        ${esArmaFuego && stock > 1 ? `<div style="font-size:11px;color:var(--amber);margin-top:4px">
+          ⚠️ Hay ${stock} unidades de este modelo: cada arma tiene su PROPIO número de serie.
+          Verificá el de la que estás entregando y corregilo abajo si no coincide.
+        </div>` : ''}
+      </div>
+    </div>`;
+  },
+
+  /* Copia los datos del artículo del inventario al formulario y muestra su
+     ficha. El arma se describe una sola vez (al darla de alta) y de ahí en
+     adelante se reusa. */
   _desdeInventario(invId) {
-    if (!invId) return;
+    const cont = document.getElementById('arm-ficha-inv');
+    if (!invId) { if (cont) { cont.innerHTML = ''; } this._avisoStock(); return; }
     const it = this._inventario.find(i => i.id === invId);
     if (!it) return;
     const a = it.atributos || {};
     const set = (id, v) => { const el = document.getElementById(id); if (el && v != null && v !== '') el.value = v; };
-    set('arm-marca', a.marca); set('arm-modelo', a.modelo); set('arm-calibre', a.calibre);
+    set('arm-marca', a.marca || it.marca); set('arm-modelo', a.modelo); set('arm-calibre', a.calibre);
     set('arm-serie', a.numero_serie); set('arm-origen', a.pais_origen);
     set('arm-precio', it.precio_venta);
     const cat = document.getElementById('arm-categoria');
-    if (cat && !cat.value && a.tipo_arma && this._CATEGORIAS[a.tipo_arma]) { cat.value = a.tipo_arma; this._toggleSerie(); }
+    if (cat && !cat.value && a.tipo_arma && this._CATEGORIAS[a.tipo_arma]) { cat.value = a.tipo_arma; }
+    if (cont) cont.innerHTML = this._fichaInventarioHTML(it);
+    this._toggleSerie();
+    this._filtrarModelos();
     this._calcTotal();
+  },
+
+  /* Avisa si se está vendiendo más de lo que hay. No bloquea: puede haber
+     un ingreso que todavía no se registró. Pero el art. 58 exige que el
+     inventario cuadre exacto, así que dejarlo pasar en silencio sería peor. */
+  _avisoStock() {
+    const cont = document.getElementById('arm-aviso-stock');
+    if (!cont) return;
+    const invId = document.getElementById('arm-inventario')?.value;
+    const tipo = document.getElementById('arm-tipo')?.value;
+    const cant = parseFloat(document.getElementById('arm-cantidad')?.value) || 0;
+    const it = invId ? this._inventario.find(i => i.id === invId) : null;
+    if (!it || tipo !== 'venta' || cant <= 0) { cont.innerHTML = ''; return; }
+    const stock = Number(it.stock) || 0;
+    cont.innerHTML = cant > stock
+      ? `<div style="background:var(--card2);border-left:3px solid var(--red);border-radius:6px;padding:8px 10px;font-size:12px;margin-top:6px">
+           ⚠️ Estás vendiendo <b>${cant}</b> pero en inventario hay <b>${stock}</b>.
+           El art. 58 exige que el inventario físico cuadre exacto — registrá primero la compra que falta.
+         </div>`
+      : '';
   },
 
   /* Modelos que corresponden a una marca. Sin marca elegida se muestran

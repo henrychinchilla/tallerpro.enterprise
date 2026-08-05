@@ -1030,8 +1030,11 @@ const DB = {
      inventario y no tecleando el arma a mano. Es lo que hace la venta
      trazable: la operación queda apuntando al artículo que salió. */
   async getInventarioArmeria() {
+    /* Trae también foto, descripción y ubicación: al vender un arma el
+       vendedor tiene que poder confirmar VISUALMENTE que está entregando la
+       correcta antes de que salga del local. */
     const { data } = await getSB().from('inventario')
-      .select('id,nombre,codigo,stock,unidad_medida,precio_venta,categoria,atributos')
+      .select('id,nombre,codigo,codigo_barras,stock,min_stock,unidad_medida,precio_venta,categoria,atributos,imagen_url,descripcion,ubicacion,marca')
       .eq('tenant_id', getTID()).eq('tipo_item', 'armeria')
       .order('nombre');
     return data || [];
