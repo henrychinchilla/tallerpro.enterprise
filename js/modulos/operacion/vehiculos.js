@@ -592,7 +592,7 @@ Modulos.vehiculos = {
         <div class="form-group"><label class="form-label">Cliente *</label>
           <select class="form-select" id="veh-cliente" onchange="Modulos.vehiculos._clienteElegido()">
             <option value="">Seleccionar cliente...</option>
-            ${this._clientes.map(c=>`<option value="${c.id}" ${v.cliente_id===c.id?'selected':''}>${c.nombre} ${c.nit?`(${c.nit})`:''}</option>`).join('')}
+            ${this._clientes.map(c=>`<option value="${c.id}" ${v.cliente_id===c.id?'selected':''}>${UI.esc(c.nombre)} ${c.nit?`(${c.nit})`:''}</option>`).join('')}
           </select></div>
         <div class="form-group"><label class="form-label">Placa *</label>
           <input class="form-input" id="veh-placa" value="${v.placa||''}" placeholder="P-123ABC" style="text-transform:uppercase"></div>
@@ -768,7 +768,7 @@ Modulos.vehiculos = {
       </tr>`;
     }).join('');
 
-    UI.modal(`🔧 Mantenimiento — ${v.marca} ${v.modelo} (${v.placa})`, `
+    UI.modal(`🔧 Mantenimiento — ${UI.esc(v.marca)} ${UI.esc(v.modelo)} (${v.placa})`, `
       <div class="alert alert-cyan" style="margin-bottom:14px">
         <div class="alert-icon">📋</div>
         <div class="alert-body" style="font-size:12px">

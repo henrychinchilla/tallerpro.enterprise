@@ -184,7 +184,7 @@ Modulos.clientes = {
       </div>
       <div class="form-row">
         <div class="form-group"><label class="form-label">Nombre Completo *</label>
-          <input class="form-input" id="cli-nombre" value="${c.nombre||''}"></div>
+          <input class="form-input" id="cli-nombre" value="${UI.esc(c.nombre||'')}"></div>
         <div class="form-group"><label class="form-label">NIT</label>
           <div style="display:flex;gap:6px">
             <input class="form-input" id="cli-nit" value="${c.nit||''}" placeholder="CF" style="flex:1">
@@ -196,7 +196,7 @@ Modulos.clientes = {
         <div class="form-group"><label class="form-label">Teléfono *</label>
           <input class="form-input" id="cli-tel" value="${c.tel||''}" placeholder="5501-1234"></div>
         <div class="form-group"><label class="form-label">Email</label>
-          <input class="form-input" id="cli-email" value="${c.email||''}" type="email"></div>
+          <input class="form-input" id="cli-email" value="${UI.esc(c.email||'')}" type="email"></div>
       </div>
 
       <!-- Datos que exige una declaración jurada (art. 55 a) de la Ley de
@@ -235,7 +235,7 @@ Modulos.clientes = {
       </div>`}
       <div class="form-row">
         <div class="form-group" style="flex:2"><label class="form-label">Dirección${armeria ? ' completa' : ''}</label>
-          <input class="form-input" id="cli-dir" value="${c.direccion||''}"
+          <input class="form-input" id="cli-dir" value="${UI.esc(c.direccion||'')}"
                  placeholder="${armeria ? 'Calle, avenida, número de casa, zona, municipio, departamento' : ''}"></div>
         ${!armeria ? '' : `
         <div class="form-group"><label class="form-label">La vivienda es</label>
@@ -247,7 +247,7 @@ Modulos.clientes = {
           </select></div>`}
       </div>
       <div class="form-group"><label class="form-label">Notas</label>
-        <textarea class="form-input" id="cli-notas" rows="2">${c.notas||''}</textarea></div>
+        <textarea class="form-input" id="cli-notas" rows="2">${UI.esc(c.notas||'')}</textarea></div>
       <div class="form-group">
         <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
           <input type="checkbox" id="cli-puntos" ${c.programa_puntos?'checked':''}>

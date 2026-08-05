@@ -155,7 +155,7 @@ Modulos.kpi_mecanicos = {
               return `<tr>
                 <td><strong style="color:var(--muted)">${i+1}</strong></td>
                 <td>
-                  <strong>${r.mec.nombre}</strong><br>
+                  <strong>${UI.esc(r.mec.nombre)}</strong><br>
                   <small style="color:var(--muted)">${r.mec.cargo || 'Mecánico'}</small>
                 </td>
                 <td>${r.otsEntregadas} <small style="color:var(--muted)">/ ${r.otsTrabajadas}</small></td>
@@ -182,7 +182,7 @@ Modulos.kpi_mecanicos = {
                 </td>
                 <td>
                   <button class="btn btn-ghost btn-sm" title="Ver detalle horas"
-                    onclick="Modulos.kpi_mecanicos.modalDetalleHoras('${r.mec.id}','${r.mec.nombre}')">
+                    onclick="Modulos.kpi_mecanicos.modalDetalleHoras('${r.mec.id}','${UI.esc(r.mec.nombre)}')">
                     ⏱ Horas
                   </button>
                 </td>
@@ -207,7 +207,7 @@ Modulos.kpi_mecanicos = {
           return `
           <div style="margin-bottom:16px">
             <div style="display:flex;justify-content:space-between;margin-bottom:6px;font-size:14px">
-              <span><strong>${r.mec.nombre}</strong></span>
+              <span><strong>${UI.esc(r.mec.nombre)}</strong></span>
               <span style="color:var(--green);font-weight:700">${UI.q(r.ingresos)}
                 <small style="color:var(--muted)"> · ${r.totalHoras.toFixed(1)}h · rentab. ${rent}%</small>
               </span>
@@ -262,7 +262,7 @@ Modulos.kpi_mecanicos = {
         <select class="form-select" id="hh-ot">
           <option value="">— Seleccionar OT —</option>
           ${ordenes.map(o => {
-            const veh = o.vehiculos ? `${o.vehiculos.marca} ${o.vehiculos.modelo}` : o.descripcion?.slice(0,30) || '';
+            const veh = o.vehiculos ? `${UI.esc(o.vehiculos.marca)} ${UI.esc(o.vehiculos.modelo)}` : o.descripcion?.slice(0,30) || '';
             const cli = o.clientes?.nombre || '';
             return `<option value="${o.id}" ${o.id===preOrdenId?'selected':''}>${o.num} · ${veh} · ${cli}</option>`;
           }).join('')}

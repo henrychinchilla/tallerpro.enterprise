@@ -467,22 +467,25 @@ const POS = {
         <div class="pos-layout">
           <!-- Catálogo -->
           <div class="pos-catalogo">
-            <div style="display:flex;gap:12px;align-items:center">
-              <div style="position:relative;flex:1">
-                <span style="position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--text3)">🔍</span>
-                <input class="form-input" style="width:100%;padding-left:36px" placeholder="Buscar producto o código..."
-                       value="${this._busca}" oninput="POS._busca=this.value;POS._pintarGrid()">
-              </div>
+            <div class="fpos-search">
+              <span style="color:var(--text3);font-size:15px">🔍</span>
+              <input id="pos-busca" placeholder="Buscar por nombre, código o código de barras…"
+                     value="${UI.esc(this._busca)}" autocomplete="off"
+                     oninput="POS._busca=this.value;POS._pintarGrid()">
             </div>
-            <!-- Categorías Horizontal Slider -->
-            <div class="pos-cat-slider">
-              <div class="pos-cat-pill ${!this._cat ? 'active' : ''}" onclick="POS._cat='';POS._onCatChange(this)">📦 Todo</div>
-              ${POS._girosPOS().map(g => `<div class="pos-cat-pill ${this._giro===g?'active':''}" onclick="POS.setGiro('${g}', this)">${(GIROS[g]||{}).icon||''} ${(GIROS[g]||{}).label||g}</div>`).join('')}
-              ${this._cats().map(c=>`
-                <div class="pos-cat-pill ${this._cat===c?'active':''}" onclick="POS._cat='${c}';POS._onCatChange(this)">${c}</div>
-              `).join('')}
-            </div>
+            ${POS._girosPOS().length > 1 ? `
+            <div class="fpos-chips">
+              ${POS._girosPOS().map(g => `<div class="fpos-chip ${this._giro===g?'on':''}" onclick="POS.setGiro('${g}', this)">${(GIROS[g]||{}).icon||''} ${UI.esc((GIROS[g]||{}).label||g)}</div>`).join('')}
+            </div>` : ''}
+            <!-- Chips de categoría con conteo; se repintan con la rejilla -->
+            <div class="fpos-chips" id="pos-chips"></div>
             <div id="pos-grid" style="flex:1"></div>
+            <div class="fpos-teclas">
+              <span>⌨️ <kbd>F2</kbd>buscar</span>
+              <span><kbd>F4</kbd>cobrar</span>
+              <span><kbd>Esc</kbd>limpiar búsqueda</span>
+              <span style="color:var(--text3)">Escaneá el código de barras y el artículo se agrega solo.</span>
+            </div>
           </div>
           <!-- Carrito -->
           <div class="pos-cart-panel" id="pos-cart-panel">
@@ -498,6 +501,7 @@ const POS = {
       </div>`;
     this._pintarGrid();
     this._pintarCart();
+    this._cablearAtajos();
   },
 
   /* Panel del carrito en móvil (≤920px): se desliza sobre el catálogo */
@@ -516,8 +520,80 @@ const POS = {
   },
 
   _onCatChange(el) {
-    document.querySelectorAll('.pos-cat-pill').forEach(p=>p.classList.remove('active'));
-    el.classList.add('active');
+    /* Los chips de categoría se repintan enteros en _pintarChips (el conteo
+       cambia), así que basta con repintar. Se conservan las pastillas de giro,
+       que sí viven fuera de ese repintado. */
+    document.querySelectorAll('.pos-cat-pill').forEach(p => p.classList.remove('active'));
+    if (el && el.classList.contains('pos-cat-pill')) el.classList.add('active');
+    this._pintarGrid();
+  },
+
+  /* ── ATAJOS DE TECLADO Y ESCÁNER ──
+     Se anuncian en la barra inferior del catálogo, así que tienen que existir:
+     un atajo que se muestra y no funciona es peor que no mostrarlo.
+       F2  → al buscador       F4  → cobrar       Esc → limpiar la búsqueda
+     El escáner de código de barras se comporta como un teclado que escribe
+     rápido y termina con Enter: por eso el Enter del buscador agrega el
+     artículo cuando la búsqueda identifica a UNO solo, y limpia para el
+     siguiente. Sin eso, escanear sólo filtraba y había que tocar la tarjeta. */
+  _cablearAtajos() {
+    if (this._atajosListos) return;      // render() se llama varias veces
+    this._atajosListos = true;
+
+    document.addEventListener('keydown', (e) => {
+      if (!document.getElementById('pos-grid')) return;   // no estamos en el POS
+
+      if (e.key === 'F2') {
+        e.preventDefault();
+        const i = document.getElementById('pos-busca');
+        if (i) { i.focus(); i.select(); }
+        return;
+      }
+      if (e.key === 'F4') {
+        e.preventDefault();
+        if (this._cart.length) this.cobrar();
+        else UI.toast('El carrito está vacío', 'warn');
+        return;
+      }
+      if (e.key === 'Escape') {
+        const i = document.getElementById('pos-busca');
+        if (i && (this._busca || i.value)) {
+          this._busca = ''; i.value = ''; this._pintarGrid();
+        }
+        return;
+      }
+      if (e.key === 'Enter' && e.target?.id === 'pos-busca') {
+        e.preventDefault();
+        this._agregarPorBusqueda();
+      }
+    });
+  },
+
+  /* Enter en el buscador: agrega si la búsqueda deja UN candidato claro.
+     Prioriza la coincidencia EXACTA de código sobre el nombre — un escáner
+     manda el código completo, y si además hubiera un producto cuyo nombre lo
+     contiene, agregar el equivocado sería peor que no agregar nada. */
+  _agregarPorBusqueda() {
+    const b = this._busca.trim().toLowerCase();
+    if (!b) return;
+    const items = this._filtrados();
+
+    const exacto = items.filter(p =>
+      String(p.codigo || '').toLowerCase() === b ||
+      String(p.codigo_barras || '').toLowerCase() === b);
+
+    const elegido = exacto.length === 1 ? exacto[0] : (items.length === 1 ? items[0] : null);
+
+    if (!elegido) {
+      UI.toast(items.length ? `${items.length} coincidencias: elegí una` : 'Sin coincidencias', 'warn');
+      return;
+    }
+    if ((Number(elegido.stock) || 0) <= 0) { UI.toast(`${elegido.nombre}: sin stock`, 'warn'); return; }
+
+    this.addToCart(elegido.id);
+    this._busca = '';
+    const i = document.getElementById('pos-busca');
+    if (i) i.value = '';
     this._pintarGrid();
   },
 
@@ -533,34 +609,74 @@ const POS = {
     });
   },
 
+  /* Tarjeta de producto al estilo del POS de DoctorPro: miniatura, nombre a
+     dos líneas, precio grande y un badge de stock con semáforo. El badge dice
+     el número disponible en vez de sólo "hay/no hay": el cajero decide si
+     alcanza para lo que le están pidiendo sin abrir nada. */
+  _tarjetaProducto(p) {
+    const stock = Number(p.stock) || 0;
+    const sinStock = stock <= 0;
+    const bajo = !sinStock && stock <= 5;
+    const clase = sinStock ? 'out' : (bajo ? 'low' : 'ok');
+    const etiqueta = sinStock ? 'Agotado'
+      : `${stock}${p.unidad_medida ? ' ' + UI.esc(p.unidad_medida) : ''} disp.`;
+
+    const thumb = p.imagen_url
+      ? `<img class="fpos-thumb" src="${encodeURI(p.imagen_url)}" alt="" loading="lazy">`
+      : '<div class="fpos-thumb">📦</div>';
+
+    const codigo = p.codigo || p.codigo_barras;
+    return `
+      <div class="fpos-card ${sinStock ? 'off' : ''}"
+           ${sinStock ? '' : `onclick="POS.addToCart('${p.id}')"`}
+           title="${UI.esc(p.nombre)}">
+        ${thumb}
+        <div class="fpos-body">
+          <div class="fpos-nombre">${UI.esc(p.nombre)}</div>
+          ${codigo ? `<div class="fpos-meta">${UI.esc(codigo)}</div>` : ''}
+          <div class="fpos-pie">
+            <span class="fpos-precio">${UI.q(p.precio_venta)}</span>
+            <span class="fpos-stock ${clase}">${etiqueta}</span>
+          </div>
+        </div>
+      </div>`;
+  },
+
   _pintarGrid() {
     const cont = document.getElementById('pos-grid');
     if (!cont) return;
     const items = this._filtrados();
-    cont.innerHTML = `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:12px">
-      ${items.map(p=>{
-        const sinStock = (p.stock||0) <= 0;
-        const stockBajo = !sinStock && (p.stock||0) <= 5;
-        const thumb = p.imagen_url
-          ? `<img src="${p.imagen_url}" alt="" style="width:100%;height:100px;object-fit:cover;border-radius:12px 12px 0 0">`
-          : `<div style="width:100%;height:100px;background:var(--surface2);display:flex;align-items:center;justify-content:center;font-size:32px;border-radius:12px 12px 0 0">📦</div>`;
-        return `
-        <div class="pos-prod-card" onclick="${sinStock?'':'POS.addToCart(\''+p.id+'\')'}" style="opacity:${sinStock?0.55:1}">
-          <div style="position:relative">
-            ${thumb}
-            ${sinStock?`<span style="position:absolute;top:8px;right:8px;background:var(--red);color:#fff;font-size:9px;font-weight:900;padding:2px 6px;border-radius:4px">AGOTADO</span>`:
-              (stockBajo?`<span style="position:absolute;top:8px;right:8px;background:var(--amber);color:#fff;font-size:9px;font-weight:900;padding:2px 6px;border-radius:4px">¡ÚLTIMOS ${p.stock}!</span>`:'')}
-          </div>
-          <div style="padding:10px">
-            <div style="font-weight:800;font-size:12px;line-height:1.3;height:32px;overflow:hidden;color:var(--text);margin-bottom:6px">${p.nombre}</div>
-            <div style="display:flex;justify-content:space-between;align-items:center">
-              <span style="font-weight:900;font-size:14px;color:var(--amber);font-family:\'Outfit\',sans-serif">${UI.q(p.precio_venta)}</span>
-              <span style="font-size:10px;color:var(--text3);font-weight:700">${sinStock?'Sin stock':`${p.stock} ${p.unidad_medida||''}`}</span>
-            </div>
-          </div>
-        </div>`;
-      }).join('')||'<div class="text-muted" style="padding:24px;text-align:center">Sin productos encontrados</div>'}
-    </div>`;
+    cont.innerHTML = items.length
+      ? `<div class="fpos-grid">${items.map(p => this._tarjetaProducto(p)).join('')}</div>`
+      : `<div class="empty-state" style="padding:34px;text-align:center">
+           ${this._busca ? `Ningún producto coincide con <b>${UI.esc(this._busca)}</b>.`
+                         : 'No hay productos en esta categoría.'}
+         </div>`;
+    this._pintarChips();
+  },
+
+  /* Los chips se repintan junto con la rejilla porque su conteo depende del
+     buscador: al escribir "aceite", cada categoría debe decir cuántos aceites
+     tiene, no cuántos artículos tiene en total. */
+  _pintarChips() {
+    const cont = document.getElementById('pos-chips');
+    if (!cont) return;
+    /* Se cuenta sobre lo filtrado por texto y giro, pero SIN la categoría
+       activa: si no, el chip elegido diría su total y los demás cero. */
+    const catGuardada = this._cat;
+    this._cat = '';
+    const base = this._filtrados();
+    this._cat = catGuardada;
+
+    const cuenta = c => base.filter(p => (p.categoria || 'Sin categoría') === c).length;
+    const chip = (activo, txt, n, onclick) =>
+      `<div class="fpos-chip ${activo ? 'on' : ''}" onclick="${onclick}">${txt}<small>${n}</small></div>`;
+
+    cont.innerHTML = [
+      chip(!this._cat, '📦 Todo', base.length, `POS._cat='';POS._onCatChange(this)`),
+      ...this._cats().map(c => chip(this._cat === c, UI.esc(c), cuenta(c),
+        `POS._cat='${UI.escUI.jsAttr(String(c))}';POS._onCatChange(this)`)),
+    ].join('');
   },
 
   /* ── CARRITO ─────────────────────────────────────── */
@@ -685,7 +801,7 @@ const POS = {
         <div class="pos-line" style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border)">
           ${l.imagen_url?`<img src="${l.imagen_url}" style="width:40px;height:40px;border-radius:8px;object-fit:cover;flex-shrink:0">`:'<div style="width:40px;height:40px;border-radius:8px;background:var(--surface3);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:18px">📦</div>'}
           <div class="pos-line-info" style="flex:1;min-width:0">
-            <div class="pos-line-nombre" style="font-size:13.5px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--text)">${l.nombre}</div>
+            <div class="pos-line-nombre" style="font-size:13.5px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--text)">${UI.esc(l.nombre)}</div>
             <div style="font-size:11.5px;color:var(--text3);margin-top:2px">${UI.q(l.precio)} c/u</div>
           </div>
           <div style="display:flex;align-items:center;gap:6px">
@@ -776,7 +892,7 @@ const POS = {
         </div>
       </div>
 
-      <button class="btn btn-amber" style="width:100%;font-size:17px;padding:15px;font-weight:900;border-radius:10px;margin-top:14px;box-shadow:0 6px 18px rgba(217,119,6,0.2)" onclick="POS.cobrar()" ${this._cart.length?'':'disabled'}>
+      <button class="btn fpos-cobrar" style="width:100%;font-size:18px;padding:16px;font-weight:800;border-radius:12px;margin-top:14px;background:${this._cart.length?'#16a34a':'var(--surface3)'};color:${this._cart.length?'#fff':'var(--text3)'};border:none;font-family:'Outfit',sans-serif;box-shadow:${this._cart.length?'0 6px 18px rgba(22,163,74,0.28)':'none'}" onclick="POS.cobrar()" ${this._cart.length?'':'disabled'}>
         💵 Cobrar ${UI.q(t.total)}
       </button>`;
     this._pintarMbar();

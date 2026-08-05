@@ -520,8 +520,8 @@ Modulos.armeria = {
             ${this._data.map(o => `<tr>
               <td class="mono-sm"><b>${o.num || '—'}</b></td>
               <td><span class="badge badge-${this._colorTipo(o.tipo)}">${o.tipo === 'compra' ? '🔽 Compra' : '🔺 Venta'}</span></td>
-              <td>${o.clientes?.nombre || o.proveedores?.nombre || '—'}</td>
-              <td><span class="badge badge-gray">${this._CATEGORIAS[o.categoria] || o.categoria}</span><div style="font-size:11px;color:var(--text3)">${[o.marca, o.modelo, o.calibre].filter(Boolean).join(' · ') || '—'}</div></td>
+              <td>${UI.esc(o.clientes?.nombre || o.proveedores?.nombre || '—')}</td>
+              <td><span class="badge badge-gray">${this._CATEGORIAS[o.categoria] || o.categoria}</span><div style="font-size:11px;color:var(--text3)">${UI.esc([o.marca, o.modelo, o.calibre].filter(Boolean).join(' · ') || '—')}</div></td>
               <td class="mono-sm">${o.numero_serie || '—'}${o.inventario_id ? '<div style="font-size:10px;color:var(--green)">📦 del inventario</div>' : ''}</td>
               <td class="mono-sm" style="font-weight:700">${UI.q(o.total)}</td>
               <td><span class="badge badge-${this._colorEstado(o.estado)}">${this._ESTADOS[o.estado] || o.estado || '—'}</span></td>

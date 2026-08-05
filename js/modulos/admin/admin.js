@@ -384,8 +384,8 @@ Modulos.admin = {
               </div>
               <div style="display:flex;gap:6px">
                 <button class="btn btn-sm btn-cyan" onclick="Modulos.admin.verDocEmpresa('${d.id}')">👁 Ver</button>
-                <button class="btn btn-sm btn-ghost" onclick="Modulos.admin.modalDocEmpresa('${d.tipo.replace(/'/g,"\\'")}','${d.id}')">🔄 Reemplazar</button>
-                ${Modulos.btnAccion('eliminar', `Modulos.eliminarRegistro('documentos_empresa','${d.id}','${d.tipo.replace(/'/g,"\\'")}',()=>Modulos.admin._renderDocumentosEmpresa())`)}
+                <button class="btn btn-sm btn-ghost" onclick="Modulos.admin.modalDocEmpresa('${UI.jsAttr(d.tipo)}','${d.id}')">🔄 Reemplazar</button>
+                ${Modulos.btnAccion('eliminar', `Modulos.eliminarRegistro('documentos_empresa','${d.id}','${UI.jsAttr(d.tipo)}',()=>Modulos.admin._renderDocumentosEmpresa())`)}
               </div>
             </div>`).join('') : `<div class="text-muted" style="font-size:12px">Sin documentos adicionales.</div>`}
         </div>
@@ -409,7 +409,7 @@ Modulos.admin = {
       </div>
       <div class="modal-footer">
         <button class="btn btn-ghost" onclick="UI.cerrarModal()">Cancelar</button>
-        <button class="btn btn-amber" onclick="Modulos.admin.guardarDocEmpresa('${tipo.replace(/'/g,"\\'")}','${docId}')">Guardar</button>
+        <button class="btn btn-amber" onclick="Modulos.admin.guardarDocEmpresa('${UI.jsAttr(tipo)}','${docId}')">Guardar</button>
       </div>`, '480px');
   },
 

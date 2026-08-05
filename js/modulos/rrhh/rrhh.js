@@ -44,7 +44,7 @@ Modulos.rrhh = {
               ${this._empleados.map(e=>`<tr>
                 <td><div style="display:flex;align-items:center;gap:8px">
                   <div style="width:32px;height:32px;border-radius:50%;background:var(--amber-dim);display:flex;align-items:center;justify-content:center">👤</div>
-                  <div><div style="font-weight:700">${e.nombre}</div><div style="font-size:11px;color:var(--text3)">${e.email||''}</div></div>
+                  <div><div style="font-weight:700">${UI.esc(e.nombre)}</div><div style="font-size:11px;color:var(--text3)">${UI.esc(e.email||'')}</div></div>
                 </div></td>
                 <td>${e.cargo||'—'}</td>
                 <td class="mono-sm">${e.dpi||'—'}</td>
@@ -55,7 +55,7 @@ Modulos.rrhh = {
                 <td><div style="display:flex;gap:4px">
                   ${Modulos.btnAccion('editar', `Modulos.rrhh.modalEmpleado('${e.id}')`)}
                   <button class="btn btn-sm btn-amber" title="Imprimir Carné de Identificación" onclick="event.stopPropagation();Modulos.rrhh.imprimirCarne('${e.id}')">🪪 Carné</button>
-                  ${Modulos.btnAccion('eliminar', `Modulos.rrhh.eliminarEmpleado('${e.id}','${(e.nombre||'').replace(/'/g,"\\'")}')`)}
+                  ${Modulos.btnAccion('eliminar', `Modulos.rrhh.eliminarEmpleado('${e.id}','${UI.jsAttr(e.nombre||'')}')`)}
                 </div></td>
               </tr>`).join('')||'<tr><td colspan="8" style="text-align:center;padding:24px;color:var(--text3)">Sin empleados</td></tr>'}
             </tbody>
@@ -87,7 +87,7 @@ Modulos.rrhh = {
             <thead><tr><th>Empleado</th><th>Salario</th><th>Bono</th><th>IGSS Lab.</th><th>ISR</th><th>Extra/Feriado</th><th>Líquido</th><th>Estado</th><th>Acciones</th></tr></thead>
             <tbody>
               ${pagos.map(p=>`<tr>
-                <td>${p.empleados?.nombre||'—'}</td>
+                <td>${UI.esc(p.empleados?.nombre||'—')}</td>
                 <td class="mono-sm">${UI.q(p.salario_base)}</td>
                 <td class="mono-sm">${UI.q(p.bonificacion)}</td>
                 <td class="mono-sm text-red">-${UI.q(p.igss_laboral)}</td>
@@ -98,7 +98,7 @@ Modulos.rrhh = {
                 <td><div style="display:flex;gap:4px">
                   ${p.pagado ? '' : `<button class="btn btn-sm btn-green" onclick="Modulos.rrhh.pagarNomina('${p.id}')">💵 Pagar</button>`}
                   <button class="btn btn-sm btn-ghost" onclick="Modulos.rrhh.modalNomina('${p.id}')" title="Editar">✏️ Editar</button>
-                  ${Modulos.btnAccion('eliminar', `Modulos.eliminarRegistro('pagos_nomina','${p.id}','el pago de nómina de ${(p.empleados?.nombre||'').replace(/'/g,"\\'")}',()=>Modulos.rrhh._renderTab())`)}
+                  ${Modulos.btnAccion('eliminar', `Modulos.eliminarRegistro('pagos_nomina','${p.id}','el pago de nómina de ${UI.jsAttr(p.empleados?.nombre||'')}',()=>Modulos.rrhh._renderTab())`)}
                 </div></td>
               </tr>`).join('')||`<tr><td colspan="9" style="text-align:center;padding:24px;color:var(--text3)">
                 Presiona "Calcular Nómina" para generar los pagos del mes actual o "Registrar Pago Manual"
@@ -187,7 +187,7 @@ Modulos.rrhh = {
 
                 return `<tr>
                   <td>
-                    <div style="font-weight:700">${p.empleados?.nombre || '—'}</div>
+                    <div style="font-weight:700">${UI.esc(p.empleados?.nombre || '—')}</div>
                     <div style="font-size:11px;color:var(--text3)">Afiliación: <b>${p.empleados?.igss || 'No afiliado'}</b></div>
                   </td>
                   <td class="mono-sm">${p.empleados?.dpi || '—'}</td>
@@ -376,7 +376,7 @@ Modulos.rrhh = {
     UI.modal(id ? '✏️ Editar Pago de Nómina' : '＋ Registrar Pago de Nómina Manual', `
       <div class="form-row">
         <div class="form-group"><label class="form-label">Empleado *</label>
-          ${esEdicion ? `<input class="form-input" value="${p.empleados?.nombre || ''}" readonly>` : `
+          ${esEdicion ? `<input class="form-input" value="${UI.esc(p.empleados?.nombre || '')}" readonly>` : `
           <select class="form-select" id="nom-empleado-id" onchange="Modulos.rrhh._onNomEmpleadoCambio(this.value)">
             <option value="">— Seleccionar Empleado —</option>
             ${activos.map(e=>`<option value="${e.id}">${UI.esc(e.nombre)}</option>`).join('')}
@@ -616,7 +616,7 @@ Modulos.rrhh = {
       <div class="form-group"><label class="form-label">Reporta a (jefe directo)</label>
         <select class="form-select" id="emp-jefe">
           <option value="">— Sin jefe (CEO / Dueño / Gerente General) —</option>
-          ${this._empleados.filter(x=>x.id!==e.id).map(x=>`<option value="${x.id}" ${e.reporta_a===x.id?'selected':''}>${x.nombre}${x.cargo?` — ${x.cargo}`:''}</option>`).join('')}
+          ${this._empleados.filter(x=>x.id!==e.id).map(x=>`<option value="${x.id}" ${e.reporta_a===x.id?'selected':''}>${UI.esc(x.nombre)}${x.cargo?` — ${x.cargo}`:''}</option>`).join('')}
         </select>
         <div style="font-size:11px;color:var(--text3);margin-top:4px">Define la cadena de mando. Solo la cúpula (CEO/Dueño/Gerente General) queda sin jefe.</div></div>
 
@@ -1017,7 +1017,7 @@ Modulos.rrhh = {
               <div style="width:48px;height:48px;border-radius:50%;background:var(--surface);display:flex;align-items:center;justify-content:center;font-weight:800;color:var(--${col})">${score}%</div>
             </div>
             <div style="min-width:0">
-              <div style="font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${e.avatar||'👤'} ${e.nombre}</div>
+              <div style="font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${e.avatar||'👤'} ${UI.esc(e.nombre)}</div>
               <div style="font-size:11px;color:var(--text3)">${e.cargo||ROLES[e.rol]?.label||'—'}</div>
               <div style="margin-top:3px"><span class="badge badge-${rec?.aprobado?'green':'amber'}" style="font-size:10px">Bono ${UI.q(bono)}${rec?.aprobado?' ✓':''}</span></div>
             </div>
@@ -1330,8 +1330,8 @@ Modulos.rrhh = {
       <div class="table-wrap"><table class="data-table">
         <thead><tr><th>Empleado</th><th>Capacitación</th><th>Modalidad</th><th>Fechas</th><th>Horas</th><th>Costo</th><th>Resultado</th><th>Acciones</th></tr></thead>
         <tbody>${lista.map(c=>`<tr>
-          <td><b>${c.empleados?.nombre||'—'}</b><div style="font-size:10px;color:var(--text3)">${c.empleados?.cargo||''}</div></td>
-          <td>${c.titulo}<div style="font-size:10px;color:var(--text3)">${c.instructor?'Por: '+c.instructor:''}</div></td>
+          <td><b>${UI.esc(c.empleados?.nombre||'—')}</b><div style="font-size:10px;color:var(--text3)">${c.empleados?.cargo||''}</div></td>
+          <td>${UI.esc(c.titulo)}<div style="font-size:10px;color:var(--text3)">${c.instructor?'Por: '+c.instructor:''}</div></td>
           <td><span class="badge badge-cyan" style="font-size:10px">${c.tipo||'Curso'}</span></td>
           <td class="mono-sm">${UI.fecha(c.fecha_inicio)}${c.fecha_fin?' → '+UI.fecha(c.fecha_fin):''}</td>
           <td class="mono-sm" style="text-align:center">${c.horas||'—'}</td>
@@ -1457,9 +1457,9 @@ Modulos.rrhh = {
         <tbody>${lista.map(a=>{
           const esMia = Auth.user?.email && a.empleados?.email && Auth.user.email.toLowerCase()===a.empleados.email.toLowerCase();
           return `<tr style="${a.estado==='devuelto'?'opacity:.6':''}">
-            <td><b>${a.empleados?.nombre||'—'}</b><div style="font-size:10px;color:var(--text3)">${a.empleados?.cargo||''}</div></td>
+            <td><b>${UI.esc(a.empleados?.nombre||'—')}</b><div style="font-size:10px;color:var(--text3)">${a.empleados?.cargo||''}</div></td>
             <td><span class="badge badge-cyan" style="font-size:10px">${this._asigTipos[a.tipo]||a.tipo}</span></td>
-            <td>${a.descripcion}<div style="font-size:10px;color:var(--text3)">${a.identificador||''} ${(a.fotos||[]).length?`· 📷 ${(a.fotos||[]).length}`:''}</div></td>
+            <td>${UI.esc(a.descripcion)}<div style="font-size:10px;color:var(--text3)">${a.identificador||''} ${(a.fotos||[]).length?`· 📷 ${(a.fotos||[]).length}`:''}</div></td>
             <td class="mono-sm">${UI.fecha(a.fecha_entrega)}</td>
             <td>${a.firma_fecha
               ? `<span class="badge badge-green" style="font-size:10px">✍️ ${a.firma_tipo==='digital'?'Digital':'En papel'} · ${a.firma_nombre||''}</span>`
@@ -1717,7 +1717,7 @@ Modulos.rrhh = {
         <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
           <span class="badge badge-${st.color}">${st.txt}</span>
           <button class="btn btn-sm btn-cyan" onclick="Modulos.rrhh.modalDocumento('${empId}','${tipo}','${doc?.id||''}')">${doc?'✏️':'＋'}</button>
-          ${doc?Modulos.btnAccion('eliminar', `Modulos.eliminarRegistro('empleado_documentos','${doc.id}','el documento ${tipo}',()=>Modulos.rrhh.verDocumentos('${empId}','${(nombre||'').replace(/'/g,"\\'")}'))`):''}
+          ${doc?Modulos.btnAccion('eliminar', `Modulos.eliminarRegistro('empleado_documentos','${doc.id}','el documento ${tipo}',()=>Modulos.rrhh.verDocumentos('${empId}','${UI.jsAttr(nombre||'')}'))`):''}
         </div>
       </div>`;
     }).join('');
@@ -1896,7 +1896,7 @@ Modulos.rrhh = {
                 const totA = lab + totP;
                 return `
                   <tr>
-                    <td>${p.empleados?.nombre || '—'}</td>
+                    <td>${UI.esc(p.empleados?.nombre || '—')}</td>
                     <td>${p.empleados?.igss || '—'}</td>
                     <td>${p.empleados?.dpi || '—'}</td>
                     <td class="text-right">Q${base.toFixed(2)}</td>
@@ -2493,7 +2493,7 @@ Modulos.rrhh = {
             ${Modulos.btnAccion('editar', `Modulos.rrhh.modalVacante('${v.id}')`)}
             <button class="btn btn-sm btn-${v.estado==='publicada'?'ghost':'green'}" onclick="Modulos.rrhh.togglePublicarVacante('${v.id}')">${v.estado==='publicada'?'⏸️ Despublicar':'📢 Publicar'}</button>
             <button class="btn btn-sm btn-cyan" onclick="Modulos.rrhh._reclutVacanteSel='${v.id}';Modulos.rrhh._renderTab()">👥 Aplicantes</button>
-            ${Modulos.btnAccion('eliminar', `Modulos.eliminarRegistro('vacantes','${v.id}','${(v.puesto||'').replace(/'/g,"\\'")}',()=>Modulos.rrhh._renderTab())`)}
+            ${Modulos.btnAccion('eliminar', `Modulos.eliminarRegistro('vacantes','${v.id}','${UI.jsAttr(v.puesto||'')}',()=>Modulos.rrhh._renderTab())`)}
           </div></td>
         </tr>`).join('')||'<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--text3)">Sin vacantes registradas</td></tr>'}</tbody>
       </table></div>
@@ -2510,7 +2510,7 @@ Modulos.rrhh = {
         <tbody>${aplicantes.map(a=>{
           const vac = vacantes.find(v=>v.id===a.vacante_id);
           return `<tr>
-          <td><b>${a.nombre}</b>${a.notas?`<div style="font-size:10px;color:var(--text3)">${UI.esc(a.notas)}</div>`:''}</td>
+          <td><b>${UI.esc(a.nombre)}</b>${a.notas?`<div style="font-size:10px;color:var(--text3)">${UI.esc(a.notas)}</div>`:''}</td>
           <td>${vac?.puesto||'—'}</td>
           <td class="mono-sm">${a.telefono||''}${a.email?'<br>'+a.email:''}</td>
           <td>${a.cv_base64?`<button class="btn btn-sm btn-cyan" onclick="UI.verAdjunto(Modulos.rrhh._cvDe('${a.id}'),'📄 CV')">📄 Ver</button>`:'—'}</td>
@@ -2519,7 +2519,7 @@ Modulos.rrhh = {
           </select></td>
           <td><div style="display:flex;gap:4px">
             ${Modulos.btnAccion('editar', `Modulos.rrhh.modalAplicante('${a.id}')`)}
-            ${Modulos.btnAccion('eliminar', `Modulos.eliminarRegistro('aplicantes','${a.id}','${(a.nombre||'').replace(/'/g,"\\'")}',()=>Modulos.rrhh._renderTab())`)}
+            ${Modulos.btnAccion('eliminar', `Modulos.eliminarRegistro('aplicantes','${a.id}','${UI.jsAttr(a.nombre||'')}',()=>Modulos.rrhh._renderTab())`)}
           </div></td>
         </tr>`;}).join('')||'<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--text3)">Sin aplicantes registrados</td></tr>'}</tbody>
       </table></div>
@@ -2542,7 +2542,7 @@ Modulos.rrhh = {
             <td>${a.cv_base64?`<button class="btn btn-sm btn-cyan" onclick="UI.verAdjunto(Modulos.rrhh._cvDe('${a.id}'),'📄 CV')">📄 Ver</button>`:'—'}</td>
             <td><span class="badge badge-${a.estado==='contratado'?'green':a.estado==='rechazado'?'gray':'amber'}">${a.estado}</span></td>
             <td class="mono-sm">${UI.fecha(a.created_at)}</td>
-            <td>${Modulos.btnAccion('eliminar', `Modulos.eliminarRegistro('aplicantes','${a.id}','${(a.nombre||'').replace(/'/g,"\\'")}',()=>Modulos.rrhh._renderTab())`)}</td>
+            <td>${Modulos.btnAccion('eliminar', `Modulos.eliminarRegistro('aplicantes','${a.id}','${UI.jsAttr(a.nombre||'')}',()=>Modulos.rrhh._renderTab())`)}</td>
           </tr>`;}).join('')||'<tr><td colspan="7" style="text-align:center;padding:24px;color:var(--text3)">Sin aplicantes en historial</td></tr>'}</tbody>
         </table></div>`:''}
       </div>`;
@@ -2725,9 +2725,9 @@ Modulos.rrhh = {
       <div class="table-wrap"><table class="data-table">
         <thead><tr><th>Empleado</th><th>Tipo</th><th>Motivo</th><th>Fecha</th><th>Artículo</th><th>Detalle</th><th>Acciones</th></tr></thead>
         <tbody>${registros.map(r=>`<tr>
-          <td><b>${r.empleados?.nombre||'—'}</b></td>
+          <td><b>${UI.esc(r.empleados?.nombre||'—')}</b></td>
           <td><span class="badge badge-${this._discColor(r.tipo)}" style="font-size:10px">${r.tipo}</span></td>
-          <td>${r.motivo}</td>
+          <td>${UI.esc(r.motivo)}</td>
           <td class="mono-sm">${UI.fecha(r.fecha)}</td>
           <td class="mono-sm">${r.articulo||'—'}</td>
           <td class="mono-sm">${r.dias_suspension?r.dias_suspension+' día(s) susp.':''}${r.monto_sancion?UI.q(r.monto_sancion):''}</td>
@@ -2881,12 +2881,12 @@ Modulos.rrhh = {
         <tbody>${movs.map(m=>{
           const emp = this._empleados.find(e=>e.id===m.empleado_id);
           return `<tr>
-          <td>${emp?.nombre||'—'}</td>
+          <td>${UI.esc(emp?.nombre||'—')}</td>
           <td><span class="badge badge-${m.tipo==='goce'?'cyan':'amber'}">${m.tipo==='goce'?'Goce':'Pago'}</span></td>
           <td class="mono-sm">${m.fecha_inicio?UI.fecha(m.fecha_inicio)+(m.fecha_fin?' → '+UI.fecha(m.fecha_fin):''):'—'}</td>
           <td class="mono-sm" style="text-align:center">${m.dias}</td>
           <td class="mono-sm text-amber">${m.monto?UI.q(m.monto):'—'}</td>
-          <td>${m.notas||''}</td>
+          <td>${UI.esc(m.notas||'')}</td>
           <td>${Modulos.btnAccion('eliminar', `Modulos.eliminarRegistro('vacaciones_movimientos','${m.id}','este movimiento',()=>Modulos.rrhh._renderTab())`)}</td>
         </tr>`;}).join('')||'<tr><td colspan="7" style="text-align:center;padding:24px;color:var(--text3)">Sin movimientos registrados</td></tr>'}</tbody>
       </table></div>`;
@@ -2998,7 +2998,7 @@ Modulos.rrhh = {
       <div class="table-wrap"><table class="data-table">
         <thead><tr><th>Empleado</th><th>Fecha</th><th>Tipo</th><th>Horas</th><th>Factor</th><th>Monto</th><th>Estado</th><th>Acciones</th></tr></thead>
         <tbody>${registros.map(r=>`<tr>
-          <td><b>${r.empleados?.nombre||'—'}</b></td>
+          <td><b>${UI.esc(r.empleados?.nombre||'—')}</b></td>
           <td class="mono-sm">${UI.fecha(r.fecha)}</td>
           <td><span class="badge badge-${r.tipo==='extra'?'cyan':'green'}" style="font-size:10px">${this._heTipos[r.tipo]||r.tipo}</span></td>
           <td class="mono-sm" style="text-align:center">${r.horas||'—'}</td>

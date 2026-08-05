@@ -49,8 +49,8 @@ Modulos.electronica = {
           <tbody>
             ${this._data.map(r=>`<tr>
               <td class="mono-sm"><b>${r.num||'—'}</b></td>
-              <td>${r.clientes?.nombre||'—'}</td>
-              <td><span class="badge badge-gray">${this._TIPOS[r.tipo_equipo]||r.tipo_equipo}</span><div style="font-size:11px;color:var(--text3)">${[r.marca,r.modelo].filter(Boolean).join(' ')}</div></td>
+              <td>${UI.esc(r.clientes?.nombre||'—')}</td>
+              <td><span class="badge badge-gray">${this._TIPOS[r.tipo_equipo]||r.tipo_equipo}</span><div style="font-size:11px;color:var(--text3)">${UI.esc([r.marca,r.modelo].filter(Boolean).join(' '))}</div></td>
               <td style="font-size:12px;max-width:180px">${(r.falla_reportada||'').slice(0,60)}${(r.falla_reportada||'').length>60?'…':''}</td>
               <td class="mono-sm">${UI.q(r.precio_total)}</td>
               <td class="mono-sm ${r.anticipo>0?'text-green':''}">${UI.q(r.anticipo)}</td>

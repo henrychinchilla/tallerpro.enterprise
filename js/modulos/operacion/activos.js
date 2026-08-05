@@ -55,7 +55,7 @@ Modulos.activos = {
             const anios = ((Number(a.vida_util_meses)||0)/12);
             const estCol = a.estado==='activo'?'green':a.estado==='vendido'?'cyan':'gray';
             return `<tr style="${a.estado!=='activo'?'opacity:.6':''}">
-              <td><div style="font-weight:700">${a.nombre}</div>${a.codigo?`<div style="font-size:11px;color:var(--text3)">${a.codigo}</div>`:''}</td>
+              <td><div style="font-weight:700">${UI.esc(a.nombre)}</div>${a.codigo?`<div style="font-size:11px;color:var(--text3)">${a.codigo}</div>`:''}</td>
               <td><span class="badge badge-gray">${a.categoria||'—'}</span></td>
               <td class="mono-sm">${UI.fecha(a.fecha_adquisicion)||'—'}</td>
               <td class="mono-sm">${UI.q(a.costo)}</td>
@@ -66,7 +66,7 @@ Modulos.activos = {
               <td><div style="display:flex;gap:4px">
                 ${Modulos.btnAccion('editar', `Modulos.activos.modalForm('${a.id}')`)}
                 ${a.estado==='activo'?`<button class="btn btn-sm btn-ghost" onclick="Modulos.activos.modalBaja('${a.id}')" title="Dar de baja / vender">📤</button>`:''}
-                ${Modulos.btnAccion('eliminar', `Modulos.eliminarRegistro('activos','${a.id}','${(a.nombre||'').replace(/'/g,"\\'")}',()=>Modulos.activos.render())`)}
+                ${Modulos.btnAccion('eliminar', `Modulos.eliminarRegistro('activos','${a.id}','${UI.jsAttr(a.nombre||'')}',()=>Modulos.activos.render())`)}
               </div></td>
             </tr>`;
           }).join('')||'<tr><td colspan="9" style="text-align:center;padding:24px;color:var(--text3)">Sin activos. Registra herramientas, maquinaria y equipo con “＋ Nuevo Activo”.</td></tr>'}

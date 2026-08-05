@@ -474,7 +474,7 @@ Modulos.contabilidad = {
           <tbody>${obligaciones.map(o=>{
             const vencida = o.estado!=='pagado' && o.fecha_vencimiento && o.fecha_vencimiento < hoy;
             return `<tr>
-              <td><b>${o.tipo}</b><div style="font-size:10px;color:var(--text3)">${o.notas||''}</div></td>
+              <td><b>${o.tipo}</b><div style="font-size:10px;color:var(--text3)">${UI.esc(o.notas||'')}</div></td>
               <td class="mono-sm">${o.periodo}</td>
               <td class="mono-sm text-amber">${UI.q(o.monto_calculado)}</td>
               <td class="mono-sm text-green">${o.monto_pagado?UI.q(o.monto_pagado):'—'}</td>

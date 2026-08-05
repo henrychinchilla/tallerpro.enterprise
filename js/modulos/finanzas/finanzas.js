@@ -147,7 +147,7 @@ Modulos.finanzas = {
                   : v.tipo==='hospedaje' && det.noches ? `🛏️ ${det.noches} noche${det.noches==1?'':'s'}` : '';
                 return `<tr>
                 <td>${UI.fecha(v.fecha)}</td>
-                <td>${v.empleados?.nombre||'—'}</td>
+                <td>${UI.esc(v.empleados?.nombre||'—')}</td>
                 <td>${v.concepto}${desg?`<div style="font-size:10px;color:var(--text3)">${desg}</div>`:''}</td>
                 <td><span class="badge badge-gray">${v.tipo||'—'}</span></td>
                 <td class="mono-sm text-amber">${UI.q(v.monto)}</td>
@@ -205,7 +205,7 @@ Modulos.finanzas = {
                   <td><div style="display:flex;gap:4px">
                     ${(r.activo && !generadoEsteMes)?`<button class="btn btn-sm btn-green" onclick="Modulos.finanzas.generarRecurrente('${r.id}')" title="Generar egreso de este mes">⚡ Generar</button>`:''}
                     ${Modulos.btnAccion('editar', `Modulos.finanzas.modalRecurrente('${r.id}')`)}
-                    ${Modulos.btnAccion('eliminar', `Modulos.eliminarRegistro('egresos_recurrentes','${r.id}','${(r.concepto||'').replace(/'/g,"\\'")}',()=>Modulos.finanzas._renderTab())`)}
+                    ${Modulos.btnAccion('eliminar', `Modulos.eliminarRegistro('egresos_recurrentes','${r.id}','${UI.jsAttr(r.concepto||'')}',()=>Modulos.finanzas._renderTab())`)}
                   </div></td>
                 </tr>`;
               }).join('')||'<tr><td colspan="7" style="text-align:center;padding:24px;color:var(--text3)">Sin gastos recurrentes. Crea el primero con “＋ Nuevo Recurrente”.</td></tr>'}

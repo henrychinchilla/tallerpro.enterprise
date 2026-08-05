@@ -49,7 +49,7 @@ Modulos.peleteria = {
           <tbody>
             ${this._data.map(p=>`<tr>
               <td class="mono-sm"><b>${p.num||'—'}</b></td>
-              <td>${p.clientes?.nombre||'—'}</td>
+              <td>${UI.esc(p.clientes?.nombre||'—')}</td>
               <td><span class="badge badge-gray">${this._TIPOS[p.tipo_producto]||p.tipo_producto}</span>${p.cantidad>1?` ×${p.cantidad}`:''}<div style="font-size:11px;color:var(--text3)">${p.tipo_inicio==='directo'?'⚡ Directo':'📋 Cotización'}</div></td>
               <td style="font-size:12px">${[p.material,p.color].filter(Boolean).join(' · ')||'—'}</td>
               <td class="mono-sm">${p.fecha_entrega?UI.fecha(p.fecha_entrega):'—'}</td>

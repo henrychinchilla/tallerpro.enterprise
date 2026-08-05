@@ -2384,8 +2384,8 @@ Modulos.diagnostico_obd = {
     const faltantes = conocidas.filter(c => !mods.some(m => m.req === c.req));
     if (log && faltantes.length)
       log(`<span style="color:var(--amber)">⚠️ ${faltantes.length} módulo(s) del mapa NO respondieron: ` +
-          `${faltantes.map(f => f.nombre || '0x' + f.req.toString(16).toUpperCase()).join(', ')}` +
-          ` — en ${mapa.marca} ${mapa.modelo} sí contestan. Puede estar dañado, desconectado o sin alimentación.</span>`);
+          `${faltantes.map(f => UI.esc(f.nombre || '0x' + f.req.toString(16).toUpperCase())).join(', ')}` +
+          ` — en ${UI.esc(mapa.marca)} ${UI.esc(mapa.modelo)} sí contestan. Puede estar dañado, desconectado o sin alimentación.</span>`);
 
     if (log) log(`<b>${mods.length} módulo(s) encontrados</b> — leyendo códigos de cada uno...`);
 
@@ -2852,7 +2852,7 @@ Modulos.diagnostico_obd = {
         () => `${Object.keys(j.mids).length}|${Object.keys(j.datos).length}|${j.fallas.length}`,
         { min:2000, max:14000, quieto:2500,
           log: () => log(`&nbsp;&nbsp;<span style="color:var(--text3)">…${Object.keys(j.mids).length} módulo(s), ${Object.keys(j.datos).length} parámetro(s), ${j.fallas.length} falla(s)</span>`) });
-      log(`Escucha ${esc.motivo === 'tope' ? 'cortada por tiempo' : 'completa'} (${(esc.ms/1000).toFixed(1)} s)`);
+      log(`Escucha ${UI.esc(esc.motivo === 'tope' ? 'cortada por tiempo' : 'completa')} (${(esc.ms/1000).toFixed(1)} s)`);
 
       /* Bus mudo casi siempre es el switch, y el mecánico está en la cabina con
          la laptop en el asiento. Antes esto tiraba error y había que rehacer el
@@ -3291,7 +3291,7 @@ Modulos.diagnostico_obd = {
         () => `${Object.keys(j.pgns).length}|${Object.keys(j.datos).length}|${Object.keys(j.sas).length}|${Object.keys(j.dm1).length}`,
         { min:2000, max:14000, quieto:2500,
           log: () => log(`&nbsp;&nbsp;<span style="color:var(--text3)">…${Object.keys(j.pgns).length} tipo(s) de mensaje, ${Object.keys(j.datos).length} parámetro(s)</span>`) });
-      log(`Escucha ${esc.motivo === 'tope' ? 'cortada por tiempo' : 'completa'} (${(esc.ms/1000).toFixed(1)} s)`);
+      log(`Escucha ${UI.esc(esc.motivo === 'tope' ? 'cortada por tiempo' : 'completa')} (${(esc.ms/1000).toFixed(1)} s)`);
       /* Misma ventana que en J1708: dar chance a girar la llave antes de dar el
          escaneo por perdido. */
       if (!j.total) {
@@ -4287,7 +4287,7 @@ Modulos.diagnostico_obd = {
         <label class="form-label">Vehículo *</label>
         <select class="form-select" id="obd-veh" onchange="Modulos.diagnostico_obd._avisoAcceso(this.value)">
           <option value="">— Seleccionar vehículo —</option>
-          ${this._vehiculos.map(v=>`<option value="${v.id}"${vehId===v.id?' selected':''}>${v.placa||'s/placa'} · ${v.marca||''} ${v.modelo||''} ${v.anio||''} ${v.clientes?`(${v.clientes.nombre})`:''}</option>`).join('')}
+          ${this._vehiculos.map(v=>`<option value="${v.id}"${vehId===v.id?' selected':''}>${v.placa||'s/placa'} · ${UI.esc(v.marca||'')} ${UI.esc(v.modelo||'')} ${v.anio||''} ${v.clientes?`(${UI.esc(v.clientes.nombre)})`:''}</option>`).join('')}
         </select>
       </div>
       <div id="obd-aviso"></div>
@@ -4806,7 +4806,7 @@ Modulos.diagnostico_obd = {
     el.innerHTML = `
       ${s.nhtsa ? `<div class="card" style="padding:14px;margin-top:12px;border-left:3px solid var(--cyan)">
         <b style="font-size:12px">🌐 IDENTIFICADO POR VIN (NHTSA)</b>
-        <div style="font-size:13px;margin-top:4px">${s.nhtsa.marca} ${s.nhtsa.modelo||''} ${s.nhtsa.anio||''}
+        <div style="font-size:13px;margin-top:4px">${UI.esc(s.nhtsa.marca)} ${UI.esc(s.nhtsa.modelo||'')} ${s.nhtsa.anio||''}
           ${s.nhtsa.motor?` · Motor ${s.nhtsa.motor}`:''} ${s.nhtsa.combustible?` · ${s.nhtsa.combustible}`:''}
           ${s.nhtsa.pais?` · Fab. ${s.nhtsa.pais}`:''}</div>
         <button class="btn btn-sm btn-cyan" style="margin-top:6px" onclick="Modulos.diagnostico_obd.aplicarVIN()">📋 Completar ficha del vehículo</button>
@@ -4936,7 +4936,7 @@ Modulos.diagnostico_obd = {
             ? `${conf ? `${conf} confirmado(s)` : ''}${conf && pend ? ' · ' : ''}${pend ? `${pend} pendiente(s)` : ''}`
             : 'responde · sin códigos';
           return `<div style="background:var(--surface2);border-radius:8px;padding:9px 11px;border-left:3px solid var(--${col})">
-            <div style="font-size:12.5px;font-weight:600">${m.nombre}</div>
+            <div style="font-size:12.5px;font-weight:600">${UI.esc(m.nombre)}</div>
             <div style="font-size:10px;color:var(--text3);font-family:ui-monospace,Consolas,monospace">${m.ecu ? (j87 ? `MID ${m.ecu}` : '0x' + m.ecu.toString(16).toUpperCase()) : 'dirección no expuesta'}</div>
             <div style="font-size:11.5px;margin-top:4px;color:var(--${col});font-weight:600">${estado}</div>
           </div>`;
@@ -5736,7 +5736,7 @@ Modulos.diagnostico_obd = {
     const v = d.vehiculos;
     UI.modal('🩺 Reporte de Diagnóstico', `
       <div style="font-size:13px">
-        <p><b>Vehículo:</b> ${v ? `${v.placa||''} · ${v.marca||''} ${v.modelo||''} ${v.anio||''}` : '—'}<br>
+        <p><b>Vehículo:</b> ${v ? `${UI.esc(v.placa||'')} · ${UI.esc(v.marca||'')} ${UI.esc(v.modelo||'')} ${UI.esc(v.anio||'')}` : '—'}<br>
         <b>Fecha:</b> ${UI.fecha(d.created_at)} · <b>VIN:</b> <span style="font-family:monospace">${d.vin||'—'}</span><br>
         <b>Protocolo:</b> ${d.protocolo||'—'} · <b>Adaptador:</b> ${d.adaptador||'—'} · <b>Batería:</b> ${d.voltaje||'—'}<br>
         <b>Check Engine:</b> ${d.mil?'🔴 Encendido':'✅ Apagado'} ${d.dtcs_borrados?' · 🧹 Códigos borrados tras el escaneo':''}</p>
@@ -5827,7 +5827,7 @@ Modulos.diagnostico_obd = {
       </style></head><body>
       <h2>${Auth.tenant?.name||'NexusPro'} — Diagnóstico OBD-II</h2>
       <div class="section">
-        <b>VEHÍCULO:</b> ${v ? `${v.placa||''} · ${v.marca||''} ${v.modelo||''} ${v.anio||''}` : '—'}<br>
+        <b>VEHÍCULO:</b> ${v ? `${UI.esc(v.placa||'')} · ${UI.esc(v.marca||'')} ${UI.esc(v.modelo||'')} ${UI.esc(v.anio||'')}` : '—'}<br>
         <b>VIN:</b> ${d.vin||'—'} · <b>Fecha:</b> ${UI.fecha(d.created_at)}<br>
         <b>Protocolo:</b> ${d.protocolo||'—'} · <b>Batería:</b> ${d.voltaje||'—'}<br>
         <b>Check Engine:</b> <span class="${d.mil?'mil-on':'mil-off'}">${d.mil?'ENCENDIDO':'Apagado'}</span>

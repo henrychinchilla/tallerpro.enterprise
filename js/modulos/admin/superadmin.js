@@ -346,11 +346,11 @@ Modulos.superadmin = {
           <thead><tr><th>Respaldo</th><th>Tamaño</th><th>Acciones</th></tr></thead>
           <tbody>
             ${this._dbBackups.map(b=>`<tr>
-              <td class="mono-sm">${b.nombre}</td>
+              <td class="mono-sm">${UI.esc(b.nombre)}</td>
               <td class="mono-sm">${b.tamano?Math.round(b.tamano/1024)+' KB':'—'}</td>
               <td><div style="display:flex;gap:4px;flex-wrap:wrap">
                 ${b.url?`<a class="btn btn-sm btn-cyan" href="${b.url}" target="_blank">⬇️ Descargar</a>`:''}
-                <button class="btn btn-sm btn-amber" onclick="Modulos.superadmin._dbRestaurar('${b.nombre}')">♻️ Restaurar</button>
+                <button class="btn btn-sm btn-amber" onclick="Modulos.superadmin._dbRestaurar('${UI.esc(b.nombre)}')">♻️ Restaurar</button>
               </div></td>
             </tr>`).join('')||'<tr><td colspan="3" style="text-align:center;padding:24px;color:var(--text3)">Sin respaldos para este comercio</td></tr>'}
           </tbody>

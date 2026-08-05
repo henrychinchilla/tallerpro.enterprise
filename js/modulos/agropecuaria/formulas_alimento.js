@@ -339,7 +339,7 @@ Modulos.formulas_alimento = {
           <td style="font-size:12px;color:var(--text3)">${UI.esc(i.nota || '—')}</td>
           <td><div style="display:flex;gap:4px">
             ${Modulos.btnAccion('editar', `Modulos.formulas_alimento.modalInsumo('${i.id}')`)}
-            ${Modulos.btnAccion('eliminar', `Modulos.formulas_alimento.eliminarInsumo('${i.id}','${UI.esc(i.nombre).replace(/'/g, "\\'")}')`)}
+            ${Modulos.btnAccion('eliminar', `Modulos.formulas_alimento.eliminarInsumo('${i.id}','${UI.escUI.jsAttr(i.nombre)}')`)}
           </div></td>
         </tr>`).join('')}</tbody>
       </table></div>` : `<div style="padding:16px;font-size:13px;color:var(--text3)">

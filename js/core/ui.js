@@ -68,6 +68,28 @@ const UI = {
     });
   },
 
+  /* Texto que va DENTRO de una cadena JS que a su vez va dentro de un atributo
+     HTML — el caso de onclick="Modulos.eliminarRegistro('t','id','NOMBRE')".
+
+     Ahí UI.esc() NO alcanza, y es un error fácil de cometer: el navegador
+     decodifica las entidades del atributo ANTES de evaluar el JS, así que un
+     &#39; vuelve a ser ' y rompe la cadena igual. Y al revés, escapar sólo la
+     comilla simple (como se venía haciendo a mano en once lugares) deja pasar
+     la comilla DOBLE, que cierra el atributo entero y permite colgarle otro
+     manejador al botón.
+
+     Orden correcto: primero el escape de JavaScript (la barra invertida
+     ANTES que las comillas, si no se escapa la que uno mismo puso), y encima
+     el de HTML. */
+  jsAttr(valor = '') {
+    return this.esc(
+      String(valor ?? '')
+        .replace(/\\/g, '\\\\')
+        .replace(/'/g, "\\'")
+        .replace(/\r?\n/g, ' ')
+    );
+  },
+
   /* Muestra u oculta el bloque de "Régimen de ISR" según el régimen de IVA
      elegido. En los simplificados (Pequeño Contribuyente y Agropecuario) el
      ISR no aplica: su tasa única es de pago definitivo, así que preguntarlo

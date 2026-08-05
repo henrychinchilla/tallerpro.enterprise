@@ -253,7 +253,7 @@ Modulos.herreria = {
           <tbody>
             ${this._data.map(p=>`<tr>
               <td class="mono-sm"><b>${p.num||'—'}</b></td>
-              <td>${p.clientes?.nombre||'—'}</td>
+              <td>${UI.esc(p.clientes?.nombre||'—')}</td>
               <td><span class="badge badge-gray">${this._TIPOS[p.tipo_trabajo]||p.tipo_trabajo}</span><div style="font-size:11px;color:var(--text3)">${p.tipo_inicio==='directo'?'⚡ Directo':'📋 Cotización'}</div></td>
               <td class="mono-sm">${p.ancho_m&&p.alto_m?`${p.ancho_m}×${p.alto_m} m`:'—'}</td>
               <td class="mono-sm">${UI.q(p.precio_venta)}</td>
