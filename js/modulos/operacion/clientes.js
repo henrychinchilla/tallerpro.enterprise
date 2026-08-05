@@ -2,6 +2,19 @@
 Modulos.clientes = {
   _data: [],
 
+  /* Los datos personales largos (fecha de nacimiento, estado civil,
+     profesión, nacionalidad, DPI, vivienda) y los documentos de
+     identificación existen por la Ley de Armas: son los que la declaración
+     jurada exige. A un taller mecánico o una venta de granos no le sirven
+     de nada, así que sólo se piden si el comercio tiene armería activa.
+     Un negocio mixto (taller + armería) sí los ve, y los deja vacíos en los
+     clientes que no compran armas — el módulo de armería ya avisa cuando
+     falta algo al momento de vender. */
+  _pideDatosArmeria() {
+    const mods = window.Auth?.tenant?.modulos_activos;
+    return Array.isArray(mods) ? mods.includes('armeria') : false;
+  },
+
   async render(busca='') {
     const el = document.getElementById('page-content');
     UI.loading(el);
@@ -72,6 +85,68 @@ Modulos.clientes = {
     return (edad >= 0 && edad < 150) ? edad : null;
   },
 
+  /* ── Lectura automática de DPI y recibo de servicios ─────────────────────
+     La foto se manda a Nexus, que devuelve JSON. Dos decisiones que importan:
+
+     · NO se pisa lo que el usuario ya escribió. Sólo se llenan los campos
+       vacíos, y lo que difiere se REPORTA para que la persona decida. Un OCR
+       equivocado sobreescribiendo un dato correcto es peor que no leer nada,
+       y esto alimenta una declaración jurada.
+     · El prompt le ordena devolver null en lo que no lea con claridad; acá
+       se respeta: un null no llena nada. */
+  async _leerDocumento(inputEl, cual) {
+    const file = inputEl.files?.[0];
+    inputEl.value = '';
+    if (!file) return;
+    const aviso = document.getElementById('cli-lectura-aviso');
+    const pintar = (html, color) => { if (aviso) { aviso.innerHTML = html; aviso.style.color = color || 'var(--text3)'; } };
+
+    if (file.size > 5 * 1024 * 1024) { pintar('⚠️ La imagen pesa más de 5 MB.', 'var(--red)'); return; }
+    pintar('⏳ Leyendo el documento…');
+
+    const base64 = await new Promise((res, rej) => {
+      const r = new FileReader();
+      r.onload = () => res(r.result); r.onerror = rej; r.readAsDataURL(file);
+    }).catch(() => null);
+    if (!base64) { pintar('⚠️ No se pudo leer el archivo.', 'var(--red)'); return; }
+
+    const r = cual === 'dpi' ? await IA.escanearDPI(base64) : await IA.escanearRecibo(base64);
+    if (!r?.ok) { pintar('⚠️ ' + (r?.error || 'No se pudo leer el documento.'), 'var(--red)'); return; }
+
+    let datos;
+    try {
+      /* El modelo a veces envuelve el JSON en ```; se limpia antes de parsear. */
+      datos = JSON.parse(String(r.texto || '').replace(/```json|```/g, '').trim());
+    } catch (_) { pintar('⚠️ El documento no se leyó con claridad. Escribí los datos a mano.', 'var(--red)'); return; }
+
+    const mapa = cual === 'dpi'
+      ? { 'cli-dpi': datos.cui, 'cli-nombre': datos.nombre_completo, 'cli-fnac': datos.fecha_nacimiento,
+          'cli-estado-civil': datos.estado_civil, 'cli-nacionalidad': datos.nacionalidad,
+          'cli-lugar-nac': datos.lugar_nacimiento }
+      : { 'cli-dir': datos.direccion };
+
+    const llenados = [], distintos = [];
+    for (const [idEl, valor] of Object.entries(mapa)) {
+      const el = document.getElementById(idEl);
+      const v = (valor == null || valor === '') ? null : String(valor).trim();
+      if (!el || !v) continue;
+      const actual = (el.value || '').trim();
+      if (!actual) { el.value = v; llenados.push(idEl); }
+      else if (actual.toLowerCase() !== v.toLowerCase()) distintos.push(`${el.previousElementSibling?.textContent || idEl}: el documento dice «${v}»`);
+    }
+    this._mostrarEdad();
+
+    const partes = [];
+    if (llenados.length) partes.push(`<span style="color:var(--green)">✅ ${llenados.length} campo(s) llenados desde el ${cual === 'dpi' ? 'DPI' : 'recibo'}.</span>`);
+    if (distintos.length) partes.push(`<span style="color:var(--amber)">⚠️ No se tocó lo que ya estaba escrito. Diferencias: ${distintos.join(' · ')}</span>`);
+    if (!partes.length) partes.push('<span style="color:var(--amber)">El documento no aportó datos nuevos.</span>');
+    partes.push('<span style="color:var(--text3)">Revisá siempre contra el documento físico antes de guardar: esto alimenta una declaración jurada.</span>');
+    pintar(partes.join('<br>'));
+  },
+
+  _leerDPI(el)    { return this._leerDocumento(el, 'dpi'); },
+  _leerRecibo(el) { return this._leerDocumento(el, 'recibo'); },
+
   _mostrarEdad() {
     const el = document.getElementById('cli-edad'); if (!el) return;
     const edad = this.edadDe(document.getElementById('cli-fnac')?.value);
@@ -83,6 +158,7 @@ Modulos.clientes = {
   async modalForm(id=null, onGuardado=null) {
     const c = id ? this._data.find(x=>x.id===id) : {};
     const esEdicion = !!id;
+    const armeria = this._pideDatosArmeria();
     if (onGuardado !== null) this._onGuardado = onGuardado;
     UI.modal(`${esEdicion?'✏️ Editar':'＋ Nuevo'} Cliente`, `
       ${esEdicion?'<div class="alert alert-amber" style="margin-bottom:12px"><div class="alert-icon">⚠️</div><div class="alert-body" style="font-size:11px">Los cambios reemplazarán la información actual del cliente.</div></div>':''}
@@ -120,9 +196,24 @@ Modulos.clientes = {
       <!-- Datos que exige una declaración jurada (art. 55 a) de la Ley de
            Armas y art. 17 b) de su reglamento: edad, estado civil,
            nacionalidad, profesión y DPI). Guardados acá, el documento sale
-           lleno en vez de con rayas para escribir a mano cada vez. -->
+           lleno en vez de con rayas para escribir a mano cada vez.
+           Sólo se piden si el comercio vende armas. -->
+      ${!armeria ? '' : `
       <div style="background:var(--card2);border-radius:8px;padding:10px 12px;margin-bottom:12px">
-        <div style="font-size:12px;font-weight:700;margin-bottom:8px">🪪 Datos personales (para declaraciones juradas y trámites)</div>
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;flex-wrap:wrap">
+          <div style="font-size:12px;font-weight:700">🪪 Datos personales (para declaraciones juradas y trámites)</div>
+          <div style="margin-left:auto;display:flex;gap:6px">
+            <button type="button" class="btn btn-sm btn-cyan" onclick="document.getElementById('cli-foto-dpi').click()">
+              📷 Leer del DPI</button>
+            <input type="file" id="cli-foto-dpi" accept="image/*" style="display:none"
+                   onchange="Modulos.clientes._leerDPI(this)">
+            <button type="button" class="btn btn-sm btn-ghost" onclick="document.getElementById('cli-foto-recibo').click()">
+              🧾 Leer dirección del recibo</button>
+            <input type="file" id="cli-foto-recibo" accept="image/*" style="display:none"
+                   onchange="Modulos.clientes._leerRecibo(this)">
+          </div>
+        </div>
+        <div id="cli-lectura-aviso" style="font-size:11px;margin-bottom:8px"></div>
         <div class="form-row">
           <div class="form-group"><label class="form-label">DPI</label>
             <input class="form-input" id="cli-dpi" value="${c.dpi||''}" placeholder="0000 00000 0000" style="font-family:monospace"></div>
@@ -142,18 +233,22 @@ Modulos.clientes = {
             <input class="form-input" id="cli-profesion" value="${c.profesion||''}" placeholder="Comerciante, ingeniero, agricultor..."></div>
           <div class="form-group"><label class="form-label">Nacionalidad</label>
             <input class="form-input" id="cli-nacionalidad" value="${c.nacionalidad||''}" placeholder="Guatemalteca"></div>
+          <div class="form-group"><label class="form-label">Lugar de nacimiento</label>
+            <input class="form-input" id="cli-lugar-nac" value="${c.lugar_nacimiento||''}" placeholder="Municipio, departamento"></div>
         </div>
-      </div>
+      </div>`}
       <div class="form-row">
-        <div class="form-group" style="flex:2"><label class="form-label">Dirección completa</label>
-          <input class="form-input" id="cli-dir" value="${c.direccion||''}" placeholder="Calle, avenida, número de casa, zona, municipio, departamento"></div>
+        <div class="form-group" style="flex:2"><label class="form-label">Dirección${armeria ? ' completa' : ''}</label>
+          <input class="form-input" id="cli-dir" value="${c.direccion||''}"
+                 placeholder="${armeria ? 'Calle, avenida, número de casa, zona, municipio, departamento' : ''}"></div>
+        ${!armeria ? '' : `
         <div class="form-group"><label class="form-label">La vivienda es</label>
           <select class="form-select" id="cli-vivienda">
             <option value="">— No indicado —</option>
             <option value="propia"   ${c.vivienda==='propia'?'selected':''}>🏠 Propia</option>
             <option value="rentada"  ${c.vivienda==='rentada'?'selected':''}>🔑 Rentada</option>
             <option value="familiar" ${c.vivienda==='familiar'?'selected':''}>👪 Familiar / prestada</option>
-          </select></div>
+          </select></div>`}
       </div>
       <div class="form-group"><label class="form-label">Notas</label>
         <textarea class="form-input" id="cli-notas" rows="2">${c.notas||''}</textarea></div>
@@ -182,11 +277,11 @@ Modulos.clientes = {
           </div>
         </div>
       </div>
-      ${esEdicion ? this._htmlDocumentos(id) : `
+      ${!armeria ? '' : (esEdicion ? this._htmlDocumentos(id) : `
       <div class="form-group" style="background:var(--card2);border-radius:8px;padding:10px 12px;font-size:12px;color:var(--text2)">
-        📎 <b>Documentos de identificación</b> (DPI, licencia de tenencia/portación, pasaporte)<br>
+        📎 <b>Documentos de identificación</b> (DPI, licencia de tenencia/portación, pasaporte, recibo de servicios)<br>
         <span style="font-size:11px;color:var(--text3)">Al guardar, el formulario se queda abierto para que los adjuntes de una vez — el archivo necesita que el cliente ya exista.</span>
-      </div>`}
+      </div>`)}
       ${!esEdicion?`
       <div class="card" style="background:var(--amber-dim);border-color:var(--amber-border);margin-top:4px">
         <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px">
@@ -252,12 +347,6 @@ Modulos.clientes = {
       nit:            document.getElementById('cli-nit')?.value.trim()||null,
       email:          document.getElementById('cli-email')?.value.trim()||null,
       direccion:      document.getElementById('cli-dir')?.value.trim()||null,
-      vivienda:       document.getElementById('cli-vivienda')?.value || null,
-      dpi:            document.getElementById('cli-dpi')?.value.trim()||null,
-      fecha_nacimiento: document.getElementById('cli-fnac')?.value || null,
-      estado_civil:   document.getElementById('cli-estado-civil')?.value || null,
-      profesion:      document.getElementById('cli-profesion')?.value.trim()||null,
-      nacionalidad:   document.getElementById('cli-nacionalidad')?.value.trim()||null,
       notas:          document.getElementById('cli-notas')?.value.trim()||null,
       nombre_empresa: tipo==='empresa'?document.getElementById('cli-empresa')?.value.trim():null,
       representante:  tipo==='empresa'?document.getElementById('cli-representante')?.value.trim():null,
@@ -266,6 +355,23 @@ Modulos.clientes = {
       ret_iva_pct: parseFloat(document.getElementById('cli-ret-iva')?.value) || 0,
       ret_isr_pct: parseFloat(document.getElementById('cli-ret-isr')?.value) || 0
     };
+    /* Los campos de armería sólo se mandan si sus inputs EXISTEN en la
+       pantalla. Mandarlos siempre los pondría en null cuando el bloque no se
+       dibuja (comercio sin armería), y eso BORRARÍA lo ya guardado — por
+       ejemplo si alguien apaga el módulo un rato, o al editar el cliente
+       desde una pantalla que no muestra el bloque. Ausente ≠ vacío. */
+    const siExiste = (idEl, clave, transformar = v => v.trim() || null) => {
+      const el = document.getElementById(idEl);
+      if (el) fields[clave] = transformar(el.value ?? '');
+    };
+    siExiste('cli-vivienda', 'vivienda', v => v || null);
+    siExiste('cli-dpi', 'dpi');
+    siExiste('cli-fnac', 'fecha_nacimiento', v => v || null);
+    siExiste('cli-estado-civil', 'estado_civil', v => v || null);
+    siExiste('cli-profesion', 'profesion');
+    siExiste('cli-nacionalidad', 'nacionalidad');
+    siExiste('cli-lugar-nac', 'lugar_nacimiento');
+
     if (id) fields.id = id;
 
     /* Aviso (no bloquea) si el NIT tiene dígito verificador inválido */
