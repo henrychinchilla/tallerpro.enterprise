@@ -124,6 +124,63 @@ ARM._data = [{ id: 'op1', num: 'ARM-2026-0001', cliente_id: 'c1', inventario_id:
   ok('muestra los datos del cliente vinculado', /Juan Pérez López/.test(menu));
 }
 
+/* ── Los datos del cliente llenan la identificación ──────────────────────
+   La ley describe cómo debe identificarse quien declara: edad, estado
+   civil, nacionalidad, profesión, DPI y domicilio (art. 55 a) de la ley,
+   art. 17 b) del reglamento). Antes salían como rayas para llenar a mano
+   en cada declaración aunque fueran siempre los mismos del mismo cliente. */
+{
+  /* Se carga clientes.js para que la declaración pueda derivar la edad. */
+  vm.runInContext(fs.readFileSync(raiz('js', 'modulos', 'operacion', 'clientes.js'), 'utf8'), ctx);
+
+  /* La fecha se arma con los componentes LOCALES, no con toISOString():
+     éste convierte a UTC y en Guatemala (UTC-6) devuelve el día siguiente,
+     con lo que el cliente "todavía no cumple" y la edad sale un año menos.
+     Es la misma trampa que el propio edadDe() está escrito para evitar. */
+  const hoyL = new Date();
+  const p2 = (n) => String(n).padStart(2, '0');
+  const nacidoISO = `${hoyL.getFullYear() - 40}-${p2(hoyL.getMonth() + 1)}-${p2(hoyL.getDate())}`;
+  ARM._clientes = [{
+    id: 'c9', nombre: 'María López', nit: '111-2', dpi: '2233445566778',
+    direccion: 'Av. Reforma 10-00 zona 9', vivienda: 'rentada',
+    fecha_nacimiento: nacidoISO,
+    estado_civil: 'casada(a)', profesion: 'Contadora', nacionalidad: 'guatemalteca',
+  }];
+  ARM._data = [];
+
+  ARM.imprimirDeclaracion('ingresos', '', 'c9');
+  const doc = impreso;
+  ok('la declaración calcula la EDAD sola desde la fecha de nacimiento', /de <b>40<\/b> años de edad/.test(doc));
+  ok('lleva el estado civil del cliente', /casada\(a\)/.test(doc));
+  ok('lleva la profesión', /Contadora/.test(doc));
+  ok('lleva la nacionalidad', /guatemalteca/.test(doc));
+  ok('lleva el DPI de la ficha del cliente', /2233445566778/.test(doc));
+  ok('lleva el NIT', /111-2/.test(doc));
+  ok('lleva la dirección y si la vivienda es propia o rentada',
+     /Av\. Reforma 10-00/.test(doc) && /vivienda rentada/.test(doc));
+  ok('ya no quedan rayas en blanco para esos datos: van en negrita',
+     /<b>Contadora<\/b>/.test(doc) && /<b>casada\(a\)<\/b>/.test(doc));
+
+  /* Un cliente sin esos datos sigue generando el documento, con rayas. */
+  ARM._clientes.push({ id: 'c10', nombre: 'Sin Datos' });
+  ARM.imprimirDeclaracion('ingresos', '', 'c10');
+  ok('sin fecha de nacimiento deja la raya de la edad, no un "null"',
+     !/null/.test(impreso) && /border-bottom:1px solid #000/.test(impreso));
+}
+
+/* ── Editable antes de imprimir ──────────────────────────────────────────
+   Henry pidió poder corregir el documento antes de mandarlo al notario.
+   Se usa contenteditable (nativo) y NO se dispara la impresión sola: hacerlo
+   volvería inútil la edición. */
+{
+  ARM.imprimirDeclaracion('ingresos', '', 'c9');
+  const doc = impreso;
+  ok('el documento es editable', /contenteditable="true"/.test(doc));
+  ok('tiene su propio botón de imprimir', /window\.print\(\)/.test(doc));
+  ok('avisa que los cambios no se guardan en la ficha', /no se guardan/.test(doc));
+  ok('la barra de edición NO sale impresa', /@media print \{ \.barra\{display:none\}/.test(doc));
+}
+
 /* ── Declaración A DEMANDA, sin venta de por medio ───────────────────────
    Un cliente puede necesitar sólo la declaración: la del art. 72 es para
    tramitar la licencia de portación de un arma que YA tiene, y ahí no hay
