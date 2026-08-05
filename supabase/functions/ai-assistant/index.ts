@@ -394,7 +394,12 @@ Deno.serve(async (req) => {
      prompt del sistema y la instrucción que acompaña a la foto. */
   const MODOS_IMAGEN: Record<string, string> = {
     tarjeta: "Analiza la imagen de la tarjeta de circulación de Guatemala y extrae los datos solicitados en formato JSON.",
-    dpi:     "Analiza la imagen del DPI (o pasaporte) y extrae los datos solicitados en formato JSON. Si un dato no se lee con claridad, devuélvelo como null en vez de adivinarlo.",
+    /* En el DPI de Guatemala el ANVERSO es el que trae los datos: CUI,
+       nombres, fecha y lugar de nacimiento, vecindad, estado civil y
+       vencimiento. El reverso es sobre todo zona legible por máquina, así que
+       no se manda a leer: gastaría una llamada para devolver nulos, y si
+       devolviera algo mal leído sobrescribiría lo bueno. */
+    dpi:     "Analiza la imagen del ANVERSO del DPI de Guatemala (o de la hoja de datos de un pasaporte) y extrae los datos solicitados en formato JSON. Si un dato no se lee con claridad, devuélvelo como null en vez de adivinarlo. Si la imagen es el REVERSO del DPI (zona legible por máquina, sin fotografía), devuelve todos los campos como null.",
     recibo:  "Analiza la imagen del recibo de servicios y extrae los datos solicitados en formato JSON. Si un dato no se lee con claridad, devuélvelo como null en vez de adivinarlo.",
   };
 

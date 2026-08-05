@@ -295,18 +295,51 @@ Modulos.clientes = {
   /* DPI, licencia (tenencia/portación) o pasaporte — foto o PDF. Vive en el
      cliente en general (no solo en Armería) porque cualquier vertical puede
      necesitar identificar a alguien; Armería es quien más lo exige hoy. */
+  /* El DPI y la licencia tienen DOS CARAS y las dos van al expediente: es lo
+     que piden DIGECAM y el notario, y con una sola el expediente queda
+     incompleto aunque el dato ya se haya leído.
+
+     OJO con dónde vive cada dato en el DPI guatemalteco: el ANVERSO trae el
+     CUI, nombres, fecha y lugar de nacimiento, vecindad, estado civil y
+     vencimiento. El REVERSO es sobre todo la zona legible por máquina y los
+     elementos de seguridad. Por eso la lectura automática apunta al anverso;
+     el reverso se archiva para completar el expediente, no para sacar campos
+     que no están ahí. */
   _DOCS_CLIENTE: {
-    dpi: { icon: '🪪', label: 'DPI' },
-    licencia_arma: { icon: '📋', label: 'Licencia (tenencia/portación)' },
-    pasaporte: { icon: '📘', label: 'Pasaporte (extranjeros)' },
+    dpi_frente:       { icon: '🪪', label: 'DPI — anverso (frente)' },
+    dpi_reverso:      { icon: '🪪', label: 'DPI — reverso (atrás)' },
+    licencia_frente:  { icon: '📋', label: 'Licencia de arma — anverso' },
+    licencia_reverso: { icon: '📋', label: 'Licencia de arma — reverso' },
+    pasaporte:        { icon: '📘', label: 'Pasaporte (extranjeros) — hoja de datos' },
     recibo_servicios: { icon: '🧾', label: 'Recibo de servicios (agua/luz/teléfono)' },
   },
+
+  /* Los tipos viejos, de antes de partir los documentos en dos caras. Se
+     conservan para que los expedientes ya cargados sigan reconociéndose y no
+     se le pida a nadie volver a fotografiar lo que ya entregó. */
+  _DOCS_HEREDADOS: { dpi: 'dpi_frente', licencia_arma: 'licencia_frente' },
 
   /* Una sola subida por documento: se ARCHIVA el archivo y, si el documento
      trae datos aprovechables, se LEEN de una vez. Antes había dos caminos
      separados —un botón para leer y otro para adjuntar— y el usuario tenía
      que dar la misma foto dos veces. */
-  _LECTOR_DOC: { dpi: 'dpi', pasaporte: 'dpi', recibo_servicios: 'recibo' },
+  _LECTOR_DOC: {
+    dpi_frente: 'dpi',
+    pasaporte: 'dpi',
+    recibo_servicios: 'recibo',
+    /* dpi_reverso NO se lee: sus datos ya vinieron del anverso. Mandarlo al
+       lector gastaría una llamada de IA para devolver nulos, y peor: si
+       devolviera algo mal leído, sobrescribiría lo bueno.
+       La LICENCIA tampoco se lee todavía: sus datos (tipo, número,
+       vencimiento, armas registradas) no viven en la ficha del cliente sino en
+       cada operación y entrega, así que no habría dónde volcarlos. Se archiva
+       por las dos caras, que es lo que pide el expediente. */
+  },
+
+  /* Documentos que exige el expediente de una armería (art. 59 y 72 de la Ley
+     de Armas). Las dos caras cuentan por separado: falta una, falta el
+     documento. El pasaporte sustituye al DPI sólo para extranjeros. */
+  _DOCS_OBLIGATORIOS_ARMERIA: ['dpi_frente', 'dpi_reverso', 'recibo_servicios'],
 
   /* Fotos tomadas antes de que el cliente exista. Un cliente nuevo todavía
      no tiene id, y el archivo se guarda en una carpeta con ese id — así que
@@ -320,12 +353,19 @@ Modulos.clientes = {
       <div class="form-group" style="background:var(--card2);border-radius:8px;padding:10px 12px">
         <label class="form-label">📎 Documentos de identificación</label>
         <div style="font-size:11px;color:var(--text3);margin-bottom:8px">
-          Se archiva el documento y, del DPI y del recibo, se leen los datos automáticamente.
+          El <b>DPI y la licencia van por las dos caras</b>: el expediente queda incompleto con una sola.
+          Del anverso del DPI, de la licencia y del recibo se leen los datos automáticamente.
           ${id ? '' : 'Se adjuntan al guardar el cliente.'}
         </div>
-        ${Object.entries(this._DOCS_CLIENTE).map(([tipo, d]) => `
-          <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;flex-wrap:wrap">
-            <span style="font-size:12px;min-width:210px">${d.icon} ${d.label}
+        ${Object.entries(this._DOCS_CLIENTE).map(([tipo, d]) => {
+          /* El reverso se dibuja pegado a su anverso —sin la línea de arriba y
+             con sangría— para que se lea como un documento de dos caras y no
+             como dos documentos sueltos. */
+          const esReverso = tipo.endsWith('_reverso');
+          return `
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;flex-wrap:wrap;
+                      ${esReverso ? 'padding-left:16px;margin-top:-2px' : 'margin-top:8px'}">
+            <span style="font-size:12px;min-width:230px">${esReverso ? '↳ ' : ''}${d.icon} ${d.label}
               ${this._LECTOR_DOC[tipo] ? '<span style="color:var(--cyan);font-size:10px">· se lee solo</span>' : ''}</span>
             <button type="button" class="btn btn-sm btn-cyan" onclick="document.getElementById('cli-doc-${tipo}-cam').click()">📷 Cámara</button>
             <button type="button" class="btn btn-sm btn-ghost" onclick="document.getElementById('cli-doc-${tipo}-gal').click()">📂 Archivo</button>
@@ -334,7 +374,8 @@ Modulos.clientes = {
               onchange="Modulos.clientes._subirDoc('${id || ''}','${tipo}',this)">
             <input type="file" id="cli-doc-${tipo}-gal" accept="image/*,application/pdf" style="display:none"
               onchange="Modulos.clientes._subirDoc('${id || ''}','${tipo}',this)">
-          </div>`).join('')}
+          </div>`;
+        }).join('')}
         <div id="cli-lectura-aviso" style="font-size:11px;margin:6px 0"></div>
         <div id="cli-docs"></div>
       </div>`;
