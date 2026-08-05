@@ -128,7 +128,7 @@ Modulos.armeria = {
   _tabsHTML() {
     const b = (tab, txt) => `<button class="btn btn-sm ${this._tab === tab ? 'btn-cyan' : 'btn-ghost'}" onclick="Modulos.armeria._irTab('${tab}')">${txt}</button>`;
     return `<div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
-      ${b('operaciones', '🎯 Operaciones')}${b('municiones', '📦 Entrega de municiones')}${b('ley', '⚖️ Ley de Armas y Municiones')}
+      ${b('operaciones', '🎯 Operaciones')}${b('municiones', '📦 Entrega de municiones')}${b('declaraciones', '📄 Declaraciones')}${b('ley', '⚖️ Ley de Armas y Municiones')}
     </div>`;
   },
 
@@ -136,6 +136,7 @@ Modulos.armeria = {
     this._tab = tab;
     if (tab === 'ley') return this.renderLey();
     if (tab === 'municiones') return this.renderMuniciones();
+    if (tab === 'declaraciones') return this.renderDeclaraciones();
     return this.render(this._filtroTipo);
   },
 
@@ -466,6 +467,7 @@ Modulos.armeria = {
   async render(filtroTipo = '') {
     if (this._tab === 'ley') return this.renderLey();
     if (this._tab === 'municiones') return this.renderMuniciones();
+    if (this._tab === 'declaraciones') return this.renderDeclaraciones();
     const el = document.getElementById('page-content');
     UI.loading(el);
     this._filtroTipo = filtroTipo;

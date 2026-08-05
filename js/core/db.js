@@ -990,6 +990,40 @@ const DB = {
     return (data || []).filter(r => r.id !== excluirId).reduce((s, r) => s + (Number(r.cantidad) || 0), 0);
   },
 
+  /* ── DECLARACIONES JURADAS: historial ──
+     Se guarda el documento YA EDITADO, no los campos con los que se armó: lo
+     que vale como respaldo ante DIGECAM o la IVE es el papel que se firmó. */
+  async getDeclaraciones(filtros = {}) {
+    let q = getSB().from('armeria_declaraciones')
+      .select('id,num,tipo,titulo,base_legal,cliente_id,operacion_id,cliente_nombre,cliente_dpi,fecha,notas,created_at, usuarios(nombre)')
+      .eq('tenant_id', getTID()).order('fecha', { ascending: false }).order('created_at', { ascending: false });
+    if (filtros.cliente_id) q = q.eq('cliente_id', filtros.cliente_id);
+    if (filtros.tipo) q = q.eq('tipo', filtros.tipo);
+    const { data } = await q;
+    return data || [];
+  },
+
+  /* El contenido va aparte porque pesa: el listado no lo necesita y traerlo
+     en cada fila haría lenta una pantalla que sólo muestra encabezados. */
+  async getDeclaracionContenido(id) {
+    const { data } = await getSB().from('armeria_declaraciones')
+      .select('contenido_html').eq('id', id).maybeSingle();
+    return data?.contenido_html || null;
+  },
+
+  async guardarDeclaracion(fields) {
+    const num = await this.siguienteNum('ARMDEC', 'DEC', 'armeria_declaraciones');
+    const { data, error } = await getSB().from('armeria_declaraciones')
+      .insert({ ...fields, tenant_id: getTID(), num, generado_por: Auth.user?.id || null })
+      .select('id,num').single();
+    return { data, error };
+  },
+
+  async eliminarDeclaracion(id) {
+    const { error } = await getSB().from('armeria_declaraciones').delete().eq('id', id);
+    return !error;
+  },
+
   /* ── MUNICIÓN: saldo a favor y entregas ──
      La armería puede vender un combo de 1,000 cartuchos, pero el art. 60 limita
      lo que el cliente se LLEVA cada mes (200 con tenencia, 250 por arma con
