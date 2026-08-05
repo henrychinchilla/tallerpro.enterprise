@@ -415,10 +415,10 @@ Modulos.superadmin = {
       </div>
       <div class="form-row">
         <div class="form-group"><label class="form-label">Régimen de IVA</label>
-          <select class="form-select" id="nt-regimen">
+          <select class="form-select" id="nt-regimen" onchange="UI.toggleISR('nt-regimen','nt-isr-box')">
             ${Object.entries(REGIMENES_SAT).map(([id, r]) => `<option value="${id}">${r.label}</option>`).join('')}
           </select></div>
-        <div class="form-group"><label class="form-label">Régimen de ISR</label>
+        <div class="form-group" id="nt-isr-box"><label class="form-label">Régimen de ISR</label>
           <select class="form-select" id="nt-isr">
             ${Object.entries(REGIMENES_ISR).map(([id, r]) => `<option value="${id}">${r.label}</option>`).join('')}
           </select></div>

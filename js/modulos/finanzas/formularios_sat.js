@@ -307,7 +307,9 @@ Modulos.contabilidad.sat = {
        tienen la tasa, así que se deduce de ella (0.25 = sobre utilidades). */
     const isrActual = REGIMENES_ISR[fiscal.regimen_isr] ? fiscal.regimen_isr
                     : ((Number(fiscal.tasa_isr)||0.05) >= 0.2 ? 'utilidades' : 'opcional_simplificado');
-    const regimenActual = `${REGIMENES_SAT[ivaActual].label} · ISR ${REGIMENES_ISR[isrActual].label}`;
+    const regimenActual = aplicaISR(ivaActual)
+      ? `${REGIMENES_SAT[ivaActual].label} · ISR ${REGIMENES_ISR[isrActual].label}`
+      : `${REGIMENES_SAT[ivaActual].label} · sin ISR (pago definitivo)`;
 
     UI.modal('⚠️ Cambio de Régimen Fiscal', `
       <div class="alert alert-amber" style="margin-bottom:16px">
@@ -330,12 +332,12 @@ Modulos.contabilidad.sat = {
       <div class="form-row">
         <div class="form-group">
           <label class="form-label">Régimen IVA</label>
-          <select class="form-select" id="cfr-iva">
+          <select class="form-select" id="cfr-iva" onchange="UI.toggleISR('cfr-iva','cfr-isr-box')">
             ${Object.entries(REGIMENES_SAT).map(([id, r]) =>
               `<option value="${id}" ${id===ivaActual?'selected':''}>${r.label}</option>`).join('')}
           </select>
         </div>
-        <div class="form-group">
+        <div class="form-group" id="cfr-isr-box" ${aplicaISR(ivaActual)?'':'style="display:none"'}>
           <label class="form-label">Régimen ISR</label>
           <select class="form-select" id="cfr-isr">
             ${Object.entries(REGIMENES_ISR).map(([id, r]) =>
@@ -345,6 +347,7 @@ Modulos.contabilidad.sat = {
       </div>
       <div style="font-size:11px;color:var(--text3);margin:-4px 0 10px">
         El IVA y el ISR son impuestos distintos: la tasa de IVA la fija el régimen de arriba (12% en el general) y el 25% corresponde al ISR sobre utilidades, no al IVA.
+        <b>En Pequeño Contribuyente y en Agropecuario no se pregunta el ISR:</b> su tasa única es de pago definitivo y los releva de declararlo (Decretos 27-92 y 7-2019).
       </div>
       <div class="form-group" style="margin-top:12px">
         <label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:13px;font-weight:700">

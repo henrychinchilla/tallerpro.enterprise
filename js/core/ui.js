@@ -68,6 +68,18 @@ const UI = {
     });
   },
 
+  /* Muestra u oculta el bloque de "Régimen de ISR" según el régimen de IVA
+     elegido. En los simplificados (Pequeño Contribuyente y Agropecuario) el
+     ISR no aplica: su tasa única es de pago definitivo, así que preguntarlo
+     invita a guardar un dato que la ley no reconoce. Se usa desde los cuatro
+     formularios donde se elige régimen. */
+  toggleISR(idSelectIva, idBloqueIsr) {
+    const bloque = document.getElementById(idBloqueIsr);
+    if (!bloque) return;
+    const iva = document.getElementById(idSelectIva)?.value;
+    bloque.style.display = aplicaISR(iva) ? '' : 'none';
+  },
+
   /* ── FORMATOS ─────────────────────────────────── */
   q(n) {
     return 'Q' + (n||0).toLocaleString('es-GT', { minimumFractionDigits:2, maximumFractionDigits:2 });

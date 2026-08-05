@@ -34,9 +34,18 @@ const TASA_IVA: Record<string, number> = {
 };
 const TASA_ISR: Record<string, number> = { opcional_simplificado: 0.05, utilidades: 0.25 };
 
+/* Los simplificados NO pagan ISR aparte: su tasa única sobre ingresos brutos
+   es de pago definitivo y los releva de declararlo (Decretos 27-92 y 7-2019).
+   Se guarda null = "no aplica", no un valor por defecto que mentiría. */
+const SIMPLIFICADOS = ["pequeno", "pequeno_electronico",
+                       "agropecuario", "agropecuario_electronico"];
+
 function resolverRegimenes(body: Record<string, unknown>) {
   const iva = TASA_IVA[String(body.regimen_iva ?? "")] !== undefined
     ? String(body.regimen_iva) : "general";
+  if (SIMPLIFICADOS.includes(iva)) {
+    return { regimenIva: iva, tasaIva: TASA_IVA[iva], regimenIsr: null, tasaIsr: 0 };
+  }
   const isr = TASA_ISR[String(body.regimen_isr ?? "")] !== undefined
     ? String(body.regimen_isr) : "opcional_simplificado";
   return { regimenIva: iva, tasaIva: TASA_IVA[iva], regimenIsr: isr, tasaIsr: TASA_ISR[isr] };

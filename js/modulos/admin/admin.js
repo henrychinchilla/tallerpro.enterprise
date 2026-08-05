@@ -47,7 +47,9 @@ Modulos.admin = {
       const regimenLabel = fiscal?.regimen_iva
         ? (REGIMENES_SAT[fiscal.regimen_iva]?.label || fiscal.regimen_iva)
         : 'No configurado';
-      const isrLabel = fiscal?.tasa_isr >= 0.25 ? 'Sobre Utilidades (25%)' : fiscal?.tasa_isr >= 0.07 ? 'Opcional Simplificado (7%)' : fiscal?.tasa_isr >= 0.05 ? 'Opcional Simplificado (5%)' : '—';
+      /* En los simplificados no hay ISR que mostrar: su pago es definitivo. */
+      const isrLabel = !aplicaISR(fiscal?.regimen_iva) ? 'No aplica (pago definitivo)'
+        : fiscal?.tasa_isr >= 0.25 ? 'Sobre Utilidades (25%)' : fiscal?.tasa_isr >= 0.07 ? 'Opcional Simplificado (7%)' : fiscal?.tasa_isr >= 0.05 ? 'Opcional Simplificado (5%)' : '—';
       el.innerHTML = `
         <div class="grid-2" style="margin-bottom:20px">
           <div class="card card-cyan">

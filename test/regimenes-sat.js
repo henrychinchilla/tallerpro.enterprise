@@ -18,7 +18,9 @@ ctx.window = ctx;
 vm.createContext(ctx);
 vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'js', 'core', 'config.js'), 'utf8'), ctx);
 const { REGIMENES_SAT, REGIMENES_ISR, regimenSAT, regimenSimplificado, tasaIVARegimen,
-        tasaISR, resolverRegimenes } = ctx;
+        tasaISR, aplicaISR, resolverRegimenes } = ctx;
+
+const SIMPLIFICADOS = ['pequeno', 'pequeno_electronico', 'agropecuario', 'agropecuario_electronico'];
 
 let pasadas = 0, fallidas = 0;
 const ok = (n, c) => { if (c) { pasadas++; console.log('PASS — ' + n); } else { fallidas++; console.log('FAIL — ' + n); } };
@@ -106,9 +108,12 @@ const ok = (n, c) => { if (c) { pasadas++; console.log('PASS — ' + n); } else 
   ok('...y con la lógica vieja se guardaba como general', viejo('agropecuario') === 'general');
   ok('el agropecuario conserva su IVA del 5%', agro.tasa_iva === 0.05);
   ok('...que la lógica vieja subía a 12%', REGIMENES_SAT[viejo('agropecuario')].tasa_iva === 0.12);
-  ok('el ISR sobre utilidades se guarda al 25%', agro.tasa_isr === 0.25);
-  ok('...y antes quedaba fijo en 5% para todos', 0.05 !== agro.tasa_isr);
-  ok('guarda también el nombre del régimen de ISR', agro.regimen_isr === 'utilidades');
+
+  /* El ISR se comprueba sobre el general, que es el único que lo paga. */
+  const util = resolverRegimenes('general', 'utilidades');
+  ok('el ISR sobre utilidades se guarda al 25%', util.tasa_isr === 0.25);
+  ok('...y antes quedaba fijo en 5% para todos', util.tasa_isr !== 0.05);
+  ok('guarda también el nombre del régimen de ISR', util.regimen_isr === 'utilidades');
 
   /* Las tasas ya no se piden aparte: las deriva el régimen. Así no se puede
      guardar "Pequeño Contribuyente" con IVA 12%. */
@@ -121,6 +126,39 @@ const ok = (n, c) => { if (c) { pasadas++; console.log('PASS — ' + n); } else 
   ok('sin elección se asume general', porDefecto.regimen_iva === 'general');
   ok('sin elección el ISR es el simplificado', porDefecto.regimen_isr === 'opcional_simplificado');
   ok('basura no revienta el alta', resolverRegimenes('zzz', 'zzz').tasa_iva === 0.12);
+}
+
+/* ── En los simplificados NO hay ISR ────────────────────────────────────────
+   Lo cazó Henry: "cuando se elige pequeño contribuyente debería desaparecer el
+   régimen de ISR porque estos regímenes no generan ISR". Es correcto, y aplica
+   también al AGROPECUARIO, que es igual de simplificado:
+
+     · Pequeño Contribuyente      — Decreto 27-92 (Ley del IVA), arts. 45 a 50
+     · Contribuyente Agropecuario — Decreto 7-2019
+
+   Su tasa única sobre ingresos brutos es de pago DEFINITIVO: quedan relevados
+   de presentar y pagar ISR (anual, trimestral o mensual) y el ISO. Guardarles
+   un régimen de ISR afirma una obligación que la ley no les impone. */
+{
+  SIMPLIFICADOS.forEach(id => {
+    ok(`${id} NO paga ISR aparte`, aplicaISR(id) === false);
+    const r = resolverRegimenes(id, 'utilidades');   // aunque el formulario insista
+    ok(`...y no se le guarda régimen de ISR`, r.regimen_isr === null);
+    ok(`...ni tasa de ISR`, r.tasa_isr === 0);
+    ok(`...pero conserva su tasa de IVA`, r.tasa_iva === REGIMENES_SAT[id].tasa_iva);
+  });
+
+  ok('el régimen general SÍ paga ISR aparte', aplicaISR('general') === true);
+  ok('...y ahí sí se guarda el régimen elegido',
+     resolverRegimenes('general', 'utilidades').regimen_isr === 'utilidades');
+  ok('sin régimen de IVA se asume general, que sí paga ISR', aplicaISR(undefined) === true);
+
+  /* La regla se deriva de `simplificado` en el catálogo, no de una lista suelta:
+     si mañana la SAT agrega otro régimen simplificado, hereda el trato solo. */
+  Object.entries(REGIMENES_SAT).forEach(([id, r]) => {
+    ok(`${id}: pagar ISR es lo contrario de ser simplificado`,
+       aplicaISR(id) === !r.simplificado);
+  });
 }
 
 console.log(`   ${pasadas} pasadas, ${fallidas} fallidas`);
