@@ -138,7 +138,9 @@ function domBase() {
 {
   const conDatos = (obj) => { ctx.IA = { escanearDPI: async () => ({ ok: true, texto: JSON.stringify(obj) }),
                                          escanearRecibo: async () => ({ ok: true, texto: JSON.stringify(obj) }) }; };
-  const archivo = { files: [{ size: 1000 }], value: '' };
+  /* _leerDocumento recibe el File directo: quien lo llama es _subirDoc, que
+     ya lo sacó del input y lo archivó primero. */
+  const archivo = { size: 1000, type: 'image/jpeg' };
   ctx.FileReader = function () {
     this.readAsDataURL = () => { this.result = 'data:image/jpeg;base64,AAA'; this.onload(); };
   };
@@ -208,9 +210,107 @@ function domBase() {
   campos['cli-edad'] = { textContent: '', style: {} };
   let llamo = false;
   ctx.IA = { escanearDPI: async () => { llamo = true; return { ok: true, texto: '{}' }; } };
-  await CLI._leerDPI({ files: [{ size: 9 * 1024 * 1024 }], value: '' });
+  await CLI._leerDPI({ size: 9 * 1024 * 1024, type: 'image/jpeg' });
   ok('una imagen de 9MB se rechaza sin gastar una llamada de IA', llamo === false);
   ok('y lo dice', /más de 5 MB/.test(campos['cli-lectura-aviso'].innerHTML));
+}
+
+/* ── Una sola subida: archiva Y lee ──────────────────────────────────────
+   Antes había dos caminos separados (un botón para leer, otro para
+   adjuntar) y el usuario tenía que dar la misma foto dos veces. */
+{
+  ctx.Auth.tenant = { modulos_activos: ['armeria'] };
+  const subidos = [];
+  ctx.Docs = {
+    subirArchivo: async (ent, cid, tipo, titulo) => { subidos.push({ cid, tipo, titulo }); return {}; },
+    render() {},
+  };
+  ctx.IA = { escanearDPI: async () => ({ ok: true, texto: JSON.stringify({ cui: '1111111111111' }) }),
+             escanearRecibo: async () => ({ ok: true, texto: JSON.stringify({ direccion: 'Zona 5' }) }) };
+
+  /* Cliente EXISTENTE: archiva de una vez y lee. */
+  domBase();
+  campos['cli-lectura-aviso'] = { innerHTML: '', style: {} };
+  campos['cli-dpi'] = { value: '' };
+  campos['cli-edad'] = { textContent: '', style: {} };
+  subidos.length = 0;
+  await CLI._subirDoc('c1', 'dpi', { files: [{ size: 1000, type: 'image/jpeg' }], value: '' });
+  ok('con cliente existente, archiva el documento', subidos.length === 1 && subidos[0].tipo === 'dpi');
+  ok('...y en la MISMA acción lee los datos', campos['cli-dpi'].value === '1111111111111');
+
+  /* La licencia se archiva pero no tiene datos que leer: no debe llamar IA. */
+  let leyoLicencia = false;
+  ctx.IA = { escanearDPI: async () => { leyoLicencia = true; return { ok: true, texto: '{}' }; } };
+  subidos.length = 0;
+  await CLI._subirDoc('c1', 'licencia_arma', { files: [{ size: 1000, type: 'image/jpeg' }], value: '' });
+  ok('la licencia se archiva', subidos.length === 1 && subidos[0].tipo === 'licencia_arma');
+  ok('...pero no gasta una llamada de IA (no hay qué leer ahí)', leyoLicencia === false);
+
+  /* Un PDF se archiva pero no se manda a leer: el lector es de imágenes. */
+  ctx.IA = { escanearDPI: async () => { leyoLicencia = true; return { ok: true, texto: '{}' }; } };
+  leyoLicencia = false;
+  subidos.length = 0;
+  await CLI._subirDoc('c1', 'dpi', { files: [{ size: 1000, type: 'application/pdf' }], value: '' });
+  ok('un PDF se archiva igual', subidos.length === 1);
+  ok('...pero no se manda al lector de imágenes', leyoLicencia === false);
+}
+
+/* ── Fotos tomadas ANTES de que el cliente exista ────────────────────────
+   Un cliente nuevo no tiene id, y el archivo se guarda en una carpeta con
+   ese id. Se retienen y se suben al crearlo, para no pedir la foto dos
+   veces. */
+{
+  const subidos = [];
+  ctx.Docs = { subirArchivo: async (e, cid, tipo) => { subidos.push({ cid, tipo }); return {}; }, render() {} };
+  ctx.IA = { escanearDPI: async () => ({ ok: true, texto: JSON.stringify({ cui: '2222222222222' }) }) };
+
+  CLI._docsPendientes = {};
+  domBase();
+  campos['cli-lectura-aviso'] = { innerHTML: '', style: {} };
+  campos['cli-dpi'] = { value: '' };
+  campos['cli-edad'] = { textContent: '', style: {} };
+  campos['cli-docs-box'] = { innerHTML: '' };
+
+  subidos.length = 0;
+  await CLI._subirDoc('', 'dpi', { files: [{ size: 1000, type: 'image/jpeg' }], value: '' });
+  ok('sin cliente todavía, NO intenta archivar (no hay carpeta donde)', subidos.length === 0);
+  ok('pero retiene la foto para después', !!CLI._docsPendientes.dpi);
+  ok('y LEE los datos igual, sin esperar a guardar', campos['cli-dpi'].value === '2222222222222');
+
+  /* Al crear el cliente, lo pendiente se adjunta solo. */
+  guardado = null;
+  await CLI.guardar('');
+  ok('al crear el cliente se adjunta lo pendiente', subidos.length === 1 && subidos[0].tipo === 'dpi');
+  ok('...con el id del cliente recién creado', subidos[0].cid === 'c1');
+  ok('y la lista de pendientes queda limpia', Object.keys(CLI._docsPendientes).length === 0);
+
+  /* Abrir una ficha nueva descarta lo pendiente de otra: si no, una foto
+     tomada para un cliente terminaría en el siguiente. */
+  CLI._docsPendientes = { dpi: { file: {}, titulo: 'DPI' } };
+  CLI._data = [];
+  CLI.modalForm();
+  ok('abrir una ficha nueva descarta lo pendiente de la anterior',
+     Object.keys(CLI._docsPendientes).length === 0);
+}
+
+/* ── Ya no hay dos caminos para la misma foto ────────────────────────────── */
+{
+  ctx.Auth.tenant = { modulos_activos: ['armeria'] };
+  CLI._data = [{ id: 'c1', nombre: 'Juan Pérez' }];
+  CLI.modalForm('c1');
+  ok('el formulario ofrece cámara para cada documento', /capture="environment"/.test(htmlModal));
+  ok('y también subir archivo', /cli-doc-dpi-gal/.test(htmlModal));
+  ok('marca cuáles documentos se leen solos', /se lee solo/.test(htmlModal));
+  ok('ya NO existe un botón aparte de "Leer del DPI"', !/Leer del DPI/.test(htmlModal));
+  ok('ni uno aparte para el recibo', !/Leer dirección del recibo/.test(htmlModal));
+  ok('los datos personales explican de dónde se llenan', /Se llenan solos al adjuntar/.test(htmlModal));
+
+  /* Abrir la ficha de un id que no está en la lista cargada no debe tumbar
+     la pantalla: pasa si otro módulo la abre con una lista distinta. */
+  CLI._data = [];
+  let reventó = false;
+  try { CLI.modalForm('id-que-no-existe'); } catch (_) { reventó = true; }
+  ok('un id ausente no tumba el formulario', reventó === false);
 }
 
 /* ── Sin tenant cargado no revienta ni asume que hay armería ─────────────── */
