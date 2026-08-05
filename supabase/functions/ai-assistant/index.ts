@@ -208,6 +208,11 @@ Devuelve ÚNICAMENTE un objeto JSON válido, sin bloques de código markdown, si
 
 REGLA CRÍTICA: si un dato no se lee con claridad en la imagen, devuélvelo como null. NUNCA adivines, completes ni corrijas un dato — este documento se usa para trámites ante DIGECAM y un dato inventado es peor que un campo vacío.
 
+CIRCULAN DOS DISEÑOS DE DPI Y AMBOS SON VÁLIDOS. Los dos se deben leer igual:
+  · Diseño ANTERIOR: fotografía en blanco y negro o de menor calidad, rótulos únicamente en español, escudo de armas de Guatemala.
+  · Diseño NUEVO (desde 2025): fotografía a COLOR, rótulos en español E INGLÉS, bandera nacional y un quetzal en lugar del escudo y de la pirámide, y puede incluir la DIRECCIÓN del titular, que el diseño anterior no traía.
+No rechaces ni marques como inválido un documento por ser del diseño anterior: sigue vigente. Si los rótulos vienen en dos idiomas, toma el valor una sola vez (no lo dupliques). Si el diseño nuevo trae dirección y el anterior no, simplemente devuelve null cuando no aparezca.
+
 Campos esperados:
 {
   "documento": "'dpi' o 'pasaporte', según cuál sea la imagen",
@@ -218,7 +223,30 @@ Campos esperados:
   "estado_civil": "Exactamente uno de: 'soltero(a)', 'casado(a)', 'unido(a)', 'divorciado(a)', 'viudo(a)'. Si el documento dice SOLTERO o SOLTERA, devuelve 'soltero(a)'. Si no aparece, null",
   "nacionalidad": "La nacionalidad que indique el documento (ej. 'Guatemalteca')",
   "vecindad": "El municipio/departamento de vecindad si aparece, si no null",
+  "direccion": "La dirección del titular SÓLO si el documento la trae impresa (el diseño nuevo puede traerla; el anterior no). Si no aparece, null",
   "fecha_vencimiento": "Fecha de vencimiento del documento en formato YYYY-MM-DD, si aparece; si no, null"
+}`,
+
+  licencia: `Eres un asistente especializado en leer LICENCIAS DE TENENCIA Y PORTACIÓN DE ARMA DE FUEGO emitidas por la DIGECAM (Dirección General de Control de Armas y Municiones) de Guatemala.
+Tu única tarea es leer la imagen y devolver los datos EXACTAMENTE como aparecen impresos.
+Devuelve ÚNICAMENTE un objeto JSON válido, sin bloques de código markdown, sin comentarios y sin explicaciones.
+
+REGLA CRÍTICA: si un dato no se lee con claridad, devuélvelo como null. NUNCA adivines. De estos datos depende cuánta munición se le puede entregar legalmente al cliente (artículo 60 del Decreto 15-2009): un tipo de licencia inventado autoriza una entrega ilegal.
+
+DISTINGUIR EL TIPO ES LO MÁS IMPORTANTE:
+  · TENENCIA autoriza tener el arma en el domicilio o lugar de trabajo. Tope de 200 cartuchos al mes.
+  · PORTACIÓN autoriza llevarla consigo fuera de esos lugares. Tope de 250 cartuchos por arma registrada.
+Si el documento no dice con claridad cuál de los dos es, devuelve null en "tipo". No lo deduzcas del formato ni del color de la tarjeta.
+
+Campos esperados:
+{
+  "tipo": "Exactamente 'tenencia' o 'portación'. Si no lo distingues con total seguridad, null",
+  "numero": "El número de licencia tal como aparece impreso, sin agregar ni quitar caracteres",
+  "titular": "Nombre completo del titular tal como aparece",
+  "cui": "El CUI/DPI del titular de 13 dígitos sin espacios ni guiones, si aparece; si no, null",
+  "fecha_vencimiento": "Vencimiento en formato YYYY-MM-DD. Suele venir DD/MM/AAAA: conviértela. Si no aparece, null",
+  "fecha_emision": "Emisión en formato YYYY-MM-DD, si aparece; si no, null",
+  "armas_registradas": "Cuántas armas ampara la licencia, como número entero, SÓLO si el documento lo indica explícitamente (por ejemplo listando los números de serie). Si no lo dice, null — no supongas 1"
 }`,
 
   recibo: `Eres un asistente especializado en extraer la DIRECCIÓN de un recibo de servicios de Guatemala (energía eléctrica, agua, teléfono o cable).
@@ -401,6 +429,7 @@ Deno.serve(async (req) => {
        devolviera algo mal leído sobrescribiría lo bueno. */
     dpi:     "Analiza la imagen del ANVERSO del DPI de Guatemala (o de la hoja de datos de un pasaporte) y extrae los datos solicitados en formato JSON. Si un dato no se lee con claridad, devuélvelo como null en vez de adivinarlo. Si la imagen es el REVERSO del DPI (zona legible por máquina, sin fotografía), devuelve todos los campos como null.",
     recibo:  "Analiza la imagen del recibo de servicios y extrae los datos solicitados en formato JSON. Si un dato no se lee con claridad, devuélvelo como null en vez de adivinarlo.",
+    licencia: "Analiza la imagen de la licencia de tenencia o portación de arma emitida por DIGECAM (Guatemala) y extrae los datos solicitados en formato JSON. El tipo sólo puede ser 'tenencia' o 'portación': si no lo distingues con total seguridad, devuélvelo null. Si un dato no se lee con claridad, devuélvelo como null en vez de adivinarlo.",
   };
 
   if (MODOS_IMAGEN[modo]) {

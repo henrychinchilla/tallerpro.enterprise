@@ -142,6 +142,12 @@ const IA = {
   async escanearRecibo(imagenBase64) {
     return _invocar('ai-assistant', { modo: 'recibo', imagen_base64: imagenBase64 });
   },
+  /* Lee la licencia de tenencia/portación de DIGECAM. De su TIPO depende
+     cuánta munición se le puede entregar al cliente (art. 60), así que el
+     prompt devuelve null antes que adivinarlo. */
+  async escanearLicencia(imagenBase64) {
+    return _invocar('ai-assistant', { modo: 'licencia', imagen_base64: imagenBase64 });
+  },
 
   /* ── Chat flotante con Nexus ────────────────────── */
   abrirChat() {

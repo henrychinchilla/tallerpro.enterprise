@@ -58,8 +58,10 @@ const ok = (n, c) => { if (c) { pasadas++; console.log('PASS — ' + n); } else 
 {
   ok('el anverso del DPI se lee solo', C._LECTOR_DOC.dpi_frente === 'dpi');
   ok('el REVERSO del DPI no se manda a la IA', !C._LECTOR_DOC.dpi_reverso);
-  ok('la licencia no se lee (sus datos no viven en la ficha del cliente)',
-     !C._LECTOR_DOC.licencia_frente && !C._LECTOR_DOC.licencia_reverso);
+  /* La licencia SÍ se lee desde que sus datos viven en la ficha del cliente
+     (migración 127). Antes no se leía porque no había dónde volcarlos. */
+  ok('el anverso de la licencia se lee', C._LECTOR_DOC.licencia_frente === 'licencia');
+  ok('el REVERSO de la licencia no se manda a la IA', !C._LECTOR_DOC.licencia_reverso);
   ok('el pasaporte se lee como un DPI', C._LECTOR_DOC.pasaporte === 'dpi');
   ok('el recibo se lee para la dirección', C._LECTOR_DOC.recibo_servicios === 'recibo');
 
@@ -68,7 +70,7 @@ const ok = (n, c) => { if (c) { pasadas++; console.log('PASS — ' + n); } else 
   ok('el prompt del DPI apunta al ANVERSO', /ANVERSO del DPI/.test(srcIA));
   ok('el prompt sabe qué hacer si le dan el reverso',
      /REVERSO del DPI[\s\S]{0,120}null/.test(srcIA));
-  ok('no quedó un modo de licencia sin uso', !/licencia:\s*"Analiza/.test(srcIA));
+  ok('existe el modo de lectura de licencia', /licencia:\s*"Analiza/.test(srcIA));
 }
 
 /* ── Los expedientes ya cargados siguen valiendo ────────────────────────── */
