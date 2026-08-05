@@ -130,6 +130,18 @@ const IA = {
   async escanearTarjeta(imagenBase64) {
     return _invocar('ai-assistant', { modo: 'tarjeta', imagen_base64: imagenBase64 });
   },
+  /* Lee un DPI o pasaporte y devuelve sus datos. El prompt le ordena
+     devolver null en lo que no se lea con claridad: estos datos van a una
+     declaración jurada y a un trámite de DIGECAM, así que un dato inventado
+     es peor que un campo vacío. */
+  async escanearDPI(imagenBase64) {
+    return _invocar('ai-assistant', { modo: 'dpi', imagen_base64: imagenBase64 });
+  },
+  /* Lee un recibo de servicios para sacar la dirección (verificación de
+     domicilio del cliente de armería). */
+  async escanearRecibo(imagenBase64) {
+    return _invocar('ai-assistant', { modo: 'recibo', imagen_base64: imagenBase64 });
+  },
 
   /* ── Chat flotante con Nexus ────────────────────── */
   abrirChat() {

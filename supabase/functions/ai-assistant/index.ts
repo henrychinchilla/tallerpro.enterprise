@@ -200,6 +200,41 @@ Campos y formatos esperados:
   "asientos": "El número de asientos como entero (ej. 7)",
   "ejes": "El número de ejes como entero (ej. 2)",
   "color": "El color o colores del vehículo"
+}`,
+
+  dpi: `Eres un asistente especializado en extraer información del Documento Personal de Identificación (DPI) de Guatemala, emitido por el RENAP, y de pasaportes.
+Tu única tarea es leer la imagen y devolver los datos EXACTAMENTE como aparecen impresos.
+Devuelve ÚNICAMENTE un objeto JSON válido, sin bloques de código markdown, sin comentarios y sin explicaciones.
+
+REGLA CRÍTICA: si un dato no se lee con claridad en la imagen, devuélvelo como null. NUNCA adivines, completes ni corrijas un dato — este documento se usa para trámites ante DIGECAM y un dato inventado es peor que un campo vacío.
+
+Campos esperados:
+{
+  "documento": "'dpi' o 'pasaporte', según cuál sea la imagen",
+  "cui": "El CUI/DPI de 13 dígitos, SIN espacios ni guiones (ej. '1605755322205'). En pasaporte, el número de pasaporte",
+  "nombre_completo": "Nombres y apellidos completos tal como aparecen, en el orden en que aparecen",
+  "fecha_nacimiento": "En formato YYYY-MM-DD. La tarjeta suele traerla como DD/MM/AAAA: conviértela",
+  "lugar_nacimiento": "El lugar de nacimiento tal como aparece (municipio y departamento, o país si es extranjero)",
+  "estado_civil": "Exactamente uno de: 'soltero(a)', 'casado(a)', 'unido(a)', 'divorciado(a)', 'viudo(a)'. Si el documento dice SOLTERO o SOLTERA, devuelve 'soltero(a)'. Si no aparece, null",
+  "nacionalidad": "La nacionalidad que indique el documento (ej. 'Guatemalteca')",
+  "vecindad": "El municipio/departamento de vecindad si aparece, si no null",
+  "fecha_vencimiento": "Fecha de vencimiento del documento en formato YYYY-MM-DD, si aparece; si no, null"
+}`,
+
+  recibo: `Eres un asistente especializado en extraer la DIRECCIÓN de un recibo de servicios de Guatemala (energía eléctrica, agua, teléfono o cable).
+Se usa para verificar el domicilio de un cliente, así que la dirección debe salir tal como está impresa.
+Devuelve ÚNICAMENTE un objeto JSON válido, sin markdown, sin comentarios y sin explicaciones.
+
+REGLA CRÍTICA: si un dato no se lee con claridad, devuélvelo como null. NUNCA lo inventes ni lo completes.
+
+Campos esperados:
+{
+  "titular": "El nombre del titular del servicio tal como aparece",
+  "direccion": "La dirección completa del suministro, tal como está impresa, en una sola línea",
+  "servicio": "Tipo de servicio: 'energía eléctrica', 'agua', 'teléfono', 'cable' u otro que indique",
+  "empresa": "La empresa que emite el recibo (ej. EEGSA, EMPAGUA, Claro, Tigo)",
+  "periodo": "El período o mes facturado tal como aparece, si aparece; si no, null",
+  "fecha_emision": "Fecha de emisión en formato YYYY-MM-DD, si aparece; si no, null"
 }`
 };
 
@@ -343,7 +378,10 @@ Deno.serve(async (req) => {
   const contexto = body.contexto ?? {};
 
   if (!PROMPTS[modo]) return json({ error: "Modo no válido" }, 400);
-  if (!mensaje && modo !== "insights" && modo !== "tarjeta") return json({ error: "Falta el mensaje" }, 400);
+  /* Los modos de imagen y `insights` no llevan mensaje de texto. */
+  if (!mensaje && !["insights", "tarjeta", "dpi", "recibo"].includes(modo)) {
+    return json({ error: "Falta el mensaje" }, 400);
+  }
 
   // ── Construir el contenido del usuario ──
   let userContent = "";
@@ -351,10 +389,19 @@ Deno.serve(async (req) => {
   let sistemaPrompt = PROMPTS[modo]; // puede ser sobreescrito por persona dinámica en chat/insights
   let modsDelRol: string[] = []; // módulos que este rol puede tocar (para gating de web_search)
 
-  if (modo === "tarjeta") {
+  /* Modos que leen una imagen y devuelven JSON. Comparten toda la mecánica
+     (validar el base64, armar el bloque de imagen); lo único distinto es el
+     prompt del sistema y la instrucción que acompaña a la foto. */
+  const MODOS_IMAGEN: Record<string, string> = {
+    tarjeta: "Analiza la imagen de la tarjeta de circulación de Guatemala y extrae los datos solicitados en formato JSON.",
+    dpi:     "Analiza la imagen del DPI (o pasaporte) y extrae los datos solicitados en formato JSON. Si un dato no se lee con claridad, devuélvelo como null en vez de adivinarlo.",
+    recibo:  "Analiza la imagen del recibo de servicios y extrae los datos solicitados en formato JSON. Si un dato no se lee con claridad, devuélvelo como null en vez de adivinarlo.",
+  };
+
+  if (MODOS_IMAGEN[modo]) {
     const base64Data = body.imagen_base64;
     if (!base64Data) {
-      return json({ error: "Falta la imagen de la tarjeta" }, 400);
+      return json({ error: "Falta la imagen" }, 400);
     }
     let mediaType = "image/jpeg";
     let base64Raw = base64Data;
@@ -381,7 +428,7 @@ Deno.serve(async (req) => {
           },
           {
             type: "text",
-            text: "Analiza la imagen de la tarjeta de circulación de Guatemala y extrae los datos solicitados en formato JSON.",
+            text: MODOS_IMAGEN[modo],
           },
         ],
       },
