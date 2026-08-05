@@ -197,6 +197,7 @@ Modulos.armeria = {
               <td><div style="display:flex;gap:4px;flex-wrap:wrap">
                 ${Modulos.btnAccion('ver', `Modulos.armeria.verDetalle('${o.id}')`)}
                 ${Modulos.btnAccion('editar', `Modulos.armeria.modalForm('${o.id}')`)}
+                <button class="btn btn-sm btn-ghost" onclick="Modulos.armeria.modalDeclaraciones('${o.id}')" title="Declaraciones juradas">📄</button>
                 ${Modulos.btnAccion('eliminar', `Modulos.armeria.eliminar('${o.id}')`)}
               </div></td>
             </tr>`).join('') || '<tr><td colspan="10" style="text-align:center;padding:24px;color:var(--text3)">Sin operaciones. Registra la primera con "＋ Nueva Operación".</td></tr>'}
@@ -313,6 +314,7 @@ Modulos.armeria = {
       ${o.notas ? `<div style="background:var(--card2);padding:10px;border-radius:6px;margin-bottom:12px;font-size:13px">${UI.esc(o.notas)}</div>` : ''}
       <div class="modal-footer">
         <button class="btn btn-ghost" onclick="UI.cerrarModal()">Cerrar</button>
+        <button class="btn btn-ghost" onclick="UI.cerrarModal();Modulos.armeria.modalDeclaraciones('${o.id}')">📄 Declaraciones</button>
         ${!o.notificado_digecam ? `<button class="btn btn-cyan" onclick="UI.cerrarModal();Modulos.armeria._accionNotificar('${o.id}')">⚠️ Marcar notificado</button>` : ''}
         <button class="btn btn-amber" onclick="UI.cerrarModal();Modulos.armeria.modalForm('${o.id}')">✏️ Editar</button>
       </div>`, '680px');
