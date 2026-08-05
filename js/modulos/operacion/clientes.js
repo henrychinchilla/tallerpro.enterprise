@@ -226,7 +226,7 @@ Modulos.clientes = {
         </div>
         <div class="form-row">
           <div class="form-group"><label class="form-label">Profesión u oficio</label>
-            <input class="form-input" id="cli-profesion" value="${c.profesion||''}" placeholder="Comerciante, ingeniero, agricultor..."></div>
+            <input class="form-input" id="cli-profesion" value="${UI.esc(c.profesion||'')}" placeholder="Comerciante, ingeniero, agricultor..."></div>
           <div class="form-group"><label class="form-label">Nacionalidad</label>
             <input class="form-input" id="cli-nacionalidad" value="${c.nacionalidad||''}" placeholder="Guatemalteca"></div>
           <div class="form-group"><label class="form-label">Lugar de nacimiento</label>

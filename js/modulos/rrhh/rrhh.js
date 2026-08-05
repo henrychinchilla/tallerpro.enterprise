@@ -297,7 +297,7 @@ Modulos.rrhh = {
       <li class="${esRaiz ? 'org-root' : ''}" style="${dim}">
         <div class="org-card" style="border-top: 3px solid ${esRaiz ? 'var(--amber)' : 'var(--cyan)'}">
           <div class="org-card-avatar">${e.avatar || '👤'}</div>
-          <div class="org-card-name">${e.nombre}</div>
+          <div class="org-card-name">${UI.esc(e.nombre)}</div>
           <div class="org-card-cargo">${e.cargo || ROLES[e.rol]?.label || '—'}</div>
           ${esRaiz ? '<div class="org-card-tag">Cúpula</div>' : ''}
           ${hijos.length ? `<div style="font-size:10px;color:var(--text3);margin-top:4px;font-weight:700">${hijos.length} a cargo</div>` : ''}
@@ -379,7 +379,7 @@ Modulos.rrhh = {
           ${esEdicion ? `<input class="form-input" value="${p.empleados?.nombre || ''}" readonly>` : `
           <select class="form-select" id="nom-empleado-id" onchange="Modulos.rrhh._onNomEmpleadoCambio(this.value)">
             <option value="">— Seleccionar Empleado —</option>
-            ${activos.map(e=>`<option value="${e.id}">${e.nombre}</option>`).join('')}
+            ${activos.map(e=>`<option value="${e.id}">${UI.esc(e.nombre)}</option>`).join('')}
           </select>`}
         </div>
       </div>
@@ -491,7 +491,7 @@ Modulos.rrhh = {
     const pagos = await DB.getPagosNomina(mes, anio);
     const p = pagos.find(x=>x.id===pagoId);
     if (!p) return;
-    const ok = await UI.confirmar(`¿Marcar como pagado el salario de <b>${p.empleados?.nombre || 'empleado'}</b> por un monto líquido de <b>${UI.q(p.liquido)}</b>? Se registrará como egreso y salida de banco.`, 'Confirmar Pago');
+    const ok = await UI.confirmar(`¿Marcar como pagado el salario de <b>${UI.esc(p.empleados?.nombre || 'empleado')}</b> por un monto líquido de <b>${UI.q(p.liquido)}</b>? Se registrará como egreso y salida de banco.`, 'Confirmar Pago');
     if (!ok) return;
 
     // 1. Actualizar el pago de nómina
@@ -547,7 +547,7 @@ Modulos.rrhh = {
           <div style="font-weight:700;font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px">Datos Personales</div>
           <div class="form-row">
             <div class="form-group"><label class="form-label">Nombre Completo *</label>
-              <input class="form-input" id="emp-nombre" value="${e.nombre||''}"></div>
+              <input class="form-input" id="emp-nombre" value="${UI.esc(e.nombre||'')}"></div>
             <div class="form-group"><label class="form-label">Cargo / Puesto</label>
               <input class="form-input" id="emp-cargo" value="${e.cargo||''}"></div>
           </div>
@@ -575,7 +575,7 @@ Modulos.rrhh = {
         <div class="form-group"><label class="form-label">Teléfono</label>
           <input class="form-input" id="emp-tel" value="${e.tel||''}" placeholder="5501-1234"></div>
         <div class="form-group"><label class="form-label">Email</label>
-          <input class="form-input" id="emp-email" type="email" value="${e.email||''}"></div>
+          <input class="form-input" id="emp-email" type="email" value="${UI.esc(e.email||'')}"></div>
       </div>
       <div class="form-row">
         <div class="form-group"><label class="form-label">Fecha de Nacimiento</label>
@@ -586,7 +586,7 @@ Modulos.rrhh = {
           </select></div>
       </div>
       <div class="form-group"><label class="form-label">Dirección</label>
-        <input class="form-input" id="emp-dir" value="${e.direccion||''}"></div>
+        <input class="form-input" id="emp-dir" value="${UI.esc(e.direccion||'')}"></div>
 
       <!-- SITUACIÓN DE SALUD / ALERGIAS -->
       <div class="form-group"><label class="form-label">Alergias / Situación de Salud (se muestra en el carné)</label>
@@ -703,7 +703,7 @@ Modulos.rrhh = {
       </div>
 
       <div class="form-group"><label class="form-label">Notas</label>
-        <textarea class="form-input" id="emp-notas" rows="2">${e.notas||''}</textarea></div>
+        <textarea class="form-input" id="emp-notas" rows="2">${UI.esc(e.notas||'')}</textarea></div>
       ${esEdicion?`<div class="form-group">
         <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
           <input type="checkbox" id="emp-activo" ${e.activo?'checked':''}>
@@ -929,7 +929,7 @@ Modulos.rrhh = {
     const filas = datos.map(({ e, rec, score, raw, hh, bono }) => {
       const col = score>=80?'green':score>=50?'amber':'red';
       return `<tr>
-        <td><div style="font-weight:700">${e.nombre}</div><div style="font-size:11px;color:var(--text3)">${e.cargo||ROLES[e.rol]?.label||'—'} · KPIs ${KPIS_ROL_LABELS[plantillaKpiRol(e.rol)]?.replace(/^\S+\s/,'')||''}</div></td>
+        <td><div style="font-weight:700">${UI.esc(e.nombre)}</div><div style="font-size:11px;color:var(--text3)">${e.cargo||ROLES[e.rol]?.label||'—'} · KPIs ${KPIS_ROL_LABELS[plantillaKpiRol(e.rol)]?.replace(/^\S+\s/,'')||''}</div></td>
         <td class="mono-sm">${UI.q(hh.horaHombre)}<div style="font-size:10px;color:var(--text3)">${UI.q(hh.costoMensual)}/mes</div></td>
         <td style="text-align:center" class="mono-sm">${raw.entregadas}/${raw.trabajadas}</td>
         <td class="mono-sm text-green">${UI.q(raw.ingresos)}</td>
@@ -1145,7 +1145,7 @@ Modulos.rrhh = {
     const bono = this._calcBono(e.salario_base, score, cfg);
     const nombreMes = new Date(anio, mes-1, 1).toLocaleDateString('es-GT',{month:'long',year:'numeric'});
 
-    const ok = await UI.confirmar(`¿Aprobar bono de <b>${e.nombre}</b> por <b>${UI.q(bono)}</b> (score ${score}%) de ${nombreMes}?<br>Se registrará como egreso.`, 'Aprobar');
+    const ok = await UI.confirmar(`¿Aprobar bono de <b>${UI.esc(e.nombre)}</b> por <b>${UI.q(bono)}</b> (score ${score}%) de ${nombreMes}?<br>Se registrará como egreso.`, 'Aprobar');
     if (!ok) return;
 
     const { error } = await DB.upsertKpiEmpleado({
@@ -1364,7 +1364,7 @@ Modulos.rrhh = {
           </select></div>
       </div>
       <div class="form-group"><label class="form-label">Título / Tema *</label>
-        <input class="form-input" id="cap-titulo" value="${c.titulo||''}" placeholder="Diagnóstico de inyección electrónica"></div>
+        <input class="form-input" id="cap-titulo" value="${UI.esc(c.titulo||'')}" placeholder="Diagnóstico de inyección electrónica"></div>
       <div class="form-row">
         <div class="form-group"><label class="form-label">Inicio *</label>
           <input class="form-input" id="cap-ini" type="date" value="${c.fecha_inicio||new Date().toISOString().slice(0,10)}"></div>
@@ -1387,7 +1387,7 @@ Modulos.rrhh = {
         <input class="form-input" type="file" accept="image/*,application/pdf" onchange="Modulos.rrhh._onCertificado(this)">
         <div id="cap-cert-info" style="font-size:11px;color:var(--text3);margin-top:4px">${c.certificado?'📎 Ya tiene certificado adjunto (subir otro lo reemplaza)':''}</div></div>
       <div class="form-group"><label class="form-label">Notas</label>
-        <textarea class="form-input" id="cap-notas" rows="2">${c.notas||''}</textarea></div>
+        <textarea class="form-input" id="cap-notas" rows="2">${UI.esc(c.notas||'')}</textarea></div>
       <div class="modal-footer">
         <button class="btn btn-ghost" onclick="UI.cerrarModal()">Cancelar</button>
         <button class="btn btn-amber" onclick="Modulos.rrhh.guardarCapacitacion('${id||''}')">Guardar</button>
@@ -1563,8 +1563,8 @@ Modulos.rrhh = {
     const esMia = Auth.user?.email && a.empleados?.email && Auth.user.email.toLowerCase()===a.empleados.email.toLowerCase();
     if (esMia) {
       const ok = await UI.confirmar(
-        `<b>Firma digital de recibido</b><br><br>Yo, <b>${a.empleados?.nombre}</b>, confirmo que recibí
-        <b>${a.descripcion}</b>${a.identificador?` (${a.identificador})`:''} en el estado descrito,
+        `<b>Firma digital de recibido</b><br><br>Yo, <b>${UI.esc(a.empleados?.nombre)}</b>, confirmo que recibí
+        <b>${UI.esc(a.descripcion)}</b>${a.identificador?` (${a.identificador})`:''} en el estado descrito,
         y me comprometo a su cuidado y devolución conforme a las condiciones indicadas.<br><br>
         La firma quedará registrada con tu usuario, fecha y hora.`, '✍️ Firmar de recibido');
       if (!ok) return;
@@ -1576,7 +1576,7 @@ Modulos.rrhh = {
       UI.toast('Firmado de recibido ✓');
     } else {
       const ok = await UI.confirmar(
-        `¿Marcar esta entrega como <b>firmada en papel</b> por <b>${a.empleados?.nombre}</b>?<br>
+        `¿Marcar esta entrega como <b>firmada en papel</b> por <b>${UI.esc(a.empleados?.nombre)}</b>?<br>
         <span style="font-size:11px;color:var(--text3)">Úsalo cuando el acta impresa ya fue firmada físicamente. Si el empleado tiene usuario, lo ideal es que firme digitalmente al ingresar.</span>`, 'Acta en papel');
       if (!ok) return;
       const { error } = await DB.upsertAsignacion({
@@ -1592,7 +1592,7 @@ Modulos.rrhh = {
   async devolverAsignacion(id) {
     const a = (this._asigsCache||[]).find(x=>x.id===id); if (!a) return;
     UI.modal('↩️ Registrar devolución', `
-      <div style="font-size:13px;margin-bottom:10px"><b>${a.descripcion}</b> — ${a.empleados?.nombre}</div>
+      <div style="font-size:13px;margin-bottom:10px"><b>${UI.esc(a.descripcion)}</b> — ${UI.esc(a.empleados?.nombre)}</div>
       <div class="form-group"><label class="form-label">Fecha de devolución</label>
         <input class="form-input" id="dev-fecha" type="date" value="${new Date().toISOString().slice(0,10)}"></div>
       <div class="form-group"><label class="form-label">Estado al devolver / observaciones</label>
@@ -1647,7 +1647,7 @@ Modulos.rrhh = {
 
       <h2>1. Receptor</h2>
       <table>
-        <tr><td class="k">Nombre del empleado</td><td>${e.nombre||'—'}</td></tr>
+        <tr><td class="k">Nombre del empleado</td><td>${UI.esc(e.nombre||'—')}</td></tr>
         <tr><td class="k">DPI</td><td>${e.dpi||'—'}</td></tr>
         <tr><td class="k">Cargo</td><td>${e.cargo||'—'}</td></tr>
       </table>
@@ -1655,7 +1655,7 @@ Modulos.rrhh = {
       <h2>2. Bien o acceso entregado</h2>
       <table>
         <tr><td class="k">Tipo</td><td>${(this._asigTipos[a.tipo]||a.tipo).replace(/^\S+\s/,'')}</td></tr>
-        <tr><td class="k">Descripción</td><td>${a.descripcion}</td></tr>
+        <tr><td class="k">Descripción</td><td>${UI.esc(a.descripcion)}</td></tr>
         <tr><td class="k">Identificador (serie/placa/usuario)</td><td>${a.identificador||'—'}</td></tr>
         <tr><td class="k">Estado al entregar</td><td>${a.estado_entrega||'—'}</td></tr>
         ${a.notas?`<tr><td class="k">Condiciones</td><td>${a.notas}</td></tr>`:''}
@@ -2079,7 +2079,7 @@ Modulos.rrhh = {
     win.document.write(`
       <html>
         <head>
-          <title>Carné - ${e.nombre}</title>
+          <title>Carné - ${UI.esc(e.nombre)}</title>
           <style>
             @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700;800&display=swap');
             @media print {
@@ -2360,7 +2360,7 @@ Modulos.rrhh = {
                 </div>
               </div>
               <div class="body-content">
-                <div class="emp-name">${e.nombre}</div>
+                <div class="emp-name">${UI.esc(e.nombre)}</div>
                 <div class="emp-cargo">${e.cargo || 'Mecánico'}</div>
                 
                 <div class="info-grid">
@@ -2510,7 +2510,7 @@ Modulos.rrhh = {
         <tbody>${aplicantes.map(a=>{
           const vac = vacantes.find(v=>v.id===a.vacante_id);
           return `<tr>
-          <td><b>${a.nombre}</b>${a.notas?`<div style="font-size:10px;color:var(--text3)">${a.notas}</div>`:''}</td>
+          <td><b>${a.nombre}</b>${a.notas?`<div style="font-size:10px;color:var(--text3)">${UI.esc(a.notas)}</div>`:''}</td>
           <td>${vac?.puesto||'—'}</td>
           <td class="mono-sm">${a.telefono||''}${a.email?'<br>'+a.email:''}</td>
           <td>${a.cv_base64?`<button class="btn btn-sm btn-cyan" onclick="UI.verAdjunto(Modulos.rrhh._cvDe('${a.id}'),'📄 CV')">📄 Ver</button>`:'—'}</td>
@@ -2536,7 +2536,7 @@ Modulos.rrhh = {
           <tbody>${historial.map(a=>{
             const vac = vacantes.find(v=>v.id===a.vacante_id);
             return `<tr>
-            <td><b>${a.nombre}</b>${a.notas?`<div style="font-size:10px;color:var(--text3)">${a.notas}</div>`:''}</td>
+            <td><b>${UI.esc(a.nombre)}</b>${a.notas?`<div style="font-size:10px;color:var(--text3)">${a.notas}</div>`:''}</td>
             <td>${vac?.puesto||'—'}</td>
             <td class="mono-sm">${a.telefono||''}${a.email?'<br>'+a.email:''}</td>
             <td>${a.cv_base64?`<button class="btn btn-sm btn-cyan" onclick="UI.verAdjunto(Modulos.rrhh._cvDe('${a.id}'),'📄 CV')">📄 Ver</button>`:'—'}</td>
@@ -2567,7 +2567,7 @@ Modulos.rrhh = {
           <input class="form-input" id="vac-cant" type="number" min="1" value="${v.vacantes_disponibles||1}"></div>
       </div>
       <div class="form-group"><label class="form-label">Descripción</label>
-        <textarea class="form-input" id="vac-desc" rows="3">${v.descripcion||''}</textarea></div>
+        <textarea class="form-input" id="vac-desc" rows="3">${UI.esc(v.descripcion||'')}</textarea></div>
       <div class="form-group"><label class="form-label">Requisitos</label>
         <textarea class="form-input" id="vac-req" rows="3">${v.requisitos||''}</textarea></div>
       <div class="form-group"><label class="form-label">Estado</label>
@@ -2624,11 +2624,11 @@ Modulos.rrhh = {
         </select></div>
       <div class="form-row">
         <div class="form-group"><label class="form-label">Nombre *</label>
-          <input class="form-input" id="apl-nombre" value="${a.nombre||''}"></div>
+          <input class="form-input" id="apl-nombre" value="${UI.esc(a.nombre||'')}"></div>
         <div class="form-group"><label class="form-label">Teléfono</label>
           <input class="form-input" id="apl-tel" value="${a.telefono||''}"></div>
         <div class="form-group"><label class="form-label">Email</label>
-          <input class="form-input" id="apl-email" value="${a.email||''}"></div>
+          <input class="form-input" id="apl-email" value="${UI.esc(a.email||'')}"></div>
       </div>
       <div class="form-group"><label class="form-label">CV (pdf o imagen)</label>
         <input class="form-input" type="file" accept="image/*,application/pdf" onchange="Modulos.rrhh._onCV(this)">
@@ -2638,7 +2638,7 @@ Modulos.rrhh = {
           ${['nuevo','entrevista','rechazado','contratado'].map(s=>`<option ${(a.estado||'nuevo')===s?'selected':''}>${s}</option>`).join('')}
         </select></div>
       <div class="form-group"><label class="form-label">Notas</label>
-        <textarea class="form-input" id="apl-notas" rows="2">${a.notas||''}</textarea></div>
+        <textarea class="form-input" id="apl-notas" rows="2">${UI.esc(a.notas||'')}</textarea></div>
       <div class="modal-footer">
         <button class="btn btn-ghost" onclick="UI.cerrarModal()">Cancelar</button>
         <button class="btn btn-amber" onclick="Modulos.rrhh.guardarAplicante('${id||''}')">Guardar</button>
@@ -2768,7 +2768,7 @@ Modulos.rrhh = {
           <input class="form-input" id="disc-articulo" value="${r.articulo||this._DISC_ARTICULOS[tipoIni]||''}"></div>
       </div>
       <div class="form-group"><label class="form-label">Motivo *</label>
-        <textarea class="form-input" id="disc-motivo" rows="3">${r.motivo||''}</textarea></div>
+        <textarea class="form-input" id="disc-motivo" rows="3">${UI.esc(r.motivo||'')}</textarea></div>
       <div class="form-row">
         <div class="form-group" id="disc-dias-wrap" style="${tipoIni==='Suspensión'?'':'display:none'}">
           <label class="form-label">Días de suspensión</label>
@@ -3040,7 +3040,7 @@ Modulos.rrhh = {
       <div class="form-group"><label class="form-label">Monto (Q) *</label>
         <input class="form-input" id="he-monto" type="number" min="0" step="0.01" value="${r.monto||0}"></div>
       <div class="form-group"><label class="form-label">Notas</label>
-        <textarea class="form-input" id="he-notas" rows="2">${r.notas||''}</textarea></div>
+        <textarea class="form-input" id="he-notas" rows="2">${UI.esc(r.notas||'')}</textarea></div>
       <div class="modal-footer">
         <button class="btn btn-ghost" onclick="UI.cerrarModal()">Cancelar</button>
         <button class="btn btn-amber" onclick="Modulos.rrhh.guardarHoraExtra('${id||''}')">Guardar</button>

@@ -105,9 +105,9 @@ Modulos.traslados = {
   _itemsHtml(items) {
     return items.length ? items.map(i=>`
       <div style="display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:1px solid var(--border)">
-        <div style="flex:1;font-size:12px"><b>${i.nombre}</b> <span class="text-muted">· disp: ${i.stock} ${i.unidad_medida||''}</span></div>
+        <div style="flex:1;font-size:12px"><b>${UI.esc(i.nombre)}</b> <span class="text-muted">· disp: ${i.stock} ${i.unidad_medida||''}</span></div>
         <input class="form-input" style="width:96px" type="number" min="0" max="${i.stock}" step="1"
-               id="tri-${i.id}" data-stock="${i.stock}" data-nombre="${(i.nombre||'').replace(/"/g,'&quot;')}" data-unidad="${i.unidad_medida||''}" placeholder="0">
+               id="tri-${i.id}" data-stock="${i.stock}" data-nombre="${UI.esc((i.nombre||'').replace(/"/g,'&quot;'))}" data-unidad="${i.unidad_medida||''}" placeholder="0">
       </div>`).join('') : '<div class="text-muted" style="padding:8px">Esta ubicación no tiene artículos.</div>';
   },
 
@@ -157,7 +157,7 @@ Modulos.traslados = {
     UI.modal(`📋 Traslado ${t.num||''}`, `
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
         <div><b>${t.origen_nombre||'Principal'} → ${t.destino_nombre||'Principal'}</b>
-          <div style="font-size:12px;color:var(--text3)">${t.motivo||''}</div></div>
+          <div style="font-size:12px;color:var(--text3)">${UI.esc(t.motivo||'')}</div></div>
         <span class="badge badge-${c}">${l}</span>
       </div>
       <div style="font-size:12px;color:var(--text3);margin-bottom:10px">

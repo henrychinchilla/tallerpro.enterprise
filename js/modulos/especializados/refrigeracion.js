@@ -86,7 +86,7 @@ Modulos.refrigeracion = {
     const s = this._data.find(x=>x.id===id); if (!s) return;
     UI.modal(`❄️ Servicio ${s.num||''}`, `
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px">
-        <div><div style="font-size:11px;color:var(--text3)">Cliente</div><div style="font-weight:700">${s.clientes?.nombre||'—'}</div></div>
+        <div><div style="font-size:11px;color:var(--text3)">Cliente</div><div style="font-weight:700">${UI.esc(s.clientes?.nombre||'—')}</div></div>
         <div><div style="font-size:11px;color:var(--text3)">Sistema</div><div>${this._SISTEMAS[s.tipo_sistema]||s.tipo_sistema}</div></div>
         <div><div style="font-size:11px;color:var(--text3)">Estado</div><div><span class="badge badge-${this._colorEstado(s.estado)}">${this._ESTADOS[s.estado]||s.estado}</span></div></div>
         <div><div style="font-size:11px;color:var(--text3)">Inicio</div><div>${s.tipo_inicio==='directo'?'⚡ Directo':'📋 Cotización'}</div></div>
@@ -212,7 +212,7 @@ Modulos.refrigeracion = {
           <input class="form-input" id="ref-anticipo" type="number" min="0" step="0.01" value="${s.anticipo||0}"></div>
       </div>
       <div class="form-group"><label class="form-label">Notas</label>
-        <textarea class="form-input" id="ref-notas" rows="2">${s.notas||''}</textarea></div>
+        <textarea class="form-input" id="ref-notas" rows="2">${UI.esc(s.notas||'')}</textarea></div>
       <div class="modal-footer">
         <button class="btn btn-ghost" onclick="UI.cerrarModal()">Cancelar</button>
         <button class="btn btn-amber" onclick="Modulos.refrigeracion.guardar('${id||''}')">${esEdicion?'Guardar Cambios':'Crear Servicio'}</button>

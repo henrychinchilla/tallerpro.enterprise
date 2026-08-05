@@ -78,11 +78,11 @@ Modulos.agroservicio = {
     const p = this._data.find(x=>x.id===id); if (!p) return;
     UI.modal(`📋 Servicio ${p.num||''}`, `
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px">
-        <div><div style="font-size:11px;color:var(--text3)">Cliente</div><div style="font-weight:700">${p.clientes?.nombre||'—'}</div></div>
+        <div><div style="font-size:11px;color:var(--text3)">Cliente</div><div style="font-weight:700">${UI.esc(p.clientes?.nombre||'—')}</div></div>
         <div><div style="font-size:11px;color:var(--text3)">Servicio</div><div>${this._TIPOS[p.tipo_servicio]||p.tipo_servicio}</div></div>
         <div><div style="font-size:11px;color:var(--text3)">Estado</div><div><span class="badge badge-${this._colorEstado(p.estado)}">${this._ESTADOS[p.estado]||p.estado}</span></div></div>
         <div><div style="font-size:11px;color:var(--text3)">Inicio</div><div>${p.tipo_inicio==='directo'?'⚡ Directo':'📋 Cotización'}</div></div>
-        <div><div style="font-size:11px;color:var(--text3)">Descripción</div><div>${p.descripcion||'—'}</div></div>
+        <div><div style="font-size:11px;color:var(--text3)">Descripción</div><div>${UI.esc(p.descripcion||'—')}</div></div>
         <div><div style="font-size:11px;color:var(--text3)">Cantidad</div><div>${p.cantidad}  ${p.unidad||'unid.'}</div></div>
         <div><div style="font-size:11px;color:var(--text3)">Fecha Entrega</div><div>${p.fecha_entrega?UI.fecha(p.fecha_entrega):'—'}</div></div>
         <div><div style="font-size:11px;color:var(--text3)">Precio Venta</div><div class="mono-sm" style="font-weight:700">${UI.q(p.precio_venta)}</div></div>
@@ -126,7 +126,7 @@ Modulos.agroservicio = {
 
         <div class="form-group">
           <label class="form-label">Descripción (semilla, fertilizante, etc.)</label>
-          <textarea class="form-input" id="form-desc" style="min-height:60px">${p?.descripcion||''}</textarea>
+          <textarea class="form-input" id="form-desc" style="min-height:60px">${UI.esc(p?.descripcion||'')}</textarea>
         </div>
 
         <div class="form-row">

@@ -580,7 +580,7 @@ Modulos.finanzas = {
       <div class="form-group"><label class="form-label">Proveedor / Acreedor</label>
         <input class="form-input" id="rec-prov" value="${r.proveedor||''}" placeholder="Empresa Eléctrica / Arrendante"></div>
       <div class="form-group"><label class="form-label">Notas</label>
-        <textarea class="form-input" id="rec-notas" rows="2">${r.notas||''}</textarea></div>
+        <textarea class="form-input" id="rec-notas" rows="2">${UI.esc(r.notas||'')}</textarea></div>
       ${esEdicion?`<div class="form-group">
         <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
           <input type="checkbox" id="rec-activo" ${r.activo!==false?'checked':''}>

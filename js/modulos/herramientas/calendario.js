@@ -136,10 +136,10 @@ Modulos.calendario = {
       : c._envio? { col:'cyan',   ico:'🚚', click:`App.navegarA('envios')` }
       :           { col:'amber',  ico:'🔧', click:`Modulos.calendario.modalCita('${c.id}')` };
     const hora = (!c._sat && !c._pago && !c._feriado && c.fecha_cita) ? new Date(c.fecha_cita).toLocaleTimeString('es-GT',{hour:'2-digit',minute:'2-digit'}) : '';
-    return `<div onclick="event.stopPropagation();${conf.click}" title="${(c.titulo||'').replace(/"/g,'&quot;')}"
+    return `<div onclick="event.stopPropagation();${conf.click}" title="${UI.esc((c.titulo||'').replace(/"/g,'&quot;'))}"
       style="font-size:10px;padding:2px 6px;border-radius:5px;background:var(--${conf.col}-dim);color:var(--${conf.col});
              border-left:2px solid var(--${conf.col});margin-bottom:2px;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">
-      ${conf.ico} ${hora?hora+' ':''}${c.titulo||''}</div>`;
+      ${conf.ico} ${hora?hora+' ':''}${UI.esc(c.titulo||'')}</div>`;
   },
 
   /* ── VISTA MES: cuadrícula con número de semana ── */
@@ -233,7 +233,7 @@ Modulos.calendario = {
       const color = dias < 0 ? 'red' : dias <= 30 ? 'amber' : 'cyan';
       const txt = dias < 0 ? `vencido hace ${Math.abs(dias)} d` : `en ${dias} d`;
       return `<div style="display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid var(--border);font-size:12px">
-        <div><b>${d.tipo}</b> · <span class="text-muted">${d.empleados?.nombre||''}</span></div>
+        <div><b>${d.tipo}</b> · <span class="text-muted">${UI.esc(d.empleados?.nombre||'')}</span></div>
         <span class="badge badge-${color}">${UI.fecha(d.fecha_vencimiento)} · ${txt}</span>
       </div>`;
     };
@@ -351,7 +351,7 @@ Modulos.calendario = {
       return `<div style="padding:10px;border-left:3px solid var(--green);margin-bottom:8px;background:var(--surface2);border-radius:0 8px 8px 0;cursor:pointer"
            onclick="App.navegarSub('rrhh','horasextra')">
         <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
-          <div style="font-weight:700;font-size:13px">🎉 ${c.titulo}</div>
+          <div style="font-weight:700;font-size:13px">🎉 ${UI.esc(c.titulo)}</div>
           <div style="font-size:11px;color:var(--green);white-space:nowrap">${conFecha?fecha:''}</div>
         </div>
         <div style="font-size:11px;color:var(--text3);margin-top:2px">
@@ -370,7 +370,7 @@ Modulos.calendario = {
       return `<div style="padding:10px;border-left:3px solid var(--${col});margin-bottom:8px;background:var(--surface2);border-radius:0 8px 8px 0;cursor:pointer"
            onclick="${click}">
         <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
-          <div style="font-weight:700;font-size:13px">${ico} ${c.titulo}</div>
+          <div style="font-weight:700;font-size:13px">${ico} ${UI.esc(c.titulo)}</div>
           <div style="font-size:11px;color:var(--${col});white-space:nowrap">${conFecha?fecha:''}</div>
         </div>
         <div style="font-size:11px;color:var(--text3);margin-top:2px;display:flex;justify-content:space-between;align-items:center">
@@ -383,7 +383,7 @@ Modulos.calendario = {
       return `<div style="padding:10px;border-left:3px solid var(--cyan);margin-bottom:8px;background:var(--surface2);border-radius:0 8px 8px 0;cursor:pointer"
            onclick="App.navegarA('envios')">
         <div style="display:flex;justify-content:space-between;align-items:center">
-          <div style="font-weight:700;font-size:13px">🚚 ${c.titulo}</div>
+          <div style="font-weight:700;font-size:13px">🚚 ${UI.esc(c.titulo)}</div>
           <div style="font-size:11px;color:var(--cyan)">${conFecha?fecha+' ':''}${hora}</div>
         </div>
         <div style="font-size:11px;color:var(--text3);margin-top:2px">Entrega estimada de envío</div>
@@ -393,7 +393,7 @@ Modulos.calendario = {
       return `<div style="padding:10px;border-left:3px solid var(--red);margin-bottom:8px;background:var(--surface2);border-radius:0 8px 8px 0;cursor:pointer"
            onclick="Modulos.finanzas&&(Modulos.finanzas._tab='recurrentes');App.navegarA('finanzas')">
         <div style="display:flex;justify-content:space-between;align-items:center">
-          <div style="font-weight:700;font-size:13px">💸 ${c.titulo}</div>
+          <div style="font-weight:700;font-size:13px">💸 ${UI.esc(c.titulo)}</div>
           <div style="font-size:11px;color:var(--red)">${conFecha?fecha+' ':''}</div>
         </div>
         <div style="font-size:11px;color:var(--text3);margin-top:2px;display:flex;justify-content:space-between">
@@ -403,12 +403,12 @@ Modulos.calendario = {
     }
     return `<div style="padding:10px;border-left:3px solid var(--${c.estado==='completada'?'green':c.estado==='cancelada'?'red':'amber'});margin-bottom:8px;background:var(--surface2);border-radius:0 8px 8px 0;cursor:pointer" onclick="Modulos.calendario.modalCita('${c.id}')">
       <div style="display:flex;justify-content:space-between;align-items:center">
-        <div style="font-weight:700;font-size:13px">${c.titulo}</div>
+        <div style="font-weight:700;font-size:13px">${UI.esc(c.titulo)}</div>
         <div style="font-size:11px;color:var(--amber)">${conFecha?fecha+' ':''} ${hora}</div>
       </div>
       <div style="font-size:11px;color:var(--text3);margin-top:2px">
-        ${c.clientes?.nombre||''} ${c.vehiculos?.placa?'· '+c.vehiculos.placa:''}
-        ${c.empleados?.nombre?'· '+c.empleados.nombre:''}
+        ${UI.esc(c.clientes?.nombre||'')} ${c.vehiculos?.placa?'· '+c.vehiculos.placa:''}
+        ${UI.esc(c.empleados?.nombre?'· '+c.empleados.nombre:'')}
       </div>
     </div>`;
   },
@@ -422,7 +422,7 @@ Modulos.calendario = {
     UI.modal(`${esEdicion?'✏️ Editar':'＋ Nueva'} Cita`, `
       ${esEdicion?'<div class="alert alert-amber" style="margin-bottom:12px"><div class="alert-icon">⚠️</div><div class="alert-body" style="font-size:11px">Los cambios reemplazarán la información actual de la cita.</div></div>':''}
       <div class="form-group"><label class="form-label">Título / Motivo *</label>
-        <input class="form-input" id="cit-titulo" value="${c.titulo||''}" placeholder="Cambio de aceite / Revisión general"></div>
+        <input class="form-input" id="cit-titulo" value="${UI.esc(c.titulo||'')}" placeholder="Cambio de aceite / Revisión general"></div>
       <div class="form-row">
         <div class="form-group"><label class="form-label">Cliente</label>
           <select class="form-select" id="cit-cli">
@@ -453,7 +453,7 @@ Modulos.calendario = {
           </select></div>`:''}
       </div>
       <div class="form-group"><label class="form-label">Notas</label>
-        <textarea class="form-input" id="cit-notas" rows="2">${c.notas||''}</textarea></div>
+        <textarea class="form-input" id="cit-notas" rows="2">${UI.esc(c.notas||'')}</textarea></div>
       <div class="modal-footer">
         ${esEdicion?`<button class="btn btn-sm btn-danger" title="Eliminar" onclick="Modulos.eliminarRegistro('citas','${id}','${(c.titulo||'esta cita').replace(/'/g,"\\'")}',()=>{UI.cerrarModal();Modulos.calendario.render()})">🗑️ Eliminar</button>`:''}
         <button class="btn btn-ghost" onclick="UI.cerrarModal()">Cancelar</button>

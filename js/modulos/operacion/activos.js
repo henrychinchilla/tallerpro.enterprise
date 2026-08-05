@@ -91,7 +91,7 @@ Modulos.activos = {
       totQ += dq; totA += da;
       if (dq===0 && da===0 && a.estado!=='activo') return '';
       return `<tr>
-        <td><div style="font-weight:700">${a.nombre}</div><div style="font-size:11px;color:var(--text3)">${a.categoria||''}</div></td>
+        <td><div style="font-weight:700">${UI.esc(a.nombre)}</div><div style="font-size:11px;color:var(--text3)">${a.categoria||''}</div></td>
         <td class="mono-sm">${UI.q(a.costo)}</td>
         <td class="mono-sm text-red">${UI.q(dq)}</td>
         <td class="mono-sm text-red">${UI.q(da)}</td>
@@ -134,7 +134,7 @@ Modulos.activos = {
       ${esEdicion?'<div class="alert alert-amber" style="margin-bottom:12px"><div class="alert-icon">⚠️</div><div class="alert-body" style="font-size:11px">Los cambios reemplazarán la información actual del activo.</div></div>':''}
       <div class="form-row">
         <div class="form-group"><label class="form-label">Nombre *</label>
-          <input class="form-input" id="act-nombre" value="${a.nombre||''}" placeholder="Compresor de aire 100L / Scanner OBD2"></div>
+          <input class="form-input" id="act-nombre" value="${UI.esc(a.nombre||'')}" placeholder="Compresor de aire 100L / Scanner OBD2"></div>
         <div class="form-group"><label class="form-label">Código / Serie</label>
           <input class="form-input" id="act-codigo" value="${a.codigo||''}"></div>
       </div>
@@ -172,7 +172,7 @@ Modulos.activos = {
       </div>
       <div id="act-dep-preview" class="card" style="background:var(--surface2);font-size:12px;margin-bottom:12px"></div>
       <div class="form-group"><label class="form-label">Notas</label>
-        <textarea class="form-input" id="act-notas" rows="2">${a.notas||''}</textarea></div>
+        <textarea class="form-input" id="act-notas" rows="2">${UI.esc(a.notas||'')}</textarea></div>
       <div class="modal-footer">
         <button class="btn btn-ghost" onclick="UI.cerrarModal()">Cancelar</button>
         <button class="btn btn-amber" onclick="Modulos.activos.guardar('${id||''}')">${esEdicion?'Guardar Cambios':'Crear Activo'}</button>

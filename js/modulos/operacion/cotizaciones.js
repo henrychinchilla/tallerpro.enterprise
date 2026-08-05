@@ -85,7 +85,7 @@ Modulos.cotizaciones = {
     if (!c) return;
     UI.modal(`📝 Cotización ${c.num||''}`, `
       <div style="font-size:13px;line-height:1.6">
-        <div><b>Cliente:</b> ${c.clientes?.nombre||'—'}</div>
+        <div><b>Cliente:</b> ${UI.esc(c.clientes?.nombre||'—')}</div>
         ${c.vehiculos?`<div><b>Vehículo:</b> ${c.vehiculos.placa} — ${c.vehiculos.marca} ${c.vehiculos.modelo}</div>`:''}
         <div><b>Origen:</b> ${this._origenLabel(c.modulo_origen)}</div>
         <div><b>Fecha:</b> ${UI.fecha(c.fecha)} · <b>Válida hasta:</b> ${UI.fecha(this._fechaVencimiento(c))}</div>
@@ -168,7 +168,7 @@ Modulos.cotizaciones = {
       </div>
       <div id="cot-totales" style="text-align:right;font-size:13px;margin-top:10px;line-height:1.6"></div>
       <div class="form-group"><label class="form-label">Notas</label>
-        <textarea class="form-input" id="cot-notas" rows="2">${c.notas||''}</textarea></div>
+        <textarea class="form-input" id="cot-notas" rows="2">${UI.esc(c.notas||'')}</textarea></div>
       <div class="form-group"><label class="form-label">Condiciones</label>
         <textarea class="form-input" id="cot-condiciones" rows="2">${c.condiciones||'Precios sujetos a cambio sin previo aviso. Anticipo del 50% para iniciar el trabajo.'}</textarea></div>
       <div class="modal-footer">

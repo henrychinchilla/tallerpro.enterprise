@@ -97,7 +97,7 @@ const Charts = {
 
     const legend = series.map(s =>
       `<span style="display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--text2);font-weight:600;font-family:Outfit, Inter, sans-serif">
-        <span style="width:11px;height:11px;border-radius:3px;background:var(--${s.colorVar})"></span>${s.nombre}</span>`).join('');
+        <span style="width:11px;height:11px;border-radius:3px;background:var(--${s.colorVar})"></span>${UI.esc(s.nombre)}</span>`).join('');
 
     return `<div style="display:flex;gap:16px;margin-bottom:8px">${legend}</div>
       <svg viewBox="0 0 ${W} ${H}" width="100%" preserveAspectRatio="xMidYMid meet" style="display:block;overflow:visible">

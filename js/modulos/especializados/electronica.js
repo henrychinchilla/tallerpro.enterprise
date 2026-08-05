@@ -73,10 +73,10 @@ Modulos.electronica = {
     const r = this._data.find(x=>x.id===id); if (!r) return;
     UI.modal(`🔌 ${r.num||'Equipo'} — ${r.clientes?.nombre||''}`, `
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px">
-        <div><div style="font-size:11px;color:var(--text3)">Equipo</div><div style="font-weight:700">${this._TIPOS[r.tipo_equipo]||r.tipo_equipo} · ${[r.marca,r.modelo].filter(Boolean).join(' ')||'—'}</div></div>
+        <div><div style="font-size:11px;color:var(--text3)">Equipo</div><div style="font-weight:700">${this._TIPOS[r.tipo_equipo]||r.tipo_equipo} · ${UI.esc([r.marca,r.modelo].filter(Boolean).join(' ')||'—')}</div></div>
         <div><div style="font-size:11px;color:var(--text3)">Serie / IMEI</div><div class="mono-sm">${r.numero_serie||'—'}</div></div>
         <div><div style="font-size:11px;color:var(--text3)">Estado</div><div><span class="badge badge-${this._colorEstado(r.estado)}">${this._ESTADOS[r.estado]||r.estado}</span></div></div>
-        <div><div style="font-size:11px;color:var(--text3)">Técnico</div><div>${this._empleados.find(e=>e.id===r.tecnico_id)?.nombre||'—'}</div></div>
+        <div><div style="font-size:11px;color:var(--text3)">Técnico</div><div>${UI.esc(this._empleados.find(e=>e.id===r.tecnico_id)?.nombre||'—')}</div></div>
         <div><div style="font-size:11px;color:var(--text3)">Recibido</div><div>${r.fecha_recibido?UI.fecha(r.fecha_recibido):'—'}</div></div>
         <div><div style="font-size:11px;color:var(--text3)">Accesorios</div><div style="font-size:12px">${r.accesorios_recibidos||'—'}</div></div>
       </div>
@@ -121,9 +121,9 @@ Modulos.electronica = {
       </div>
       <div class="form-row">
         <div class="form-group"><label class="form-label">Marca</label>
-          <input class="form-input" id="ele-marca" value="${r.marca||''}"></div>
+          <input class="form-input" id="ele-marca" value="${UI.esc(r.marca||'')}"></div>
         <div class="form-group"><label class="form-label">Modelo</label>
-          <input class="form-input" id="ele-modelo" value="${r.modelo||''}"></div>
+          <input class="form-input" id="ele-modelo" value="${UI.esc(r.modelo||'')}"></div>
         <div class="form-group"><label class="form-label">No. de serie / IMEI</label>
           <input class="form-input" id="ele-serie" value="${r.numero_serie||''}"></div>
       </div>
@@ -169,7 +169,7 @@ Modulos.electronica = {
           <input class="form-input" id="ele-anticipo" type="number" min="0" step="0.01" value="${r.anticipo||0}"></div>
       </div>
       <div class="form-group"><label class="form-label">Notas</label>
-        <textarea class="form-input" id="ele-notas" rows="2">${r.notas||''}</textarea></div>
+        <textarea class="form-input" id="ele-notas" rows="2">${UI.esc(r.notas||'')}</textarea></div>
       <div class="modal-footer">
         <button class="btn btn-ghost" onclick="UI.cerrarModal()">Cancelar</button>
         <button class="btn btn-amber" onclick="Modulos.electronica.guardar('${id||''}')">${esEdicion?'Guardar Cambios':'Registrar Equipo'}</button>

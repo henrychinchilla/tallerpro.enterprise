@@ -160,10 +160,10 @@ Modulos._especialOT = {
       <p>Fecha: ${hoy}</p>
     </div>
     <table>
-      <tr><td>Cliente</td><td>${proyecto.clientes?.nombre || proyecto.cliente_nombre || '—'}</td></tr>
+      <tr><td>Cliente</td><td>${UI.esc(proyecto.clientes?.nombre || proyecto.cliente_nombre || '—')}</td></tr>
       <tr><td>${labelProyecto} No.</td><td><b>${proyecto.num || '—'}</b></td></tr>
       ${proyecto.ot_num ? `<tr><td>OT vinculada</td><td><b>${proyecto.ot_num}</b></td></tr>` : ''}
-      <tr><td>Descripción</td><td>${proyecto.descripcion || proyecto.falla_reportada || proyecto.tipo_trabajo || '—'}</td></tr>
+      <tr><td>Descripción</td><td>${UI.esc(proyecto.descripcion || proyecto.falla_reportada || proyecto.tipo_trabajo || '—')}</td></tr>
       <tr><td>Forma de pago</td><td>${forma}</td></tr>
       ${notas ? `<tr><td>Referencia</td><td>${notas}</td></tr>` : ''}
     </table>
@@ -278,7 +278,7 @@ Modulos.herreria = {
     const p = this._data.find(x=>x.id===id); if (!p) return;
     UI.modal(`📋 Proyecto ${p.num||''}`, `
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px">
-        <div><div style="font-size:11px;color:var(--text3)">Cliente</div><div style="font-weight:700">${p.clientes?.nombre||'—'}</div></div>
+        <div><div style="font-size:11px;color:var(--text3)">Cliente</div><div style="font-weight:700">${UI.esc(p.clientes?.nombre||'—')}</div></div>
         <div><div style="font-size:11px;color:var(--text3)">Tipo</div><div>${this._TIPOS[p.tipo_trabajo]||p.tipo_trabajo}</div></div>
         <div><div style="font-size:11px;color:var(--text3)">Estado</div><div><span class="badge badge-${this._colorEstado(p.estado)}">${this._ESTADOS[p.estado]||p.estado}</span></div></div>
         <div><div style="font-size:11px;color:var(--text3)">Inicio</div><div>${p.tipo_inicio==='directo'?'⚡ Directo':'📋 Cotización'}</div></div>
@@ -337,7 +337,7 @@ Modulos.herreria = {
           </select></div>
       </div>
       <div class="form-group"><label class="form-label">Descripción del trabajo</label>
-        <textarea class="form-input" id="her-desc" rows="2" placeholder="Portón corredizo 2 hojas, tubo cuadrado 2x2...">${p.descripcion||''}</textarea></div>
+        <textarea class="form-input" id="her-desc" rows="2" placeholder="Portón corredizo 2 hojas, tubo cuadrado 2x2...">${UI.esc(p.descripcion||'')}</textarea></div>
       <div class="form-row">
         <div class="form-group"><label class="form-label">Ancho (m)</label>
           <input class="form-input" id="her-ancho" type="number" min="0" step="0.01" value="${p.ancho_m||''}"></div>
@@ -373,7 +373,7 @@ Modulos.herreria = {
           <input class="form-input" id="her-anticipo" type="number" min="0" step="0.01" value="${p.anticipo||0}"></div>
       </div>
       <div class="form-group"><label class="form-label">Notas</label>
-        <textarea class="form-input" id="her-notas" rows="2">${p.notas||''}</textarea></div>
+        <textarea class="form-input" id="her-notas" rows="2">${UI.esc(p.notas||'')}</textarea></div>
       <div class="modal-footer">
         <button class="btn btn-ghost" onclick="UI.cerrarModal()">Cancelar</button>
         <button class="btn btn-amber" onclick="Modulos.herreria.guardar('${id||''}')">${esEdicion?'Guardar Cambios':'Crear Proyecto'}</button>

@@ -257,7 +257,7 @@ Modulos.dashboard = {
           <div class="card-sub mb-3">⚠️ Artículos con Stock Bajo</div>
           ${kpi.invBajo.map(i => `
             <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border);font-size:13px">
-              <span>${i.nombre}</span><span class="text-red">Stock: ${i.stock} / Min: ${i.min_stock}</span>
+              <span>${UI.esc(i.nombre)}</span><span class="text-red">Stock: ${i.stock} / Min: ${i.min_stock}</span>
             </div>`).join('')}
         </div>` : ''}
 

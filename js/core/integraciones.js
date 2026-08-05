@@ -78,7 +78,7 @@ const Email = {
     const html =
       `<div style="font-family:Arial,sans-serif;max-width:520px">` +
       `<h2 style="color:#d97706">🔧 ${taller}</h2>` +
-      `<p>Hola${cliente.nombre ? ' ' + cliente.nombre : ''},</p>` +
+      `<p>Hola${UI.esc(cliente.nombre ? ' ' + cliente.nombre : '')},</p>` +
       `<p>Tu orden <b>${orden.num || ''}</b> cambió a estado: <b>${estado}</b>.</p>` +
       (orden.saldo ? `<p>Saldo pendiente: <b>${UI.q(orden.saldo)}</b>.</p>` : '') +
       `<p>¡Gracias por tu preferencia!</p></div>`;

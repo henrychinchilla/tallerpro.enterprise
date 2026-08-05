@@ -255,7 +255,7 @@ function renderLogin(vista='login') {
           <select class="form-select" id="nt-regimen" onchange="document.getElementById('nt-regimen-det').textContent=(REGIMENES_SAT[this.value]||{}).detalle||'';UI.toggleISR('nt-regimen','nt-isr-box')">
             ${Object.entries(REGIMENES_SAT).map(([id, r]) => `<option value="${id}">${r.label}</option>`).join('')}
           </select>
-          <div id="nt-regimen-det" style="font-size:11px;color:var(--text2);margin-top:4px">${REGIMENES_SAT.general.detalle}</div>
+          <div id="nt-regimen-det" style="font-size:11px;color:var(--text2);margin-top:4px">${UI.esc(REGIMENES_SAT.general.detalle)}</div>
         </div>
 
         <div class="form-group" id="nt-isr-box">
@@ -263,7 +263,7 @@ function renderLogin(vista='login') {
           <select class="form-select" id="nt-isr" onchange="document.getElementById('nt-isr-det').textContent=(REGIMENES_ISR[this.value]||{}).detalle||''">
             ${Object.entries(REGIMENES_ISR).map(([id, r]) => `<option value="${id}">${r.label}</option>`).join('')}
           </select>
-          <div id="nt-isr-det" style="font-size:11px;color:var(--text2);margin-top:4px">${REGIMENES_ISR.opcional_simplificado.detalle}</div>
+          <div id="nt-isr-det" style="font-size:11px;color:var(--text2);margin-top:4px">${UI.esc(REGIMENES_ISR.opcional_simplificado.detalle)}</div>
           <div style="font-size:11px;color:var(--text3);margin-top:4px">El ISR es un impuesto aparte del IVA: el IVA es 12% (o 5% en Pequeño Contribuyente) y el 25% corresponde al ISR sobre utilidades. Podrás cambiar ambos después en Contabilidad → SAT.</div>
         </div>
 
@@ -427,14 +427,14 @@ function renderLogin(vista='login') {
           <select class="form-select" id="ntg-regimen" onchange="document.getElementById('ntg-regimen-det').textContent=(REGIMENES_SAT[this.value]||{}).detalle||'';UI.toggleISR('ntg-regimen','ntg-isr-box')">
             ${Object.entries(REGIMENES_SAT).map(([id, r]) => `<option value="${id}">${r.label}</option>`).join('')}
           </select>
-          <div id="ntg-regimen-det" style="font-size:11px;color:var(--text2);margin-top:4px">${REGIMENES_SAT.general.detalle}</div>
+          <div id="ntg-regimen-det" style="font-size:11px;color:var(--text2);margin-top:4px">${UI.esc(REGIMENES_SAT.general.detalle)}</div>
         </div>
         <div class="form-group" id="ntg-isr-box">
           <label class="form-label">Régimen de ISR *</label>
           <select class="form-select" id="ntg-isr" onchange="document.getElementById('ntg-isr-det').textContent=(REGIMENES_ISR[this.value]||{}).detalle||''">
             ${Object.entries(REGIMENES_ISR).map(([id, r]) => `<option value="${id}">${r.label}</option>`).join('')}
           </select>
-          <div id="ntg-isr-det" style="font-size:11px;color:var(--text2);margin-top:4px">${REGIMENES_ISR.opcional_simplificado.detalle}</div>
+          <div id="ntg-isr-det" style="font-size:11px;color:var(--text2);margin-top:4px">${UI.esc(REGIMENES_ISR.opcional_simplificado.detalle)}</div>
           <div style="font-size:11px;color:var(--text3);margin-top:4px">El ISR es un impuesto aparte del IVA: el IVA es 12% (o 5% en Pequeño Contribuyente) y el 25% corresponde al ISR sobre utilidades. Podrás cambiar ambos después en Contabilidad → SAT.</div>
         </div>
 

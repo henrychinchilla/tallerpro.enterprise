@@ -569,7 +569,7 @@ Modulos.diagnostico_obd = {
         const dominante = Object.keys(cuenta).sort((a, b) => cuenta[b] - cuenta[a])[0];
         if (dominante && total >= this._MIN_IGUALES && dominante !== cvn && cuenta[dominante] >= Math.ceil(total * 0.6)) {
           res.avisos.push({ nivel:'alto',
-            txt:`<b>La calibración del ECU no coincide con la de sus iguales.</b> ${cuenta[dominante]} de ${total} ${v.marca} ${v.modelo} del taller traen <code>${UI.esc(dominante)}</code> y este trae <code>${UI.esc(cvn)}</code>. Señal de computadora reprogramada.` });
+            txt:`<b>La calibración del ECU no coincide con la de sus iguales.</b> ${cuenta[dominante]} de ${total} ${UI.esc(v.marca)} ${UI.esc(v.modelo)} del taller traen <code>${UI.esc(dominante)}</code> y este trae <code>${UI.esc(cvn)}</code>. Señal de computadora reprogramada.` });
         }
       }
 
@@ -589,7 +589,7 @@ Modulos.diagnostico_obd = {
             if (mios.has(nombre)) continue;
             if (cuenta[nombre] < Math.ceil(conLectura * 0.7)) continue;   // que sea la norma del modelo
             res.avisos.push({ nivel:'alto',
-              txt:`<b>No declara el monitor de ${UI.esc(nombre)}</b>, que ${cuenta[nombre]} de ${conLectura} ${v.marca} ${v.modelo} del taller sí declaran. Señal de sistema eliminado.` });
+              txt:`<b>No declara el monitor de ${UI.esc(nombre)}</b>, que ${cuenta[nombre]} de ${conLectura} ${UI.esc(v.marca)} ${UI.esc(v.modelo)} del taller sí declaran. Señal de sistema eliminado.` });
           }
         }
       }
@@ -612,7 +612,7 @@ Modulos.diagnostico_obd = {
           if (mios.has(k)) continue;
           if (cuenta[k] < Math.ceil(conModulos * 0.7)) continue;
           res.avisos.push({ nivel:'medio',
-            txt:`<b>${UI.esc(k)} no respondió</b>, y ${cuenta[k]} de ${conModulos} ${v.marca} ${v.modelo} del taller sí lo tienen. Puede estar dañado, desconectado o sin alimentación — verificar antes de darlo por ausente.` });
+            txt:`<b>${UI.esc(k)} no respondió</b>, y ${cuenta[k]} de ${conModulos} ${UI.esc(v.marca)} ${UI.esc(v.modelo)} del taller sí lo tienen. Puede estar dañado, desconectado o sin alimentación — verificar antes de darlo por ausente.` });
         }
       }
       return res;
@@ -2349,7 +2349,7 @@ Modulos.diagnostico_obd = {
     /* Primero el mapa conocido: da resultados en segundos y deja ver de una
        cuáles de los módulos habituales del modelo faltan hoy. */
     if (conocidas.length) {
-      if (log) log(`&nbsp;&nbsp;Mapa conocido de ${mapa.marca} ${mapa.modelo}${mapa.anio ? ' ' + mapa.anio : ''}: <b>${conocidas.length} módulo(s)</b> en ${mapa.n} escaneo(s) previo(s) — preguntando ahí primero...`);
+      if (log) log(`&nbsp;&nbsp;Mapa conocido de ${UI.esc(mapa.marca)} ${UI.esc(mapa.modelo)}${mapa.anio ? ' ' + mapa.anio : ''}: <b>${conocidas.length} módulo(s)</b> en ${mapa.n} escaneo(s) previo(s) — preguntando ahí primero...`);
       mods = await this._probarConocidas(conocidas);
       if (log) log(`&nbsp;&nbsp;${mods.length} de ${conocidas.length} del mapa respondieron`);
     }
@@ -3389,7 +3389,7 @@ Modulos.diagnostico_obd = {
       if (vin) {
         log('Consultando VIN en base de datos NHTSA...');
         nhtsa = await this._decodeVIN(vin);
-        log(nhtsa ? `VIN identificado: <b>${nhtsa.marca} ${nhtsa.modelo || ''} ${nhtsa.anio || ''}</b>` : 'VIN sin coincidencias en NHTSA');
+        log(nhtsa ? `VIN identificado: <b>${UI.esc(nhtsa.marca)} ${UI.esc(nhtsa.modelo || '')} ${nhtsa.anio || ''}</b>` : 'VIN sin coincidencias en NHTSA');
       }
 
       this._sop = Object.keys(this._j39.datos).filter(k => typeof this._j39.datos[k] === 'number');
@@ -3969,7 +3969,7 @@ Modulos.diagnostico_obd = {
                  onclick="Modulos.bitacora.ver('${UI.esc(b.id)}')">
               <div style="font-size:12.5px;font-weight:800">${UI.esc(b.titulo)}</div>
               <div style="font-size:11px;color:var(--text3);margin-top:2px">
-                ${b.motivo === 'codigo' ? '🎯 mismo código' : '🚗 mismo modelo'}
+                ${UI.esc(b.motivo === 'codigo' ? '🎯 mismo código' : '🚗 mismo modelo')}
                 ${(b.dtc_codigos || []).length ? ` · ${UI.esc((b.dtc_codigos || []).join(', '))}` : ''}
                 ${b.veces_ejecutada > 1 ? ` · resuelto ${b.veces_ejecutada}×` : ''}
                 ${b.creado_por_nombre ? ` · ${UI.esc(b.creado_por_nombre)}` : ''}
@@ -4250,7 +4250,7 @@ Modulos.diagnostico_obd = {
                 const n = (d.dtcs||[]).length, np = (d.dtcs_pendientes||[]).length;
                 return `<tr style="cursor:pointer" onclick="Modulos.diagnostico_obd.ver('${d.id}')">
                   <td>${UI.fecha(d.created_at)}</td>
-                  <td>${v ? `<b>${v.placa||''}</b> ${v.marca||''} ${v.modelo||''}` : '—'}</td>
+                  <td>${v ? `<b>${v.placa||''}</b> ${UI.esc(v.marca||'')} ${UI.esc(v.modelo||'')}` : '—'}</td>
                   <td style="font-family:monospace;font-size:11px">${d.vin||'—'}</td>
                   <td>${d.mil ? '<span class="badge badge-red">🔴 Encendido</span>' : '<span class="badge badge-green">Apagado</span>'}</td>
                   <td>${n ? `<span class="badge badge-red">${n}</span>` : '<span class="badge badge-green">0</span>'}${np?` <span class="badge badge-amber" title="pendientes">${np}p</span>`:''}${d.dtcs_borrados?' 🧹':''}</td>
@@ -4734,7 +4734,7 @@ Modulos.diagnostico_obd = {
       const readiness = await this._leerReadiness();
       const normaObd = await this._leerNormaOBD();
       const calib = await this._leerCalibracion();
-      if (normaObd) log(`Norma declarada: <b>${normaObd.nombre}</b>`);
+      if (normaObd) log(`Norma declarada: <b>${UI.esc(normaObd.nombre)}</b>`);
       if (calib?.calid) log(`Calibración: <b>${calib.calid}</b>${calib.cvn ? ` <span style="color:var(--text3)">· CVN ${calib.cvn}</span>` : ''}`);
       else if (calib?.cvn) log(`CVN de calibración: <b>${calib.cvn}</b>`);
       const equipo = this._analizarEquipamiento({ readiness, norma:normaObd, vin, calib });
@@ -4754,9 +4754,9 @@ Modulos.diagnostico_obd = {
       const iguales = await this._compararConIguales({ vehId, calib, readiness, modulos });
       if (!iguales) log('&nbsp;&nbsp;<span style="color:var(--text3)">Sin datos de marca/modelo para comparar</span>');
       else if (iguales.insuficiente)
-        log(`&nbsp;&nbsp;<span style="color:var(--text3)">Solo ${iguales.n} ${iguales.marca} ${iguales.modelo} en el historial (hacen falta ${this._MIN_IGUALES}). Escaneá más de este modelo y la comparación empieza a servir.</span>`);
+        log(`&nbsp;&nbsp;<span style="color:var(--text3)">Solo ${iguales.n} ${UI.esc(iguales.marca)} ${UI.esc(iguales.modelo)} en el historial (hacen falta ${this._MIN_IGUALES}). Escaneá más de este modelo y la comparación empieza a servir.</span>`);
       else if (!iguales.avisos.length)
-        log(`&nbsp;&nbsp;<span style="color:var(--green)">Coincide con los ${iguales.n} ${iguales.marca} ${iguales.modelo} del taller ✓</span>`);
+        log(`&nbsp;&nbsp;<span style="color:var(--green)">Coincide con los ${iguales.n} ${UI.esc(iguales.marca)} ${UI.esc(iguales.modelo)} del taller ✓</span>`);
       else for (const a of iguales.avisos)
         log(`<span style="color:${a.nivel === 'alto' ? 'var(--red)' : 'var(--amber)'}">${a.nivel === 'alto' ? '⛔' : '⚠️'} ${a.txt}</span>`);
       if (iguales && iguales.avisos) equipo.iguales = iguales;
@@ -4771,7 +4771,7 @@ Modulos.diagnostico_obd = {
       if (vin) {
         log('Consultando VIN en base de datos NHTSA...');
         nhtsa = await this._decodeVIN(vin);
-        log(nhtsa ? `VIN identificado: <b>${nhtsa.marca} ${nhtsa.modelo||''} ${nhtsa.anio||''}</b>` : 'VIN sin coincidencias en NHTSA');
+        log(nhtsa ? `VIN identificado: <b>${UI.esc(nhtsa.marca)} ${UI.esc(nhtsa.modelo||'')} ${nhtsa.anio||''}</b>` : 'VIN sin coincidencias en NHTSA');
       }
 
       this._scan = { costo: this._costoEscaneo(vehId),
@@ -5655,7 +5655,7 @@ Modulos.diagnostico_obd = {
     for (const m of conFallas) {
       const r = await this._borrarModulo(m.ecu, m.resp);
       if (r.ok) { bien++; this._log(`🧹 ${m.nombre}: borrado ✓`); m.codigos = []; }
-      else { mal++; this._log(`<span style="color:var(--amber)">⚠️ ${m.nombre}: no se pudo borrar (${r.motivo})</span>`); }
+      else { mal++; this._log(`<span style="color:var(--amber)">⚠️ ${UI.esc(m.nombre)}: no se pudo borrar (${UI.esc(r.motivo)})</span>`); }
     }
     if (this._scan) this._scan.dtcs_borrados = true;
     this._renderResultado();
@@ -5686,10 +5686,10 @@ Modulos.diagnostico_obd = {
         this._log(`🔄 ${m.nombre}: reiniciado ✓ — esperá unos segundos y volvé a escanear`);
         UI.toast('Módulo reiniciado ✓');
       } else if (r && r[0] === 0x7F) {
-        this._log(`<span style="color:var(--amber)">${m.nombre}: rechazó el reinicio (0x${(r[2] || 0).toString(16)})</span>`);
+        this._log(`<span style="color:var(--amber)">${UI.esc(m.nombre)}: rechazó el reinicio (0x${(r[2] || 0).toString(16)})</span>`);
         UI.toast('El módulo rechazó el reinicio', 'warn');
       } else {
-        this._log(`<span style="color:var(--amber)">${m.nombre}: sin respuesta al reinicio</span>`);
+        this._log(`<span style="color:var(--amber)">${UI.esc(m.nombre)}: sin respuesta al reinicio</span>`);
         UI.toast('Sin respuesta del módulo', 'warn');
       }
     } catch (e) { UI.toast('No se pudo reiniciar: ' + e.message, 'error'); }
@@ -5779,7 +5779,7 @@ Modulos.diagnostico_obd = {
       </div>
       <div class="form-group">
         <label class="form-label">Notas del técnico</label>
-        <textarea class="form-input" id="obd-e-notas" rows="4" placeholder="Diagnóstico, causa probable, trabajo recomendado...">${d.notas||''}</textarea>
+        <textarea class="form-input" id="obd-e-notas" rows="4" placeholder="Diagnóstico, causa probable, trabajo recomendado...">${UI.esc(d.notas||'')}</textarea>
       </div>
       <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px">
         <button class="btn btn-ghost" onclick="UI.cerrarModal()">Cancelar</button>

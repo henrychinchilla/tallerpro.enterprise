@@ -70,11 +70,11 @@ Modulos.vehiculos = {
     if (c) {
       /* No se pisa una selección distinta hecha a mano sin avisar */
       if (sel.value && sel.value !== c.id) {
-        if (aviso) aviso.innerHTML = `<span style="color:var(--amber);font-size:11px">⚠️ Ese documento es de <b>${c.nombre}</b>, pero hay otro cliente seleccionado.</span>`;
+        if (aviso) aviso.innerHTML = `<span style="color:var(--amber);font-size:11px">⚠️ Ese documento es de <b>${UI.esc(c.nombre)}</b>, pero hay otro cliente seleccionado.</span>`;
         return;
       }
       sel.value = c.id;
-      if (aviso) aviso.innerHTML = `<span style="color:var(--green);font-size:11px">✓ Cliente enlazado: <b>${c.nombre}</b></span>`;
+      if (aviso) aviso.innerHTML = `<span style="color:var(--green);font-size:11px">✓ Cliente enlazado: <b>${UI.esc(c.nombre)}</b></span>`;
     } else if (aviso) {
       aviso.innerHTML = `<span style="color:var(--text3);font-size:11px">Ningún cliente con ese documento — creá el cliente o elegilo abajo.</span>`;
     }
@@ -90,7 +90,7 @@ Modulos.vehiculos = {
     if (nit && !nit.value.trim() && c.nit) nit.value = c.nit;
     if (cui && !cui.value.trim() && (c.cui || c.dpi)) cui.value = c.cui || c.dpi;
     const aviso = document.getElementById('veh-doc-status');
-    if (aviso) aviso.innerHTML = `<span style="color:var(--green);font-size:11px">✓ Cliente: <b>${c.nombre}</b></span>`;
+    if (aviso) aviso.innerHTML = `<span style="color:var(--green);font-size:11px">✓ Cliente: <b>${UI.esc(c.nombre)}</b></span>`;
   },
 
   /* Abre el escaneo OBD con este vehículo ya elegido. */
@@ -607,7 +607,7 @@ Modulos.vehiculos = {
       </div>
       <div class="form-row">
         <div class="form-group"><label class="form-label">Marca *</label>
-          <input class="form-input" id="veh-marca" list="marcas-list" autocomplete="off" value="${v.marca||''}" placeholder="Toyota, Honda..."
+          <input class="form-input" id="veh-marca" list="marcas-list" autocomplete="off" value="${UI.esc(v.marca||'')}" placeholder="Toyota, Honda..."
                  oninput="Modulos.vehiculos._onMarcaChange()" onchange="Modulos.vehiculos._onMarcaChange()">
           <datalist id="marcas-list">${this._opcionesMarca(v.tipo||'Liviano')}</datalist></div>
         <div class="form-group"><label class="form-label">Línea *</label>
@@ -615,8 +615,8 @@ Modulos.vehiculos = {
       </div>
       <div class="form-row">
         <div class="form-group"><label class="form-label">Modelo (Nombre/Línea sugerido) *</label>
-          <input class="form-input" id="veh-modelo" list="modelos-list" autocomplete="off" value="${v.modelo||''}" placeholder="Elige según la marca o escribe...">
-          <datalist id="modelos-list">${this._opcionesModelo(v.marca||'', v.tipo||'Liviano')}</datalist></div>
+          <input class="form-input" id="veh-modelo" list="modelos-list" autocomplete="off" value="${UI.esc(v.modelo||'')}" placeholder="Elige según la marca o escribe...">
+          <datalist id="modelos-list">${UI.esc(this._opcionesModelo(v.marca||'', v.tipo||'Liviano'))}</datalist></div>
         <div class="form-group"><label class="form-label">Año (Modelo)</label>
           <input class="form-input" id="veh-anio" type="number" value="${v.anio||''}" placeholder="2020"></div>
       </div>
@@ -664,7 +664,7 @@ Modulos.vehiculos = {
 
       <div style="font-weight:700;font-size:12px;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;margin-top:14px;margin-bottom:8px;border-bottom:1px solid var(--border);padding-bottom:4px">📝 Notas Adicionales</div>
       <div class="form-group">
-        <textarea class="form-input" id="veh-notas" rows="2" placeholder="Observaciones adicionales del vehículo">${v.notas||''}</textarea></div>
+        <textarea class="form-input" id="veh-notas" rows="2" placeholder="Observaciones adicionales del vehículo">${UI.esc(v.notas||'')}</textarea></div>
 
       <div class="modal-footer">
         <button class="btn btn-ghost" onclick="UI.cerrarModal()">Cancelar</button>
@@ -785,7 +785,7 @@ Modulos.vehiculos = {
       <div style="border-top:1px solid var(--border);margin-top:14px;padding-top:12px">
         <div style="font-weight:700;font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px">🤖 Recomendaciones específicas del fabricante</div>
         <div id="mant-ia" style="font-size:13px;color:var(--text2);white-space:pre-wrap;background:var(--surface2);border-radius:8px;padding:12px;min-height:48px;line-height:1.5">
-          Consulta a Nexus recomendaciones específicas para tu <b>${v.marca} ${v.modelo}${v.anio?` ${v.anio}`:''}</b> (aceites, torques, particularidades del fabricante).
+          Consulta a Nexus recomendaciones específicas para tu <b>${UI.esc(v.marca)} ${UI.esc(v.modelo)}${v.anio?` ${v.anio}`:''}</b> (aceites, torques, particularidades del fabricante).
         </div>
         <button class="btn btn-amber btn-sm" style="margin-top:10px" onclick="Modulos.vehiculos.consultarNexus('${id}')">🔧 Consultar a Nexus (IA)</button>
       </div>
@@ -817,7 +817,7 @@ Modulos.vehiculos = {
     if (!due.length) { UI.toast('No hay servicios próximos según el uso actual','info'); return; }
 
     const ok = await UI.confirmar(
-      `Se creará una OT para <b>${v.marca} ${v.modelo} (${v.placa})</b> con <b>${due.length} servicio(s)</b> sugeridos a ${km.toLocaleString()} ${u}:<br><br>`+
+      `Se creará una OT para <b>${UI.esc(v.marca)} ${UI.esc(v.modelo)} (${v.placa})</b> con <b>${due.length} servicio(s)</b> sugeridos a ${km.toLocaleString()} ${u}:<br><br>`+
       due.map(d=>`${d.ico} ${d.item}`).join('<br>')+
       `<br><br>más el ítem <b>Mano de obra</b>. Los precios quedan en Q0 para que los completes.`,
       'Crear OT sugerida'
