@@ -5,8 +5,9 @@
    Se renderiza como pestaña del módulo Finanzas.
 
    Fórmulas por régimen (B = base sin IVA, P = precio al cliente):
-   · Pequeño Contribuyente (5% s/facturado, sin crédito IVA):
-       P = costo / (1 − 0.05 − fijos − comisión − merma − margen)
+   · Simplificados — Pequeño Contribuyente y Agropecuario (tasa única s/facturado,
+     sin crédito IVA y SIN ISR aparte: el pago es definitivo):
+       P = costo / (1 − tasa − fijos − comisión − merma − margen)   [tasa = 5% ó 4%]
    · Opcional Simplificado (ISR 5%/7% s/ingresos; gastos NO deducen):
        B = costo / (1 − isr − fijos − comisión − merma − margen);  P = B × 1.12
    · Sobre Utilidades (ISR 25% s/utilidad; gastos SÍ deducen):
@@ -73,14 +74,25 @@ Modulos.precios = {
     this._pintar(el);
   },
 
-  /* ── Régimen activo (mismo criterio que Contabilidad/Formularios SAT) ── */
+  /* ── Régimen activo (mismo criterio que Contabilidad/Formularios SAT) ──
+     `pequeno` significa "régimen simplificado": tasa única sobre lo facturado,
+     sin IVA que trasladar y sin ISR aparte. Antes se decidía con
+     startsWith('peque'), así que el AGROPECUARIO —que es simplificado y paga
+     igual— caía en la rama del régimen general: se le agregaba IVA 12% al
+     precio y se le restaba un ISR que no paga. Doble error en el margen. */
   _regimen() {
     const f = this._fiscal || {};
-    const pequeno = (f.regimen_iva||'general').toLowerCase().startsWith('peque');
-    const utilidades = (Number(f.tasa_isr)||0.05) >= 0.2;
+    const iva = REGIMENES_SAT[f.regimen_iva] ? f.regimen_iva : 'general';
+    const pequeno = regimenSimplificado(iva);
+    /* La tasa del simplificado no siempre es 5%: las variantes electrónicas
+       del Decreto 7-2019 pagan 4%. Sale del catálogo, no de una constante. */
+    const tasaSimpl = REGIMENES_SAT[iva].tasa_iva;
+    const utilidades = !pequeno && (REGIMENES_ISR[f.regimen_isr]
+      ? f.regimen_isr === 'utilidades'
+      : (Number(f.tasa_isr)||0.05) >= 0.2);   // comercios viejos: sólo tienen la tasa
     return {
-      pequeno, utilidades,
-      label: pequeno ? 'Pequeño Contribuyente (5% s/facturación)'
+      pequeno, utilidades, tasaSimpl,
+      label: pequeno ? `${REGIMENES_SAT[iva].label} — pago definitivo, sin ISR`
            : utilidades ? 'Sobre Utilidades (ISR 25% + ISO)'
            : 'Opcional Simplificado (ISR 5%/7%)'
     };
@@ -89,7 +101,7 @@ Modulos.precios = {
   /* ── Motor de cálculo. costo → precio y todos los indicadores ── */
   _calc() {
     const c = this._cfg;
-    const { pequeno, utilidades } = this._regimen();
+    const { pequeno, utilidades, tasaSimpl } = this._regimen();
     const margen = (Number(c.margen_neto_pct)||0)/100;
     const margenMin = Math.min(margen, (Number(c.margen_minimo_pct)||20)/100);
     const GF = c.gastos_fijos.reduce((s,g)=>s+(Number(g.monto)||0),0);
@@ -103,7 +115,7 @@ Modulos.precios = {
 
     /* denominador según régimen (margen deseado y margen mínimo) */
     const denom = (mg) => {
-      if (pequeno)    return 1 - 0.05 - ohd - com - m - mg;
+      if (pequeno)    return 1 - tasaSimpl - ohd - com - m - mg;
       if (utilidades) return 1 - ohd - com - m - mg/0.75;
       const isr = BV > 30000 ? 0.07 : 0.05;
       return 1 - isr - ohd - com - m - mg;
@@ -112,7 +124,7 @@ Modulos.precios = {
     const iva = pequeno ? 1 : 1.12;
     const M    = dSel > 0.03 ? iva/dSel : null;        // precio al cliente = costo × M
     const Mmin = dMin > 0.03 ? iva/dMin : null;
-    const isrPct = pequeno ? 0.05 : utilidades ? null : (BV>30000 ? 0.07 : 0.05);
+    const isrPct = pequeno ? tasaSimpl : utilidades ? null : (BV>30000 ? 0.07 : 0.05);
 
     /* Hora-hombre: costo real de una hora facturable */
     const costoHora = (Number(c.salario_tecnico)||0) * (Number(c.factor_prestaciones)||1.42)
@@ -121,24 +133,24 @@ Modulos.precios = {
 
     /* Punto de equilibrio: facturación mensual donde la ganancia neta es Q0 */
     const cd = this._costoDirPct;                      // costo directo promedio (inventario)
-    const dEq = (pequeno ? 1-0.05 : utilidades ? 1 : 1-(BV>30000?0.07:0.05)) - com - m - cd;
+    const dEq = (pequeno ? 1-tasaSimpl : utilidades ? 1 : 1-(BV>30000?0.07:0.05)) - com - m - cd;
     const breakEven = dEq > 0.03 ? (GF/dEq) * iva : null;
 
     /* Descuento máximo promedio que aún respeta el margen mínimo */
     const descMax = (M && Mmin && M > Mmin) ? (1 - Mmin/M) : 0;
 
-    return { M, Mmin, GF, V, BV, ohd, com, m, isrPct, pequeno, utilidades,
+    return { M, Mmin, GF, V, BV, ohd, com, m, isrPct, pequeno, utilidades, tasaSimpl,
              costoHora, tarifaHora, breakEven, descMax, margen, margenMin, cd };
   },
 
   /* Margen neto resultante si el mercado fija el precio (modo inverso) */
   _margenDe(precio, costo) {
-    const { pequeno, utilidades } = this._regimen();
+    const { pequeno, utilidades, tasaSimpl } = this._regimen();
     const k = this._calc();
     if (!(precio>0) || !(costo>=0)) return null;
     const B = pequeno ? precio : precio/1.12;
     const varTot = k.ohd + k.com + k.m;
-    if (pequeno)    return 1 - 0.05 - varTot - costo/B;
+    if (pequeno)    return 1 - tasaSimpl - varTot - costo/B;
     if (utilidades) return (1 - varTot - costo/B) * 0.75;
     return 1 - (k.isrPct||0.05) - varTot - costo/B;
   },
@@ -158,7 +170,7 @@ Modulos.precios = {
     el.innerHTML = `
       <div class="alert alert-cyan" style="margin-bottom:16px"><div class="alert-icon">🧭</div><div class="alert-body" style="font-size:12px">
         Tu régimen SAT activo: <b>${reg.label}</b> (se lee de Contabilidad → Formularios SAT).
-        ${reg.pequeno ? 'El 5% sobre lo facturado <b>sí es un costo</b> y no acreditas IVA de compras.'
+        ${reg.pequeno ? `El ${(reg.tasaSimpl*100).toFixed(0)}% sobre lo facturado <b>sí es un costo</b> y no acreditas IVA de compras. Es pago definitivo: <b>no pagas ISR aparte</b>.`
           : reg.utilidades ? 'Tus gastos <b>sí deducen</b> el ISR (25% sobre utilidad). El IVA 12% no es costo: se traslada al cliente.'
           : 'El ISR (5%/7%) se paga sobre el ingreso: tus gastos <b>no lo reducen</b>. El IVA 12% no es costo: se traslada al cliente.'}
       </div></div>
@@ -255,7 +267,7 @@ Modulos.precios = {
       <div style="display:flex;justify-content:space-between;font-size:12.5px;padding:3px 0">
         <span style="color:var(--text2)">${label}</span><span class="mono-sm" style="color:var(--${color||'text2'});font-weight:700">${UI.q(monto)}</span>
       </div>` : '';
-    const isrQ = k.pequeno ? p100*0.05 : k.utilidades ? (base*(1-k.ohd-k.com-k.m)-100)*0.25 : base*(k.isrPct||0.05);
+    const isrQ = k.pequeno ? p100*k.tasaSimpl : k.utilidades ? (base*(1-k.ohd-k.com-k.m)-100)*0.25 : base*(k.isrPct||0.05);
     const gananciaQ = base*k.margen;
     return `
       <div class="card card-green mb-4">
@@ -331,7 +343,7 @@ Modulos.precios = {
     if (!out) return;
     const V = parseFloat(document.getElementById('pp-sim-ventas')?.value)||0;
     if (!(V>0)) { out.textContent='—'; return; }
-    const { pequeno, utilidades } = this._regimen();
+    const { pequeno, utilidades, tasaSimpl } = this._regimen();
     const k = this._calc();
     const B = pequeno ? V : V/1.12;
     const mezcla = (Number(this._cfg.mezcla_tarjeta_pct)||0)/100;
@@ -339,7 +351,7 @@ Modulos.precios = {
     const com = mezcla*comPct*(pequeno?1:1.12);
     let neta;
     const contrib = B*(1 - this._costoDirPct - com - k.m) - k.GF;
-    if (pequeno)         neta = contrib - V*0.05;
+    if (pequeno)         neta = contrib - V*tasaSimpl;
     else if (utilidades) neta = contrib>0 ? contrib*0.75 : contrib;
     else                 neta = contrib - B*(B>30000?0.07:0.05);
     out.innerHTML = `<span style="color:var(--${neta>=0?'green':'red'})">${neta>=0?'Ganas':'Pierdes'} ${UI.q(Math.abs(neta))}/mes</span>`;

@@ -139,12 +139,17 @@ Deno.serve(async (req) => {
     agropecuario: 0.05, agropecuario_electronico: 0.04,
   };
   const TASA_ISR: Record<string, number> = { opcional_simplificado: 0.05, utilidades: 0.25 };
+  /* Los simplificados no pagan ISR aparte: su tasa única es de pago definitivo
+     y los releva de declararlo (Decretos 27-92 y 7-2019) → null = no aplica. */
+  const SIMPLIFICADOS = ["pequeno", "pequeno_electronico",
+                         "agropecuario", "agropecuario_electronico"];
   const regimenIva = TASA_IVA[sol.regimen_iva] !== undefined ? sol.regimen_iva : "general";
-  const regimenIsr = TASA_ISR[sol.regimen_isr] !== undefined ? sol.regimen_isr : "opcional_simplificado";
+  const regimenIsr = SIMPLIFICADOS.includes(regimenIva) ? null
+    : (TASA_ISR[sol.regimen_isr] !== undefined ? sol.regimen_isr : "opcional_simplificado");
   await admin.from("config_fiscal").insert({
     tenant_id: tenant.id,
     regimen_iva: regimenIva, tasa_iva: TASA_IVA[regimenIva],
-    regimen_isr: regimenIsr, tasa_isr: TASA_ISR[regimenIsr],
+    regimen_isr: regimenIsr, tasa_isr: regimenIsr ? TASA_ISR[regimenIsr] : 0,
   }).then(() => {}, () => {});
 
   if (sol.auth_user_id) {

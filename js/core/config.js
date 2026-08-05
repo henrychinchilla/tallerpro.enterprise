@@ -800,6 +800,20 @@ const REGIMENES_ISR = {
   },
 };
 
+/* ¿Este régimen de IVA paga ISR aparte?
+
+   NO en los simplificados. Tanto el Pequeño Contribuyente (Decreto 27-92) como
+   el Contribuyente Agropecuario (Decreto 7-2019) pagan una tasa única sobre
+   ingresos brutos con carácter DEFINITIVO: quedan relevados de presentar y
+   pagar declaraciones de ISR —anuales, trimestrales o mensuales— y del ISO.
+   Ese 5% (o 4% en las variantes electrónicas) ya lo incluye todo.
+
+   Por eso, cuando el régimen de IVA es simplificado, el régimen de ISR no se
+   pregunta: no existe. Se guarda null, no un valor por defecto que mentiría. */
+function aplicaISR(regimenIva) {
+  return !regimenSimplificado(regimenIva);
+}
+
 /* Tasa de ISR que corresponde a un ingreso mensual dado. En el opcional
    simplificado la tasa depende del monto (5% hasta Q30,000, 7% arriba), así
    que no es un número fijo: se calcula. */
@@ -818,6 +832,13 @@ function tasaISR(regimenId, ingresoMensual = 0) {
    como "general" con IVA 12%. */
 function resolverRegimenes(regimenIva, regimenIsr) {
   const iva = REGIMENES_SAT[regimenIva] ? regimenIva : 'general';
+  /* En los regímenes simplificados el ISR no aplica (pago definitivo), así que
+     se guarda null y tasa 0 aunque el formulario mande algo: el dato correcto
+     es "no hay régimen de ISR", no un valor por defecto. */
+  if (!aplicaISR(iva)) {
+    return { regimen_iva: iva, tasa_iva: REGIMENES_SAT[iva].tasa_iva,
+             regimen_isr: null, tasa_isr: 0 };
+  }
   const isr = REGIMENES_ISR[regimenIsr] ? regimenIsr : 'opcional_simplificado';
   return {
     regimen_iva: iva,
@@ -852,5 +873,6 @@ if (typeof window !== 'undefined') {
   window.regimenSimplificado = regimenSimplificado;
   window.tasaIVARegimen = tasaIVARegimen;
   window.tasaISR = tasaISR;
+  window.aplicaISR = aplicaISR;
   window.resolverRegimenes = resolverRegimenes;
 }

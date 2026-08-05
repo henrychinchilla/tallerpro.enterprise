@@ -292,8 +292,13 @@ Modulos.calendario = {
      Estado desde obligaciones_fiscales. */
   _eventosSATRango(ini, fin, fiscal, obligaciones, incluir = { sat:true, igss:true }) {
     const out = [];
-    const pequeno = (fiscal?.regimen_iva||'general').toLowerCase().startsWith('peque');
-    const utilidades = (Number(fiscal?.tasa_isr)||0.05) >= 0.2;
+    /* `startsWith('peque')` dejaba fuera al AGROPECUARIO, que también es
+       simplificado: se le agendaban vencimientos de ISR que por ley no
+       presenta (Decreto 7-2019, pago definitivo). */
+    const pequeno = regimenSimplificado(fiscal?.regimen_iva||'general');
+    const utilidades = !pequeno && (REGIMENES_ISR[fiscal?.regimen_isr]
+      ? fiscal.regimen_isr === 'utilidades'
+      : (Number(fiscal?.tasa_isr)||0.05) >= 0.2);
     const f = d => this._f(d);
     const estadoDe = (tipo, periodo) => {
       const o = (obligaciones||[]).find(x=>x.tipo===tipo && x.periodo===periodo);

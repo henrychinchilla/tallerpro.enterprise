@@ -185,7 +185,12 @@ Deno.serve(async (req) => {
                          "agropecuario", "agropecuario_electronico"];
   const REGIMENES_ISR = ["opcional_simplificado", "utilidades"];
   const regimenIva = REGIMENES_IVA.includes(body.regimen_iva) ? body.regimen_iva : "general";
-  const regimenIsr = REGIMENES_ISR.includes(body.regimen_isr) ? body.regimen_isr : "opcional_simplificado";
+  /* En los regímenes simplificados el ISR no aplica: su tasa única es de pago
+     definitivo (Decretos 27-92 y 7-2019). Se guarda null = "no aplica". */
+  const SIMPLIFICADOS = ["pequeno", "pequeno_electronico",
+                         "agropecuario", "agropecuario_electronico"];
+  const regimenIsr = SIMPLIFICADOS.includes(regimenIva) ? null
+    : (REGIMENES_ISR.includes(body.regimen_isr) ? body.regimen_isr : "opcional_simplificado");
   if (pendiente) {
     await admin.from("solicitudes_comercio").update({
       nombre_comercio: nombreTaller, nombre_admin: nombreAdmin, nit, telefono,

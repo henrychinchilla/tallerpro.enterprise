@@ -252,13 +252,13 @@ function renderLogin(vista='login') {
 
         <div class="form-group">
           <label class="form-label">Régimen ante la SAT *</label>
-          <select class="form-select" id="nt-regimen" onchange="document.getElementById('nt-regimen-det').textContent=(REGIMENES_SAT[this.value]||{}).detalle||''">
+          <select class="form-select" id="nt-regimen" onchange="document.getElementById('nt-regimen-det').textContent=(REGIMENES_SAT[this.value]||{}).detalle||'';UI.toggleISR('nt-regimen','nt-isr-box')">
             ${Object.entries(REGIMENES_SAT).map(([id, r]) => `<option value="${id}">${r.label}</option>`).join('')}
           </select>
           <div id="nt-regimen-det" style="font-size:11px;color:var(--text2);margin-top:4px">${REGIMENES_SAT.general.detalle}</div>
         </div>
 
-        <div class="form-group">
+        <div class="form-group" id="nt-isr-box">
           <label class="form-label">Régimen de ISR *</label>
           <select class="form-select" id="nt-isr" onchange="document.getElementById('nt-isr-det').textContent=(REGIMENES_ISR[this.value]||{}).detalle||''">
             ${Object.entries(REGIMENES_ISR).map(([id, r]) => `<option value="${id}">${r.label}</option>`).join('')}
@@ -424,12 +424,12 @@ function renderLogin(vista='login') {
         </div>
         <div class="form-group">
           <label class="form-label">Régimen ante la SAT *</label>
-          <select class="form-select" id="ntg-regimen" onchange="document.getElementById('ntg-regimen-det').textContent=(REGIMENES_SAT[this.value]||{}).detalle||''">
+          <select class="form-select" id="ntg-regimen" onchange="document.getElementById('ntg-regimen-det').textContent=(REGIMENES_SAT[this.value]||{}).detalle||'';UI.toggleISR('ntg-regimen','ntg-isr-box')">
             ${Object.entries(REGIMENES_SAT).map(([id, r]) => `<option value="${id}">${r.label}</option>`).join('')}
           </select>
           <div id="ntg-regimen-det" style="font-size:11px;color:var(--text2);margin-top:4px">${REGIMENES_SAT.general.detalle}</div>
         </div>
-        <div class="form-group">
+        <div class="form-group" id="ntg-isr-box">
           <label class="form-label">Régimen de ISR *</label>
           <select class="form-select" id="ntg-isr" onchange="document.getElementById('ntg-isr-det').textContent=(REGIMENES_ISR[this.value]||{}).detalle||''">
             ${Object.entries(REGIMENES_ISR).map(([id, r]) => `<option value="${id}">${r.label}</option>`).join('')}
