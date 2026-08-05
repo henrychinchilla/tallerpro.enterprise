@@ -5,19 +5,35 @@
    tramitar su licencia. La app los llena con los datos que ya tiene y los
    deja listos para imprimir y llevar al notario.
 
-   ⚠️ SOBRE EL "FORMULARIO IVE" QUE SE PIDIÓ:
-   Se revisó el texto de la Ley Contra el Lavado de Dinero u Otros Activos
-   (Decreto 67-2001). Su artículo 18 enumera a las "personas obligadas" —
-   las que deben reportar a la Intendencia de Verificación Especial (IVE)
-   de la Superintendencia de Bancos — y son: entidades supervisadas por la
-   SIB, corretaje de valores, emisoras de tarjetas de crédito, entidades
-   off-shore, y quienes hagan canje de cheques, giros, transferencias
-   sistemáticas, factoraje, arrendamiento financiero o compraventa de
-   divisas. **Las armerías y la compraventa de armas NO aparecen en esa
-   lista.** El inciso 5 g) deja abierto que el reglamento agregue otras
-   actividades, y el Decreto 15-2026 (vigente desde ~17/09/2026) suma
-   notarios, inmobiliarias y criptoactivos, permitiendo a la SIB incorporar
-   más actividades con aval del Conclaft.
+   ⚠️ SOBRE EL "FORMULARIO IVE" QUE SE PIDIÓ — verificado en LEY Y REGLAMENTO:
+
+   · Ley Contra el Lavado de Dinero (Decreto 67-2001), art. 18: enumera a las
+     "personas obligadas" a reportar a la Intendencia de Verificación
+     Especial (IVE) — entidades supervisadas por la SIB, corretaje de
+     valores, tarjetas de crédito, off-shore, y quienes hagan canje de
+     cheques, giros, transferencias sistemáticas, factoraje, arrendamiento
+     financiero o compraventa de divisas.
+
+   · Su REGLAMENTO (Acuerdo Gubernativo 118-2002), art. 5, subdivide esas
+     personas obligadas en dos grupos y los lista completos:
+       Grupo A — Banco de Guatemala, bancos del sistema, sociedades
+         financieras, casas de cambio, corretaje de valores, emisores y
+         operadores de tarjetas de crédito, entidades off-shore.
+       Grupo B — transferencias sistemáticas de fondos, compañías de seguros
+         y fianzas, canje de cheques, Instituto de Fomento de Hipotecas
+         Aseguradas, factoraje, arrendamiento financiero, almacenes
+         generales de depósito, otras que la legislación someta a vigilancia
+         de la SIB, y cooperativas de ahorro y crédito (AG 438-2002).
+
+   **Las armerías y la compraventa de armas NO aparecen en ninguno de los
+   dos grupos.** El art. 8 del reglamento explica el único camino para
+   incorporarlas: un Acuerdo Gubernativo del Presidente que modifique ese
+   art. 5. Mientras no exista, un negocio de armas no es persona obligada.
+
+   OJO CON LA FECHA: el Decreto 15-2026 (Ley Integral, vigente desde
+   ~17/09/2026) reemplaza este marco, suma notarios, inmobiliarias y
+   criptoactivos, y faculta a la SIB para incorporar más actividades con
+   aval del Conclaft. Cuando entre en vigor hay que releer su reglamento.
 
    Por eso acá NO se genera un "formulario IVE": rotular un documento como
    obligación ante la IVE sin que la ley la imponga sería inventarle al
@@ -176,10 +192,11 @@ Object.assign(Modulos.armeria, {
         ${L(null, 340)}</p>
         <p style="font-size:11px;color:#555;border:1px solid #ccc;padding:8px;border-radius:4px">
         <b>Nota sobre este documento:</b> no es un formulario de la Intendencia de Verificación
-        Especial (IVE). El artículo 18 del Decreto 67-2001 enumera a las personas obligadas a
-        reportar ante la IVE y no incluye a las armerías ni a la compraventa de armas y municiones.
+        Especial (IVE). El artículo 18 del Decreto 67-2001 y el artículo 5 de su Reglamento
+        (Acuerdo Gubernativo 118-2002) enumeran a las personas obligadas a reportar ante la IVE
+        —Grupo A y Grupo B— y no incluyen a las armerías ni a la compraventa de armas y municiones.
         Este documento es un control interno voluntario del establecimiento. Verifique con su
-        asesor legal si alguna disposición posterior le impone obligaciones ante la IVE.</p>`,
+        asesor legal, especialmente a partir de la vigencia del Decreto 15-2026.</p>`,
     };
 
     const detalleArma = (tipo !== 'origen_fondos' && (o.marca || o.numero_serie)) ? `

@@ -98,6 +98,11 @@ ARM._data = [{ id: 'op1', num: 'ARM-2026-0001', cliente_id: 'c1', inventario_id:
   ok('pregunta si actúa por cuenta propia o de un tercero', /por cuenta propia/i.test(doc));
   ok('ACLARA que no es un formulario de la IVE', /no es un formulario de la Intendencia/i.test(doc));
   ok('explica que el art. 18 no incluye a las armerías', /art[íi]culo 18 del Decreto 67-2001/.test(doc));
+  /* La evidencia fuerte: el reglamento (AG 118-2002) lista los dos grupos
+     completos y ahí tampoco están. Citarlo hace la afirmación verificable. */
+  ok('cita también el reglamento AG 118-2002', /Acuerdo Gubernativo 118-2002/.test(doc));
+  ok('menciona que revisó ambos grupos', /Grupo A y Grupo B/.test(doc));
+  ok('avisa de la fecha del Decreto 15-2026', /15-2026/.test(doc));
   ok('recomienda verificar con asesor legal', /asesor legal/i.test(doc));
   ok('NO se presenta como obligación legal del negocio', /control interno voluntario/i.test(doc));
   /* El detalle del arma no aplica a un documento de origen de fondos. */

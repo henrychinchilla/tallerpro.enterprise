@@ -9,7 +9,11 @@ const fs = require('fs');
 const vm = require('vm');
 const path = require('path');
 
-const ctx = { console, Modulos: {} };
+/* `document` arranca devolviendo null en todo: el módulo consulta el DOM en
+   varios lados y así esas rutas se saltan solas, como en el navegador
+   cuando el nodo aún no existe. Las pruebas que sí necesitan campos lo
+   sustituyen. */
+const ctx = { console, Modulos: {}, document: { getElementById: () => null } };
 ctx.window = ctx;
 vm.createContext(ctx);
 /* ley-armas.js primero: el módulo saca de ahí los topes legales. */
@@ -245,6 +249,37 @@ ok('una navaja tampoco', !ARM._esArma('arma_blanca'));
   ARM.imprimirLibro();
   ok('sin artículo vinculado el libro no inventa el cañón', /<td>—<\/td>/.test(abierto[0] || ''));
   ARM._data = []; ARM._inventario = [];
+}
+
+/* ── Ayudante de consulta a DIGECAM ──────────────────────────────────────
+   DIGECAM no expone API pública, así que la verificación del art. 21 la
+   hace una persona en el sistema de ellos. Lo único que la app puede hacer
+   es que no haya que teclear todo de nuevo: arma el texto con lo que ya
+   está en el formulario. Si ese texto sale incompleto, el vendedor consulta
+   mal y el código que le den no corresponde a la venta. */
+{
+  const campos = {
+    'arm-cliente': 'c1', 'arm-dpi': '1234567890101', 'arm-nit': '9876543-2',
+    'arm-lic-tipo': 'portación', 'arm-lic-num': 'POR-555', 'arm-armas-reg': '2',
+    'arm-calibre': '9mm', 'arm-cantidad': '300',
+  };
+  ctx.document.getElementById = (id) => (id in campos ? { value: campos[id] } : null);
+  ARM._clientes = [{ id: 'c1', nombre: 'Juan Pérez' }];
+
+  const txt = ARM._textoConsultaDigecam();
+  ok('la consulta cita el artículo que la obliga', /art\.?\s*21/i.test(txt));
+  ok('lleva el nombre del comprador', /Juan Pérez/.test(txt));
+  ok('lleva el DPI', /1234567890101/.test(txt));
+  ok('lleva el tipo y número de licencia', /portaci[óo]n/i.test(txt) && /POR-555/.test(txt));
+  ok('lleva el calibre — el art. 60 sólo permite el registrado', /9mm/.test(txt));
+  ok('lleva la cantidad solicitada', /300/.test(txt));
+  ok('calcula el tope según licencia y armas (250 × 2 = 500)', /500\/mes/.test(txt));
+
+  /* Sin datos no debe escribir "undefined" en una consulta que va a DIGECAM. */
+  ctx.document.getElementById = () => null;
+  const vacio = ARM._textoConsultaDigecam();
+  ok('sin datos usa guiones, no "undefined"', !/undefined/.test(vacio) && /—/.test(vacio));
+  ctx.document.getElementById = () => null;
 }
 
 /* ── Avisos legales por categoría ───────────────────────────────────────── */
