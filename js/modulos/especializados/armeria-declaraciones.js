@@ -248,8 +248,9 @@ Object.assign(Modulos.armeria, {
     </style></head><body>
     <div class="barra">
       <b>✏️ Podés corregir cualquier dato haciendo clic sobre él.</b>
-      <span style="color:#666">Los cambios son sólo para esta impresión — no se guardan en la ficha del cliente.</span>
-      <button onclick="window.print()" style="margin-left:auto">🖨️ Imprimir</button>
+      <span style="color:#666">Las correcciones son de este documento — no tocan la ficha del cliente.</span>
+      <button id="btn-guardar" style="margin-left:auto">💾 Guardar en historial</button>
+      <button onclick="window.print()">🖨️ Imprimir</button>
     </div>
     <div class="doc" contenteditable="true" spellcheck="false">
     <div class="enc">
@@ -295,5 +296,224 @@ Object.assign(Modulos.armeria, {
     /* NO se imprime solo: Henry pidió poder editar antes. La barra tiene su
        propio botón de imprimir, y el documento es editable hasta que la
        persona decida. Imprimir de una haría inútil la edición. */
+
+    /* El botón se cablea desde acá y no con un onclick en el HTML: así el
+       handler vive en ESTA ventana, con acceso a DB y a Modulos, y no hay que
+       serializar nada dentro del documento. */
+    const btn = w.document.getElementById('btn-guardar');
+    if (btn) btn.onclick = () => this._guardarDeclaracion(w, btn, {
+      tipo, titulo: d.label, base_legal: d.base,
+      cliente_id: cli.id || null,
+      operacion_id: o.id || null,
+      cliente_nombre: cli.nombre || null,
+      cliente_dpi: o.contraparte_dpi || cli.dpi || null,
+    });
+  },
+
+  /* Quita de un documento guardado todo lo que puede ejecutar código.
+     El texto sale de un contenteditable, así que alguien con acceso al módulo
+     podría pegar HTML: al reimprimir se abre en una ventana con document.write
+     y correría. Se limpia AL GUARDAR y otra vez AL REIMPRIMIR — lo segundo
+     porque una fila puede haber entrado por otra vía (API, restauración de un
+     respaldo) sin pasar por lo primero. */
+  _sanearDocumento(html) {
+    return String(html || '')
+      .replace(/<\s*(script|iframe|object|embed|link|meta|base|form)\b[\s\S]*?<\s*\/\s*\1\s*>/gi, '')
+      .replace(/<\s*(script|iframe|object|embed|link|meta|base|form)\b[^>]*>/gi, '')
+      /* Atributos on* (onclick, onerror, onload…), con y sin comillas. */
+      .replace(/\son[a-z]+\s*=\s*"[^"]*"/gi, '')
+      .replace(/\son[a-z]+\s*=\s*'[^']*'/gi, '')
+      .replace(/\son[a-z]+\s*=\s*[^\s>]+/gi, '')
+      /* href/src con javascript: o data: (data: permite incrustar HTML). */
+      .replace(/\s(href|src|xlink:href)\s*=\s*(["'])\s*(javascript|data|vbscript):[^"']*\2/gi, ' $1="#"');
+  },
+
+  async _guardarDeclaracion(win, btn, meta) {
+    const doc = win.document.querySelector('.doc');
+    if (!doc) { UI.toast('No se encontró el contenido del documento', 'error'); return; }
+
+    btn.disabled = true; btn.textContent = '⏳ Guardando…';
+    const { data, error } = await DB.guardarDeclaracion({
+      ...meta,
+      contenido_html: this._sanearDocumento(doc.innerHTML),
+    });
+
+    if (error) {
+      btn.disabled = false; btn.textContent = '💾 Guardar en historial';
+      UI.toast(error.message || 'No se pudo guardar la declaración', 'error', 7000);
+      return;
+    }
+
+    /* Se avisa en las dos ventanas: quien guardó está mirando el documento,
+       no la app. */
+    btn.textContent = `✓ Guardada (${data.num})`;
+    btn.style.background = '#dcfce7';
+    btn.style.borderColor = '#86efac';
+    UI.toast(`✓ Declaración ${data.num} guardada en el historial`, 'success');
+    if (this._tab === 'declaraciones') await this.renderDeclaraciones();
+  },
+
+  /* ══ HISTORIAL ══════════════════════════════════════════════════════════ */
+  async renderDeclaraciones() {
+    const el = document.getElementById('page-content');
+    UI.loading(el);
+    /* Se cargan los clientes porque el menú de "Nueva declaración" los
+       necesita para el selector, y esta pestaña puede ser la primera que abra
+       el usuario (render() de operaciones podría no haber corrido). */
+    const [decls, clientes] = await Promise.all([
+      DB.getDeclaraciones().catch(() => []),
+      (this._clientes && this._clientes.length) ? Promise.resolve(this._clientes)
+        : DB.getClientes().catch(() => []),
+    ]);
+    this._declaraciones = decls;
+    this._clientes = clientes;
+    this._data = this._data || [];
+    this._inventario = this._inventario || [];
+
+    /* Mes activo por defecto, historial completo a pedido (regla 3). */
+    const hoy = new Date();
+    const delMes = decls.filter(x => {
+      const f = new Date(x.fecha + 'T00:00:00');
+      return f.getMonth() === hoy.getMonth() && f.getFullYear() === hoy.getFullYear();
+    });
+
+    const fila = x => `
+      <tr>
+        <td class="mono-sm">${UI.esc(x.num)}</td>
+        <td class="mono-sm">${UI.fecha(x.fecha)}</td>
+        <td>${UI.esc((this._DECLARACIONES[x.tipo] || {}).label || x.titulo)}</td>
+        <td>${UI.esc(x.cliente_nombre || '—')}
+            ${x.cliente_dpi ? `<div style="font-size:11px;color:var(--text3)">DPI ${UI.esc(x.cliente_dpi)}</div>` : ''}</td>
+        <td style="font-size:11px;color:var(--text3)">${UI.esc(x.usuarios?.nombre || '—')}</td>
+        <td style="text-align:right;white-space:nowrap">
+          ${Modulos.btnAccion('ver', `Modulos.armeria.verDeclaracion('${x.id}')`)}
+          ${Modulos.btnAccion('imprimir', `Modulos.armeria.reimprimirDeclaracion('${x.id}')`)}
+          ${Modulos.btnAccion('eliminar', `Modulos.armeria.eliminarDeclaracion('${x.id}')`)}
+        </td>
+      </tr>`;
+
+    const tabla = filas => `
+      <div class="table-wrap"><table class="data-table">
+        <thead><tr><th>No.</th><th>Fecha</th><th>Tipo</th><th>Declarante</th><th>Emitió</th><th></th></tr></thead>
+        <tbody>${filas.map(fila).join('')}</tbody>
+      </table></div>`;
+
+    el.innerHTML = `
+      <div class="page-header"><h1 class="page-title">🎯 Armería</h1></div>
+      <div class="page-body">
+        ${this._tabsHTML()}
+
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;gap:10px;flex-wrap:wrap">
+          <div style="font-size:12px;color:var(--text3);flex:1;min-width:240px">
+            Cada declaración se guarda <b>tal como quedó tras editarla</b>: eso es lo que el cliente
+            firmó ante notario y lo que sirve de respaldo si DIGECAM o la IVE preguntan.
+          </div>
+          <button class="btn btn-cyan btn-sm" onclick="Modulos.armeria.modalDeclaraciones('','')">
+            ➕ Nueva declaración
+          </button>
+        </div>
+
+        <div class="card">
+          <div style="display:flex;justify-content:space-between;align-items:center" class="mb-3">
+            <div class="card-sub" style="margin-bottom:0">
+              📄 Emitidas en ${UI.esc(hoy.toLocaleDateString('es-GT',{month:'long',year:'numeric'}))}
+            </div>
+            <button class="btn btn-sm btn-ghost" onclick="Modulos.armeria._verHistorialDeclaraciones()">
+              📅 Ver historial completo (${decls.length})
+            </button>
+          </div>
+          ${delMes.length ? tabla(delMes)
+            : `<div class="empty-state">Sin declaraciones este mes. Generá una con <b>Nueva declaración</b>
+               y guardala con el botón <b>💾 Guardar en historial</b> del documento.</div>`}
+        </div>
+      </div>`;
+  },
+
+  _verHistorialDeclaraciones() {
+    const todas = this._declaraciones || [];
+    if (!todas.length) { UI.toast('Todavía no hay declaraciones guardadas', 'info'); return; }
+    UI.modal('📅 Historial completo de declaraciones', `
+      <div class="table-wrap" style="max-height:60vh;overflow:auto"><table class="data-table">
+        <thead><tr><th>No.</th><th>Fecha</th><th>Tipo</th><th>Declarante</th><th></th></tr></thead>
+        <tbody>${todas.map(x => `<tr>
+          <td class="mono-sm">${UI.esc(x.num)}</td>
+          <td class="mono-sm">${UI.fecha(x.fecha)}</td>
+          <td>${UI.esc((this._DECLARACIONES[x.tipo] || {}).label || x.titulo)}</td>
+          <td>${UI.esc(x.cliente_nombre || '—')}</td>
+          <td style="text-align:right;white-space:nowrap">
+            ${Modulos.btnAccion('imprimir', `Modulos.armeria.reimprimirDeclaracion('${x.id}')`)}
+          </td>
+        </tr>`).join('')}</tbody>
+      </table></div>
+      <div class="modal-footer"><button class="btn btn-ghost" onclick="UI.cerrarModal()">Cerrar</button></div>
+    `, '760px');
+  },
+
+  async verDeclaracion(id) {
+    const x = (this._declaraciones || []).find(d => d.id === id);
+    const html = await DB.getDeclaracionContenido(id);
+    if (!html) { UI.toast('No se pudo leer el documento', 'error'); return; }
+    UI.modal(`📄 ${UI.esc(x?.num || 'Declaración')}`, `
+      <div style="font-size:12px;color:var(--text3);margin-bottom:10px">
+        ${UI.esc(x?.cliente_nombre || 'Sin cliente')} · ${UI.fecha(x?.fecha)} ·
+        emitida por ${UI.esc(x?.usuarios?.nombre || '—')}
+      </div>
+      <div style="max-height:58vh;overflow:auto;background:#fff;color:#000;padding:18px;border-radius:6px;
+                  font-family:'Times New Roman',Georgia,serif;font-size:12.5px;line-height:1.7">
+        ${this._sanearDocumento(html)}
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" onclick="UI.cerrarModal()">Cerrar</button>
+        <button class="btn btn-cyan" onclick="Modulos.armeria.reimprimirDeclaracion('${id}')">🖨️ Imprimir</button>
+      </div>`, '820px');
+  },
+
+  async reimprimirDeclaracion(id) {
+    const x = (this._declaraciones || []).find(d => d.id === id);
+    const guardado = await DB.getDeclaracionContenido(id);
+    if (!guardado) { UI.toast('No se pudo leer el documento', 'error'); return; }
+
+    const w = window.open('', '_blank', 'width=880,height=800');
+    if (!w) { UI.toast('Permití las ventanas emergentes para imprimir', 'error'); return; }
+    w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8">
+      <title>${UI.esc(x?.titulo || 'Declaración')} ${UI.esc(x?.num || '')}</title>
+      <style>
+        @page { margin: 2.5cm; }
+        body{font-family:'Times New Roman',Georgia,serif;font-size:12.5px;line-height:1.7;margin:0;color:#000}
+        .barra{position:sticky;top:0;background:#eef6ff;border-bottom:1px solid #c7ddf5;padding:8px 12px;
+               font-family:Arial,sans-serif;font-size:12px;display:flex;gap:10px;align-items:center;z-index:9}
+        .barra button{font-family:Arial,sans-serif;font-size:12px;padding:5px 12px;border:1px solid #999;
+               border-radius:5px;background:#fff;cursor:pointer}
+        .doc{padding:0 4px}
+        @media print { .barra{display:none} }
+        .enc{text-align:center;margin-bottom:18px}
+        .enc h1{font-size:15px;margin:0 0 4px;text-transform:uppercase;letter-spacing:.5px}
+        .enc .base{font-size:10.5px;color:#444}
+        p{text-align:justify;margin:9px 0}
+        .firmas{margin-top:48px;display:flex;gap:40px}
+        .firma{flex:1;text-align:center}
+        .firma .linea{border-top:1px solid #000;margin-bottom:4px}
+        .firma .rol{font-size:10.5px}
+        .pie{margin-top:26px;font-size:9.5px;color:#666;border-top:1px dashed #bbb;padding-top:8px}
+        .sello{margin-top:34px;border:1px dashed #999;height:110px;padding:6px;font-size:10px;color:#777}
+      </style></head><body>
+      <div class="barra">
+        <b>📄 Copia del historial — ${UI.esc(x?.num || '')}</b>
+        <span style="color:#666">Es el documento tal como se guardó. Para cambiarlo, generá uno nuevo.</span>
+        <button onclick="window.print()" style="margin-left:auto">🖨️ Imprimir</button>
+      </div>
+      <div class="doc">${this._sanearDocumento(guardado)}</div>
+      </body></html>`);
+    w.document.close();
+    w.focus();
+  },
+
+  async eliminarDeclaracion(id) {
+    const x = (this._declaraciones || []).find(d => d.id === id);
+    if (!confirm(`¿Eliminar la declaración ${x?.num || ''} de ${x?.cliente_nombre || 'sin cliente'}?\n\n` +
+                 'Se pierde el respaldo de lo que se declaró ese día. Esto no se puede deshacer.')) return;
+    const ok = await DB.eliminarDeclaracion(id);
+    UI.toast(ok ? 'Declaración eliminada' : 'No se pudo eliminar', ok ? 'success' : 'error');
+    if (ok) await this.renderDeclaraciones();
   },
 });

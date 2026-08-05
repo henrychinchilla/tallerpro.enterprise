@@ -32,7 +32,21 @@ const ctx = {
   setTimeout: (fn) => { try { fn(); } catch (_) {} },
 };
 ctx.window = ctx;
-ctx.window.open = () => ({ document: { write: h => { impreso = h; }, close() {} }, focus() {}, print() {} });
+/* El módulo cablea el botón "Guardar en historial" con getElementById sobre la
+   ventana nueva, así que el simulacro tiene que ofrecerlo: devuelve un botón de
+   mentira para poder comprobar que el cableado ocurre. */
+let botonGuardar = null;
+ctx.window.open = () => ({
+  document: {
+    write: h => { impreso = h; },
+    close() {},
+    getElementById: id => (id === 'btn-guardar'
+      ? (botonGuardar = { id, style: {}, onclick: null, textContent: '', disabled: false })
+      : null),
+    querySelector: () => null,
+  },
+  focus() {}, print() {},
+});
 ctx.window.Auth = { tenant: { name: 'ARMERÍA DEMO, S.A.', nit: '1234567-8' } };
 vm.createContext(ctx);
 vm.runInContext(fs.readFileSync(raiz('js', 'core', 'ley-armas.js'), 'utf8'), ctx);
@@ -177,8 +191,17 @@ ARM._data = [{ id: 'op1', num: 'ARM-2026-0001', cliente_id: 'c1', inventario_id:
   const doc = impreso;
   ok('el documento es editable', /contenteditable="true"/.test(doc));
   ok('tiene su propio botón de imprimir', /window\.print\(\)/.test(doc));
-  ok('avisa que los cambios no se guardan en la ficha', /no se guardan/.test(doc));
+  /* El aviso cambió de sentido al aparecer el historial: antes las
+     correcciones se perdían al cerrar; ahora se guardan como declaración, y lo
+     que NO tocan es la ficha del cliente. Confundir las dos cosas haría que
+     alguien creyera que corregir la dirección acá la corrige en el cliente. */
+  ok('aclara que las correcciones no tocan la ficha del cliente',
+     /no tocan la ficha del cliente/.test(doc));
+  ok('ofrece guardar en el historial', /Guardar en historial/.test(doc));
+  ok('el botón de guardar tiene id para cablearlo', /id="btn-guardar"/.test(doc));
   ok('la barra de edición NO sale impresa', /@media print \{ \.barra\{display:none\}/.test(doc));
+  ok('se cableó el botón de guardar en la ventana nueva',
+     botonGuardar !== null && typeof botonGuardar.onclick === 'function');
 }
 
 /* ── Declaración A DEMANDA, sin venta de por medio ───────────────────────
