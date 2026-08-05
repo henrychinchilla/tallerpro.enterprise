@@ -211,6 +211,91 @@ Asimismo, tienen prohibido mantener en depósito pólvora o explosivos, pudiendo
     },
   ],
 
+  /* ── REGLAMENTO — Acuerdo Gubernativo 85-2011 ────────────────────────────
+     La ley delega en el reglamento un montón de cosas ("de conformidad con
+     el reglamento"), y ahí es donde están las obligaciones del día a día de
+     un establecimiento de compraventa. Texto literal, mismo criterio que la
+     ley. Se marcan con `reglamento: true` para no confundirlos con
+     artículos de la ley: son numeraciones distintas. */
+  articulosReglamento: [
+    {
+      num: 17, tema: 'compraventa', clave: true, reglamento: true,
+      titulo: 'Compraventa (licencia del establecimiento)',
+      texto: `Las personas individuales o jurídicas que deseen dedicarse a la compraventa de armas de fuego y/o municiones, deberán cumplir con los requisitos siguientes:
+
+a) Formulario de solicitud emitido por la DIGECAM.
+b) Presentar a la DIGECAM, declaración jurada ante Notario, que deberá contener: nombres y apellidos completos del solicitante, edad, estado civil, nacionalidad, profesión o actividad a la que se dedica, calidad en la que actúa, número del documento de identificación personal, dirección exacta del domicilio y de su lugar de trabajo, y promesa de informar inmediatamente de cualquier cambio en los datos proporcionados.
+c) Acompañar los documentos siguientes:
+  1. Fotocopia legalizada del documento de identificación personal, reconocido por la ley.
+  2. Certificación de carencia de antecedentes penales extendida por la autoridad correspondiente, del solicitante o del representante legal, si se tratare de persona jurídica.
+  3. Certificación de carencia de antecedentes policíacos extendida por la autoridad correspondiente.
+  4. Certificación contable de sus ingresos o estados financieros.
+  5. Fotocopia legalizada del testimonio de la escritura constitutiva y sus modificaciones, debidamente inscrita en el Registro Mercantil, si el solicitante es una persona jurídica.
+  6. Fotocopia legalizada de la patente de sociedad y patente de empresa, si el solicitante es persona jurídica, y fotocopia legalizada de la patente de empresa, si el solicitante es persona individual.
+  7. Fotocopia legalizada del nombramiento de representante legal, si el solicitante es una persona jurídica.
+  8. Certificación de que se encuentra inscrito como sujeto de contribución fiscal en la Superintendencia de Administración Tributaria.
+
+La DIGECAM emitirá la licencia correspondiente al cumplir los requisitos, la que tendrá una vigencia de cinco (5) años. En cada solicitud de renovación debe cumplirse con todos los requisitos enumerados en este artículo.`,
+    },
+    {
+      num: 20, tema: 'compraventa', clave: true, reglamento: true,
+      titulo: 'Conexión al sistema informático de la DIGECAM',
+      texto: `Las personas individuales o jurídicas que tengan licencia para venta de armas y municiones deberán estar todos los días conectados en línea al sistema informático de la DIGECAM, para lo cual deberán:
+
+a) Contar con el equipo informático con las capacidades mínimas exigidas por la DIGECAM.
+b) Que el personal que utilizará la conexión en línea cuente con la capacitación impartida en la DIGECAM.
+c) Remitir los informes requeridos en la forma y plazo establecidos por la DIGECAM.`,
+    },
+    {
+      num: 21, tema: 'municiones', clave: true, reglamento: true,
+      titulo: 'Verificación en línea para la venta de munición',
+      texto: `Las entidades que la DIGECAM autorice para la venta de municiones, previo a cada venta de las mismas deberán verificar en el sistema en línea con DIGECAM que la persona no haya excedido del límite de munición que se pueda adquirir mensualmente. Asimismo, obtener un código de autorización de venta en la DIGECAM, por vía informática o telefónica, el cual debe anotarse en la factura de venta.`,
+    },
+    {
+      num: 22, tema: 'seguridad', clave: true, reglamento: true,
+      titulo: 'Medidas de seguridad en establecimientos de compraventa',
+      texto: `Las personas individuales o jurídicas que se dediquen a la comercialización de armas y municiones, deberán cumplir las medidas de seguridad físicas siguientes:
+
+a) El local de la empresa debe ser construido con techo, paredes fuertes y sólidas, ya sea de block o concreto.
+b) No compartir el local con otra empresa y otro tipo de negocio.
+c) Contar con una sola puerta de acceso al local.
+d) No estar ubicada la venta de armas y municiones en una colonia cerrada, condominio o casa de habitación.
+e) Contar con un enrejado metálico ubicado frente al mostrador, de manera que las personas ajenas al negocio no tengan acceso al área donde se encuentran las armas y municiones.
+f) Deben contar con una chapa eléctrica ubicada en la entrada principal, activable desde el mostrador u oficinas.
+g) Contar con un enrejado metálico en forma de jaula en la entrada principal.
+h) A un lado de la entrada principal, un casillero con puertas con llave, para que la persona ajena al negocio deposite sus armas y no entre armada a la sala de ventas.
+i) Extinguidor contra incendios tipo ABC, de por lo menos quince (15) libras, con servicio técnico cada seis (6) meses.
+j) Caja fuerte o bóveda con capacidad de resguardar todo el inventario de armas y municiones. Debe tener por lo menos un cuarto de pulgada de grosor.
+k) Sistema de alarma antirrobos con sensores pasivos de movimiento que protejan todas las áreas, sirena, botón de pánico y caja eléctrica central.
+l) Botiquín de primeros auxilios.
+m) A requerimiento de la DIGECAM, contar con uno o varios agentes de una empresa de seguridad privada.
+n) La DIGECAM requerirá otras medidas de seguridad que estime convenientes en casos concretos.`,
+    },
+    {
+      num: 23, tema: 'municiones', reglamento: true,
+      titulo: 'Permiso especial para compra de munición',
+      texto: `Las personas individuales o jurídicas que necesiten mayor cantidad de municiones de las reguladas en la ley, para obtener el permiso especial de la DIGECAM deberán cumplir los requisitos siguientes:
+
+a) Formulario de solicitud emitido por DIGECAM.
+b) Fotocopia legalizada del documento de identificación personal, reconocido por la ley.
+c) Fotocopia de la tarjeta de tenencia emitida por DIGECAM.
+d) Documentos que justifiquen y demuestren la situación que motiva dicha solicitud.
+
+La DIGECAM autorizará la cantidad de munición que considere conveniente en base a la justificación del requirente. En caso se autorice la compra de una cantidad de munición la DIGECAM realizará la anotación en el sistema informático y emitirá el documento de autorización, el cual debe ser presentado ante la empresa de compraventa de armas y municiones para cumplir con el procedimiento establecido de compra.`,
+    },
+    {
+      num: 40, tema: 'armeria', reglamento: true,
+      titulo: 'Autorización de armerías (taller de reparación)',
+      texto: `Para que se autorice el funcionamiento de armerías, las personas individuales deberán cumplir con los requisitos siguientes:
+
+a) Presentar solicitud en formulario emitido por la DIGECAM, al cual se adherirán especies fiscales por valor de cien quetzales (Q.100.00); tal solicitud contendrá: nombres y apellidos del solicitante, edad, estado civil, nacionalidad, profesión, número del documento de identificación personal, dirección de su residencia, lugar de trabajo y lugar para recibir notificaciones.
+b) A la solicitud se acompañarán: fotocopia legalizada del documento de identificación personal; certificación de carencia de antecedentes penales; certificación de carencia de antecedentes policíacos; acreditar que el responsable del establecimiento tiene los conocimientos científicos y técnicos necesarios para la reparación y mantenimiento de armas de fuego; y fotocopia legalizada de patente de empresa.
+c) Las personas jurídicas acompañarán además: fotocopia legalizada del testimonio de la escritura constitutiva inscrita en el Registro Mercantil; fotocopia legalizada del nombramiento del representante legal y de las patentes de comercio; y fotocopia legalizada de patente de sociedad.
+
+La DIGECAM emitirá la licencia correspondiente al cumplir los requisitos, la que tendrá una vigencia de cinco (5) años.`,
+    },
+  ],
+
   temas: {
     compraventa:  { label: 'Compraventa (licencia del negocio)', icon: '🏪' },
     venta_arma:   { label: 'Venta de un arma', icon: '🔫' },
@@ -220,8 +305,19 @@ Asimismo, tienen prohibido mantener en depósito pólvora o explosivos, pudiendo
     inventario:   { label: 'Inventario y libros', icon: '📒' },
     prohibiciones:{ label: 'Prohibiciones', icon: '🚫' },
     armeria:      { label: 'Armería (reparación)', icon: '🔧' },
+    seguridad:    { label: 'Seguridad del local', icon: '🔒' },
   },
 };
+
+/* Ley y reglamento en una sola lista, cada artículo marcado con su fuente.
+   Se consultan juntos porque en la práctica se aplican juntos: la ley dice
+   qué, el reglamento dice cómo. */
+function articulosLeyArmas() {
+  return [
+    ...LEY_ARMAS.articulos.map(a => ({ ...a, fuente: 'ley' })),
+    ...LEY_ARMAS.articulosReglamento.map(a => ({ ...a, fuente: 'reglamento' })),
+  ];
+}
 
 /* Tope mensual de munición que la ley permite venderle a una persona.
    Art. 60: 250 por CADA arma registrada en la licencia de portación, o 200
@@ -236,12 +332,13 @@ function topeMunicionMensual(tipoLicencia, armasRegistradas = 1) {
   return 0;                                       // sin licencia no se vende munición
 }
 
-/* Busca artículos por texto libre (número, título o contenido). */
+/* Busca en ley y reglamento por texto libre (número, título o contenido). */
 function buscarLeyArmas(q) {
+  const todos = articulosLeyArmas();
   const s = String(q || '').trim().toLowerCase();
-  if (!s) return LEY_ARMAS.articulos;
+  if (!s) return todos;
   const soloNum = s.replace(/[^\d]/g, '');
-  return LEY_ARMAS.articulos.filter(a =>
+  return todos.filter(a =>
     (soloNum && String(a.num) === soloNum) ||
     a.titulo.toLowerCase().includes(s) ||
     a.texto.toLowerCase().includes(s)
@@ -252,4 +349,5 @@ if (typeof window !== 'undefined') {
   window.LEY_ARMAS = LEY_ARMAS;
   window.topeMunicionMensual = topeMunicionMensual;
   window.buscarLeyArmas = buscarLeyArmas;
+  window.articulosLeyArmas = articulosLeyArmas;
 }

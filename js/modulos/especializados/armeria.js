@@ -112,6 +112,11 @@ Modulos.armeria = {
       if (!String(f.contraparte_nit || '').trim() || !String(f.contraparte_direccion || '').trim()) {
         return { ok: false, error: 'El art. 60 exige que la factura de munición lleve el NIT y la dirección del comprador — regístralos antes de guardar' };
       }
+      /* Art. 21 del Reglamento: el código que devuelve DIGECAM es la prueba
+         de que la verificación en línea se hizo, y va en la factura. */
+      if (!String(f.codigo_autorizacion_digecam || '').trim()) {
+        return { ok: false, error: 'Falta el código de autorización de DIGECAM. El art. 21 del Reglamento obliga a verificar el cupo del comprador en el sistema en línea antes de cada venta de munición y a anotar ese código en la factura' };
+      }
     }
     if (!(Number(f.cantidad) > 0)) return { ok: false, error: 'La cantidad debe ser mayor a cero' };
     if (Number(f.precio_unit) < 0) return { ok: false, error: 'El precio no puede ser negativo' };
@@ -156,6 +161,7 @@ Modulos.armeria = {
         <p class="page-subtitle">// ${this._data.length} operaciones registradas</p></div>
         <div class="page-actions">
           <button class="btn btn-ghost" onclick="Modulos.inventario.abrirGiro('armeria')" title="Ver y cargar sólo los artículos de este giro">📦 Inventario de armería</button>
+          <button class="btn btn-ghost" onclick="Modulos.armeria.modalDeclaraciones()">📄 Declaraciones</button>
           <button class="btn btn-ghost" onclick="Modulos.armeria.imprimirLibro()">🖨️ Libro de registro</button>
           <button class="btn btn-amber" onclick="Modulos.armeria.modalForm()">＋ Nueva Operación</button>
         </div>
@@ -215,12 +221,13 @@ Modulos.armeria = {
     const el = document.getElementById('page-content');
     const ley = window.LEY_ARMAS;
     if (!ley) { el.innerHTML = '<div class="page-body">No se pudo cargar el texto de la ley.</div>'; return; }
-    const arts = (typeof buscarLeyArmas === 'function') ? buscarLeyArmas(this._busquedaLey) : ley.articulos;
+    const arts = (typeof buscarLeyArmas === 'function') ? buscarLeyArmas(this._busquedaLey)
+      : (typeof articulosLeyArmas === 'function' ? articulosLeyArmas() : ley.articulos);
 
     el.innerHTML = `
       <div class="page-header">
         <div><h1 class="page-title">⚖️ ${ley.nombre}</h1>
-        <p class="page-subtitle">// ${ley.decreto} · reglamento: ${ley.reglamento}</p></div>
+        <p class="page-subtitle">// ${ley.decreto} y su reglamento (${ley.reglamento})</p></div>
         <div class="page-actions">
           <button class="btn btn-ghost" onclick="window.print()">🖨 Imprimir</button>
           <button class="btn btn-amber" onclick="Modulos.armeria._irTab('operaciones')">← Volver a operaciones</button>
@@ -249,7 +256,7 @@ Modulos.armeria = {
         ${arts.map(a => `
           <div class="card" style="margin-bottom:12px;padding:14px">
             <div style="display:flex;align-items:baseline;gap:8px;margin-bottom:8px;flex-wrap:wrap">
-              <span class="badge badge-${a.clave ? 'amber' : 'gray'}">Artículo ${a.num}</span>
+              <span class="badge badge-${a.clave ? 'amber' : 'gray'}">${a.reglamento ? 'Reglamento' : 'Ley'} · Art. ${a.num}</span>
               <b style="font-size:14px">${UI.esc(a.titulo)}</b>
               ${a.clave ? '<span style="font-size:11px;color:var(--amber)">⭐ de uso diario</span>' : ''}
               <span style="font-size:11px;color:var(--text3);margin-left:auto">${ley.temas[a.tema]?.icon || ''} ${ley.temas[a.tema]?.label || a.tema}</span>
@@ -268,7 +275,8 @@ Modulos.armeria = {
     this.renderLey();
     /* Filtra por tema sin pasar por el buscador de texto (el tema no siempre
        aparece escrito en el artículo). */
-    const arts = window.LEY_ARMAS.articulos.filter(a => a.tema === tema);
+    const arts = (typeof articulosLeyArmas === 'function' ? articulosLeyArmas() : window.LEY_ARMAS.articulos)
+      .filter(a => a.tema === tema);
     const el = document.getElementById('page-content');
     const cont = el.querySelector('.page-body');
     if (!cont || !arts.length) return;
@@ -440,6 +448,16 @@ Modulos.armeria = {
               ${[1, 2, 3].map(n => `<option value="${n}" ${(o.contraparte_armas_registradas || 1) === n ? 'selected' : ''}>${n}</option>`).join('')}
             </select></div>
         </div>
+        <div class="form-group" id="arm-grupo-codigo">
+          <label class="form-label">Código de autorización DIGECAM (venta de munición)</label>
+          <input class="form-input" id="arm-codigo-digecam" value="${UI.esc(o.codigo_autorizacion_digecam || '')}"
+                 style="font-family:monospace" placeholder="El que devuelve DIGECAM por sistema o teléfono">
+          <div style="font-size:11px;color:var(--text3);margin-top:2px">
+            Art. 21 del Reglamento: <b>antes de cada venta</b> de munición hay que verificar en el sistema en línea
+            de DIGECAM que el comprador no haya excedido su límite mensual, y obtener este código —
+            que además <b>debe anotarse en la factura</b>.
+          </div>
+        </div>
         <div id="arm-tope-info" style="font-size:11px;color:var(--cyan);margin-top:6px"></div>
         <div style="display:flex;gap:16px;margin-top:6px">
           <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer">
@@ -602,9 +620,16 @@ Modulos.armeria = {
     const n = parseInt(document.getElementById('arm-armas-reg')?.value, 10) || 1;
     if (!tipoLic) { cont.textContent = 'Sin licencia sólo se pueden vender accesorios (art. 60).'; return; }
     const tope = this._limiteMunicionMes(tipoLic, n);
-    cont.textContent = tipoLic === 'portación'
+    const base = tipoLic === 'portación'
       ? `Art. 60: hasta ${tope} cartuchos al mes (250 × ${n} arma(s) registrada(s) en la licencia).`
       : `Art. 60: hasta ${tope} cartuchos al mes con registro de tenencia.`;
+    /* El conteo que lleva la app es SÓLO de este comercio. El art. 21 del
+       reglamento manda verificar en el sistema de DIGECAM justamente porque
+       el cliente pudo comprar en otra armería el mismo mes. Decirlo acá
+       evita que alguien confíe en un número que no ve el cuadro completo. */
+    cont.innerHTML = `${base}<br><span style="color:var(--amber)">⚠️ El conteo de la app sólo ve las ventas de este negocio.
+      El art. 21 del Reglamento obliga a verificar el cupo en el sistema en línea de DIGECAM antes de cada venta —
+      el cliente pudo haber comprado en otra armería.</span>`;
   },
 
   _toggleContraparte() {
@@ -734,6 +759,7 @@ Modulos.armeria = {
       contraparte_licencia_num: document.getElementById('arm-lic-num')?.value || null,
       contraparte_licencia_vencimiento: document.getElementById('arm-lic-vence')?.value || null,
       contraparte_armas_registradas: parseInt(document.getElementById('arm-armas-reg')?.value, 10) || 1,
+      codigo_autorizacion_digecam: document.getElementById('arm-codigo-digecam')?.value || null,
       foto_tomada: !!document.getElementById('arm-foto')?.checked,
       huella_tomada: !!document.getElementById('arm-huella')?.checked,
       forma_pago: document.getElementById('arm-forma')?.value || 'efectivo',
