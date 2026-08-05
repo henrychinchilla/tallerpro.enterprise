@@ -752,7 +752,7 @@ const App = {
           <span style="font-size:10px;color:rgba(255,255,255,0.2)">·</span>
           <a href="/terminos.html" target="_blank" style="font-size:10px;color:rgba(255,255,255,0.4);text-decoration:none;transition:color .2s" onmouseover="this.style.color='rgba(255,255,255,0.75)'" onmouseout="this.style.color='rgba(255,255,255,0.4)'">Términos</a>
           <span style="font-size:10px;color:rgba(255,255,255,0.2)">·</span>
-          <span style="font-size:10px;color:rgba(255,255,255,0.2)">© 2026</span>
+          <span style="font-size:10px;color:rgba(255,255,255,0.35)" title="Derechos reservados">© 2026 CM INVESTMENTS</span>
         </div>
       </div>`;
 

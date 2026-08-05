@@ -17,7 +17,8 @@ const ctx = { console, Math, Date, JSON };
 ctx.window = ctx;
 vm.createContext(ctx);
 vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'js', 'core', 'config.js'), 'utf8'), ctx);
-const { REGIMENES_SAT, regimenSAT, regimenSimplificado, tasaIVARegimen } = ctx;
+const { REGIMENES_SAT, REGIMENES_ISR, regimenSAT, regimenSimplificado, tasaIVARegimen,
+        tasaISR, resolverRegimenes } = ctx;
 
 let pasadas = 0, fallidas = 0;
 const ok = (n, c) => { if (c) { pasadas++; console.log('PASS — ' + n); } else { fallidas++; console.log('FAIL — ' + n); } };
@@ -40,7 +41,12 @@ const ok = (n, c) => { if (c) { pasadas++; console.log('PASS — ' + n); } else 
   ok('el agropecuario es 5%', tasaIVARegimen('agropecuario') === 0.05);
   ok('el agropecuario electrónico, 4%', tasaIVARegimen('agropecuario_electronico') === 0.04);
   ok('el agropecuario llega hasta Q3,000,000 al año', REGIMENES_SAT.agropecuario.techo_anual === 3000000);
-  ok('el pequeño contribuyente hasta Q150,000', REGIMENES_SAT.pequeno.techo_anual === 150000);
+  /* Q150,000 era el límite viejo, y contradecía el aviso de Contabilidad → SAT
+     que ya citaba la cifra del Decreto 31-2024 (125 salarios mínimos). */
+  ok('el pequeño contribuyente hasta Q465,381.25 (Decreto 31-2024)',
+     REGIMENES_SAT.pequeno.techo_anual === 465381.25);
+  ok('la variante electrónica tiene el mismo techo',
+     REGIMENES_SAT.pequeno_electronico.techo_anual === REGIMENES_SAT.pequeno.techo_anual);
 }
 
 /* ── EL BUG QUE ESTO EVITA ──────────────────────────────────────────────── */
@@ -61,6 +67,60 @@ const ok = (n, c) => { if (c) { pasadas++; console.log('PASS — ' + n); } else 
   ok('sin régimen configurado se asume general', regimenSAT(null).label === REGIMENES_SAT.general.label);
   ok('un código desconocido no revienta la contabilidad', regimenSAT('zzz').tasa_iva === 0.12);
   ok('las mayúsculas no importan', tasaIVARegimen('PEQUENO') === 0.05);
+}
+
+/* ── ISR: es OTRO impuesto, no un IVA del 25% ───────────────────────────────
+   Henry buscó "el régimen general del IVA del 25%" y no lo encontró, con razón:
+   en Guatemala el IVA es 12% y el 25% es la tasa del ISR sobre utilidades.
+   Estaban en el mismo saco —el 25% sólo se mencionaba dentro del texto de
+   ayuda del régimen general— así que acá se prueba que son cosas separadas. */
+{
+  ok('el ISR tiene sus dos regímenes (Decreto 10-2012)',
+     !!REGIMENES_ISR.utilidades && !!REGIMENES_ISR.opcional_simplificado);
+  ok('sobre utilidades es 25%', tasaISR('utilidades') === 0.25);
+  ok('...y el 25% NO es una tasa de IVA',
+     !Object.values(REGIMENES_SAT).some(r => r.tasa_iva === 0.25));
+  ok('el IVA más alto sigue siendo 12%',
+     Math.max(...Object.values(REGIMENES_SAT).map(r => r.tasa_iva)) === 0.12);
+
+  /* En el simplificado la tasa depende del monto: 5% hasta Q30,000, 7% arriba. */
+  ok('simplificado: 5% en el primer tramo', tasaISR('opcional_simplificado', 20000) === 0.05);
+  ok('simplificado: 5% justo en Q30,000', tasaISR('opcional_simplificado', 30000) === 0.05);
+  ok('simplificado: 7% al pasar Q30,000', tasaISR('opcional_simplificado', 30001) === 0.07);
+  ok('sobre utilidades no depende del monto',
+     tasaISR('utilidades', 1) === tasaISR('utilidades', 9e9));
+  ok('un régimen de ISR desconocido no revienta', tasaISR('zzz') === 0);
+}
+
+/* ── EL BUG QUE ESTO EVITA ──────────────────────────────────────────────────
+   Las cuatro rutas de alta (registro por correo, registro con Google, alta
+   desde el Panel SaaS y el respaldo de auth.js) hacían lo mismo:
+     regimen_iva === 'pequeno' ? 'pequeno' : 'general'   +   tasa_isr: 0.05
+   Es decir: quien elegía Agropecuario quedaba guardado como General con IVA
+   12%, y TODO comercio nuevo nacía con ISR al 5% aunque tributara al 25%. */
+{
+  const viejo = (r) => (r === 'pequeno' ? 'pequeno' : 'general');
+
+  const agro = resolverRegimenes('agropecuario', 'utilidades');
+  ok('el agropecuario se guarda como agropecuario', agro.regimen_iva === 'agropecuario');
+  ok('...y con la lógica vieja se guardaba como general', viejo('agropecuario') === 'general');
+  ok('el agropecuario conserva su IVA del 5%', agro.tasa_iva === 0.05);
+  ok('...que la lógica vieja subía a 12%', REGIMENES_SAT[viejo('agropecuario')].tasa_iva === 0.12);
+  ok('el ISR sobre utilidades se guarda al 25%', agro.tasa_isr === 0.25);
+  ok('...y antes quedaba fijo en 5% para todos', 0.05 !== agro.tasa_isr);
+  ok('guarda también el nombre del régimen de ISR', agro.regimen_isr === 'utilidades');
+
+  /* Las tasas ya no se piden aparte: las deriva el régimen. Así no se puede
+     guardar "Pequeño Contribuyente" con IVA 12%. */
+  Object.keys(REGIMENES_SAT).forEach(id => {
+    ok(`la tasa de IVA de ${id} sale del catálogo`,
+       resolverRegimenes(id, 'utilidades').tasa_iva === REGIMENES_SAT[id].tasa_iva);
+  });
+
+  const porDefecto = resolverRegimenes(undefined, undefined);
+  ok('sin elección se asume general', porDefecto.regimen_iva === 'general');
+  ok('sin elección el ISR es el simplificado', porDefecto.regimen_isr === 'opcional_simplificado');
+  ok('basura no revienta el alta', resolverRegimenes('zzz', 'zzz').tasa_iva === 0.12);
 }
 
 console.log(`   ${pasadas} pasadas, ${fallidas} fallidas`);

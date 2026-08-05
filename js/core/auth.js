@@ -279,7 +279,7 @@ const Auth = {
       fecha_vencimiento: new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10)
     });
     await sb.from('config_fiscal').insert({
-      tenant_id: tenant.id, regimen_iva: 'general', tasa_iva: 0.12, tasa_isr: 0.05
+      tenant_id: tenant.id, ...resolverRegimenes(fields.regimen_iva, fields.regimen_isr)
     });
     await sb.from('usuarios').upsert({
       id: userId, tenant_id: tenant.id, nombre: fields.nombre, email: fields.email,

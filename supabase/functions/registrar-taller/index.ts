@@ -14,7 +14,7 @@
 // verificación (Edge: verificar-registro). Si no verifica, no hay comercio.
 //
 // Body: { nombre_taller, nit?, nombre_admin, email, password, telefono,
-//         tipo_negocio?, modulos_activos?, regimen_iva?, turnstile_token? }
+//         tipo_negocio?, modulos_activos?, regimen_iva?, regimen_isr?, turnstile_token? }
 //
 // Deploy:  supabase functions deploy registrar-taller --no-verify-jwt
 // Secrets: TURNSTILE_SECRET, RESEND_API_KEY, EMAIL_FROM
@@ -176,17 +176,26 @@ Deno.serve(async (req) => {
   }
 
   // ── D) Registrar / actualizar la solicitud ──
-  const regimenIva = body.regimen_iva === "pequeno" ? "pequeno" : "general";
+  /* Los regímenes se guardan tal cual los eligió el usuario (validados contra
+     el catálogo). Antes se colapsaban a "pequeno"/"general", así que quien
+     elegía Agropecuario o Pequeño Electrónico terminaba en General con IVA 12%.
+     El ISR ni se preguntaba. verificar-registro los copia a config_fiscal
+     cuando el comercio se aprueba. */
+  const REGIMENES_IVA = ["general", "pequeno", "pequeno_electronico",
+                         "agropecuario", "agropecuario_electronico"];
+  const REGIMENES_ISR = ["opcional_simplificado", "utilidades"];
+  const regimenIva = REGIMENES_IVA.includes(body.regimen_iva) ? body.regimen_iva : "general";
+  const regimenIsr = REGIMENES_ISR.includes(body.regimen_isr) ? body.regimen_isr : "opcional_simplificado";
   if (pendiente) {
     await admin.from("solicitudes_comercio").update({
       nombre_comercio: nombreTaller, nombre_admin: nombreAdmin, nit, telefono,
-      tipo_negocio: tipoNegocio, modulos_activos: modulos, regimen_iva: regimenIva,
+      tipo_negocio: tipoNegocio, modulos_activos: modulos, regimen_iva: regimenIva, regimen_isr: regimenIsr,
       token, token_expira: expira, auth_user_id: authUserId, ip,
     }).eq("id", pendiente.id);
   } else {
     const { error: sErr } = await admin.from("solicitudes_comercio").insert({
       email, nombre_comercio: nombreTaller, nombre_admin: nombreAdmin,
-      nit, telefono, tipo_negocio: tipoNegocio, modulos_activos: modulos, regimen_iva: regimenIva,
+      nit, telefono, tipo_negocio: tipoNegocio, modulos_activos: modulos, regimen_iva: regimenIva, regimen_isr: regimenIsr,
       token, token_expira: expira, auth_user_id: authUserId, ip,
       estado: "pendiente_verificacion",
     });
