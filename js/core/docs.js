@@ -29,7 +29,7 @@ const Docs = {
       const pads = firmantes.map(f => `
         <div style="margin-bottom:14px">
           <label class="form-label">${f.label}</label>
-          <input class="form-input" id="fz-nom-${f.key}" placeholder="Nombre de quien firma" value="${f.nombre||''}" style="margin-bottom:6px">
+          <input class="form-input" id="fz-nom-${f.key}" placeholder="Nombre de quien firma" value="${UI.esc(f.nombre||'')}" style="margin-bottom:6px">
           <div style="position:relative;border:1px dashed var(--border-default,#999);border-radius:8px;background:#fff">
             <canvas id="fz-cv-${f.key}" width="520" height="150" style="width:100%;height:150px;touch-action:none;border-radius:8px"></canvas>
             <button type="button" onclick="Docs._limpiar('${f.key}')" style="position:absolute;top:6px;right:6px;font-size:11px;background:#eee;border:none;border-radius:6px;padding:2px 8px;cursor:pointer">Limpiar</button>
@@ -230,7 +230,7 @@ const Docs = {
       const esImagen = /\.(jpe?g|png|webp)$/i.test(d.storage_path);
       return `
       <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--border);font-size:12px">
-        <div><b>${esImagen ? '📷' : '📄'} ${d.titulo||d.tipo||'Documento'}</b>
+        <div><b>${esImagen ? '📷' : '📄'} ${UI.esc(d.titulo||d.tipo||'Documento')}</b>
           <div style="color:var(--text3);font-size:11px">${(d.firmantes||[]).map(f=>`${f.rol}: ${f.nombre||'—'}`).join(' · ')}${(d.firmantes||[]).length ? ' · ' : ''}${UI.fechaHora(d.created_at)}</div>
         </div>
         <div style="display:flex;gap:4px">

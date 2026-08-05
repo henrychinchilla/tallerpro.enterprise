@@ -46,7 +46,7 @@ Modulos.bodegas = {
                 <div>
                   <div style="font-size:28px;margin-bottom:4px">🏭</div>
                   <div style="font-weight:800;font-size:15px">${b.nombre}</div>
-                  ${b.direccion?`<div style="font-size:11px;color:var(--text3)">📍 ${b.direccion}</div>`:''}
+                  ${b.direccion?`<div style="font-size:11px;color:var(--text3)">📍 ${UI.esc(b.direccion)}</div>`:''}
                   ${b.responsable?`<div style="font-size:11px;color:var(--text3)">👤 ${b.responsable}</div>`:''}
                 </div>
                 <span class="badge badge-${b.activa?'green':'gray'}">${b.activa?'Activa':'Inactiva'}</span>
@@ -429,9 +429,9 @@ Modulos.bodegas = {
     UI.modal(`${esEdicion?'✏️ Editar':'＋ Nueva'} Bodega`, `
       ${esEdicion?'<div class="alert alert-amber" style="margin-bottom:12px"><div class="alert-icon">⚠️</div><div class="alert-body" style="font-size:11px">Los cambios reemplazarán la información actual de la bodega.</div></div>':''}
       <div class="form-group"><label class="form-label">Nombre / Sucursal *</label>
-        <input class="form-input" id="bod-nombre" value="${b.nombre||''}" placeholder="Bodega Norte / Sucursal Centro"></div>
+        <input class="form-input" id="bod-nombre" value="${UI.esc(b.nombre||'')}" placeholder="Bodega Norte / Sucursal Centro"></div>
       <div class="form-group"><label class="form-label">Dirección</label>
-        <input class="form-input" id="bod-dir" value="${b.direccion||''}"></div>
+        <input class="form-input" id="bod-dir" value="${UI.esc(b.direccion||'')}"></div>
       <div class="form-group"><label class="form-label">Responsable</label>
         <input class="form-input" id="bod-resp" value="${b.responsable||''}"></div>
       ${esEdicion?`<div class="form-group">

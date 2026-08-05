@@ -162,7 +162,7 @@ Modulos.precios = {
     const k = this._calc();
     const filaGasto = (g,i)=>`
       <div style="display:flex;gap:6px;margin-bottom:6px" class="pp-gasto">
-        <input class="form-input" style="flex:1;padding:7px 10px;font-size:13px" value="${(g.nombre||'').replace(/"/g,'&quot;')}" placeholder="Concepto" onchange="Modulos.precios._setGasto(${i},'nombre',this.value)">
+        <input class="form-input" style="flex:1;padding:7px 10px;font-size:13px" value="${UI.esc((g.nombre||'').replace(/"/g,'&quot;'))}" placeholder="Concepto" onchange="Modulos.precios._setGasto(${i},'nombre',this.value)">
         <input class="form-input mono-sm" style="width:110px;padding:7px 10px;font-size:13px" type="number" min="0" step="0.01" value="${g.monto||0}" onchange="Modulos.precios._setGasto(${i},'monto',this.value)">
         <button class="btn btn-ghost btn-sm" style="padding:4px 8px" title="Quitar" onclick="Modulos.precios._quitarGasto(${i})">🗑️</button>
       </div>`;

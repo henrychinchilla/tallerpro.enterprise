@@ -32,7 +32,7 @@ Modulos.mi_ot = {
     el.innerHTML = `
       <div class="page-header">
         <div><h1 class="page-title">🔍 Mis Órdenes</h1>
-        <p class="page-subtitle">// ${cliente.nombre} · ${lista.length} en proceso</p></div>
+        <p class="page-subtitle">// ${UI.esc(cliente.nombre)} · ${lista.length} en proceso</p></div>
       </div>
       <div class="page-body">
         ${lista.length ? `<div class="grid-2">${lista.map(o=>this._card(o)).join('')}</div>`
@@ -50,7 +50,7 @@ Modulos.mi_ot = {
       <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">
         <div>
           <div class="mono-sm text-amber" style="font-weight:700">${o.num}</div>
-          <div style="font-weight:800;font-size:15px">${o.vehiculos?.placa||''} · ${o.vehiculos?.marca||''} ${o.vehiculos?.modelo||''} ${o.vehiculos?.anio||''}</div>
+          <div style="font-weight:800;font-size:15px">${o.vehiculos?.placa||''} · ${UI.esc(o.vehiculos?.marca||'')} ${UI.esc(o.vehiculos?.modelo||'')} ${o.vehiculos?.anio||''}</div>
         </div>
         <span class="badge badge-${est.color}">${est.label}</span>
       </div>
@@ -58,7 +58,7 @@ Modulos.mi_ot = {
         <div style="height:100%;width:${est.pct}%;background:var(--${est.color});border-radius:8px;transition:width .5s"></div>
       </div>
       <div style="font-size:12px;color:var(--text3);display:flex;flex-wrap:wrap;gap:12px">
-        <span>🔧 ${o.empleados?.nombre||'Por asignar'}</span>
+        <span>🔧 ${UI.esc(o.empleados?.nombre||'Por asignar')}</span>
         ${o.fecha_estimada?`<span>📅 Entrega estimada: ${UI.fecha(o.fecha_estimada)}</span>`:''}
       </div>
       ${o.descripcion?`<div style="font-size:12px;color:var(--text2);margin-top:8px;padding:8px;background:var(--surface2);border-radius:8px">${o.descripcion}</div>`:''}
@@ -78,7 +78,7 @@ Modulos.mi_ot = {
     cont.innerHTML = `<div style="font-size:11px;color:var(--text3);font-weight:700;text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px">Trabajos</div>` +
       items.map(i=>`<div style="font-size:12px;display:flex;align-items:center;gap:6px;padding:2px 0">
         <span>${i.ejecutado?'✅':'⏳'}</span>
-        <span style="${i.ejecutado?'color:var(--text3)':''}">${i.descripcion}${i.es_extra?(i.autorizado?'':' <span style="color:var(--amber)">(espera tu autorización)</span>'):''}</span>
+        <span style="${i.ejecutado?'color:var(--text3)':''}">${UI.esc(i.descripcion)}${i.es_extra?(i.autorizado?'':' <span style="color:var(--amber)">(espera tu autorización)</span>'):''}</span>
       </div>`).join('');
   }
 };

@@ -152,13 +152,13 @@ Modulos.venta_granos = {
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px">
         <div><div style="font-size:11px;color:var(--text3)">Tipo</div><div><span class="badge badge-${v.es_compra?'purple':'cyan'}">${v.es_compra?'🔽 Compra':'🔺 Venta'}</span></div></div>
         <div><div style="font-size:11px;color:var(--text3)">Grano</div><div>${this._TIPOS_GRANO[v.tipo_grano]||v.tipo_grano}</div></div>
-        <div><div style="font-size:11px;color:var(--text3)">${v.es_compra?'Proveedor':'Cliente'}</div><div style="font-weight:700">${v.es_compra?(v.proveedores?.nombre||'—'):(v.clientes?.nombre||'—')}</div></div>
+        <div><div style="font-size:11px;color:var(--text3)">${v.es_compra?'Proveedor':'Cliente'}</div><div style="font-weight:700">${UI.esc(v.es_compra?(v.proveedores?.nombre||'—'):(v.clientes?.nombre||'—'))}</div></div>
         <div><div style="font-size:11px;color:var(--text3)">Cantidad (kg)</div><div class="mono-sm" style="font-weight:700">${UI.numero(v.cantidad_kg)}</div></div>
         <div><div style="font-size:11px;color:var(--text3)">Precio/kg</div><div class="mono-sm" style="font-weight:700">${UI.q(v.precio_kg)}</div></div>
         <div><div style="font-size:11px;color:var(--text3)">Total</div><div class="mono-sm" style="font-weight:700;color:var(--green)">${UI.q(v.total)}</div></div>
         <div><div style="font-size:11px;color:var(--text3)">Estado</div><div><span class="badge badge-${this._colorEstado(v.estado)}">${this._ESTADOS[v.estado]||v.estado}</span></div></div>
         <div><div style="font-size:11px;color:var(--text3)">Fecha</div><div>${UI.fecha(v.fecha)}</div></div>
-        <div style="grid-column:1/-1"><div style="font-size:11px;color:var(--text3)">Notas</div><div style="font-size:12px">${v.notas||'—'}</div></div>
+        <div style="grid-column:1/-1"><div style="font-size:11px;color:var(--text3)">Notas</div><div style="font-size:12px">${UI.esc(v.notas||'—')}</div></div>
       </div>
       <div class="modal-footer">
         <button class="btn btn-ghost" onclick="UI.cerrarModal()">Cerrar</button>
@@ -234,7 +234,7 @@ Modulos.venta_granos = {
 
         <div class="form-group">
           <label class="form-label">Notas</label>
-          <textarea class="form-input" id="form-notas" style="min-height:50px">${v?.notas||''}</textarea>
+          <textarea class="form-input" id="form-notas" style="min-height:50px">${UI.esc(v?.notas||'')}</textarea>
         </div>
       </div>
 

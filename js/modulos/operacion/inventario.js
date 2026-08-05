@@ -132,7 +132,7 @@ Modulos.inventario = {
                   : `<div style="width:34px;height:34px;border-radius:6px;background:var(--surface2);display:flex;align-items:center;justify-content:center;color:var(--text3);flex-shrink:0">📦</div>`;
                 return `<tr data-categoria="${i.categoria||'General'}" data-giro="${i.tipo_item||'general'}" data-bajo="${bajo}" style="${bajo?'background:var(--red-dim)':''}">
                   <td class="mono-sm">${i.codigo||'—'}</td>
-                  <td><div style="display:flex;align-items:center;gap:8px">${thumb}<div><b>${i.nombre}</b>${i.descripcion?`<br><small class="text-muted">${i.descripcion}</small>`:''}</div></div></td>
+                  <td><div style="display:flex;align-items:center;gap:8px">${thumb}<div><b>${i.nombre}</b>${i.descripcion?`<br><small class="text-muted">${UI.esc(i.descripcion)}</small>`:''}</div></div></td>
                   <td><span class="badge badge-gray">${i.categoria||'General'}</span></td>
                   <td class="mono-sm ${bajo?'text-red':'text-green'}"><b>${i.stock}</b> ${i.unidad_medida||''}</td>
                   <td class="mono-sm text-muted">${i.min_stock}</td>
@@ -215,13 +215,13 @@ Modulos.inventario = {
         <div class="form-group"><label class="form-label">Código / SKU</label>
           <input class="form-input" id="inv-codigo" value="${item.codigo||''}" placeholder="REP-001"></div>
         <div class="form-group"><label class="form-label">Nombre *</label>
-          <input class="form-input" id="inv-nombre" value="${item.nombre||''}" placeholder="Filtro de aceite"></div>
+          <input class="form-input" id="inv-nombre" value="${UI.esc(item.nombre||'')}" placeholder="Filtro de aceite"></div>
       </div>
       <div class="form-row">
         <div class="form-group"><label class="form-label">Código de barras</label>
           <input class="form-input" id="inv-barcode" value="${item.codigo_barras||''}" placeholder="7501234567890"></div>
         <div class="form-group"><label class="form-label">Marca</label>
-          <input class="form-input" id="inv-marca" value="${item.marca||''}"></div>
+          <input class="form-input" id="inv-marca" value="${UI.esc(item.marca||'')}"></div>
       </div>
       <div class="form-row">
         <div class="form-group"><label class="form-label">Categoría</label>
@@ -281,7 +281,7 @@ Modulos.inventario = {
       ${Modulos.inventario._camposGiroHTML(giro, item)}
 
       <div class="form-group"><label class="form-label">Descripción</label>
-        <textarea class="form-input" id="inv-desc" rows="2">${item.descripcion||''}</textarea></div>
+        <textarea class="form-input" id="inv-desc" rows="2">${UI.esc(item.descripcion||'')}</textarea></div>
       <div class="modal-footer">
         <button class="btn btn-ghost" onclick="UI.cerrarModal()">Cancelar</button>
         <button class="btn btn-amber" onclick="Modulos.inventario.guardar('${id||''}')">
@@ -537,7 +537,7 @@ Modulos.inventario = {
               <td><b>${m.inventario?.nombre||'—'}</b>${m.inventario?.codigo?`<br><small class="text-muted">${m.inventario.codigo}</small>`:''}</td>
               <td><span class="badge badge-${t[0]}">${t[1]}</span></td>
               <td class="mono-sm">${signo}${m.cantidad} ${m.inventario?.unidad_medida||''}</td>
-              <td class="mono-sm">${m.referencia||'—'}${m.notas?`<br><small class="text-muted">${m.notas}</small>`:''}</td>
+              <td class="mono-sm">${m.referencia||'—'}${m.notas?`<br><small class="text-muted">${UI.esc(m.notas)}</small>`:''}</td>
               <td>${m.usuario_nombre||'—'}</td>
             </tr>`;
           }).join('')||'<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--text3)">Sin movimientos registrados</td></tr>'}

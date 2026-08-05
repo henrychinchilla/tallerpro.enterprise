@@ -95,7 +95,7 @@ const POS = {
       const directa = r.data.find(t => t.id === recordada) || (r.data.length === 1 ? r.data[0] : null);
       if (directa) return this.seleccionarTerminal(directa.id, r.data);
     }
-    const opciones = r.data.map(t => `<button class="pos-select-option" onclick="POS.seleccionarTerminal('${t.id}')"><b>${this._seguro(t.nombre)}</b><span>${t.es_principal ? 'Terminal principal' : 'Terminal POS'} · Elegir terminal →</span></button>`).join('');
+    const opciones = r.data.map(t => `<button class="pos-select-option" onclick="POS.seleccionarTerminal('${t.id}')"><b>${UI.esc(this._seguro(t.nombre))}</b><span>${t.es_principal ? 'Terminal principal' : 'Terminal POS'} · Elegir terminal →</span></button>`).join('');
     document.getElementById('pos-root').innerHTML = `<div class="pos-login-shell"><div class="pos-login-card"><div class="pos-login-brand"><div class="pos-brand-mark">N</div><div><strong>NexusPro</strong> <em>POS</em><span>${this._seguro(Auth.tenant?.name || 'Taller')}</span></div></div><h1>Elige tu terminal POS</h1><p>La caja, sus ventas y su cierre quedan registrados para esta terminal.</p><div class="pos-select-list">${opciones}</div><div class="pos-login-back"><button class="btn btn-ghost btn-sm" onclick="POS.cambiarTaller()">← Cambiar taller</button></div></div></div>`;
   },
 
@@ -257,7 +257,7 @@ const POS = {
         <div class="card" style="max-width:420px;text-align:center">
           <div style="font-size:40px">🚫</div>
           <h2 class="font-display" style="margin:8px 0">Sin acceso al POS</h2>
-          <p style="color:var(--text2);font-size:13px">Tu usuario (${Auth.user?.email||''}) no tiene permiso para el Punto de Venta. Contacta al administrador.</p>
+          <p style="color:var(--text2);font-size:13px">Tu usuario (${UI.esc(Auth.user?.email||'')}) no tiene permiso para el Punto de Venta. Contacta al administrador.</p>
           <div style="display:flex;gap:8px;justify-content:center;margin-top:14px">
             <button class="btn btn-ghost" onclick="POS.salir()">Cerrar sesión</button>
             <a class="btn btn-amber" href="/">Ir al sistema</a>
@@ -299,7 +299,7 @@ const POS = {
     const html =
       `<div style="font-family:Arial,sans-serif;max-width:480px">`+
       `<h2 style="color:#d97706">🧾 Cierre de caja — ${taller}</h2>`+
-      `<p>Fecha: <b>${UI.fecha(hoy)}</b><br>Cajero: <b>${Auth.user?.nombre||Auth.user?.email||''}</b></p>`+
+      `<p>Fecha: <b>${UI.fecha(hoy)}</b><br>Cajero: <b>${UI.esc(Auth.user?.nombre||Auth.user?.email||'')}</b></p>`+
       `<p>Ventas del día: <b>${vivas.length}</b></p>`+
       `<table style="width:100%;border-collapse:collapse;font-size:14px">`+
       Object.entries(porMetodo).map(([m,v])=>`<tr><td style="padding:4px 0;color:#666">${m}</td><td style="text-align:right">${UI.q(v)}</td></tr>`).join('')+
@@ -456,11 +456,11 @@ const POS = {
           <div style="font-family:\'Outfit\',\'Bebas Neue\',sans-serif;font-size:24px;font-weight:900;letter-spacing:-0.5px;color:var(--amber)">🛒 POS</div>
           <div style="font-size:12px;color:var(--text3);background:var(--surface3);padding:4px 10px;border-radius:6px;font-weight:700">${Auth.tenant?.name||''}</div>
           <!-- La terminal se recuerda, así que este chip es la única forma de cambiarla -->
-          <button class="btn btn-ghost btn-sm" style="font-size:12px" onclick="POS.cambiarTerminal()" title="Cambiar de terminal o de taller">🖥️ ${this._seguro(this._terminal?.nombre || 'Terminal')}</button>
+          <button class="btn btn-ghost btn-sm" style="font-size:12px" onclick="POS.cambiarTerminal()" title="Cambiar de terminal o de taller">🖥️ ${UI.esc(this._seguro(this._terminal?.nombre || 'Terminal'))}</button>
           <div style="margin-left:auto;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
             <button class="btn btn-ghost btn-sm" onclick="POS.modalCierreCaja()">🧾 Cerrar caja</button>
             <button class="btn btn-ghost btn-sm" onclick="POS.reportes()">📊 Reportes</button>
-            <span class="pos-user-name" style="font-size:12px;color:var(--text2);font-weight:700;display:flex;align-items:center;gap:6px">${Auth.user?.avatar||'👤'} ${Auth.user?.nombre||Auth.user?.email||''}</span>
+            <span class="pos-user-name" style="font-size:12px;color:var(--text2);font-weight:700;display:flex;align-items:center;gap:6px">${Auth.user?.avatar||'👤'} ${UI.esc(Auth.user?.nombre||Auth.user?.email||'')}</span>
             <button class="btn btn-ghost btn-sm" onclick="POS.confirmarSalida()">⏻ Salir</button>
           </div>
         </header>
@@ -865,7 +865,7 @@ const POS = {
 
   _listaClientes(arr) {
     return arr.map(c=>`<div onclick="POS.setCliente('${c.id}')" style="padding:8px 10px;border-bottom:1px solid var(--border);cursor:pointer;display:flex;justify-content:space-between;align-items:center">
-      <div><b>${c.nombre}</b><div style="font-size:11px;color:var(--text3)">NIT ${c.nit||'CF'} · ${c.tel||''}</div></div>
+      <div><b>${UI.esc(c.nombre)}</b><div style="font-size:11px;color:var(--text3)">NIT ${c.nit||'CF'} · ${c.tel||''}</div></div>
       ${c.programa_puntos?`<span class="badge badge-amber">${c.puntos_saldo||0} pts</span>`:'<span class="badge badge-gray">sin puntos</span>'}
     </div>`).join('') || '<div class="text-muted" style="padding:16px">Sin clientes</div>';
   },
@@ -897,12 +897,12 @@ const POS = {
     UI.modal('🚚 Datos del envío al cliente', `
       <div class="form-row">
         <div class="form-group"><label class="form-label">Destinatario *</label>
-          <input class="form-input" id="env-dest" value="${e.destinatario||cli?.nombre||''}" placeholder="Nombre de quien recibe"></div>
+          <input class="form-input" id="env-dest" value="${UI.esc(e.destinatario||cli?.nombre||'')}" placeholder="Nombre de quien recibe"></div>
         <div class="form-group"><label class="form-label">Teléfono *</label>
           <input class="form-input" id="env-tel" value="${e.telefono||cli?.tel||''}" placeholder="5555-5555"></div>
       </div>
       <div class="form-group"><label class="form-label">Dirección de entrega *</label>
-        <textarea class="form-input" id="env-dir" rows="2" placeholder="Calle, número, zona, referencias...">${e.direccion||cli?.direccion||''}</textarea></div>
+        <textarea class="form-input" id="env-dir" rows="2" placeholder="Calle, número, zona, referencias...">${UI.esc(e.direccion||cli?.direccion||'')}</textarea></div>
       <div class="form-row">
         <div class="form-group"><label class="form-label">Municipio / Depto.</label>
           <input class="form-input" id="env-muni" value="${e.municipio||''}" placeholder="Guatemala, Mixco..."></div>
@@ -1076,7 +1076,7 @@ const POS = {
       <body>
       <div class="center title">${Auth.tenant?.name||'NexusPro'}</div>
       <div class="center" style="font-size:10px">NIT: ${Auth.tenant?.nit||'—'}</div>
-      <div class="center" style="font-size:10px">${Auth.tenant?.direccion||'Guatemala'}</div>
+      <div class="center" style="font-size:10px">${UI.esc(Auth.tenant?.direccion||'Guatemala')}</div>
       <div class="hr"></div>
       <div class="r"><span>No. Ticket: <b>${f.num||''}</b></span><span>${UI.fecha(f.fecha)}</span></div>
       <div>Cliente: ${f.nombre_receptor||'CF'}</div>

@@ -734,7 +734,7 @@ const App = {
       <div class="sidebar-user" id="sidebar-user" onclick="TEMAS.picker()" title="Cambiar tema">
         <span class="sidebar-user-avatar">${Auth.user?.avatar || '👤'}</span>
         <div class="sidebar-user-info">
-          <div class="user-name">${Auth.user?.nombre || 'Usuario'}</div>
+          <div class="user-name">${UI.esc(Auth.user?.nombre || 'Usuario')}</div>
           <div class="user-role">${ROLES[Auth.user?.rol]?.label || ''}</div>
         </div>
         <span style="margin-left:auto;opacity:.5;font-size:14px">🎨</span>
@@ -1199,7 +1199,7 @@ Modulos.btnAccion = function (tipo, onclick, opts = {}) {
   };
   const [cls, label, title] = map[tipo] || ['btn-ghost', tipo, tipo];
   const handler = stop ? `event.stopPropagation();${onclick}` : onclick;
-  return `<button class="btn btn-sm ${cls}" title="${opts.titulo || title}" onclick="${handler}">${opts.label || label}</button>`;
+  return `<button class="btn btn-sm ${cls}" title="${UI.esc(opts.titulo || title)}" onclick="${handler}">${opts.label || label}</button>`;
 };
 
 /* Eliminar genérico con confirmación (tenant-scoped vía RLS). cb refresca la vista. */
@@ -1239,7 +1239,7 @@ Modulos.verificarNIT = async function (inputId, statusId, nombreInputId) {
     ? '<span style="color:var(--green);font-size:11px">✓ NIT válido</span>'
     : '<span style="color:var(--red);font-size:11px">✗ Dígito verificador inválido</span>' ];
   if (r.nombre) {
-    partes.push(`<span style="color:var(--cyan);font-size:11px">· ${r.nombre}</span>`);
+    partes.push(`<span style="color:var(--cyan);font-size:11px">· ${UI.esc(r.nombre)}</span>`);
     const nEl = nombreInputId ? document.getElementById(nombreInputId) : null;
     if (nEl && !nEl.value.trim()) nEl.value = r.nombre;
   } else if (r.mensaje) {

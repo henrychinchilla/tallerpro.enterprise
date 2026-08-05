@@ -140,7 +140,7 @@ Modulos.facturacion = {
           ${['borrador','pendiente','certificada','anulada'].map(s=>`<option ${f.estado===s?'selected':''}>${s}</option>`).join('')}
         </select></div>`:''}
       <div class="form-group"><label class="form-label">Notas</label>
-        <textarea class="form-input" id="fel-notas" rows="2">${f.notas||''}</textarea></div>
+        <textarea class="form-input" id="fel-notas" rows="2">${UI.esc(f.notas||'')}</textarea></div>
       <div class="modal-footer">
         ${esEdicion?`<button class="btn btn-red" onclick="UI.cerrarModal();Modulos.finanzas.eliminar('facturas','${id}')" style="margin-right:auto">🗑️ Eliminar Factura</button>`:''}
         <button class="btn btn-ghost" onclick="UI.cerrarModal()">Cancelar</button>
@@ -285,7 +285,7 @@ Modulos.facturacion = {
            onmouseenter="this.style.background='var(--surface2)'" onmouseleave="this.style.background=''"
            style="display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:6px;cursor:pointer;border-bottom:1px solid var(--border)">
         <div style="flex:1">
-          <div style="font-weight:700;font-size:13px">${p.nombre}</div>
+          <div style="font-weight:700;font-size:13px">${UI.esc(p.nombre)}</div>
           <div style="font-size:11px;color:var(--text3)">${p.categoria||''} · ${p.codigo||''}${p.stock!=null?` · Stock: ${p.stock}`:''}</div>
         </div>
         <div style="font-weight:800;color:var(--amber);font-size:14px">${UI.q(p.precio_venta)}</div>
@@ -516,7 +516,7 @@ Modulos.facturacion = {
     const html =
       `<div style="font-family:Arial,sans-serif;max-width:560px;margin:auto">` +
       `<h2 style="color:#d97706">🧾 ${taller}</h2>` +
-      `<p>Estimado(a) <b>${f.nombre_receptor||f.clientes?.nombre||'cliente'}</b>, adjuntamos el detalle de su factura:</p>` +
+      `<p>Estimado(a) <b>${UI.esc(f.nombre_receptor||f.clientes?.nombre||'cliente')}</b>, adjuntamos el detalle de su factura:</p>` +
       `<table style="width:100%;border-collapse:collapse;font-size:14px">` +
       `<tr><td style="padding:6px 0;color:#666">Factura</td><td style="text-align:right"><b>${nro}</b></td></tr>` +
       `<tr><td style="padding:6px 0;color:#666">Fecha</td><td style="text-align:right">${UI.fecha(f.fecha)}</td></tr>` +
@@ -526,7 +526,7 @@ Modulos.facturacion = {
       `<tr><td style="padding:10px 0;border-top:2px solid #d97706;font-weight:800">TOTAL</td>` +
       `<td style="text-align:right;padding:10px 0;border-top:2px solid #d97706;font-weight:800;color:#d97706">${UI.q(f.total)}</td></tr>` +
       `</table>` +
-      (f.notas?`<p style="font-size:12px;color:#666;margin-top:12px">${f.notas}</p>`:'') +
+      (f.notas?`<p style="font-size:12px;color:#666;margin-top:12px">${UI.esc(f.notas)}</p>`:'') +
       `<p style="margin-top:16px">¡Gracias por su preferencia! 🔧</p></div>`;
 
     UI.toast('Enviando factura por email...','info');
@@ -553,7 +553,7 @@ Modulos.facturacion = {
       <p>NIT: ${Auth.tenant?.nit||'—'} | ${Auth.tenant?.tel||''}</p>
       <hr><p><b>Factura:</b> ${nroDoc}</p>
       <p><b>Fecha:</b> ${UI.fecha(f.fecha)}</p>
-      <p><b>Cliente:</b> ${f.nombre_receptor||f.clientes?.nombre||'CF'} | NIT: ${f.nit||f.clientes?.nit||'CF'}</p>
+      <p><b>Cliente:</b> ${UI.esc(f.nombre_receptor||f.clientes?.nombre||'CF')} | NIT: ${f.nit||f.clientes?.nit||'CF'}</p>
       ${itemsHtml}
       <hr><p>Subtotal: Q${f.subtotal?.toFixed(2)}</p>
       <p>IVA (12%): Q${f.iva?.toFixed(2)}</p>

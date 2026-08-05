@@ -56,7 +56,7 @@ Modulos.ordenes = {
         <tbody id="ot-tbody">
           ${this._data.map(o=>`<tr onclick="Modulos.ordenes.verDetalle('${o.id}')" style="cursor:pointer">
             <td class="mono-sm"><b style="color:var(--amber)">${o.num}</b></td>
-            <td>${o.vehiculos ? `${o.vehiculos.placa}<br><small class="text-muted">${o.vehiculos.marca} ${o.vehiculos.modelo}</small>` : `<span class="badge badge-gray" style="font-size:11px">${o.diagnostico || 'Servicio / Proyecto'}</span>`}</td>
+            <td>${o.vehiculos ? `${o.vehiculos.placa}<br><small class="text-muted">${UI.esc(o.vehiculos.marca)} ${UI.esc(o.vehiculos.modelo)}</small>` : `<span class="badge badge-gray" style="font-size:11px">${o.diagnostico || 'Servicio / Proyecto'}</span>`}</td>
             <td>${o.clientes?.nombre||'—'}</td>
             <td onclick="event.stopPropagation()">
               <select class="badge" style="border:none;background:transparent;cursor:pointer;font-size:11px;color:var(--text)"
@@ -94,9 +94,9 @@ Modulos.ordenes = {
               onclick="Modulos.ordenes.verDetalle('${o.id}')">
             <div class="mono-sm text-amber">${o.num}</div>
             <div style="font-size:12px;margin:4px 0">${o.vehiculos ? `${o.vehiculos.placa} · ${o.vehiculos.marca}` : (o.diagnostico || 'Servicio / Proyecto')}</div>
-            <div style="font-size:11px;color:var(--text3)">${o.clientes?.nombre||''}</div>
+            <div style="font-size:11px;color:var(--text3)">${UI.esc(o.clientes?.nombre||'')}</div>
             <div style="display:flex;justify-content:space-between;margin-top:6px;font-size:11px">
-              <span>${o.empleados?.nombre||'Sin asignar'}</span>
+              <span>${UI.esc(o.empleados?.nombre||'Sin asignar')}</span>
               <span class="text-amber">${UI.q(o.total)}</span>
             </div>
           </div>`).join('')}
@@ -129,8 +129,8 @@ Modulos.ordenes = {
       <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px">
         <div>
           <div style="font-size:17px;font-weight:800">${tituloOT}</div>
-          <div style="font-size:13px;color:var(--text2)">${o.clientes?.nombre||''} · ${o.clientes?.tel||''}</div>
-          <div style="font-size:12px;color:var(--text3)">Encargado: ${o.empleados?.nombre||'Sin asignar'}</div>
+          <div style="font-size:13px;color:var(--text2)">${UI.esc(o.clientes?.nombre||'')} · ${o.clientes?.tel||''}</div>
+          <div style="font-size:12px;color:var(--text3)">Encargado: ${UI.esc(o.empleados?.nombre||'Sin asignar')}</div>
         </div>
         <div style="text-align:right">
           <select class="form-select" style="font-size:12px;padding:6px"
@@ -290,7 +290,7 @@ Modulos.ordenes = {
         </select>
       </div>
       <div class="form-group"><label class="form-label">Descripción *</label>
-        <input class="form-input" id="item-desc" value="${(item.descripcion || '').replace(/"/g, '&quot;')}" placeholder="Cambio de filtro de aceite, revisión de frenos..."></div>
+        <input class="form-input" id="item-desc" value="${UI.esc((item.descripcion || '').replace(/"/g, '&quot;'))}" placeholder="Cambio de filtro de aceite, revisión de frenos..."></div>
       <div class="form-row">
         <div class="form-group"><label class="form-label">Cantidad</label>
           <input class="form-input" id="item-cant" type="number" value="${item.cantidad !== undefined ? item.cantidad : '1'}" min="0.01" step="0.01"
@@ -464,7 +464,7 @@ Modulos.ordenes = {
       const calc = `Modulos.ordenes._calcTE()`;
       UI.modal(`${id?'✏️ Editar':'＋'} Trabajo externo`, `
         <div class="form-group"><label class="form-label">Descripción *</label>
-          <input class="form-input" id="te-desc" value="${(te.descripcion||'').replace(/"/g,'&quot;')}" placeholder="Enviar discos de freno al torno"></div>
+          <input class="form-input" id="te-desc" value="${UI.esc((te.descripcion||'').replace(/"/g,'&quot;'))}" placeholder="Enviar discos de freno al torno"></div>
         <div class="form-group"><label class="form-label">Proveedor / taller externo</label>
           <input class="form-input" id="te-prov" value="${(te.proveedor||'').replace(/"/g,'&quot;')}" placeholder="Torno El Progreso"></div>
         <div class="form-row">
@@ -550,8 +550,8 @@ Modulos.ordenes = {
     if ((canal==='email'||canal==='ambos') && cli.email) {
       const html = `<div style="font-family:Arial,sans-serif;max-width:520px">`+
         `<h2 style="color:#0891b2">🔧 ${taller}</h2>`+
-        `<p>Hola ${cli.nombre||''}, en su vehículo <b>${o.vehiculos?.placa||''}</b> (${o.num||''}) detectamos un trabajo adicional:</p>`+
-        `<p style="font-size:15px"><b>${te.descripcion}</b>${te.proveedor?` — ${te.proveedor}`:''}</p>`+
+        `<p>Hola ${UI.esc(cli.nombre||'')}, en su vehículo <b>${o.vehiculos?.placa||''}</b> (${o.num||''}) detectamos un trabajo adicional:</p>`+
+        `<p style="font-size:15px"><b>${UI.esc(te.descripcion)}</b>${te.proveedor?` — ${te.proveedor}`:''}</p>`+
         `<p>Costo total con gestión: <b>${UI.q(te.total_cliente)}</b></p>`+
         `<p>¿Autoriza que lo realicemos? Por favor responda a este correo con <b>SÍ</b> o <b>NO</b>.</p></div>`;
       Email.enviar(cli.email, `${taller} — Autorización de trabajo (${o.num||''})`, { html, referencia_id:o.id });
@@ -843,11 +843,11 @@ Modulos.ordenes = {
           Estado: ${ESTADOS_OT[o.estado]?.label||o.estado}<br>
           Fecha ingreso: ${UI.fecha(o.fecha_ingreso)}<br>
           Entrega estimada: ${UI.fecha(o.fecha_estimada)||'—'}<br>
-          Mecánico: ${o.empleados?.nombre||'—'}
+          Mecánico: ${UI.esc(o.empleados?.nombre||'—')}
         </div>
         <div class="section">
           <b>CLIENTE</b><br>
-          ${o.clientes?.nombre||'—'}<br>
+          ${UI.esc(o.clientes?.nombre||'—')}<br>
           NIT: ${o.clientes?.nit||'CF'}<br>
           Tel: ${o.clientes?.tel||'—'}<br><br>
           <b>${o.vehiculos ? 'VEHÍCULO' : 'DETALLE / SERVICIO'}</b><br>
@@ -857,7 +857,7 @@ Modulos.ordenes = {
 
       <div class="section">
         <b>DESCRIPCIÓN DEL TRABAJO:</b><br>
-        <p>${o.descripcion||'—'}</p>
+        <p>${UI.esc(o.descripcion||'—')}</p>
       </div>
 
       <div class="section">
@@ -894,7 +894,7 @@ Modulos.ordenes = {
     const vehs = this._vehiculos.filter(v => v.cliente_id === clienteId);
     if (!vehs.length) return '<option value="">Este cliente no tiene vehículos — regístralo en Vehículos</option>';
     return '<option value="">Seleccionar vehículo...</option>' +
-      vehs.map(v=>`<option value="${v.id}" ${selVeh===v.id?'selected':''}>${v.placa} · ${v.marca} ${v.modelo} ${v.anio||''}</option>`).join('');
+      vehs.map(v=>`<option value="${v.id}" ${selVeh===v.id?'selected':''}>${v.placa} · ${UI.esc(v.marca)} ${UI.esc(v.modelo)} ${v.anio||''}</option>`).join('');
   },
 
   /* Tarjeta con los datos de contacto del cliente seleccionado */
@@ -903,7 +903,7 @@ Modulos.ordenes = {
     if (!c) return '';
     return `<div class="card" style="background:var(--surface2);padding:10px 12px;margin-bottom:12px;font-size:12px">
       <div style="display:flex;gap:16px;flex-wrap:wrap">
-        <span><b>👤 ${c.nombre}</b></span>
+        <span><b>👤 ${UI.esc(c.nombre)}</b></span>
         <span class="text-muted">📞 ${c.tel||'—'}</span>
         <span class="text-muted">🆔 NIT: ${c.nit||'CF'}</span>
         ${c.email?`<span class="text-muted">✉️ ${c.email}</span>`:''}
@@ -959,7 +959,7 @@ Modulos.ordenes = {
           ${this._mecanicos.filter(e=>e.activo!==false).map(e=>`<option value="${e.id}" ${o.mecanico_id===e.id?'selected':''}>${e.nombre}${e.cargo?` — ${e.cargo}`:''}</option>`).join('')}
         </select></div>
       <div class="form-group"><label class="form-label">Descripción del Trabajo *</label>
-        <textarea class="form-input" id="ot-desc" rows="3" placeholder="Descripción general del trabajo a realizar...">${o.descripcion||''}</textarea></div>
+        <textarea class="form-input" id="ot-desc" rows="3" placeholder="Descripción general del trabajo a realizar...">${UI.esc(o.descripcion||'')}</textarea></div>
       <div class="form-row">
         <div class="form-group"><label class="form-label">Estado</label>
           <select class="form-select" id="ot-estado">

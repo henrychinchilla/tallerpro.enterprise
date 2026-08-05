@@ -36,7 +36,7 @@ Modulos.configuracion = {
             <div class="form-group"><label class="form-label">Teléfono</label>
               <input class="form-input" id="cfg-tel" value="${t.tel||''}"></div>
             <div class="form-group"><label class="form-label">Email</label>
-              <input class="form-input" id="cfg-email" value="${t.email||''}"></div>
+              <input class="form-input" id="cfg-email" value="${UI.esc(t.email||'')}"></div>
             <div class="form-group"><label class="form-label">Dirección</label>
               <input class="form-input" id="cfg-dir" value="${t.address||''}"></div>
             <button class="btn btn-amber" onclick="Modulos.configuracion.guardar()">Guardar Cambios</button>

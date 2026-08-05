@@ -129,7 +129,7 @@ Modulos.compras = {
 
   _invOpts(sel='') {
     return `<option value="">— Libre / nuevo —</option>` +
-      this._inv.map(a=>`<option value="${a.id}" ${sel===a.id?'selected':''} data-nombre="${(a.nombre||'').replace(/"/g,'&quot;')}" data-cat="${(a.categoria||'').replace(/"/g,'&quot;')}" data-costo="${a.precio_costo||0}">${a.nombre}${a.codigo?` (${a.codigo})`:''}</option>`).join('');
+      this._inv.map(a=>`<option value="${a.id}" ${sel===a.id?'selected':''} data-nombre="${UI.esc((a.nombre||'').replace(/"/g,'&quot;'))}" data-cat="${(a.categoria||'').replace(/"/g,'&quot;')}" data-costo="${a.precio_costo||0}">${UI.esc(a.nombre)}${a.codigo?` (${a.codigo})`:''}</option>`).join('');
   },
 
   _filaHtml(idx) {

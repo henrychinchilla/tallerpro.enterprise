@@ -187,7 +187,7 @@ Modulos.comunicaciones = {
               <div class="form-group"><label class="form-label">Nombre del remitente</label>
                 <input class="form-input" id="cfg-smtp-name" placeholder="${t.name||'Mi Taller'}" value="${smtp.from_name||t.name||''}"></div>
               <div class="form-group"><label class="form-label">Email visible al cliente</label>
-                <input class="form-input" id="cfg-smtp-from" type="email" placeholder="notificaciones@mitaller.com" value="${smtp.from_email||t.email||''}"></div>
+                <input class="form-input" id="cfg-smtp-from" type="email" placeholder="notificaciones@mitaller.com" value="${UI.esc(smtp.from_email||t.email||'')}"></div>
             </div>
             <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px">
               <button class="btn btn-cyan" onclick="Modulos.comunicaciones.guardarSMTP()">💾 Guardar SMTP</button>

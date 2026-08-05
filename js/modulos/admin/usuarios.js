@@ -396,7 +396,7 @@ Modulos.usuarios = {
       <!-- DATOS BÁSICOS -->
       <div class="form-row">
         <div class="form-group"><label class="form-label">Nombre *</label>
-          <input class="form-input" id="eu-nombre" value="${u.nombre}"></div>
+          <input class="form-input" id="eu-nombre" value="${UI.esc(u.nombre)}"></div>
         <div class="form-group"><label class="form-label">Rol</label>
           <select class="form-select" id="eu-rol" onchange="Modulos.usuarios._actualizarPermisos(this.value)">
             ${roles.map(([k,v])=>`<option value="${k}" ${u.rol===k?'selected':''}>${v.icon} ${v.label}</option>`).join('')}
@@ -467,7 +467,7 @@ Modulos.usuarios = {
 
       <div class="modal-footer">
         <button class="btn btn-ghost" onclick="UI.cerrarModal()">Cancelar</button>
-        <button class="btn btn-ghost btn-sm" onclick="Modulos.usuarios.modalReset('${id}','${u.nombre}')">🔑 Reset Pass</button>
+        <button class="btn btn-ghost btn-sm" onclick="Modulos.usuarios.modalReset('${id}','${UI.esc(u.nombre)}')">🔑 Reset Pass</button>
         <button class="btn btn-amber" onclick="Modulos.usuarios.guardarEdicion('${id}')">Guardar Cambios</button>
       </div>`,'720px');
   },

@@ -714,7 +714,7 @@ Modulos.contabilidad = {
         <div class="form-group"><label class="form-label">Fecha de Pago</label>
           <input class="form-input" type="date" id="ob-fecha-pago" value="${o.fecha_pago || ''}"></div>
         <div class="form-group"><label class="form-label">Notas / Formulario</label>
-          <input class="form-input" id="ob-notas" value="${o.notas||''}" placeholder="SAT-2237 IVA General"></div>
+          <input class="form-input" id="ob-notas" value="${UI.esc(o.notas||'')}" placeholder="SAT-2237 IVA General"></div>
       </div>
       <div class="modal-footer">
         <button class="btn btn-ghost" onclick="UI.cerrarModal()">Cancelar</button>

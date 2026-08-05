@@ -337,7 +337,7 @@ Modulos.marketing = {
     UI.modal(`📜 Puntos — ${nombre}`, `
       <div class="table-wrap" style="max-height:360px;overflow-y:auto"><table class="data-table">
         <thead><tr><th>Fecha</th><th>Movimiento</th><th>Puntos</th></tr></thead>
-        <tbody>${movs.map(m=>`<tr><td class="mono-sm">${UI.fecha(m.fecha)}</td><td>${m.motivo||m.tipo}${m.referencia?` <small class="text-muted">(${m.referencia})</small>`:''}</td><td class="mono-sm ${m.puntos>=0?'text-green':'text-red'}">${m.puntos>=0?'+':''}${m.puntos}</td></tr>`).join('')||'<tr><td colspan="3" style="text-align:center;color:var(--text3);padding:16px">Sin movimientos</td></tr>'}</tbody>
+        <tbody>${movs.map(m=>`<tr><td class="mono-sm">${UI.fecha(m.fecha)}</td><td>${m.motivo||m.tipo}${m.referencia?` <small class="text-muted">(${UI.esc(m.referencia)})</small>`:''}</td><td class="mono-sm ${m.puntos>=0?'text-green':'text-red'}">${m.puntos>=0?'+':''}${m.puntos}</td></tr>`).join('')||'<tr><td colspan="3" style="text-align:center;color:var(--text3);padding:16px">Sin movimientos</td></tr>'}</tbody>
       </table></div>
       <div class="modal-footer"><button class="btn btn-ghost" onclick="UI.cerrarModal()">Cerrar</button></div>`);
   },
@@ -474,7 +474,7 @@ Modulos.marketing = {
     UI.modal(`${id?'✏️ Editar':'＋ Nuevo'} Combo`, `
       ${id?'<div class="alert alert-amber" style="margin-bottom:12px"><div class="alert-icon">⚠️</div><div class="alert-body" style="font-size:11px">Los cambios reemplazarán la información actual del combo.</div></div>':''}
       <div class="form-group"><label class="form-label">Nombre del Combo *</label>
-        <input class="form-input" id="cmb-nombre" value="${c.nombre||''}" placeholder="Combo Mantenimiento Premium"></div>
+        <input class="form-input" id="cmb-nombre" value="${UI.esc(c.nombre||'')}" placeholder="Combo Mantenimiento Premium"></div>
       <div class="form-row">
         <div class="form-group"><label class="form-label">Tipo</label>
           <select class="form-select" id="cmb-tipo">
@@ -487,7 +487,7 @@ Modulos.marketing = {
           </select></div>
       </div>
       <div class="form-group"><label class="form-label">Descripción / Incluye</label>
-        <textarea class="form-input" id="cmb-desc" rows="3" placeholder="Incluye: cambio de aceite + filtro + revisión de frenos...">${c.descripcion||''}</textarea></div>
+        <textarea class="form-input" id="cmb-desc" rows="3" placeholder="Incluye: cambio de aceite + filtro + revisión de frenos...">${UI.esc(c.descripcion||'')}</textarea></div>
       <div class="form-row">
         <div class="form-group"><label class="form-label">Precio Regular (Q)</label>
           <input class="form-input" id="cmb-reg" type="number" value="${c.precio_regular||0}" step="0.01"></div>
@@ -525,9 +525,9 @@ Modulos.marketing = {
     UI.modal(`${id?'✏️ Editar':'＋ Nueva'} Promoción`, `
       ${id?'<div class="alert alert-amber" style="margin-bottom:12px"><div class="alert-icon">⚠️</div><div class="alert-body" style="font-size:11px">Los cambios reemplazarán la información actual de la promoción.</div></div>':''}
       <div class="form-group"><label class="form-label">Nombre *</label>
-        <input class="form-input" id="prm-nombre" value="${p.nombre||''}" placeholder="Descuento Julio"></div>
+        <input class="form-input" id="prm-nombre" value="${UI.esc(p.nombre||'')}" placeholder="Descuento Julio"></div>
       <div class="form-group"><label class="form-label">Descripción</label>
-        <textarea class="form-input" id="prm-desc" rows="2">${p.descripcion||''}</textarea></div>
+        <textarea class="form-input" id="prm-desc" rows="2">${UI.esc(p.descripcion||'')}</textarea></div>
       <div class="form-row">
         <div class="form-group"><label class="form-label">Descuento %</label>
           <input class="form-input" id="prm-pct" type="number" value="${p.descuento_pct||0}" min="0" max="100"></div>

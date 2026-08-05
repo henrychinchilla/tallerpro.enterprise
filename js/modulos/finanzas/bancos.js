@@ -122,7 +122,7 @@ Modulos.bancos = {
     el.innerHTML = `
       <div class="page-header">
         <div>
-          <h1 class="page-title">🏦 ${banco.nombre}</h1>
+          <h1 class="page-title">🏦 ${UI.esc(banco.nombre)}</h1>
           <p class="page-subtitle">// ${banco.banco} · ${banco.numero||'—'} · Saldo actual total: <b>${UI.q(banco._saldo!=null?banco._saldo:saldoFinalMes)}</b></p>
         </div>
         <div class="page-actions">
@@ -176,7 +176,7 @@ Modulos.bancos = {
       ${esEdicion?'<div class="alert alert-amber" style="margin-bottom:12px"><div class="alert-icon">⚠️</div><div class="alert-body" style="font-size:11px">Los cambios reemplazarán la información actual de la cuenta.</div></div>':''}
       <div class="form-row">
         <div class="form-group"><label class="form-label">Nombre de Cuenta *</label>
-          <input class="form-input" id="ban-nombre" value="${b.nombre||''}" placeholder="Cuenta Operativa GTQ"></div>
+          <input class="form-input" id="ban-nombre" value="${UI.esc(b.nombre||'')}" placeholder="Cuenta Operativa GTQ"></div>
         <div class="form-group"><label class="form-label">Banco</label>
           <select class="form-select" id="ban-banco">
             ${['Banrural','BAC','G&T Continental','Industrial','Bantrab','Agromercantil','Citibank','Otro'].map(x=>`<option ${b.banco===x?'selected':''}>${x}</option>`).join('')}

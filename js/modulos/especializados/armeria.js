@@ -226,7 +226,7 @@ Modulos.armeria = {
 
     el.innerHTML = `
       <div class="page-header">
-        <div><h1 class="page-title">⚖️ ${ley.nombre}</h1>
+        <div><h1 class="page-title">⚖️ ${UI.esc(ley.nombre)}</h1>
         <p class="page-subtitle">// ${ley.decreto} y su reglamento (${ley.reglamento})</p></div>
         <div class="page-actions">
           <button class="btn btn-ghost" onclick="window.print()">🖨 Imprimir</button>
@@ -303,9 +303,9 @@ Modulos.armeria = {
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px">
         <div><div style="font-size:11px;color:var(--text3)">Tipo</div><div><span class="badge badge-${this._colorTipo(o.tipo)}">${o.tipo === 'compra' ? '🔽 Compra' : '🔺 Venta'}</span></div></div>
         <div><div style="font-size:11px;color:var(--text3)">Estado del trámite</div><div><span class="badge badge-${this._colorEstado(o.estado)}">${this._ESTADOS[o.estado] || o.estado || '—'}</span></div></div>
-        <div><div style="font-size:11px;color:var(--text3)">Contraparte</div><div style="font-weight:700">${o.clientes?.nombre || o.proveedores?.nombre || '—'}</div></div>
+        <div><div style="font-size:11px;color:var(--text3)">Contraparte</div><div style="font-weight:700">${UI.esc(o.clientes?.nombre || o.proveedores?.nombre || '—')}</div></div>
         <div><div style="font-size:11px;color:var(--text3)">Categoría</div><div>${this._CATEGORIAS[o.categoria] || o.categoria}</div></div>
-        <div><div style="font-size:11px;color:var(--text3)">Marca / Modelo / Calibre</div><div>${[o.marca, o.modelo, o.calibre].filter(Boolean).join(' · ') || '—'}</div></div>
+        <div><div style="font-size:11px;color:var(--text3)">Marca / Modelo / Calibre</div><div>${UI.esc([o.marca, o.modelo, o.calibre].filter(Boolean).join(' · ') || '—')}</div></div>
         <div><div style="font-size:11px;color:var(--text3)">Número de serie</div><div class="mono-sm">${o.numero_serie || '—'}</div></div>
         <div><div style="font-size:11px;color:var(--text3)">Trazabilidad</div><div>${invNombre ? `📦 ${UI.esc(invNombre)}` : '<span style="color:var(--amber)">sin vincular al inventario</span>'}</div></div>
         <div><div style="font-size:11px;color:var(--text3)">País de origen</div><div>${o.pais_origen || '—'}</div></div>
@@ -904,11 +904,11 @@ Modulos.armeria = {
       const canon = inv?.atributos?.largo_canon;
       return `<tr>
       <td>${o.num || '—'}</td><td>${o.tipo === 'compra' ? 'Compra' : 'Venta'}</td>
-      <td>${o.clientes?.nombre || o.proveedores?.nombre || '—'}</td>
+      <td>${UI.esc(o.clientes?.nombre || o.proveedores?.nombre || '—')}</td>
       <td>${o.contraparte_dpi || '—'}</td>
       <td>${o.contraparte_nit || '—'}</td>
       <td>${this._CATEGORIAS[o.categoria] || o.categoria}</td>
-      <td>${[o.marca, o.modelo, o.calibre].filter(Boolean).join(' ')}</td>
+      <td>${UI.esc([o.marca, o.modelo, o.calibre].filter(Boolean).join(' '))}</td>
       <td>${canon ? canon + '"' : '—'}</td>
       <td>${o.numero_serie || '—'}</td>
       <td>${o.cantidad || ''}</td>

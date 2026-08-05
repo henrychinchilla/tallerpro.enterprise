@@ -77,7 +77,7 @@ Modulos.proveedores = {
           <div style="font-size:12px;color:var(--text2);display:flex;flex-direction:column;gap:4px">
             ${p.nit?`<span>NIT: ${p.nit}</span>`:''}
             ${p.telefono?`<span>📞 ${p.telefono}</span>`:''}
-            ${p.email?`<span>✉️ ${p.email}</span>`:''}
+            ${p.email?`<span>✉️ ${UI.esc(p.email)}</span>`:''}
             ${p.contacto?`<span>👤 ${p.contacto}</span>`:''}
           </div>
           <div style="display:flex;gap:4px;margin-top:10px" onclick="event.stopPropagation()">
@@ -116,7 +116,7 @@ Modulos.proveedores = {
       ${esEdicion?'<div class="alert alert-amber" style="margin-bottom:12px"><div class="alert-icon">⚠️</div><div class="alert-body" style="font-size:11px">Los cambios reemplazarán la información actual del proveedor.</div></div>':''}
       <div class="form-row">
         <div class="form-group"><label class="form-label">Nombre / Razón Social *</label>
-          <input class="form-input" id="prov-nombre" value="${p.nombre||''}" placeholder="Distribuidora García"></div>
+          <input class="form-input" id="prov-nombre" value="${UI.esc(p.nombre||'')}" placeholder="Distribuidora García"></div>
         <div class="form-group"><label class="form-label">NIT</label>
           <div style="display:flex;gap:6px">
             <input class="form-input" id="prov-nit" value="${p.nit||''}" placeholder="1234567-8" style="flex:1">
@@ -144,12 +144,12 @@ Modulos.proveedores = {
         <div class="form-group"><label class="form-label">Teléfono</label>
           <input class="form-input" id="prov-tel" value="${p.telefono||''}" placeholder="5501-1234"></div>
         <div class="form-group"><label class="form-label">Email</label>
-          <input class="form-input" id="prov-email" type="email" value="${p.email||''}"></div>
+          <input class="form-input" id="prov-email" type="email" value="${UI.esc(p.email||'')}"></div>
       </div>
       <div class="form-group"><label class="form-label">Dirección</label>
-        <input class="form-input" id="prov-dir" value="${p.direccion||''}"></div>
+        <input class="form-input" id="prov-dir" value="${UI.esc(p.direccion||'')}"></div>
       <div class="form-group"><label class="form-label">Notas / Condiciones de pago</label>
-        <textarea class="form-input" id="prov-notas" rows="2">${p.notas||''}</textarea></div>
+        <textarea class="form-input" id="prov-notas" rows="2">${UI.esc(p.notas||'')}</textarea></div>
       ${esEdicion?`<div class="form-group">
         <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
           <input type="checkbox" id="prov-activo" ${p.activo?'checked':''}>

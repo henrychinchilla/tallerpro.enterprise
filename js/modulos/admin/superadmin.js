@@ -228,15 +228,23 @@ Modulos.superadmin = {
             <div class="table-wrap"><table class="data-table">
               <thead><tr><th>Fecha</th><th>Comercio</th><th>Monto</th><th>Banco</th><th>Referencia</th><th>Lectura IA</th><th></th></tr></thead>
               <tbody>${pend.map(v=>{ const t=tnById(v.tenant_id); const a=v.analisis||{};
+                /* TODO ESTO VIENE DE AFUERA y se pinta en la sesión del SUPERADMIN:
+                   el nombre del comercio lo escribe quien se registra, y el banco,
+                   la referencia y los checks los produce la IA leyendo la IMAGEN
+                   del voucher que sube el cliente. Sin escapar, un comercio podía
+                   subir un voucher con HTML y ejecutarlo acá (la CSP permite
+                   'unsafe-inline'), robando la sesión que ve TODOS los comercios.
+                   Los checks se escapan uno por uno y luego se unen: el <br> es
+                   nuestro, el contenido no. */
                 const ia = a.monto!=null
-                  ? `Q${a.monto} · conf. ${Math.round((a.confianza||0)*100)}%${(a.checks||[]).length?`<div style="font-size:10px;color:var(--amber)">${(a.checks||[]).join('<br>')}</div>`:''}`
+                  ? `Q${UI.esc(a.monto)} · conf. ${Math.round((a.confianza||0)*100)}%${(a.checks||[]).length?`<div style="font-size:10px;color:var(--amber)">${(a.checks||[]).map(c=>UI.esc(c)).join('<br>')}</div>`:''}`
                   : '<span style="color:var(--text3)">sin lectura</span>';
                 return `<tr>
                 <td class="mono-sm">${UI.fecha(v.created_at)}</td>
-                <td>${t?.name||t?.slug||'—'}</td>
+                <td>${UI.esc(t?.name||t?.slug||'—')}</td>
                 <td class="mono-sm">${v.monto!=null?UI.q(v.monto):'—'}</td>
-                <td>${v.banco||a.banco||'—'}</td>
-                <td class="mono-sm">${v.referencia_detectada||v.referencia||'—'}</td>
+                <td>${UI.esc(v.banco||a.banco||'—')}</td>
+                <td class="mono-sm">${UI.esc(v.referencia_detectada||v.referencia||'—')}</td>
                 <td style="font-size:11px">${ia}</td>
                 <td style="white-space:nowrap">
                   ${Modulos.btnAccion('ver', `Modulos.superadmin.verVoucher('${v.id}')`)}
@@ -581,12 +589,12 @@ Modulos.superadmin = {
       </div>
       ${(()=>{ const tj = this._tarjetas.find(x=>x.tenant_id===id) || {}; return `
       <div style="border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:12px">
-        <div class="card-sub mb-3">💳 Cobro de suscripción con tarjeta ${tj.id?`<span class="badge badge-green" style="margin-left:6px">${tj.marca||'Tarjeta'} ****${tj.ultimos4||'????'}</span>`:'<span class="badge badge-gray" style="margin-left:6px">Sin tarjeta</span>'}</div>
+        <div class="card-sub mb-3">💳 Cobro de suscripción con tarjeta ${tj.id?`<span class="badge badge-green" style="margin-left:6px">${UI.esc(tj.marca||'Tarjeta')} ****${tj.ultimos4||'????'}</span>`:'<span class="badge badge-gray" style="margin-left:6px">Sin tarjeta</span>'}</div>
         <div class="form-row">
           <div class="form-group"><label class="form-label">Titular</label>
             <input class="form-input" id="sa-tj-titular" value="${tj.titular||''}" placeholder="Como aparece en la tarjeta"></div>
           <div class="form-group"><label class="form-label">Marca</label>
-            <select class="form-select" id="sa-tj-marca">${['VISA','MASTERCARD','OTRA'].map(m=>`<option ${tj.marca===m?'selected':''}>${m}</option>`).join('')}</select></div>
+            <select class="form-select" id="sa-tj-marca">${['VISA','MASTERCARD','OTRA'].map(m=>`<option ${UI.esc(tj.marca===m?'selected':'')}>${m}</option>`).join('')}</select></div>
         </div>
         <div class="form-row">
           <div class="form-group"><label class="form-label">Últimos 4 dígitos</label>

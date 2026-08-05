@@ -73,7 +73,7 @@ Modulos.envios = {
     return `<tr>
       <td class="mono-sm">${UI.fecha(e.fecha_envio)}</td>
       <td><span class="badge badge-${tc}">${tl}</span></td>
-      <td><b>${e.descripcion}</b>${e.num_factura?`<br><small class="text-muted">Fact: ${e.num_factura}</small>`:''}</td>
+      <td><b>${UI.esc(e.descripcion)}</b>${e.num_factura?`<br><small class="text-muted">Fact: ${e.num_factura}</small>`:''}</td>
       <td>${destino}${contacto?`<br><small class="text-muted">${contacto.slice(0,60)}</small>`:''}</td>
       <td>${e.medio?this._medioLabel(e.medio):'—'}</td>
       <td class="mono-sm text-red">${UI.q(e.costo_total)}</td>
@@ -116,7 +116,7 @@ Modulos.envios = {
             placeholder="COT-0001 / FAC-0042 / # pedido / referencia libre..." style="font-size:12px"></div>
       </div>
       <div class="form-group"><label class="form-label">Descripción de lo enviado *</label>
-        <input class="form-input" id="env-desc" value="${(e.descripcion||'').replace(/"/g,'&quot;')}" placeholder="Discos de freno / repuestos a Bodega Norte"></div>
+        <input class="form-input" id="env-desc" value="${UI.esc((e.descripcion||'').replace(/"/g,'&quot;'))}" placeholder="Discos de freno / repuestos a Bodega Norte"></div>
       <div class="form-group"><label class="form-label">Destinatario (proveedor / cliente / bodega)</label>
         <input class="form-input" id="env-dest" value="${(e.destinatario||'').replace(/"/g,'&quot;')}" placeholder="Torno El Progreso / Bodega Norte"></div>
       <div class="form-row">
@@ -126,7 +126,7 @@ Modulos.envios = {
           <input class="form-input" id="env-muni" value="${(e.municipio||'').replace(/"/g,'&quot;')}" placeholder="Guatemala, Mixco..."></div>
       </div>
       <div class="form-group"><label class="form-label">Dirección de entrega</label>
-        <textarea class="form-input" id="env-dir" rows="2" placeholder="Calle, número, zona...">${e.direccion||''}</textarea></div>
+        <textarea class="form-input" id="env-dir" rows="2" placeholder="Calle, número, zona...">${UI.esc(e.direccion||'')}</textarea></div>
       <div class="form-group"><label class="form-label">Referencias del lugar</label>
         <input class="form-input" id="env-refs" value="${(e.referencias||'').replace(/"/g,'&quot;')}" placeholder="Punto de referencia, horario de entrega..."></div>
 
@@ -172,7 +172,7 @@ Modulos.envios = {
           <input class="form-input" id="env-est" type="date" value="${e.fecha_entrega_estimada||''}"></div>
       </div>
       <div class="form-group"><label class="form-label">Notas</label>
-        <textarea class="form-input" id="env-notas" rows="2">${e.notas||''}</textarea></div>
+        <textarea class="form-input" id="env-notas" rows="2">${UI.esc(e.notas||'')}</textarea></div>
       <div id="env-calc" class="card" style="background:var(--surface2);font-size:12px;margin-bottom:12px"></div>
       <div class="modal-footer">
         <button class="btn btn-ghost" onclick="UI.cerrarModal()">Cancelar</button>

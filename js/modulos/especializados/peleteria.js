@@ -74,7 +74,7 @@ Modulos.peleteria = {
     const p = this._data.find(x=>x.id===id); if (!p) return;
     UI.modal(`📋 Pedido ${p.num||''}`, `
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px">
-        <div><div style="font-size:11px;color:var(--text3)">Cliente</div><div style="font-weight:700">${p.clientes?.nombre||'—'}</div></div>
+        <div><div style="font-size:11px;color:var(--text3)">Cliente</div><div style="font-weight:700">${UI.esc(p.clientes?.nombre||'—')}</div></div>
         <div><div style="font-size:11px;color:var(--text3)">Producto</div><div>${this._TIPOS[p.tipo_producto]||p.tipo_producto}</div></div>
         <div><div style="font-size:11px;color:var(--text3)">Estado</div><div><span class="badge badge-${this._colorEstado(p.estado)}">${this._ESTADOS[p.estado]||p.estado}</span></div></div>
         <div><div style="font-size:11px;color:var(--text3)">Inicio</div><div>${p.tipo_inicio==='directo'?'⚡ Directo':'📋 Cotización'}</div></div>
@@ -143,7 +143,7 @@ Modulos.peleteria = {
       <div class="form-group"><label class="form-label">Medidas</label>
         <input class="form-input" id="pel-medidas" value="${p.medidas||''}" placeholder="Talla 38, 110cm de largo..."></div>
       <div class="form-group"><label class="form-label">Descripción / Detalle del trabajo</label>
-        <textarea class="form-input" id="pel-desc" rows="2">${p.descripcion||''}</textarea></div>
+        <textarea class="form-input" id="pel-desc" rows="2">${UI.esc(p.descripcion||'')}</textarea></div>
       <div class="form-group"><label class="form-label">Fecha de entrega</label>
         <input class="form-input" id="pel-fecha-entrega" type="date" value="${p.fecha_entrega||''}"></div>
       <div class="form-row">
@@ -159,7 +159,7 @@ Modulos.peleteria = {
           <input class="form-input" id="pel-anticipo" type="number" min="0" step="0.01" value="${p.anticipo||0}"></div>
       </div>
       <div class="form-group"><label class="form-label">Notas</label>
-        <textarea class="form-input" id="pel-notas" rows="2">${p.notas||''}</textarea></div>
+        <textarea class="form-input" id="pel-notas" rows="2">${UI.esc(p.notas||'')}</textarea></div>
       <div class="modal-footer">
         <button class="btn btn-ghost" onclick="UI.cerrarModal()">Cancelar</button>
         <button class="btn btn-amber" onclick="Modulos.peleteria.guardar('${id||''}')">${esEdicion?'Guardar Cambios':'Crear Pedido'}</button>

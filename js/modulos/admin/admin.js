@@ -282,7 +282,7 @@ Modulos.admin = {
             </div>
             <div class="form-row">
               <div class="form-group"><label class="form-label">Administrador 1 — correo</label>
-                <input class="form-input" id="del-a1-email" type="email" value="${Auth.user?.email||''}"></div>
+                <input class="form-input" id="del-a1-email" type="email" value="${UI.esc(Auth.user?.email||'')}"></div>
               <div class="form-group"><label class="form-label">Admin 1 — código 2FA</label>
                 <input class="form-input" id="del-a1-code" placeholder="000000" maxlength="6" inputmode="numeric"
                        style="font-family:monospace;font-size:18px;letter-spacing:6px;text-align:center"></div>
