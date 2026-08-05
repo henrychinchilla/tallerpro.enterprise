@@ -1067,11 +1067,22 @@ Modulos.armeria = {
     const docs = await Docs.listar('cliente', clienteId).catch(() => []);
     const tipos = new Set(docs.map(d => d.tipo));
 
+    /* Un expediente con una sola cara del DPI está incompleto: DIGECAM y el
+       notario piden ambas. Los tipos VIEJOS ('dpi', 'licencia_arma') se
+       aceptan como el anverso, para no mandar a refotografiar lo que ya se
+       entregó antes de partir los documentos en dos caras. */
+    const hay = t => tipos.has(t);
+    const anversoDPI = hay('dpi_frente') || hay('dpi') || hay('pasaporte');
+    const reversoDPI = hay('dpi_reverso') || hay('pasaporte');   // el pasaporte es una hoja
+    const anversoLic = hay('licencia_frente') || hay('licencia_arma');
+    const reversoLic = hay('licencia_reverso');
+
     const falta = [];
-    /* El DPI se da por cubierto si subió pasaporte (extranjero). */
-    if (!tipos.has('dpi') && !tipos.has('pasaporte')) falta.push(this._CHECK_DOCS.dpi);
-    if (!tipos.has('licencia_arma')) falta.push(this._CHECK_DOCS.licencia_arma);
-    if (!tipos.has('recibo_servicios')) falta.push(this._CHECK_DOCS.recibo_servicios);
+    if (!anversoDPI) falta.push('DPI (anverso) o pasaporte');
+    else if (!reversoDPI) falta.push('DPI — falta el REVERSO');
+    if (!anversoLic) falta.push(this._CHECK_DOCS.licencia_arma);
+    else if (!reversoLic) falta.push('Licencia de arma — falta el REVERSO');
+    if (!hay('recibo_servicios')) falta.push(this._CHECK_DOCS.recibo_servicios);
     if (!String(cli?.direccion || '').trim()) falta.push('Dirección completa');
     if (!cli?.vivienda) falta.push('Indicar si la vivienda es propia o rentada');
 
@@ -1081,7 +1092,7 @@ Modulos.armeria = {
            <ul style="margin:4px 0 4px 16px">${falta.map(f => `<li>${UI.esc(f)}</li>`).join('')}</ul>
            <a href="#" onclick="event.preventDefault();Modulos.armeria._completarCliente('${clienteId}')" style="color:var(--cyan)">Completarlo ahora →</a>
          </div>`
-      : '<span style="color:var(--green)">✅ Expediente completo (DPI/pasaporte, licencia, recibo de servicios y domicilio).</span>';
+      : '<span style="color:var(--green)">✅ Expediente completo (DPI y licencia por ambas caras, recibo de servicios y domicilio).</span>';
   },
 
   /* Abre la ficha del cliente para completarla y vuelve a la operación. */

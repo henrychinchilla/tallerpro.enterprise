@@ -234,8 +234,8 @@ function domBase() {
   campos['cli-dpi'] = { value: '' };
   campos['cli-edad'] = { textContent: '', style: {} };
   subidos.length = 0;
-  await CLI._subirDoc('c1', 'dpi', { files: [{ size: 1000, type: 'image/jpeg' }], value: '' });
-  ok('con cliente existente, archiva el documento', subidos.length === 1 && subidos[0].tipo === 'dpi');
+  await CLI._subirDoc('c1', 'dpi_frente', { files: [{ size: 1000, type: 'image/jpeg' }], value: '' });
+  ok('con cliente existente, archiva el documento', subidos.length === 1 && subidos[0].tipo === 'dpi_frente');
   ok('...y en la MISMA acción lee los datos', campos['cli-dpi'].value === '1111111111111');
 
   /* La licencia se archiva pero no tiene datos que leer: no debe llamar IA. */
@@ -250,7 +250,7 @@ function domBase() {
   ctx.IA = { escanearDPI: async () => { leyoLicencia = true; return { ok: true, texto: '{}' }; } };
   leyoLicencia = false;
   subidos.length = 0;
-  await CLI._subirDoc('c1', 'dpi', { files: [{ size: 1000, type: 'application/pdf' }], value: '' });
+  await CLI._subirDoc('c1', 'dpi_frente', { files: [{ size: 1000, type: 'application/pdf' }], value: '' });
   ok('un PDF se archiva igual', subidos.length === 1);
   ok('...pero no se manda al lector de imágenes', leyoLicencia === false);
 }
@@ -272,15 +272,15 @@ function domBase() {
   campos['cli-docs-box'] = { innerHTML: '' };
 
   subidos.length = 0;
-  await CLI._subirDoc('', 'dpi', { files: [{ size: 1000, type: 'image/jpeg' }], value: '' });
+  await CLI._subirDoc('', 'dpi_frente', { files: [{ size: 1000, type: 'image/jpeg' }], value: '' });
   ok('sin cliente todavía, NO intenta archivar (no hay carpeta donde)', subidos.length === 0);
-  ok('pero retiene la foto para después', !!CLI._docsPendientes.dpi);
+  ok('pero retiene la foto para después', !!CLI._docsPendientes.dpi_frente);
   ok('y LEE los datos igual, sin esperar a guardar', campos['cli-dpi'].value === '2222222222222');
 
   /* Al crear el cliente, lo pendiente se adjunta solo. */
   guardado = null;
   await CLI.guardar('');
-  ok('al crear el cliente se adjunta lo pendiente', subidos.length === 1 && subidos[0].tipo === 'dpi');
+  ok('al crear el cliente se adjunta lo pendiente', subidos.length === 1 && subidos[0].tipo === 'dpi_frente');
   ok('...con el id del cliente recién creado', subidos[0].cid === 'c1');
   ok('y la lista de pendientes queda limpia', Object.keys(CLI._docsPendientes).length === 0);
 
@@ -299,7 +299,7 @@ function domBase() {
   CLI._data = [{ id: 'c1', nombre: 'Juan Pérez' }];
   CLI.modalForm('c1');
   ok('el formulario ofrece cámara para cada documento', /capture="environment"/.test(htmlModal));
-  ok('y también subir archivo', /cli-doc-dpi-gal/.test(htmlModal));
+  ok('y también subir archivo', /cli-doc-dpi_frente-gal/.test(htmlModal));
   ok('marca cuáles documentos se leen solos', /se lee solo/.test(htmlModal));
   ok('ya NO existe un botón aparte de "Leer del DPI"', !/Leer del DPI/.test(htmlModal));
   ok('ni uno aparte para el recibo', !/Leer dirección del recibo/.test(htmlModal));
