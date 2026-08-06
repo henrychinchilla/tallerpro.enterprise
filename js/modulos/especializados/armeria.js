@@ -210,6 +210,16 @@ Modulos.armeria = {
               El control real es el <b>código de autorización de DIGECAM</b>, que se pide en cada entrega
               (reglamento AG 85-2011, art. 21).
             </div>
+            <div style="margin-top:6px;color:var(--text3);border-top:1px dashed var(--border);padding-top:6px">
+              🔐 <b>La consulta se hace en SIGECAM</b>, el sistema de empresas de DIGECAM
+              (<a href="https://www.digecam.mil.gt/acceso-empresas" target="_blank" rel="noopener" style="color:var(--cyan)">digecam.mil.gt/acceso-empresas</a>).
+              Se entra con DPI, contraseña y código de Google Authenticator, y <b>no publica API</b>:
+              por eso esta app no puede consultarlo sola — haría falta la contraseña y el código de
+              6 dígitos de una persona. La app prepara la consulta; el resultado vuelve escrito acá
+              como código de autorización. <b>Ojo:</b> SIGECAM muestra unos 3 meses de historial de
+              munición, así que para las ventas de <i>este</i> comercio el registro de acá termina
+              siendo más completo.
+            </div>
           </div>
         </div>
 
@@ -571,6 +581,57 @@ Modulos.armeria = {
      literal (ver js/core/ley-armas.js), no un resumen. */
   _busquedaLey: '',
 
+  /* La ley reparte el trámite de importación en once artículos de tres
+     capítulos distintos, y leídos así no se ve el ORDEN en que hay que hacer
+     las cosas. Esto los pone en secuencia, cada paso con el artículo que lo
+     respalda, y separa visualmente qué le toca a DIGECAM y qué a la SAT —
+     que es la confusión más común: no es una o la otra, son las dos. */
+  modalImportacion() {
+    const pasos = (typeof pasosImportacion === 'function') ? pasosImportacion() : [];
+    if (!pasos.length) { UI.toast('No se pudo cargar el trámite de importación', 'error'); return; }
+
+    const colorEntidad = e => e === 'SAT' ? 'var(--amber)'
+                          : e === 'DIGECAM' ? 'var(--cyan)' : 'var(--purple, var(--cyan))';
+
+    UI.modal('🛃 Importación de armas — el trámite en orden', `
+      <div style="background:var(--card2);border-left:3px solid var(--cyan);border-radius:8px;padding:10px 12px;margin-bottom:14px;font-size:12px;line-height:1.6">
+        <b>Son DOS entidades, no una.</b>
+        <span style="color:var(--cyan);font-weight:700">DIGECAM</span> autoriza (licencia de importación),
+        toma huellas balísticas, emite tarjetas de tenencia y <b>troquela con las letras GUA</b>.
+        <span style="color:var(--amber);font-weight:700">SAT</span> cobra los aranceles y custodia la
+        mercadería en el almacén fiscal. Ninguna sustituye a la otra: sin licencia de DIGECAM la SAT no
+        desalmacena, y sin pagar aranceles la DIGECAM no recibe nada.
+      </div>
+
+      <div style="max-height:56vh;overflow:auto;padding-right:4px">
+        ${pasos.map(p => `
+          <div style="display:flex;gap:11px;margin-bottom:12px;padding-bottom:12px;border-bottom:1px solid var(--border)">
+            <div style="flex-shrink:0;width:28px;height:28px;border-radius:50%;background:${colorEntidad(p.entidad)};
+                        color:#fff;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:13px">${p.n}</div>
+            <div style="flex:1;min-width:0">
+              <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:3px">
+                <b style="font-size:13px">${p.alerta ? '⚠️ ' : ''}${UI.esc(p.titulo)}</b>
+                <span style="font-size:10px;font-weight:800;color:${colorEntidad(p.entidad)};
+                             border:1px solid ${colorEntidad(p.entidad)};border-radius:4px;padding:1px 6px">${UI.esc(p.entidad)}</span>
+                <span style="font-size:10.5px;color:var(--text3)">art. ${p.arts.join(', ')}</span>
+              </div>
+              <div style="font-size:12px;line-height:1.6;color:var(--text2)">${UI.esc(p.detalle)}</div>
+            </div>
+          </div>`).join('')}
+      </div>
+
+      <div style="font-size:11px;color:var(--text3);margin-top:10px;border-top:1px dashed var(--border);padding-top:10px;line-height:1.6">
+        Esto <b>ordena lo que dice la ley</b> (Decreto 15-2009); no reemplaza al trámite oficial.
+        Los formularios, las tasas y los tiempos de respuesta los fija la DIGECAM y <b>cambian sin que
+        cambie la ley</b>: confirmalos en <b>digecam.mil.gt</b> antes de presentar.
+        El texto literal de cada artículo está en esta misma pantalla — buscá por su número.
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" onclick="UI.cerrarModal()">Cerrar</button>
+        <button class="btn btn-cyan" onclick="window.print()">🖨 Imprimir</button>
+      </div>`, '760px');
+  },
+
   renderLey() {
     const el = document.getElementById('page-content');
     const ley = window.LEY_ARMAS;
@@ -596,6 +657,11 @@ Modulos.armeria = {
             ⚠️ Para la ley completa y sus reformas, consultá la fuente oficial: Congreso de la República
             (congreso.gob.gt) y DIGECAM (digecam.mil.gt). Esta consulta es de apoyo, no sustituye asesoría legal.
           </div>
+        </div>
+        <div style="margin-bottom:14px">
+          <button class="btn btn-cyan btn-sm" onclick="Modulos.armeria.modalImportacion()">
+            🛃 Cómo importar armas — pasos ante DIGECAM y SAT
+          </button>
         </div>
         <input class="form-input" id="ley-busca" style="margin-bottom:14px"
                placeholder="🔍 Buscar por número de artículo, título o texto (ej. 'munición', '60', 'portación')..."
