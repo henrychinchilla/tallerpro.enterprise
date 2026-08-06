@@ -123,12 +123,35 @@ Modulos.clientes = {
     } catch (_) { pintar('⚠️ El documento no se leyó con claridad. Escribí los datos a mano.', 'var(--red)'); return; }
 
     const mapas = {
-      /* La dirección del DPI sólo viene en el diseño nuevo; en el anterior es
-         null y el recibo de servicios sigue siendo la fuente. */
-      dpi: { 'cli-dpi': datos.cui, 'cli-nombre': datos.nombre_completo, 'cli-fnac': datos.fecha_nacimiento,
-             'cli-estado-civil': datos.estado_civil, 'cli-nacionalidad': datos.nacionalidad,
-             'cli-lugar-nac': datos.lugar_nacimiento, 'cli-dir': datos.direccion },
-      recibo: { 'cli-dir': datos.direccion },
+      /* El DPI trae la nacionalidad y el país como código ISO ("GTM"): se
+         traducen acá porque una declaración jurada no puede decir "de
+         nacionalidad GTM". Y el lugar de nacimiento y la vecindad vienen en
+         DOS líneas —departamento y municipio—, que es como se guardan.
+         La dirección exacta sólo viene en el diseño nuevo del DPI; en el
+         anterior es null y el recibo de servicios sigue siendo la fuente. */
+      dpi: {
+        'cli-dpi': datos.cui,
+        'cli-nombre': datos.nombre_completo,
+        'cli-fnac': datos.fecha_nacimiento,
+        'cli-sexo': datos.sexo,
+        'cli-estado-civil': datos.estado_civil,
+        'cli-nacionalidad': (typeof nacionalidadDesdeISO === 'function')
+          ? nacionalidadDesdeISO(datos.nacionalidad) : datos.nacionalidad,
+        'cli-nac-depto': datos.nacimiento_departamento,
+        'cli-nac-muni': datos.nacimiento_municipio,
+        'cli-vec-depto': datos.vecindad_departamento,
+        'cli-vec-muni': datos.vecindad_municipio,
+        'cli-dir': datos.direccion,
+        'cli-dpi-emision': datos.fecha_emision,
+        'cli-dpi-vence': datos.fecha_vencimiento,
+        'cli-dpi-serie': datos.dpi_numero_serie,
+        'cli-dpi-version': datos.dpi_version,
+      },
+      recibo: {
+        'cli-dir': datos.direccion,
+        'cli-vec-depto': datos.departamento,
+        'cli-vec-muni': datos.municipio,
+      },
       /* El tipo de licencia decide cuánta munición se puede entregar (art. 60),
          así que si la IA no lo distinguió manda null y el campo queda vacío
          para que alguien lo ponga a conciencia. */
@@ -149,6 +172,34 @@ Modulos.clientes = {
     }
     this._mostrarEdad();
 
+    /* Con departamento y municipio puestos, el código postal sale solo. */
+    this._sincronizarMunicipios();
+    this._calcularCodigosPostales();
+
+    /* SI EL RECIBO NO ESTÁ A NOMBRE DEL CLIENTE, LA VIVIENDA NO ES PROPIA.
+       Es la señal que usa cualquier analista de expediente, y hasta ahora
+       había que deducirla a ojo. No se decide sola —se sugiere— porque un
+       recibo puede estar a nombre del cónyuge o del padre en una casa propia:
+       la app marca la diferencia y la persona resuelve. */
+    if (cual === 'recibo' && datos.titular) {
+      const norm = s => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '')
+        .toLowerCase().replace(/[^a-z ]/g, ' ').replace(/\s+/g, ' ').trim();
+      const nomCliente = norm(document.getElementById('cli-nombre')?.value);
+      const nomRecibo = norm(datos.titular);
+      const viv = document.getElementById('cli-vivienda');
+      if (nomCliente && nomRecibo) {
+        /* Coincide si uno contiene al otro: el recibo suele traer el nombre
+           completo y la ficha a veces sólo dos apellidos. */
+        const coincide = nomRecibo.includes(nomCliente) || nomCliente.includes(nomRecibo);
+        if (coincide) {
+          if (viv && !viv.value) viv.value = 'propia';
+          this._avisoRecibo = `<span style="color:var(--green)">🏠 El recibo está a nombre del cliente: se marcó la vivienda como <b>propia</b>.</span>`;
+        } else {
+          this._avisoRecibo = `<span style="color:var(--amber)">🔑 El recibo está a nombre de <b>${UI.esc(datos.titular)}</b>, no del cliente. Suele indicar vivienda <b>rentada</b> — confirmalo, porque también puede ser del cónyuge o de un familiar en casa propia.</span>`;
+        }
+      }
+    }
+
     const nombreDoc = { dpi: 'DPI', recibo: 'recibo', licencia: 'licencia' }[cual] || 'documento';
     const partes = [];
     if (llenados.length) partes.push(`<span style="color:var(--green)">✅ ${llenados.length} campo(s) llenados desde el ${nombreDoc}.</span>`);
@@ -157,6 +208,7 @@ Modulos.clientes = {
     if (cual === 'licencia' && !datos.tipo)
       partes.push('<span style="color:var(--red)">⚠️ No se pudo distinguir si es de <b>tenencia</b> o de <b>portación</b>. Elegilo a mano: de eso depende cuánta munición se le puede entregar.</span>');
     if (distintos.length) partes.push(`<span style="color:var(--amber)">⚠️ No se tocó lo que ya estaba escrito. Diferencias: ${distintos.join(' · ')}</span>`);
+    if (this._avisoRecibo) { partes.push(this._avisoRecibo); this._avisoRecibo = null; }
     if (!partes.length) partes.push('<span style="color:var(--amber)">El documento no aportó datos nuevos.</span>');
     partes.push('<span style="color:var(--text3)">Revisá siempre contra el documento físico antes de guardar: esto alimenta una declaración jurada.</span>');
     pintar(partes.join('<br>'));
@@ -204,6 +256,58 @@ Modulos.clientes = {
       box.innerHTML = `✅ Vigente — le quedan ${d} días.`;
       box.style.color = 'var(--green)';
     }
+  },
+
+  /* Los municipios dependen del departamento elegido. Se repueblan sin perder
+     lo que ya estaba puesto: al leer el DPI llegan los dos a la vez, y si el
+     municipio se limpiara al fijar el departamento, la lectura se perdería. */
+  _sincronizarMunicipios() {
+    if (typeof municipiosGT !== 'function') return;
+    [['cli-nac-depto', 'cli-nac-muni'], ['cli-vec-depto', 'cli-vec-muni']].forEach(([idD, idM]) => {
+      const selD = document.getElementById(idD), selM = document.getElementById(idM);
+      if (!selD || !selM) return;
+      /* Optional chaining en dataset e innerHTML: si el elemento no es un
+         <select> real (o el navegador aún no lo terminó de armar), esto no
+         puede tumbar la lectura del documento entero — el usuario ya gastó
+         una foto y una llamada de IA. */
+      const deseado = selM.value || selM.dataset?.pendiente || '';
+      const lista = municipiosGT(selD.value);
+      if ('innerHTML' in selM) {
+        selM.innerHTML = '<option value="">— Municipio —</option>' +
+          lista.map(m => `<option value="${UI.esc(m.nombre)}">${UI.esc(m.nombre)}</option>`).join('');
+      }
+      /* Se busca tolerando tildes y mayúsculas: el DPI escribe
+         "SANTA CATARINA MITA" y el catálogo "Santa Catarina Mita". */
+      const match = lista.find(m => normalizarGeo(m.nombre) === normalizarGeo(deseado));
+      /* Si el municipio leído no está en el catálogo se CONSERVA lo que dijo
+         el documento en vez de borrarlo: puede ser una aldea que el catálogo
+         postal no lista, y perder el dato sería peor que no normalizarlo. */
+      selM.value = match ? match.nombre : deseado;
+      if (match && selM.dataset) delete selM.dataset.pendiente;
+    });
+  },
+
+  /* El código postal NO se teclea: sale de departamento + municipio. Queda
+     editable por si Correos publica uno nuevo antes de que se actualice el
+     catálogo, pero nadie debería tener que buscarlo. */
+  _calcularCodigosPostales() {
+    if (typeof codigoPostalGT !== 'function') return;
+    const poner = (idD, idM, idCP) => {
+      const cp = document.getElementById(idCP);
+      if (!cp) return;
+      const v = codigoPostalGT(document.getElementById(idD)?.value,
+                               document.getElementById(idM)?.value);
+      /* Si no se encuentra se deja lo que hubiera: mejor un campo vacío que
+         un código inventado, que terminaría impreso en una declaración. */
+      if (v) cp.value = v;
+    };
+    poner('cli-nac-depto', 'cli-nac-muni', 'cli-nac-cp');
+    poner('cli-vec-depto', 'cli-vec-muni', 'cli-cp');
+  },
+
+  _cambioDepartamento() {
+    this._sincronizarMunicipios();
+    this._calcularCodigosPostales();
   },
 
   _leerDPI(file)      { return this._leerDocumento(file, 'dpi'); },
@@ -291,10 +395,61 @@ Modulos.clientes = {
           <div class="form-group"><label class="form-label">Profesión u oficio</label>
             <input class="form-input" id="cli-profesion" value="${UI.esc(c.profesion||'')}" placeholder="Comerciante, ingeniero, agricultor..."></div>
           <div class="form-group"><label class="form-label">Nacionalidad</label>
-            <input class="form-input" id="cli-nacionalidad" value="${c.nacionalidad||''}" placeholder="Guatemalteca"></div>
-          <div class="form-group"><label class="form-label">Lugar de nacimiento</label>
-            <input class="form-input" id="cli-lugar-nac" value="${c.lugar_nacimiento||''}" placeholder="Municipio, departamento"></div>
+            <input class="form-input" id="cli-nacionalidad" value="${UI.esc(c.nacionalidad||'')}" placeholder="Guatemalteca"></div>
+          <div class="form-group"><label class="form-label">Sexo</label>
+            <select class="form-select" id="cli-sexo">
+              <option value="">— No indicado —</option>
+              <option value="masculino" ${c.sexo==='masculino'?'selected':''}>Masculino</option>
+              <option value="femenino"  ${c.sexo==='femenino'?'selected':''}>Femenino</option>
+            </select></div>
         </div>
+
+        <div class="form-row">
+          <div class="form-group"><label class="form-label">Nacimiento — departamento</label>
+            <select class="form-select" id="cli-nac-depto" onchange="Modulos.clientes._cambioDepartamento()">
+              <option value="">— Departamento —</option>
+              ${(typeof departamentosGT==='function'?departamentosGT():[]).map(d=>`<option value="${UI.esc(d)}" ${c.nacimiento_departamento===d?'selected':''}>${UI.esc(d)}</option>`).join('')}
+            </select></div>
+          <div class="form-group"><label class="form-label">Nacimiento — municipio</label>
+            <select class="form-select" id="cli-nac-muni" data-pendiente="${UI.esc(c.nacimiento_municipio||'')}"
+                    onchange="Modulos.clientes._calcularCodigosPostales()">
+              <option value="">— Municipio —</option>
+            </select></div>
+          <div class="form-group" style="max-width:130px"><label class="form-label">Cód. postal</label>
+            <input class="form-input mono-sm" id="cli-nac-cp" value="${UI.esc(c.nacimiento_codigo_postal||'')}" placeholder="22003"></div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group"><label class="form-label">Vecindad — departamento</label>
+            <select class="form-select" id="cli-vec-depto" onchange="Modulos.clientes._cambioDepartamento()">
+              <option value="">— Departamento —</option>
+              ${(typeof departamentosGT==='function'?departamentosGT():[]).map(d=>`<option value="${UI.esc(d)}" ${c.vecindad_departamento===d?'selected':''}>${UI.esc(d)}</option>`).join('')}
+            </select></div>
+          <div class="form-group"><label class="form-label">Vecindad — municipio</label>
+            <select class="form-select" id="cli-vec-muni" data-pendiente="${UI.esc(c.vecindad_municipio||'')}"
+                    onchange="Modulos.clientes._calcularCodigosPostales()">
+              <option value="">— Municipio —</option>
+            </select></div>
+          <div class="form-group" style="max-width:130px"><label class="form-label">Cód. postal</label>
+            <input class="form-input mono-sm" id="cli-cp" value="${UI.esc(c.codigo_postal||'')}" placeholder="01062"></div>
+        </div>
+        <div style="font-size:11px;color:var(--text3);margin:-6px 0 10px">
+          La <b>vecindad</b> es dónde vive ahora (va en el reverso del DPI); la <b>dirección</b> de abajo
+          es la calle exacta. El código postal se calcula solo al elegir departamento y municipio.
+        </div>
+
+        <div class="form-row">
+          <div class="form-group"><label class="form-label">DPI — emisión</label>
+            <input class="form-input" id="cli-dpi-emision" type="date" value="${c.dpi_fecha_emision||''}"></div>
+          <div class="form-group"><label class="form-label">DPI — vencimiento</label>
+            <input class="form-input" id="cli-dpi-vence" type="date" value="${c.dpi_fecha_vencimiento||''}"
+                   onchange="Modulos.clientes._avisarDPI()"></div>
+          <div class="form-group"><label class="form-label">DPI — No. de serie</label>
+            <input class="form-input mono-sm" id="cli-dpi-serie" value="${UI.esc(c.dpi_numero_serie||'')}" placeholder="0000036456563"></div>
+          <div class="form-group" style="max-width:110px"><label class="form-label">Versión</label>
+            <input class="form-input mono-sm" id="cli-dpi-version" value="${UI.esc(c.dpi_version||'')}" placeholder="004"></div>
+        </div>
+        <div id="cli-dpi-aviso" style="font-size:11.5px;margin:-4px 0 6px"></div>
       </div>`}
       <div class="form-row">
         <div class="form-group" style="flex:2"><label class="form-label">Dirección${armeria ? ' completa' : ''}</label>
@@ -384,6 +539,29 @@ Modulos.clientes = {
     if (esEdicion) Docs.render('cliente', id, 'cli-docs');
     this._mostrarEdad();
     this._avisarLicencia();
+    /* Los municipios se pueblan según el departamento guardado; el municipio
+       viaja en data-pendiente porque su <option> aún no existe al renderizar. */
+    this._sincronizarMunicipios();
+    this._avisarDPI();
+  },
+
+  /* Un DPI vencido no identifica a nadie, y una declaración jurada armada con
+     un documento vencido nace inservible. Se avisa antes, no al imprimir. */
+  _avisarDPI() {
+    const box = document.getElementById('cli-dpi-aviso');
+    if (!box) return;
+    const d = this.diasLicencia(document.getElementById('cli-dpi-vence')?.value);
+    if (d === null) { box.innerHTML = ''; return; }
+    if (d < 0) {
+      box.innerHTML = `⛔ <b>El DPI venció hace ${Math.abs(d)} día(s).</b> Un DPI vencido no identifica: pedile el renovado antes de armar cualquier declaración.`;
+      box.style.color = 'var(--red)';
+    } else if (d <= 90) {
+      box.innerHTML = `⚠️ El DPI vence en <b>${d} día(s)</b>.`;
+      box.style.color = 'var(--amber)';
+    } else {
+      box.innerHTML = `✅ DPI vigente — le quedan ${d} días.`;
+      box.style.color = 'var(--green)';
+    }
   },
 
   /* DPI, licencia (tenencia/portación) o pasaporte — foto o PDF. Vive en el
@@ -495,8 +673,12 @@ Modulos.clientes = {
 
     /* 2. Leer, si este documento trae datos. Va después de archivar: si la
           lectura falla, el archivo ya quedó guardado igual. */
+    /* Antes esto exigía image/*, y los recibos de servicios llegan en PDF
+       (EEGSA los emite así): se archivaban y NUNCA se leían, en silencio.
+       Ahora se aceptan también PDF, que la API lee igual. */
     const lector = this._LECTOR_DOC[tipo];
-    if (lector && file.type?.startsWith('image/')) await this._leerDocumento(file, lector);
+    const legible = file.type?.startsWith('image/') || file.type === 'application/pdf';
+    if (lector && legible) await this._leerDocumento(file, lector);
   },
 
   /* Sube lo que quedó pendiente de un cliente recién creado. */
@@ -544,6 +726,17 @@ Modulos.clientes = {
     siExiste('cli-profesion', 'profesion');
     siExiste('cli-nacionalidad', 'nacionalidad');
     siExiste('cli-lugar-nac', 'lugar_nacimiento');
+    siExiste('cli-sexo', 'sexo', v => v || null);
+    siExiste('cli-nac-depto', 'nacimiento_departamento', v => v || null);
+    siExiste('cli-nac-muni', 'nacimiento_municipio', v => v || null);
+    siExiste('cli-nac-cp', 'nacimiento_codigo_postal');
+    siExiste('cli-vec-depto', 'vecindad_departamento', v => v || null);
+    siExiste('cli-vec-muni', 'vecindad_municipio', v => v || null);
+    siExiste('cli-cp', 'codigo_postal');
+    siExiste('cli-dpi-emision', 'dpi_fecha_emision', v => v || null);
+    siExiste('cli-dpi-vence', 'dpi_fecha_vencimiento', v => v || null);
+    siExiste('cli-dpi-serie', 'dpi_numero_serie');
+    siExiste('cli-dpi-version', 'dpi_version');
     siExiste('cli-lic-tipo', 'licencia_tipo', v => v || null);
     siExiste('cli-lic-num', 'licencia_num');
     siExiste('cli-lic-vence', 'licencia_vencimiento', v => v || null);

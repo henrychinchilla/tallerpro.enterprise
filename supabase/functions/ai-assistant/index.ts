@@ -211,6 +211,13 @@ Devuelve ÚNICAMENTE un objeto JSON válido, sin bloques de código markdown, si
 
 REGLA CRÍTICA: si un dato no se lee con claridad en la imagen, devuélvelo como null. NUNCA adivines, completes ni corrijas un dato — este documento se usa para trámites ante DIGECAM y un dato inventado es peor que un campo vacío.
 
+EL DPI TIENE DOS CARAS Y CADA UNA TRAE COSAS DISTINTAS. Verificado contra un DPI real:
+  · ANVERSO: CÓDIGO ÚNICO DE IDENTIFICACIÓN (CUI), NOMBRE, APELLIDO, NACIONALIDAD, PAÍS DE NAC., SEXO, FECHA DE NACIMIENTO, la firma, un número de versión al pie (ej. "004") y una fecha bajo la fotografía que es la de EMISIÓN.
+  · REVERSO: LUGAR DE NACIMIENTO (dos líneas: primero el DEPARTAMENTO y debajo el MUNICIPIO), los datos de registro civil (L: libro, F: folio, P: partida), VECINDAD (también departamento y municipio), ESTADO CIVIL, FECHA DE VENCIMIENTO, NÚMERO DE SERIE y la zona legible por máquina (MRZ).
+Si te dan una sola cara, devuelve null en todo lo que no aparezca en ella. No deduzcas el reverso a partir del anverso ni al revés.
+
+LA NACIONALIDAD Y EL PAÍS VIENEN COMO CÓDIGO ISO DE TRES LETRAS ("GTM"). Devuélvelo TAL CUAL, en mayúsculas; la app lo traduce a "Guatemala" o "Guatemalteca" según haga falta. No lo traduzcas tú.
+
 CIRCULAN DOS DISEÑOS DE DPI Y AMBOS SON VÁLIDOS. Los dos se deben leer igual:
   · Diseño ANTERIOR: fotografía en blanco y negro o de menor calidad, rótulos únicamente en español, escudo de armas de Guatemala.
   · Diseño NUEVO (desde 2025): fotografía a COLOR, rótulos en español E INGLÉS, bandera nacional y un quetzal en lugar del escudo y de la pirámide, y puede incluir la DIRECCIÓN del titular, que el diseño anterior no traía.
@@ -225,9 +232,16 @@ Campos esperados:
   "lugar_nacimiento": "El lugar de nacimiento tal como aparece (municipio y departamento, o país si es extranjero)",
   "estado_civil": "Exactamente uno de: 'soltero(a)', 'casado(a)', 'unido(a)', 'divorciado(a)', 'viudo(a)'. Si el documento dice SOLTERO o SOLTERA, devuelve 'soltero(a)'. Si no aparece, null",
   "nacionalidad": "La nacionalidad que indique el documento (ej. 'Guatemalteca')",
-  "vecindad": "El municipio/departamento de vecindad si aparece, si no null",
-  "direccion": "La dirección del titular SÓLO si el documento la trae impresa (el diseño nuevo puede traerla; el anterior no). Si no aparece, null",
-  "fecha_vencimiento": "Fecha de vencimiento del documento en formato YYYY-MM-DD, si aparece; si no, null"
+  "sexo": "Exactamente 'masculino' o 'femenino', según el campo SEXO del anverso. Si no aparece, null",
+  "nacimiento_departamento": "La PRIMERA línea de LUGAR DE NACIMIENTO (el departamento, ej. 'JUTIAPA'). Si no aparece, null",
+  "nacimiento_municipio": "La SEGUNDA línea de LUGAR DE NACIMIENTO (el municipio o aldea, ej. 'SANTA CATARINA MITA'). Si no aparece, null",
+  "vecindad_departamento": "La PRIMERA línea de VECINDAD (el departamento, ej. 'GUATEMALA'). Si no aparece, null",
+  "vecindad_municipio": "La SEGUNDA línea de VECINDAD (el municipio, ej. 'FRAIJANES'). Si no aparece, null",
+  "direccion": "La dirección del titular SÓLO si el documento la trae impresa (el diseño nuevo puede traerla; el anterior no). La VECINDAD no es la dirección: no la copies aquí. Si no aparece, null",
+  "dpi_numero_serie": "El NÚMERO DE SERIE del reverso, tal como aparece. Si no aparece, null",
+  "dpi_version": "El número de versión al pie del anverso (ej. '004'). Si no aparece, null",
+  "fecha_emision": "La fecha bajo la fotografía del anverso, en formato YYYY-MM-DD. Viene como 17OCT2023: conviértela. Si no aparece, null",
+  "fecha_vencimiento": "La FECHA DE VENCIMIENTO del reverso, en formato YYYY-MM-DD. Viene como 16OCT2033: conviértela. Si no aparece, null"
 }`,
 
   licencia: `Eres un asistente especializado en leer LICENCIAS DE TENENCIA Y PORTACIÓN DE ARMA DE FUEGO emitidas por la DIGECAM (Dirección General de Control de Armas y Municiones) de Guatemala.
@@ -274,8 +288,11 @@ REGLA CRÍTICA: si un dato no se lee con claridad, devuélvelo como null. NUNCA 
 
 Campos esperados:
 {
-  "titular": "El nombre del titular del servicio tal como aparece",
-  "direccion": "La dirección completa del suministro, tal como está impresa, en una sola línea",
+  "titular": "El nombre del titular del servicio tal como aparece. IMPORTANTE: la app compara este nombre con el del cliente para deducir si la vivienda es propia o rentada, así que devuélvelo completo y sin corregir",
+  "direccion": "La dirección completa del suministro, tal como está impresa, en una sola línea. Une las líneas del domicilio pero NO incluyas el municipio y departamento si vienen en renglón aparte: esos van en sus propios campos",
+  "municipio": "El municipio del suministro si aparece (ej. 'FRAIJANES'), si no null",
+  "departamento": "El departamento del suministro si aparece (ej. 'GUATEMALA'), si no null",
+  "nit_titular": "El NIT del titular si aparece, si no null",
   "servicio": "Tipo de servicio: 'energía eléctrica', 'agua', 'teléfono', 'cable' u otro que indique",
   "empresa": "La empresa que emite el recibo (ej. EEGSA, EMPAGUA, Claro, Tigo)",
   "periodo": "El período o mes facturado tal como aparece, si aparece; si no, null",
@@ -462,7 +479,12 @@ Deno.serve(async (req) => {
       base64Raw = parts[1];
       mediaType = meta.split(";")[0].split(":")[1] || "image/jpeg";
     }
-    if (!['image/jpeg', 'image/png', 'image/webp'].includes(mediaType) || !/^[A-Za-z0-9+/=]+$/.test(base64Raw) || base64Raw.length > 7_000_000) {
+    /* Los recibos de servicios llegan casi siempre en PDF (EEGSA los emite
+       así), y hasta ahora se rechazaban en silencio: por eso la dirección
+       nunca se llenaba sola. La API acepta PDF con un bloque `document`, que
+       es lo mismo pero con otro nombre. */
+    const esPDF = mediaType === 'application/pdf';
+    if ((!['image/jpeg', 'image/png', 'image/webp'].includes(mediaType) && !esPDF) || !/^[A-Za-z0-9+/=]+$/.test(base64Raw) || base64Raw.length > 7_000_000) {
       return json({ error: "La imagen debe ser JPG, PNG o WebP y pesar como máximo 5 MB." }, 400);
     }
     messagesPayload = [
@@ -470,7 +492,7 @@ Deno.serve(async (req) => {
         role: "user",
         content: [
           {
-            type: "image",
+            type: esPDF ? "document" : "image",
             source: {
               type: "base64",
               media_type: mediaType,
