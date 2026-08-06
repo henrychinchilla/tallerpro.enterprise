@@ -125,5 +125,28 @@ const ok = (n, c) => { if (c) { pasadas++; console.log('PASS — ' + n); } else 
   ok('vacío devuelve null', paisDesdeISO('') === null && nacionalidadDesdeISO(null) === null);
 }
 
+
+/* -- El asiento del registro civil (L: F: P: del reverso) ---------------- */
+{
+  const fs2 = require('fs'), path2 = require('path');
+  const r2 = path2.join(__dirname, '..');
+  const srcCli = fs2.readFileSync(path2.join(r2, 'js', 'modulos', 'operacion', 'clientes.js'), 'utf8');
+  const srcIA = fs2.readFileSync(path2.join(r2, 'supabase', 'functions', 'ai-assistant', 'index.ts'), 'utf8');
+  const migR = fs2.readFileSync(path2.join(r2, 'db', 'migrations', '131_clientes_registro_civil.sql'), 'utf8');
+
+  ['registro_libro', 'registro_folio', 'registro_pagina'].forEach(c => {
+    ok('la migracion guarda ' + c, migR.includes(c));
+    ok('el prompt lee ' + c, srcIA.includes('"' + c + '"'));
+    ok('el formulario guarda ' + c, srcCli.includes("'" + c + "'"));
+  });
+
+  /* Van como TEXTO: en asientos viejos hay letras y ceros a la izquierda que
+     un integer se comeria. */
+  ok('se guardan como texto, no como numero', /registro_libro\s+text/.test(migR));
+  /* El prompt necesita el ejemplo literal para no confundir las tres letras. */
+  ok('el prompt trae el ejemplo real del DPI', /L:102 F:42 P:263/.test(srcIA));
+  ok('la pantalla explica para que sirve', /asiento del registro civil/.test(srcCli));
+}
+
 console.log(`   ${pasadas} pasadas, ${fallidas} fallidas`);
 if (fallidas) process.exitCode = 1;
