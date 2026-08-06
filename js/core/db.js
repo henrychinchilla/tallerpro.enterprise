@@ -990,6 +990,33 @@ const DB = {
     return (data || []).filter(r => r.id !== excluirId).reduce((s, r) => s + (Number(r.cantidad) || 0), 0);
   },
 
+  /* ── TENENCIAS DEL CLIENTE (una tarjeta por arma) ──
+     Sustentan cuántas armas registradas tiene, que es lo que multiplica el
+     tope de munición del art. 60 en portación (250 por arma, hasta 3). */
+  async getTenencias(clienteId) {
+    if (!clienteId) return [];
+    const { data } = await getSB().from('cliente_tenencias')
+      .select('*').eq('tenant_id', getTID()).eq('cliente_id', clienteId)
+      .order('activa', { ascending: false }).order('created_at', { ascending: false });
+    return data || [];
+  },
+
+  async guardarTenencia(fields) {
+    const payload = { ...fields, tenant_id: getTID(), updated_at: new Date().toISOString() };
+    if (fields.id) {
+      const { error } = await getSB().from('cliente_tenencias').update(payload).eq('id', fields.id);
+      return { error };
+    }
+    delete payload.id;
+    const { data, error } = await getSB().from('cliente_tenencias').insert(payload).select('id').single();
+    return { data, error };
+  },
+
+  async eliminarTenencia(id) {
+    const { error } = await getSB().from('cliente_tenencias').delete().eq('id', id);
+    return !error;
+  },
+
   /* ── DECLARACIONES JURADAS: historial ──
      Se guarda el documento YA EDITADO, no los campos con los que se armó: lo
      que vale como respaldo ante DIGECAM o la IVE es el papel que se firmó. */
