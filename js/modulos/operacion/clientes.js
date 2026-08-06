@@ -493,7 +493,27 @@ Modulos.clientes = {
             <div style="font-size:11px;color:var(--text3);margin-top:3px">Máximo 3 (art. 72).</div></div>
         </div>
         <div id="cli-lic-aviso" style="font-size:11.5px;margin-top:4px"></div>
-      </div>`}
+      </div>
+
+      ${!esEdicion ? `
+      <div class="form-group" style="background:var(--card2);border-radius:8px;padding:10px 12px">
+        <label class="form-label">🔫 Tarjetas de tenencia</label>
+        <div style="font-size:11px;color:var(--text3)">
+          Guardá primero el cliente y volvé a abrirlo para registrar sus tenencias.
+        </div>
+      </div>` : `
+      <div class="form-group" style="background:var(--card2);border-radius:8px;padding:10px 12px">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">
+          <label class="form-label" style="margin:0">🔫 Tarjetas de tenencia (una por arma)</label>
+          <button type="button" class="btn btn-sm btn-cyan" onclick="Modulos.clientes.modalTenencia('${id}')">➕ Agregar tenencia</button>
+        </div>
+        <div style="font-size:11px;color:var(--text3);margin:6px 0 8px">
+          La <b>licencia</b> es del titular y vence; la <b>tenencia</b> es de cada arma y <b>no vence</b>
+          (dice CIVIL ART. 9). De cuántas tenencias activas tenga sale el número de armas registradas,
+          que en portación multiplica el tope de munición del art. 60 — hasta 3 (art. 72).
+        </div>
+        <div id="cli-tenencias">Cargando…</div>
+      </div>`}`}
       <div class="form-group"><label class="form-label">Notas</label>
         <textarea class="form-input" id="cli-notas" rows="2">${UI.esc(c.notas||'')}</textarea></div>
       <div class="form-group">
@@ -543,6 +563,169 @@ Modulos.clientes = {
        viaja en data-pendiente porque su <option> aún no existe al renderizar. */
     this._sincronizarMunicipios();
     this._avisarDPI();
+    if (esEdicion) this.renderTenencias(id);
+  },
+
+  /* ══ TENENCIAS ═══════════════════════════════════════════════════════════
+     Una tarjeta por arma. Cuentan para el tope de munición sólo las ACTIVAS:
+     un arma vendida o extraviada no le da derecho a más cartuchos. */
+  async renderTenencias(clienteId) {
+    const cont = document.getElementById('cli-tenencias');
+    if (!cont) return;
+    const lista = await DB.getTenencias(clienteId).catch(() => []);
+    this._tenencias = lista;
+
+    const activas = lista.filter(t => t.activa).length;
+    const cuentan = Math.min(3, activas);
+
+    if (!lista.length) {
+      cont.innerHTML = `<div style="font-size:12px;color:var(--text3);padding:8px 0">
+        Sin tenencias registradas. Si el cliente compra munición con licencia de portación,
+        registrarlas es lo que respalda su tope mensual.</div>`;
+      return;
+    }
+
+    cont.innerHTML = `
+      <div style="font-size:12px;margin-bottom:8px">
+        <b>${activas}</b> arma(s) activa(s)${activas > 3 ? ` — el art. 72 topa en 3, así que cuentan <b>${cuentan}</b>` : ''}.
+        Tope de munición con portación: <b>${cuentan * 250}</b> cartuchos al mes.
+      </div>
+      <div class="table-wrap"><table class="data-table">
+        <thead><tr><th>Arma</th><th>Calibre</th><th>No. de serie</th><th>Marcaje GUA</th><th>Estado</th><th></th></tr></thead>
+        <tbody>${lista.map(t => `
+          <tr style="${t.activa ? '' : 'opacity:.55'}">
+            <td><b>${UI.esc([t.marca, t.modelo].filter(Boolean).join(' ') || t.tipo || '—')}</b>
+                <div style="font-size:11px;color:var(--text3)">${UI.esc(t.tipo || '')}${t.largo_canon_mm ? ` · cañón ${UI.esc(t.largo_canon_mm)} mm` : ''}</div></td>
+            <td>${UI.esc(t.calibre || '—')}</td>
+            <td class="mono-sm">${UI.esc(t.numero_serie || '—')}</td>
+            <td class="mono-sm" style="font-size:11px">${UI.esc(t.marcaje_gua || '—')}</td>
+            <td>${t.activa ? '<span class="badge badge-green">Activa</span>' : '<span class="badge badge-gray">Baja</span>'}</td>
+            <td style="text-align:right;white-space:nowrap">
+              ${Modulos.btnAccion('editar', `Modulos.clientes.modalTenencia('${clienteId}','${t.id}')`)}
+              ${Modulos.btnAccion('eliminar', `Modulos.clientes.eliminarTenencia('${clienteId}','${t.id}')`)}
+            </td>
+          </tr>`).join('')}</tbody>
+      </table></div>`;
+  },
+
+  modalTenencia(clienteId, tenenciaId) {
+    const t = (this._tenencias || []).find(x => x.id === tenenciaId) || {};
+    const v = (k, d = '') => UI.esc(t[k] ?? d);
+
+    UI.modal(tenenciaId ? '🔫 Editar tenencia' : '🔫 Nueva tarjeta de tenencia', `
+      <div style="font-size:11.5px;color:var(--text3);margin-bottom:12px;line-height:1.6">
+        Copiá los datos de la <b>tarjeta de tenencia</b> que emite DIGECAM. El
+        <b>largo del cañón va en milímetros</b>, como lo anota la tarjeta (pistola ≈102 mm,
+        escopeta ≈530 mm) — el art. 58 exige que el inventario cuadre exacto con el documento.
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Tipo de arma *</label>
+          <input class="form-input" id="ten-tipo" value="${v('tipo')}" placeholder="Pistola, escopeta, revólver..."></div>
+        <div class="form-group"><label class="form-label">Marca *</label>
+          <input class="form-input" id="ten-marca" value="${v('marca')}" placeholder="Glock"></div>
+        <div class="form-group"><label class="form-label">Modelo</label>
+          <input class="form-input" id="ten-modelo" value="${v('modelo')}" placeholder="19X"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Calibre</label>
+          <input class="form-input" id="ten-calibre" value="${v('calibre')}" placeholder="9x19"></div>
+        <div class="form-group"><label class="form-label">No. de serie *</label>
+          <input class="form-input mono-sm" id="ten-serie" value="${v('numero_serie')}" placeholder="BHTT137"></div>
+        <div class="form-group"><label class="form-label">Largo del cañón (mm)</label>
+          <input class="form-input" id="ten-canon" type="number" step="0.1" value="${v('largo_canon_mm')}" placeholder="102"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Conversiones de calibre</label>
+          <input class="form-input" id="ten-conv" value="${v('conversiones')}" placeholder="Ninguna"></div>
+        <div class="form-group"><label class="form-label">País de origen</label>
+          <input class="form-input" id="ten-pais" value="${v('pais_origen')}" placeholder="Austria"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">No. de tarjeta</label>
+          <input class="form-input mono-sm" id="ten-num" value="${v('num_tarjeta')}" placeholder="2621570"></div>
+        <div class="form-group"><label class="form-label">Huella balística No.</label>
+          <input class="form-input mono-sm" id="ten-huella" value="${v('huella_balistica')}" placeholder="2202261"></div>
+        <div class="form-group"><label class="form-label">No. de propietario</label>
+          <input class="form-input mono-sm" id="ten-propietario" value="${v('no_propietario')}" placeholder="300951"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Marcaje GUA (troquelado)</label>
+          <input class="form-input mono-sm" id="ten-gua" value="${v('marcaje_gua')}" placeholder="816025 3773028 337597">
+          <div style="font-size:11px;color:var(--text3);margin-top:3px">Los tres números de la línea MARCAJE GUA (art. 35).</div></div>
+        <div class="form-group"><label class="form-label">Fecha de emisión</label>
+          <input class="form-input" id="ten-emision" type="date" value="${t.fecha_emision || ''}">
+          <div style="font-size:11px;color:var(--text3);margin-top:3px">La tarjeta de tenencia <b>no vence</b>.</div></div>
+      </div>
+      <div class="form-group">
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+          <input type="checkbox" id="ten-activa" ${t.activa === false ? '' : 'checked'}>
+          <span class="form-label" style="margin:0">Arma activa (cuenta para el tope de munición)</span>
+        </label>
+        <div style="font-size:11px;color:var(--text3);margin-top:2px">
+          Desmarcala si el arma se vendió, se extravió o la tarjeta se anuló.
+        </div>
+      </div>
+      <div class="form-group"><label class="form-label">Notas</label>
+        <input class="form-input" id="ten-notas" value="${v('notas')}" placeholder="Opcional"></div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" onclick="UI.cerrarModal()">Cancelar</button>
+        <button class="btn btn-cyan" onclick="Modulos.clientes.guardarTenencia('${clienteId}','${tenenciaId || ''}')">Guardar</button>
+      </div>`, '700px');
+  },
+
+  async guardarTenencia(clienteId, tenenciaId) {
+    const v = id => document.getElementById(id)?.value?.trim() || null;
+    const serie = v('ten-serie');
+    if (!serie) { UI.toast('El número de serie identifica al arma: es obligatorio', 'error'); return; }
+
+    const fields = {
+      cliente_id: clienteId,
+      tipo: v('ten-tipo'), marca: v('ten-marca'), modelo: v('ten-modelo'),
+      calibre: v('ten-calibre'), numero_serie: serie,
+      largo_canon_mm: v('ten-canon') ? Number(v('ten-canon')) : null,
+      conversiones: v('ten-conv'), pais_origen: v('ten-pais'),
+      num_tarjeta: v('ten-num'), huella_balistica: v('ten-huella'),
+      no_propietario: v('ten-propietario'), marcaje_gua: v('ten-gua'),
+      fecha_emision: v('ten-emision'),
+      activa: document.getElementById('ten-activa')?.checked !== false,
+      notas: v('ten-notas'),
+    };
+    if (tenenciaId) fields.id = tenenciaId;
+
+    const { error } = await DB.guardarTenencia(fields);
+    if (error) {
+      /* El índice único por número de serie es el que atrapa la doble captura,
+         que contaría el arma dos veces para el tope de munición. */
+      const dup = /duplicate key|uq_tenencia_serie/i.test(error.message || '');
+      UI.toast(dup ? `Ya hay una tenencia registrada con el número de serie ${serie}`
+                   : (error.message || 'No se pudo guardar la tenencia'), 'error', 7000);
+      return;
+    }
+    UI.cerrarModal();
+    UI.toast('Tenencia guardada ✓');
+    await this.renderTenencias(clienteId);
+    this._sincronizarArmasRegistradas();
+  },
+
+  async eliminarTenencia(clienteId, tenenciaId) {
+    const t = (this._tenencias || []).find(x => x.id === tenenciaId);
+    if (!confirm(`¿Eliminar la tenencia de ${t?.marca || ''} ${t?.modelo || ''} (serie ${t?.numero_serie || '—'})?\n\n` +
+                 'Si el arma se vendió o se extravió, es mejor darla de BAJA (desmarcar "activa"): así queda el rastro.')) return;
+    const ok = await DB.eliminarTenencia(tenenciaId);
+    UI.toast(ok ? 'Tenencia eliminada' : 'No se pudo eliminar', ok ? 'success' : 'error');
+    if (ok) { await this.renderTenencias(clienteId); this._sincronizarArmasRegistradas(); }
+  },
+
+  /* El número de armas registradas deja de teclearse: sale de las tenencias
+     activas, topado en 3 por el art. 72. Si no hay tenencias cargadas no se
+     toca el campo — un comercio que aún no las registró no debe quedarse en 0
+     y perder el tope que su cliente sí tiene. */
+  _sincronizarArmasRegistradas() {
+    const sel = document.getElementById('cli-armas-reg');
+    if (!sel) return;
+    const activas = (this._tenencias || []).filter(t => t.activa).length;
+    if (!activas) return;
+    sel.value = String(Math.min(3, activas));
   },
 
   /* Un DPI vencido no identifica a nadie, y una declaración jurada armada con
