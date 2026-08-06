@@ -117,5 +117,62 @@ const ok = (n, c) => { if (c) { pasadas++; console.log('PASS — ' + n); } else 
   ok('...con los ejemplos de las tarjetas reales', /102 mm[\s\S]{0,40}530 mm/.test(srcCli));
 }
 
+
+/* ── La tarjeta se lee sola (foto o PDF) ────────────────────────────────── */
+{
+  ok('el formulario ofrece camara', /id="ten-cam"[\s\S]{0,120}capture="environment"/.test(srcCli));
+  ok('...y archivo, incluido PDF (las tarjetas electronicas vienen asi)',
+     /id="ten-gal"[\s\S]{0,120}accept="image\/\*,application\/pdf"/.test(srcCli));
+  ok('existe el lector de tenencias', /_leerTenencia\(inputEl\)/.test(srcCli));
+  /* Reusa el modo 'licencia' porque la tarjeta de tenencia ES el documento
+     que trae los datos del arma: un modo nuevo seria el mismo prompt. */
+  ok('reusa el lector de licencia', /IA\.escanearLicencia\(base64\)/.test(srcCli));
+
+  const fn = srcCli.slice(srcCli.indexOf('_leerTenencia(inputEl)'), srcCli.indexOf('async guardarTenencia('));
+  ok('mapea los datos del arma', /'ten-serie': d\.arma_serie/.test(fn) && /'ten-marca': d\.arma_marca/.test(fn));
+  ok('...y el marcaje GUA y la huella balistica',
+     /'ten-gua': d\.marcaje_gua/.test(fn) && /'ten-huella': d\.huella_balistica/.test(fn));
+  ok('el canon se toma en mm', /'ten-canon': d\.arma_largo_canon_mm/.test(fn));
+  /* Misma regla que el DPI: llenar lo vacio, reportar lo que difiere. Pisar
+     un dato ya verificado seria peor que no leer. */
+  ok('NO pisa lo que ya estaba escrito', /if \(!actual\) \{ el\.value = v;/.test(fn));
+  ok('...y reporta las diferencias', /No se toco lo ya escrito|No se tocó lo ya escrito/.test(fn));
+  /* Si le dan la LICENCIA en vez de la tenencia, los datos del arma vienen
+     vacios: hay que decirlo, no dejar el formulario en blanco sin explicacion. */
+  ok('avisa si el documento no parece una tenencia',
+     /Seguro que es una <b>tarjeta de tenencia<\/b>/.test(fn));
+}
+
+/* ── HISTORIAL: guarda los cambios pero NO acumula repetidos ────────────── */
+{
+  const migH = fs.readFileSync(path.join(raiz, 'db', 'migrations', '130_cliente_historial.sql'), 'utf8');
+
+  ok('existe la tabla de historial', /create table if not exists public\.cliente_historial/.test(migH));
+  ok('lo escribe un trigger (atrapa TODOS los caminos, no solo el formulario)',
+     /create trigger trg_cliente_historial/.test(migH));
+  /* Se archiva el valor ANTERIOR: el nuevo ya esta en la ficha, y la pregunta
+     real del historial es "que decia antes". */
+  ok('archiva el valor ANTERIOR, no el nuevo', /to_jsonb\(OLD\)/.test(migH));
+
+  /* Las dos reglas que pidio Henry: */
+  ok('si nada vigilado cambio, no guarda version', /if v_ant = v_nue then[\s\S]{0,60}return NEW;/.test(migH));
+  ok('si la version anterior YA esta guardada, tampoco',
+     /if v_ult is not null and v_ult = v_ant then[\s\S]{0,40}return NEW;/.test(migH));
+
+  /* El telefono, las notas o el saldo de puntos cambian a diario y no son lo
+     que respalda una declaracion jurada: no deben generar versiones. */
+  ok('solo vigila campos de identificacion', /v_etiquetas/.test(migH));
+  ok('...y el motivo se lee en castellano', /'Cambio: ' \|\| array_to_string|Cambió: /.test(migH));
+
+  ok('RLS por tenant en el historial',
+     /create policy cliente_historial_tenant[\s\S]{0,200}current_tenant_id\(\)/.test(migH));
+  ok('el historial muere con el cliente',
+     /cliente_id\s+uuid not null references public\.clientes\(id\) on delete cascade/.test(migH));
+
+  ok('la pantalla lo muestra', /verHistorial\(clienteId\)/.test(srcCli));
+  ok('...y explica para qué sirve', /declaraci[oó]n\s+firmada/.test(srcCli));
+  ok('DB.getHistorialCliente existe', /async getHistorialCliente\(/.test(srcDB));
+}
+
 console.log(`   ${pasadas} pasadas, ${fallidas} fallidas`);
 if (fallidas) process.exitCode = 1;
