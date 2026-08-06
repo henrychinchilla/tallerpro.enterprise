@@ -81,10 +81,13 @@ const ok = (n, c) => { if (c) { pasadas++; console.log('PASS — ' + n); } else 
 
   /* La verificación del expediente en Armería debe aceptarlos, si no le
      pediría el anverso a quien ya lo entregó. */
-  ok('la verificación acepta el "dpi" viejo como anverso',
-     /hay\('dpi_frente'\) \|\| hay\('dpi'\)/.test(srcArm));
-  ok('...y la "licencia_arma" vieja',
-     /hay\('licencia_frente'\) \|\| hay\('licencia_arma'\)/.test(srcArm));
+  /* La traduccion ya no se repite en armeria.js con literales: usa el MAPA
+     que declara clientes.js. Tenerlo en dos lados es como se rompe la
+     compatibilidad la proxima vez que se parta un documento en dos caras. */
+  ok('la verificación usa el mapa de tipos heredados, no literales sueltos',
+     /Modulos\.clientes\?\._DOCS_HEREDADOS/.test(srcArm));
+  ok('...y traduce cada tipo viejo a su equivalente nuevo',
+     /if \(tipos\.has\(viejo\)\) tipos\.add\(nuevo\)/.test(srcArm));
 }
 
 /* ── El expediente incompleto se nota ───────────────────────────────────── */
