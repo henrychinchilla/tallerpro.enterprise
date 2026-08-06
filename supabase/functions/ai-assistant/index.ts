@@ -305,7 +305,7 @@ Campos esperados:
 
 /* Snapshot del tenant. `elevado` (admin/gerente/CEO) recibe TODA la info,
    incluyendo finanzas; los demás roles solo lo operativo (sin dinero/costos). */
-async function snapshotTenant(admin: ReturnType<typeof createClient>, tenantId: string, elevado: boolean) {
+async function snapshotTenant(admin: ReturnType<typeof createClient>, tenantId: string, elevado: boolean, conArmeria = false) {
   const hoy = new Date();
   const ini = new Date(hoy.getFullYear(), hoy.getMonth(), 1).toISOString().slice(0, 10);
   const fin = new Date(hoy.getFullYear(), hoy.getMonth() + 1, 0).toISOString().slice(0, 10);
@@ -335,6 +335,47 @@ async function snapshotTenant(admin: ReturnType<typeof createClient>, tenantId: 
       ultima_visita: v.ultima_visita ?? "sin registro", km: v.kilometraje ?? null,
     })),
   };
+
+  /* ── ARMERÍA ──
+     Va ANTES del corte por rol a propósito: esto es OPERATIVO, no financiero.
+     Quien atiende el mostrador necesita saber si a un cliente le queda saldo
+     de munición o si su expediente está incompleto — negárselo lo obligaría a
+     vender a ciegas. Lo que sigue detrás del corte son los montos, no la ley. */
+  if (conArmeria) {
+    const [saldos, entregasMes, sinExpediente] = await Promise.all([
+      f(admin.from("armeria_municion_saldos")
+        .select("calibre,comprado,entregado,saldo,clientes(nombre)")
+        .eq("tenant_id", tenantId).gt("saldo", 0).limit(60)),
+      f(admin.from("armeria_municion_entregas")
+        .select("cantidad,calibre,fecha,licencia_tipo,codigo_autorizacion_digecam,clientes(nombre)")
+        .eq("tenant_id", tenantId).gte("fecha", ini).lte("fecha", fin).limit(200)),
+      /* Un cliente sin tipo de licencia no puede comprar munición: es el hueco
+         que más frena una venta en el mostrador. */
+      f(admin.from("clientes").select("nombre,licencia_tipo,licencia_vencimiento,dpi_fecha_vencimiento")
+        .eq("tenant_id", tenantId).is("licencia_tipo", null).limit(40)),
+    ]);
+
+    const hoyISO = hoy.toISOString().slice(0, 10);
+    snap.armeria = {
+      municion_pendiente_de_entregar: saldos.map((s: any) => ({
+        cliente: s.clientes?.nombre ?? "—", calibre: s.calibre,
+        comprado: s.comprado, entregado: s.entregado, le_queda: s.saldo,
+      })),
+      entregas_del_mes: entregasMes.length,
+      cartuchos_entregados_del_mes: sum(entregasMes, "cantidad"),
+      /* Sin código de DIGECAM la entrega quedó sin su respaldo real: el conteo
+         propio es sólo una referencia parcial (cuota nacional, reglamento
+         art. 21), así que conviene que Nexus pueda señalarlas. */
+      entregas_sin_codigo_digecam: entregasMes.filter((e: any) => !e.codigo_autorizacion_digecam).length,
+      clientes_sin_tipo_de_licencia: sinExpediente.map((c: any) => c.nombre),
+      recordatorio_legal:
+        "Tope del art. 60: 200 cartuchos al mes con TENENCIA y 250 POR ARMA REGISTRADA con PORTACIÓN " +
+        "(máximo 3 armas según el art. 72, o sea 750). El conteo de esta app es una REFERENCIA PARCIAL: " +
+        "la cuota es nacional por persona y aquí sólo se ven las entregas de este comercio. " +
+        "La tarjeta de tenencia NO vence; la licencia de portación sí.",
+      fecha_de_hoy: hoyISO,
+    };
+  }
 
   if (!elevado) return snap;
 
@@ -544,7 +585,9 @@ Deno.serve(async (req) => {
       }
     }
 
-    const snap = await snapshotTenant(asCaller, tenantId, elevado);
+    /* El bloque de armería sólo se arma si el ROL puede tocar ese módulo: un
+       mecánico no tiene por qué ver el saldo de munición de un cliente. */
+    const snap = await snapshotTenant(asCaller, tenantId, elevado, modsDelRol.includes("armeria"));
     userContent = `Fecha de hoy: ${new Date().toISOString().slice(0, 10)}\n` +
       `Snapshot del negocio (JSON):\n${JSON.stringify(snap, null, 2)}\n\n` +
       (modo === "insights" ? "Genera el resumen ejecutivo." : `Pregunta: ${mensaje}`);
