@@ -145,7 +145,11 @@ const ok = (n, c) => { if (c) { pasadas++; console.log('PASS — ' + n); } else 
   /* '' a una columna integer revienta el insert. */
   ok('armas registradas se manda como entero o null',
      /siExiste\('cli-armas-reg', 'armas_registradas', v => \(v \? Number\(v\) : null\)\)/.test(srcCli));
-  ok('el bloque sólo se dibuja para armería', /\$\{!armeria \? '' : `[\s\S]{0,200}Licencia de arma \(DIGECAM\)/.test(srcCli));
+  ok('el bloque sólo se dibuja para armería',
+     /\$\{!armeria \? '' : `[\s\S]{0,400}Licencia de arma \(DIGECAM\)/.test(srcCli));
+  /* Con 48 campos, el alta se pliega en secciones: <details> nativo, sin JS. */
+  ok('la licencia vive en su propia sección plegable',
+     /_seccion\('🔫', 'Licencia y tenencias'/.test(srcCli));
 }
 
 /* ── La entrega la trae puesta, pero guarda su propia copia ─────────────── */

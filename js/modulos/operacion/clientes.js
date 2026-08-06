@@ -261,6 +261,35 @@ Modulos.clientes = {
     }
   },
 
+  /* Encabezado de una sección plegable del formulario.
+
+     El alta de un cliente de armería pide 48 campos: DPI por sus dos caras,
+     nacimiento, vecindad, licencia, tenencias y documentos. Todo junto es una
+     pared, y quien sólo viene a corregir un teléfono no debería recorrerla.
+
+     Se usa <details>/<summary>, que es nativo: pliega sin una línea de
+     JavaScript, funciona con teclado y lector de pantalla, y el navegador
+     recuerda el estado dentro de la misma pantalla. Cada llamada ABRE un
+     <details> que el bloque siguiente cierra con </details>.
+
+     `abierta` deja desplegadas las dos que casi siempre se tocan (los datos
+     del DPI y los documentos, que son los que se llenan solos al subir las
+     fotos); licencia, tenencias e historial arrancan cerradas. */
+  _seccion(icono, titulo, ayuda, abierta = false) {
+    return `
+      <details ${abierta ? 'open' : ''} style="margin-bottom:12px;border:1px solid var(--border);border-radius:8px;overflow:hidden">
+        <summary style="cursor:pointer;padding:9px 12px;background:var(--surface2);font-weight:700;font-size:12.5px;
+                        display:flex;align-items:center;gap:8px;user-select:none;list-style:none">
+          <span>${icono}</span>
+          <span>${UI.esc(titulo)}</span>
+          <span style="font-weight:400;font-size:11px;color:var(--text3);margin-left:auto;text-align:right">${UI.esc(ayuda || '')}</span>
+        </summary>
+        <div style="padding:10px 12px 4px">`;
+  },
+
+  /* Cierra el div de relleno y el <details> que abrio _seccion. */
+  _finSeccion() { return '</div></details>'; },
+
   /* Los municipios dependen del departamento elegido. Se repueblan sin perder
      lo que ya estaba puesto: al leer el DPI llegan los dos a la vez, y si el
      municipio se limpiara al fijar el departamento, la lectura se perdería. */
@@ -375,10 +404,10 @@ Modulos.clientes = {
            lleno en vez de con rayas para escribir a mano cada vez.
            Sólo se piden si el comercio vende armas. -->
       ${!armeria ? '' : `
+      ${this._seccion('🪪', 'Datos del DPI', 'Nombre, nacimiento, estado civil, vecindad y vigencia del documento', true)}
       <div style="background:var(--card2);border-radius:8px;padding:10px 12px;margin-bottom:12px">
-        <div style="font-size:12px;font-weight:700;margin-bottom:2px">🪪 Datos personales (para declaraciones juradas y trámites)</div>
         <div style="font-size:11px;color:var(--text3);margin-bottom:8px">
-          Se llenan solos al adjuntar el DPI y el recibo de servicios ahí abajo 👇
+          Se llenan solos al adjuntar las dos caras del DPI y el recibo de servicios, más abajo.
         </div>
         <div class="form-row">
           <div class="form-group"><label class="form-label">DPI</label>
@@ -480,9 +509,10 @@ Modulos.clientes = {
             <option value="familiar" ${c.vivienda==='familiar'?'selected':''}>👪 Familiar / prestada</option>
           </select></div>`}
       </div>
-      ${!armeria ? '' : `
+      ${!armeria ? '' : `${this._finSeccion()}
+      ${this._seccion('🔫', 'Licencia y tenencias', 'De aquí sale el tope mensual de munición del art. 60')}
       <div class="form-group" style="background:var(--card2);border-radius:8px;padding:10px 12px">
-        <label class="form-label">🔫 Licencia de arma (DIGECAM)</label>
+        <label class="form-label">Licencia de arma (DIGECAM)</label>
         <div style="font-size:11px;color:var(--text3);margin-bottom:8px">
           Se llena sola al subir el <b>anverso de la licencia</b> abajo. De estos datos sale el tope
           mensual de munición del art. 60, y quedan copiados en cada entrega como evidencia del día.
@@ -531,9 +561,11 @@ Modulos.clientes = {
         <div id="cli-tenencias">Cargando…</div>
       </div>
 
+      ${this._finSeccion()}
+      ${this._seccion('🕓', 'Historial de cambios', 'Qué decía la ficha antes de cada renovación o mudanza')}
       <div class="form-group" style="background:var(--card2);border-radius:8px;padding:10px 12px">
         <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">
-          <label class="form-label" style="margin:0">🕓 Historial de cambios</label>
+          <label class="form-label" style="margin:0">Versiones anteriores</label>
           <button type="button" class="btn btn-sm btn-ghost" onclick="Modulos.clientes.verHistorial('${id}')">Ver versiones anteriores</button>
         </div>
         <div style="font-size:11px;color:var(--text3);margin-top:4px">
@@ -569,7 +601,10 @@ Modulos.clientes = {
           </div>
         </div>
       </div>
-      ${!armeria ? '' : `<div id="cli-docs-box">${this._htmlDocumentos(id)}</div>`}
+      ${!armeria ? '' : `${this._finSeccion()}
+      ${this._seccion('📎', 'Documentos', 'DPI por sus dos caras, licencia, pasaporte y recibo de servicios', true)}
+      <div id="cli-docs-box">${this._htmlDocumentos(id)}</div>
+      ${this._finSeccion()}`}
       ${!esEdicion?`
       <div class="card" style="background:var(--amber-dim);border-color:var(--amber-border);margin-top:4px">
         <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px">

@@ -1163,10 +1163,18 @@ Modulos.armeria = {
        notario piden ambas. Los tipos VIEJOS ('dpi', 'licencia_arma') se
        aceptan como el anverso, para no mandar a refotografiar lo que ya se
        entregó antes de partir los documentos en dos caras. */
+    /* Los tipos VIEJOS se traducen con el mapa que declara el módulo de
+       clientes, en vez de repetirlos acá: tenerlos escritos en dos lados es
+       cómo se rompe la compatibilidad la próxima vez que se parta un
+       documento en dos caras y alguien actualice sólo uno. */
+    const heredados = Modulos.clientes?._DOCS_HEREDADOS || {};
+    for (const [viejo, nuevo] of Object.entries(heredados)) {
+      if (tipos.has(viejo)) tipos.add(nuevo);
+    }
     const hay = t => tipos.has(t);
-    const anversoDPI = hay('dpi_frente') || hay('dpi') || hay('pasaporte');
+    const anversoDPI = hay('dpi_frente') || hay('pasaporte');
     const reversoDPI = hay('dpi_reverso') || hay('pasaporte');   // el pasaporte es una hoja
-    const anversoLic = hay('licencia_frente') || hay('licencia_arma');
+    const anversoLic = hay('licencia_frente');
     const reversoLic = hay('licencia_reverso');
 
     const falta = [];
