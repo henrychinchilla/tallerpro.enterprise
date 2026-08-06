@@ -8,7 +8,7 @@
    Para forzar actualización: subir CACHE_VERSION.
 ═══════════════════════════════════════════════════════ */
 
-const CACHE_VERSION = 'v4.64.0-20260805';
+const CACHE_VERSION = 'v4.65.0-20260806';
 const CACHE_NAME = `nexuspro-${CACHE_VERSION}`;
 
 /* App shell — se precachea en install para que funcione offline */
@@ -23,6 +23,7 @@ const PRECACHE = [
   '/js/core/config.js',
   '/js/core/ui.js',
   '/js/core/giros.js',
+  '/js/core/geo-guatemala.js',
   '/js/core/ley-armas.js',
   '/js/core/bascula.js',
   '/js/core/db.js',

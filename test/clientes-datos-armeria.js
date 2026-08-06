@@ -36,6 +36,10 @@ const ctx = {
 };
 ctx.window = ctx;
 vm.createContext(ctx);
+/* El catálogo geográfico va ANTES, como en el navegador: clientes.js lo usa
+   para traducir el código ISO del DPI ("GTM" → "Guatemalteca") y para derivar
+   el código postal. Sin él, la traducción cae al valor crudo. */
+vm.runInContext(fs.readFileSync(raiz('js', 'core', 'geo-guatemala.js'), 'utf8'), ctx);
 vm.runInContext(fs.readFileSync(raiz('js', 'modulos', 'operacion', 'clientes.js'), 'utf8'), ctx);
 const CLI = ctx.Modulos.clientes;
 CLI.render = async () => {};   // no hay página que pintar en la prueba
@@ -152,15 +156,27 @@ function domBase() {
   };
 
   /* Campos vacíos: se llenan. */
-  prepararDom({ 'cli-dpi': '', 'cli-fnac': '', 'cli-estado-civil': '', 'cli-nacionalidad': '', 'cli-lugar-nac': '', 'cli-edad': '' });
+  prepararDom({ 'cli-dpi': '', 'cli-fnac': '', 'cli-estado-civil': '', 'cli-nacionalidad': '',
+                'cli-nac-depto': '', 'cli-nac-muni': '', 'cli-edad': '' });
   campos['cli-edad'] = { textContent: '', style: {} };
   conDatos({ cui: '1605755322205', nombre_completo: 'Ana María Gómez', fecha_nacimiento: '1990-06-15',
-             estado_civil: 'soltero(a)', nacionalidad: 'Guatemalteca', lugar_nacimiento: 'Mixco, Guatemala' });
+             estado_civil: 'soltero(a)', nacionalidad: 'GTM',
+             nacimiento_departamento: 'GUATEMALA', nacimiento_municipio: 'MIXCO' });
   await CLI._leerDPI(archivo);
   ok('llena el DPI que estaba vacío', campos['cli-dpi'].value === '1605755322205');
   ok('llena la fecha de nacimiento', campos['cli-fnac'].value === '1990-06-15');
   ok('llena el estado civil', campos['cli-estado-civil'].value === 'soltero(a)');
-  ok('llena el lugar de nacimiento', campos['cli-lugar-nac'].value === 'Mixco, Guatemala');
+  /* El lugar de nacimiento ya no es un texto suelto: el DPI lo trae en dos
+     lineas y se guarda partido, para poder derivar el codigo postal. */
+  ok('llena el departamento de nacimiento', campos['cli-nac-depto'].value === 'GUATEMALA');
+  /* El DPI grita en MAYUSCULAS ("MIXCO") y el catalogo postal lo escribe
+     "Mixco". Se guarda la forma del CATALOGO: si no, el mismo municipio
+     entraria de dos maneras y los codigos postales dejarian de cuadrar. */
+  ok('llena el municipio de nacimiento, normalizado al catalogo',
+     campos['cli-nac-muni'].value === 'Mixco');
+  /* El DPI imprime el codigo ISO: una declaracion jurada no puede decir
+     "de nacionalidad GTM". */
+  ok('traduce GTM a Guatemalteca', campos['cli-nacionalidad'].value === 'Guatemalteca');
   ok('avisa cuántos campos llenó', /campo\(s\) llenados/.test(campos['cli-lectura-aviso'].innerHTML));
 
   /* Campo YA escrito y el documento dice otra cosa: NO se pisa, se reporta. */
@@ -246,13 +262,14 @@ function domBase() {
   ok('la licencia se archiva', subidos.length === 1 && subidos[0].tipo === 'licencia_arma');
   ok('...pero no gasta una llamada de IA (no hay qué leer ahí)', leyoLicencia === false);
 
-  /* Un PDF se archiva pero no se manda a leer: el lector es de imágenes. */
+  /* Un PDF SI se lee. Antes se archivaba y se saltaba en silencio, y por eso
+     la direccion nunca se llenaba: los recibos de EEGSA vienen en PDF. */
   ctx.IA = { escanearDPI: async () => { leyoLicencia = true; return { ok: true, texto: '{}' }; } };
   leyoLicencia = false;
   subidos.length = 0;
   await CLI._subirDoc('c1', 'dpi_frente', { files: [{ size: 1000, type: 'application/pdf' }], value: '' });
   ok('un PDF se archiva igual', subidos.length === 1);
-  ok('...pero no se manda al lector de imágenes', leyoLicencia === false);
+  ok('...y TAMBIEN se manda a leer (los recibos vienen en PDF)', leyoLicencia === true);
 }
 
 /* ── Fotos tomadas ANTES de que el cliente exista ────────────────────────
