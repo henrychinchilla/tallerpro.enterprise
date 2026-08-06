@@ -30,6 +30,18 @@ screenshots/*.html
 *.xlsx
 *.pptx
 
+# Fotos sueltas en la raiz (DPI, tarjetas de tenencia, capturas de pantalla
+# para marketing, fotos de referencia...): NO son parte del sitio, y varias
+# son documentos personales/sensibles. index.html sólo referencia imagenes
+# bajo /icons/, así que excluir TODO archivo de imagen suelto en la raiz no
+# rompe nada. El 2026-08-06 esto se subio por accidente (Henry DPI Frontal.jpg,
+# Henry DPI atras.jpg, tenencia glock.jpg quedaron publicas en el CDN un rato).
+/*.jpg
+/*.jpeg
+/*.png
+/*.webp
+/*.gif
+
 # capturas de Wireshark: evidencia de diagnostico, no son parte del sitio
 docs/capturas/
 *.pcapng
