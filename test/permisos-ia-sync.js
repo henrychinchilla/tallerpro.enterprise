@@ -54,5 +54,32 @@ for (const [rol, modulos] of Object.entries(PERMISOS_MIN)) {
 ok('mecánico NO tiene armería en PERMISOS_MIN', !PERMISOS_MIN.mecanico.includes('armeria'));
 ok('mecánico NO tiene armería en config.js tampoco', PERMISOS.mecanico?.armeria !== true);
 
+
+/* -- Nexus conoce lo nuevo de armeria, y solo si el ROL lo permite -------- */
+{
+  const fs2 = require('fs'), path2 = require('path');
+  const srcIA2 = fs2.readFileSync(path2.join(__dirname, '..', 'supabase', 'functions', 'ai-assistant', 'index.ts'), 'utf8');
+
+  ok('el snapshot trae el saldo de municion pendiente', /municion_pendiente_de_entregar/.test(srcIA2));
+  ok('...y las entregas del mes', /cartuchos_entregados_del_mes/.test(srcIA2));
+  /* Sin codigo de DIGECAM la entrega quedo sin su respaldo real. */
+  ok('senala las entregas sin codigo de DIGECAM', /entregas_sin_codigo_digecam/.test(srcIA2));
+  ok('avisa de los clientes sin tipo de licencia', /clientes_sin_tipo_de_licencia/.test(srcIA2));
+
+  /* El tope y sus limites viajan CON los datos: si Nexus viera el conteo sin
+     el recordatorio, lo presentaria como si fuera la cuota nacional. */
+  ok('el recordatorio legal viaja junto al conteo', /recordatorio_legal/.test(srcIA2));
+  ok('...dice que el 250 es POR ARMA', /250 POR ARMA REGISTRADA/.test(srcIA2));
+  ok('...y que el conteo es una REFERENCIA PARCIAL', /REFERENCIA PARCIAL/.test(srcIA2));
+  ok('...y que la tenencia no vence', /tarjeta de tenencia NO vence/.test(srcIA2));
+
+  /* Un mecanico no debe ver el saldo de municion de un cliente. */
+  ok('el bloque se arma solo si el ROL puede tocar armeria',
+     srcIA2.includes('modsDelRol.includes("armeria")'));
+  /* Va ANTES del corte financiero: quien atiende el mostrador lo necesita. */
+  ok('es operativo, no financiero (va antes del corte por rol elevado)',
+     srcIA2.indexOf('municion_pendiente_de_entregar') < srcIA2.indexOf('if (!elevado) return snap;'));
+}
+
 console.log(`\n${pasadas} pasadas, ${fallidas} fallidas`);
 process.exitCode = fallidas ? 1 : 0;
