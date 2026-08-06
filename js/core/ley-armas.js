@@ -31,6 +31,115 @@ const LEY_ARMAS = {
      filtrar, y el texto literal. `clave: true` marca los que se aplican todos
      los días en el mostrador. */
   articulos: [
+    /* ── IMPORTACIÓN ──
+       Van primero porque son el principio de la cadena: un arma que se vende
+       en el mostrador entró por acá. El troquelado que todos mencionan es el
+       artículo 35: las letras GUA, a costo del importador. */
+    {
+      num: 32, tema: 'importacion',
+      titulo: 'Importación de armas y municiones',
+      texto: `Las personas individuales o jurídicas debidamente registradas y autorizadas por la DIGECAM, tienen el derecho de importar armas de fuego, de las clasificadas en esta Ley como armas de fuego de uso civil y armas deportivas y municiones, ya sea que la finalidad de la importación sea la venta al público en establecimientos autorizados para el efecto, o bien la utilización para fines personales de seguridad y recreación.
+
+Las entidades deportivas se regirán por lo que establecen sus leyes y reglamentos, además de lo preceptuado en la presente Ley.`,
+    },
+    {
+      num: 33, tema: 'importacion',
+      titulo: 'Importación de armas y municiones para casos de excepción',
+      texto: `Las personas individuales o jurídicas que deseen importar armas de fuego y sus municiones, de las contempladas como de uso y manejo individual con mecanismo de disparo automático o semiautomático: fusiles militares de asalto táctico, ametralladoras, subametralladoras, carabinas, pistolas automáticas, rifles automáticos, deben hacerlo por medio de un establecimiento debidamente autorizado para vender armas de fuego. El establecimiento deberá hacer la solicitud de importación, llenando los requisitos que para tal efecto establece la presente Ley.
+
+Los establecimientos autorizados para vender armas de fuego, sólo podrán importar armas de las contempladas en el párrafo anterior, a requerimiento de una persona individual o jurídica, cuando ésta ya cuente con el dictamen favorable del Ministerio de la Defensa Nacional y la autorización correspondiente de la DIGECAM, tal y como lo establece la presente Ley.
+
+Los establecimientos autorizados para vender armas de fuego, sólo podrán tener en su inventario armas de fuego de las consideradas en esta Ley como de uso civil y deportivo, a excepción de aquellas que hubiere importado llenando los requisitos establecidos en el párrafo anterior y que aún no hubiesen sido retiradas por su propietario.`,
+    },
+    {
+      num: 34, tema: 'importacion', clave: true,
+      titulo: 'Requisitos para importar armas de fuego y sus municiones',
+      texto: `Las personas individuales o jurídicas que deseen importar armas de fuego y sus municiones, deberán llenar los siguientes requisitos:
+
+a) Solicitud dirigida a la DIGECAM, en formulario que proporcionará el departamento respectivo, al que se le adjuntará declaración jurada prestada ante notario público, con la información siguiente:
+  1. Nombres y apellidos completos del solicitante, edad, estado civil, nacionalidad, profesión o actividad a que se dedica, número de orden, registro, fecha y lugar de extensión de su documento de identificación personal, dirección exacta del domicilio, de su lugar de trabajo, y promesa de informar inmediatamente de cualquier cambio en los datos proporcionados.
+  2. Cantidades, características de las armas de fuego que integran el lote, marca, calibre y conversiones a otros calibres, el número de registro, modelo, largo del cañón o cañones del arma y país de procedencia. En caso de algún cambio en los datos proporcionados, se deberá informar inmediatamente a quien corresponda.
+
+b) Acompañar los siguientes documentos:
+  1. Fotocopia legalizada del documento de identificación personal.
+  2. Certificación de carencia de antecedentes penales y de carencia de antecedentes policíacos.
+  3. Certificación de trabajo o certificación contable de sus ingresos; o acreditar tener arte, profesión u oficio.
+
+c) Las personas jurídicas deberán acompañar adicionalmente:
+  1. Fotocopia legalizada del testimonio de la escritura constitutiva, debidamente inscrita en el Registro Mercantil.
+  2. Fotocopia legalizada de la patente de comercio.
+  3. Nombramiento de representación.
+  4. Certificación de que se encuentra inscrito como sujeto de contribución fiscal.`,
+    },
+    {
+      num: 35, tema: 'importacion', clave: true,
+      titulo: 'Procedimiento de registro de armas importadas',
+      texto: `El importador deberá, a su costo, remitir todas las armas importadas a la DIGECAM, con el objeto que se tomen las huellas balísticas y se emitan tarjetas de tenencia a nombre del importador.
+
+Cuando las armas ingresen al país con el propósito de ser comercializadas, deberán ser marcadas por la DIGECAM con las letras GUA, a costo del importador.`,
+    },
+    {
+      num: 37, tema: 'importacion',
+      titulo: 'Importación de accesorios sin licencia',
+      texto: `Es permitida sin necesidad de licencia de la DIGECAM, la importación de los siguientes artículos para armas de uso civil, deportivas y de acción por gases comprimidos:
+
+a) Accesorios y repuestos.
+b) Sistemas de puntería de cualquier clase.
+c) Cajas de seguridad.
+d) Aceites, solventes, materiales y accesorios de mantenimiento.
+e) Accesorios de portación: fundas, portacargadores, maletines de protección y transporte.
+f) Tolvas, cargadores y cachas.
+g) Tacos de fieltro, de cartón y plástico o similares.
+h) Implementos para reacondicionar o recargar cartuchos de armas de fuego de uso civil y/o deportivas, como vainas o cascabillos, fulminantes, ojivas, postas y perdigones.
+i) Cartuchos de salva, de señales, balines y municiones para armas de acción por gases comprimidos.
+j) Rifles y pistolas de acción por gases comprimidos a que se refiere la presente Ley, pistolas de señales y los catalogados como juguetes, siempre y cuando no lancen municiones mayores de 55 milímetros de diámetro.
+k) Ballestas, arcos, flechas, javas y otros artículos semejantes y sus repuestos.`,
+    },
+    {
+      num: 38, tema: 'importacion',
+      titulo: 'Importación de componentes específicos para armas de fuego',
+      texto: `Para la importación de componentes específicos de armas de fuego, se deberá contar con la licencia de importación correspondiente extendida por la DIGECAM. Se consideran componentes específicos los siguientes:
+
+a. Cañones.
+b. Marcos.
+c. Cajones de mecanismos.
+
+Los componentes específicos enunciados en este artículo, deberán ser marcados de conformidad con lo que fuere aplicable en la presente Ley y de acuerdo al reglamento respectivo.`,
+    },
+    {
+      num: 39, tema: 'importacion',
+      titulo: 'Obligación de importación de repuestos',
+      texto: `Los importadores de armas de fuego que se dediquen a la venta al público, tienen la obligación de incluir en cada pedido, por lo menos un dos por ciento (2%) del valor de sus importaciones en repuestos para las mismas.`,
+    },
+    {
+      num: 43, tema: 'importacion', clave: true,
+      titulo: 'Desalmacenaje de armas de fuego, municiones y componentes específicos',
+      texto: `Para iniciar las gestiones de desalmacenaje y transporte ante la autoridad correspondiente, el interesado deberá presentar la licencia de importación del arma o armas, municiones o de sus componentes específicos según sea el caso, extendida por la DIGECAM.
+
+Una vez satisfecho este requisito, se verificará la entrega de conformidad con los procedimientos señalados en leyes fiscales, siempre y cuando el interesado haya efectuado los pagos arancelarios, tasas y demás impuestos que graven la importación, salvo que goce de franquicia, la cual deberá presentar.`,
+    },
+    {
+      num: 44, tema: 'importacion',
+      titulo: 'Arribo al país de armas de fuego de uso civil y/o deportivas',
+      texto: `Las compañías de transporte que al arribo al país traigan como carga armas de fuego de uso civil y/o deportivas, deberán ponerlo inmediatamente en conocimiento de la DIGECAM y Superintendencia de Administración Tributaria -SAT-, para que sus delegados se hagan cargo de la custodia y aranceles correspondientes conforme la ley.`,
+    },
+    {
+      num: 45, tema: 'importacion',
+      titulo: 'Control de recepción y registro de las armas de fuego de uso civil y/o deportivas',
+      texto: `En el almacén fiscal se llevarán los controles de recepción y registro apropiados. Previo al ingreso de las armas de uso civil y/o deportivas importadas, la autoridad correspondiente procederá al reconocimiento y conteo de las mismas, tomando las medidas de precaución que sean necesarias, ordenando su almacenaje debidamente marchamado en un lugar que reúna las condiciones de seguridad necesarias con la custodia correspondiente, bajo su responsabilidad. De las diligencias practicadas se informará a la DIGECAM, para lo que proceda.`,
+    },
+    {
+      num: 46, tema: 'importacion', clave: true,
+      titulo: 'Plazo para retirar la mercadería de armas de fuego y municiones',
+      texto: `La mercadería permanecerá en el almacén fiscal hasta ocho (8) días hábiles, plazo dentro del cual el interesado deberá presentar la documentación respectiva. Transcurrido dicho plazo sin que se presente reclamo o se demuestre la propiedad de la mercadería, deberá trasladarse a la DIGECAM para los efectos legales correspondientes.`,
+    },
+    {
+      num: 47, tema: 'importacion',
+      titulo: 'Transporte de armas de fuego',
+      texto: `Todo transporte y/o traslado de armas de fuego y municiones del almacén fiscal hacia la DIGECAM, y de ésta al almacén autorizado por el importador, será custodiado por el personal de seguridad de la DIGECAM, o personal que esta Dirección coordine con otras dependencias de seguridad del Estado.
+
+Los gastos que ocasionen el transporte y los viáticos de la custodia de la mercadería serán cubiertos por el importador.`,
+    },
     {
       num: 55, tema: 'compraventa', clave: true,
       titulo: 'Compraventa',
@@ -297,6 +406,7 @@ La DIGECAM emitirá la licencia correspondiente al cumplir los requisitos, la qu
   ],
 
   temas: {
+    importacion:  { label: 'Importación (DIGECAM y SAT)', icon: '🛃' },
     compraventa:  { label: 'Compraventa (licencia del negocio)', icon: '🏪' },
     venta_arma:   { label: 'Venta de un arma', icon: '🔫' },
     municiones:   { label: 'Venta de municiones', icon: '📦' },
@@ -332,6 +442,123 @@ function topeMunicionMensual(tipoLicencia, armasRegistradas = 1) {
   return 0;                                       // sin licencia no se vende munición
 }
 
+/* ── EL TRÁMITE DE IMPORTACIÓN, EN ORDEN ──
+   La ley trae los requisitos repartidos en once artículos de tres capítulos
+   distintos, y leídos así no se ve el orden en que hay que hacer las cosas.
+   Esto los ordena como ocurren en la práctica, citando el artículo de cada
+   paso para que se pueda verificar contra el texto (que está más arriba, en
+   `articulos`, con su redacción literal).
+
+   DOS ENTIDADES, NO UNA. Es la confusión más común:
+     · DIGECAM autoriza (licencia de importación), toma huellas balísticas,
+       emite tarjetas de tenencia y TROQUELA con las letras GUA.
+     · SAT cobra los aranceles y custodia la mercadería en el almacén fiscal.
+   Ninguna sustituye a la otra: sin licencia de DIGECAM la SAT no desalmacena,
+   y sin pagar aranceles la DIGECAM no recibe nada.
+
+   OJO: esto ordena lo que dice la ley, no reemplaza al trámite oficial.
+   Los formularios, tasas y tiempos de respuesta los fija la DIGECAM y cambian
+   sin que cambie la ley — confirmarlos en digecam.mil.gt antes de presentar. */
+const PASOS_IMPORTACION = [
+  {
+    n: 1, entidad: 'DIGECAM', arts: [32],
+    titulo: 'Estar registrado y autorizado como importador',
+    detalle: 'Sólo las personas individuales o jurídicas registradas y autorizadas por la DIGECAM pueden importar. Para vender al público hace falta además la licencia de compraventa del artículo 55.',
+  },
+  {
+    n: 2, entidad: 'DIGECAM', arts: [33],
+    titulo: '¿El arma es de las de excepción?',
+    detalle: 'Las de mecanismo automático o semiautomático de asalto (fusiles tácticos, ametralladoras, subametralladoras, carabinas, pistolas y rifles automáticos) sólo entran por un establecimiento autorizado y exigen ADEMÁS dictamen favorable del Ministerio de la Defensa Nacional. Si es de uso civil o deportiva, se sigue al paso 3.',
+    alerta: true,
+  },
+  {
+    n: 3, entidad: 'DIGECAM', arts: [34],
+    titulo: 'Solicitar la licencia de importación',
+    detalle: 'Formulario de la DIGECAM + declaración jurada ante notario con los datos del solicitante y el DETALLE DEL LOTE: cantidades, marca, calibre y sus conversiones, número de registro, modelo, largo del cañón y país de procedencia. Se adjunta DPI legalizado, antecedentes penales y policíacos, y constancia de ingresos. Las personas jurídicas suman escritura constitutiva, patente de comercio, nombramiento e inscripción fiscal.',
+  },
+  {
+    n: 4, entidad: 'DIGECAM', arts: [37, 38],
+    titulo: 'Verificar qué necesita licencia y qué no',
+    detalle: 'NO la necesitan: accesorios, repuestos, miras, cajas de seguridad, fundas, cargadores, cachas, implementos de recarga, balines y aire comprimido, ballestas y arcos. SÍ la necesitan los componentes específicos: cañones, marcos y cajones de mecanismos, que además se marcan.',
+  },
+  {
+    n: 5, entidad: 'DIGECAM', arts: [39],
+    titulo: 'Incluir el 2% en repuestos',
+    detalle: 'Quien importa para vender al público debe incluir en CADA pedido al menos el 2% del valor de la importación en repuestos. Conviene dejarlo en la orden de compra desde el inicio: agregarlo después obliga a rehacer el pedido.',
+  },
+  {
+    n: 6, entidad: 'SAT', arts: [44],
+    titulo: 'Aviso al arribo',
+    detalle: 'La compañía de transporte debe avisar de inmediato a la DIGECAM y a la SAT para que sus delegados se hagan cargo de la custodia y de los aranceles.',
+  },
+  {
+    n: 7, entidad: 'SAT', arts: [45],
+    titulo: 'Reconocimiento y marchamo en el almacén fiscal',
+    detalle: 'Antes de ingresar se reconoce y cuenta la mercadería y se almacena marchamada bajo custodia. Si viene en empaque de fábrica cerrado se guarda sin abrir; si el empaque venía abierto, se abre un reconocimiento detallado ante autoridad competente.',
+  },
+  {
+    n: 8, entidad: 'SAT', arts: [46],
+    titulo: 'Ocho días hábiles para presentar la documentación',
+    detalle: 'Es el plazo que da la ley. Vencido sin reclamo ni prueba de propiedad, la mercadería se traslada a la DIGECAM y deja de estar a disposición del importador.',
+    alerta: true,
+  },
+  {
+    n: 9, entidad: 'SAT + DIGECAM', arts: [43],
+    titulo: 'Desalmacenaje',
+    detalle: 'Se presenta la licencia de importación de la DIGECAM y se pagan aranceles, tasas e impuestos (salvo franquicia, que hay que presentar). Sin los dos no hay salida: la licencia sin el pago no desalmacena, y el pago sin licencia tampoco.',
+  },
+  {
+    n: 10, entidad: 'DIGECAM', arts: [47],
+    titulo: 'Traslado bajo custodia',
+    detalle: 'Del almacén fiscal a la DIGECAM, y de ahí al almacén del importador, siempre con custodia de personal de la DIGECAM o de quien ella coordine. El transporte y los viáticos de la custodia los paga el importador.',
+  },
+  {
+    n: 11, entidad: 'DIGECAM', arts: [35],
+    titulo: 'Huellas balísticas, tarjeta de tenencia y TROQUELADO',
+    detalle: 'El importador remite TODAS las armas a la DIGECAM, a su costo, para que se tomen las huellas balísticas y se emitan las tarjetas de tenencia a su nombre. Si van a comercializarse, la DIGECAM las marca con las letras GUA — también a costo del importador. Hasta acá el arma no se puede vender.',
+    alerta: true,
+  },
+];
+
+function pasosImportacion() { return PASOS_IMPORTACION; }
+
+/* ── SIGECAM: el portal de empresas de DIGECAM ──
+   Lo verificó Henry entrando en persona a DIGECAM (5-ago-2026). Importa
+   dejarlo escrito porque define QUÉ PUEDE Y QUÉ NO PUEDE hacer esta app:
+
+   · Se entra con DPI + contraseña + segundo factor de Google Authenticator.
+     Eso significa que NO hay forma legítima de que el sistema consulte solo:
+     haría falta la contraseña y el código de 6 dígitos de una persona, que
+     cambia cada 30 segundos. Automatizarlo obligaría a guardar credenciales
+     de gobierno de un tercero — no se hace, y no es un problema técnico que
+     se pueda "resolver": es la protección funcionando como debe.
+   · El portal público NO documenta API, servicio web ni integración alguna.
+   · El historial de compra de munición que muestra llega hasta unos 3 meses.
+     Ojo con la consecuencia: para las ventas PROPIAS, el registro de esta app
+     termina siendo MÁS completo que lo que SIGECAM le enseña al comercio.
+
+   Por eso el flujo correcto es el que ya usa el módulo: la app prepara la
+   consulta, la persona la hace en SIGECAM, y el resultado vuelve como CÓDIGO
+   DE AUTORIZACIÓN escrito en la entrega. Eso es un respaldo verificable; un
+   número que la app calcule sola, no. */
+/* SON DOS PORTALES DISTINTOS, y confundirlos manda a buscar al lugar
+   equivocado:
+     · /portal/personas → lo del INDIVIDUO: sus armas y su historial de
+       munición. Es donde entra el cliente, no la armería.
+     · SIGECAM (/acceso-empresas, conexion_1 y conexion_2) → lo de la EMPRESA:
+       compraventa, y es el que le toca al negocio. */
+const SIGECAM = {
+  nombre: 'SIGECAM — Sistema de Compra-Venta para Empresas',
+  entidad: 'DIGECAM (Ministerio de la Defensa Nacional)',
+  accesos: ['https://conexion_1.digecam.mil.gt/', 'https://conexion_2.digecam.mil.gt/'],
+  portal: 'https://www.digecam.mil.gt/acceso-empresas',
+  portalPersonas: 'https://digecam.mil.gt/portal/personas',
+  autenticacion: 'DPI + contraseña + segundo factor (Google Authenticator)',
+  tieneApi: false,
+  historialMunicionMeses: 3,
+  verificado: '2026-08-05',
+};
+
 /* Busca en ley y reglamento por texto libre (número, título o contenido). */
 function buscarLeyArmas(q) {
   const todos = articulosLeyArmas();
@@ -348,6 +575,9 @@ function buscarLeyArmas(q) {
 if (typeof window !== 'undefined') {
   window.LEY_ARMAS = LEY_ARMAS;
   window.topeMunicionMensual = topeMunicionMensual;
+  window.PASOS_IMPORTACION = PASOS_IMPORTACION;
+  window.pasosImportacion = pasosImportacion;
+  window.SIGECAM = SIGECAM;
   window.buscarLeyArmas = buscarLeyArmas;
   window.articulosLeyArmas = articulosLeyArmas;
 }
