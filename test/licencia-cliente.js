@@ -87,7 +87,37 @@ const ok = (n, c) => { if (c) { pasadas++; console.log('PASS — ' + n); } else 
   ok('manda null antes que adivinar el tipo',
      /no lo distingues con total seguridad, null/.test(srcIA));
   ok('explica por qué importa (tope de munición del art. 60)', /art[íi]culo 60/.test(srcIA));
-  ok('no supone 1 arma cuando el documento no lo dice', /no supongas 1/.test(srcIA));
+  ok('no supone la cantidad de armas cuando el documento no lo dice', /no supongas/.test(srcIA));
+
+  /* Estructura real de la tarjeta, verificada contra dos ejemplares que dio
+     Henry: una Glock de 2019 en papel y una escopeta de 2024 electrónica. */
+  ok('el prompt conoce la tarjeta de tenencia real', /TARJETA DE TENENCIA DE ARMA DE FUEGO/.test(srcIA));
+  ok('sabe que la tenencia NO vence', /NO TIENE FECHA DE VENCIMIENTO/.test(srcIA));
+  ok('...y que no debe usar la emisión como vencimiento',
+     /NO tomes la fecha de emisión/.test(srcIA));
+  ok('reconoce la leyenda CIVIL ART. 9', /CIVIL ART\. 9/.test(srcIA));
+  ok('lee el MARCAJE GUA (troquelado del art. 35)', /MARCAJE GUA/.test(srcIA));
+  ok('lee la huella balística', /huella_balistica/.test(srcIA));
+  ok('lee el No. PROPIETARIO que asigna DIGECAM', /no_propietario/.test(srcIA));
+  /* El largo del cañón viene en mm en la tarjeta: convertirlo a pulgadas
+     haría que el inventario no cuadre con el documento (art. 58). */
+  ok('el largo del cañón se lee en MILÍMETROS', /arma_largo_canon_mm/.test(srcIA));
+  ok('...y avisa de no convertirlo a pulgadas', /NO lo conviertas a pulgadas/.test(srcIA));
+}
+
+/* ── La tenencia no vence: no se le puede avisar "vencida" ──────────────── */
+{
+  const srcGiros = fs.readFileSync(path.join(raiz, 'js', 'core', 'giros.js'), 'utf8');
+  ok('el largo del cañón del inventario está en mm',
+     /label: 'Largo del cañón \(mm\)'/.test(srcGiros));
+  ok('...con un ejemplo real de la tarjeta (102 mm)', /ph: '102'/.test(srcGiros));
+
+  ok('la ficha del cliente no marca vencida una tenencia',
+     /tipo === 'tenencia'[\s\S]{0,220}no vence/.test(srcCli));
+  ok('la verificación del expediente sólo mira el vencimiento en portación',
+     /cli\?\.licencia_tipo === 'portación' && Modulos\.clientes\?\.diasLicencia/.test(srcArm));
+  ok('la entrega de munición, igual',
+     /cli\.licencia_tipo === 'portación' && Modulos\.clientes\?\.diasLicencia/.test(srcArm));
 }
 
 /* ── LOS DOS DISEÑOS DE DPI ─────────────────────────────────────────────── */

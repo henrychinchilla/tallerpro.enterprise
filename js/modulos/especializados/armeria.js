@@ -279,7 +279,8 @@ Modulos.armeria = {
     const cli = (this._clientes || []).find(c => c.id === clienteId) || {};
     const lic = cli.licencia_tipo || 'tenencia';
     const armas = Math.min(3, Math.max(1, Number(cli.armas_registradas) || 1));
-    const dias = Modulos.clientes?.diasLicencia
+    /* Sólo la portación vence; la tarjeta de tenencia no trae vigencia. */
+    const dias = (cli.licencia_tipo === 'portación' && Modulos.clientes?.diasLicencia)
       ? Modulos.clientes.diasLicencia(cli.licencia_vencimiento) : null;
     const sel = (v, x) => v === x ? 'selected' : '';
 
@@ -1179,8 +1180,12 @@ Modulos.armeria = {
     if (!cli?.licencia_tipo) falta.push('Tipo de licencia (tenencia o portación) en la ficha del cliente');
 
     /* Una licencia VENCIDA no es un dato faltante: es un impedimento legal, y
-       se avisa aparte y en rojo para que no se pierda entre la lista. */
-    const dias = Modulos.clientes?.diasLicencia
+       se avisa aparte y en rojo para que no se pierda entre la lista.
+       Sólo aplica a PORTACIÓN: la tarjeta de tenencia no vence (dice "CIVIL
+       ART. 9" y no trae vigencia — verificado contra dos tarjetas reales de
+       DIGECAM, de 2019 y 2024). Avisar "vencida" sobre una tenencia inventaría
+       un impedimento que la ley no pone. */
+    const dias = (cli?.licencia_tipo === 'portación' && Modulos.clientes?.diasLicencia)
       ? Modulos.clientes.diasLicencia(cli?.licencia_vencimiento) : null;
     const avisoVence = dias === null ? ''
       : dias < 0
