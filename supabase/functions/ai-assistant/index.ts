@@ -213,7 +213,7 @@ REGLA CRÍTICA: si un dato no se lee con claridad en la imagen, devuélvelo como
 
 EL DPI TIENE DOS CARAS Y CADA UNA TRAE COSAS DISTINTAS. Verificado contra un DPI real:
   · ANVERSO: CÓDIGO ÚNICO DE IDENTIFICACIÓN (CUI), NOMBRE, APELLIDO, NACIONALIDAD, PAÍS DE NAC., SEXO, FECHA DE NACIMIENTO, la firma, un número de versión al pie (ej. "004") y una fecha bajo la fotografía que es la de EMISIÓN.
-  · REVERSO: LUGAR DE NACIMIENTO (dos líneas: primero el DEPARTAMENTO y debajo el MUNICIPIO), los datos de registro civil (L: libro, F: folio, P: partida), VECINDAD (también departamento y municipio), ESTADO CIVIL, FECHA DE VENCIMIENTO, NÚMERO DE SERIE y la zona legible por máquina (MRZ).
+  · REVERSO: LUGAR DE NACIMIENTO (dos líneas: primero el DEPARTAMENTO y debajo el MUNICIPIO), debajo una línea con el asiento del registro civil en la forma "L:102 F:42 P:263" (libro, folio y página de donde el RENAP tomó los datos al migrar de Cédula a DPI), VECINDAD (también departamento y municipio), ESTADO CIVIL, FECHA DE VENCIMIENTO, NÚMERO DE SERIE y la zona legible por máquina (MRZ).
 Si te dan una sola cara, devuelve null en todo lo que no aparezca en ella. No deduzcas el reverso a partir del anverso ni al revés.
 
 LA NACIONALIDAD Y EL PAÍS VIENEN COMO CÓDIGO ISO DE TRES LETRAS ("GTM"). Devuélvelo TAL CUAL, en mayúsculas; la app lo traduce a "Guatemala" o "Guatemalteca" según haga falta. No lo traduzcas tú.
@@ -238,6 +238,9 @@ Campos esperados:
   "vecindad_departamento": "La PRIMERA línea de VECINDAD (el departamento, ej. 'GUATEMALA'). Si no aparece, null",
   "vecindad_municipio": "La SEGUNDA línea de VECINDAD (el municipio, ej. 'FRAIJANES'). Si no aparece, null",
   "direccion": "La dirección del titular SÓLO si el documento la trae impresa (el diseño nuevo puede traerla; el anterior no). La VECINDAD no es la dirección: no la copies aquí. Si no aparece, null",
+  "registro_libro": "El número que sigue a 'L:' en el reverso, bajo el lugar de nacimiento (ej. de 'L:102 F:42 P:263' devuelve '102'). Es el asiento del registro civil. Si no aparece, null",
+  "registro_folio": "El número que sigue a 'F:' en esa misma línea (ej. '42'). Si no aparece, null",
+  "registro_pagina": "El número que sigue a 'P:' en esa misma línea (ej. '263'). Si no aparece, null",
   "dpi_numero_serie": "El NÚMERO DE SERIE del reverso, tal como aparece. Si no aparece, null",
   "dpi_version": "El número de versión al pie del anverso (ej. '004'). Si no aparece, null",
   "fecha_emision": "La fecha bajo la fotografía del anverso, en formato YYYY-MM-DD. Viene como 17OCT2023: conviértela. Si no aparece, null",

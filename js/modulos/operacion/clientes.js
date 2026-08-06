@@ -146,6 +146,9 @@ Modulos.clientes = {
         'cli-dpi-vence': datos.fecha_vencimiento,
         'cli-dpi-serie': datos.dpi_numero_serie,
         'cli-dpi-version': datos.dpi_version,
+        'cli-reg-libro': datos.registro_libro,
+        'cli-reg-folio': datos.registro_folio,
+        'cli-reg-pagina': datos.registro_pagina,
       },
       recibo: {
         'cli-dir': datos.direccion,
@@ -450,6 +453,19 @@ Modulos.clientes = {
             <input class="form-input mono-sm" id="cli-dpi-version" value="${UI.esc(c.dpi_version||'')}" placeholder="004"></div>
         </div>
         <div id="cli-dpi-aviso" style="font-size:11.5px;margin:-4px 0 6px"></div>
+
+        <div class="form-row">
+          <div class="form-group" style="max-width:130px"><label class="form-label">Registro — Libro</label>
+            <input class="form-input mono-sm" id="cli-reg-libro" value="${UI.esc(c.registro_libro||'')}" placeholder="102"></div>
+          <div class="form-group" style="max-width:130px"><label class="form-label">Folio</label>
+            <input class="form-input mono-sm" id="cli-reg-folio" value="${UI.esc(c.registro_folio||'')}" placeholder="42"></div>
+          <div class="form-group" style="max-width:130px"><label class="form-label">Página</label>
+            <input class="form-input mono-sm" id="cli-reg-pagina" value="${UI.esc(c.registro_pagina||'')}" placeholder="263"></div>
+          <div class="form-group" style="align-self:flex-end;font-size:11px;color:var(--text3);padding-bottom:8px">
+            Es el <b>L: F: P:</b> del reverso del DPI — el asiento del registro civil de donde el RENAP
+            tomó los datos al pasar de Cédula a DPI. Permite pedir la certificación de nacimiento.
+          </div>
+        </div>
       </div>`}
       <div class="form-row">
         <div class="form-group" style="flex:2"><label class="form-label">Dirección${armeria ? ' completa' : ''}</label>
@@ -1053,6 +1069,9 @@ Modulos.clientes = {
     siExiste('cli-dpi-vence', 'dpi_fecha_vencimiento', v => v || null);
     siExiste('cli-dpi-serie', 'dpi_numero_serie');
     siExiste('cli-dpi-version', 'dpi_version');
+    siExiste('cli-reg-libro', 'registro_libro');
+    siExiste('cli-reg-folio', 'registro_folio');
+    siExiste('cli-reg-pagina', 'registro_pagina');
     siExiste('cli-lic-tipo', 'licencia_tipo', v => v || null);
     siExiste('cli-lic-num', 'licencia_num');
     siExiste('cli-lic-vence', 'licencia_vencimiento', v => v || null);
