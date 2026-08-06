@@ -990,6 +990,17 @@ const DB = {
     return (data || []).filter(r => r.id !== excluirId).reduce((s, r) => s + (Number(r.cantidad) || 0), 0);
   },
 
+  /* Versiones anteriores de los datos del cliente. Las escribe un trigger
+     (migración 130), que además evita acumular filas idénticas. */
+  async getHistorialCliente(clienteId) {
+    if (!clienteId) return [];
+    const { data } = await getSB().from('cliente_historial')
+      .select('id,datos,motivo,created_at,usuarios(nombre)')
+      .eq('tenant_id', getTID()).eq('cliente_id', clienteId)
+      .order('created_at', { ascending: false });
+    return data || [];
+  },
+
   /* ── TENENCIAS DEL CLIENTE (una tarjeta por arma) ──
      Sustentan cuántas armas registradas tiene, que es lo que multiplica el
      tope de munición del art. 60 en portación (250 por arma, hasta 3). */

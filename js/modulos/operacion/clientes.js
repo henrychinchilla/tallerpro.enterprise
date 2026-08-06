@@ -513,6 +513,18 @@ Modulos.clientes = {
           que en portación multiplica el tope de munición del art. 60 — hasta 3 (art. 72).
         </div>
         <div id="cli-tenencias">Cargando…</div>
+      </div>
+
+      <div class="form-group" style="background:var(--card2);border-radius:8px;padding:10px 12px">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">
+          <label class="form-label" style="margin:0">🕓 Historial de cambios</label>
+          <button type="button" class="btn btn-sm btn-ghost" onclick="Modulos.clientes.verHistorial('${id}')">Ver versiones anteriores</button>
+        </div>
+        <div style="font-size:11px;color:var(--text3);margin-top:4px">
+          Al renovar el DPI o cambiar de domicilio se guarda lo que decía antes. Una declaración
+          firmada el año pasado lleva los datos de <b>entonces</b>, y hay que poder mostrarlos.
+          No se guardan versiones repetidas.
+        </div>
       </div>`}`}
       <div class="form-group"><label class="form-label">Notas</label>
         <textarea class="form-input" id="cli-notas" rows="2">${UI.esc(c.notas||'')}</textarea></div>
@@ -566,6 +578,54 @@ Modulos.clientes = {
     if (esEdicion) this.renderTenencias(id);
   },
 
+  /* Las versiones anteriores. El trigger de la migración 130 sólo guarda
+     cuando cambió algo de identificación, así que esta lista no tiene ruido:
+     lo que aparece acá pasó de verdad. */
+  async verHistorial(clienteId) {
+    const lista = await DB.getHistorialCliente(clienteId).catch(() => []);
+    if (!lista.length) {
+      UI.toast('Este cliente no tiene cambios registrados todavía', 'info');
+      return;
+    }
+    const ETIQUETAS = {
+      dpi: 'DPI', nombre: 'Nombre', nit: 'NIT', fecha_nacimiento: 'Fecha de nacimiento',
+      estado_civil: 'Estado civil', profesion: 'Profesión', nacionalidad: 'Nacionalidad',
+      sexo: 'Sexo', direccion: 'Dirección', vivienda: 'Vivienda',
+      nacimiento_departamento: 'Depto. nacimiento', nacimiento_municipio: 'Municipio nacimiento',
+      vecindad_departamento: 'Depto. vecindad', vecindad_municipio: 'Municipio vecindad',
+      codigo_postal: 'Código postal', dpi_fecha_emision: 'Emisión DPI',
+      dpi_fecha_vencimiento: 'Vencimiento DPI', dpi_numero_serie: 'Serie DPI',
+      dpi_version: 'Versión DPI', licencia_tipo: 'Tipo de licencia',
+      licencia_num: 'No. licencia', licencia_vencimiento: 'Vence licencia',
+      armas_registradas: 'Armas registradas',
+    };
+
+    UI.modal('🕓 Versiones anteriores', `
+      <div style="font-size:11.5px;color:var(--text3);margin-bottom:12px;line-height:1.6">
+        Cada bloque es lo que decía la ficha <b>antes</b> de un cambio, de lo más reciente a lo más
+        viejo. Sirve para explicar por qué una declaración firmada hace meses no coincide con los
+        datos de hoy.
+      </div>
+      <div style="max-height:58vh;overflow:auto">
+        ${lista.map(v => `
+          <div style="border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:10px">
+            <div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-bottom:6px">
+              <b style="font-size:12.5px">${UI.esc(v.motivo || 'Cambio')}</b>
+              <span style="font-size:11px;color:var(--text3)">
+                ${UI.fecha(v.created_at)}${v.usuarios?.nombre ? ' · ' + UI.esc(v.usuarios.nombre) : ''}
+              </span>
+            </div>
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:4px 14px;font-size:11.5px">
+              ${Object.entries(v.datos || {}).map(([k, val]) => `
+                <div><span style="color:var(--text3)">${UI.esc(ETIQUETAS[k] || k)}:</span> ${UI.esc(val)}</div>
+              `).join('')}
+            </div>
+          </div>`).join('')}
+      </div>
+      <div class="modal-footer"><button class="btn btn-ghost" onclick="UI.cerrarModal()">Cerrar</button></div>
+    `, '760px');
+  },
+
   /* ══ TENENCIAS ═══════════════════════════════════════════════════════════
      Una tarjeta por arma. Cuentan para el tope de munición sólo las ACTIVAS:
      un arma vendida o extraviada no le da derecho a más cartuchos. */
@@ -613,9 +673,23 @@ Modulos.clientes = {
     const v = (k, d = '') => UI.esc(t[k] ?? d);
 
     UI.modal(tenenciaId ? '🔫 Editar tenencia' : '🔫 Nueva tarjeta de tenencia', `
+      <div style="background:var(--card2);border-radius:8px;padding:10px 12px;margin-bottom:12px">
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <b style="font-size:12.5px">📄 Leer la tarjeta y llenar solo</b>
+          <button type="button" class="btn btn-sm btn-cyan" onclick="document.getElementById('ten-cam').click()">📷 Cámara</button>
+          <button type="button" class="btn btn-sm btn-ghost" onclick="document.getElementById('ten-gal').click()">📂 Foto o PDF</button>
+          <input type="file" id="ten-cam" accept="image/*" capture="environment" style="display:none"
+                 onchange="Modulos.clientes._leerTenencia(this)">
+          <input type="file" id="ten-gal" accept="image/*,application/pdf" style="display:none"
+                 onchange="Modulos.clientes._leerTenencia(this)">
+        </div>
+        <div id="ten-lectura" style="font-size:11px;margin-top:6px;color:var(--text3)">
+          Tomale foto a la tarjeta (o subí el PDF si es electrónica) y los campos se llenan solos.
+        </div>
+      </div>
       <div style="font-size:11.5px;color:var(--text3);margin-bottom:12px;line-height:1.6">
-        Copiá los datos de la <b>tarjeta de tenencia</b> que emite DIGECAM. El
-        <b>largo del cañón va en milímetros</b>, como lo anota la tarjeta (pistola ≈102 mm,
+        Revisá siempre contra la tarjeta física antes de guardar. El
+        <b>largo del cañón va en milímetros</b>, como lo anota DIGECAM (pistola ≈102 mm,
         escopeta ≈530 mm) — el art. 58 exige que el inventario cuadre exacto con el documento.
       </div>
       <div class="form-row">
@@ -671,6 +745,65 @@ Modulos.clientes = {
         <button class="btn btn-ghost" onclick="UI.cerrarModal()">Cancelar</button>
         <button class="btn btn-cyan" onclick="Modulos.clientes.guardarTenencia('${clienteId}','${tenenciaId || ''}')">Guardar</button>
       </div>`, '700px');
+  },
+
+  /* Lee la tarjeta de tenencia (foto o PDF) y llena el formulario.
+     Reusa el modo 'licencia' de la IA, que ya devuelve los datos del arma
+     porque la tarjeta de tenencia ES el documento que los trae. */
+  async _leerTenencia(inputEl) {
+    const file = inputEl.files?.[0];
+    inputEl.value = '';
+    if (!file) return;
+    const aviso = document.getElementById('ten-lectura');
+    const pintar = (html, color) => { if (aviso) { aviso.innerHTML = html; aviso.style.color = color || 'var(--text3)'; } };
+
+    if (file.size > 5 * 1024 * 1024) { pintar('⚠️ El archivo pesa más de 5 MB.', 'var(--red)'); return; }
+    pintar('⏳ Leyendo la tarjeta…');
+
+    const base64 = await new Promise((res, rej) => {
+      const r = new FileReader();
+      r.onload = () => res(r.result); r.onerror = rej; r.readAsDataURL(file);
+    }).catch(() => null);
+    if (!base64) { pintar('⚠️ No se pudo leer el archivo.', 'var(--red)'); return; }
+
+    const r = await IA.escanearLicencia(base64);
+    if (!r?.ok) { pintar('⚠️ ' + (r?.error || 'No se pudo leer la tarjeta.'), 'var(--red)'); return; }
+
+    let d;
+    try { d = JSON.parse(String(r.texto || '').replace(/```json|```/g, '').trim()); }
+    catch (_) { pintar('⚠️ La tarjeta no se leyó con claridad. Escribí los datos a mano.', 'var(--red)'); return; }
+
+    const mapa = {
+      'ten-tipo': d.arma_tipo, 'ten-marca': d.arma_marca, 'ten-modelo': d.arma_modelo,
+      'ten-calibre': d.arma_calibre, 'ten-serie': d.arma_serie,
+      'ten-canon': d.arma_largo_canon_mm, 'ten-num': d.numero,
+      'ten-huella': d.huella_balistica, 'ten-propietario': d.no_propietario,
+      'ten-gua': d.marcaje_gua, 'ten-emision': d.fecha_emision,
+    };
+
+    /* Misma regla que el DPI: se llena lo VACÍO y se REPORTA lo que difiere.
+       Pisar un dato que alguien ya verificó contra el documento físico sería
+       peor que no leer nada — de esto sale el tope de munición del cliente. */
+    const llenados = [], distintos = [];
+    for (const [id, valor] of Object.entries(mapa)) {
+      const el = document.getElementById(id);
+      const v = (valor == null || valor === '') ? null : String(valor).trim();
+      if (!el || !v) continue;
+      const actual = (el.value || '').trim();
+      if (!actual) { el.value = v; llenados.push(id); }
+      else if (actual.toLowerCase() !== v.toLowerCase()) distintos.push(`la tarjeta dice «${v}»`);
+    }
+
+    const partes = [];
+    if (llenados.length) partes.push(`<span style="color:var(--green)">✅ ${llenados.length} campo(s) llenados desde la tarjeta.</span>`);
+    if (distintos.length) partes.push(`<span style="color:var(--amber)">⚠️ No se tocó lo ya escrito. Diferencias: ${UI.esc(distintos.join(' · '))}</span>`);
+    /* El tipo del documento importa: si la foto era una LICENCIA y no una
+       tenencia, los datos del arma vendrán vacíos y hay que decirlo. */
+    if (!d.arma_serie && !d.arma_marca)
+      partes.push('<span style="color:var(--amber)">⚠️ No se encontraron datos de arma. ¿Seguro que es una <b>tarjeta de tenencia</b> y no la licencia?</span>');
+    if (!partes.length) partes.push('<span style="color:var(--amber)">La tarjeta no aportó datos nuevos.</span>');
+    partes.push('<span style="color:var(--text3)">Revisá contra la tarjeta física: de estos datos sale el tope de munición.</span>');
+    pintar(partes.join('<br>'));
   },
 
   async guardarTenencia(clienteId, tenenciaId) {
