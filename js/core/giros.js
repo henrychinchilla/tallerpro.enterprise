@@ -188,8 +188,13 @@ const GIROS = {
          la ley por su nombre. Van en la tarjeta de tenencia que extiende
          DIGECAM (art. 63) y en la solicitud de licencia de portación
          (art. 72 a) 2). El comprador los necesita para su trámite. */
-      { id: 'largo_canon', label: 'Largo del cañón (pulgadas)', tipo: 'decimal', ph: '4.02',
-        ayuda: 'Lo exigen el art. 63 (tarjeta de tenencia) y el art. 72 (licencia de portación). En escopetas de dos cañones, anotar ambos.' },
+      /* EN MILÍMETROS, no en pulgadas. Verificado contra dos tarjetas de
+         tenencia reales de DIGECAM: una Glock 19X dice "102 mm" y una escopeta
+         Maverick 88 dice "530mm.". El dato físico es el mismo (102 mm = 4.02")
+         pero el art. 58 exige que el inventario cuadre con el documento: si
+         acá dice 4.02 y la tarjeta dice 102, no cuadra ante una inspección. */
+      { id: 'largo_canon', label: 'Largo del cañón (mm)', tipo: 'decimal', ph: '102',
+        ayuda: 'En MILÍMETROS, como lo anota la tarjeta de tenencia de DIGECAM (ej. pistola 102 mm, escopeta 530 mm). Lo exigen el art. 63 (tarjeta de tenencia) y el art. 72 (licencia de portación). En escopetas de dos cañones, anotar ambos.' },
       { id: 'conversiones_calibre', label: 'Conversiones de calibre', tipo: 'texto', ph: 'Ej. .22LR con kit de conversión',
         ayuda: 'La ley pide identificar "las conversiones de calibres que tuviere" (arts. 63 y 72). Dejar vacío si no tiene.' },
       /* Cómo se ve y de qué está hecha: es lo que el cliente pregunta y lo

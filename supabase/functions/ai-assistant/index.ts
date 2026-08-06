@@ -236,6 +236,11 @@ Devuelve ÚNICAMENTE un objeto JSON válido, sin bloques de código markdown, si
 
 REGLA CRÍTICA: si un dato no se lee con claridad, devuélvelo como null. NUNCA adivines. De estos datos depende cuánta munición se le puede entregar legalmente al cliente (artículo 60 del Decreto 15-2009): un tipo de licencia inventado autoriza una entrega ilegal.
 
+CÓMO ES UNA TARJETA DE TENENCIA (verificado contra ejemplares reales, en papel y electrónica):
+Encabezado "MINISTERIO DE LA DEFENSA NACIONAL / DIRECCIÓN GENERAL DE CONTROL DE ARMAS Y MUNICIONES / TARJETA DE TENENCIA DE ARMA DE FUEGO", con el escudo de DIGECAM. Lleva "HUELLA BALISTICA No.", la leyenda "CIVIL ART. 9" y un "No." de tarjeta. Bloque IDENTIFICACIÓN con No. PROPIETARIO, PROPIETARIO, RESIDENCIA, DOMICILIO, DOCUMENTO PERSONAL DE IDENTIFICACIÓN (DPI) y NACIONALIDAD. Bloque DATOS DEL ARMA con TIPO, MARCA, MODELO, CALIBRE, No. DE SERIE y LARGO DEL CAÑÓN O CAÑONES **en milímetros**. Luego CONVERSIONES (con rayas si no tiene) y una línea "MARCAJE GUA" con TRES números, que es el troquelado del artículo 35. Cierra con lugar y fecha, firma de la Dirección DIGECAM y, en la versión electrónica, un código QR de verificación.
+
+LA TARJETA DE TENENCIA **NO TIENE FECHA DE VENCIMIENTO**. Dice "CIVIL ART. 9" y no lleva vigencia. Si te dan una tenencia, devuelve fecha_vencimiento = null; NO tomes la fecha de emisión ni la del marcaje como vencimiento. La que sí vence es la LICENCIA DE PORTACIÓN, que es otro documento.
+
 DISTINGUIR EL TIPO ES LO MÁS IMPORTANTE:
   · TENENCIA autoriza tener el arma en el domicilio o lugar de trabajo. Tope de 200 cartuchos al mes.
   · PORTACIÓN autoriza llevarla consigo fuera de esos lugares. Tope de 250 cartuchos por arma registrada.
@@ -243,13 +248,22 @@ Si el documento no dice con claridad cuál de los dos es, devuelve null en "tipo
 
 Campos esperados:
 {
-  "tipo": "Exactamente 'tenencia' o 'portación'. Si no lo distingues con total seguridad, null",
-  "numero": "El número de licencia tal como aparece impreso, sin agregar ni quitar caracteres",
-  "titular": "Nombre completo del titular tal como aparece",
+  "tipo": "Exactamente 'tenencia' o 'portación'. Si el documento se titula 'TARJETA DE TENENCIA DE ARMA DE FUEGO', es 'tenencia'. Si no lo distingues con total seguridad, null",
+  "numero": "El 'No.' de la tarjeta o licencia tal como aparece impreso, sin agregar ni quitar caracteres",
+  "titular": "Nombre completo del titular (campo PROPIETARIO) tal como aparece",
   "cui": "El CUI/DPI del titular de 13 dígitos sin espacios ni guiones, si aparece; si no, null",
-  "fecha_vencimiento": "Vencimiento en formato YYYY-MM-DD. Suele venir DD/MM/AAAA: conviértela. Si no aparece, null",
-  "fecha_emision": "Emisión en formato YYYY-MM-DD, si aparece; si no, null",
-  "armas_registradas": "Cuántas armas ampara la licencia, como número entero, SÓLO si el documento lo indica explícitamente (por ejemplo listando los números de serie). Si no lo dice, null — no supongas 1"
+  "no_propietario": "El 'No. PROPIETARIO' que asigna DIGECAM al titular, si aparece; si no, null",
+  "huella_balistica": "El 'HUELLA BALISTICA No.', si aparece; si no, null",
+  "marcaje_gua": "Los números de la línea 'MARCAJE GUA' tal como aparecen, separados por espacio. Es el troquelado del art. 35. Si no aparece, null",
+  "fecha_vencimiento": "Vencimiento en formato YYYY-MM-DD. SÓLO si el documento trae una fecha de vencimiento explícita. Una TARJETA DE TENENCIA no la trae: en ese caso devuelve null y NO uses la fecha de emisión",
+  "fecha_emision": "Fecha de emisión en formato YYYY-MM-DD, si aparece; si no, null",
+  "arma_tipo": "TIPO del arma (pistola, escopeta, revólver, rifle...), si el documento es una tarjeta de tenencia; si no, null",
+  "arma_marca": "MARCA del arma, si aparece; si no, null",
+  "arma_modelo": "MODELO del arma, si aparece; si no, null",
+  "arma_calibre": "CALIBRE tal como aparece (ej. '9x19', '12'), si aparece; si no, null",
+  "arma_serie": "No. DE SERIE del arma, si aparece; si no, null",
+  "arma_largo_canon_mm": "LARGO DEL CAÑÓN en MILÍMETROS, sólo el número (ej. 102 de '102 mm', 530 de '530mm.'). La tarjeta lo trae en mm: NO lo conviertas a pulgadas. Si no aparece, null",
+  "armas_registradas": "Cuántas armas ampara el documento, como número entero, SÓLO si lo indica explícitamente. Una tarjeta de tenencia ampara UNA arma. Si no lo dice, null — no supongas"
 }`,
 
   recibo: `Eres un asistente especializado en extraer la DIRECCIÓN de un recibo de servicios de Guatemala (energía eléctrica, agua, teléfono o cable).

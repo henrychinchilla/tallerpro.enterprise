@@ -178,6 +178,20 @@ Modulos.clientes = {
   _avisarLicencia() {
     const box = document.getElementById('cli-lic-aviso');
     if (!box) return;
+
+    /* LA TARJETA DE TENENCIA NO VENCE. Verificado contra dos tarjetas reales
+       de DIGECAM: dicen "CIVIL ART. 9" y no traen fecha de vencimiento — una
+       de 2019 y otra de 2024, ninguna con vigencia. Lo que vence es la
+       LICENCIA DE PORTACIÓN (art. 72), que es otro documento.
+       Avisar "vencida" sobre una tenencia sería inventar un impedimento que
+       la ley no pone, y mandaría al cliente a renovar algo que no se renueva. */
+    const tipo = document.getElementById('cli-lic-tipo')?.value;
+    if (tipo === 'tenencia') {
+      box.innerHTML = 'ℹ️ La <b>tarjeta de tenencia no vence</b> (CIVIL ART. 9): es por arma y no lleva vigencia. La fecha de arriba, si la ponés, se guarda como referencia.';
+      box.style.color = 'var(--text3)';
+      return;
+    }
+
     const d = this.diasLicencia(document.getElementById('cli-lic-vence')?.value);
     if (d === null) { box.innerHTML = ''; return; }
     if (d < 0) {
@@ -304,7 +318,7 @@ Modulos.clientes = {
         </div>
         <div class="form-row">
           <div class="form-group"><label class="form-label">Tipo</label>
-            <select class="form-select" id="cli-lic-tipo">
+            <select class="form-select" id="cli-lic-tipo" onchange="Modulos.clientes._avisarLicencia()">
               <option value="">— No indicado —</option>
               <option value="tenencia"  ${c.licencia_tipo==='tenencia'?'selected':''}>🏠 Tenencia (200 al mes)</option>
               <option value="portación" ${c.licencia_tipo==='portación'?'selected':''}>🚶 Portación (250 por arma)</option>
