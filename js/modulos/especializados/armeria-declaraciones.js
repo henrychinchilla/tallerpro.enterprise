@@ -147,8 +147,8 @@ Object.assign(Modulos.armeria, {
     /* La edad se DERIVA de la fecha de nacimiento en el momento de generar
        el documento. Guardarla la dejaría vencida cada cumpleaños, y esto se
        firma bajo juramento: un dato viejo acá es un dato falso. */
-    const edad = (Modulos.clientes?.edadDe)
-      ? Modulos.clientes.edadDe(cli.fecha_nacimiento, hoy) : null;
+    const edad = (Modulos.clientesArmeria?.edadDe)
+      ? Modulos.clientesArmeria.edadDe(cli.fecha_nacimiento, hoy) : null;
 
     const identificacion = `
       <p>Yo, ${UI.esc(L(cli.nombre, 300))}, de ${L(edad != null ? String(edad) : null, 60)} años de edad,
