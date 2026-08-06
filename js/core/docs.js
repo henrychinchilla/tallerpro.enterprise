@@ -182,9 +182,17 @@ const Docs = {
   },
 
   /* Borra de Storage y de la tabla. Un documento mal subido no se "edita": se
-     reemplaza (eliminar + volver a subir), como cualquier adjunto de archivo. */
+     reemplaza (eliminar + volver a subir), como cualquier adjunto de archivo.
+
+     OJO: se usa confirm() nativo y NO UI.confirmar(). UI.confirmar() dibuja su
+     diálogo reutilizando el ÚNICO #modal-body de la app (no hay pila de
+     modales) — si esto se llama desde dentro de otro modal ya abierto (el
+     formulario de edición de un cliente, una OT, un traslado...), el diálogo
+     de confirmación BORRA ese formulario, y al confirmar UI.cerrarModal()
+     cierra todo, sacando a la persona de la edición con lo que llevaba
+     escrito perdido. confirm() es bloqueante y no toca el DOM del modal. */
   async eliminar(docId, storagePath) {
-    const ok = await UI.confirmar('¿Eliminar este documento? Esta acción no se puede deshacer.', 'Eliminar');
+    const ok = confirm('¿Eliminar este documento? Esta acción no se puede deshacer.');
     if (!ok) return false;
     await getSB().storage.from('documentos').remove([storagePath]);
     const { error } = await getSB().from('documentos').delete().eq('id', docId);

@@ -280,8 +280,8 @@ Modulos.armeria = {
     const lic = cli.licencia_tipo || 'tenencia';
     const armas = Math.min(3, Math.max(1, Number(cli.armas_registradas) || 1));
     /* Sólo la portación vence; la tarjeta de tenencia no trae vigencia. */
-    const dias = (cli.licencia_tipo === 'portación' && Modulos.clientes?.diasLicencia)
-      ? Modulos.clientes.diasLicencia(cli.licencia_vencimiento) : null;
+    const dias = (cli.licencia_tipo === 'portación' && Modulos.clientesArmeria?.diasLicencia)
+      ? Modulos.clientesArmeria.diasLicencia(cli.licencia_vencimiento) : null;
     const sel = (v, x) => v === x ? 'selected' : '';
 
     UI.modal('📦 Entregar munición', `
@@ -1167,7 +1167,7 @@ Modulos.armeria = {
        clientes, en vez de repetirlos acá: tenerlos escritos en dos lados es
        cómo se rompe la compatibilidad la próxima vez que se parta un
        documento en dos caras y alguien actualice sólo uno. */
-    const heredados = Modulos.clientes?._DOCS_HEREDADOS || {};
+    const heredados = Modulos.clientesArmeria?._DOCS_HEREDADOS || {};
     for (const [viejo, nuevo] of Object.entries(heredados)) {
       if (tipos.has(viejo)) tipos.add(nuevo);
     }
@@ -1193,8 +1193,8 @@ Modulos.armeria = {
        ART. 9" y no trae vigencia — verificado contra dos tarjetas reales de
        DIGECAM, de 2019 y 2024). Avisar "vencida" sobre una tenencia inventaría
        un impedimento que la ley no pone. */
-    const dias = (cli?.licencia_tipo === 'portación' && Modulos.clientes?.diasLicencia)
-      ? Modulos.clientes.diasLicencia(cli?.licencia_vencimiento) : null;
+    const dias = (cli?.licencia_tipo === 'portación' && Modulos.clientesArmeria?.diasLicencia)
+      ? Modulos.clientesArmeria.diasLicencia(cli?.licencia_vencimiento) : null;
     const avisoVence = dias === null ? ''
       : dias < 0
         ? `<div style="background:rgba(239,68,68,.08);border-left:3px solid var(--red);border-radius:6px;padding:8px 10px;margin-bottom:6px;color:var(--red)">
@@ -1215,12 +1215,15 @@ Modulos.armeria = {
       : '<span style="color:var(--green)">✅ Expediente completo (DPI y licencia por ambas caras, recibo de servicios, domicilio y licencia vigente).</span>');
   },
 
-  /* Abre la ficha del cliente para completarla y vuelve a la operación. */
+  /* Abre el EXPEDIENTE DE ARMERÍA del cliente (DPI, licencia, tenencias,
+     documentos) para completarlo y vuelve a la operación. Antes abría el
+     modal de Modulos.clientes, que hoy es sólo el alta básica y ya no trae
+     estos campos — el expediente vive aparte, en Modulos.clientesArmeria. */
   _completarCliente(clienteId) {
     UI.cerrarModal();
-    if (Modulos.clientes?.modalForm) {
-      Modulos.clientes._data = this._clientes;
-      Modulos.clientes.modalForm(clienteId, () => {
+    if (Modulos.clientesArmeria?.modalForm) {
+      Modulos.clientesArmeria._data = this._clientes;
+      Modulos.clientesArmeria.modalForm(clienteId, () => {
         DB.getClientes().then(cs => { this._clientes = cs; this.modalForm(); });
       });
     }
@@ -1230,8 +1233,8 @@ Modulos.armeria = {
      crear el cliente de la armería con su DPI/licencia desde acá. */
   _nuevoCliente() {
     UI.cerrarModal();
-    if (Modulos.clientes?.modalForm) {
-      Modulos.clientes.modalForm(null, () => {
+    if (Modulos.clientesArmeria?.modalForm) {
+      Modulos.clientesArmeria.modalForm(null, () => {
         /* Al guardar, refresca la lista y vuelve a abrir la operación. */
         DB.getClientes().then(cs => { this._clientes = cs; this.modalForm(); });
       });
