@@ -153,8 +153,20 @@ Modulos.clientesArmeria = {
       const v = (valor == null || valor === '') ? null : String(valor).trim();
       if (!el || !v) continue;
       const actual = (el.value || '').trim();
-      if (!actual) { if (this._ponerValor(el, v)) llenados.push(idEl); }
-      else if (actual.toLowerCase() !== v.toLowerCase()) distintos.push(`${el.previousElementSibling?.textContent || idEl}: el documento dice «${v}»`);
+      const forzarSobrescribir = (cual === 'recibo' && ['cli-dir', 'cli-vec-depto', 'cli-vec-muni'].includes(idEl));
+      if (!actual || forzarSobrescribir) {
+        const cambio = actual.toLowerCase() !== v.toLowerCase();
+        if (this._ponerValor(el, v)) {
+          if (cambio && actual) {
+            llenados.push(`${el.previousElementSibling?.textContent || idEl} (actualizado)`);
+          } else {
+            llenados.push(idEl);
+          }
+        }
+      }
+      else if (actual.toLowerCase() !== v.toLowerCase()) {
+        distintos.push(`${el.previousElementSibling?.textContent || idEl}: el documento dice «${v}»`);
+      }
     }
     this._mostrarEdad();
 
