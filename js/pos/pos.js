@@ -1188,7 +1188,7 @@ const POS = {
     this._cliente = id ? this._clientes.find(c=>c.id===id) : null;
     this._canje = 0;
     UI.cerrarModal();
-    this._pintarCart();
+    setTimeout(() => this._pintarCart(), 40);
   },
 
   /* ── ENVÍO ───────────────────────────────────────── */
