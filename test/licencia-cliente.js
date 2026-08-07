@@ -68,7 +68,12 @@ const ok = (n, c) => { if (c) { pasadas++; console.log('PASS — ' + n); } else 
 /* ── El lector ──────────────────────────────────────────────────────────── */
 {
   ok('el anverso de la licencia dispara el lector', C._LECTOR_DOC.licencia_frente === 'licencia');
-  ok('el reverso no', !C._LECTOR_DOC.licencia_reverso);
+  /* El reverso TAMBIÉN se lee. Se piden las dos caras justamente porque no
+     traen la misma información; leer sólo una era la causa de que medio
+     expediente quedara en blanco. Es seguro: el prompt devuelve null en lo
+     que no aparece en la cara que le dan, y la lectura sólo llena campos
+     vacíos, así que una cara no puede pisar lo que trajo la otra. */
+  ok('y el reverso también', C._LECTOR_DOC.licencia_reverso === 'licencia');
   ok('existe IA.escanearLicencia', /escanearLicencia/.test(srcInt));
   ok('llama al modo correcto', /modo: 'licencia'/.test(srcInt));
   ok('los datos caen en los campos del formulario',

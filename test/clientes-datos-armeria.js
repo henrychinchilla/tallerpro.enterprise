@@ -220,7 +220,13 @@ function domBase() {
   await ARM._leerDPI(archivo);
   ok('un dato ilegible (null) NO llena el campo', campos['cli-dpi'].value === '');
   ok('y nunca escribe la palabra "null"', campos['cli-fnac'].value !== 'null');
-  ok('avisa que no aportó datos', /no aportó datos/.test(campos['cli-lectura-aviso'].innerHTML));
+  /* CERO campos leídos es un FALLO, no un resultado: la IA contesta "ok" con
+     todo en null cuando la foto sale movida u oscura, y antes eso se
+     despachaba con un renglón gris indistinguible de "la app no hizo nada". */
+  ok('cero datos leídos se avisa como fallo, no como resultado',
+     /No se pudo sacar ningún dato/.test(campos['cli-lectura-aviso'].innerHTML));
+  ok('...y dice qué hacer (repetir la foto)',
+     /Volvé a tomarla/.test(campos['cli-lectura-aviso'].innerHTML));
 
   /* Respuesta que no es JSON: no revienta, avisa. */
   prepararDom({ 'cli-dpi': '' });
@@ -325,14 +331,21 @@ function domBase() {
   ok('con cliente existente, archiva el documento', subidos.length === 1 && subidos[0].tipo === 'dpi_frente');
   ok('...y en la MISMA acción lee los datos', campos['cli-dpi'].value === '1111111111111');
 
-  /* El REVERSO se archiva pero no se manda a leer: sus datos ya vinieron
-     del anverso y una lectura mala sobrescribiría lo bueno. */
+  /* EL REVERSO TAMBIÉN SE LEE. Se pide justamente porque NO trae la misma
+     información que el anverso: de atrás salen la vecindad, el estado civil,
+     el asiento L:F:P:, el número de serie y la fecha de vencimiento. Antes se
+     archivaba sin leerse y esos campos quedaban en blanco para siempre. */
   let leyoReverso = false;
-  ctx.IA = { escanearDPI: async () => { leyoReverso = true; return { ok: true, texto: '{}' }; } };
+  ctx.IA = { escanearDPI: async () => { leyoReverso = true; return { ok: true, texto: JSON.stringify({
+    vecindad_departamento: 'GUATEMALA', estado_civil: 'casado(a)', registro_libro: '102' }) }; } };
+  campos['cli-vec-depto'] = { value: '' };
+  campos['cli-estado-civil'] = { value: '' };
+  campos['cli-reg-libro'] = { value: '' };
   subidos.length = 0;
   await ARM._subirDoc('c1', 'dpi_reverso', { files: [{ size: 1000, type: 'image/jpeg' }], value: '' });
   ok('el reverso se archiva', subidos.length === 1 && subidos[0].tipo === 'dpi_reverso');
-  ok('...pero no gasta una llamada de IA (sus datos ya vinieron del anverso)', leyoReverso === false);
+  ok('...y SÍ se manda a leer (trae lo que el anverso no tiene)', leyoReverso === true);
+  ok('...y llena los datos que sólo están atrás', campos['cli-estado-civil'].value === 'casado(a)');
 
   /* Un PDF SI se lee. Antes se archivaba y se saltaba en silencio, y por eso
      la direccion nunca se llenaba: los recibos de EEGSA vienen en PDF. */
