@@ -120,6 +120,13 @@ Modulos.clientesArmeria = {
         'cli-estado-civil': datos.estado_civil,
         'cli-nacionalidad': (typeof nacionalidadDesdeISO === 'function')
           ? nacionalidadDesdeISO(datos.nacionalidad) : datos.nacionalidad,
+        /* PAÍS DE NAC. es OTRO campo del anverso, al lado de NACIONALIDAD.
+           En un guatemalteco de nacimiento dicen lo mismo (GTM) y por eso
+           faltaba sin que se notara; en un naturalizado NO coinciden, y la
+           declaración jurada del art. 55 a) tiene que decir dónde nació la
+           persona, no sólo qué nacionalidad ostenta. */
+        'cli-pais-nac': (typeof paisDesdeISO === 'function')
+          ? paisDesdeISO(datos.pais_nacimiento) : datos.pais_nacimiento,
         'cli-nac-depto': datos.nacimiento_departamento,
         'cli-nac-muni': datos.nacimiento_municipio,
         'cli-vec-depto': datos.vecindad_departamento,
@@ -443,6 +450,16 @@ Modulos.clientesArmeria = {
               <option value="masculino" ${c.sexo==='masculino'?'selected':''}>Masculino</option>
               <option value="femenino"  ${c.sexo==='femenino'?'selected':''}>Femenino</option>
             </select></div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group"><label class="form-label">País de nacimiento</label>
+            <input class="form-input" id="cli-pais-nac" value="${UI.esc((typeof paisDesdeISO==='function' ? paisDesdeISO(c.pais_nacimiento) : c.pais_nacimiento)||'')}" placeholder="Guatemala">
+            <div style="font-size:11px;color:var(--text3);margin-top:3px">
+              Es el <b>PAÍS DE NAC.</b> del anverso, al lado de NACIONALIDAD. En el DPI los dos dicen
+              <b>GTM</b>; sólo difieren en una persona naturalizada — y ahí la declaración jurada tiene
+              que decir dónde nació, no sólo qué nacionalidad tiene.
+            </div></div>
         </div>
 
         <div class="form-row">
@@ -935,6 +952,7 @@ Modulos.clientesArmeria = {
      el reverso se archiva para completar el expediente, no para sacar campos
      que no están ahí. */
   _DOCS_CLIENTE: {
+    foto_cliente:     { icon: '📸', label: 'Foto del cliente (rostro)' },
     dpi_frente:       { icon: '🪪', label: 'DPI — anverso (frente)' },
     dpi_reverso:      { icon: '🪪', label: 'DPI — reverso (atrás)' },
     licencia_frente:  { icon: '📋', label: 'Licencia de arma — anverso' },
@@ -976,6 +994,54 @@ Modulos.clientesArmeria = {
      de Armas). Las dos caras cuentan por separado: falta una, falta el
      documento. El pasaporte sustituye al DPI sólo para extranjeros. */
   _DOCS_OBLIGATORIOS_ARMERIA: ['dpi_frente', 'dpi_reverso', 'recibo_servicios'],
+
+  /* ══ FOTO DEL CLIENTE ═══════════════════════════════════════════════════
+     Un expediente sin cara no identifica a nadie. Se puede tomar con la
+     cámara o subir, y si no hay ninguna se RECORTA del anverso del DPI, que
+     ya está en el expediente: pedirle otra vez la cara a alguien cuya foto ya
+     tenemos es hacerle perder el tiempo.
+
+     El recorte es por PROPORCIONES del formato ID-1 (85.6 × 54 mm), que es el
+     del DPI: la fotografía ocupa siempre la misma banda izquierda. Sale bien
+     cuando la foto del DPI está tomada de frente y encuadrada; si el carné
+     salió torcido o pequeño dentro del cuadro, el recorte queda mal — por eso
+     se marca como "recortada del DPI" y se puede reemplazar con una foto real
+     en un toque. Es un punto de partida, no una verdad. */
+  _RECORTE_DPI: { x: 0.055, y: 0.20, w: 0.29, h: 0.62 },
+
+  async _recortarFotoDPI(file) {
+    if (!file?.type?.startsWith('image/')) return null;   // un PDF no se recorta
+    if (typeof createImageBitmap !== 'function') return null;
+    const bmp = await createImageBitmap(file).catch(() => null);
+    if (!bmp) return null;
+    try {
+      const r = this._RECORTE_DPI;
+      const sx = Math.round(bmp.width * r.x), sy = Math.round(bmp.height * r.y);
+      const sw = Math.round(bmp.width * r.w), sh = Math.round(bmp.height * r.h);
+      if (sw < 40 || sh < 40) return null;                // foto demasiado chica para sacar nada
+      const cv = document.createElement('canvas');
+      cv.width = sw; cv.height = sh;
+      cv.getContext('2d').drawImage(bmp, sx, sy, sw, sh, 0, 0, sw, sh);
+      const blob = await new Promise(res => cv.toBlob(res, 'image/jpeg', 0.9));
+      return blob ? new File([blob], 'foto-cliente.jpg', { type: 'image/jpeg' }) : null;
+    } finally { bmp.close?.(); }
+  },
+
+  /* Pinta la foto en el recuadro del expediente. El bucket es privado, así
+     que hace falta una URL firmada; sin foto se deja el marcador. */
+  async renderFoto(clienteId) {
+    const cont = document.getElementById('cli-foto');
+    if (!cont) return;
+    const vacio = '<div style="width:96px;height:120px;border:1px dashed var(--border);border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:26px;color:var(--text3)">👤</div>';
+    if (!clienteId) { cont.innerHTML = vacio; return; }
+    const doc = await Docs.ultimo('cliente', clienteId, 'foto_cliente').catch(() => null);
+    if (!doc) { cont.innerHTML = vacio; return; }
+    const url = await Docs.urlFirmada(doc.storage_path).catch(() => null);
+    cont.innerHTML = url
+      ? `<img src="${UI.esc(url)}" alt="Foto del cliente"
+              style="width:96px;height:120px;object-fit:cover;border-radius:6px;border:1px solid var(--border)">`
+      : vacio;
+  },
 
   _htmlDocumentos(id) {
     const pend = Object.keys(this._docsPendientes || {});
@@ -1022,6 +1088,7 @@ Modulos.clientesArmeria = {
       if (error) { UI.toast('Error: ' + error.message, 'error'); return; }
       UI.toast(`${titulo} archivado ✓`);
       Docs.render('cliente', clienteId, 'cli-docs');
+      if (tipo === 'foto_cliente') this.renderFoto(clienteId);
     } else {
       this._docsPendientes[tipo] = { file, titulo };
       UI.toast(`${titulo} listo — se adjunta al guardar`);
@@ -1029,12 +1096,44 @@ Modulos.clientesArmeria = {
       if (cont) cont.innerHTML = this._htmlDocumentos('');
     }
 
-    /* 2. Leer, si este documento trae datos. Va después de archivar: si la
+    /* 2. Si es el ANVERSO del DPI y todavía no hay foto del cliente, se
+          recorta la cara de ahí mismo. La foto ya la tenemos en la mano: no
+          tiene sentido pedirle otra al cliente sólo para llenar el recuadro.
+          Sólo se hace si NO hay una propia — una foto tomada a la persona
+          siempre gana sobre un recorte de un carné plastificado. */
+    if (tipo === 'dpi_frente') await this._fotoDesdeDPI(clienteId, file);
+
+    /* 3. Leer, si este documento trae datos. Va después de archivar: si la
           lectura falla, el archivo ya quedó guardado igual. Se aceptan
           también PDF (los recibos de EEGSA llegan así), que la API lee igual. */
     const lector = this._LECTOR_DOC[tipo];
     const legible = file.type?.startsWith('image/') || file.type === 'application/pdf';
     if (lector && legible) await this._leerDocumento(file, lector);
+  },
+
+  /* Deriva la foto del cliente del anverso del DPI, si aún no tiene una. */
+  async _fotoDesdeDPI(clienteId, fileDPI) {
+    const yaTienePropia = clienteId
+      ? !!(await Docs.ultimo('cliente', clienteId, 'foto_cliente').catch(() => null))
+      : !!this._docsPendientes?.foto_cliente;
+    if (yaTienePropia) return;
+
+    const recorte = await this._recortarFotoDPI(fileDPI);
+    if (!recorte) return;
+    const titulo = 'Foto del cliente (recortada del DPI)';
+
+    if (clienteId) {
+      const { error } = await Docs.subirArchivo('cliente', clienteId, 'foto_cliente', titulo, recorte);
+      if (error) return;                       // no es crítico: se puede subir a mano
+      UI.toast('📸 Foto tomada del DPI — reemplazala si querés una del cliente');
+      this.renderFoto(clienteId);
+      Docs.render('cliente', clienteId, 'cli-docs');
+    } else {
+      this._docsPendientes.foto_cliente = { file: recorte, titulo };
+      UI.toast('📸 Foto recortada del DPI — se adjunta al guardar');
+      const cont = document.getElementById('cli-docs-box');
+      if (cont) cont.innerHTML = this._htmlDocumentos('');
+    }
   },
 
   /* Sube lo que quedó pendiente de un cliente recién creado. A diferencia de
@@ -1204,6 +1303,7 @@ Modulos.clientesArmeria = {
     asignar('cli-estado-civil', 'estado_civil', x => x || null);
     asignar('cli-profesion', 'profesion');
     asignar('cli-nacionalidad', 'nacionalidad');
+    asignar('cli-pais-nac', 'pais_nacimiento');
     asignar('cli-sexo', 'sexo', x => x || null);
     asignar('cli-nac-depto', 'nacimiento_departamento', x => x || null);
     asignar('cli-nac-muni', 'nacimiento_municipio', x => x || null);

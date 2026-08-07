@@ -221,11 +221,27 @@ const Docs = {
     return data || [];
   },
 
+  /* URL firmada temporal. El bucket es privado, así que un <img src> necesita
+     esto: no hay URL pública que poner. Devuelve null si falla, para que quien
+     la pida decida qué mostrar en su lugar. */
+  async urlFirmada(path, segundos = 300) {
+    if (!path) return null;
+    const { data, error } = await getSB().storage.from('documentos').createSignedUrl(path, segundos);
+    return (error || !data?.signedUrl) ? null : data.signedUrl;
+  },
+
   /* Abre el PDF en una pestaña con URL firmada temporal */
   async abrir(path) {
-    const { data, error } = await getSB().storage.from('documentos').createSignedUrl(path, 120);
-    if (error || !data?.signedUrl) { UI.toast('No se pudo abrir el documento','error'); return; }
-    window.open(data.signedUrl, '_blank');
+    const url = await this.urlFirmada(path, 120);
+    if (!url) { UI.toast('No se pudo abrir el documento','error'); return; }
+    window.open(url, '_blank');
+  },
+
+  /* El documento MÁS RECIENTE de un tipo (ej. la foto del cliente, que se
+     reemplaza subiendo otra en vez de editarse). */
+  async ultimo(entidad, entidadId, tipo) {
+    const docs = await this.listar(entidad, entidadId);
+    return docs.find(d => d.tipo === tipo) || null;   // listar() ya viene del más nuevo al más viejo
   },
 
   /* HTML para listar documentos de una entidad (para los detalles/historiales) */
