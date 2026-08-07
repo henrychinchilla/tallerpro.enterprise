@@ -28,9 +28,6 @@ Modulos.clientesArmeria = {
      (que no mantiene la lista de Clientes cargada) no rompe. */
   async _obtenerCliente(id) {
     if (!id) return {};
-    const enCache = (this._data || []).find(x => x.id === id)
-      || (Modulos.clientes?._data || []).find(x => x.id === id);
-    if (enCache) return enCache;
     const lista = await DB.getClientes();
     this._data = lista;
     return lista.find(x => x.id === id) || {};
