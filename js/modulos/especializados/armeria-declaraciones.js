@@ -237,34 +237,189 @@ Object.assign(Modulos.armeria, {
     const html = `<!DOCTYPE html><html><head><meta charset="utf-8">
     <title>${d.label}</title>
     <style>
-      @page { margin: 2.5cm; }
-      body{font-family:'Times New Roman',Georgia,serif;font-size:12.5px;line-height:1.7;margin:0;color:#000}
-      /* La barra de edición no debe salir impresa: es andamio, no documento. */
-      .barra{position:sticky;top:0;background:#fffbe6;border-bottom:1px solid #e0d9b0;padding:8px 12px;
-             font-family:Arial,sans-serif;font-size:12px;display:flex;gap:10px;align-items:center;z-index:9}
-      .barra button{font-family:Arial,sans-serif;font-size:12px;padding:5px 12px;border:1px solid #999;
-             border-radius:5px;background:#fff;cursor:pointer}
-      .doc{padding:0 4px}
-      .doc:focus{outline:2px dashed #c9a227;outline-offset:6px}
-      @media print { .barra{display:none} .doc:focus{outline:none} }
-      .enc{text-align:center;margin-bottom:18px}
-      .enc h1{font-size:15px;margin:0 0 4px;text-transform:uppercase;letter-spacing:.5px}
-      .enc .base{font-size:10.5px;color:#444}
-      p{text-align:justify;margin:9px 0}
-      .firmas{margin-top:48px;display:flex;gap:40px}
-      .firma{flex:1;text-align:center}
-      .firma .linea{border-top:1px solid #000;margin-bottom:4px}
-      .firma .rol{font-size:10.5px}
-      .pie{margin-top:26px;font-size:9.5px;color:#666;border-top:1px dashed #bbb;padding-top:8px}
-      .sello{margin-top:34px;border:1px dashed #999;height:110px;padding:6px;font-size:10px;color:#777}
+      @page { margin: 0; }
+      body {
+        background: #f3f4f6;
+        margin: 0;
+        padding: 0;
+        color: #1f2937;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+      }
+      
+      .barra {
+        position: sticky;
+        top: 0;
+        background: rgba(255, 255, 255, 0.9);
+        backdrop-filter: blur(10px);
+        border-bottom: 1px solid #e5e7eb;
+        padding: 12px 24px;
+        display: flex;
+        gap: 16px;
+        align-items: center;
+        z-index: 99;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+      }
+      .barra .info {
+        font-size: 13px;
+        color: #4b5563;
+        font-family: Arial, sans-serif;
+      }
+      .barra .info b {
+        color: #0f172a;
+      }
+      .barra button {
+        font-family: Arial, sans-serif;
+        font-size: 13px;
+        font-weight: 500;
+        padding: 7px 16px;
+        border: 1px solid #d1d5db;
+        border-radius: 6px;
+        background: #ffffff;
+        color: #374151;
+        cursor: pointer;
+        transition: all 0.2s ease;
+      }
+      .barra button:hover {
+        background: #f9fafb;
+        border-color: #9ca3af;
+        color: #111827;
+      }
+      .barra button.primary {
+        background: #0891b2;
+        color: #ffffff;
+        border-color: #0891b2;
+      }
+      .barra button.primary:hover {
+        background: #0e7490;
+        border-color: #0e7490;
+      }
+      
+      .doc-wrapper {
+        display: flex;
+        justify-content: center;
+        padding: 30px 10px;
+      }
+      
+      .doc {
+        background: #ffffff;
+        width: 21.59cm;
+        min-height: 27.94cm;
+        padding: 3cm 2cm 3cm 2.5cm;
+        box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+        box-sizing: border-box;
+        font-family: 'Times New Roman', Times, Georgia, serif;
+        font-size: 13px;
+        line-height: 1.8;
+        color: #000000;
+      }
+      
+      .doc:focus {
+        outline: none;
+      }
+      
+      .enc {
+        text-align: center;
+        margin-bottom: 24px;
+      }
+      .enc h1 {
+        font-size: 16px;
+        font-weight: bold;
+        margin: 0 0 6px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+      }
+      .enc .base {
+        font-size: 11px;
+        color: #4b5563;
+        font-style: italic;
+      }
+      
+      p {
+        text-align: justify;
+        margin: 12px 0;
+        text-indent: 1.2cm;
+      }
+      
+      .firmas p, .pie p, .sello p, .enc p {
+        text-indent: 0;
+      }
+      
+      .firmas {
+        margin-top: 60px;
+        display: flex;
+        gap: 60px;
+      }
+      .firma {
+        flex: 1;
+        text-align: center;
+      }
+      .firma .linea {
+        border-top: 1px solid #000;
+        margin-bottom: 6px;
+      }
+      .firma .rol {
+        font-size: 11px;
+        color: #374151;
+        margin-top: 2px;
+      }
+      
+      .pie {
+        margin-top: 40px;
+        font-size: 10px;
+        color: #4b5563;
+        border-top: 1px dashed #d1d5db;
+        padding-top: 12px;
+        line-height: 1.5;
+      }
+      
+      .sello {
+        margin-top: 36px;
+        border: 1px dashed #9ca3af;
+        background: #f9fafb;
+        border-radius: 4px;
+        height: 120px;
+        padding: 10px;
+        font-size: 10.5px;
+        color: #6b7280;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+      }
+      
+      @media print { .barra{display:none}
+        body {
+          background: #ffffff;
+          color: #000000;
+        }
+        .barra {
+          display: none !important;
+        }
+        .doc-wrapper {
+          padding: 0;
+        }
+        .doc {
+          width: 100%;
+          min-height: auto;
+          padding: 2.5cm 2cm 2.5cm 2.5cm;
+          box-shadow: none;
+          border: none;
+        }
+        .sello {
+          background: none;
+          border-color: #000;
+        }
+      }
     </style></head><body>
     <div class="barra">
-      <b>✏️ Podés corregir cualquier dato haciendo clic sobre él.</b>
-      <span style="color:#666">Las correcciones son de este documento — no tocan la ficha del cliente.</span>
+      <div class="info">
+        <b>✏️ Documento Editable:</b> podés corregir cualquier dato haciendo clic directo sobre la hoja (las correcciones son de este documento, no tocan la ficha del cliente).
+      </div>
       <button id="btn-guardar" style="margin-left:auto">💾 Guardar en historial</button>
-      <button onclick="window.print()">🖨️ Imprimir</button>
+      <button onclick="window.print()" class="primary">🖨️ Imprimir Declaración</button>
     </div>
-    <div class="doc" contenteditable="true" spellcheck="false">
+    <div class="doc-wrapper">
+      <div class="doc" contenteditable="true" spellcheck="false">
     <div class="enc">
       <h1>${d.label}</h1>
       <div class="base">Fundamento: ${d.base}</div>
@@ -296,6 +451,7 @@ Object.assign(Modulos.armeria, {
       Documento generado por NexusPro el ${hoy.toLocaleString('es-GT')}. Este sistema únicamente
       prepara el formato con los datos registrados; <b>la fe pública la otorga el notario</b>.
       Verifique el contenido antes de firmar.
+    </div>
     </div>
     </div>
     </body></html>`;
