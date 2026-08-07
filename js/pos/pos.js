@@ -721,7 +721,7 @@ const POS = {
     cont.innerHTML = [
       chip(!this._cat, '📦 Todo', base.length, `POS._cat='';POS._onCatChange(this)`),
       ...this._cats().map(c => chip(this._cat === c, UI.esc(c), cuenta(c),
-        `POS._cat='${UI.escUI.jsAttr(String(c))}';POS._onCatChange(this)`)),
+        `POS._cat='${UI.jsAttr(String(c))}';POS._onCatChange(this)`)),
     ].join('');
   },
 
@@ -868,6 +868,74 @@ const POS = {
     const t = this._totales();
     const cli = this._cliente;
     const puntosCli = cli?.programa_puntos ? (Number(cli.puntos_saldo)||0) : null;
+
+    // 1. Bloque de Canje de Puntos HTML (Desacoplado)
+    let htmlCanje = '';
+    if (puntosCli !== null && puntosCli >= (Number(fidelizacionCfg().puntos_por_q1_canje) || 10)) {
+      const tasa = Number(fidelizacionCfg().puntos_por_q1_canje) || 10;
+      const maxCanjeable = Math.min(puntosCli, Math.floor(t.bruto * tasa));
+      htmlCanje = `
+      <div style="display:flex; align-items:center; justify-content:space-between; font-size:12px; background:rgba(255,255,255,0.6); padding:8px; border-radius:8px; border:1px solid #ebd5ff; margin-top:2px;">
+        <span style="font-weight:700; color:#5b21b6;">Canjear pts:</span>
+        <div style="display:flex; align-items:center; gap:4px">
+          <input class="form-input" style="width:72px; padding:4px 6px; font-size:12px; height:26px; border-radius:5px; background:#fff;" type="number" min="0" step="${tasa}" max="${maxCanjeable}"
+                 value="${this._canje}" onchange="POS.setCanje(this.value)">
+          <span style="font-size:11px; color:#5b21b6; font-weight:700;">= Q${(this._canje / tasa).toFixed(2)}</span>
+        </div>
+      </div>`;
+    }
+
+    // 2. Bloque de Métodos de Pago HTML (Desacoplado)
+    const pt = Auth.tenant?.config_pos_tarjeta;
+    const conTarjeta = !pt || pt.habilitado !== false;
+    const metodos = [
+      { id:'Efectivo', label:'Efectivo', icon:'💵' },
+      ...(conTarjeta ? [{ id:'Tarjeta', label:'Tarjeta', icon:'💳' }] : []),
+      { id:'Transferencia', label:'Transfer', icon:'🏦' },
+      { id:'Cheque', label:'Cheque', icon:'✍️' }
+    ];
+    const htmlMetodos = metodos.map(m => `
+      <div class="pos-pay-compact-btn ${this._metodo===m.id?'selected':''}" onclick="POS._setMetodoPagoInline('${m.id}')">
+        <span>${m.icon}</span> <span>${m.label}</span>
+      </div>
+    `).join('');
+
+    // 3. Bloque de Calculadora de Vuelto HTML (Desacoplado)
+    let htmlVuelto = '';
+    if (this._metodo === 'Efectivo') {
+      let htmlBilletes = '';
+      if (t.total > 0) {
+        const billetes = this._montosRapidos(t.total);
+        const botonesBilletes = billetes.map(m => `
+          <button class="btn btn-secondary btn-sm" style="flex:1; font-weight:700; border-radius:4px; padding:3px; font-size:10px;" onclick="POS._setRecibido(${m})">Q${m}</button>
+        `).join('');
+        htmlBilletes = `
+        <div style="display:flex; gap:3px; margin-top:2px; flex-wrap:wrap;">
+          <button class="btn btn-secondary btn-sm" style="flex:1; font-weight:700; border-radius:4px; padding:3px; font-size:10px;" onclick="POS._setRecibido(${t.total.toFixed(2)})">Exacto</button>
+          ${botonesBilletes}
+        </div>`;
+      }
+      htmlVuelto = `
+        <div style="display:flex; gap:6px; align-items:center; background:#fff; padding:6px; border-radius:6px; border:1px solid #ffedd5; margin-top:2px;">
+          <div style="flex:1.2;">
+            <label style="font-size:9.5px; font-weight:800; color:#c2410c; text-transform:uppercase;">Recibido</label>
+            <input class="form-input" id="pos-recibido" type="number" min="0" step="0.01"
+                   placeholder="${t.total.toFixed(2)}" style="margin-top:1px; border-radius:4px; background:var(--surface); width:100%; padding:3px 6px; height:24px; font-size:12px; font-weight:700; color:var(--text);">
+          </div>
+          <div style="flex:1; text-align:right;">
+            <div style="font-size:9.5px; font-weight:800; color:#c2410c; text-transform:uppercase;">Cambio</div>
+            <div id="pos-cambio" style="font-size:16px; font-weight:900; color:#15803d; margin-top:1px;">Q 0.00</div>
+          </div>
+        </div>
+        ${htmlBilletes}`;
+    }
+
+    // 4. Desglose de Descuentos HTML
+    const htmlDescRow = t.desc > 0 ? `
+      <div style="display:flex; justify-content:space-between; font-size:11px; color:#c2410c; font-weight:700;">
+        <span>Descuento</span><span>− ${UI.q(t.desc)}</span>
+      </div>` : '';
+
     tot.innerHTML = `
       <!-- Columna Izquierda: Cliente & Envío (Morado/Lavanda) -->
       <div id="pos-cart-campos" style="flex:1.2;">
@@ -879,19 +947,7 @@ const POS = {
           </button>
         </div>
 
-        <!-- Canjear Puntos -->
-        ${puntosCli !== null && puntosCli >= (Number(fidelizacionCfg().puntos_por_q1_canje) || 10) ? (() => {
-          const tasa = Number(fidelizacionCfg().puntos_por_q1_canje) || 10;
-          return `
-          <div style="display:flex; align-items:center; justify-content:space-between; font-size:12px; background:rgba(255,255,255,0.6); padding:8px; border-radius:8px; border:1px solid #ebd5ff; margin-top:2px;">
-            <span style="font-weight:700; color:#5b21b6;">Canjear pts:</span>
-            <div style="display:flex; align-items:center; gap:4px">
-              <input class="form-input" style="width:72px; padding:4px 6px; font-size:12px; height:26px; border-radius:5px; background:#fff;" type="number" min="0" step="${tasa}" max="${Math.min(puntosCli, Math.floor(t.bruto * tasa))}"
-                     value="${this._canje}" onchange="POS.setCanje(this.value)">
-              <span style="font-size:11px; color:#5b21b6; font-weight:700;">= Q${(this._canje / tasa).toFixed(2)}</span>
-            </div>
-          </div>`;
-        })() : ''}
+        ${htmlCanje}
 
         <!-- Programar Envío -->
         <div style="border:1px solid #ebd5ff; border-radius:8px; padding:8px; background:#fff; margin-top:2px;">
@@ -922,26 +978,13 @@ const POS = {
         <div style="margin-top:2px;">
           <div style="font-size:10.5px; font-weight:800; color:#c2410c; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:4px">Método de Pago</div>
           <div class="pos-pay-compact-grid">
-            ${(() => {
-              const pt = Auth.tenant?.config_pos_tarjeta;
-              const conTarjeta = !pt || pt.habilitado !== false;
-              return [
-                { id:'Efectivo', label:'Efectivo', icon:'💵' },
-                ...(conTarjeta ? [{ id:'Tarjeta', label:'Tarjeta', icon:'💳' }] : []),
-                { id:'Transferencia', label:'Transfer', icon:'🏦' },
-                { id:'Cheque', label:'Cheque', icon:'✍️' }
-              ];
-            })().map(m => `
-              <div class="pos-pay-compact-btn ${this._metodo===m.id?'selected':''}" onclick="POS._setMetodoPagoInline('${m.id}')">
-                <span>${m.icon}</span> <span>${m.label}</span>
-              </div>
-            `).join('')}
+            ${htmlMetodos}
           </div>
         </div>
 
         <!-- Totales Breakdown -->
         <div style="background:rgba(255,255,255,0.7); border-radius:8px; padding:8px; border:1px solid #ffedd5; margin-top:2px;">
-          ${t.desc > 0 ? `<div style="display:flex; justify-content:space-between; font-size:11px; color:#c2410c; font-weight:700;"><span>Descuento</span><span>− ${UI.q(t.desc)}</span></div>` : ''}
+          ${htmlDescRow}
           <div style="display:flex; justify-content:space-between; font-size:11px; color:#7c2d12; padding:1px 0"><span>Subtotal</span><span>${UI.q(t.subtotal)}</span></div>
           <div style="display:flex; justify-content:space-between; font-size:11px; color:#7c2d12; padding:1px 0"><span>IVA (12%)</span><span>${UI.q(t.iva)}</span></div>
           <div style="display:flex; justify-content:space-between; font-size:20px; font-weight:900; margin-top:4px; padding-top:4px; border-top:1px solid #ffedd5; font-family:'Outfit',sans-serif; color:#7c2d12;">
@@ -950,25 +993,7 @@ const POS = {
           </div>
         </div>
 
-        <!-- Calculadora de Vuelto -->
-        ${this._metodo === 'Efectivo' ? `
-          <div style="display:flex; gap:6px; align-items:center; background:#fff; padding:6px; border-radius:6px; border:1px solid #ffedd5; margin-top:2px;">
-            <div style="flex:1.2;">
-              <label style="font-size:9.5px; font-weight:800; color:#c2410c; text-transform:uppercase;">Recibido</label>
-              <input class="form-input" id="pos-recibido" type="number" min="0" step="0.01"
-                     placeholder="${t.total.toFixed(2)}" style="margin-top:1px; border-radius:4px; background:var(--surface); width:100%; padding:3px 6px; height:24px; font-size:12px; font-weight:700; color:var(--text);">
-            </div>
-            <div style="flex:1; text-align:right;">
-              <div style="font-size:9.5px; font-weight:800; color:#c2410c; text-transform:uppercase;">Cambio</div>
-              <div id="pos-cambio" style="font-size:16px; font-weight:900; color:#15803d; margin-top:1px;">Q 0.00</div>
-            </div>
-          </div>
-          ${t.total > 0 ? `
-          <div style="display:flex; gap:3px; margin-top:2px; flex-wrap:wrap;">
-            <button class="btn btn-secondary btn-sm" style="flex:1; font-weight:700; border-radius:4px; padding:3px; font-size:10px;" onclick="POS._setRecibido(${t.total.toFixed(2)})">Exacto</button>
-            ${this._montosRapidos(t.total).map(m =>
-              `<button class="btn btn-secondary btn-sm" style="flex:1; font-weight:700; border-radius:4px; padding:3px; font-size:10px;" onclick="POS._setRecibido(${m})">Q${m}</button>`).join('')}
-          </div>` : ''}` : ''}
+        ${htmlVuelto}
 
         <button class="btn fpos-cobrar" id="pos-btn-cobrar" style="width:100%; font-size:15px; padding:10px; font-weight:800; border-radius:8px; margin-top:4px; background:${this._cart.length ? '#16a34a' : 'var(--surface3)'}; color:${this._cart.length ? '#fff' : 'var(--text3)'}; border:none; font-family:'Outfit',sans-serif; box-shadow:${this._cart.length ? '0 4px 10px rgba(22,163,74,0.2)' : 'none'}" onclick="POS.cobrar()" ${this._cart.length ? '' : 'disabled'}>
           💵 Cobrar ${UI.q(t.total)}
