@@ -1,6 +1,9 @@
 /* Los datos personales largos del cliente son sólo para armería.
 
-   Dos cosas que pueden salir mal, y la segunda es la que duele:
+   Desde que el expediente de armería vive en su PROPIO módulo
+   (js/modulos/especializados/clientes-armeria.js), la separación ya no
+   depende de un `if` dentro del formulario común: son dos pantallas
+   distintas. La prueba cubre las dos y, sobre todo, lo que puede salir mal:
 
    1) Que un taller mecánico o una venta de granos tenga que ver campos de
       fecha de nacimiento, estado civil y recibos de servicios que no le
@@ -11,7 +14,12 @@
       no existe en la pantalla, la clave no debe viajar al update — porque
       PostgREST hace update parcial y omitirla es justo lo que preserva el
       dato. Un comercio que apague armería un rato perdería el expediente
-      de todos sus clientes. */
+      de todos sus clientes.
+
+   3) Que subir la foto de un documento NO llene los campos. Es lo que más
+      duele en el mostrador: se toma la foto, el archivo se guarda, y los
+      datos siguen en blanco. Los casos de abajo recorren esa cadena entera
+      con la IA simulada. */
 const fs = require('fs');
 const vm = require('vm');
 const path = require('path');
@@ -23,25 +31,29 @@ const campos = {};   // simula el DOM: sólo existe lo que el formulario dibujó
 
 const ctx = {
   console,
-  Modulos: {},
-  UI: { esc: v => String(v ?? ''), modal: (t, h) => { htmlModal = h; }, cerrarModal() {}, toast() {} },
+  Modulos: { btnAccion: () => '' },
+  UI: { esc: v => String(v ?? ''), modal: (t, h) => { htmlModal = h; }, cerrarModal() {}, toast() {},
+        fecha: v => String(v ?? ''), fechaHora: v => String(v ?? '') },
   NIT: { validarLocal: () => ({ valido: true }) },
-  Docs: { render() {} },
+  Docs: { render() {}, listar: async () => [] },
   Auth: { tenant: { modulos_activos: [] } },
   DB: {
     upsertCliente: async (f) => { guardado = f; return { data: { id: 'c1' }, error: null } ; },
     getClientes: async () => [],
+    getTenencias: async () => [],
   },
   document: { getElementById: (id) => (id in campos ? campos[id] : null), querySelector: () => null },
 };
 ctx.window = ctx;
 vm.createContext(ctx);
-/* El catálogo geográfico va ANTES, como en el navegador: clientes.js lo usa
+/* El catálogo geográfico va ANTES, como en el navegador: el expediente lo usa
    para traducir el código ISO del DPI ("GTM" → "Guatemalteca") y para derivar
    el código postal. Sin él, la traducción cae al valor crudo. */
 vm.runInContext(fs.readFileSync(raiz('js', 'core', 'geo-guatemala.js'), 'utf8'), ctx);
 vm.runInContext(fs.readFileSync(raiz('js', 'modulos', 'operacion', 'clientes.js'), 'utf8'), ctx);
-const CLI = ctx.Modulos.clientes;
+vm.runInContext(fs.readFileSync(raiz('js', 'modulos', 'especializados', 'clientes-armeria.js'), 'utf8'), ctx);
+const CLI = ctx.Modulos.clientes;             // alta básica, cualquier vertical
+const ARM = ctx.Modulos.clientesArmeria;      // expediente de armería
 CLI.render = async () => {};   // no hay página que pintar en la prueba
 
 let pasadas = 0, fallidas = 0;
@@ -60,13 +72,16 @@ function domBase() {
    que todo el cuerpo va dentro de una función async. */
 (async () => {
 
-/* ── Comercio SIN armería: no se piden esos datos ────────────────────────── */
+/* ── El alta BÁSICA nunca muestra los datos de armería ────────────────────
+   Ya no por un `if`, sino porque esos campos viven en otro módulo. La
+   prueba se mantiene igual de estricta: lo que importa es que el taller no
+   los vea, no cómo se logra. */
 {
   ctx.Auth.tenant.modulos_activos = ['ordenes', 'vehiculos', 'inventario'];
   ok('un taller no pide datos de armería', CLI._pideDatosArmeria() === false);
 
   CLI._data = [];
-  CLI.modalForm();
+  await CLI.modalForm();
   ok('el formulario NO muestra fecha de nacimiento', !/id="cli-fnac"/.test(htmlModal));
   ok('...ni estado civil', !/id="cli-estado-civil"/.test(htmlModal));
   ok('...ni profesión ni nacionalidad',
@@ -77,6 +92,15 @@ function domBase() {
   ok('pero sí sigue pidiendo lo de siempre (nombre, teléfono, NIT, dirección)',
      /id="cli-nombre"/.test(htmlModal) && /id="cli-tel"/.test(htmlModal) &&
      /id="cli-nit"/.test(htmlModal) && /id="cli-dir"/.test(htmlModal));
+
+  /* Y con armería encendida el alta básica TAMPOCO los muestra: para eso
+     está el expediente aparte. Lo que sí aparece es cómo llegar a él. */
+  ctx.Auth.tenant.modulos_activos = ['ordenes', 'armeria', 'inventario'];
+  CLI._data = [{ id: 'c1', nombre: 'Juan Pérez' }];
+  await CLI.modalForm('c1');
+  ok('con armería, el alta básica sigue sin mostrar el DPI', !/id="cli-fnac"/.test(htmlModal));
+  ok('...pero ofrece abrir el expediente de armería',
+     /clientesArmeria\.modalForm/.test(htmlModal));
 }
 
 /* ── Y guardar NO debe borrar lo que ya estaba ───────────────────────────
@@ -88,25 +112,24 @@ function domBase() {
   await CLI.guardar('c1');
   ok('se guardó algo', !!guardado);
   for (const clave of ['fecha_nacimiento', 'estado_civil', 'profesion', 'nacionalidad', 'dpi', 'vivienda']) {
-    ok(`no manda "${clave}" cuando el campo no existe (si lo mandara, lo borraría)`,
+    ok(`el alta básica no manda "${clave}" (si lo mandara, borraría el expediente)`,
        !(clave in guardado));
   }
   ok('sí manda los campos que sí existen', guardado.nombre === 'Juan Pérez' && guardado.direccion === 'Zona 1');
 }
 
-/* ── Comercio CON armería: sí se piden y sí se guardan ───────────────────── */
+/* ── El EXPEDIENTE de armería sí los pide y sí los guarda ─────────────────── */
 {
   ctx.Auth.tenant.modulos_activos = ['ordenes', 'armeria', 'inventario'];
-  ok('un comercio con armería sí los pide', CLI._pideDatosArmeria() === true);
-
-  CLI._data = [];
-  CLI.modalForm();
-  ok('el formulario muestra fecha de nacimiento', /id="cli-fnac"/.test(htmlModal));
+  ARM._data = [{ id: 'c1', nombre: 'Juan Pérez' }];
+  await ARM.modalForm('c1');
+  ok('el expediente muestra fecha de nacimiento', /id="cli-fnac"/.test(htmlModal));
   ok('...y estado civil, profesión, nacionalidad',
      /id="cli-estado-civil"/.test(htmlModal) && /id="cli-profesion"/.test(htmlModal) &&
      /id="cli-nacionalidad"/.test(htmlModal));
   ok('...y el tipo de vivienda', /id="cli-vivienda"/.test(htmlModal));
   ok('...y los documentos de identificación', /Documentos de identificaci[óo]n/.test(htmlModal));
+  ok('...y la licencia de DIGECAM', /id="cli-lic-tipo"/.test(htmlModal));
 
   domBase();
   campos['cli-fnac'] = { value: '1990-06-15' };
@@ -117,7 +140,7 @@ function domBase() {
   campos['cli-vivienda'] = { value: 'propia' };
 
   guardado = null;
-  await CLI.guardar('c1');
+  await ARM.guardar('c1');
   ok('guarda la fecha de nacimiento', guardado.fecha_nacimiento === '1990-06-15');
   ok('guarda el estado civil', guardado.estado_civil === 'casado(a)');
   ok('guarda la profesión', guardado.profesion === 'Comerciante');
@@ -129,7 +152,7 @@ function domBase() {
      está borrando a propósito, que es distinto de que el campo no exista. */
   campos['cli-profesion'] = { value: '' };
   guardado = null;
-  await CLI.guardar('c1');
+  await ARM.guardar('c1');
   ok('un campo visible y vacío sí se limpia (borrar a propósito ≠ ausente)',
      'profesion' in guardado && guardado.profesion === null);
 }
@@ -162,7 +185,7 @@ function domBase() {
   conDatos({ cui: '1605755322205', nombre_completo: 'Ana María Gómez', fecha_nacimiento: '1990-06-15',
              estado_civil: 'soltero(a)', nacionalidad: 'GTM',
              nacimiento_departamento: 'GUATEMALA', nacimiento_municipio: 'MIXCO' });
-  await CLI._leerDPI(archivo);
+  await ARM._leerDPI(archivo);
   ok('llena el DPI que estaba vacío', campos['cli-dpi'].value === '1605755322205');
   ok('llena la fecha de nacimiento', campos['cli-fnac'].value === '1990-06-15');
   ok('llena el estado civil', campos['cli-estado-civil'].value === 'soltero(a)');
@@ -180,10 +203,10 @@ function domBase() {
   ok('avisa cuántos campos llenó', /campo\(s\) llenados/.test(campos['cli-lectura-aviso'].innerHTML));
 
   /* Campo YA escrito y el documento dice otra cosa: NO se pisa, se reporta. */
-  prepararDom({ 'cli-dpi': '9999999999999', 'cli-fnac': '', 'cli-estado-civil': '', 'cli-nacionalidad': '', 'cli-lugar-nac': '' });
+  prepararDom({ 'cli-dpi': '9999999999999', 'cli-fnac': '', 'cli-estado-civil': '', 'cli-nacionalidad': '' });
   campos['cli-edad'] = { textContent: '', style: {} };
   conDatos({ cui: '1605755322205', fecha_nacimiento: '1990-06-15' });
-  await CLI._leerDPI(archivo);
+  await ARM._leerDPI(archivo);
   ok('NO pisa el DPI que el usuario ya había escrito', campos['cli-dpi'].value === '9999999999999');
   ok('pero reporta la diferencia para que la persona decida',
      /Diferencias/.test(campos['cli-lectura-aviso'].innerHTML) && /1605755322205/.test(campos['cli-lectura-aviso'].innerHTML));
@@ -191,10 +214,10 @@ function domBase() {
 
   /* El prompt ordena devolver null en lo que no se lea con claridad: un
      null no debe llenar nada ni escribir "null" en el campo. */
-  prepararDom({ 'cli-dpi': '', 'cli-fnac': '', 'cli-estado-civil': '', 'cli-nacionalidad': '', 'cli-lugar-nac': '' });
+  prepararDom({ 'cli-dpi': '', 'cli-fnac': '', 'cli-estado-civil': '', 'cli-nacionalidad': '' });
   campos['cli-edad'] = { textContent: '', style: {} };
   conDatos({ cui: null, fecha_nacimiento: null, estado_civil: null });
-  await CLI._leerDPI(archivo);
+  await ARM._leerDPI(archivo);
   ok('un dato ilegible (null) NO llena el campo', campos['cli-dpi'].value === '');
   ok('y nunca escribe la palabra "null"', campos['cli-fnac'].value !== 'null');
   ok('avisa que no aportó datos', /no aportó datos/.test(campos['cli-lectura-aviso'].innerHTML));
@@ -203,21 +226,32 @@ function domBase() {
   prepararDom({ 'cli-dpi': '' });
   campos['cli-edad'] = { textContent: '', style: {} };
   ctx.IA = { escanearDPI: async () => ({ ok: true, texto: 'no soy json' }) };
-  await CLI._leerDPI(archivo);
+  await ARM._leerDPI(archivo);
   ok('una respuesta ilegible no revienta, avisa', /no se leyó con claridad/.test(campos['cli-lectura-aviso'].innerHTML));
+
+  /* Y si la Edge Function contesta un ERROR (sesión, plan, modo no válido),
+     el aviso tiene que DECIRLO — no quedarse mudo. Es exactamente lo que
+     pasó con el modo "licencia", que el servidor rechazaba y en pantalla
+     sólo se veía que no pasaba nada. */
+  prepararDom({ 'cli-dpi': '' });
+  campos['cli-edad'] = { textContent: '', style: {} };
+  ctx.IA = { escanearDPI: async () => ({ ok: false, error: 'Falta el mensaje' }) };
+  await ARM._leerDPI(archivo);
+  ok('un error del servidor se muestra tal cual en pantalla',
+     /Falta el mensaje/.test(campos['cli-lectura-aviso'].innerHTML));
 
   /* El modelo suele envolver el JSON en ```json — debe limpiarse. */
   prepararDom({ 'cli-dpi': '' });
   campos['cli-edad'] = { textContent: '', style: {} };
   ctx.IA = { escanearDPI: async () => ({ ok: true, texto: '```json\n{"cui":"1234567890101"}\n```' }) };
-  await CLI._leerDPI(archivo);
+  await ARM._leerDPI(archivo);
   ok('limpia el ```json que a veces envuelve la respuesta', campos['cli-dpi'].value === '1234567890101');
 
   /* El recibo sólo debe tocar la dirección. */
   prepararDom({ 'cli-dir': '', 'cli-dpi': 'NO-TOCAR' });
   campos['cli-edad'] = { textContent: '', style: {} };
   ctx.IA = { escanearRecibo: async () => ({ ok: true, texto: JSON.stringify({ direccion: '5a calle 3-40 zona 1', titular: 'Otro Nombre' }) }) };
-  await CLI._leerRecibo(archivo);
+  await ARM._leerRecibo(archivo);
   ok('el recibo llena la dirección', campos['cli-dir'].value === '5a calle 3-40 zona 1');
   ok('el recibo NO toca el DPI', campos['cli-dpi'].value === 'NO-TOCAR');
 
@@ -226,20 +260,57 @@ function domBase() {
   campos['cli-edad'] = { textContent: '', style: {} };
   let llamo = false;
   ctx.IA = { escanearDPI: async () => { llamo = true; return { ok: true, texto: '{}' }; } };
-  await CLI._leerDPI({ size: 9 * 1024 * 1024, type: 'image/jpeg' });
+  await ARM._leerDPI({ size: 9 * 1024 * 1024, type: 'image/jpeg' });
   ok('una imagen de 9MB se rechaza sin gastar una llamada de IA', llamo === false);
   ok('y lo dice', /más de 5 MB/.test(campos['cli-lectura-aviso'].innerHTML));
 }
 
+/* ── LICENCIA: el caso que estuvo roto en el servidor ─────────────────────
+   El modo "licencia" existía en el frontend pero la Edge Function lo
+   rechazaba con "Falta el mensaje" porque no estaba en la lista de modos
+   que no llevan texto. Acá se cubre el lado del cliente: que mande el modo
+   correcto y que llene el tipo, el número y el vencimiento. */
+{
+  const archivo = { size: 1000, type: 'image/jpeg' };
+  domBase();
+  campos['cli-lectura-aviso'] = { innerHTML: '', style: {} };
+  campos['cli-edad'] = { textContent: '', style: {} };
+  campos['cli-lic-tipo'] = { value: '' };
+  campos['cli-lic-num'] = { value: '' };
+  campos['cli-lic-vence'] = { value: '' };
+  campos['cli-armas-reg'] = { value: '' };
+  campos['cli-lic-aviso'] = { innerHTML: '', style: {} };
+
+  ctx.IA = { escanearLicencia: async () => ({ ok: true, texto: JSON.stringify({
+    tipo: 'portación', numero: 'LIC-99887', fecha_vencimiento: '2030-01-15', armas_registradas: 2 }) }) };
+  await ARM._leerLicencia(archivo);
+  ok('la licencia llena el tipo', campos['cli-lic-tipo'].value === 'portación');
+  ok('...el número', campos['cli-lic-num'].value === 'LIC-99887');
+  ok('...y el vencimiento', campos['cli-lic-vence'].value === '2030-01-15');
+  ok('...y las armas registradas', campos['cli-armas-reg'].value === '2');
+
+  /* Si la IA no distingue tenencia de portación manda null, y eso hay que
+     gritarlo: de ese dato depende cuánta munición se puede entregar. */
+  campos['cli-lic-tipo'] = { value: '' };
+  campos['cli-lic-num'] = { value: '' };
+  campos['cli-lectura-aviso'] = { innerHTML: '', style: {} };
+  ctx.IA = { escanearLicencia: async () => ({ ok: true, texto: JSON.stringify({ tipo: null, numero: 'LIC-1' }) }) };
+  await ARM._leerLicencia(archivo);
+  ok('si no distingue el tipo de licencia, lo dice fuerte',
+     /tenencia<\/b> o de <b>portación/.test(campos['cli-lectura-aviso'].innerHTML));
+}
+
 /* ── Una sola subida: archiva Y lee ──────────────────────────────────────
    Antes había dos caminos separados (un botón para leer, otro para
-   adjuntar) y el usuario tenía que dar la misma foto dos veces. */
+   adjuntar) y el usuario tenía que dar la misma foto dos veces.
+   Éste es EL caso que se rompe en el mostrador: se sube la foto y los
+   campos quedan en blanco. */
 {
   ctx.Auth.tenant = { modulos_activos: ['armeria'] };
   const subidos = [];
   ctx.Docs = {
     subirArchivo: async (ent, cid, tipo, titulo) => { subidos.push({ cid, tipo, titulo }); return {}; },
-    render() {},
+    render() {}, listar: async () => [],
   };
   ctx.IA = { escanearDPI: async () => ({ ok: true, texto: JSON.stringify({ cui: '1111111111111' }) }),
              escanearRecibo: async () => ({ ok: true, texto: JSON.stringify({ direccion: 'Zona 5' }) }) };
@@ -250,26 +321,27 @@ function domBase() {
   campos['cli-dpi'] = { value: '' };
   campos['cli-edad'] = { textContent: '', style: {} };
   subidos.length = 0;
-  await CLI._subirDoc('c1', 'dpi_frente', { files: [{ size: 1000, type: 'image/jpeg' }], value: '' });
+  await ARM._subirDoc('c1', 'dpi_frente', { files: [{ size: 1000, type: 'image/jpeg' }], value: '' });
   ok('con cliente existente, archiva el documento', subidos.length === 1 && subidos[0].tipo === 'dpi_frente');
   ok('...y en la MISMA acción lee los datos', campos['cli-dpi'].value === '1111111111111');
 
-  /* La licencia se archiva pero no tiene datos que leer: no debe llamar IA. */
-  let leyoLicencia = false;
-  ctx.IA = { escanearDPI: async () => { leyoLicencia = true; return { ok: true, texto: '{}' }; } };
+  /* El REVERSO se archiva pero no se manda a leer: sus datos ya vinieron
+     del anverso y una lectura mala sobrescribiría lo bueno. */
+  let leyoReverso = false;
+  ctx.IA = { escanearDPI: async () => { leyoReverso = true; return { ok: true, texto: '{}' }; } };
   subidos.length = 0;
-  await CLI._subirDoc('c1', 'licencia_arma', { files: [{ size: 1000, type: 'image/jpeg' }], value: '' });
-  ok('la licencia se archiva', subidos.length === 1 && subidos[0].tipo === 'licencia_arma');
-  ok('...pero no gasta una llamada de IA (no hay qué leer ahí)', leyoLicencia === false);
+  await ARM._subirDoc('c1', 'dpi_reverso', { files: [{ size: 1000, type: 'image/jpeg' }], value: '' });
+  ok('el reverso se archiva', subidos.length === 1 && subidos[0].tipo === 'dpi_reverso');
+  ok('...pero no gasta una llamada de IA (sus datos ya vinieron del anverso)', leyoReverso === false);
 
   /* Un PDF SI se lee. Antes se archivaba y se saltaba en silencio, y por eso
      la direccion nunca se llenaba: los recibos de EEGSA vienen en PDF. */
-  ctx.IA = { escanearDPI: async () => { leyoLicencia = true; return { ok: true, texto: '{}' }; } };
-  leyoLicencia = false;
+  let leyo = false;
+  ctx.IA = { escanearDPI: async () => { leyo = true; return { ok: true, texto: '{}' }; } };
   subidos.length = 0;
-  await CLI._subirDoc('c1', 'dpi_frente', { files: [{ size: 1000, type: 'application/pdf' }], value: '' });
+  await ARM._subirDoc('c1', 'dpi_frente', { files: [{ size: 1000, type: 'application/pdf' }], value: '' });
   ok('un PDF se archiva igual', subidos.length === 1);
-  ok('...y TAMBIEN se manda a leer (los recibos vienen en PDF)', leyoLicencia === true);
+  ok('...y TAMBIEN se manda a leer (los recibos vienen en PDF)', leyo === true);
 }
 
 /* ── Fotos tomadas ANTES de que el cliente exista ────────────────────────
@@ -278,10 +350,11 @@ function domBase() {
    veces. */
 {
   const subidos = [];
-  ctx.Docs = { subirArchivo: async (e, cid, tipo) => { subidos.push({ cid, tipo }); return {}; }, render() {} };
+  ctx.Docs = { subirArchivo: async (e, cid, tipo) => { subidos.push({ cid, tipo }); return {}; },
+               render() {}, listar: async () => [] };
   ctx.IA = { escanearDPI: async () => ({ ok: true, texto: JSON.stringify({ cui: '2222222222222' }) }) };
 
-  CLI._docsPendientes = {};
+  ARM._docsPendientes = {};
   domBase();
   campos['cli-lectura-aviso'] = { innerHTML: '', style: {} };
   campos['cli-dpi'] = { value: '' };
@@ -289,45 +362,63 @@ function domBase() {
   campos['cli-docs-box'] = { innerHTML: '' };
 
   subidos.length = 0;
-  await CLI._subirDoc('', 'dpi_frente', { files: [{ size: 1000, type: 'image/jpeg' }], value: '' });
+  await ARM._subirDoc('', 'dpi_frente', { files: [{ size: 1000, type: 'image/jpeg' }], value: '' });
   ok('sin cliente todavía, NO intenta archivar (no hay carpeta donde)', subidos.length === 0);
-  ok('pero retiene la foto para después', !!CLI._docsPendientes.dpi_frente);
+  ok('pero retiene la foto para después', !!ARM._docsPendientes.dpi_frente);
   ok('y LEE los datos igual, sin esperar a guardar', campos['cli-dpi'].value === '2222222222222');
 
   /* Al crear el cliente, lo pendiente se adjunta solo. */
   guardado = null;
-  await CLI.guardar('');
+  await ARM.guardar('');
   ok('al crear el cliente se adjunta lo pendiente', subidos.length === 1 && subidos[0].tipo === 'dpi_frente');
   ok('...con el id del cliente recién creado', subidos[0].cid === 'c1');
-  ok('y la lista de pendientes queda limpia', Object.keys(CLI._docsPendientes).length === 0);
+  ok('y la lista de pendientes queda limpia', Object.keys(ARM._docsPendientes).length === 0);
+}
 
-  /* Abrir una ficha nueva descarta lo pendiente de otra: si no, una foto
-     tomada para un cliente terminaría en el siguiente. */
-  CLI._docsPendientes = { dpi: { file: {}, titulo: 'DPI' } };
-  CLI._data = [];
-  CLI.modalForm();
+/* ── Si el archivado FALLA, no se puede decir que se adjuntó ──────────────
+   El error se tragaba en silencio y el aviso contaba la cola, no los
+   éxitos: la foto se perdía y en pantalla decía "adjuntado". */
+{
+  ctx.Docs = { subirArchivo: async () => ({ error: { message: 'RLS denegado' } }),
+               render() {}, listar: async () => [] };
+  ARM._docsPendientes = { dpi_frente: { file: { size: 10, type: 'image/jpeg' }, titulo: 'DPI — anverso' } };
+  const r = await ARM._subirPendientes('c1');
+  ok('un archivado fallido NO se cuenta como éxito', r.exitosos.length === 0);
+  ok('...se reporta como fallido', r.fallidos.length === 1);
+  ok('...y la foto NO se pierde: queda pendiente para reintentar',
+     !!ARM._docsPendientes.dpi_frente);
+}
+
+/* ── Abrir una ficha nueva descarta lo pendiente de otra ──────────────────
+   Si no, una foto tomada para un cliente terminaría en el siguiente. */
+{
+  ctx.Docs = { subirArchivo: async () => ({}), render() {}, listar: async () => [] };
+  ARM._docsPendientes = { dpi_frente: { file: {}, titulo: 'DPI' } };
+  ARM._data = [];
+  await ARM.modalForm();
   ok('abrir una ficha nueva descarta lo pendiente de la anterior',
-     Object.keys(CLI._docsPendientes).length === 0);
+     Object.keys(ARM._docsPendientes).length === 0);
 }
 
 /* ── Ya no hay dos caminos para la misma foto ────────────────────────────── */
 {
   ctx.Auth.tenant = { modulos_activos: ['armeria'] };
-  CLI._data = [{ id: 'c1', nombre: 'Juan Pérez' }];
-  CLI.modalForm('c1');
-  ok('el formulario ofrece cámara para cada documento', /capture="environment"/.test(htmlModal));
+  ARM._data = [{ id: 'c1', nombre: 'Juan Pérez' }];
+  await ARM.modalForm('c1');
+  ok('el expediente ofrece cámara para cada documento', /capture="environment"/.test(htmlModal));
   ok('y también subir archivo', /cli-doc-dpi_frente-gal/.test(htmlModal));
   ok('marca cuáles documentos se leen solos', /se lee solo/.test(htmlModal));
   ok('ya NO existe un botón aparte de "Leer del DPI"', !/Leer del DPI/.test(htmlModal));
   ok('ni uno aparte para el recibo', !/Leer dirección del recibo/.test(htmlModal));
   ok('los datos personales explican de dónde se llenan', /Se llenan solos al adjuntar/.test(htmlModal));
+  ok('se puede imprimir el expediente completo', /imprimirExpediente/.test(htmlModal));
 
   /* Abrir la ficha de un id que no está en la lista cargada no debe tumbar
      la pantalla: pasa si otro módulo la abre con una lista distinta. */
-  CLI._data = [];
+  ARM._data = [];
   let reventó = false;
-  try { CLI.modalForm('id-que-no-existe'); } catch (_) { reventó = true; }
-  ok('un id ausente no tumba el formulario', reventó === false);
+  try { await ARM.modalForm('id-que-no-existe'); } catch (_) { reventó = true; }
+  ok('un id ausente no tumba el expediente', reventó === false);
 }
 
 /* ── Sin tenant cargado no revienta ni asume que hay armería ─────────────── */
