@@ -500,12 +500,18 @@ Deno.serve(async (req) => {
      nuevo no puede volver a quedar afuera de la excepción. */
   const MODOS_IMAGEN: Record<string, string> = {
     tarjeta: "Analiza la imagen de la tarjeta de circulación de Guatemala y extrae los datos solicitados en formato JSON.",
-    /* En el DPI de Guatemala el ANVERSO es el que trae los datos: CUI,
-       nombres, fecha y lugar de nacimiento, vecindad, estado civil y
-       vencimiento. El reverso es sobre todo zona legible por máquina, así que
-       no se manda a leer: gastaría una llamada para devolver nulos, y si
-       devolviera algo mal leído sobrescribiría lo bueno. */
-    dpi:     "Analiza la imagen del ANVERSO del DPI de Guatemala (o de la hoja de datos de un pasaporte) y extrae los datos solicitados en formato JSON. Si un dato no se lee con claridad, devuélvelo como null en vez de adivinarlo. Si la imagen es el REVERSO del DPI (zona legible por máquina, sin fotografía), devuelve todos los campos como null.",
+    /* LAS DOS CARAS TRAEN DATOS Y LAS DOS SE LEEN.
+       Acá había una premisa falsa: se decía que el anverso traía el lugar de
+       nacimiento, la vecindad, el estado civil y el vencimiento, y se le
+       ORDENABA al modelo devolver todo null si le daban el reverso.
+       Verificado contra la lectura real de un DPI: el anverso devuelve CUI,
+       nombre, fecha de nacimiento, nacionalidad, sexo y versión — y null en
+       todo lo demás, porque lo demás está impreso ATRÁS. Con esa instrucción,
+       ocho campos del expediente no se podían llenar nunca.
+       El prompt del sistema ya describe bien cada cara y ordena devolver null
+       en lo que no aparezca; el frontend sólo llena campos vacíos, así que
+       una cara no puede pisar lo que trajo la otra. */
+    dpi:     "Analiza la imagen del DPI de Guatemala (o de la hoja de datos de un pasaporte) y extrae los datos solicitados en formato JSON. Puede ser el ANVERSO o el REVERSO: lee la cara que te den y devuelve null en todo lo que no aparezca en ella. El REVERSO es igual de importante que el anverso — de ahí salen el lugar de nacimiento, la vecindad, el estado civil, el asiento del registro civil (L: F: P:), el número de serie y la fecha de vencimiento. Si un dato no se lee con claridad, devuélvelo como null en vez de adivinarlo.",
     recibo:  "Analiza la imagen del recibo de servicios y extrae los datos solicitados en formato JSON. Si un dato no se lee con claridad, devuélvelo como null en vez de adivinarlo.",
     licencia: "Analiza la imagen de la licencia de tenencia o portación de arma emitida por DIGECAM (Guatemala) y extrae los datos solicitados en formato JSON. El tipo sólo puede ser 'tenencia' o 'portación': si no lo distingues con total seguridad, devuélvelo null. Si un dato no se lee con claridad, devuélvelo como null en vez de adivinarlo.",
   };

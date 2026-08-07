@@ -153,7 +153,7 @@ Modulos.clientesArmeria = {
       const v = (valor == null || valor === '') ? null : String(valor).trim();
       if (!el || !v) continue;
       const actual = (el.value || '').trim();
-      if (!actual) { el.value = v; llenados.push(idEl); }
+      if (!actual) { if (this._ponerValor(el, v)) llenados.push(idEl); }
       else if (actual.toLowerCase() !== v.toLowerCase()) distintos.push(`${el.previousElementSibling?.textContent || idEl}: el documento dice «${v}»`);
     }
     this._mostrarEdad();
@@ -195,9 +195,54 @@ Modulos.clientesArmeria = {
       partes.push('<span style="color:var(--red)">⚠️ No se pudo distinguir si es de <b>tenencia</b> o de <b>portación</b>. Elegilo a mano: de eso depende cuánta munición se le puede entregar.</span>');
     if (distintos.length) partes.push(`<span style="color:var(--amber)">⚠️ No se tocó lo que ya estaba escrito. Diferencias: ${distintos.join(' · ')}</span>`);
     if (this._avisoRecibo) { partes.push(this._avisoRecibo); this._avisoRecibo = null; }
-    if (!partes.length) partes.push('<span style="color:var(--amber)">El documento no aportó datos nuevos.</span>');
+
+    /* CERO CAMPOS LEÍDOS ES UN FALLO, NO UN RESULTADO. La IA contesta "ok"
+       con todos los campos en null cuando la foto sale movida, oscura, con
+       reflejo o recortada — y eso antes se despachaba con un renglón gris que
+       decía "no aportó datos nuevos". Desde afuera se ve idéntico a que la
+       app no hiciera nada, y no hay forma de saber que hay que repetir la
+       foto. Se avisa igual de fuerte que un error de red, y se dice QUÉ
+       hacer. */
+    if (!llenados.length && !distintos.length) {
+      const queEs = { dpi: 'el DPI', recibo: 'el recibo', licencia: 'la licencia' }[cual] || 'el documento';
+      partes.push(`<span style="color:var(--red)">⛔ <b>No se pudo sacar ningún dato de ${queEs}.</b> Suele ser la foto: movida, oscura, con reflejo del plástico o con el documento cortado. Volvé a tomarla con el documento completo dentro del cuadro y buena luz.</span>`);
+      UI.toast(`No se sacó ningún dato de ${queEs} — repetí la foto (completa, sin reflejo y con buena luz)`, 'error', 9000);
+    }
+
     partes.push('<span style="color:var(--text3)">Revisá siempre contra el documento físico antes de guardar: esto alimenta una declaración jurada.</span>');
     pintar(partes.join('<br>'));
+  },
+
+  /* Pone un valor leído del documento en un campo del formulario.
+     Devuelve true si de verdad quedó puesto.
+
+     EXISTE POR UN FALLO REAL, invisible durante semanas: un <select> DESCARTA
+     EN SILENCIO cualquier valor que no coincida EXACTO con una de sus
+     opciones. El DPI grita "GUATEMALA" y el catálogo postal escribe
+     "Guatemala", así que `el.value = 'GUATEMALA'` dejaba el campo VACÍO sin
+     error ninguno. Y como el municipio depende del departamento y el código
+     postal depende de los dos, se caían SEIS campos en cadena — justo los
+     del lugar de nacimiento y la vecindad, que van en la declaración jurada.
+
+     Las pruebas no podían verlo: simulan el DOM con objetos planos
+     ({value:''}) que aceptan cualquier texto. Esto sólo se ve en un navegador
+     de verdad, y por eso ahora hay una prueba con <select> reales. */
+  _ponerValor(el, v) {
+    if (el.tagName !== 'SELECT') { el.value = v; return true; }
+
+    const norm = (typeof normalizarGeo === 'function')
+      ? normalizarGeo : (s => String(s || '').toLowerCase().trim());
+    const opcion = Array.from(el.options || [])
+      .find(o => o.value && norm(o.value) === norm(v));
+    if (opcion) { el.value = opcion.value; return true; }
+
+    /* Sin opción que calce puede ser que la lista AÚN no esté poblada: los
+       municipios se cargan según el departamento, que quizá se acaba de
+       fijar en esta misma pasada. Se deja anotado en data-pendiente, que es
+       de donde _sincronizarMunicipios() lo recoge después. Antes el dato
+       simplemente se perdía. */
+    if (el.dataset) el.dataset.pendiente = v;
+    return false;
   },
 
   _leerDPI(file)      { return this._leerDocumento(file, 'dpi'); },
@@ -293,8 +338,23 @@ Modulos.clientesArmeria = {
           lista.map(m => `<option value="${UI.esc(m.nombre)}">${UI.esc(m.nombre)}</option>`).join('');
       }
       const match = lista.find(m => normalizarGeo(m.nombre) === normalizarGeo(deseado));
-      selM.value = match ? match.nombre : deseado;
-      if (match && selM.dataset) delete selM.dataset.pendiente;
+      if (match) {
+        selM.value = match.nombre;
+        if (selM.dataset) delete selM.dataset.pendiente;
+      } else if (deseado) {
+        /* El municipio leído no está en el catálogo (pasa con aldeas que
+           Correos no lista). La intención siempre fue CONSERVAR lo que dijo
+           el documento en vez de borrarlo... pero `selM.value = deseado` en un
+           <select> sin esa opción lo deja VACÍO en silencio, así que el dato
+           se perdía igual. Se agrega como opción para que se conserve y se
+           vea; queda marcada para que nadie la confunda con el catálogo. */
+        if ('innerHTML' in selM) {
+          selM.innerHTML += `<option value="${UI.esc(deseado)}">${UI.esc(deseado)} (del documento)</option>`;
+        }
+        selM.value = deseado;
+      } else {
+        selM.value = '';
+      }
     });
   },
 
@@ -889,13 +949,27 @@ Modulos.clientesArmeria = {
   _DOCS_HEREDADOS: { dpi: 'dpi_frente', licencia_arma: 'licencia_frente' },
 
   /* Una sola subida por documento: se ARCHIVA el archivo y, si el documento
-     trae datos aprovechables, se LEEN de una vez. */
+     trae datos aprovechables, se LEEN de una vez.
+
+     LAS DOS CARAS SE LEEN. Antes el reverso se archivaba pero NO se mandaba a
+     leer, con este comentario: "sus datos ya vinieron del anverso". Era
+     FALSO, y costó semanas de campos en blanco. Verificado contra la lectura
+     real de un DPI: el anverso devuelve CUI, nombre, fecha de nacimiento,
+     nacionalidad, sexo y versión — y `null` en TODO lo demás, porque lo demás
+     está impreso del otro lado: lugar de nacimiento, vecindad, estado civil,
+     el asiento L:F:P: del registro civil, el número de serie y la fecha de
+     vencimiento. Sin leer el reverso, esos ocho campos no se podían llenar
+     nunca, hiciera lo que hiciera el usuario.
+     Leer las dos caras es seguro porque el prompt devuelve null en lo que no
+     aparece en la cara que le dan, y la lectura sólo llena campos VACÍOS: una
+     cara no puede pisar lo que trajo la otra. */
   _LECTOR_DOC: {
     dpi_frente: 'dpi',
+    dpi_reverso: 'dpi',
     pasaporte: 'dpi',
     licencia_frente: 'licencia',
+    licencia_reverso: 'licencia',
     recibo_servicios: 'recibo',
-    /* Los REVERSOS no se leen: sus datos ya vinieron del anverso. */
   },
 
   /* Documentos que exige el expediente de una armería (art. 59 y 72 de la Ley

@@ -30,6 +30,11 @@ const ctx = { console, Math, Date, JSON, String, Number, Object, Array, RegExp }
 ctx.window = ctx; ctx.Modulos = {}; ctx.UI = { esc: v => String(v ?? '') };
 ctx.DB = {}; ctx.Auth = { tenant: {}, user: {} }; ctx.Docs = {}; ctx.IA = {};
 vm.createContext(ctx);
+/* El catálogo geográfico va ANTES, como en el navegador: de ahí sale
+   normalizarGeo(), que es lo que hace calzar el "SACATEPEQUEZ" del DPI con el
+   "Sacatepéquez" del catálogo. Sin él, la comparación cae al fallback sin
+   tildes y el <select> se queda vacío. */
+vm.runInContext(fs.readFileSync(path.join(raiz, 'js', 'core', 'geo-guatemala.js'), 'utf8'), ctx);
 vm.runInContext(srcCli, ctx);
 const C = ctx.Modulos.clientesArmeria;
 
@@ -56,23 +61,68 @@ const ok = (n, c) => { if (c) { pasadas++; console.log('PASS — ' + n); } else 
      /reverso/i.test(C._DOCS_CLIENTE.licencia_reverso.label));
 }
 
-/* ── Sólo se lee el anverso ─────────────────────────────────────────────── */
+/* ── LAS DOS CARAS SE LEEN ───────────────────────────────────────────────
+   Antes sólo se leía el anverso, con la premisa de que el reverso "no trae
+   datos". Es FALSO y costó semanas de campos en blanco: verificado contra la
+   lectura real de un DPI, el anverso devuelve CUI, nombre, fecha de
+   nacimiento, nacionalidad, sexo y versión — y null en todo lo demás, porque
+   el lugar de nacimiento, la vecindad, el estado civil, el asiento L:F:P:,
+   el número de serie y la fecha de vencimiento están impresos ATRÁS.
+   Ocho campos del expediente no se podían llenar nunca. */
 {
-  ok('el anverso del DPI se lee solo', C._LECTOR_DOC.dpi_frente === 'dpi');
-  ok('el REVERSO del DPI no se manda a la IA', !C._LECTOR_DOC.dpi_reverso);
+  ok('el anverso del DPI se lee', C._LECTOR_DOC.dpi_frente === 'dpi');
+  ok('y el REVERSO del DPI TAMBIÉN (ahí viven vecindad, estado civil y L:F:P:)',
+     C._LECTOR_DOC.dpi_reverso === 'dpi');
   /* La licencia SÍ se lee desde que sus datos viven en la ficha del cliente
      (migración 127). Antes no se leía porque no había dónde volcarlos. */
   ok('el anverso de la licencia se lee', C._LECTOR_DOC.licencia_frente === 'licencia');
-  ok('el REVERSO de la licencia no se manda a la IA', !C._LECTOR_DOC.licencia_reverso);
+  ok('y el reverso de la licencia también', C._LECTOR_DOC.licencia_reverso === 'licencia');
   ok('el pasaporte se lee como un DPI', C._LECTOR_DOC.pasaporte === 'dpi');
   ok('el recibo se lee para la dirección', C._LECTOR_DOC.recibo_servicios === 'recibo');
 
-  /* Que el prompt sepa que el reverso no trae datos: si le llega esa foto,
-     debe devolver nulos en vez de inventar. */
-  ok('el prompt del DPI apunta al ANVERSO', /ANVERSO del DPI/.test(srcIA));
-  ok('el prompt sabe qué hacer si le dan el reverso',
-     /REVERSO del DPI[\s\S]{0,120}null/.test(srcIA));
+  /* El prompt NO debe seguir ordenando devolver todo null ante un reverso:
+     esa sola frase anulaba la lectura de la cara que más datos trae. */
+  ok('el prompt ya NO manda devolver todo null si le dan el reverso',
+     !/REVERSO del DPI \(zona legible por máquina, sin fotografía\), devuelve todos los campos como null/.test(srcIA));
+  ok('el prompt dice explícitamente que lea la cara que le den',
+     /Puede ser el ANVERSO o el REVERSO/.test(srcIA));
+  ok('...y nombra los datos que sólo están en el reverso',
+     /REVERSO es igual de importante[\s\S]{0,220}registro civil/.test(srcIA));
   ok('existe el modo de lectura de licencia', /licencia:\s*"Analiza/.test(srcIA));
+}
+
+/* ── Un <select> descarta en silencio un valor que no calza ──────────────
+   El DPI escribe "GUATEMALA" y el catálogo "Guatemala": asignar el crudo
+   dejaba el campo VACÍO sin error. Se ve sólo con <select> de verdad; las
+   pruebas con DOM simulado (objetos {value:''}) aceptan cualquier texto y
+   por eso esto pasó desapercibido. */
+{
+  ok('existe el ponedor de valores que respeta los <select>', typeof C._ponerValor === 'function');
+
+  const opciones = ['Guatemala', 'Jutiapa', 'Sacatepéquez'];
+  const selectFalso = (valor = '') => ({
+    tagName: 'SELECT', value: valor, dataset: {},
+    options: opciones.map(o => ({ value: o })),
+  });
+
+  const s1 = selectFalso();
+  ok('un valor en MAYÚSCULAS calza con la opción del catálogo',
+     C._ponerValor(s1, 'GUATEMALA') === true && s1.value === 'Guatemala');
+
+  const s2 = selectFalso();
+  ok('...y tolera las tildes ("SACATEPEQUEZ" → "Sacatepéquez")',
+     C._ponerValor(s2, 'SACATEPEQUEZ') === true && s2.value === 'Sacatepéquez');
+
+  /* Si la lista aún no está poblada (los municipios dependen del
+     departamento), el dato NO se pierde: queda anotado para que
+     _sincronizarMunicipios lo recoja al llenar las opciones. */
+  const s3 = { tagName: 'SELECT', value: '', dataset: {}, options: [] };
+  ok('si la lista aún no existe, el dato no se pierde',
+     C._ponerValor(s3, 'MIXCO') === false && s3.dataset.pendiente === 'MIXCO');
+
+  const inp = { tagName: 'INPUT', value: '' };
+  ok('un input normal se llena tal cual',
+     C._ponerValor(inp, '2206011432203') === true && inp.value === '2206011432203');
 }
 
 /* ── Los expedientes ya cargados siguen valiendo ────────────────────────── */
