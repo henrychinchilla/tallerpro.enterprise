@@ -144,8 +144,9 @@ ARM._data = [{ id: 'op1', num: 'ARM-2026-0001', cliente_id: 'c1', inventario_id:
    art. 17 b) del reglamento). Antes salían como rayas para llenar a mano
    en cada declaración aunque fueran siempre los mismos del mismo cliente. */
 {
-  /* Se carga clientes.js para que la declaración pueda derivar la edad. */
-  vm.runInContext(fs.readFileSync(raiz('js', 'modulos', 'operacion', 'clientes.js'), 'utf8'), ctx);
+  /* Se carga el expediente de armería para que la declaración pueda derivar
+     la edad: edadDe() se mudó ahí al separarlo del alta común del cliente. */
+  vm.runInContext(fs.readFileSync(raiz('js', 'modulos', 'especializados', 'clientes-armeria.js'), 'utf8'), ctx);
 
   /* La fecha se arma con los componentes LOCALES, no con toISOString():
      éste convierte a UTC y en Guatemala (UTC-6) devuelve el día siguiente,

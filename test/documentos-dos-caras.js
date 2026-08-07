@@ -19,7 +19,9 @@ const path = require('path');
 const vm = require('vm');
 
 const raiz = path.join(__dirname, '..');
-const srcCli = fs.readFileSync(path.join(raiz, 'js', 'modulos', 'operacion', 'clientes.js'), 'utf8');
+/* Los documentos de identificación viven en el EXPEDIENTE de armería desde
+   que se separó del alta común (js/modulos/especializados/clientes-armeria.js). */
+const srcCli = fs.readFileSync(path.join(raiz, 'js', 'modulos', 'especializados', 'clientes-armeria.js'), 'utf8');
 const srcArm = fs.readFileSync(path.join(raiz, 'js', 'modulos', 'especializados', 'armeria.js'), 'utf8');
 const srcIA  = fs.readFileSync(path.join(raiz, 'supabase', 'functions', 'ai-assistant', 'index.ts'), 'utf8');
 
@@ -29,7 +31,7 @@ ctx.window = ctx; ctx.Modulos = {}; ctx.UI = { esc: v => String(v ?? '') };
 ctx.DB = {}; ctx.Auth = { tenant: {}, user: {} }; ctx.Docs = {}; ctx.IA = {};
 vm.createContext(ctx);
 vm.runInContext(srcCli, ctx);
-const C = ctx.Modulos.clientes;
+const C = ctx.Modulos.clientesArmeria;
 
 let pasadas = 0, fallidas = 0;
 const ok = (n, c) => { if (c) { pasadas++; console.log('PASS — ' + n); } else { fallidas++; console.log('FAIL — ' + n); } };
@@ -82,10 +84,11 @@ const ok = (n, c) => { if (c) { pasadas++; console.log('PASS — ' + n); } else 
   /* La verificación del expediente en Armería debe aceptarlos, si no le
      pediría el anverso a quien ya lo entregó. */
   /* La traduccion ya no se repite en armeria.js con literales: usa el MAPA
-     que declara clientes.js. Tenerlo en dos lados es como se rompe la
-     compatibilidad la proxima vez que se parta un documento en dos caras. */
+     que declara el expediente (clientes-armeria.js). Tenerlo en dos lados es
+     como se rompe la compatibilidad la proxima vez que se parta un documento
+     en dos caras. */
   ok('la verificación usa el mapa de tipos heredados, no literales sueltos',
-     /Modulos\.clientes\?\._DOCS_HEREDADOS/.test(srcArm));
+     /Modulos\.clientesArmeria\?\._DOCS_HEREDADOS/.test(srcArm));
   ok('...y traduce cada tipo viejo a su equivalente nuevo',
      /if \(tipos\.has\(viejo\)\) tipos\.add\(nuevo\)/.test(srcArm));
 }

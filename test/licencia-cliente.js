@@ -16,7 +16,9 @@ const path = require('path');
 const vm = require('vm');
 
 const raiz = path.join(__dirname, '..');
-const srcCli = fs.readFileSync(path.join(raiz, 'js', 'modulos', 'operacion', 'clientes.js'), 'utf8');
+/* La licencia vive en el EXPEDIENTE de armería (clientes-armeria.js), no en
+   el alta básica del cliente: son dos pantallas desde que se separaron. */
+const srcCli = fs.readFileSync(path.join(raiz, 'js', 'modulos', 'especializados', 'clientes-armeria.js'), 'utf8');
 const srcArm = fs.readFileSync(path.join(raiz, 'js', 'modulos', 'especializados', 'armeria.js'), 'utf8');
 const srcIA  = fs.readFileSync(path.join(raiz, 'supabase', 'functions', 'ai-assistant', 'index.ts'), 'utf8');
 const srcInt = fs.readFileSync(path.join(raiz, 'js', 'core', 'integraciones.js'), 'utf8');
@@ -27,7 +29,7 @@ ctx.window = ctx; ctx.Modulos = {}; ctx.UI = { esc: v => String(v ?? '') };
 ctx.DB = {}; ctx.Auth = { tenant: {}, user: {} }; ctx.Docs = {}; ctx.IA = {};
 vm.createContext(ctx);
 vm.runInContext(srcCli, ctx);
-const C = ctx.Modulos.clientes;
+const C = ctx.Modulos.clientesArmeria;
 
 let pasadas = 0, fallidas = 0;
 const ok = (n, c) => { if (c) { pasadas++; console.log('PASS — ' + n); } else { fallidas++; console.log('FAIL — ' + n); } };
@@ -114,10 +116,11 @@ const ok = (n, c) => { if (c) { pasadas++; console.log('PASS — ' + n); } else 
 
   ok('la ficha del cliente no marca vencida una tenencia',
      /tipo === 'tenencia'[\s\S]{0,220}no vence/.test(srcCli));
+  /* diasLicencia se mudó con el expediente a Modulos.clientesArmeria. */
   ok('la verificación del expediente sólo mira el vencimiento en portación',
-     /cli\?\.licencia_tipo === 'portación' && Modulos\.clientes\?\.diasLicencia/.test(srcArm));
+     /cli\?\.licencia_tipo === 'portación' && Modulos\.clientesArmeria\?\.diasLicencia/.test(srcArm));
   ok('la entrega de munición, igual',
-     /cli\.licencia_tipo === 'portación' && Modulos\.clientes\?\.diasLicencia/.test(srcArm));
+     /cli\.licencia_tipo === 'portación' && Modulos\.clientesArmeria\?\.diasLicencia/.test(srcArm));
 }
 
 /* ── LOS DOS DISEÑOS DE DPI ─────────────────────────────────────────────── */
@@ -140,13 +143,23 @@ const ok = (n, c) => { if (c) { pasadas++; console.log('PASS — ' + n); } else 
 {
   /* Mismo cuidado que el resto de campos de armería: si el bloque no se
      dibuja, no se manda la clave — mandar null BORRARÍA lo guardado. */
+  /* El helper se llama `asignar` desde que el expediente es su propio módulo
+     (antes `siExiste`): lo que importa no es el nombre sino la regla — sólo
+     manda la clave si el input EXISTE en la pantalla. */
   ['cli-lic-tipo', 'cli-lic-num', 'cli-lic-vence', 'cli-armas-reg']
-    .forEach(id => ok(`${id} se guarda con siExiste`, new RegExp(`siExiste\\('${id}'`).test(srcCli)));
+    .forEach(id => ok(`${id} sólo se manda si el campo existe`, new RegExp(`asignar\\('${id}'`).test(srcCli)));
+  ok('...y el helper de verdad comprueba que el elemento exista',
+     /const asignar = [\s\S]{0,200}if \(val !== undefined\) fields\[clave\] = val/.test(srcCli));
   /* '' a una columna integer revienta el insert. */
   ok('armas registradas se manda como entero o null',
-     /siExiste\('cli-armas-reg', 'armas_registradas', v => \(v \? Number\(v\) : null\)\)/.test(srcCli));
-  ok('el bloque sólo se dibuja para armería',
-     /\$\{!armeria \? '' : `[\s\S]{0,400}Licencia de arma \(DIGECAM\)/.test(srcCli));
+     /asignar\('cli-armas-reg', 'armas_registradas', x => \(x \? Number\(x\) : null\)\)/.test(srcCli));
+  /* Ya no hace falta un `if (armeria)` alrededor del bloque: TODO este
+     módulo es el expediente de armería, y el alta común (clientes.js) no lo
+     dibuja nunca. La separación pasó de ser un condicional a ser un archivo. */
+  ok('el bloque de licencia vive en el módulo de armería, no en el alta común',
+     /Licencia de arma \(DIGECAM\)/.test(srcCli) &&
+     !/Licencia de arma \(DIGECAM\)/.test(
+       fs.readFileSync(path.join(raiz, 'js', 'modulos', 'operacion', 'clientes.js'), 'utf8')));
   /* Con 48 campos, el alta se pliega en secciones: <details> nativo, sin JS. */
   ok('la licencia vive en su propia sección plegable',
      /_seccion\('🔫', 'Licencia y tenencias'/.test(srcCli));

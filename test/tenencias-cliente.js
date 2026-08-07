@@ -17,7 +17,9 @@ const vm = require('vm');
 const path = require('path');
 
 const raiz = path.join(__dirname, '..');
-const srcCli = fs.readFileSync(path.join(raiz, 'js', 'modulos', 'operacion', 'clientes.js'), 'utf8');
+/* Las tenencias viven en el EXPEDIENTE de armería desde que se separó del
+   alta común del cliente (js/modulos/especializados/clientes-armeria.js). */
+const srcCli = fs.readFileSync(path.join(raiz, 'js', 'modulos', 'especializados', 'clientes-armeria.js'), 'utf8');
 const srcDB  = fs.readFileSync(path.join(raiz, 'js', 'core', 'db.js'), 'utf8');
 const mig    = fs.readFileSync(path.join(raiz, 'db', 'migrations', '129_clientes_tenencias.sql'), 'utf8');
 
@@ -28,7 +30,7 @@ ctx.document = { getElementById: () => null, querySelector: () => null };
 vm.createContext(ctx);
 vm.runInContext(fs.readFileSync(path.join(raiz, 'js', 'core', 'geo-guatemala.js'), 'utf8'), ctx);
 vm.runInContext(srcCli, ctx);
-const C = ctx.Modulos.clientes;
+const C = ctx.Modulos.clientesArmeria;
 
 let pasadas = 0, fallidas = 0;
 const ok = (n, c) => { if (c) { pasadas++; console.log('PASS — ' + n); } else { fallidas++; console.log('FAIL — ' + n); } };
@@ -123,12 +125,14 @@ const ok = (n, c) => { if (c) { pasadas++; console.log('PASS — ' + n); } else 
   ok('el formulario ofrece camara', /id="ten-cam"[\s\S]{0,120}capture="environment"/.test(srcCli));
   ok('...y archivo, incluido PDF (las tarjetas electronicas vienen asi)',
      /id="ten-gal"[\s\S]{0,120}accept="image\/\*,application\/pdf"/.test(srcCli));
-  ok('existe el lector de tenencias', /_leerTenencia\(inputEl\)/.test(srcCli));
+  /* Recibe tambien el id de la tenencia: lo necesita para ARCHIVAR la foto
+     en el expediente de esa arma, no solo para leerla. */
+  ok('existe el lector de tenencias', /_leerTenencia\(inputEl, tenenciaId\)/.test(srcCli));
   /* Reusa el modo 'licencia' porque la tarjeta de tenencia ES el documento
      que trae los datos del arma: un modo nuevo seria el mismo prompt. */
   ok('reusa el lector de licencia', /IA\.escanearLicencia\(base64\)/.test(srcCli));
 
-  const fn = srcCli.slice(srcCli.indexOf('_leerTenencia(inputEl)'), srcCli.indexOf('async guardarTenencia('));
+  const fn = srcCli.slice(srcCli.indexOf('_leerTenencia(inputEl, tenenciaId)'), srcCli.indexOf('async guardarTenencia('));
   ok('mapea los datos del arma', /'ten-serie': d\.arma_serie/.test(fn) && /'ten-marca': d\.arma_marca/.test(fn));
   ok('...y el marcaje GUA y la huella balistica',
      /'ten-gua': d\.marcaje_gua/.test(fn) && /'ten-huella': d\.huella_balistica/.test(fn));
@@ -141,6 +145,19 @@ const ok = (n, c) => { if (c) { pasadas++; console.log('PASS — ' + n); } else 
      vacios: hay que decirlo, no dejar el formulario en blanco sin explicacion. */
   ok('avisa si el documento no parece una tenencia',
      /Seguro que es una <b>tarjeta de tenencia<\/b>/.test(fn));
+
+  /* LA FOTO DE LA TARJETA SE ARCHIVA, no solo se lee. Antes se mandaba a la
+     IA y se descartaba: el expediente del arma quedaba sin su documento
+     aunque la persona ya habia tomado la foto. */
+  ok('la tarjeta se ARCHIVA, no solo se lee',
+     /Docs\.subirArchivo\('cliente_tenencia', tenenciaId, 'tenencia'/.test(fn));
+  ok('...y si la tenencia aun no existe, la foto se retiene para archivarla al guardar',
+     /_tenenciaPendiente = \{ file, titulo/.test(fn));
+  const fnGuardar = srcCli.slice(srcCli.indexOf('async guardarTenencia('), srcCli.indexOf('async eliminarTenencia('));
+  ok('...y guardarTenencia la sube en cuanto hay id',
+     /Docs\.subirArchivo\('cliente_tenencia', idFinal, 'tenencia'/.test(fnGuardar));
+  ok('el formulario muestra los documentos archivados de esa arma',
+     /Docs\.render\('cliente_tenencia', tenenciaId, 'ten-docs'\)/.test(srcCli));
 }
 
 /* ── HISTORIAL: guarda los cambios pero NO acumula repetidos ────────────── */

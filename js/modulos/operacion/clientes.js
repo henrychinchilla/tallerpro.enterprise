@@ -48,18 +48,18 @@ Modulos.clientes = {
             </tr></thead>
             <tbody>
               ${this._data.map(c=>`<tr>
-                <td><b>${c.nombre}</b>${c.nombre_empresa?'<br><small>'+c.nombre_empresa+'</small>':''}</td>
+                <td><b>${UI.esc(c.nombre)}</b>${c.nombre_empresa?'<br><small>'+UI.esc(c.nombre_empresa)+'</small>':''}</td>
                 <td><span class="badge badge-${c.tipo==='empresa'?'amber':'cyan'}">${c.tipo==='empresa'?'Empresa':'Individual'}</span></td>
-                <td class="mono-sm">${c.nit||'CF'}</td>
-                <td>${c.tel||'—'}</td>
-                <td>${c.email||'—'}</td>
+                <td class="mono-sm">${UI.esc(c.nit||'CF')}</td>
+                <td>${UI.esc(c.tel||'—')}</td>
+                <td>${UI.esc(c.email||'—')}</td>
                 <td onclick="event.stopPropagation()">
                   <div style="display:flex;gap:4px">
                     <button class="btn btn-sm btn-cyan" onclick="Modulos.clientes.modalForm('${c.id}')" title="Editar">✏️ Editar</button>
                     ${armeria ? `<button class="btn btn-sm btn-ghost" onclick="Modulos.clientesArmeria.modalForm('${c.id}')" title="Expediente de armería">🔫</button>` : ''}
-                    <button class="btn btn-sm btn-ghost" onclick="Modulos.clientes.whatsapp('${c.tel}','${c.nombre}')" title="WhatsApp">💬</button>
-                    <button class="btn btn-sm btn-ghost" onclick="Modulos.clientes.verVehiculos('${c.id}','${c.nombre}')" title="Vehículos">🚗</button>
-                    <button class="btn btn-sm btn-danger" onclick="Modulos.clientes.eliminar('${c.id}','${c.nombre}')" title="Eliminar">🗑️</button>
+                    <button class="btn btn-sm btn-ghost" onclick="Modulos.clientes.whatsapp('${UI.jsAttr(c.tel)}','${UI.jsAttr(c.nombre)}')" title="WhatsApp">💬</button>
+                    <button class="btn btn-sm btn-ghost" onclick="Modulos.clientes.verVehiculos('${c.id}','${UI.jsAttr(c.nombre)}')" title="Vehículos">🚗</button>
+                    <button class="btn btn-sm btn-danger" onclick="Modulos.clientes.eliminar('${c.id}','${UI.jsAttr(c.nombre)}')" title="Eliminar">🗑️</button>
                   </div>
                 </td>
               </tr>`).join('')||'<tr><td colspan="6" style="text-align:center;color:var(--text3);padding:24px">Sin clientes registrados</td></tr>'}

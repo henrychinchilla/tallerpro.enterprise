@@ -75,15 +75,21 @@ Modulos.clientesArmeria = {
     if (!file) return;
     const aviso = document.getElementById('cli-lectura-aviso');
     const pintar = (html, color) => { if (aviso) { aviso.innerHTML = html; aviso.style.color = color || 'var(--text3)'; } };
+    /* UN FALLO DE LECTURA NO PUEDE PASAR DESAPERCIBIDO. El aviso de arriba es
+       una línea de texto perdida entre 40 campos del formulario: cuando la
+       lectura fallaba, en el mostrador se veía como que "no pasó nada" y no
+       había forma de saber por qué. El toast se para encima de todo y dice
+       la causa exacta — que es también lo que hace falta para reportarla. */
+    const fallar = (texto) => { pintar('⚠️ ' + texto, 'var(--red)'); UI.toast('No se pudo leer el documento: ' + texto, 'error', 9000); };
 
-    if (file.size > 5 * 1024 * 1024) { pintar('⚠️ La imagen pesa más de 5 MB.', 'var(--red)'); return; }
+    if (file.size > 5 * 1024 * 1024) { fallar('La imagen pesa más de 5 MB.'); return; }
     pintar('⏳ Leyendo el documento…');
 
     const base64 = await new Promise((res, rej) => {
       const r = new FileReader();
       r.onload = () => res(r.result); r.onerror = rej; r.readAsDataURL(file);
     }).catch(() => null);
-    if (!base64) { pintar('⚠️ No se pudo leer el archivo.', 'var(--red)'); return; }
+    if (!base64) { fallar('No se pudo abrir el archivo.'); return; }
 
     const lectores = {
       dpi:      () => IA.escanearDPI(base64),
@@ -91,13 +97,13 @@ Modulos.clientesArmeria = {
       licencia: () => IA.escanearLicencia(base64),
     };
     const r = await (lectores[cual] || lectores.dpi)();
-    if (!r?.ok) { pintar('⚠️ ' + (r?.error || 'No se pudo leer el documento.'), 'var(--red)'); return; }
+    if (!r?.ok) { fallar(r?.error || 'El servidor no contestó.'); return; }
 
     let datos;
     try {
       /* El modelo a veces envuelve el JSON en ```; se limpia antes de parsear. */
       datos = JSON.parse(String(r.texto || '').replace(/```json|```/g, '').trim());
-    } catch (_) { pintar('⚠️ El documento no se leyó con claridad. Escribí los datos a mano.', 'var(--red)'); return; }
+    } catch (_) { fallar('El documento no se leyó con claridad. Escribí los datos a mano.'); return; }
 
     const mapas = {
       /* El DPI trae la nacionalidad y el país como código ISO ("GTM"): se
@@ -729,22 +735,24 @@ Modulos.clientesArmeria = {
     if (!file) return;
     const aviso = document.getElementById('ten-lectura');
     const pintar = (html, color) => { if (aviso) { aviso.innerHTML = html; aviso.style.color = color || 'var(--text3)'; } };
+    /* Mismo criterio que el DPI: el fallo se GRITA. Ver _leerDocumento. */
+    const fallar = (texto) => { pintar('⚠️ ' + texto, 'var(--red)'); UI.toast('No se pudo leer la tarjeta: ' + texto, 'error', 9000); };
 
-    if (file.size > 5 * 1024 * 1024) { pintar('⚠️ El archivo pesa más de 5 MB.', 'var(--red)'); return; }
+    if (file.size > 5 * 1024 * 1024) { fallar('El archivo pesa más de 5 MB.'); return; }
     pintar('⏳ Leyendo la tarjeta…');
 
     const base64 = await new Promise((res, rej) => {
       const r = new FileReader();
       r.onload = () => res(r.result); r.onerror = rej; r.readAsDataURL(file);
     }).catch(() => null);
-    if (!base64) { pintar('⚠️ No se pudo leer el archivo.', 'var(--red)'); return; }
+    if (!base64) { fallar('No se pudo abrir el archivo.'); return; }
 
     const r = await IA.escanearLicencia(base64);
-    if (!r?.ok) { pintar('⚠️ ' + (r?.error || 'No se pudo leer la tarjeta.'), 'var(--red)'); return; }
+    if (!r?.ok) { fallar(r?.error || 'El servidor no contestó.'); return; }
 
     let d;
     try { d = JSON.parse(String(r.texto || '').replace(/```json|```/g, '').trim()); }
-    catch (_) { pintar('⚠️ La tarjeta no se leyó con claridad. Escribí los datos a mano.', 'var(--red)'); return; }
+    catch (_) { fallar('La tarjeta no se leyó con claridad. Escribí los datos a mano.'); return; }
 
     const mapa = {
       'ten-tipo': d.arma_tipo, 'ten-marca': d.arma_marca, 'ten-modelo': d.arma_modelo,
@@ -986,14 +994,20 @@ Modulos.clientesArmeria = {
       Docs.listar('cliente', clienteId).catch(() => []),
     ]);
     const t = window.Auth?.tenant || {};
-    const L = v => v ? UI.esc(v) : '<span style="color:#999">— sin dato —</span>';
     const edad = this.edadDe(c.fecha_nacimiento);
     const diasLic = c.licencia_tipo === 'portación' ? this.diasLicencia(c.licencia_vencimiento) : null;
 
-    const fila = (label, val) => `<div class="campo"><span class="et">${label}</span><span>${L(val)}</span></div>`;
+    /* `fila` recibe el valor YA ESCAPADO. Antes escapaba adentro, y aunque
+       era seguro, dejaba las llamadas con el dato crudo a la vista — que es
+       justo lo que no se puede distinguir de un hueco real, ni a ojo ni con
+       el detector de XSS. Escapar en el punto donde el dato entra al HTML
+       hace que un descuido se vea. */
+    const SIN_DATO = '<span style="color:#999">— sin dato —</span>';
+    const fila = (label, valorHtml) => `<div class="campo"><span class="et">${label}</span><span>${valorHtml || SIN_DATO}</span></div>`;
+    const unir = (...partes) => UI.esc(partes.filter(Boolean).join(' / '));
 
     const html = `<!DOCTYPE html><html><head><meta charset="utf-8">
-    <title>Expediente — ${c.nombre || ''}</title>
+    <title>Expediente — ${UI.esc(c.nombre || '')}</title>
     <style>
       @page { margin: 2cm; }
       body{font-family:Arial,Helvetica,sans-serif;font-size:12px;line-height:1.5;margin:0;color:#111}
@@ -1021,37 +1035,37 @@ Modulos.clientesArmeria = {
 
       <h2>Identificación</h2>
       <div class="grid">
-        ${fila('Nombre', c.nombre)}
+        ${fila('Nombre', UI.esc(c.nombre))}
         ${fila('Edad', edad != null ? edad + ' años' : null)}
-        ${fila('NIT', c.nit)}
-        ${fila('Teléfono', c.tel)}
-        ${fila('Email', c.email)}
-        ${fila('DPI', c.dpi)}
-        ${fila('Estado civil', c.estado_civil)}
-        ${fila('Nacionalidad', c.nacionalidad)}
-        ${fila('Profesión u oficio', c.profesion)}
-        ${fila('Sexo', c.sexo)}
-        ${fila('Fecha de nacimiento', c.fecha_nacimiento)}
-        ${fila('Nacimiento — depto/muni', [c.nacimiento_departamento, c.nacimiento_municipio].filter(Boolean).join(' / '))}
-        ${fila('Vecindad — depto/muni', [c.vecindad_departamento, c.vecindad_municipio].filter(Boolean).join(' / '))}
-        ${fila('DPI — emisión / vence', [c.dpi_fecha_emision, c.dpi_fecha_vencimiento].filter(Boolean).join(' — '))}
-        ${fila('DPI — serie / versión', [c.dpi_numero_serie, c.dpi_version].filter(Boolean).join(' / '))}
-        ${fila('Registro civil L/F/P', [c.registro_libro, c.registro_folio, c.registro_pagina].filter(Boolean).join(' / '))}
+        ${fila('NIT', UI.esc(c.nit))}
+        ${fila('Teléfono', UI.esc(c.tel))}
+        ${fila('Email', UI.esc(c.email))}
+        ${fila('DPI', UI.esc(c.dpi))}
+        ${fila('Estado civil', UI.esc(c.estado_civil))}
+        ${fila('Nacionalidad', UI.esc(c.nacionalidad))}
+        ${fila('Profesión u oficio', UI.esc(c.profesion))}
+        ${fila('Sexo', UI.esc(c.sexo))}
+        ${fila('Fecha de nacimiento', UI.esc(c.fecha_nacimiento))}
+        ${fila('Nacimiento — depto/muni', unir(c.nacimiento_departamento, c.nacimiento_municipio))}
+        ${fila('Vecindad — depto/muni', unir(c.vecindad_departamento, c.vecindad_municipio))}
+        ${fila('DPI — emisión / vence', unir(c.dpi_fecha_emision, c.dpi_fecha_vencimiento))}
+        ${fila('DPI — serie / versión', unir(c.dpi_numero_serie, c.dpi_version))}
+        ${fila('Registro civil L/F/P', unir(c.registro_libro, c.registro_folio, c.registro_pagina))}
       </div>
 
       <h2>Domicilio</h2>
       <div class="grid">
-        ${fila('Dirección', c.direccion)}
-        ${fila('La vivienda es', c.vivienda)}
+        ${fila('Dirección', UI.esc(c.direccion))}
+        ${fila('La vivienda es', UI.esc(c.vivienda))}
       </div>
 
       <h2>Licencia de arma (DIGECAM)</h2>
       <div class="grid">
-        ${fila('Tipo', c.licencia_tipo)}
-        ${fila('No. de licencia', c.licencia_num)}
-        ${fila('Vence', c.licencia_vencimiento)}
+        ${fila('Tipo', UI.esc(c.licencia_tipo))}
+        ${fila('No. de licencia', UI.esc(c.licencia_num))}
+        ${fila('Vence', UI.esc(c.licencia_vencimiento))}
         ${fila('Estado', diasLic == null ? null : (diasLic < 0 ? `VENCIDA hace ${Math.abs(diasLic)} día(s)` : `Vigente — ${diasLic} día(s)`))}
-        ${fila('Armas registradas', c.armas_registradas)}
+        ${fila('Armas registradas', UI.esc(c.armas_registradas))}
       </div>
 
       <h2>Tenencias registradas (${tenencias.length})</h2>

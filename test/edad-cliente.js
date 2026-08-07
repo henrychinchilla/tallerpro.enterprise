@@ -16,8 +16,10 @@ const ctx = {
 };
 ctx.window = ctx;
 vm.createContext(ctx);
-vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'js', 'modulos', 'operacion', 'clientes.js'), 'utf8'), ctx);
-const CLI = ctx.Modulos.clientes;
+/* La edad se deriva en el EXPEDIENTE de armería: es dato de declaración
+   jurada, y ahí se mudó al separarlo del alta común del cliente. */
+vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'js', 'modulos', 'especializados', 'clientes-armeria.js'), 'utf8'), ctx);
+const CLI = ctx.Modulos.clientesArmeria;
 
 let pasadas = 0, fallidas = 0;
 const ok = (n, c) => { if (c) { pasadas++; console.log('PASS — ' + n); } else { fallidas++; console.log('FAIL — ' + n); } };

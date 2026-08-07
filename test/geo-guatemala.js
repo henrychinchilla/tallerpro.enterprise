@@ -130,7 +130,9 @@ const ok = (n, c) => { if (c) { pasadas++; console.log('PASS — ' + n); } else 
 {
   const fs2 = require('fs'), path2 = require('path');
   const r2 = path2.join(__dirname, '..');
-  const srcCli = fs2.readFileSync(path2.join(r2, 'js', 'modulos', 'operacion', 'clientes.js'), 'utf8');
+  /* El asiento del registro civil se pide en el EXPEDIENTE de armería: sale
+     del reverso del DPI y sólo lo necesita una declaración jurada. */
+  const srcCli = fs2.readFileSync(path2.join(r2, 'js', 'modulos', 'especializados', 'clientes-armeria.js'), 'utf8');
   const srcIA = fs2.readFileSync(path2.join(r2, 'supabase', 'functions', 'ai-assistant', 'index.ts'), 'utf8');
   const migR = fs2.readFileSync(path2.join(r2, 'db', 'migrations', '131_clientes_registro_civil.sql'), 'utf8');
 
