@@ -132,8 +132,8 @@ Modulos.clientesArmeria = {
       },
       recibo: {
         'cli-dir': datos.direccion,
-        'cli-vec-depto': datos.departamento,
-        'cli-vec-muni': datos.municipio,
+        'cli-res-depto': datos.departamento,
+        'cli-res-muni': datos.municipio,
       },
       /* El tipo de licencia decide cuánta munición se puede entregar (art. 60),
          así que si la IA no lo distinguió manda null y el campo queda vacío
@@ -150,7 +150,7 @@ Modulos.clientesArmeria = {
       const v = (valor == null || valor === '') ? null : String(valor).trim();
       if (!el || !v) continue;
       const actual = (el.value || '').trim();
-      const forzarSobrescribir = (cual === 'recibo' && ['cli-dir', 'cli-vec-depto', 'cli-vec-muni'].includes(idEl));
+      const forzarSobrescribir = (cual === 'recibo' && ['cli-dir', 'cli-res-depto', 'cli-res-muni'].includes(idEl));
       if (!actual || forzarSobrescribir) {
         const cambio = actual.toLowerCase() !== v.toLowerCase();
         if (this._ponerValor(el, v)) {
@@ -337,7 +337,7 @@ Modulos.clientesArmeria = {
      municipio se limpiara al fijar el departamento, la lectura se perdería. */
   _sincronizarMunicipios() {
     if (typeof municipiosGT !== 'function') return;
-    [['cli-nac-depto', 'cli-nac-muni'], ['cli-vec-depto', 'cli-vec-muni']].forEach(([idD, idM]) => {
+    [['cli-nac-depto', 'cli-nac-muni'], ['cli-vec-depto', 'cli-vec-muni'], ['cli-res-depto', 'cli-res-muni']].forEach(([idD, idM]) => {
       const selD = document.getElementById(idD), selM = document.getElementById(idM);
       if (!selD || !selM) return;
       const deseado = selM.value || selM.dataset?.pendiente || '';
@@ -562,13 +562,24 @@ Modulos.clientesArmeria = {
       <div class="form-row">
         <div class="form-group" style="flex:2"><label class="form-label">Dirección completa</label>
           <input class="form-input" id="cli-dir" value="${UI.esc(c.direccion||'')}"
-                 placeholder="Calle, avenida, número de casa, zona, municipio, departamento"></div>
+                 placeholder="Calle, avenida, número de casa, zona..."></div>
         <div class="form-group"><label class="form-label">La vivienda es</label>
           <select class="form-select" id="cli-vivienda">
             <option value="">— No indicado —</option>
             <option value="propia"   ${c.vivienda==='propia'?'selected':''}>🏠 Propia</option>
             <option value="rentada"  ${c.vivienda==='rentada'?'selected':''}>🔑 Rentada</option>
             <option value="familiar" ${c.vivienda==='familiar'?'selected':''}>👪 Familiar / prestada</option>
+          </select></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Residencia — departamento</label>
+          <select class="form-select" id="cli-res-depto" onchange="Modulos.clientesArmeria._cambioDepartamento()">
+            <option value="">— Departamento —</option>
+            ${(typeof departamentosGT==='function'?departamentosGT():[]).map(d=>`<option value="${UI.esc(d)}" ${c.residencia_departamento===d?'selected':''}>${UI.esc(d)}</option>`).join('')}
+          </select></div>
+        <div class="form-group"><label class="form-label">Residencia — municipio</label>
+          <select class="form-select" id="cli-res-muni" data-pendiente="${UI.esc(c.residencia_municipio||'')}">
+            <option value="">— Municipio —</option>
           </select></div>
       </div>
       ${this._finSeccion()}
@@ -1291,6 +1302,8 @@ Modulos.clientesArmeria = {
     };
     asignar('cli-dir', 'direccion');
     asignar('cli-vivienda', 'vivienda', x => x || null);
+    asignar('cli-res-depto', 'residencia_departamento', x => x || null);
+    asignar('cli-res-muni', 'residencia_municipio', x => x || null);
     asignar('cli-dpi', 'dpi');
     asignar('cli-fnac', 'fecha_nacimiento', x => x || null);
     asignar('cli-estado-civil', 'estado_civil', x => x || null);

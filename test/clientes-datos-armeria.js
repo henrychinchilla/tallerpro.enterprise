@@ -253,12 +253,14 @@ function domBase() {
   await ARM._leerDPI(archivo);
   ok('limpia el ```json que a veces envuelve la respuesta', campos['cli-dpi'].value === '1234567890101');
 
-  /* El recibo sólo debe tocar la dirección. */
-  prepararDom({ 'cli-dir': '', 'cli-dpi': 'NO-TOCAR' });
+  /* El recibo llena la dirección, municipio y departamento de residencia. */
+  prepararDom({ 'cli-dir': '', 'cli-dpi': 'NO-TOCAR', 'cli-res-depto': '', 'cli-res-muni': '' });
   campos['cli-edad'] = { textContent: '', style: {} };
-  ctx.IA = { escanearRecibo: async () => ({ ok: true, texto: JSON.stringify({ direccion: '5a calle 3-40 zona 1', titular: 'Otro Nombre' }) }) };
+  ctx.IA = { escanearRecibo: async () => ({ ok: true, texto: JSON.stringify({ direccion: '5a calle 3-40 zona 1', titular: 'Otro Nombre', municipio: 'Mixco', departamento: 'Guatemala' }) }) };
   await ARM._leerRecibo(archivo);
   ok('el recibo llena la dirección', campos['cli-dir'].value === '5a calle 3-40 zona 1');
+  ok('el recibo llena el departamento de residencia', campos['cli-res-depto'].value === 'Guatemala');
+  ok('el recibo llena el municipio de residencia', campos['cli-res-muni'].value === 'Mixco');
   ok('el recibo NO toca el DPI', campos['cli-dpi'].value === 'NO-TOCAR');
 
   /* Imagen demasiado grande: se rechaza antes de gastar una llamada de IA. */

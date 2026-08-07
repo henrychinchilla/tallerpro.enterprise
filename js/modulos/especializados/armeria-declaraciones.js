@@ -149,7 +149,7 @@ Object.assign(Modulos.armeria, {
        dejar el hueco invisible: un notario necesita ver qué falta. */
     const L = (v, ancho = 220) => v
       ? `<b>${UI.esc(v)}</b>`
-      : `<span class="hueco-vacio" style="display:inline-block;border-bottom:1px solid #000;min-width:${ancho}px;color:#777" onfocus="if(this.innerText.includes('___')) { this.innerText = ''; this.style.color = '#000'; }" onblur="if(this.innerText.trim()==='') { this.innerText = '____________________'; this.style.color = '#777'; }">____________________</span>`;
+      : `<span style="display:inline-block;border-bottom:1px solid #000;min-width:${ancho}px">&nbsp;</span>`;
 
     const hoy = new Date();
     const meses = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
@@ -264,7 +264,7 @@ Object.assign(Modulos.armeria, {
       ${L(estadoCivil, 90)} (estado civil), de nacionalidad ${L(nacionalidadStr, 130)},
       de profesión u oficio ${L(cli.profesion, 180)}, con residencia en
       ${L(cli.direccion, 340)}${cli.vivienda ? ` (vivienda ${UI.esc(cli.vivienda)})` : ''},
-      del municipio de ${L(cli.vecindad_municipio, 180)}, departamento de ${L(cli.vecindad_departamento, 180)},
+      del municipio de ${L(cli.residencia_municipio, 180)}, departamento de ${L(cli.residencia_departamento, 180)},
       me identifico con el Documento Personal de Identificación (DPI)
       número ${L(dpiTexto, 380)} extendido por el Registro Nacional
       de las Personas de la República de Guatemala${cli.nit || o.contraparte_nit ? `, con Número de Identificación Tributaria (NIT) ${L(cli.nit || o.contraparte_nit, 140)}` : ''}.</p>`;
@@ -413,10 +413,6 @@ Object.assign(Modulos.armeria, {
       
       .doc:focus {
         outline: none;
-      }
-      .hueco-vacio:focus {
-        outline: none;
-        background: #fff8e1;
       }
       
       .enc {

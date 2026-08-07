@@ -158,6 +158,7 @@ ARM._data = [{ id: 'op1', num: 'ARM-2026-0001', cliente_id: 'c1', inventario_id:
   ARM._clientes = [{
     id: 'c9', nombre: 'María López', nit: '111-2', dpi: '2233445566778',
     direccion: 'Av. Reforma 10-00 zona 9', vivienda: 'rentada',
+    residencia_municipio: 'Guatemala', residencia_departamento: 'Guatemala',
     fecha_nacimiento: nacidoISO,
     estado_civil: 'casada(a)', profesion: 'Contadora', nacionalidad: 'guatemalteca',
   }];
@@ -173,6 +174,8 @@ ARM._data = [{ id: 'op1', num: 'ARM-2026-0001', cliente_id: 'c1', inventario_id:
   ok('lleva el NIT', /111-2/.test(doc));
   ok('lleva la dirección y si la vivienda es propia o rentada',
      /Av\. Reforma 10-00/.test(doc) && /vivienda rentada/.test(doc));
+  ok('lleva el municipio y departamento de residencia real',
+     /municipio de <b>Guatemala<\/b>/.test(doc) && /departamento de <b>Guatemala<\/b>/.test(doc));
   ok('ya no quedan rayas en blanco para esos datos: van en negrita',
      /<b>Contadora<\/b>/.test(doc) && /<b>casada\(a\)<\/b>/.test(doc));
 
