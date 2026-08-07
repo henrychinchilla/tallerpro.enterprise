@@ -22,6 +22,13 @@ falta pasó desapercibida; en un naturalizado **no coinciden**.
 |---|---|---|---|
 | `marcaje_gua` | `816025 3773028 387597` | `816.025 3.773.028 387.597` | se comió los puntos |
 | `num_tarjeta` | `2621570` | `2821570225570` | dígito confundido + número truncado |
+| `arma_serie` | `ARZ20241` | `BHTT137` | **no se parece en nada** |
+
+El caso de `arma_serie` es el más grave y cambia el diagnóstico: `ARZ20241` no
+es una confusión de dígitos de `BHTT137` — distinto largo, distintas letras.
+El modelo no leyó mal ese campo: leyó **otro renglón de la tarjeta**, o lo
+inventó. Un número de serie equivocado en el inventario de una armería es un
+arma que ante DIGECAM no cuadra con su tarjeta (art. 58).
 
 El marcaje GUA va **tal como está troquelado** (art. 35). Quitarle los puntos
 cambia el dato que se copia a un formulario de DIGECAM.
@@ -39,13 +46,18 @@ Dos clases de problema distintas y con arreglos distintos:
 
 1. **Formato** (marcaje GUA sin puntos): se corrige en el prompt — decir que
    la puntuación se conserva literal.
-2. **Precisión de dígitos** (serie y número de tarjeta): no se arregla con
-   instrucciones. Estos documentos se leen con `claude-haiku-4-5`, que es el
-   modelo por defecto de toda la app. Para un documento que alimenta una
-   declaración jurada y un trámite de DIGECAM, un dígito equivocado es un
-   documento falso: los modos de imagen deberían usar un modelo más fuerte
-   (variable `AI_MODEL_DOCS`), aunque cueste más por lectura. Son lecturas
-   poco frecuentes y de alto riesgo.
+2. **Lectura equivocada** (serie del DPI, número de tarjeta y sobre todo
+   `arma_serie`): NO se arregla con instrucciones. Estos documentos se leen
+   con `claude-haiku-4-5`, el modelo por defecto de toda la app — el más
+   barato y el más flojo leyendo texto pequeño en un plástico con reflejo.
+   `BHTT137` → `ARZ20241` no es ruido de OCR, es el modelo tomando otro campo.
+   Para un documento que alimenta una declaración jurada y un trámite de
+   DIGECAM, eso es un documento falso. Los modos de imagen tienen que correr
+   con un modelo más fuerte (variable `AI_MODEL_DOCS`), aunque cueste más por
+   lectura: son pocas lecturas y de mucho riesgo.
+
+   **Medir, no suponer**: con esta tabla se puede comparar modelo contra
+   modelo sobre los mismos documentos, en vez de "se ve mejor".
 
 Y en los dos casos: **estos números hay que verificarlos contra el documento
 físico antes de guardar**, que es lo que el aviso de pantalla ya dice — pero
