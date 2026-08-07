@@ -422,7 +422,7 @@ Modulos.clientesArmeria = {
     }
 
     const estiloImg = esDpiDuplicado
-      ? 'width:100%;height:100%;object-fit:cover;object-position: 8% center;transform:scale(1.6);transform-origin:left center;'
+      ? 'width:100%;height:100%;object-fit:cover;object-position: 91% center;transform:scale(1.65);transform-origin:right center;'
       : 'width:100%;height:100%;object-fit:cover;';
 
     UI.modal(`🔫 ${esEdicion ? 'Expediente de armería' : 'Nuevo cliente de armería'}`, `
@@ -1082,7 +1082,7 @@ Modulos.clientesArmeria = {
         const box = document.getElementById('cli-foto-box');
         if (box) {
           const estiloImg = tipo === 'dpi_frente'
-            ? 'width:100%;height:100%;object-fit:cover;object-position: 8% center;transform:scale(1.6);transform-origin:left center;'
+            ? 'width:100%;height:100%;object-fit:cover;object-position: 91% center;transform:scale(1.65);transform-origin:right center;'
             : 'width:100%;height:100%;object-fit:cover;';
           box.innerHTML = `<img src="${e.target.result}" style="${estiloImg}">`;
         }

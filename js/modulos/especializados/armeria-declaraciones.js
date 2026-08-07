@@ -71,10 +71,14 @@ Object.assign(Modulos.armeria, {
          no hay venta de por medio. Amarrar las declaraciones a una venta
          dejaba ese caso sin salida.
      `clienteId` permite elegir el cliente cuando no hay operación. */
-  modalDeclaraciones(operacionId, clienteId) {
+  async modalDeclaraciones(operacionId, clienteId) {
+    if (typeof DB !== 'undefined' && typeof DB.getClientes === 'function') {
+      const cs = await DB.getClientes().catch(() => []);
+      if (cs && cs.length) this._clientes = cs;
+    }
     const o = operacionId ? this._data.find(x => x.id === operacionId) : null;
-    const cli = o ? this._clientes.find(c => c.id === o.cliente_id)
-                  : (clienteId ? this._clientes.find(c => c.id === clienteId) : null);
+    const cli = o ? (this._clientes || []).find(c => c.id === o.cliente_id)
+                  : (clienteId ? (this._clientes || []).find(c => c.id === clienteId) : null);
     const dpi = o?.contraparte_dpi || cli?.dpi;
 
     UI.modal('📄 Declaraciones juradas', `
@@ -124,12 +128,19 @@ Object.assign(Modulos.armeria, {
   },
 
   /* Genera el documento imprimible. `tipo` es una clave de _DECLARACIONES. */
-  imprimirDeclaracion(tipo, operacionId, clienteId) {
+  async imprimirDeclaracion(tipo, operacionId, clienteId) {
     const d = this._DECLARACIONES[tipo]; if (!d) return;
     const o = (operacionId ? this._data.find(x => x.id === operacionId) : null) || {};
-    /* El cliente puede venir de la operación o elegirse suelto (declaración
-       a demanda, sin venta). */
-    const cli = this._clientes.find(c => c.id === (o.cliente_id || clienteId)) || {};
+    
+    const cid = o.cliente_id || clienteId;
+    let cli = {};
+    if (cid) {
+      if (typeof DB !== 'undefined' && typeof DB.getClientes === 'function') {
+        const cs = await DB.getClientes().catch(() => []);
+        if (cs && cs.length) this._clientes = cs;
+      }
+      cli = (this._clientes || []).find(c => c.id === cid) || {};
+    }
     const t = window.Auth?.tenant || {};
     const inv = o.inventario_id ? this._inventario.find(i => i.id === o.inventario_id) : null;
     const a = inv?.atributos || {};
