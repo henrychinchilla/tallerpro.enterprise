@@ -401,11 +401,29 @@ Modulos.clientesArmeria = {
 
     const docs = id ? await Docs.listar('cliente', id).catch(() => []) : [];
     const docFP = docs.find(d => d.tipo === 'foto_perfil');
+    const docDPI = docs.find(d => d.tipo === 'dpi_frente');
     let fotoUrl = '';
+    let esDpiDuplicado = false;
+
     if (docFP) {
       const { data } = await getSB().storage.from('documentos').createSignedUrl(docFP.storage_path, 900).catch(() => ({}));
-      if (data?.signedUrl) fotoUrl = data.signedUrl;
+      if (data?.signedUrl) {
+        fotoUrl = data.signedUrl;
+        if (docDPI && (docFP.sha256 === docDPI.sha256 || docFP.titulo?.includes('DPI') || docFP.titulo?.includes('frente'))) {
+          esDpiDuplicado = true;
+        }
+      }
+    } else if (docDPI) {
+      const { data } = await getSB().storage.from('documentos').createSignedUrl(docDPI.storage_path, 900).catch(() => ({}));
+      if (data?.signedUrl) {
+        fotoUrl = data.signedUrl;
+        esDpiDuplicado = true;
+      }
     }
+
+    const estiloImg = esDpiDuplicado
+      ? 'width:100%;height:100%;object-fit:cover;object-position: 8% center;transform:scale(1.6);transform-origin:left center;'
+      : 'width:100%;height:100%;object-fit:cover;';
 
     UI.modal(`🔫 ${esEdicion ? 'Expediente de armería' : 'Nuevo cliente de armería'}`, `
       <div class="alert alert-cyan" style="margin-bottom:12px">
@@ -417,11 +435,20 @@ Modulos.clientesArmeria = {
         </div>
       </div>
       <div style="display:flex;gap:20px;margin-bottom:12px;align-items:center">
-        <div style="position:relative;width:90px;height:90px;border-radius:50%;background:var(--surface2);border:2px solid var(--border);overflow:hidden;flex-shrink:0;display:flex;align-items:center;justify-content:center" id="cli-foto-box" title="Foto de perfil / Identidad">
-          ${fotoUrl 
-            ? `<img src="${fotoUrl}" style="width:100%;height:100%;object-fit:cover">`
-            : `<span style="font-size:32px">👤</span>`}
-          <div style="position:absolute;bottom:0;width:100%;background:rgba(0,0,0,0.6);color:#fff;text-align:center;font-size:9px;padding:3px 0;cursor:pointer" onclick="document.getElementById('cli-doc-foto_perfil-cam').click()">Cambiar</div>
+        <div style="display:flex;flex-direction:column;align-items:center;gap:8px;flex-shrink:0;width:110px">
+          <div style="position:relative;width:95px;height:95px;border-radius:50%;background:var(--surface2);border:2px solid var(--border);overflow:hidden;display:flex;align-items:center;justify-content:center" id="cli-foto-box" title="Foto de perfil / Identidad">
+            ${fotoUrl 
+              ? `<img src="${fotoUrl}" style="${estiloImg}">`
+              : `<span style="font-size:32px">👤</span>`}
+          </div>
+          <div style="display:flex;gap:4px">
+            <button type="button" class="btn btn-xs btn-cyan" onclick="document.getElementById('cli-doc-foto_perfil-cam').click()" style="padding:2px 6px;font-size:10px" title="Tomar foto con la cámara">📷 Cámara</button>
+            <button type="button" class="btn btn-xs btn-ghost" onclick="document.getElementById('cli-doc-foto_perfil-gal').click()" style="padding:2px 6px;font-size:10px" title="Subir archivo de foto">📂 Archivo</button>
+          </div>
+          <input type="file" id="cli-doc-foto_perfil-cam" accept="image/*" capture="environment" style="display:none"
+            onchange="Modulos.clientesArmeria._subirDoc('${id || ''}','foto_perfil',this)">
+          <input type="file" id="cli-doc-foto_perfil-gal" accept="image/*" style="display:none"
+            onchange="Modulos.clientesArmeria._subirDoc('${id || ''}','foto_perfil',this)">
         </div>
         <div style="flex:1">
           <div class="form-row" style="margin-bottom:0">
@@ -1011,31 +1038,34 @@ Modulos.clientesArmeria = {
   _htmlDocumentos(id) {
     const pend = Object.keys(this._docsPendientes || {});
     return `
-      <div class="form-group" style="background:var(--card2);border-radius:8px;padding:10px 12px">
-        <label class="form-label">📎 Documentos de identificación</label>
-        <div style="font-size:11px;color:var(--text3);margin-bottom:8px">
+      <div class="form-group" style="background:var(--card2);border-radius:8px;padding:12px 14px">
+        <label class="form-label" style="font-weight:700;margin-bottom:6px">📎 Documentos de identificación</label>
+        <div style="font-size:11.5px;color:var(--text3);margin-bottom:14px;line-height:1.4">
           El <b>DPI y la licencia van por las dos caras</b>: el expediente queda incompleto con una sola.
           Del anverso del DPI, de la licencia y del recibo se leen los datos automáticamente.
           ${id ? '' : 'Se adjuntan al guardar el cliente.'}
         </div>
-        ${Object.entries(this._DOCS_CLIENTE).map(([tipo, d]) => {
-          const esReverso = tipo.endsWith('_reverso');
-          return `
-          <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;flex-wrap:wrap;
-                      ${esReverso ? 'padding-left:16px;margin-top:-2px' : 'margin-top:8px'}">
-            <span style="font-size:12px;min-width:230px">${esReverso ? '↳ ' : ''}${d.icon} ${d.label}
-              ${this._LECTOR_DOC[tipo] ? '<span style="color:var(--cyan);font-size:10px">· se lee solo</span>' : ''}</span>
-            <button type="button" class="btn btn-sm btn-cyan" onclick="document.getElementById('cli-doc-${tipo}-cam').click()">📷 Cámara</button>
-            <button type="button" class="btn btn-sm btn-ghost" onclick="document.getElementById('cli-doc-${tipo}-gal').click()">📂 Archivo</button>
-            ${pend.includes(tipo) ? '<span style="font-size:11px;color:var(--green)">✓ listo para adjuntar</span>' : ''}
-            <input type="file" id="cli-doc-${tipo}-cam" accept="image/*" capture="environment" style="display:none"
-              onchange="Modulos.clientesArmeria._subirDoc('${id || ''}','${tipo}',this)">
-            <input type="file" id="cli-doc-${tipo}-gal" accept="image/*,application/pdf" style="display:none"
-              onchange="Modulos.clientesArmeria._subirDoc('${id || ''}','${tipo}',this)">
-          </div>`;
-        }).join('')}
-        <div id="cli-lectura-aviso" style="font-size:11px;margin:6px 0"></div>
-        <div id="cli-docs"></div>
+        <div style="display:grid;grid-template-columns:1fr auto;row-gap:8px;column-gap:16px;align-items:center" id="cli-docs-list">
+          ${Object.entries(this._DOCS_CLIENTE).filter(([tipo]) => tipo !== 'foto_perfil').map(([tipo, d]) => {
+            const esReverso = tipo.endsWith('_reverso');
+            return `
+            <div style="display:flex;align-items:center;gap:6px;font-size:12px;${esReverso ? 'padding-left:18px;color:var(--text2);margin-top:-2px' : 'font-weight:600;margin-top:6px'}">
+              ${esReverso ? '↳ ' : ''}${d.icon} ${d.label}
+              ${this._LECTOR_DOC[tipo] ? '<span style="color:var(--cyan);font-size:10px;margin-left:4px;font-weight:normal">· se lee solo</span>' : ''}
+            </div>
+            <div style="display:flex;align-items:center;gap:6px;justify-content:flex-end;${esReverso ? 'margin-top:-2px' : 'margin-top:6px'}">
+              ${pend.includes(tipo) ? '<span style="font-size:11px;color:var(--green);font-weight:500;margin-right:4px">✓ listo</span>' : ''}
+              <button type="button" class="btn btn-xs btn-cyan" onclick="document.getElementById('cli-doc-${tipo}-cam').click()" style="padding:3px 8px;font-size:11px">📷 Cámara</button>
+              <button type="button" class="btn btn-xs btn-ghost" onclick="document.getElementById('cli-doc-${tipo}-gal').click()" style="padding:3px 8px;font-size:11px">📂 Archivo</button>
+              <input type="file" id="cli-doc-${tipo}-cam" accept="image/*" capture="environment" style="display:none"
+                onchange="Modulos.clientesArmeria._subirDoc('${id || ''}','${tipo}',this)">
+              <input type="file" id="cli-doc-${tipo}-gal" accept="image/*,application/pdf" style="display:none"
+                onchange="Modulos.clientesArmeria._subirDoc('${id || ''}','${tipo}',this)">
+            </div>`;
+          }).join('')}
+        </div>
+        <div id="cli-lectura-aviso" style="font-size:11px;margin:10px 0 0"></div>
+        <div id="cli-docs" style="margin-top:10px"></div>
       </div>`;
   },
 
@@ -1051,8 +1081,10 @@ Modulos.clientesArmeria = {
       reader.onload = e => {
         const box = document.getElementById('cli-foto-box');
         if (box) {
-          box.innerHTML = `<img src="${e.target.result}" style="width:100%;height:100%;object-fit:cover">
-                           <div style="position:absolute;bottom:0;width:100%;background:rgba(0,0,0,0.6);color:#fff;text-align:center;font-size:9px;padding:3px 0;cursor:pointer" onclick="document.getElementById('cli-doc-foto_perfil-cam').click()">Cambiar</div>`;
+          const estiloImg = tipo === 'dpi_frente'
+            ? 'width:100%;height:100%;object-fit:cover;object-position: 8% center;transform:scale(1.6);transform-origin:left center;'
+            : 'width:100%;height:100%;object-fit:cover;';
+          box.innerHTML = `<img src="${e.target.result}" style="${estiloImg}">`;
         }
       };
       reader.readAsDataURL(file);
