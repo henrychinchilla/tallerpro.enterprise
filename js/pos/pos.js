@@ -938,26 +938,24 @@ const POS = {
 
     tot.innerHTML = `
       <!-- Columna Izquierda: Cliente & Envío (Morado/Lavanda) -->
-      <div id="pos-cart-campos" style="flex:1.2;">
-        <div style="display:flex; flex-direction:column; gap:2px;">
-          <label style="font-size:10.5px; font-weight:800; color:#5b21b6; text-transform:uppercase; letter-spacing:0.5px;">Cliente</label>
-          <button class="btn btn-ghost" style="width:100%; text-align:left; font-size:12.5px; padding:8px 10px; border:1px solid #ebd5ff; border-radius:8px; background:#fff; color:#1e1b4b; display:flex; align-items:center; justify-content:space-between; transition:all 0.15s;" onclick="POS.modalCliente()">
+      <div id="pos-cart-campos" style="flex:1.2; justify-content:space-between;">
+        <div style="display:flex; flex-direction:column; gap:4px;">
+          <button class="btn btn-ghost" style="width:100%; text-align:left; font-size:11.5px; padding:5px 8px; border:1px solid #ebd5ff; border-radius:6px; background:#fff; color:#1e1b4b; display:flex; align-items:center; justify-content:space-between;" onclick="POS.modalCliente()">
             <span>👤 ${cli ? `<b>${UI.esc(cli.nombre)}</b>` : 'Consumidor Final (CF)'}</span>
-            ${puntosCli !== null ? `<span style="color:#d97706; font-weight:800; font-size:11px; background:#fef3c7; padding:2px 6px; border-radius:6px;">${puntosCli} pts</span>` : ''}
+            ${puntosCli !== null ? `<span style="color:#d97706; font-weight:800; font-size:10px; background:#fef3c7; padding:1px 4px; border-radius:4px;">${puntosCli} pts</span>` : ''}
           </button>
+          ${htmlCanje}
         </div>
 
-        ${htmlCanje}
-
         <!-- Programar Envío -->
-        <div style="border:1px solid #ebd5ff; border-radius:8px; padding:8px; background:#fff; margin-top:2px;">
-          <label style="display:flex; align-items:center; gap:8px; font-size:12px; font-weight:700; cursor:pointer; color:#1e1b4b; user-select:none;">
-            <input type="checkbox" id="pos-envio-on" style="width:15px; height:15px; border-radius:4px;" ${this._envioData ? 'checked' : ''} onchange="POS._toggleEnvio(this.checked)"> 🚚 Envío a domicilio
+        <div style="border:1px solid #ebd5ff; border-radius:6px; padding:6px; background:#fff; margin-top:2px;">
+          <label style="display:flex; align-items:center; gap:6px; font-size:11px; font-weight:700; cursor:pointer; color:#1e1b4b; margin:0; user-select:none;">
+            <input type="checkbox" id="pos-envio-on" style="width:13px; height:13px; margin:0;" ${this._envioData ? 'checked' : ''} onchange="POS._toggleEnvio(this.checked)"> 🚚 Envío a domicilio
           </label>
           ${this._envioData ? `
-            <div style="margin-top:6px; font-size:11px; color:#5b21b6; background:#f5f3ff; border-radius:6px; padding:6px; display:flex; justify-content:space-between; align-items:center; border:1px solid #ebd5ff;">
-              <span style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:180px;">📦 <b>${UI.esc(this._envioData.destinatario || 'Cliente')}</b> · ${UI.esc(this._envioData.direccion)}</span>
-              <button class="btn btn-sm btn-ghost" style="padding:1px 6px; font-size:10px;" onclick="POS.modalEnvio()">Editar</button>
+            <div style="margin-top:4px; font-size:10px; color:#5b21b6; background:#f5f3ff; border-radius:4px; padding:4px; display:flex; justify-content:space-between; align-items:center; border:1px solid #ebd5ff;">
+              <span style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:160px;">📦 <b>${UI.esc(this._envioData.destinatario || 'Cliente')}</b> · ${UI.esc(this._envioData.direccion)}</span>
+              <button class="btn btn-sm btn-ghost" style="padding:0px 4px; font-size:9px;" onclick="POS.modalEnvio()">Editar</button>
             </div>` : ''}
         </div>
       </div>
@@ -965,29 +963,28 @@ const POS = {
       <!-- Columna Derecha: Pago, Totales y Cobro (Naranja/Peach) -->
       <div id="pos-cart-pie" style="flex:1;">
         <!-- Descuento Manual -->
-        <div style="display:flex; gap:8px; align-items:center; justify-content:space-between; font-size:12.5px;">
+        <div style="display:flex; align-items:center; justify-content:space-between; font-size:11.5px; height:22px;">
           <span style="font-weight:700; color:#c2410c;">Descuento Manual:</span>
-          <div style="display:flex; align-items:center; gap:2px">
-            <span style="font-weight:800; color:#c2410c; font-size:11px;">Q</span>
-            <input class="form-input" style="width:72px; padding:4px 6px; font-size:12px; height:26px; border-radius:5px; background:#fff;" type="number" min="0" step="0.01"
+          <div style="display:flex; align-items:center; gap:1px">
+            <span style="font-weight:800; color:#c2410c; font-size:10px;">Q</span>
+            <input class="form-input" style="width:58px; padding:2px 4px; font-size:11px; height:20px; border-radius:4px; background:#fff; text-align:right;" type="number" min="0" step="0.01"
                    value="${this._descuento}" onchange="POS.setDescuento(this.value)">
           </div>
         </div>
 
         <!-- Método de Pago Compacto -->
-        <div style="margin-top:2px;">
-          <div style="font-size:10.5px; font-weight:800; color:#c2410c; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:4px">Método de Pago</div>
-          <div class="pos-pay-compact-grid">
-            ${htmlMetodos}
-          </div>
+        <div class="pos-pay-compact-grid" style="margin-top:2px;">
+          ${htmlMetodos}
         </div>
 
         <!-- Totales Breakdown -->
-        <div style="background:rgba(255,255,255,0.7); border-radius:8px; padding:8px; border:1px solid #ffedd5; margin-top:2px;">
+        <div style="background:rgba(255,255,255,0.7); border-radius:6px; padding:6px; border:1px solid #ffedd5; margin-top:2px;">
           ${htmlDescRow}
-          <div style="display:flex; justify-content:space-between; font-size:11px; color:#7c2d12; padding:1px 0"><span>Subtotal</span><span>${UI.q(t.subtotal)}</span></div>
-          <div style="display:flex; justify-content:space-between; font-size:11px; color:#7c2d12; padding:1px 0"><span>IVA (12%)</span><span>${UI.q(t.iva)}</span></div>
-          <div style="display:flex; justify-content:space-between; font-size:20px; font-weight:900; margin-top:4px; padding-top:4px; border-top:1px solid #ffedd5; font-family:'Outfit',sans-serif; color:#7c2d12;">
+          <div style="display:flex; justify-content:space-between; font-size:10px; color:#7c2d12;">
+            <span>Subtotal: ${UI.q(t.subtotal)}</span>
+            <span>IVA: ${UI.q(t.iva)}</span>
+          </div>
+          <div style="display:flex; justify-content:space-between; font-size:16px; font-weight:900; margin-top:2px; padding-top:2px; border-top:1px solid #ffedd5; font-family:'Outfit',sans-serif; color:#7c2d12;">
             <span>Total</span>
             <span>${UI.q(t.total)}</span>
           </div>
@@ -995,7 +992,7 @@ const POS = {
 
         ${htmlVuelto}
 
-        <button class="btn fpos-cobrar" id="pos-btn-cobrar" style="width:100%; font-size:15px; padding:10px; font-weight:800; border-radius:8px; margin-top:4px; background:${this._cart.length ? '#16a34a' : 'var(--surface3)'}; color:${this._cart.length ? '#fff' : 'var(--text3)'}; border:none; font-family:'Outfit',sans-serif; box-shadow:${this._cart.length ? '0 4px 10px rgba(22,163,74,0.2)' : 'none'}" onclick="POS.cobrar()" ${this._cart.length ? '' : 'disabled'}>
+        <button class="btn fpos-cobrar" id="pos-btn-cobrar" style="width:100%; font-size:13.5px; padding:7px; font-weight:800; border-radius:6px; margin-top:2px; background:${this._cart.length ? '#16a34a' : 'var(--surface3)'}; color:${this._cart.length ? '#fff' : 'var(--text3)'}; border:none; font-family:'Outfit',sans-serif; box-shadow:${this._cart.length ? '0 3px 6px rgba(22,163,74,0.15)' : 'none'}" onclick="POS.cobrar()" ${this._cart.length ? '' : 'disabled'}>
           💵 Cobrar ${UI.q(t.total)}
         </button>
       </div>`;

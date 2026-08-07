@@ -173,6 +173,11 @@
   flex-direction: column !important;
   width: 630px !important;
   flex-shrink: 0 !important;
+  height: 100% !important;
+}
+#pos-cart {
+  flex: 1 1 auto !important;
+  min-height: 380px !important;
 }
 #pos-totales {
   flex: 0 0 auto !important;
