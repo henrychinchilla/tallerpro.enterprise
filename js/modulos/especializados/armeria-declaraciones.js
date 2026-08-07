@@ -150,9 +150,21 @@ Object.assign(Modulos.armeria, {
     const edad = (Modulos.clientesArmeria?.edadDe)
       ? Modulos.clientesArmeria.edadDe(cli.fecha_nacimiento, hoy) : null;
 
+    const esFemenino = cli.sexo === 'femenino';
+    const deGenero = (masc, fem) => esFemenino ? fem : masc;
+
+    let estadoCivil = cli.estado_civil;
+    if (estadoCivil && cli.sexo) {
+      if (cli.sexo === 'masculino') {
+        estadoCivil = estadoCivil.replace(/\(a\)/g, '');
+      } else if (cli.sexo === 'femenino') {
+        estadoCivil = estadoCivil.replace(/\(a\)/g, 'a');
+      }
+    }
+
     const identificacion = `
       <p>Yo, ${UI.esc(L(cli.nombre, 300))}, de ${L(edad != null ? String(edad) : null, 60)} años de edad,
-      ${L(cli.estado_civil, 90)} (estado civil), de nacionalidad ${L(cli.nacionalidad || 'guatemalteca', 130)},
+      ${L(estadoCivil, 90)} (estado civil), de nacionalidad ${L(cli.nacionalidad || 'guatemalteca', 130)},
       de profesión u oficio ${UI.esc(L(cli.profesion, 180))}, con residencia en
       ${UI.esc(L(cli.direccion, 340))}${cli.vivienda ? ` (vivienda ${UI.esc(cli.vivienda)})` : ''},
       me identifico con el Documento Personal de Identificación (DPI)
@@ -162,12 +174,12 @@ Object.assign(Modulos.armeria, {
     const cuerpos = {
       ingresos: `
         ${identificacion}
-        <p>Por este medio, y bajo juramento solemne de decir verdad, debidamente enterado(a)
+        <p>Por este medio, y bajo juramento solemne de decir verdad, debidamente ${deGenero('enterado', 'enterada')}
         de las penas relativas al delito de perjurio, <b>DECLARO</b>:</p>
         <p><b>PRIMERO:</b> Que mis ingresos mensuales ascienden aproximadamente a la cantidad de
         ${L(null, 200)} quetzales (Q ${L(null, 120)}).</p>
         <p><b>SEGUNDO:</b> Que dichos ingresos los obtengo de la siguiente actividad económica:
-        ${L(null, 420)}<br>${L(null, 560)}<br>${L(null, 560)}</p>
+        ${L(cli.profesion ? `Mi actividad económica y comercial como ${cli.profesion}` : null, 420)}<br>${L(null, 560)}<br>${L(null, 560)}</p>
         <p><b>TERCERO:</b> Que por la naturaleza de la actividad económica antes descrita no me es
         posible presentar constancia de empleo ni certificación de ingresos.</p>
         <p><b>CUARTO:</b> Que los fondos con los que realizo la presente compra provienen
@@ -176,7 +188,7 @@ Object.assign(Modulos.armeria, {
 
       portacion: `
         ${identificacion}
-        <p>Por este medio, y bajo juramento solemne de decir verdad, debidamente enterado(a)
+        <p>Por este medio, y bajo juramento solemne de decir verdad, debidamente ${deGenero('enterado', 'enterada')}
         de las penas relativas al delito de perjurio, <b>DECLARO</b>:</p>
         <p><b>PRIMERO:</b> Que no padezco ni he padecido de enfermedades mentales.</p>
         <p><b>SEGUNDO:</b> Que no soy desertor del Ejército de Guatemala.</p>
@@ -190,11 +202,11 @@ Object.assign(Modulos.armeria, {
         ${identificacion}
         <p>Por este medio <b>DECLARO</b>, para efectos del control interno del establecimiento:</p>
         <p><b>PRIMERO:</b> Que el origen de los fondos con los que realizo la presente operación es
-        el siguiente: ${L(null, 400)}<br>${L(null, 560)}</p>
+        el siguiente: ${L(cli.profesion ? `Ingresos provenientes de mi actividad económica como ${cli.profesion}` : null, 400)}<br>${L(null, 560)}</p>
         <p><b>SEGUNDO:</b> Que dichos fondos provienen de actividades lícitas y no tienen relación
         alguna con el lavado de dinero u otros activos ni con el financiamiento del terrorismo.</p>
         <p><b>TERCERO:</b> Que la operación la realizo por cuenta propia
-        ${L(null, 60)} (sí / no). En caso negativo, actúo por cuenta de:
+        ${L('sí', 60)} (sí / no). En caso negativo, actúo por cuenta de:
         ${L(null, 340)}</p>
         <p style="font-size:11px;color:#555;border:1px solid #ccc;padding:8px;border-radius:4px">
         <b>Nota sobre este documento:</b> no es un formulario de la Intendencia de Verificación
@@ -262,8 +274,8 @@ Object.assign(Modulos.armeria, {
     ${cuerpos[tipo]}
     ${detalleArma}
 
-    <p>En fe de lo declarado, firmo la presente en el municipio de ${L(null, 180)},
-    departamento de ${L(null, 180)}, a los ${fechaLetras}.</p>
+    <p>En fe de lo declarado, firmo la presente en el municipio de ${L(cli.vecindad_municipio, 180)},
+    departamento de ${L(cli.vecindad_departamento, 180)}, a los ${fechaLetras}.</p>
 
     <div class="firmas">
       <div class="firma">

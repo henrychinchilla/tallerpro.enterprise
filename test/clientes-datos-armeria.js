@@ -328,7 +328,7 @@ function domBase() {
   campos['cli-edad'] = { textContent: '', style: {} };
   subidos.length = 0;
   await ARM._subirDoc('c1', 'dpi_frente', { files: [{ size: 1000, type: 'image/jpeg' }], value: '' });
-  ok('con cliente existente, archiva el documento', subidos.length === 1 && subidos[0].tipo === 'dpi_frente');
+  ok('con cliente existente, archiva el documento y su duplicado de foto_perfil', subidos.length === 2 && subidos[0].tipo === 'dpi_frente' && subidos[1].tipo === 'foto_perfil');
   ok('...y en la MISMA acción lee los datos', campos['cli-dpi'].value === '1111111111111');
 
   /* EL REVERSO TAMBIÉN SE LEE. Se pide justamente porque NO trae la misma
@@ -353,7 +353,7 @@ function domBase() {
   ctx.IA = { escanearDPI: async () => { leyo = true; return { ok: true, texto: '{}' }; } };
   subidos.length = 0;
   await ARM._subirDoc('c1', 'dpi_frente', { files: [{ size: 1000, type: 'application/pdf' }], value: '' });
-  ok('un PDF se archiva igual', subidos.length === 1);
+  ok('un PDF se archiva igual con su copia de foto_perfil', subidos.length === 2 && subidos[0].tipo === 'dpi_frente' && subidos[1].tipo === 'foto_perfil');
   ok('...y TAMBIEN se manda a leer (los recibos vienen en PDF)', leyo === true);
 }
 
@@ -377,13 +377,13 @@ function domBase() {
   subidos.length = 0;
   await ARM._subirDoc('', 'dpi_frente', { files: [{ size: 1000, type: 'image/jpeg' }], value: '' });
   ok('sin cliente todavía, NO intenta archivar (no hay carpeta donde)', subidos.length === 0);
-  ok('pero retiene la foto para después', !!ARM._docsPendientes.dpi_frente);
+  ok('pero retiene la foto para después y crea el duplicado de foto_perfil', !!ARM._docsPendientes.dpi_frente && !!ARM._docsPendientes.foto_perfil);
   ok('y LEE los datos igual, sin esperar a guardar', campos['cli-dpi'].value === '2222222222222');
 
   /* Al crear el cliente, lo pendiente se adjunta solo. */
   guardado = null;
   await ARM.guardar('');
-  ok('al crear el cliente se adjunta lo pendiente', subidos.length === 1 && subidos[0].tipo === 'dpi_frente');
+  ok('al crear el cliente se adjunta lo pendiente', subidos.length === 2 && subidos[0].tipo === 'dpi_frente' && subidos[1].tipo === 'foto_perfil');
   ok('...con el id del cliente recién creado', subidos[0].cid === 'c1');
   ok('y la lista de pendientes queda limpia', Object.keys(ARM._docsPendientes).length === 0);
 }

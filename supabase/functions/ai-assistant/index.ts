@@ -211,6 +211,11 @@ Devuelve ÚNICAMENTE un objeto JSON válido, sin bloques de código markdown, si
 
 REGLA CRÍTICA: si un dato no se lee con claridad en la imagen, devuélvelo como null. NUNCA adivines, completes ni corrijas un dato — este documento se usa para trámites ante DIGECAM y un dato inventado es peor que un campo vacío.
 
+DIRECTIVAS PARA IMÁGENES/PDFs DE BAJA RESOLUCIÓN O CALIDAD:
+1. Si la imagen se encuentra pixelada, borrosa, con reflejos en el plástico o con baja iluminación, analiza con extrema paciencia y detalle los contornos y patrones de los caracteres.
+2. El CUI de Guatemala consta de 13 dígitos distribuidos así: 4 dígitos de CUI + 4 dígitos de CUI + 1 dígito verificador + 2 dígitos del departamento + 2 dígitos del municipio de nacimiento. Utiliza esta estructura lógica para validar dígitos ambiguos (por ejemplo, distinguir '8' de '0', o '1' de '7').
+3. No intentes adivinar ni inventar datos; si a pesar de las pasadas de análisis el dato no es legible con total seguridad, devuelve null.
+
 EL DPI TIENE DOS CARAS Y CADA UNA TRAE COSAS DISTINTAS. Verificado contra un DPI real:
   · ANVERSO: CÓDIGO ÚNICO DE IDENTIFICACIÓN (CUI), NOMBRE, APELLIDO, NACIONALIDAD, PAÍS DE NAC., SEXO, FECHA DE NACIMIENTO, la firma, un número de versión al pie (ej. "004") y una fecha bajo la fotografía que es la de EMISIÓN.
   · REVERSO: LUGAR DE NACIMIENTO (dos líneas: primero el DEPARTAMENTO y debajo el MUNICIPIO), debajo una línea con el asiento del registro civil en la forma "L:102 F:42 P:263" (libro, folio y página de donde el RENAP tomó los datos al migrar de Cédula a DPI), VECINDAD (también departamento y municipio), ESTADO CIVIL, FECHA DE VENCIMIENTO, NÚMERO DE SERIE y la zona legible por máquina (MRZ).
@@ -252,6 +257,10 @@ Tu única tarea es leer la imagen y devolver los datos EXACTAMENTE como aparecen
 Devuelve ÚNICAMENTE un objeto JSON válido, sin bloques de código markdown, sin comentarios y sin explicaciones.
 
 REGLA CRÍTICA: si un dato no se lee con claridad, devuélvelo como null. NUNCA adivines. De estos datos depende cuánta munición se le puede entregar legalmente al cliente (artículo 60 del Decreto 15-2009): un tipo de licencia inventado autoriza una entrega ilegal.
+
+DIRECTIVAS PARA IMÁGENES/PDFs DE BAJA RESOLUCIÓN O CALIDAD:
+1. Si la imagen se encuentra pixelada, borrosa, con reflejos en el plástico o con baja iluminación, analiza con extrema paciencia y detalle los contornos y patrones de los caracteres.
+2. Compara y cruza los campos siempre que sea posible. Si no distingues con total seguridad un dato crítico, devuélvelo como null.
 
 CÓMO ES UNA TARJETA DE TENENCIA (verificado contra ejemplares reales, en papel y electrónica):
 Encabezado "MINISTERIO DE LA DEFENSA NACIONAL / DIRECCIÓN GENERAL DE CONTROL DE ARMAS Y MUNICIONES / TARJETA DE TENENCIA DE ARMA DE FUEGO", con el escudo de DIGECAM. Lleva "HUELLA BALISTICA No.", la leyenda "CIVIL ART. 9" y un "No." de tarjeta. Bloque IDENTIFICACIÓN con No. PROPIETARIO, PROPIETARIO, RESIDENCIA, DOMICILIO, DOCUMENTO PERSONAL DE IDENTIFICACIÓN (DPI) y NACIONALIDAD. Bloque DATOS DEL ARMA con TIPO, MARCA, MODELO, CALIBRE, No. DE SERIE y LARGO DEL CAÑÓN O CAÑONES **en milímetros**. Luego CONVERSIONES (con rayas si no tiene) y una línea "MARCAJE GUA" con TRES números, que es el troquelado del artículo 35. Cierra con lugar y fecha, firma de la Dirección DIGECAM y, en la versión electrónica, un código QR de verificación.
@@ -632,6 +641,9 @@ Deno.serve(async (req) => {
   const necesitaBusquedaWeb = (modo === "chat" || modo === "insights") &&
     (modsDelRol.includes("armeria") || modsDelRol.includes("agroservicio") || modsDelRol.includes("venta_granos"));
 
+  const modelToUse = MODOS_IMAGEN[modo] ? (Deno.env.get("AI_MODEL_VISION") ?? "claude-3-5-sonnet-20241022") : MODELO;
+  const soportaThinking = modelToUse.includes("claude-3-7") || modelToUse.includes("claude-3-8") || modelToUse.includes("fable");
+
   try {
     const r = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
@@ -641,14 +653,14 @@ Deno.serve(async (req) => {
         "content-type": "application/json",
       },
       body: JSON.stringify({
-        model: MODELO,
+        model: modelToUse,
         max_tokens: 4096,
-        /* thinking adaptativo + effort solo existen en Opus 4.6+/Fable;
-           Haiku los rechaza, así que se omiten para ese modelo */
-        ...(MODELO.includes("haiku") ? {} : {
+        /* thinking adaptativo + effort solo existen en modelos compatibles;
+           Haiku y Sonnet 3.5 los rechazan, así que se omiten si no se soporta */
+        ...(soportaThinking ? {
           thinking: { type: "adaptive" },
           output_config: { effort: EFFORT },
-        }),
+        } : {}),
         system: sistemaPrompt,
         messages: messagesPayload,
         ...(necesitaBusquedaWeb ? { tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 3 }] } : {}),

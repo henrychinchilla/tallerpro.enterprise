@@ -387,6 +387,14 @@ Modulos.clientesArmeria = {
     if (onGuardado !== null) this._onGuardado = onGuardado;
     if (!esEdicion) { this._docsPendientes = {}; this._tenenciaPendiente = null; }
 
+    const docs = id ? await Docs.listar('cliente', id).catch(() => []) : [];
+    const docFP = docs.find(d => d.tipo === 'foto_perfil');
+    let fotoUrl = '';
+    if (docFP) {
+      const { data } = await getSB().storage.from('documentos').createSignedUrl(docFP.storage_path, 900).catch(() => ({}));
+      if (data?.signedUrl) fotoUrl = data.signedUrl;
+    }
+
     UI.modal(`🔫 ${esEdicion ? 'Expediente de armería' : 'Nuevo cliente de armería'}`, `
       <div class="alert alert-cyan" style="margin-bottom:12px">
         <div class="alert-icon">🔫</div>
@@ -396,11 +404,21 @@ Modulos.clientesArmeria = {
           se editan desde <b>Clientes</b>.
         </div>
       </div>
-      <div class="form-row">
-        <div class="form-group"><label class="form-label">Nombre Completo *</label>
-          <input class="form-input" id="cli-nombre" value="${UI.esc(c.nombre||'')}"></div>
-        <div class="form-group"><label class="form-label">Teléfono *</label>
-          <input class="form-input" id="cli-tel" value="${c.tel||''}" placeholder="5501-1234"></div>
+      <div style="display:flex;gap:20px;margin-bottom:12px;align-items:center">
+        <div style="position:relative;width:90px;height:90px;border-radius:50%;background:var(--surface2);border:2px solid var(--border);overflow:hidden;flex-shrink:0;display:flex;align-items:center;justify-content:center" id="cli-foto-box" title="Foto de perfil / Identidad">
+          ${fotoUrl 
+            ? `<img src="${fotoUrl}" style="width:100%;height:100%;object-fit:cover">`
+            : `<span style="font-size:32px">👤</span>`}
+          <div style="position:absolute;bottom:0;width:100%;background:rgba(0,0,0,0.6);color:#fff;text-align:center;font-size:9px;padding:3px 0;cursor:pointer" onclick="document.getElementById('cli-doc-foto_perfil-cam').click()">Cambiar</div>
+        </div>
+        <div style="flex:1">
+          <div class="form-row" style="margin-bottom:0">
+            <div class="form-group" style="margin-bottom:8px"><label class="form-label">Nombre Completo *</label>
+              <input class="form-input" id="cli-nombre" value="${UI.esc(c.nombre||'')}"></div>
+            <div class="form-group" style="margin-bottom:8px"><label class="form-label">Teléfono *</label>
+              <input class="form-input" id="cli-tel" value="${c.tel||''}" placeholder="5501-1234"></div>
+          </div>
+        </div>
       </div>
       <div class="form-row">
         <div class="form-group"><label class="form-label">NIT</label>
@@ -935,6 +953,7 @@ Modulos.clientesArmeria = {
      el reverso se archiva para completar el expediente, no para sacar campos
      que no están ahí. */
   _DOCS_CLIENTE: {
+    foto_perfil:      { icon: '👤', label: 'Foto de perfil / Identidad' },
     dpi_frente:       { icon: '🪪', label: 'DPI — anverso (frente)' },
     dpi_reverso:      { icon: '🪪', label: 'DPI — reverso (atrás)' },
     licencia_frente:  { icon: '📋', label: 'Licencia de arma — anverso' },
@@ -1014,6 +1033,19 @@ Modulos.clientesArmeria = {
     if (!file) return;
     const titulo = this._DOCS_CLIENTE[tipo]?.label || tipo;
 
+    // Previsualización local inmediata de la foto en la interfaz circular del avatar
+    if ((tipo === 'dpi_frente' || tipo === 'foto_perfil') && file.type?.startsWith('image/')) {
+      const reader = new FileReader();
+      reader.onload = e => {
+        const box = document.getElementById('cli-foto-box');
+        if (box) {
+          box.innerHTML = `<img src="${e.target.result}" style="width:100%;height:100%;object-fit:cover">
+                           <div style="position:absolute;bottom:0;width:100%;background:rgba(0,0,0,0.6);color:#fff;text-align:center;font-size:9px;padding:3px 0;cursor:pointer" onclick="document.getElementById('cli-doc-foto_perfil-cam').click()">Cambiar</div>`;
+        }
+      };
+      reader.readAsDataURL(file);
+    }
+
     /* 1. Archivar. Si el cliente aún no existe, se retiene para subirlo
           apenas se cree — así la foto se toma una sola vez. */
     if (clienteId) {
@@ -1021,10 +1053,29 @@ Modulos.clientesArmeria = {
       const { error } = await Docs.subirArchivo('cliente', clienteId, tipo, titulo, file);
       if (error) { UI.toast('Error: ' + error.message, 'error'); return; }
       UI.toast(`${titulo} archivado ✓`);
+
+      // Duplicación automática a foto_perfil si es dpi_frente y no hay foto de perfil
+      if (tipo === 'dpi_frente') {
+        const yaSubidos = await Docs.listar('cliente', clienteId).catch(() => []);
+        const tieneFotoPerfil = yaSubidos.some(d => d.tipo === 'foto_perfil') || !!this._docsPendientes['foto_perfil'];
+        if (!tieneFotoPerfil) {
+          UI.toast('Duplicando frente del DPI como foto de perfil...', 'info');
+          const { error: errFP } = await Docs.subirArchivo('cliente', clienteId, 'foto_perfil', this._DOCS_CLIENTE['foto_perfil'].label, file);
+          if (errFP) { console.warn('Error al guardar foto de perfil duplicada:', errFP); }
+        }
+      }
+
       Docs.render('cliente', clienteId, 'cli-docs');
     } else {
       this._docsPendientes[tipo] = { file, titulo };
       UI.toast(`${titulo} listo — se adjunta al guardar`);
+
+      // Duplicación automática en cola de pendientes
+      if (tipo === 'dpi_frente' && !this._docsPendientes['foto_perfil']) {
+        this._docsPendientes['foto_perfil'] = { file, titulo: this._DOCS_CLIENTE['foto_perfil'].label };
+        UI.toast('Frente del DPI copiado como foto de perfil');
+      }
+
       const cont = document.getElementById('cli-docs-box');
       if (cont) cont.innerHTML = this._htmlDocumentos('');
     }
