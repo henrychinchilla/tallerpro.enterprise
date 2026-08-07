@@ -149,7 +149,7 @@ Object.assign(Modulos.armeria, {
        dejar el hueco invisible: un notario necesita ver qué falta. */
     const L = (v, ancho = 220) => v
       ? `<b>${UI.esc(v)}</b>`
-      : `<span style="display:inline-block;border-bottom:1px solid #000;min-width:${ancho}px">&nbsp;</span>`;
+      : `<span class="hueco-vacio" style="display:inline-block;border-bottom:1px solid #000;min-width:${ancho}px;color:#777" onfocus="if(this.innerText.includes('___')) { this.innerText = ''; this.style.color = '#000'; }" onblur="if(this.innerText.trim()==='') { this.innerText = '____________________'; this.style.color = '#777'; }">____________________</span>`;
 
     const hoy = new Date();
     const meses = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
@@ -173,13 +173,100 @@ Object.assign(Modulos.armeria, {
       }
     }
 
+    const nacionalidadNorm = (cli.nacionalidad || 'guatemalteca').toLowerCase().trim();
+    let nacionalidadStr = cli.nacionalidad || 'guatemalteca';
+    if (cli.sexo && (nacionalidadNorm === 'guatemala' || nacionalidadNorm === 'gtm' || nacionalidadNorm === 'guatemalteco' || nacionalidadNorm === 'guatemalteca')) {
+      nacionalidadStr = deGenero('guatemalteco', 'guatemalteca');
+    } else if (!cli.sexo && (nacionalidadNorm === 'guatemala' || nacionalidadNorm === 'gtm')) {
+      nacionalidadStr = 'guatemalteca';
+    }
+
+    // Convertidor de DPI/CUI a letras
+    const obtenerDpiTextoCompleto = (cuiRaw) => {
+      if (!cuiRaw) return null;
+      const cui = String(cuiRaw).replace(/\s|-/g, '');
+      if (cui.length !== 13 || !/^\d+$/.test(cui)) return cuiRaw;
+      
+      const b1 = cui.slice(0, 4);
+      const b2 = cui.slice(4, 9);
+      const b3 = cui.slice(9, 13);
+      
+      const numeroALetras = (num) => {
+        const unidades = ['', 'un', 'dos', 'tres', 'cuatro', 'cinco', 'seis', 'siete', 'ocho', 'nueve'];
+        const decenas = ['', 'diez', 'veinte', 'treinta', 'cuarenta', 'cincuenta', 'sesenta', 'setenta', 'ochenta', 'noventa'];
+        const especiales = {
+          11: 'once', 12: 'doce', 13: 'trece', 14: 'catorce', 15: 'quince',
+          16: 'dieciséis', 17: 'diecisiete', 18: 'dieciocho', 19: 'diecinueve',
+          21: 'veintiuno', 22: 'veintidós', 23: 'veintitrés', 24: 'veinticuatro',
+          25: 'veinticinco', 26: 'veintiséis', 27: 'veintiséis', 28: 'veintiocho', 29: 'veintinueve'
+        };
+        const centenas = ['', 'ciento', 'doscientos', 'trescientos', 'cuatrocientos', 'quinientos', 'seiscientos', 'setecientos', 'ochocientos', 'novecientos'];
+        
+        const n = parseInt(num, 10);
+        if (n === 0) return 'cero';
+        if (n === 100) return 'cien';
+        
+        let letras = '';
+        if (n >= 1000) {
+          const miles = Math.floor(n / 1000);
+          const resto = n % 1000;
+          if (miles === 1) {
+            letras += 'un mil ';
+          } else {
+            letras += numeroALetras(miles) + ' mil ';
+          }
+          if (resto > 0) letras += numeroALetras(resto);
+          return letras.trim();
+        }
+        if (n >= 100) {
+          const cents = Math.floor(n / 100);
+          const resto = n % 100;
+          letras += centenas[cents] + ' ';
+          if (resto > 0) letras += numeroALetras(resto);
+          return letras.trim();
+        }
+        if (n >= 10) {
+          if (especiales[n]) return especiales[n];
+          const decs = Math.floor(n / 10);
+          const u = n % 10;
+          if (u > 0) {
+            letras += decenas[decs] + ' y ' + unidades[u];
+          } else {
+            letras += decenas[decs];
+          }
+          return letras.trim();
+        }
+        return unidades[n];
+      };
+      
+      const bloqueALetras = (bloque) => {
+        let ceros = '';
+        let i = 0;
+        while (i < bloque.length && bloque[i] === '0') {
+          ceros += 'cero ';
+          i++;
+        }
+        if (i === bloque.length) return ceros.trim();
+        const resto = bloque.slice(i);
+        return (ceros + numeroALetras(resto)).trim();
+      };
+      
+      const textoLetras = `${bloqueALetras(b1)} ${bloqueALetras(b2)} ${bloqueALetras(b3)}`;
+      const numeroFormateado = `${b1} ${b2} ${b3}`;
+      return `${textoLetras} (${numeroFormateado})`;
+    };
+
+    const dpiVal = o.contraparte_dpi || cli.dpi;
+    const dpiTexto = obtenerDpiTextoCompleto(dpiVal);
+
     const identificacion = `
       <p>Yo, ${L(cli.nombre, 300)}, de ${L(edad != null ? String(edad) : null, 60)} años de edad,
-      ${L(estadoCivil, 90)} (estado civil), de nacionalidad ${L(cli.nacionalidad || 'guatemalteca', 130)},
+      ${L(estadoCivil, 90)} (estado civil), de nacionalidad ${L(nacionalidadStr, 130)},
       de profesión u oficio ${L(cli.profesion, 180)}, con residencia en
       ${L(cli.direccion, 340)}${cli.vivienda ? ` (vivienda ${UI.esc(cli.vivienda)})` : ''},
+      del municipio de ${L(cli.vecindad_municipio, 180)}, departamento de ${L(cli.vecindad_departamento, 180)},
       me identifico con el Documento Personal de Identificación (DPI)
-      número ${L(o.contraparte_dpi || cli.dpi, 200)} extendido por el Registro Nacional
+      número ${L(dpiTexto, 380)} extendido por el Registro Nacional
       de las Personas de la República de Guatemala${cli.nit || o.contraparte_nit ? `, con Número de Identificación Tributaria (NIT) ${L(cli.nit || o.contraparte_nit, 140)}` : ''}.</p>`;
 
     const cuerpos = {
@@ -326,6 +413,10 @@ Object.assign(Modulos.armeria, {
       
       .doc:focus {
         outline: none;
+      }
+      .hueco-vacio:focus {
+        outline: none;
+        background: #fff8e1;
       }
       
       .enc {
