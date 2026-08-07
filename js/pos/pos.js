@@ -396,7 +396,7 @@ const POS = {
         .pos-cart-panel { border-left:1px solid var(--border); background:var(--surface);
           display:flex; flex-direction:column; min-height:0; overflow:hidden; }
         .pos-ticket { flex:1 1 0; display:flex; flex-direction:column; min-height:0; min-width:0; }
-        #pos-cart { flex:1 1 0; overflow-y:auto; padding:14px 16px; min-height:0; }
+        #pos-cart { flex:1 1 0; overflow-y:auto; padding:4px 8px; min-height:0; }
         #pos-totales { flex:0 1 auto; border-top:1px solid var(--border); background:var(--surface2);
           padding:10px; display:flex; gap:10px; }
         .pos-cart-volver, .pos-mbar { display:none; }
@@ -842,28 +842,28 @@ const POS = {
     const tot  = document.getElementById('pos-totales');
     if (!cont || !tot) return;
     cont.innerHTML = `
-      <div style="font-weight:800;font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:var(--amber);margin-bottom:12px">🧾 Detalle de la Venta</div>
+      <div style="font-weight:800;font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--amber);margin-bottom:6px">🧾 Detalle de la Venta</div>
       ${this._cart.length ? this._cart.map(l=>`
-        <div class="pos-line" style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border)">
-          ${l.imagen_url?`<img src="${l.imagen_url}" style="width:40px;height:40px;border-radius:8px;object-fit:cover;flex-shrink:0">`:'<div style="width:40px;height:40px;border-radius:8px;background:var(--surface3);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:18px">📦</div>'}
+        <div class="pos-line" style="display:flex;align-items:center;gap:6px;padding:4px 0;border-bottom:1px solid var(--border)">
+          ${l.imagen_url?`<img src="${l.imagen_url}" style="width:30px;height:30px;border-radius:6px;object-fit:cover;flex-shrink:0">`:'<div style="width:30px;height:30px;border-radius:6px;background:var(--surface3);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:14px">📦</div>'}
           <div class="pos-line-info" style="flex:1;min-width:0">
-            <div class="pos-line-nombre" style="font-size:13.5px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--text)">${UI.esc(l.nombre)}</div>
-            <div style="font-size:11.5px;color:var(--text3);margin-top:2px">${UI.q(l.precio)} c/u</div>
+            <div class="pos-line-nombre" style="font-size:12px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--text)" title="${UI.esc(l.nombre)}">${UI.esc(l.nombre)}</div>
+            <div style="font-size:10.5px;color:var(--text3);margin-top:1px">${UI.q(l.precio)} c/u</div>
           </div>
-          <div style="display:flex;align-items:center;gap:6px">
-            <button class="btn btn-ghost" style="width:26px;height:26px;border-radius:50%;padding:0;display:flex;align-items:center;justify-content:center;font-size:16px;line-height:1;border:1px solid var(--border)" onclick="POS.cambiarCant('${l.id}',-1)">−</button>
+          <div style="display:flex;align-items:center;gap:4px">
+            <button class="btn btn-ghost" style="width:22px;height:22px;border-radius:50%;padding:0;display:flex;align-items:center;justify-content:center;font-size:14px;line-height:1;border:1px solid var(--border)" onclick="POS.cambiarCant('${l.id}',-1)">−</button>
             <input class="pos-line-cant" type="number" step="0.001" min="0" value="${l.cant}"
-                   style="width:64px;text-align:center;font-weight:900;font-size:14px;padding:2px 4px;border:1px solid var(--border);border-radius:6px;background:var(--surface2);color:var(--text)"
+                   style="width:54px;text-align:center;font-weight:900;font-size:12.5px;padding:1px 2px;border:1px solid var(--border);border-radius:5px;background:var(--surface2);color:var(--text)"
                    onchange="POS.setCant('${l.id}', this.value)"
                    onclick="this.select()"
                    title="Se puede escribir: 12.5 quintales, 3.75 libras de gas">
-            ${l.unidad ? `<span style="font-size:10.5px;color:var(--text3);min-width:38px">${l.unidad}</span>` : ''}
-            ${POS._pesable(l) ? `<button class="btn btn-ghost" style="padding:2px 6px;font-size:13px" title="Tomar el peso de la báscula" onclick="POS.pesar('${l.id}')">⚖️</button>` : ''}
-            <button class="btn btn-ghost" style="width:26px;height:26px;border-radius:50%;padding:0;display:flex;align-items:center;justify-content:center;font-size:16px;line-height:1;border:1px solid var(--border)" onclick="POS.cambiarCant('${l.id}',1)">+</button>
+            ${l.unidad ? `<span style="font-size:9.5px;color:var(--text3);min-width:28px">${l.unidad}</span>` : ''}
+            ${POS._pesable(l) ? `<button class="btn btn-ghost" style="padding:1px 4px;font-size:11px" title="Tomar el peso de la báscula" onclick="POS.pesar('${l.id}')">⚖️</button>` : ''}
+            <button class="btn btn-ghost" style="width:22px;height:22px;border-radius:50%;padding:0;display:flex;align-items:center;justify-content:center;font-size:14px;line-height:1;border:1px solid var(--border)" onclick="POS.cambiarCant('${l.id}',1)">+</button>
           </div>
-          <div style="width:84px;text-align:right;font-weight:900;font-size:14px" class="text-amber pos-line-total">${UI.q(l.cant*l.precio)}</div>
-          <button class="btn btn-ghost" style="padding:4px 6px;color:var(--text3)" onclick="POS.quitar('${l.id}')" title="Eliminar">🗑️</button>
-        </div>`).join('') : '<div class="text-muted" style="padding:40px 20px;text-align:center;font-size:13px">Selecciona productos a la izquierda para agregarlos al carrito</div>'}`;
+          <div style="width:72px;text-align:right;font-weight:900;font-size:13px" class="text-amber pos-line-total">${UI.q(l.cant*l.precio)}</div>
+          <button class="btn btn-ghost" style="padding:2px 4px;color:var(--text3)" onclick="POS.quitar('${l.id}')" title="Eliminar">🗑️</button>
+        </div>`).join('') : '<div class="text-muted" style="padding:30px 10px;text-align:center;font-size:12px">Selecciona productos a la izquierda para agregarlos al carrito</div>'}`;
 
     const t = this._totales();
     const cli = this._cliente;

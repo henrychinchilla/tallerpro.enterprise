@@ -179,7 +179,8 @@
   border-top: 1px solid var(--border) !important;
   border-left: none !important;
   background: var(--surface2) !important;
-  padding: 10px !important;
+  padding: 6px !important;
+  gap: 6px !important;
 }
 
 @media (max-width: 1200px) {
@@ -191,7 +192,7 @@
   }
   #pos-totales {
     flex-direction: column !important;
-    gap: 8px !important;
+    gap: 6px !important;
   }
 }
 
@@ -210,10 +211,10 @@
   background: #faf5ff !important;
   border: 1px solid #ebd5ff !important;
   border-radius: 12px;
-  padding: 12px;
+  padding: 8px;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 4px;
   color: #1e1b4b;
 }
 :root[data-theme="dark"] #pos-cart-campos {
@@ -227,10 +228,10 @@
   background: #fff7ed !important;
   border: 1px solid #ffedd5 !important;
   border-radius: 12px;
-  padding: 12px;
+  padding: 8px;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 4px;
   color: #431407;
 }
 :root[data-theme="dark"] #pos-cart-pie {
