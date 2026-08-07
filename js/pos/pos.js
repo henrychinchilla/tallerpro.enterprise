@@ -346,7 +346,7 @@ const POS = {
           gap: 8px !important;
           overflow-x: auto !important;
           overflow-y: hidden !important;
-          flex-shrink: 0 !important; /* con overflow, flexbox lo colapsaba a 0px cuando el catálogo era más alto que la pantalla */
+          flex-shrink: 0 !important;
           height: 52px !important;
           align-items: center !important;
           padding: 0 4px !important;
@@ -385,39 +385,25 @@ const POS = {
           border-color: var(--amber) !important;
           box-shadow: 0 4px 12px rgba(217,119,6,0.2) !important;
         }
-        /* ── Layout responsivo del POS ──
-           El catálogo se busca y se filtra, así que cede ancho: lo que el cajero
-           necesita ver completo es la venta. El panel de venta es elástico
-           (40vw) y se parte en dos —ticket con scroll propio + riel de cobro—
-           en cuanto hay ancho para que ambos se lean sin pelearse el alto.
-           Móvil (≤920px): catálogo a pantalla completa; la venta es un panel
-           deslizante que se abre con la barra inferior (total + Cobrar). */
         .pos-shell { display:flex; flex-direction:column; height:100vh; height:100dvh; }
         .pos-header { display:flex; align-items:center; gap:12px; padding:12px 18px;
           background:linear-gradient(90deg, var(--surface) 0%, var(--surface2) 100%);
           border-bottom:1px solid var(--border); flex-wrap:wrap; }
         .pos-layout { flex:1; display:grid;
-          grid-template-columns:minmax(0,1fr) clamp(500px, 40vw, 860px);
+          grid-template-columns:minmax(0,1fr) 630px;
           gap:0; overflow:hidden; min-height:0; }
         .pos-catalogo { padding:16px; overflow-y:auto; display:flex; flex-direction:column; gap:12px; min-width:0; }
         .pos-cart-panel { border-left:1px solid var(--border); background:var(--surface);
           display:flex; flex-direction:column; min-height:0; overflow:hidden; }
         .pos-ticket { flex:1 1 0; display:flex; flex-direction:column; min-height:0; min-width:0; }
         #pos-cart { flex:1 1 0; overflow-y:auto; padding:14px 16px; min-height:0; }
-        /* flex:0 1 auto (y no un alto fijo): en pantallas cortas el bloque de cobro
-           encoge y hace scroll propio en vez de que se corte el botón Cobrar. */
         #pos-totales { flex:0 1 auto; border-top:1px solid var(--border); background:var(--surface2);
-          padding:14px 16px; overflow-y:auto; }
+          padding:10px; display:flex; gap:10px; }
         .pos-cart-volver, .pos-mbar { display:none; }
-        /* Ancho suficiente para que el ticket y el cobro convivan lado a lado.
-           El panel se ensancha al partirse: si no, el riel de cobro (330px) le
-           come al ticket y las líneas de venta quedan más angostas que los totales.
-           ponytail: abajo de 1560px se queda vertical (en laptop corta el ticket
-           muestra ~5 líneas y hace scroll); partirlo ahí dejaría el catálogo inservible. */
-        @media (min-width: 1560px) {
-          .pos-layout { grid-template-columns:minmax(0,1fr) clamp(760px, 52vw, 1000px); }
-          .pos-cart-panel { flex-direction:row; }
-          #pos-totales { flex:0 0 330px; border-top:none; border-left:1px solid var(--border); }
+        @media (max-width: 1200px) {
+          .pos-layout { grid-template-columns:minmax(0,1fr) 520px; }
+          .pos-cart-panel { width:520px; }
+          #pos-totales { flex-direction:column; gap:8px; }
         }
         @media (max-width: 920px) {
           .pos-header { padding:10px 12px; gap:8px; }
@@ -439,9 +425,6 @@ const POS = {
         @media (max-width: 600px) {
           .pos-user-name { display:none !important; }
           #pos-grid > div { grid-template-columns:repeat(auto-fill,minmax(104px,1fr)) !important; }
-          /* En teléfono las columnas fijas de la fila (imagen, ±, total, papelera)
-             dejaban ~66px al nombre y el ticket decía "Aceite …". La fila se parte:
-             nombre completo arriba, cantidad y total abajo. */
           .pos-line { flex-wrap:wrap; row-gap:6px; }
           .pos-line-info { flex-basis:calc(100% - 60px) !important; }
           .pos-line-nombre { white-space:normal !important; overflow:visible !important; line-height:1.3; }
@@ -455,7 +438,6 @@ const POS = {
         <header class="pos-header">
           <div style="font-family:\'Outfit\',\'Bebas Neue\',sans-serif;font-size:24px;font-weight:900;letter-spacing:-0.5px;color:var(--amber)">🛒 POS</div>
           <div style="font-size:12px;color:var(--text3);background:var(--surface3);padding:4px 10px;border-radius:6px;font-weight:700">${Auth.tenant?.name||''}</div>
-          <!-- La terminal se recuerda, así que este chip es la única forma de cambiarla -->
           <button class="btn btn-ghost btn-sm" style="font-size:12px" onclick="POS.cambiarTerminal()" title="Cambiar de terminal o de taller">🖥️ ${UI.esc(this._seguro(this._terminal?.nombre || 'Terminal'))}</button>
           <div style="margin-left:auto;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
             <button class="btn btn-ghost btn-sm" onclick="POS.modalCierreCaja()">🧾 Cerrar caja</button>
@@ -467,12 +449,40 @@ const POS = {
         <div class="pos-layout">
           <!-- Catálogo -->
           <div class="pos-catalogo">
-            <div class="fpos-search">
-              <span style="color:var(--text3);font-size:15px">🔍</span>
-              <input id="pos-busca" placeholder="Buscar por nombre, código o código de barras…"
-                     value="${UI.esc(this._busca)}" autocomplete="off"
-                     oninput="POS._busca=this.value;POS._pintarGrid()">
+            <div style="display:flex;gap:8px;align-items:center;position:relative;">
+              <div class="pos-search-wrapper" style="flex:1;">
+                <span style="color:var(--text3);font-size:14px">🔍</span>
+                <input id="pos-busca" placeholder="Buscar por nombre, código o código de barras…"
+                       value="${UI.esc(this._busca)}" autocomplete="off"
+                       oninput="POS._busca=this.value;POS._pintarGrid()">
+              </div>
+              <button class="btn btn-secondary" id="pos-btn-numpad" style="padding:8px 12px;height:38px;display:flex;align-items:center;justify-content:center;border-radius:8px;font-size:15px;background:var(--surface);" title="Teclado numérico">⌨️</button>
+              <button class="btn btn-secondary" id="pos-btn-options" style="padding:8px 12px;height:38px;display:flex;align-items:center;justify-content:center;border-radius:8px;font-size:15px;background:var(--surface);" title="Opciones">☰</button>
+
+              <!-- Popover Teclado Virtual -->
+              <div class="numpad-popover" id="pos-numpad-popover">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;border-bottom:1px solid var(--border);padding-bottom:6px;">
+                  <span style="font-size:11px;font-weight:700;color:var(--text3);">TECLADO VIRTUAL</span>
+                  <span style="cursor:pointer;font-weight:700;font-size:13px;color:var(--red);" onclick="document.getElementById('pos-numpad-popover').style.display='none'">✕</span>
+                </div>
+                <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;">
+                  ${['1','2','3','4','5','6','7','8','9','.','0','←'].map(k => `
+                    <button class="btn btn-secondary" style="padding:12px;font-size:15px;font-weight:700;justify-content:center;border-radius:8px;" onclick="POS._keypadPress('${k}')">${k}</button>
+                  `).join('')}
+                  <button class="btn" style="grid-column:span 3;background:var(--amber);color:white;justify-content:center;padding:12px;font-size:14px;font-weight:700;border:none;border-radius:8px;" onclick="POS._keypadPress('Enter')">Agregar</button>
+                </div>
+              </div>
+
+              <!-- Popover Opciones -->
+              <div class="options-dropdown" id="pos-options-popover">
+                <div class="options-item" onclick="POS._triggerOp('📄 Reimprimir Último Ticket')">📄 Reimprimir Ticket</div>
+                <div class="options-item" onclick="POS._triggerOp('🧾 Cerrar Caja Turno')">🧾 Cerrar Caja</div>
+                <div class="options-item" onclick="POS._triggerOp('📊 Reporte de Ventas')">📊 Reportes</div>
+                <div class="options-item" onclick="POS._triggerOp('🔄 Sincronizar Catálogo')">🔄 Sincronizar Catálogo</div>
+                <div class="options-item" onclick="POS._triggerOp('🖥️ Cambiar Terminal')">🖥️ Cambiar Terminal</div>
+              </div>
             </div>
+
             ${POS._girosPOS().length > 1 ? `
             <div class="fpos-chips">
               ${POS._girosPOS().map(g => `<div class="fpos-chip ${this._giro===g?'on':''}" onclick="POS.setGiro('${g}', this)">${(GIROS[g]||{}).icon||''} ${UI.esc((GIROS[g]||{}).label||g)}</div>`).join('')}
@@ -499,6 +509,42 @@ const POS = {
         <!-- Barra móvil: total + acceso al carrito/cobro -->
         <div class="pos-mbar" id="pos-mbar" onclick="POS.toggleCart(true)"></div>
       </div>`;
+
+    // Configurar listeners interactivos para el Numpad y Opciones
+    const numpadBtn = document.getElementById('pos-btn-numpad');
+    const numpadPop = document.getElementById('pos-numpad-popover');
+    const optBtn = document.getElementById('pos-btn-options');
+    const optPop = document.getElementById('pos-options-popover');
+
+    numpadBtn?.addEventListener('click', e => {
+      e.stopPropagation();
+      const isVisible = numpadPop.style.display === 'block';
+      numpadPop.style.display = isVisible ? 'none' : 'block';
+      numpadBtn.style.background = isVisible ? 'var(--surface)' : 'color-mix(in srgb, var(--amber) 15%, var(--surface))';
+      if (optPop) optPop.style.display = 'none';
+      if (optBtn) optBtn.style.background = 'var(--surface)';
+    });
+
+    optBtn?.addEventListener('click', e => {
+      e.stopPropagation();
+      const isVisible = optPop.style.display === 'block';
+      optPop.style.display = isVisible ? 'none' : 'block';
+      optBtn.style.background = isVisible ? 'var(--surface)' : 'color-mix(in srgb, var(--amber) 15%, var(--surface))';
+      if (numpadPop) numpadPop.style.display = 'none';
+      if (numpadBtn) numpadBtn.style.background = 'var(--surface)';
+    });
+
+    window.addEventListener('click', (e) => {
+      if (numpadPop && !numpadPop.contains(e.target) && e.target !== numpadBtn) {
+        numpadPop.style.display = 'none';
+        if (numpadBtn) numpadBtn.style.background = 'var(--surface)';
+      }
+      if (optPop && !optPop.contains(e.target) && e.target !== optBtn) {
+        optPop.style.display = 'none';
+        if (optBtn) optBtn.style.background = 'var(--surface)';
+      }
+    });
+
     this._pintarGrid();
     this._pintarCart();
     this._cablearAtajos();
@@ -823,86 +869,209 @@ const POS = {
     const cli = this._cliente;
     const puntosCli = cli?.programa_puntos ? (Number(cli.puntos_saldo)||0) : null;
     tot.innerHTML = `
-      <!-- Cliente Selector -->
-      <div style="margin-bottom:12px">
-        <button class="btn btn-ghost" style="width:100%;text-align:left;font-size:13.5px;padding:10px 12px;border:1px solid var(--border);border-radius:10px;background:var(--surface2)" onclick="POS.modalCliente()">
-          👤 ${cli ? `<b>${cli.nombre}</b>` : 'Consumidor Final (CF)'}${puntosCli!==null?` · <span style="color:var(--amber);font-weight:800">${puntosCli} pts</span>`:''}
-        </button>
+      <!-- Columna Izquierda: Cliente & Envío (Morado/Lavanda) -->
+      <div id="pos-cart-campos" style="flex:1.2;">
+        <div style="display:flex; flex-direction:column; gap:2px;">
+          <label style="font-size:10.5px; font-weight:800; color:#5b21b6; text-transform:uppercase; letter-spacing:0.5px;">Cliente</label>
+          <button class="btn btn-ghost" style="width:100%; text-align:left; font-size:12.5px; padding:8px 10px; border:1px solid #ebd5ff; border-radius:8px; background:#fff; color:#1e1b4b; display:flex; align-items:center; justify-content:space-between; transition:all 0.15s;" onclick="POS.modalCliente()">
+            <span>👤 ${cli ? `<b>${UI.esc(cli.nombre)}</b>` : 'Consumidor Final (CF)'}</span>
+            ${puntosCli !== null ? `<span style="color:#d97706; font-weight:800; font-size:11px; background:#fef3c7; padding:2px 6px; border-radius:6px;">${puntosCli} pts</span>` : ''}
+          </button>
+        </div>
+
+        <!-- Canjear Puntos -->
+        ${puntosCli !== null && puntosCli >= (Number(fidelizacionCfg().puntos_por_q1_canje) || 10) ? (() => {
+          const tasa = Number(fidelizacionCfg().puntos_por_q1_canje) || 10;
+          return `
+          <div style="display:flex; align-items:center; justify-content:space-between; font-size:12px; background:rgba(255,255,255,0.6); padding:8px; border-radius:8px; border:1px solid #ebd5ff; margin-top:2px;">
+            <span style="font-weight:700; color:#5b21b6;">Canjear pts:</span>
+            <div style="display:flex; align-items:center; gap:4px">
+              <input class="form-input" style="width:72px; padding:4px 6px; font-size:12px; height:26px; border-radius:5px; background:#fff;" type="number" min="0" step="${tasa}" max="${Math.min(puntosCli, Math.floor(t.bruto * tasa))}"
+                     value="${this._canje}" onchange="POS.setCanje(this.value)">
+              <span style="font-size:11px; color:#5b21b6; font-weight:700;">= Q${(this._canje / tasa).toFixed(2)}</span>
+            </div>
+          </div>`;
+        })() : ''}
+
+        <!-- Programar Envío -->
+        <div style="border:1px solid #ebd5ff; border-radius:8px; padding:8px; background:#fff; margin-top:2px;">
+          <label style="display:flex; align-items:center; gap:8px; font-size:12px; font-weight:700; cursor:pointer; color:#1e1b4b; user-select:none;">
+            <input type="checkbox" id="pos-envio-on" style="width:15px; height:15px; border-radius:4px;" ${this._envioData ? 'checked' : ''} onchange="POS._toggleEnvio(this.checked)"> 🚚 Envío a domicilio
+          </label>
+          ${this._envioData ? `
+            <div style="margin-top:6px; font-size:11px; color:#5b21b6; background:#f5f3ff; border-radius:6px; padding:6px; display:flex; justify-content:space-between; align-items:center; border:1px solid #ebd5ff;">
+              <span style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:180px;">📦 <b>${UI.esc(this._envioData.destinatario || 'Cliente')}</b> · ${UI.esc(this._envioData.direccion)}</span>
+              <button class="btn btn-sm btn-ghost" style="padding:1px 6px; font-size:10px;" onclick="POS.modalEnvio()">Editar</button>
+            </div>` : ''}
+        </div>
       </div>
 
-      <!-- Canjear Puntos -->
-      ${puntosCli!==null && puntosCli>=(Number(fidelizacionCfg().puntos_por_q1_canje)||10) ? (()=>{ const tasa=Number(fidelizacionCfg().puntos_por_q1_canje)||10; return `
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;font-size:13px;background:var(--surface2);padding:10px 12px;border-radius:10px;border:1px solid var(--border)">
-        <span>Canjear puntos:</span>
-        <div style="display:flex;align-items:center;gap:6px">
-          <input class="form-input" style="width:80px;padding:6px 8px;font-size:13px" type="number" min="0" step="${tasa}" max="${Math.min(puntosCli, Math.floor(t.bruto*tasa))}"
-                 value="${this._canje}" onchange="POS.setCanje(this.value)">
-          <span class="text-muted" style="font-weight:700">= Q${(this._canje/tasa).toFixed(2)}</span>
-        </div>
-      </div>`; })():''}
-
-      <!-- Descuento y Metodo -->
-      <div style="display:flex;gap:8px;margin-bottom:14px;align-items:center;justify-content:space-between;font-size:13px">
-        <span>Descuento Manual:</span>
-        <div style="display:flex;align-items:center;gap:4px">
-          <span style="font-weight:700">Q</span>
-          <input class="form-input" style="width:80px;padding:6px 8px;font-size:13px" type="number" min="0" step="0.01"
-                 value="${this._descuento}" onchange="POS.setDescuento(this.value)">
-        </div>
-      </div>
-
-      <!-- Selector de Pago Segmentado -->
-      <div style="font-size:11px;font-weight:800;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">Método de Pago</div>
-      <div class="pos-pay-grid">
-        ${(()=>{
-          /* Tarjeta: visible salvo que el comercio la haya desactivado en Configuración.
-             Con la config activada (VISA/Credomatic) se captura el voucher al cobrar. */
-          const pt = Auth.tenant?.config_pos_tarjeta;
-          const conTarjeta = !pt || pt.habilitado !== false;
-          return [
-          { id:'Efectivo', label:'Efectivo', icon:'💵' },
-          ...(conTarjeta ? [{ id:'Tarjeta', label:'Tarjeta', icon:'💳' }] : []),
-          { id:'Transferencia', label:'Transfer', icon:'🏦' },
-          { id:'Cheque', label:'Cheque', icon:'✍️' }
-        ]; })().map(m=>`
-          <div class="pos-pay-btn ${this._metodo===m.id?'selected':''}" onclick="POS._setMetodoPago('${m.id}', this)">
-            <span style="font-size:18px">${m.icon}</span>
-            <span>${m.label}</span>
+      <!-- Columna Derecha: Pago, Totales y Cobro (Naranja/Peach) -->
+      <div id="pos-cart-pie" style="flex:1;">
+        <!-- Descuento Manual -->
+        <div style="display:flex; gap:8px; align-items:center; justify-content:space-between; font-size:12.5px;">
+          <span style="font-weight:700; color:#c2410c;">Descuento Manual:</span>
+          <div style="display:flex; align-items:center; gap:2px">
+            <span style="font-weight:800; color:#c2410c; font-size:11px;">Q</span>
+            <input class="form-input" style="width:72px; padding:4px 6px; font-size:12px; height:26px; border-radius:5px; background:#fff;" type="number" min="0" step="0.01"
+                   value="${this._descuento}" onchange="POS.setDescuento(this.value)">
           </div>
-        `).join('')}
-      </div>
-
-      <!-- Programar Envio -->
-      <label style="display:flex;align-items:center;gap:8px;font-size:13px;margin:12px 0;cursor:pointer;user-select:none">
-        <input type="checkbox" id="pos-envio-on" style="width:16px;height:16px" ${this._envioData?'checked':''} onchange="POS._toggleEnvio(this.checked)"> 🚚 Programar envío al cliente
-      </label>
-      ${this._envioData?`<div style="font-size:11.5px;color:var(--cyan);background:var(--surface2);border-radius:8px;padding:8px 10px;margin-bottom:12px;display:flex;justify-content:space-between;align-items:center;border:1px solid var(--border)">
-        <span>📦 ${this._envioData.destinatario||'Cliente'} · ${(this._envioData.direccion||'').slice(0,40)}</span>
-        <button class="btn btn-sm btn-ghost" style="padding:2px 8px" onclick="POS.modalEnvio()">✏️</button>
-      </div>`:''}
-
-      <!-- Totales Breakdown -->
-      <div style="background:var(--surface2);border-radius:12px;padding:12px;border:1px solid var(--border)">
-        ${t.desc>0?`<div style="display:flex;justify-content:space-between;font-size:13px;color:var(--text3);padding:2px 0"><span>Descuento</span><span style="color:var(--red);font-weight:700">− ${UI.q(t.desc)}</span></div>`:''}
-        <div style="display:flex;justify-content:space-between;font-size:13px;color:var(--text2);padding:2px 0"><span>Subtotal</span><span>${UI.q(t.subtotal)}</span></div>
-        <div style="display:flex;justify-content:space-between;font-size:13px;color:var(--text3);padding:2px 0"><span>IVA (12%)</span><span>${UI.q(t.iva)}</span></div>
-        <div style="display:flex;justify-content:space-between;font-size:24px;font-weight:900;margin-top:8px;padding-top:8px;border-top:1px solid var(--border);font-family:\'Outfit\',sans-serif">
-          <span>Total</span>
-          <span style="color:var(--green)">${UI.q(t.total)}</span>
         </div>
-      </div>
 
-      <button class="btn fpos-cobrar" style="width:100%;font-size:18px;padding:16px;font-weight:800;border-radius:12px;margin-top:14px;background:${this._cart.length?'#16a34a':'var(--surface3)'};color:${this._cart.length?'#fff':'var(--text3)'};border:none;font-family:'Outfit',sans-serif;box-shadow:${this._cart.length?'0 6px 18px rgba(22,163,74,0.28)':'none'}" onclick="POS.cobrar()" ${this._cart.length?'':'disabled'}>
-        💵 Cobrar ${UI.q(t.total)}
-      </button>`;
+        <!-- Método de Pago Compacto -->
+        <div style="margin-top:2px;">
+          <div style="font-size:10.5px; font-weight:800; color:#c2410c; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:4px">Método de Pago</div>
+          <div class="pos-pay-compact-grid">
+            ${(() => {
+              const pt = Auth.tenant?.config_pos_tarjeta;
+              const conTarjeta = !pt || pt.habilitado !== false;
+              return [
+                { id:'Efectivo', label:'Efectivo', icon:'💵' },
+                ...(conTarjeta ? [{ id:'Tarjeta', label:'Tarjeta', icon:'💳' }] : []),
+                { id:'Transferencia', label:'Transfer', icon:'🏦' },
+                { id:'Cheque', label:'Cheque', icon:'✍️' }
+              ];
+            })().map(m => `
+              <div class="pos-pay-compact-btn ${this._metodo===m.id?'selected':''}" onclick="POS._setMetodoPagoInline('${m.id}')">
+                <span>${m.icon}</span> <span>${m.label}</span>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+
+        <!-- Totales Breakdown -->
+        <div style="background:rgba(255,255,255,0.7); border-radius:8px; padding:8px; border:1px solid #ffedd5; margin-top:2px;">
+          ${t.desc > 0 ? `<div style="display:flex; justify-content:space-between; font-size:11px; color:#c2410c; font-weight:700;"><span>Descuento</span><span>− ${UI.q(t.desc)}</span></div>` : ''}
+          <div style="display:flex; justify-content:space-between; font-size:11px; color:#7c2d12; padding:1px 0"><span>Subtotal</span><span>${UI.q(t.subtotal)}</span></div>
+          <div style="display:flex; justify-content:space-between; font-size:11px; color:#7c2d12; padding:1px 0"><span>IVA (12%)</span><span>${UI.q(t.iva)}</span></div>
+          <div style="display:flex; justify-content:space-between; font-size:20px; font-weight:900; margin-top:4px; padding-top:4px; border-top:1px solid #ffedd5; font-family:'Outfit',sans-serif; color:#7c2d12;">
+            <span>Total</span>
+            <span>${UI.q(t.total)}</span>
+          </div>
+        </div>
+
+        <!-- Calculadora de Vuelto -->
+        ${this._metodo === 'Efectivo' ? `
+          <div style="display:flex; gap:6px; align-items:center; background:#fff; padding:6px; border-radius:6px; border:1px solid #ffedd5; margin-top:2px;">
+            <div style="flex:1.2;">
+              <label style="font-size:9.5px; font-weight:800; color:#c2410c; text-transform:uppercase;">Recibido</label>
+              <input class="form-input" id="pos-recibido" type="number" min="0" step="0.01"
+                     placeholder="${t.total.toFixed(2)}" style="margin-top:1px; border-radius:4px; background:var(--surface); width:100%; padding:3px 6px; height:24px; font-size:12px; font-weight:700; color:var(--text);">
+            </div>
+            <div style="flex:1; text-align:right;">
+              <div style="font-size:9.5px; font-weight:800; color:#c2410c; text-transform:uppercase;">Cambio</div>
+              <div id="pos-cambio" style="font-size:16px; font-weight:900; color:#15803d; margin-top:1px;">Q 0.00</div>
+            </div>
+          </div>
+          ${t.total > 0 ? `
+          <div style="display:flex; gap:3px; margin-top:2px; flex-wrap:wrap;">
+            <button class="btn btn-secondary btn-sm" style="flex:1; font-weight:700; border-radius:4px; padding:3px; font-size:10px;" onclick="POS._setRecibido(${t.total.toFixed(2)})">Exacto</button>
+            ${this._montosRapidos(t.total).map(m =>
+              `<button class="btn btn-secondary btn-sm" style="flex:1; font-weight:700; border-radius:4px; padding:3px; font-size:10px;" onclick="POS._setRecibido(${m})">Q${m}</button>`).join('')}
+          </div>` : ''}` : ''}
+
+        <button class="btn fpos-cobrar" id="pos-btn-cobrar" style="width:100%; font-size:15px; padding:10px; font-weight:800; border-radius:8px; margin-top:4px; background:${this._cart.length ? '#16a34a' : 'var(--surface3)'}; color:${this._cart.length ? '#fff' : 'var(--text3)'}; border:none; font-family:'Outfit',sans-serif; box-shadow:${this._cart.length ? '0 4px 10px rgba(22,163,74,0.2)' : 'none'}" onclick="POS.cobrar()" ${this._cart.length ? '' : 'disabled'}>
+          💵 Cobrar ${UI.q(t.total)}
+        </button>
+      </div>`;
+
+    // Enganchar listeners de la calculadora de vuelto
+    const recEl = document.getElementById('pos-recibido');
+    if (recEl) {
+      if (this._recibidoVal !== undefined) {
+        recEl.value = this._recibidoVal;
+        this._actualizarCambio();
+      }
+      recEl.addEventListener('input', () => this._actualizarCambio());
+      recEl.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          document.getElementById('pos-btn-cobrar')?.click();
+        }
+      });
+    }
+
     this._pintarMbar();
+  },
+
+  _setMetodoPagoInline(metodo) {
+    this._metodo = metodo;
+    if (metodo !== 'Tarjeta') this._tarjetaDatos = null;
+    this._pintarCart();
   },
 
   _setMetodoPago(metodo, el) {
     this._metodo = metodo;
     if (metodo !== 'Tarjeta') this._tarjetaDatos = null;
-    document.querySelectorAll('.pos-pay-btn').forEach(b=>b.classList.remove('selected'));
-    el.classList.add('selected');
+    this._pintarCart();
+  },
+
+  _setRecibido(v) {
+    const input = document.getElementById('pos-recibido');
+    if (input) {
+      input.value = v;
+      this._recibidoVal = v;
+      this._actualizarCambio();
+    }
+  },
+
+  _actualizarCambio() {
+    const input = document.getElementById('pos-recibido');
+    const el = document.getElementById('pos-cambio');
+    if (!input || !el) return;
+    const total = this._totales().total;
+    const rec = parseFloat(input.value) || 0;
+    this._recibidoVal = input.value;
+    const cambio = Math.max(0, rec - total);
+    el.textContent = UI.q(cambio);
+  },
+
+  _keypadPress(k) {
+    const input = document.getElementById('pos-busca');
+    if (!input) return;
+    if (k === '←') {
+      input.value = input.value.slice(0, -1);
+    } else if (k === 'Enter') {
+      document.getElementById('pos-numpad-popover').style.display = 'none';
+      const numpadBtn = document.getElementById('pos-btn-numpad');
+      if (numpadBtn) numpadBtn.style.background = 'var(--surface)';
+      this._agregarPorBusqueda();
+    } else {
+      input.value += k;
+    }
+    this._busca = input.value;
+    this._pintarGrid();
+    input.focus();
+  },
+
+  _triggerOp(op) {
+    document.getElementById('pos-options-popover').style.display = 'none';
+    const optBtn = document.getElementById('pos-btn-options');
+    if (optBtn) optBtn.style.background = 'var(--surface)';
+
+    if (op.includes('Reimprimir')) {
+      this.reimprimirUltimo();
+    } else if (op.includes('Cerrar Caja')) {
+      this.modalCierreCaja();
+    } else if (op.includes('Reporte')) {
+      this.reportes();
+    } else if (op.includes('Sincronizar')) {
+      this.render();
+      UI.toast('Catálogo sincronizado ✓');
+    } else if (op.includes('Cambiar Terminal')) {
+      this.cambiarTerminal();
+    }
+  },
+
+  reimprimirUltimo() {
+    if (this._ventasHoy && this._ventasHoy.length) {
+      const ultimo = [...this._ventasHoy].sort((a,b) => new Date(b.created_at || b.fecha) - new Date(a.created_at || a.fecha))[0];
+      if (ultimo) {
+        this._imprimirRecibo(ultimo.id);
+        return;
+      }
+    }
+    UI.toast('No se encontraron ventas recientes para reimprimir', 'warn');
   },
 
   /* ── VOUCHER DE TARJETA (POS físico VISA/Credomatic) ──
