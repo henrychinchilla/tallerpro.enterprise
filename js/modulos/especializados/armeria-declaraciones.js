@@ -163,10 +163,10 @@ Object.assign(Modulos.armeria, {
     }
 
     const identificacion = `
-      <p>Yo, ${UI.esc(L(cli.nombre, 300))}, de ${L(edad != null ? String(edad) : null, 60)} años de edad,
+      <p>Yo, ${L(cli.nombre, 300)}, de ${L(edad != null ? String(edad) : null, 60)} años de edad,
       ${L(estadoCivil, 90)} (estado civil), de nacionalidad ${L(cli.nacionalidad || 'guatemalteca', 130)},
-      de profesión u oficio ${UI.esc(L(cli.profesion, 180))}, con residencia en
-      ${UI.esc(L(cli.direccion, 340))}${cli.vivienda ? ` (vivienda ${UI.esc(cli.vivienda)})` : ''},
+      de profesión u oficio ${L(cli.profesion, 180)}, con residencia en
+      ${L(cli.direccion, 340)}${cli.vivienda ? ` (vivienda ${UI.esc(cli.vivienda)})` : ''},
       me identifico con el Documento Personal de Identificación (DPI)
       número ${L(o.contraparte_dpi || cli.dpi, 200)} extendido por el Registro Nacional
       de las Personas de la República de Guatemala${cli.nit || o.contraparte_nit ? `, con Número de Identificación Tributaria (NIT) ${L(cli.nit || o.contraparte_nit, 140)}` : ''}.</p>`;
