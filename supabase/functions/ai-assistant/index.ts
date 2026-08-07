@@ -484,20 +484,20 @@ Deno.serve(async (req) => {
   const contexto = body.contexto ?? {};
 
   if (!PROMPTS[modo]) return json({ error: "Modo no válido" }, 400);
-  /* Los modos de imagen y `insights` no llevan mensaje de texto. */
-  if (!mensaje && !["insights", "tarjeta", "dpi", "recibo"].includes(modo)) {
-    return json({ error: "Falta el mensaje" }, 400);
-  }
-
-  // ── Construir el contenido del usuario ──
-  let userContent = "";
-  let messagesPayload: any[] = [];
-  let sistemaPrompt = PROMPTS[modo]; // puede ser sobreescrito por persona dinámica en chat/insights
-  let modsDelRol: string[] = []; // módulos que este rol puede tocar (para gating de web_search)
 
   /* Modos que leen una imagen y devuelven JSON. Comparten toda la mecánica
      (validar el base64, armar el bloque de imagen); lo único distinto es el
-     prompt del sistema y la instrucción que acompaña a la foto. */
+     prompt del sistema y la instrucción que acompaña a la foto.
+
+     Declarado ANTES de la validación de `mensaje` (antes estaba después, y la
+     validación repetía a mano la lista de modos-imagen: "dpi","recibo",...).
+     "licencia" tiene su prompt acá abajo desde que se agregó (commit 8e94fa7)
+     pero NUNCA se agregó a esa lista aparte, así que cada lectura de licencia
+     o de tarjeta de tenencia (que reusa este mismo modo) se rechazaba con
+     "Falta el mensaje" antes de siquiera mirar la imagen — semanas rota pese
+     a que el lado del cliente (cámara, prompt, mapeo de campos) siempre
+     estuvo bien. Ahora hay una sola lista (esta), así que un modo-imagen
+     nuevo no puede volver a quedar afuera de la excepción. */
   const MODOS_IMAGEN: Record<string, string> = {
     tarjeta: "Analiza la imagen de la tarjeta de circulación de Guatemala y extrae los datos solicitados en formato JSON.",
     /* En el DPI de Guatemala el ANVERSO es el que trae los datos: CUI,
@@ -509,6 +509,17 @@ Deno.serve(async (req) => {
     recibo:  "Analiza la imagen del recibo de servicios y extrae los datos solicitados en formato JSON. Si un dato no se lee con claridad, devuélvelo como null en vez de adivinarlo.",
     licencia: "Analiza la imagen de la licencia de tenencia o portación de arma emitida por DIGECAM (Guatemala) y extrae los datos solicitados en formato JSON. El tipo sólo puede ser 'tenencia' o 'portación': si no lo distingues con total seguridad, devuélvelo null. Si un dato no se lee con claridad, devuélvelo como null en vez de adivinarlo.",
   };
+
+  /* Los modos de imagen y `insights` no llevan mensaje de texto. */
+  if (!mensaje && modo !== "insights" && !MODOS_IMAGEN[modo]) {
+    return json({ error: "Falta el mensaje" }, 400);
+  }
+
+  // ── Construir el contenido del usuario ──
+  let userContent = "";
+  let messagesPayload: any[] = [];
+  let sistemaPrompt = PROMPTS[modo]; // puede ser sobreescrito por persona dinámica en chat/insights
+  let modsDelRol: string[] = []; // módulos que este rol puede tocar (para gating de web_search)
 
   if (MODOS_IMAGEN[modo]) {
     const base64Data = body.imagen_base64;
