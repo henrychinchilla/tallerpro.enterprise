@@ -239,7 +239,17 @@ Modulos.inventario = {
       <div class="form-row">
         <div class="form-group"><label class="form-label">Unidad</label>
           <select class="form-select" id="inv-unidad">
-            ${perfil.unidades.map(u=>`<option ${item.unidad_medida===u?'selected':''}>${u}</option>`).join('')}
+            ${(() => {
+              /* Si el artículo trae una unidad que este giro no ofrece (se
+                 cargó desde otro giro, o por importación), se agrega a la
+                 lista en vez de dejarla afuera: si no, el select mostraría
+                 otra cosa y al guardar le cambiaría la unidad EN SILENCIO —
+                 con el stock ya contado en la anterior. */
+              const u0 = item.unidad_medida;
+              const lista = u0 && !perfil.unidades.includes(u0)
+                ? [u0, ...perfil.unidades] : perfil.unidades;
+              return lista.map(u=>`<option ${u0===u?'selected':''}>${UI.esc(u)}</option>`).join('');
+            })()}
           </select></div>
         <div class="form-group"><label class="form-label">Bodega</label>
           <select class="form-select" id="inv-bodega">

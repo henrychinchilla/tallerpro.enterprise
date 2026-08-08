@@ -154,7 +154,8 @@ Modulos.bodegas = {
           </select></div>
         <div class="form-group"><label class="form-label">Unidad</label>
           <select class="form-select" id="bi-unidad">
-            ${['unidad','litro','kg','par','caja'].map(u=>`<option>${u}</option>`).join('')}
+            ${(typeof UNIDADES_TODAS !== 'undefined' ? UNIDADES_TODAS : ['unidad','litro','libra','par','caja'])
+                .map(u=>`<option>${UI.esc(u)}</option>`).join('')}
           </select></div>
       </div>
       <div class="form-row">

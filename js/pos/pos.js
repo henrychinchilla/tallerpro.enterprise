@@ -844,9 +844,10 @@ const POS = {
   /* La bascula sirve para lo que se vende POR PESO. Un filtro de aceite se
      cuenta en piezas: ponerle el boton solo estorbaria. */
   _pesable(linea) {
-    const porPeso = ['kg', 'libra', 'lb', 'quintal', 'arroba', 'gramo', 'g', 'tonelada', 'onza'];
+    /* La lista de unidades de peso sale de giros.js y no se copia acá: una
+       copia se queda vieja el día que se agrega una unidad. */
     return typeof Bascula !== 'undefined' && Bascula.disponible()
-        && porPeso.includes(String(linea.unidad || '').toLowerCase());
+        && typeof esUnidadDePeso === 'function' && esUnidadDePeso(linea.unidad);
   },
 
   /* Toma el peso de la bascula y lo pone como cantidad. Espera a que la
