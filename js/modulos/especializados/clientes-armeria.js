@@ -28,9 +28,86 @@ Modulos.clientesArmeria = {
      (que no mantiene la lista de Clientes cargada) no rompe. */
   async _obtenerCliente(id) {
     if (!id) return {};
-    const lista = await DB.getClientes();
+    const lista = await DB.getClientes(null, 'armeria');
     this._data = lista;
     return lista.find(x => x.id === id) || {};
+  },
+
+  /* ══ LISTA PROPIA (pestaña "Clientes" de Armería) ════════════════════════
+     El expediente ya vivía aparte como PANTALLA, pero se llegaba a él desde la
+     lista de Clientes del comercio, que mezclaba a los compradores de armas
+     con los del taller. Henry lo revisó: no conviene confundirlos. Desde la
+     mig 133 el cliente declara su `giro` —igual que el artículo declara su
+     tipo_item— y esta lista muestra sólo los de armería. La tabla sigue siendo
+     una sola, así que el POS y la facturación le cobran a cualquiera. */
+  async render(busca = '') {
+    const el = document.getElementById('page-content');
+    UI.loading(el);
+    this._data = await DB.getClientes(busca || null, 'armeria');
+
+    /* Semáforo de licencia: en el mostrador lo que importa es si HOY se le
+       puede vender, y eso lo decide la fecha de vencimiento (art. 59). */
+    const semaforo = c => {
+      if (!c.licencia_tipo) return '<span class="badge badge-gray">Sin licencia</span>';
+      const dias = this.diasLicencia(c.licencia_vencimiento);
+      const tipo = UI.esc(c.licencia_tipo);
+      if (dias === null) return `<span class="badge badge-gray">${tipo} · sin fecha</span>`;
+      if (dias < 0)      return `<span class="badge badge-red">${tipo} · vencida</span>`;
+      if (dias <= 30)    return `<span class="badge badge-amber">${tipo} · vence en ${dias} d</span>`;
+      return `<span class="badge badge-cyan">${tipo} · vigente</span>`;
+    };
+
+    const fila = c => `<tr>
+      <td><b>${UI.esc(c.nombre || '')}</b>${c.tel ? `<br><small>${UI.esc(c.tel)}</small>` : ''}</td>
+      <td class="mono-sm">${UI.esc(c.dpi || '—')}</td>
+      <td>${semaforo(c)}</td>
+      <td class="mono-sm">${c.armas_registradas ?? '—'}</td>
+      <td style="text-align:right;white-space:nowrap">
+        ${Modulos.btnAccion('ver', `Modulos.clientesArmeria.imprimirExpediente('${c.id}')`, { titulo: 'Ver expediente completo (se puede imprimir desde ahí)' })}
+        ${Modulos.btnAccion('editar', `Modulos.clientesArmeria.modalForm('${c.id}')`)}
+        <button class="btn btn-sm btn-ghost" title="Tenencias registradas" onclick="event.stopPropagation();Modulos.clientesArmeria.renderTenencias('${c.id}')">🎯</button>
+        ${Modulos.btnAccion('eliminar', `Modulos.clientesArmeria.eliminar('${c.id}','${UI.jsAttr(c.nombre || '')}')`)}
+      </td>
+    </tr>`;
+
+    el.innerHTML = `
+      <div class="page-header">
+        <div><h1 class="page-title">🎯 Armería</h1>
+        <p class="page-subtitle">// ${this._data.length} clientes con expediente</p></div>
+        <div class="page-actions">
+          <button class="btn btn-amber" onclick="Modulos.clientesArmeria.modalForm()">＋ Nuevo cliente</button>
+        </div>
+      </div>
+      <div class="page-body">
+        ${Modulos.armeria?._tabsHTML ? Modulos.armeria._tabsHTML() : ''}
+        <div class="alert alert-cyan" style="margin-bottom:12px">
+          <div class="alert-icon">🗂️</div>
+          <div class="alert-body" style="font-size:11px">Estos clientes son SOLO de la armería y no aparecen en el alta de clientes
+            del resto del comercio. El expediente (DPI, licencia, tenencias y documentos) es lo que exige DIGECAM para poder venderles.</div>
+        </div>
+        <div class="search-bar" style="margin-bottom:16px">
+          <input class="form-input" id="cliarm-busca" placeholder="🔍 Buscar nombre, NIT o teléfono..."
+                 value="${UI.esc(busca)}" oninput="Modulos.clientesArmeria.render(this.value)">
+        </div>
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead><tr>
+              <th>Cliente</th><th>DPI</th><th>Licencia</th><th>Armas reg.</th><th style="text-align:right">Acciones</th>
+            </tr></thead>
+            <tbody>${this._data.map(fila).join('') ||
+              '<tr><td colspan="5" style="text-align:center;color:var(--text3);padding:24px">Todavía no hay clientes de armería. Creá el primero con ＋ Nuevo cliente.</td></tr>'}</tbody>
+          </table>
+        </div>
+      </div>`;
+    /* El foco se pierde al repintar con cada tecla; se repone al final. */
+    const inp = document.getElementById('cliarm-busca');
+    if (inp && busca) { inp.focus(); inp.setSelectionRange(inp.value.length, inp.value.length); }
+  },
+
+  /* Borrar al cliente borra su expediente entero (las tenencias van en cascada
+     por la FK de la mig 129). */
+  async eliminar(id, nombre) {
+    Modulos.eliminarRegistro('clientes', id, nombre, () => this.render());
   },
 
   /* Edad cumplida a partir de la fecha de nacimiento. No se guarda en la BD:
@@ -1285,6 +1362,9 @@ Modulos.clientesArmeria = {
       if (!nombre || !tel) { UI.toast('Nombre y teléfono son obligatorios', 'error'); return; }
       Object.assign(fields, {
         tipo: 'individual', nombre, tel,
+        /* Nace marcado como cliente de armería (mig 133): así aparece en esta
+           lista y NO en el alta general del comercio. */
+        giro: 'armeria',
         nit: document.getElementById('cli-nit')?.value.trim() || null,
         email: document.getElementById('cli-email')?.value.trim() || null,
       });
@@ -1358,5 +1438,9 @@ Modulos.clientesArmeria = {
        en cambio, "Guardar Expediente" cierra y ya: reabrirlo sería un
        parpadeo que nadie pidió. */
     if (!id && nuevoId) { await this.modalForm(nuevoId); return; }
+
+    /* Si la lista de clientes de armería está en pantalla, se repinta: si no,
+       el cambio recién guardado no se ve hasta cambiar de pestaña. */
+    if (document.getElementById('cliarm-busca')) await this.render();
   },
 };

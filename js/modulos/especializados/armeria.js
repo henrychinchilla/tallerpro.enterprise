@@ -128,7 +128,7 @@ Modulos.armeria = {
   _tabsHTML() {
     const b = (tab, txt) => `<button class="btn btn-sm ${this._tab === tab ? 'btn-cyan' : 'btn-ghost'}" onclick="Modulos.armeria._irTab('${tab}')">${txt}</button>`;
     return `<div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
-      ${b('operaciones', '🎯 Operaciones')}${b('municiones', '📦 Entrega de municiones')}${b('declaraciones', '📄 Declaraciones')}${b('ley', '⚖️ Ley de Armas y Municiones')}
+      ${b('operaciones', '🎯 Operaciones')}${b('clientes', '👥 Clientes')}${b('municiones', '📦 Entrega de municiones')}${b('declaraciones', '📄 Declaraciones')}${b('ley', '⚖️ Ley de Armas y Municiones')}
     </div>`;
   },
 
@@ -137,6 +137,9 @@ Modulos.armeria = {
     if (tab === 'ley') return this.renderLey();
     if (tab === 'municiones') return this.renderMuniciones();
     if (tab === 'declaraciones') return this.renderDeclaraciones();
+    /* Los clientes de la armería viven acá dentro y no en el alta general del
+       comercio: son otra cosa (expediente DIGECAM) y mezclarlos confunde. */
+    if (tab === 'clientes') return Modulos.clientesArmeria.render();
     return this.render(this._filtroTipo);
   },
 
@@ -509,7 +512,9 @@ Modulos.armeria = {
     this._filtroTipo = filtroTipo;
     [this._data, this._clientes, this._proveedores, this._inventario] = await Promise.all([
       DB.getArmeriaOperaciones(filtroTipo ? { tipo: filtroTipo } : {}),
-      DB.getClientes(),
+      /* Sólo los clientes de la armería (mig 133): el comprador de un arma no
+         se busca entre los clientes del taller. */
+      DB.getClientes(null, 'armeria'),
       DB.getProveedores(),
       DB.getInventarioArmeria().catch(() => []),
     ]);
@@ -751,7 +756,7 @@ Modulos.armeria = {
 
   async modalForm(id = null) {
     const o = id ? this._data.find(x => x.id === id) || {} : {};
-    if (!this._clientes.length) this._clientes = await DB.getClientes();
+    if (!this._clientes.length) this._clientes = await DB.getClientes(null, 'armeria');
     if (!this._proveedores.length) this._proveedores = await DB.getProveedores();
     if (!this._inventario.length) this._inventario = await DB.getInventarioArmeria().catch(() => []);
     if (!this._catalogo) this._catalogo = await DB.getCatalogoArmeria().catch(() => ({}));
@@ -1224,7 +1229,7 @@ Modulos.armeria = {
     if (Modulos.clientesArmeria?.modalForm) {
       Modulos.clientesArmeria._data = this._clientes;
       Modulos.clientesArmeria.modalForm(clienteId, () => {
-        DB.getClientes().then(cs => { this._clientes = cs; this.modalForm(); });
+        DB.getClientes(null, 'armeria').then(cs => { this._clientes = cs; this.modalForm(); });
       });
     }
   },
@@ -1236,7 +1241,7 @@ Modulos.armeria = {
     if (Modulos.clientesArmeria?.modalForm) {
       Modulos.clientesArmeria.modalForm(null, () => {
         /* Al guardar, refresca la lista y vuelve a abrir la operación. */
-        DB.getClientes().then(cs => { this._clientes = cs; this.modalForm(); });
+        DB.getClientes(null, 'armeria').then(cs => { this._clientes = cs; this.modalForm(); });
       });
     }
   },

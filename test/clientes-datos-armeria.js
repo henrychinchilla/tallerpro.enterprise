@@ -78,8 +78,6 @@ function domBase() {
    los vea, no cómo se logra. */
 {
   ctx.Auth.tenant.modulos_activos = ['ordenes', 'vehiculos', 'inventario'];
-  ok('un taller no pide datos de armería', CLI._pideDatosArmeria() === false);
-
   CLI._data = [];
   await CLI.modalForm();
   ok('el formulario NO muestra fecha de nacimiento', !/id="cli-fnac"/.test(htmlModal));
@@ -93,14 +91,15 @@ function domBase() {
      /id="cli-nombre"/.test(htmlModal) && /id="cli-tel"/.test(htmlModal) &&
      /id="cli-nit"/.test(htmlModal) && /id="cli-dir"/.test(htmlModal));
 
-  /* Y con armería encendida el alta básica TAMPOCO los muestra: para eso
-     está el expediente aparte. Lo que sí aparece es cómo llegar a él. */
+  /* Y con armería encendida el alta básica TAMPOCO los muestra ni lleva a
+     ellos: desde la mig 133 los clientes de armería son otra lista (declaran
+     su `giro`), así que esta pantalla no tiene por qué saber que existen. */
   ctx.Auth.tenant.modulos_activos = ['ordenes', 'armeria', 'inventario'];
   CLI._data = [{ id: 'c1', nombre: 'Juan Pérez' }];
   await CLI.modalForm('c1');
   ok('con armería, el alta básica sigue sin mostrar el DPI', !/id="cli-fnac"/.test(htmlModal));
-  ok('...pero ofrece abrir el expediente de armería',
-     /clientesArmeria\.modalForm/.test(htmlModal));
+  ok('...y ya ni siquiera ofrece el expediente (vive en Armería)',
+     !/clientesArmeria/.test(htmlModal));
 }
 
 /* ── Y guardar NO debe borrar lo que ya estaba ───────────────────────────
@@ -436,12 +435,14 @@ function domBase() {
   ok('un id ausente no tumba el expediente', reventó === false);
 }
 
-/* ── Sin tenant cargado no revienta ni asume que hay armería ─────────────── */
+/* ── Sin tenant cargado no revienta ────────────────────────────────────── */
 {
   ctx.Auth.tenant = null;
-  ok('sin tenant no pide los datos de armería', CLI._pideDatosArmeria() === false);
+  let reventó = false;
+  try { await CLI.modalForm(); } catch (_) { reventó = true; }
+  ok('sin tenant el alta básica se dibuja igual', reventó === false);
+  ok('...y sigue sin datos de armería', !/id="cli-fnac"/.test(htmlModal));
   ctx.Auth.tenant = { modulos_activos: [] };
-  ok('con modulos_activos vacío tampoco', CLI._pideDatosArmeria() === false);
 }
 
 console.log(`\n${pasadas} pasadas, ${fallidas} fallidas`);

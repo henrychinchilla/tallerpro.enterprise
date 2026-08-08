@@ -273,10 +273,40 @@ function giroPorDefecto(modulosActivos) {
   return girosDelTenant(modulosActivos)[0];
 }
 
+/* ── LO QUE NO SE COBRA EN EL MOSTRADOR ─────────────────────────────────────
+   Todo el inventario de la armería se ve en el POS —la tienda vive también de
+   chalecos, camping, limpieza y ropa, y ésos se cobran como cualquier cosa—,
+   pero un arma de fuego y la munición NO: el art. 59 obliga a remitir papeles
+   a DIGECAM antes de entregar el arma, y el art. 60 limita la munición al
+   calibre y al cupo mensual del comprador, con código de autorización en la
+   factura. Cobrarlas en el POS saltaría los dos trámites y descuadraría el
+   libro que revisa DIGECAM (art. 58). Esas van por el módulo de Armería.
+
+   Lo exento sí se cobra acá: el aire/gas comprimido ≤5.5mm (art. 68) y la
+   navaja de uso personal (art. 13) no piden licencia. */
+const ARMERIA_CATEGORIAS_REGULADAS = [
+  'Arma corta (pistola/revólver)', 'Arma larga (rifle/escopeta)',
+  'Arma deportiva', 'Munición',
+];
+const ARMERIA_TIPOS_REGULADOS = ['pistola', 'revólver', 'rifle', 'escopeta', 'deportiva', 'munición'];
+
+/* Un artículo del inventario (no una operación de armería). Se mira la
+   categoría Y el tipo de arma de sus atributos: la categoría la elige quien
+   carga el artículo y puede quedar en blanco, el tipo lo pide el formulario
+   del giro — con cualquiera de los dos alcanza para no venderlo en el POS. */
+function articuloRegulado(art) {
+  if (!art || (art.tipo_item || 'general') !== 'armeria') return false;
+  if (ARMERIA_CATEGORIAS_REGULADAS.includes(art.categoria)) return true;
+  const tipo = art.atributos?.tipo_arma;
+  return !!tipo && ARMERIA_TIPOS_REGULADOS.includes(String(tipo).toLowerCase());
+}
+
 if (typeof window !== 'undefined') {
   window.GIROS = GIROS;
   window.UNIDAD_KG = UNIDAD_KG;
   window.convertirUnidad = convertirUnidad;
   window.girosDelTenant = girosDelTenant;
   window.giroPorDefecto = giroPorDefecto;
+  window.ARMERIA_CATEGORIAS_REGULADAS = ARMERIA_CATEGORIAS_REGULADAS;
+  window.articuloRegulado = articuloRegulado;
 }
