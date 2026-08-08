@@ -101,6 +101,16 @@ function armarHTML(nombreComercio: string, mes: number, filas: any[]) {
    El destinatario es del CLIENTE, no una casilla nuestra: sale de
    tenants.email_reporte_maga y, si está vacío, del correo del comercio. Sólo
    se le manda a quien lo activó (reporte_maga_diario). */
+
+/* VARIOS destinatarios en un mismo campo, separados por ";". Un negocio suele
+   querer el resumen en el correo del dueño Y en el del que compra, y no tiene
+   por qué pedirnos una casilla nueva para eso. Resend acepta un arreglo en
+   `to`, así que se manda UN correo con todos y no uno por cada uno.
+   Se filtra lo vacío: un "; " de más no puede tumbar el envío del negocio. */
+function destinatarios(campo: string | null | undefined): string[] {
+  return String(campo || "").split(";").map((x) => x.trim()).filter(Boolean);
+}
+
 function fmtQ(n: any) {
   const v = Number(n);
   return isFinite(v) ? "Q" + v.toLocaleString("es-GT", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "—";
@@ -184,8 +194,8 @@ async function resumenDiario(admin: any, body: any, apiKey: string | undefined, 
 
   const resultado: any[] = [];
   for (const t of comercios || []) {
-    const destino = toPrueba || t.email_reporte_maga || t.email;
-    if (!destino) { resultado.push({ tenant_id: t.id, email: null, enviado: false, error: "sin correo configurado" }); continue; }
+    const destino = destinatarios(toPrueba || t.email_reporte_maga || t.email);
+    if (!destino.length) { resultado.push({ tenant_id: t.id, email: null, enviado: false, error: "sin correo configurado" }); continue; }
     const seguidos = seguidosPorTenant.get(t.id) || new Set<number>();
     const html = armarHTMLDiario(t.name || "Tu comercio", fecha, oportunidades, seguidos);
     if (dryRun) { resultado.push({ tenant_id: t.id, email: destino, oportunidades: oportunidades.length, enviado: false }); continue; }
@@ -247,7 +257,10 @@ Deno.serve(async (req) => {
     const resultado: any[] = [];
     for (const [tid, lista] of porTenant) {
       const html = armarHTML(lista[0].tenant_name || "Tu comercio", mes, lista);
-      const destino = toPrueba || lista[0].email;
+      /* Mismo criterio que el resumen diario: el campo puede traer varios
+         correos separados por ";". */
+      const destino = destinatarios(toPrueba || lista[0].email);
+      if (!destino.length) continue;
       if (dryRun) { resultado.push({ tenant_id: tid, email: destino, productos: lista.length, enviado: false }); continue; }
       /* Se llama a Resend directo y no a la función email-send: esa exige una
          sesión de usuario (devuelve 401 con la clave de servicio) porque está

@@ -236,25 +236,44 @@ Modulos.precios_maga = {
         <label style="display:flex;align-items:center;gap:6px;font-size:13px">
           <input type="checkbox" id="maga-rep-activo" ${cfg.reporte_maga_diario ? 'checked' : ''}> Recibirlo
         </label>
-        <input class="form-input" id="maga-rep-email" type="email" style="flex:1;min-width:220px"
-               placeholder="correo@delnegocio.com" value="${UI.esc(correo)}">
+        <input class="form-input" id="maga-rep-email" style="flex:1;min-width:260px"
+               placeholder="dueño@negocio.com; contador@negocio.com" value="${UI.esc(correo)}">
         <button class="btn btn-sm btn-cyan" onclick="Modulos.precios_maga._guardarCorreo()">Guardar</button>
       </div>
       <div style="font-size:11px;color:var(--text3);margin-top:6px">
-        Si lo dejás vacío se usa el correo del comercio${cfg.email ? ' (' + UI.esc(cfg.email) + ')' : ''}.
+        Podés poner <b>varios correos separados por punto y coma (;)</b> — el mismo resumen le llega a todos.
+        Si lo dejás vacío se usa el correo del negocio${cfg.email ? ' (' + UI.esc(cfg.email) + ')' : ''}.
       </div>
     </div>`;
   },
 
+  /* Varios destinatarios en un solo campo, separados por ";" — así lo pidió
+     Henry y así se guarda: un negocio suele querer el resumen en el correo del
+     dueño Y en el del que compra. El type="email" del input se quitó a
+     propósito: con varias direcciones el navegador lo marca inválido.
+
+     Se valida CADA una y se avisa cuál está mal: guardar una lista con un
+     correo roto es la forma silenciosa de que ese no reciba nada nunca. */
+  _correosDe(texto) {
+    return String(texto || '').split(';').map(x => x.trim()).filter(Boolean);
+  },
+
   async _guardarCorreo() {
     const activo = document.getElementById('maga-rep-activo')?.checked;
-    const email = document.getElementById('maga-rep-email')?.value || '';
-    if (activo && email.trim() && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email.trim())) {
-      UI.toast('Ese correo no parece válido', 'error'); return;
+    const crudo = document.getElementById('maga-rep-email')?.value || '';
+    const correos = this._correosDe(crudo);
+    const malos = correos.filter(c => !/^[^@\s;]+@[^@\s;]+\.[^@\s;]+$/.test(c));
+    if (activo && malos.length) {
+      UI.toast(`Revisá ${malos.length === 1 ? 'este correo' : 'estos correos'}: ${malos.join(', ')}`, 'error', 7000);
+      return;
     }
-    const { error } = await DB.guardarReporteMagaCfg(activo, email);
+    /* Se guarda normalizado (sin espacios ni vacíos) para que quien manda el
+       correo no tenga que adivinar el formato. */
+    const { error } = await DB.guardarReporteMagaCfg(activo, correos.join('; '));
     if (error) { UI.toast('No se pudo guardar: ' + error.message, 'error'); return; }
-    UI.toast(activo ? 'Listo: el resumen diario llegará a ese correo ✓' : 'Resumen diario apagado', 'success');
+    UI.toast(activo
+      ? `Listo: el resumen diario llegará a ${correos.length || 1} ${correos.length === 1 || !correos.length ? 'correo' : 'correos'} ✓`
+      : 'Resumen diario apagado', 'success');
   },
 
   /* ═══════════ SEGUIMIENTO Y CALENDARIO (fase 4) ═══════════
