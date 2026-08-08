@@ -82,8 +82,11 @@ const App = {
      o ya vencidas → aviso al iniciar sesión. */
   async avisoSAT() {
     try {
-      const rol = Auth.user?.rol;
-      if (!['admin','gerente_fin','contador'].includes(rol)) return;
+      /* rolEnLista deja pasar SIEMPRE al superadmin: cuando entra a un negocio
+         en modo soporte tiene que ver los mismos avisos que su dueño. */
+      if (typeof rolEnLista === 'function'
+            ? !rolEnLista(['admin','gerente_fin','contador'])
+            : !['admin','gerente_fin','contador'].includes(Auth.user?.rol)) return;
       if (typeof moduloEnPlan === 'function' && !moduloEnPlan('contabilidad')) return;
       const anio = new Date().getFullYear();
       const [o1, o2] = await Promise.all([
@@ -673,7 +676,8 @@ const App = {
       }
       const activo = App.paginaActual === m.id;
       /* Submenú interno (solo visible cuando el módulo está activo) */
-      const subnav = (m.subnav || []).filter(s => !s.roles || s.roles.includes(rol));
+      /* El superadmin ve todo submenú: rolEnLista lo deja pasar siempre. */
+      const subnav = (m.subnav || []).filter(s => !s.roles || rolEnLista(s.roles, rol));
       const sub = (activo && subnav.length && !App._subColapsado) ? `
         <ul class="nav-sub">
           ${subnav.map(s => `

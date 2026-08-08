@@ -161,7 +161,9 @@ Modulos.admin = {
         { id:'bancos',      label:'Bancos',             icon:'🏦', roles:['admin','superadmin','gerente_fin'] }
       ];
       const rol = Auth.user?.rol;
-      const disponibles = tablas.filter(t=>t.roles.includes(rol));
+      /* rolEnLista: el superadmin da soporte a todos los negocios, así que ve
+         todas las herramientas aunque una lista nueva se olvide de nombrarlo. */
+      const disponibles = tablas.filter(t=>rolEnLista(t.roles, rol));
 
       el.innerHTML = `
         <div class="alert alert-cyan" style="margin-bottom:16px">
