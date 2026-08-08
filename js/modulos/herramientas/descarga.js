@@ -78,7 +78,7 @@ Modulos.descarga = {
               ⬇️ Descargar APK (Android)
             </a>
             <div style="margin-top:10px;font-size:11px;color:var(--text3);background:var(--surface2);border-radius:8px;padding:8px 10px">
-              <b>⚠️ Antes de instalar:</b> en tu teléfono ve a <i>Configuración → Seguridad → Fuentes desconocidas</i> y actívalo. Tamaño: ~462 KB.
+              <b>⚠️ Antes de instalar:</b> en tu teléfono ve a <i>Configuración → Seguridad → Fuentes desconocidas</i> y actívalo. Tamaño: ~424 KB · versión 4.76.0.
             </div>
           </div>
 
