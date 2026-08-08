@@ -701,9 +701,11 @@ Modulos.formulas_alimento = {
           <input class="form-input" id="form-f-especie-nueva" style="margin-top:6px;display:${esNuevoGrupo ? 'block' : 'none'}"
                  value="${esNuevoGrupo ? UI.esc(espActual) : ''}" placeholder="conejos, tilapia, ovinos…">
           <div style="font-size:11px;color:var(--text3);margin-top:3px">Es la pestaña donde va a aparecer.</div></div>
-        <div class="form-group"><label class="form-label">Consumo por animal al día (kg) *</label>
-          <input class="form-input" id="form-f-consumo" type="number" min="0" step="0.001" value="${f?.consumo ?? ''}" placeholder="0.120">
-          <div style="font-size:11px;color:var(--text3);margin-top:3px">De acá sale a cuántos animales le alcanza un quintal.</div></div>
+        <div class="form-group"><label class="form-label">Consumo por animal al día (gramos) *</label>
+          <input class="form-input" id="form-f-consumo" type="number" min="0" step="0.1" value="${f?.consumo != null ? +(f.consumo * 1000).toFixed(2) : ''}" placeholder="120">
+          <div style="font-size:11px;color:var(--text3);margin-top:3px">
+            En GRAMOS, que es como se pesa una ración: 120 g un conejo, 60 g un pollito, 6000 g (6 kg) una vaca.
+            De acá sale a cuántos animales le alcanza un quintal.</div></div>
       </div>
       <div class="form-group">
         <label class="form-label">Ingredientes y % de inclusión *</label>
@@ -741,7 +743,11 @@ Modulos.formulas_alimento = {
     /* El grupo sale del select, salvo que se haya elegido "otro". */
     const elegido = v('form-f-especie');
     const especie = elegido === '__nuevo' ? v('form-f-especie-nueva') : elegido;
-    const consumo = parseFloat(document.getElementById('form-f-consumo')?.value);
+    /* El campo pide GRAMOS (que es como se pesa una ración) y la columna
+       guarda kilos, que es la unidad con la que se hace la cuenta de cuántos
+       animales alimenta un quintal. La conversión pasa acá, una sola vez. */
+    const consumoGramos = parseFloat(document.getElementById('form-f-consumo')?.value);
+    const consumo = isFinite(consumoGramos) ? consumoGramos / 1000 : NaN;
     if (!nombre) { UI.toast('Poné el nombre de la fórmula', 'error'); return; }
     if (!animal) { UI.toast('Poné para qué animal es', 'error'); return; }
     if (!especie) { UI.toast('Poné el grupo (la pestaña donde va)', 'error'); return; }
