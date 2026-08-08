@@ -221,6 +221,15 @@ Modulos.precios_maga = {
     </div>`;
   },
 
+  /* Los precios de comparación se guardan POR KILO porque es la única unidad
+     con la que se pueden poner en la misma tabla un quintal de mayoreo y una
+     libra de supermercado. Pero en pantalla van por QUINTAL, que es como se
+     negocia el grano acá: nadie cotiza maíz por kilo. */
+  _porQuintal(precioKg) {
+    const kg = (typeof convertirUnidad === 'function' ? convertirUnidad(1, 'quintal', 'kg') : 45.359237) || 45.359237;
+    return (Number(precioKg) || 0) * kg;
+  },
+
   /* Config del correo: es del CLIENTE que administra el negocio, no nuestra.
      Sólo la ve quien puede tocar configuración del comercio. */
   _configCorreoHTML(cfg) {
@@ -402,7 +411,7 @@ Modulos.precios_maga = {
             <table class="table" style="font-size:12px">
               <thead><tr>
                 <th>Fecha</th><th>N°</th><th>Grano</th><th>Tipo</th>
-                <th style="text-align:right">Mi Q/kg</th><th style="text-align:right">Mercado Q/kg</th>
+                <th style="text-align:right">Mi Q/quintal</th><th style="text-align:right">Mercado Q/quintal</th>
                 <th style="text-align:right">Diferencia</th>
               </tr></thead>
               <tbody>${filas.map(f => this._filaComparacion(f)).join('')}</tbody>
@@ -427,8 +436,8 @@ Modulos.precios_maga = {
       <td>${UI.esc(f.num || '')}</td>
       <td>${UI.esc(f.tipo_grano || '')}${f.referencia ? `<div style="font-size:10px;color:var(--text3)">${UI.esc(f.referencia)}</div>` : ''}</td>
       <td><span class="badge badge-${f.es_compra?'amber':'green'}">${f.es_compra?'Compra':'Venta'}</span></td>
-      <td style="text-align:right">${UI.q(f.precio_kg)}</td>
-      <td style="text-align:right">${f.precio_ref_kg ? `${UI.q(f.precio_ref_kg)}<div style="font-size:10px;color:var(--text3)">${UI.esc(String(f.fecha_ref||'').slice(0,7))}</div>` : '—'}</td>
+      <td style="text-align:right">${UI.q(this._porQuintal(f.precio_kg))}</td>
+      <td style="text-align:right">${f.precio_ref_kg ? `${UI.q(this._porQuintal(f.precio_ref_kg))}<div style="font-size:10px;color:var(--text3)">${UI.esc(String(f.fecha_ref||'').slice(0,7))}</div>` : '—'}</td>
       <td style="text-align:right;font-weight:800;color:${color}">
         ${dif === null ? '<span style="font-size:11px;font-weight:400;color:var(--text3)">sin referencia</span>'
                        : `${dif>0?'+':''}${dif.toFixed(1)}%`}
@@ -638,7 +647,7 @@ Modulos.precios_maga = {
           <div>
             <div style="font-size:15px;font-weight:800">${UI.esc(p.nombre)}</div>
             <div style="font-size:11.5px;color:var(--text3)">
-              ${UI.esc(p.medida)}${p.kg_equiv ? ` · ${Number(p.kg_equiv).toFixed(2)} kg` : ' · se vende por unidad, no se puede pasar a Q/kg'}
+              ${UI.esc(p.medida)}${p.kg_equiv ? ` · ${UI.numero(Number(p.kg_equiv) / 0.45359237, 1)} libras` : ' · se vende por unidad, no se puede pasar a precio por libra'}
             </div>
           </div>
           <div style="text-align:right">

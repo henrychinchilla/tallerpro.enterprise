@@ -267,7 +267,8 @@ const F = ctx.Modulos.formulas_alimento;
   F._sugerir(conejo.clave);
   const conBase = modales[modales.length - 1].h;
   ok('elegir una sugerencia trae el animal', /value="conejo"/.test(conBase));
-  ok('...el consumo', /id="form-f-consumo"[^>]*value="0.12"/.test(conBase));
+  /* El campo pide GRAMOS aunque la columna guarde kilos: 0.12 kg = 120 g. */
+  ok('...el consumo, en gramos', /id="form-f-consumo"[^>]*value="120"/.test(conBase));
   ok('...y los ingredientes con sus porcentajes',
      /value="Harina de alfalfa"/.test(conBase) && /value="40"/.test(conBase));
   ok('...dejando claro que es una copia para ajustar', /\(ajustada\)/.test(conBase));

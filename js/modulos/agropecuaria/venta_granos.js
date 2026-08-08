@@ -55,6 +55,48 @@ Modulos.venta_granos = {
       </div>
     </div>`;
   },
+  /* ── EN QUÉ UNIDAD TRABAJA EL MOSTRADOR ────────────────────────────────────
+     El grano se compra y se vende POR QUINTAL en Guatemala; el kilogramo casi
+     no se usa. Pero la tabla guarda `cantidad_kg` y `precio_kg`, así que no
+     alcanzaba con cambiarle el rótulo: si el campo dice "quintal" y el número
+     se guarda como kg, una compra de 200 quintales entra como 200 kg — cuatro
+     veces menos, y el total sale mal.
+
+     Por eso la unidad es de PANTALLA y la conversión pasa al guardar y al
+     leer. El total no cambia nunca: cantidad × precio da lo mismo en cualquier
+     unidad (200 qq × Q210 = 9071.85 kg × Q4.63). */
+  _unidad: (typeof localStorage !== 'undefined' && localStorage.getItem('tp_unidad_granos')) || 'quintal',
+
+  _kgPorUnidad(u = this._unidad) {
+    return (typeof convertirUnidad === 'function' ? convertirUnidad(1, u, 'kg') : null) || 1;
+  },
+
+  /* Cantidad guardada (kg) → la unidad de pantalla. */
+  _cant(kg, u = this._unidad) {
+    return (Number(kg) || 0) / this._kgPorUnidad(u);
+  },
+
+  /* Precio guardado (por kg) → precio por la unidad de pantalla. */
+  _precio(precioKg, u = this._unidad) {
+    return (Number(precioKg) || 0) * this._kgPorUnidad(u);
+  },
+
+  /* Cambia la unidad SIN perder lo que ya se escribió: convierte los dos
+     números y reescribe los rótulos. Reabrir el modal habría borrado el resto
+     del formulario. */
+  _cambiarUnidad(nueva) {
+    const anterior = this._unidad;
+    if (nueva === anterior) return;
+    const kgAnt = this._kgPorUnidad(anterior), kgNue = this._kgPorUnidad(nueva);
+    const cant = document.getElementById('form-cantidad');
+    const precio = document.getElementById('form-precio');
+    if (cant?.value)   cant.value   = +(parseFloat(cant.value)   * kgAnt / kgNue).toFixed(4);
+    if (precio?.value) precio.value = +(parseFloat(precio.value) * kgNue / kgAnt).toFixed(4);
+    this._unidad = nueva;
+    try { localStorage.setItem('tp_unidad_granos', nueva); } catch (_) {}
+    document.querySelectorAll('.form-unidad-lbl').forEach(el => { el.textContent = nueva; });
+  },
+
   _colorEstado(e) { return { cotizado:'gray', pendiente:'amber', vendido:'cyan', entregado:'green', cancelado:'red' }[e]||'gray'; },
 
   /* La referencia de precios del MAGA vive como pestaña de este módulo y no como
@@ -113,7 +155,7 @@ Modulos.venta_granos = {
         <div class="kpi-grid" style="margin-bottom:16px">
           ${UI.kpiCard({ icon:'🌽', clase:'cyan', label:'Pendientes', value: pendientes })}
           ${UI.kpiCard({ icon:'✓', clase:'green', label:'Vendidos', value: vendidos })}
-          ${UI.kpiCard({ icon:'📦', clase:'amber', label:'Total (kg)', value: totalKg, format:'number' })}
+          ${UI.kpiCard({ icon:'📦', clase:'amber', label:`Total (${this._unidad})`, value: this._cant(totalKg), format:'number' })}
           ${UI.kpiCard({ icon:'💰', clase:'green', label:'Ingresos', value: ingresoTotal, money:true })}
         </div>
         ${this._refMagaHTML()}
@@ -122,14 +164,14 @@ Modulos.venta_granos = {
           ${Object.entries(this._TIPOS_GRANO).map(([k,l])=>`<button class="btn btn-sm ${filtroGrano===k?'btn-cyan':'btn-ghost'}" onclick="Modulos.venta_granos.render('${k}')">${l}</button>`).join('')}
         </div>
         <div class="table-wrap"><table class="data-table">
-          <thead><tr><th>No.</th><th>Grano</th><th>Cliente</th><th>Cantidad (kg)</th><th>Precio/kg</th><th>Total</th><th>Documento</th><th>Estado</th><th>Fecha</th><th>Acciones</th></tr></thead>
+          <thead><tr><th>No.</th><th>Grano</th><th>Cliente</th><th>Cantidad (${UI.esc(this._unidad)})</th><th>Precio/${UI.esc(this._unidad)}</th><th>Total</th><th>Documento</th><th>Estado</th><th>Fecha</th><th>Acciones</th></tr></thead>
           <tbody>
             ${this._data.map(v=>`<tr>
               <td class="mono-sm"><b>${v.num||'—'}</b></td>
               <td><span class="badge badge-green">${this._TIPOS_GRANO[v.tipo_grano]||v.tipo_grano}</span></td>
               <td>${UI.esc(v.clientes?.nombre||v.proveedores?.nombre||'—')}</td>
-              <td class="mono-sm">${UI.numero(v.cantidad_kg)}</td>
-              <td class="mono-sm">${UI.q(v.precio_kg)}</td>
+              <td class="mono-sm">${UI.numero(this._cant(v.cantidad_kg))}</td>
+              <td class="mono-sm">${UI.q(this._precio(v.precio_kg))}</td>
               <td class="mono-sm" style="font-weight:700">${UI.q(v.total)}</td>
               <td><span class="badge badge-${v.es_compra?'purple':'cyan'}">${v.es_compra?'🔽 Compra':'🔺 Venta'}</span></td>
               <td><span class="badge badge-${this._colorEstado(v.estado)}">${this._ESTADOS[v.estado]||v.estado}</span></td>
@@ -153,8 +195,8 @@ Modulos.venta_granos = {
         <div><div style="font-size:11px;color:var(--text3)">Tipo</div><div><span class="badge badge-${v.es_compra?'purple':'cyan'}">${v.es_compra?'🔽 Compra':'🔺 Venta'}</span></div></div>
         <div><div style="font-size:11px;color:var(--text3)">Grano</div><div>${this._TIPOS_GRANO[v.tipo_grano]||v.tipo_grano}</div></div>
         <div><div style="font-size:11px;color:var(--text3)">${v.es_compra?'Proveedor':'Cliente'}</div><div style="font-weight:700">${UI.esc(v.es_compra?(v.proveedores?.nombre||'—'):(v.clientes?.nombre||'—'))}</div></div>
-        <div><div style="font-size:11px;color:var(--text3)">Cantidad (kg)</div><div class="mono-sm" style="font-weight:700">${UI.numero(v.cantidad_kg)}</div></div>
-        <div><div style="font-size:11px;color:var(--text3)">Precio/kg</div><div class="mono-sm" style="font-weight:700">${UI.q(v.precio_kg)}</div></div>
+        <div><div style="font-size:11px;color:var(--text3)">Cantidad (${UI.esc(this._unidad)})</div><div class="mono-sm" style="font-weight:700">${UI.numero(this._cant(v.cantidad_kg))}</div></div>
+        <div><div style="font-size:11px;color:var(--text3)">Precio/${UI.esc(this._unidad)}</div><div class="mono-sm" style="font-weight:700">${UI.q(this._precio(v.precio_kg))}</div></div>
         <div><div style="font-size:11px;color:var(--text3)">Total</div><div class="mono-sm" style="font-weight:700;color:var(--green)">${UI.q(v.total)}</div></div>
         <div><div style="font-size:11px;color:var(--text3)">Estado</div><div><span class="badge badge-${this._colorEstado(v.estado)}">${this._ESTADOS[v.estado]||v.estado}</span></div></div>
         <div><div style="font-size:11px;color:var(--text3)">Fecha</div><div>${UI.fecha(v.fecha)}</div></div>
@@ -206,12 +248,20 @@ Modulos.venta_granos = {
 
         <div class="form-row">
           <div class="form-group">
-            <label class="form-label">Cantidad (kg) *</label>
-            <input class="form-input" type="number" id="form-cantidad" value="${v?.cantidad_kg||''}" min="0.01" step="0.01">
+            <label class="form-label">Cantidad (<span class="form-unidad-lbl">${UI.esc(this._unidad)}</span>) *</label>
+            <div style="display:flex;gap:6px">
+              <input class="form-input" type="number" id="form-cantidad" style="flex:1"
+                     value="${v ? +this._cant(v.cantidad_kg).toFixed(4) : ''}" min="0.0001" step="0.01">
+              <select class="form-select" id="form-unidad" style="width:112px"
+                      onchange="Modulos.venta_granos._cambiarUnidad(this.value)" title="El grano se negocia por quintal; la base guarda kilos y convierte sola">
+                ${['quintal','libra','arroba','tonelada','kg'].map(u=>`<option value="${u}" ${this._unidad===u?'selected':''}>${u}</option>`).join('')}
+              </select>
+            </div>
           </div>
           <div class="form-group">
-            <label class="form-label">Precio por kg (Q) *</label>
-            <input class="form-input" type="number" id="form-precio" value="${v?.precio_kg||''}" min="0" step="0.01">
+            <label class="form-label">Precio por <span class="form-unidad-lbl">${UI.esc(this._unidad)}</span> (Q) *</label>
+            <input class="form-input" type="number" id="form-precio"
+                   value="${v ? +this._precio(v.precio_kg).toFixed(4) : ''}" min="0" step="0.01">
           </div>
         </div>
 
@@ -266,9 +316,17 @@ Modulos.venta_granos = {
     const tipo_grano = document.getElementById('form-grano').value;
     const cliente_id = tipo==='venta' ? document.getElementById('form-cliente').value : null;
     const proveedor_id = tipo==='compra' ? document.getElementById('form-proveedor').value : null;
-    const cantidad_kg = parseFloat(document.getElementById('form-cantidad').value) || 0;
-    const precio_kg = parseFloat(document.getElementById('form-precio').value) || 0;
-    const total = cantidad_kg * precio_kg;
+    /* Lo que se escribió está en la unidad de pantalla (quintal por defecto);
+       la tabla guarda kilos. El TOTAL se calcula con los números tal como se
+       escribieron, no con los convertidos: así lo que ve el usuario es
+       exactamente lo que se guarda, sin arrastre de redondeo. */
+    const unidad = document.getElementById('form-unidad')?.value || this._unidad;
+    const kgPorUnidad = this._kgPorUnidad(unidad);
+    const cantidadIngresada = parseFloat(document.getElementById('form-cantidad').value) || 0;
+    const precioIngresado = parseFloat(document.getElementById('form-precio').value) || 0;
+    const cantidad_kg = cantidadIngresada * kgPorUnidad;
+    const precio_kg = precioIngresado / kgPorUnidad;
+    const total = +(cantidadIngresada * precioIngresado).toFixed(2);
     const fecha = document.getElementById('form-fecha').value;
     const estado = document.getElementById('form-estado').value;
     const notas = document.getElementById('form-notas').value;
