@@ -83,6 +83,8 @@ Modulos.formulas_alimento = {
                  aviso: 'Aglutina y da palatabilidad, pero pasarse afloja el estiércol. En aves rara vez más del 5%.' },
     salvado:   { label: 'Salvado / afrecho de trigo', mercado: 'salvado de trigo' },
     avena:     { label: 'Avena en grano', mercado: 'avena' },
+    alfalfa:   { label: 'Harina de alfalfa',
+                 aviso: 'Es la FIBRA de la fórmula del conejo, no un relleno: cambiarla por grano para abaratar es lo que produce las diarreas.' },
     aceite:    { label: 'Aceite vegetal' },
     h_pescado: { label: 'Harina de pescado', mercado: 'harina de pescado' },
     carbonato: { label: 'Carbonato de calcio', mercado: 'carbonato de calcio' },
@@ -128,6 +130,42 @@ Modulos.formulas_alimento = {
       formulas: [
         { nombre: 'Caballo — mantenimiento', consumo: 2.5, animal: 'caballo', ing: { avena: 45, maiz: 18, salvado: 17, soya: 8, melaza: 8, carbonato: 1.2, sal: 1, premezcla: 0.8, aceite: 1 } },
         { nombre: 'Caballo — trabajo', consumo: 4.5, animal: 'caballo',       ing: { avena: 40, maiz: 24, salvado: 14, soya: 10, melaza: 8, carbonato: 1.2, sal: 1, premezcla: 0.8, aceite: 1 } },
+      ],
+    },
+    /* Las cuatro de arriba eran TODO lo que traía la app. Un agroservicio
+       guatemalteco vende también a quien cría conejos, ovejas, patos,
+       codornices y tilapia — y esa gente llegaba a una parrilla en blanco.
+       Siguen siendo fórmulas DE REFERENCIA, del tipo que publican las guías de
+       extensión: sirven de punto de partida y se ajustan. */
+    conejos: {
+      label: '🐇 Conejos', icon: '🐇',
+      nota: 'El conejo vive de la FIBRA: por debajo de 12-14% de fibra cruda vienen las diarreas, que es lo que mata camadas enteras. La alfalfa de esta fórmula no se cambia por más grano para abaratar.',
+      formulas: [
+        { nombre: 'Conejo — engorde (30-70 días)', consumo: 0.12, animal: 'conejo', ing: { alfalfa: 40, salvado: 18, maiz: 17, soya: 16, melaza: 5, aceite: 1.5, carbonato: 1.5, sal: 0.5, premezcla: 0.5 } },
+        { nombre: 'Coneja — lactancia', consumo: 0.25, animal: 'coneja',            ing: { alfalfa: 38, soya: 19, maiz: 19, salvado: 15, melaza: 4, aceite: 2, carbonato: 1.5, sal: 0.5, premezcla: 0.5, fosfato: 0.5 } },
+      ],
+    },
+    ovinos: {
+      label: '🐑 Ovejas y cabras', icon: '🐑',
+      nota: 'Es COMPLEMENTO del pasto, no reemplazo: el rumen necesita fibra larga. Va sin urea a propósito — en ovinos y caprinos el margen entre la dosis útil y la tóxica es más chico que en bovinos.',
+      formulas: [
+        { nombre: 'Oveja/cabra — concentrado', consumo: 0.5, animal: 'oveja',   ing: { maiz: 42, salvado: 18, sorgo: 15, soya: 12, melaza: 9, carbonato: 1.5, fosfato: 1, sal: 1, premezcla: 0.5 } },
+        { nombre: 'Cabra lechera — concentrado', consumo: 0.8, animal: 'cabra', ing: { maiz: 38, salvado: 18, soya: 16, sorgo: 14, melaza: 9, carbonato: 2, fosfato: 1, sal: 1, premezcla: 1 } },
+      ],
+    },
+    patos: {
+      label: '🦆 Patos y codornices', icon: '🦆',
+      nota: 'El pato come mojado y desperdicia: la comedera va con agua cerca pero no encima. La codorniz ponedora necesita bastante calcio, igual que la gallina.',
+      formulas: [
+        { nombre: 'Pato — engorde', consumo: 0.15, animal: 'pato',            ing: { maiz: 58, soya: 26, salvado: 6, h_pescado: 4, carbonato: 2, aceite: 1.6, fosfato: 1.5, premezcla: 0.5, sal: 0.4 } },
+        { nombre: 'Codorniz — ponedora', consumo: 0.025, animal: 'codorniz',  ing: { maiz: 55, soya: 30, carbonato: 6.5, h_pescado: 3, aceite: 2.8, fosfato: 1.5, premezcla: 0.5, sal: 0.4, metionina: 0.3 } },
+      ],
+    },
+    peces: {
+      label: '🐟 Tilapia', icon: '🐟',
+      nota: 'ESTA MEZCLA HAY QUE PELETIZARLA. En harina se deshace en el agua: el pez no la come, se pierde el alimento y se ensucia el estanque. Si no tenés peletizadora, conviene comprar el alimento hecho y usar esta fórmula sólo para comparar precios.',
+      formulas: [
+        { nombre: 'Tilapia — engorde (28-30% proteína)', consumo: 0.02, animal: 'tilapia', ing: { soya: 38, maiz: 25, salvado: 18, h_pescado: 12, aceite: 3, fosfato: 1.5, carbonato: 1, premezcla: 1, metionina: 0.5 } },
       ],
     },
   },
@@ -558,28 +596,77 @@ Modulos.formulas_alimento = {
     });
   },
 
+  /* Todas las fórmulas de referencia, de todas las especies, aplanadas: es lo
+     que se ofrece como punto de partida al crear una nueva. */
+  _sugerencias() {
+    return Object.entries(this._ESPECIES).flatMap(([k, esp]) =>
+      esp.formulas.map(f => ({ clave: `${k}|${f.nombre}`, especie: k, espLabel: esp.label, f })));
+  },
+
+  /* Carga una fórmula de referencia dentro del formulario. Reabre el modal con
+     la base puesta en vez de tocar el DOM campo por campo: son ~10 renglones de
+     ingredientes que hay que crear y numerar, y reabrir usa el mismo camino que
+     "copiar y ajustar", que ya está probado. */
+  _sugerir(clave) {
+    if (!clave) return this.modalFormula();
+    const s = this._sugerencias().find(x => x.clave === clave);
+    if (!s) return;
+    this.modalFormula(null, {
+      nombre: s.f.nombre + ' (ajustada)', animal: s.f.animal, consumo: s.f.consumo,
+      especie: s.especie, nota: this._ESPECIES[s.especie]?.nota || '',
+      ingredientes: this._ingredientes(s.f),
+    });
+  },
+
   modalFormula(id = null, base = null) {
     const f = id ? (this._propias || []).find(x => x.id === id) : base;
     const especies = this._especies();
     const espActual = f?.especie || this._especie;
     const ings = f ? this._ingredientes(f) : [{ nombre: '', pct: '' }, { nombre: '', pct: '' }];
+    const animales = [...new Set([
+      ...Object.values(this._ESPECIES).flatMap(e => e.formulas.map(x => x.animal)),
+      'perro', 'pavo', 'ganso', 'cuy', 'camarón',
+    ])].sort();
+
+    /* El grupo va en un <select> y NO en un input con datalist: el navegador
+       FILTRA el datalist por lo que el campo ya trae, así que al venir
+       precargado con "aves" se veía una sola opción y parecía que no había
+       más grupos. Con un select se ven todos, y "otro" abre el campo libre. */
+    const esNuevoGrupo = !especies[espActual];
+    const opcionesGrupo = Object.entries(especies)
+      .map(([k, v]) => `<option value="${UI.esc(k)}" ${k === espActual ? 'selected' : ''}>${UI.esc(v.label)}</option>`).join('');
 
     UI.modal(`${id ? '✏️ Editar' : '＋ Nueva'} fórmula`, `
+      ${id ? '' : `
+      <div class="form-group">
+        <label class="form-label">¿Partir de una fórmula de referencia?</label>
+        <select class="form-select" onchange="Modulos.formulas_alimento._sugerir(this.value)">
+          <option value="">— Empezar en blanco —</option>
+          ${this._sugerencias().map(s =>
+            `<option value="${UI.jsAttr(s.clave)}" ${base && base.nombre === s.f.nombre + ' (ajustada)' ? 'selected' : ''}>${UI.esc(s.espLabel)} · ${UI.esc(s.f.nombre)}</option>`).join('')}
+        </select>
+        <div style="font-size:11px;color:var(--text3);margin-top:3px">
+          Trae los ingredientes y porcentajes ya puestos para que los ajustes a lo que vos mezclás. Es lo más rápido, incluso para un animal parecido.
+        </div>
+      </div>`}
       <div class="form-row">
         <div class="form-group"><label class="form-label">Nombre de la fórmula *</label>
           <input class="form-input" id="form-f-nombre" value="${f ? UI.esc(f.nombre) : ''}" placeholder="Conejo — engorde"></div>
         <div class="form-group"><label class="form-label">Animal *</label>
           <input class="form-input" id="form-f-animal" value="${f ? UI.esc(f.animal || '') : ''}" placeholder="conejo"
                  list="form-animal-lista">
-          <datalist id="form-animal-lista">${['pollo','gallina','cerdo','vaca','novillo','caballo','conejo','oveja','cabra','pato','codorniz','tilapia','perro']
-            .map(a => `<option value="${a}">`).join('')}</datalist>
-          <div style="font-size:11px;color:var(--text3);margin-top:3px">En singular: se usa para decir "alimenta 38 conejos por un día".</div></div>
+          <datalist id="form-animal-lista">${animales.map(a => `<option value="${UI.esc(a)}">`).join('')}</datalist>
+          <div style="font-size:11px;color:var(--text3);margin-top:3px">En singular, y puede ser cualquiera: se usa para decir "alimenta 38 conejos por un día".</div></div>
       </div>
       <div class="form-row">
         <div class="form-group"><label class="form-label">Grupo (pestaña) *</label>
-          <input class="form-input" id="form-f-especie" value="${UI.esc(espActual)}" list="form-esp-lista" placeholder="conejos">
-          <datalist id="form-esp-lista">${Object.keys(especies).map(k => `<option value="${UI.esc(k)}">`).join('')}</datalist>
-          <div style="font-size:11px;color:var(--text3);margin-top:3px">Poné uno que ya exista o inventá el tuyo (conejos, tilapia, ovinos…).</div></div>
+          <select class="form-select" id="form-f-especie" onchange="Modulos.formulas_alimento._grupoNuevo(this.value === '__nuevo')">
+            ${opcionesGrupo}
+            <option value="__nuevo" ${esNuevoGrupo ? 'selected' : ''}>➕ Otro grupo (escribirlo)…</option>
+          </select>
+          <input class="form-input" id="form-f-especie-nueva" style="margin-top:6px;display:${esNuevoGrupo ? 'block' : 'none'}"
+                 value="${esNuevoGrupo ? UI.esc(espActual) : ''}" placeholder="conejos, tilapia, ovinos…">
+          <div style="font-size:11px;color:var(--text3);margin-top:3px">Es la pestaña donde va a aparecer.</div></div>
         <div class="form-group"><label class="form-label">Consumo por animal al día (kg) *</label>
           <input class="form-input" id="form-f-consumo" type="number" min="0" step="0.001" value="${f?.consumo ?? ''}" placeholder="0.120">
           <div style="font-size:11px;color:var(--text3);margin-top:3px">De acá sale a cuántos animales le alcanza un quintal.</div></div>
@@ -609,9 +696,17 @@ Modulos.formulas_alimento = {
     this._sumarPct();
   },
 
+  _grupoNuevo(mostrar) {
+    const inp = document.getElementById('form-f-especie-nueva');
+    if (inp) { inp.style.display = mostrar ? 'block' : 'none'; if (mostrar) inp.focus(); }
+  },
+
   async guardarFormula(id) {
     const v = (el) => document.getElementById(el)?.value.trim() || '';
-    const nombre = v('form-f-nombre'), animal = v('form-f-animal'), especie = v('form-f-especie');
+    const nombre = v('form-f-nombre'), animal = v('form-f-animal');
+    /* El grupo sale del select, salvo que se haya elegido "otro". */
+    const elegido = v('form-f-especie');
+    const especie = elegido === '__nuevo' ? v('form-f-especie-nueva') : elegido;
     const consumo = parseFloat(document.getElementById('form-f-consumo')?.value);
     if (!nombre) { UI.toast('Poné el nombre de la fórmula', 'error'); return; }
     if (!animal) { UI.toast('Poné para qué animal es', 'error'); return; }

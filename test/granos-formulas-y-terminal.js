@@ -89,18 +89,28 @@ const F = ctx.Modulos.formulas_alimento;
 
 /* ── 2. FÓRMULAS PROPIAS, DE CUALQUIER ANIMAL ───────────────────────────── */
 {
+  /* Un grupo que la app NO trae: es el caso que Henry pidió — "toda clase de
+     animales", no sólo los cuatro que estaban escritos en el código. */
   F._propias = [{
-    id: 'f1', especie: 'conejos', especie_label: '🐇 Conejos', nombre: 'Conejo — engorde',
-    animal: 'conejo', consumo: 0.12,
+    id: 'f1', especie: 'cuyes', especie_label: '🐹 Cuyes', nombre: 'Cuy — engorde',
+    animal: 'cuy', consumo: 0.06,
     ingredientes: [{ nombre: 'Maíz amarillo', pct: 50 }, { nombre: 'Pasta de soya (44-48% PC)', pct: 30 },
                    { nombre: 'Salvado / afrecho de trigo', pct: 20 }],
+  }, {
+    /* Y una propia dentro de un grupo que SÍ existe: tiene que convivir con
+       las de referencia, no reemplazarlas. */
+    id: 'f2', especie: 'aves', nombre: 'Pollo — mi mezcla', animal: 'pollo', consumo: 0.1,
+    ingredientes: [{ nombre: 'Maíz amarillo', pct: 60 }, { nombre: 'Pasta de soya (44-48% PC)', pct: 40 }],
   }];
   const esp = F._especies();
   ok('las especies de referencia siguen estando', !!esp.aves && !!esp.porcinos && !!esp.bovinos && !!esp.equinos);
-  ok('y la que inventó el comercio aparece como pestaña', !!esp.conejos);
-  ok('...con la etiqueta que él le puso', esp.conejos.label === '🐇 Conejos');
-  ok('...y su fórmula adentro', esp.conejos.formulas.length === 1);
-  ok('una especie de referencia no se pisa con las propias', esp.aves.formulas.length === 3);
+  ok('y la que inventó el comercio aparece como pestaña', !!esp.cuyes);
+  ok('...con la etiqueta que él le puso', esp.cuyes.label === '🐹 Cuyes');
+  ok('...y su fórmula adentro', esp.cuyes.formulas.length === 1);
+  ok('una fórmula propia convive con las de referencia del mismo grupo',
+     esp.aves.formulas.length === 4 && esp.aves.formulas.some(f => f.id === 'f2'));
+  ok('...sin borrar ninguna de referencia',
+     esp.aves.formulas.filter(f => !f.id).length === 3);
 
   /* Los dos formatos de ingredientes tienen que leerse igual. */
   const deReferencia = F._ingredientes({ ing: { maiz: 60, soya: 40 } });
@@ -222,6 +232,118 @@ const F = ctx.Modulos.formulas_alimento;
   ok('quien administra el negocio puede cambiarlo', /'admin', 'superadmin'/.test(maga));
   ok('lo que se guarda es el correo del negocio, no el nuestro',
      /email_reporte_maga/.test(leer('js', 'core', 'db.js')));
+}
+
+/* ── 7. EL ALTA DE FÓRMULA TIENE QUE SERVIRLE A ALGUIEN QUE NO SABE ────────
+   Henry abrió "＋ Nueva fórmula" y encontró: una parrilla en blanco (ninguna
+   sugerencia) y un dropdown de grupo con UNA sola opción. Lo segundo no era
+   falta de datos: el campo venía precargado con "aves" y el navegador FILTRA
+   el datalist por lo que el campo ya trae, así que escondía los otros tres.
+   Por eso el grupo va en un <select> y no en un input con datalist. */
+{
+  F._propias = [];
+  modales.length = 0;
+  F._especie = 'aves';
+  F.modalFormula();
+  const html = modales[modales.length - 1].h;
+
+  ok('el grupo es un <select> y no un input con datalist (que se filtraba solo)',
+     /<select[^>]*id="form-f-especie"/.test(html) && !/id="form-f-especie"[^>]*list=/.test(html));
+  ['aves', 'porcinos', 'bovinos', 'equinos', 'conejos', 'ovinos', 'patos', 'peces']
+    .forEach(k => ok(`...y ofrece el grupo ${k}`, new RegExp(`<option value="${k}"`).test(html)));
+  ok('...más la opción de inventar uno', /value="__nuevo"/.test(html));
+
+  ok('hay sugerencias para partir de una fórmula', /Partir de una fórmula de referencia/.test(html));
+  ok('...y son todas las de referencia, no las de una especie',
+     F._sugerencias().length === Object.values(F._ESPECIES).reduce((s, e) => s + e.formulas.length, 0));
+  ok('...bastantes como para que sirva de verdad', F._sugerencias().length >= 12);
+
+  /* Elegir una sugerencia tiene que dejar el formulario LLENO. */
+  modales.length = 0;
+  const conejo = F._sugerencias().find(s => s.f.animal === 'conejo');
+  F._sugerir(conejo.clave);
+  const conBase = modales[modales.length - 1].h;
+  ok('elegir una sugerencia trae el animal', /value="conejo"/.test(conBase));
+  ok('...el consumo', /id="form-f-consumo"[^>]*value="0.12"/.test(conBase));
+  ok('...y los ingredientes con sus porcentajes',
+     /value="Harina de alfalfa"/.test(conBase) && /value="40"/.test(conBase));
+  ok('...dejando claro que es una copia para ajustar', /\(ajustada\)/.test(conBase));
+  ok('elegir "en blanco" no revienta', (() => { try { F._sugerir(''); return true; } catch (_) { return false; } })());
+}
+
+/* ── 8. LAS FÓRMULAS NUEVAS SON CORRECTAS ─────────────────────────────────
+   Son alimento para animales vivos: una fórmula mal sumada o con un
+   ingrediente tóxico para esa especie no es un bug de pantalla. */
+{
+  const especies = Object.entries(F._ESPECIES);
+  const labels = Object.values(F._ING).map(i => i.label);
+
+  especies.forEach(([k, esp]) => {
+    esp.formulas.forEach(f => {
+      const suma = Object.values(f.ing).reduce((s, p) => s + p, 0);
+      ok(`${k} · "${f.nombre}" suma 100%`, Math.abs(suma - 100) < 0.05);
+      ok(`${k} · "${f.nombre}" dice a qué animal y cuánto come`,
+         !!f.animal && typeof f.consumo === 'number' && f.consumo > 0);
+      const desconocidos = Object.keys(f.ing).filter(c => !F._ING[c]);
+      ok(`${k} · "${f.nombre}" no usa ingredientes que no existen`, desconocidos.length === 0);
+    });
+  });
+
+  /* LA QUE MÁS IMPORTA: la urea es tóxica en monogástricos. Sólo puede
+     aparecer en rumiantes, y ni siquiera en todos — en ovinos y caprinos el
+     margen entre dosis útil y tóxica es más chico, por eso van sin ella. */
+  const conUrea = especies.filter(([, esp]) =>
+    esp.formulas.some(f => Object.keys(f.ing).includes('urea'))).map(([k]) => k);
+  ok(`la urea sólo aparece en bovinos (está en: ${conUrea.join(', ') || 'ninguna'})`,
+     conUrea.length === 1 && conUrea[0] === 'bovinos');
+
+  ok('el conejo lleva fibra de verdad (alfalfa ≥ 35%)',
+     F._ESPECIES.conejos.formulas.every(f => (f.ing.alfalfa || 0) >= 35));
+  ok('...y la alfalfa avisa que no se cambia por grano', /diarreas/i.test(F._avisoDe('Harina de alfalfa')));
+  ok('la tilapia avisa que hay que peletizar (en harina se pierde en el agua)',
+     /PELETIZAR/i.test(F._ESPECIES.peces.nota));
+  ok('el nombre del ingrediente de cada fórmula existe en el catálogo',
+     especies.every(([, esp]) => esp.formulas.every(f =>
+       F._ingredientes(f).every(i => labels.includes(i.nombre)))));
+}
+
+/* ── 9. VARIOS CORREOS PARA EL MISMO NEGOCIO, SEPARADOS POR ";" ───────────── */
+{
+  const mctx = {
+    console, Math, Date, JSON, String, Number, Object, Array, RegExp, isNaN, Promise, Set, Map,
+    UI: { esc: v => String(v ?? ''), toast() {}, fecha: v => String(v ?? '') },
+    Modulos: {}, DB: {}, Auth: { tenant: {}, user: { rol: 'admin' } },
+    document: { getElementById: () => null },
+  };
+  mctx.window = mctx;
+  vm.createContext(mctx);
+  vm.runInContext(leer('js', 'modulos', 'agropecuaria', 'precios_maga.js'), mctx);
+  const M = mctx.Modulos.precios_maga;
+
+  ok('un solo correo sigue funcionando', JSON.stringify(M._correosDe('a@b.com')) === '["a@b.com"]');
+  ok('dos correos separados por ;',
+     JSON.stringify(M._correosDe('a@b.com;c@d.com')) === '["a@b.com","c@d.com"]');
+  ok('...con espacios de por medio', JSON.stringify(M._correosDe(' a@b.com ; c@d.com ')) === '["a@b.com","c@d.com"]');
+  ok('un ";" de más no genera un destinatario vacío',
+     JSON.stringify(M._correosDe('a@b.com;;')) === '["a@b.com"]');
+  ok('vacío no revienta', JSON.stringify(M._correosDe('')) === '[]');
+  ok('null tampoco', JSON.stringify(M._correosDe(null)) === '[]');
+
+  const maga = leer('js', 'modulos', 'agropecuaria', 'precios_maga.js');
+  ok('la pantalla lo explica', /separados por punto y coma/.test(maga));
+  /* type="email" rechaza una lista: el navegador marcaba el campo inválido. */
+  ok('el campo ya no es type="email" (invalidaba la lista)',
+     !/id="maga-rep-email" type="email"/.test(maga));
+  ok('se valida cada correo por separado y se dice cuál está mal', /malos\.join/.test(maga));
+
+  /* Y quien manda el correo tiene que partirlos: guardarlos y mandar la cadena
+     entera como un solo destinatario no le llegaría a nadie. */
+  const fn = leer('supabase', 'functions', 'maga-alertas', 'index.ts');
+  ok('la Edge Function separa los destinatarios', /function destinatarios/.test(fn));
+  ok('...y los manda como arreglo (un correo con todos, no uno por cada uno)',
+     /const destino = destinatarios\(/.test(fn));
+  ok('...también en la alerta mensual', (fn.match(/destinatarios\(/g) || []).length >= 3);
+  ok('sin correos no intenta enviar', /if \(!destino\.length\)/.test(fn));
 }
 
 console.log(`\n${pasadas} pasadas, ${fallidas} fallidas`);
