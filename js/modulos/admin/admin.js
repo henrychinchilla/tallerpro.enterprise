@@ -53,7 +53,7 @@ Modulos.admin = {
       el.innerHTML = `
         <div class="grid-2" style="margin-bottom:20px">
           <div class="card card-cyan">
-            <div class="card-sub mb-3">🏢 Taller Activo</div>
+            <div class="card-sub mb-3">🏢 Negocio Activo</div>
             <div style="font-size:14px;font-weight:700;margin-bottom:4px">${Auth.tenant?.name||'—'}</div>
             <div style="font-size:12px;color:var(--text3)">NIT: ${Auth.tenant?.nit||'—'}</div>
             <div style="font-size:12px;color:var(--text3)">ID: ${Auth.tenant?.id?.slice(0,12)||'—'}...</div>
@@ -268,7 +268,7 @@ Modulos.admin = {
           </div>
         </div>
         <div class="card" style="border:2px solid var(--red)">
-          <div style="font-weight:800;font-size:15px;color:var(--red);margin-bottom:8px">🗑️ Borrar Base de Datos del Taller</div>
+          <div style="font-weight:800;font-size:15px;color:var(--red);margin-bottom:8px">🗑️ Borrar Base de Datos del Negocio</div>
           <div style="font-size:13px;color:var(--text2);margin-bottom:16px">
             Elimina <b>todos los datos</b>: clientes, vehículos, órdenes, inventario, empleados, facturas, finanzas.<br>
             <b style="color:var(--green)">🛟 Antes de borrar se genera un respaldo de seguridad automático</b> (recuperable por soporte).<br>
@@ -346,7 +346,7 @@ Modulos.admin = {
       <div class="alert alert-cyan" style="margin-bottom:16px">
         <div class="alert-icon">🗂️</div>
         <div class="alert-body" style="font-size:12px">
-          Documentos legales del taller (patentes, RTU, escritura de sociedad, representación legal, etc.).
+          Documentos legales del negocio (patentes, RTU, escritura de sociedad, representación legal, etc.).
           Solo visibles para Dueño/Administración/Gerencia con acceso habilitado.
         </div>
       </div>
@@ -466,7 +466,7 @@ Modulos.admin = {
     config_integraciones:'Integraciones', config_productividad:'Config. productividad',
     empleado_documentos:'Documento de empleado', kpi_empleado:'KPI de empleado',
     activos:'Activo / herramienta', presupuesto:'Presupuesto',
-    trabajos_externos:'Trabajo externo', envios:'Envío / flete', tenants:'Taller'
+    trabajos_externos:'Trabajo externo', envios:'Envío / flete', tenants:'Negocio'
   },
 
   async _renderAuditoria() {
@@ -564,7 +564,7 @@ Modulos.admin = {
     if (!password) return;
     if (password.length < 12) { UI.toast('Usa una contraseña de al menos 12 caracteres.', 'error'); return; }
     try {
-      const encrypted = await this._encrypt({ tabla, data, exportado: new Date().toISOString(), taller: Auth.tenant?.name }, password);
+      const encrypted = await this._encrypt({ tabla, data, exportado: new Date().toISOString(), negocio: Auth.tenant?.name }, password);
       const a = document.createElement('a');
       a.href = 'data:application/octet-stream;base64,'+encrypted;
       a.download = `${tabla}-${new Date().toISOString().slice(0,10)}.tpro`;
@@ -580,7 +580,7 @@ Modulos.admin = {
                     'kpi_empleado','pagos_nomina','viaticos','ingresos','egresos','egresos_recurrentes',
                     'presupuesto','facturas','factura_items','bancos','banco_movimientos','bodegas',
                     'combos','promociones','citas','config_fiscal','config_productividad'];
-    const backup = { version:'3.0', fecha: new Date().toISOString(), taller: Auth.tenant, licencia: Auth.licencia };
+    const backup = { version:'3.0', fecha: new Date().toISOString(), negocio: Auth.tenant, licencia: Auth.licencia };
 
     for (const tabla of tablas) {
       const { data } = await getSB().from(tabla).select('*').eq('tenant_id', getTID());
@@ -614,7 +614,7 @@ Modulos.admin = {
       if (!backup.version) { UI.toast('Archivo inválido o corrupto','error'); return; }
 
       const ok = await UI.confirmar(
-        `¿Importar backup de <b>${backup.taller?.name||'—'}</b>?<br>
+        `¿Importar backup de <b>${backup.negocio?.name||'—'}</b>?<br>
          Fecha: ${UI.fecha(backup.fecha)}<br>
          Se importarán los datos de ${Object.keys(backup).filter(k=>Array.isArray(backup[k])).length} tablas.`,
         'Importar Backup'

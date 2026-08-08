@@ -394,7 +394,7 @@ Modulos.superadmin = {
     this._dbCargar(this._dbTenantId);
   },
 
-  /* ── NUEVO TALLER: tenant + usuario admin en un paso ── */
+  /* ── NUEVO NEGOCIO: tenant + usuario admin en un paso ── */
   modalNuevoTaller() {
     const venceDefault = (()=>{ const d=new Date(); d.setMonth(d.getMonth()+1); return d.toISOString().slice(0,10); })();
     UI.modal('➕ Nuevo comercio', `
@@ -527,7 +527,7 @@ Modulos.superadmin = {
     this.render();
   },
 
-  /* ── EDITAR TALLER: plan, módulos, precio, vencimiento ── */
+  /* ── EDITAR NEGOCIO: plan, módulos, precio, vencimiento ── */
   modalTaller(id) {
     const t = this._tenants.find(x=>x.id===id); if (!t) return;
     const activos = Array.isArray(t.modulos_activos)&&t.modulos_activos.length ? t.modulos_activos : (PLANES[t.plan]?.modulos||[]);
@@ -975,7 +975,7 @@ Modulos.superadmin = {
     UI.toast('Respaldando todos los comercios a Storage...','info');
     const { data, error } = await getSB().functions.invoke('backup-tenants', { body: {} });
     if (error || data?.error) { UI.toast('Error: '+(data?.error||error.message),'error'); return; }
-    UI.toast(`Respaldo completo ✓ ${data.talleres} comercios · ${data.registros} registros`);
+    UI.toast(`Respaldo completo ✓ ${data.negocios} comercios · ${data.registros} registros`);
     if (data.errores?.length) console.warn('backup-tenants errores:', data.errores);
   },
 

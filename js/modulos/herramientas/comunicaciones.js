@@ -59,11 +59,11 @@ Modulos.comunicaciones = {
         </div>`;
       // Plantillas separadas para evitar escape de comillas en template anidado
       const plantillas = [
-        { label: '✅ OT Lista',       msg: `✅ Hola, su vehículo está LISTO para retirar en ${t.name||'nuestro taller'}. Horario: 8am-6pm. ¡Gracias por su preferencia!` },
-        { label: '🔧 En Proceso',     msg: `🔧 Buenas, su vehículo está en proceso de reparación en ${t.name||'el taller'}. Le avisamos cuando esté listo.` },
-        { label: '📅 Cita mañana',    msg: `📅 Recordatorio: tiene una cita mañana en ${t.name||'nuestro taller'}. Por favor confírmenos su asistencia.` },
-        { label: '🛢️ Mantenimiento',  msg: `🛢️ Hola, es tiempo del mantenimiento de su vehículo. Llámenos para agendar su cita en ${t.name||'el taller'}. ¡Le esperamos!` },
-        { label: '💳 Pago pendiente', msg: `💳 Hola, tiene un saldo pendiente en ${t.name||'el taller'}. Por favor comuníquese con nosotros para coordinar.` },
+        { label: '✅ OT Lista',       msg: `✅ Hola, su vehículo está LISTO para retirar en ${t.name||'nuestro negocio'}. Horario: 8am-6pm. ¡Gracias por su preferencia!` },
+        { label: '🔧 En Proceso',     msg: `🔧 Buenas, su vehículo está en proceso de reparación en ${t.name||'el negocio'}. Le avisamos cuando esté listo.` },
+        { label: '📅 Cita mañana',    msg: `📅 Recordatorio: tiene una cita mañana en ${t.name||'nuestro negocio'}. Por favor confírmenos su asistencia.` },
+        { label: '🛢️ Mantenimiento',  msg: `🛢️ Hola, es tiempo del mantenimiento de su vehículo. Llámenos para agendar su cita en ${t.name||'el negocio'}. ¡Le esperamos!` },
+        { label: '💳 Pago pendiente', msg: `💳 Hola, tiene un saldo pendiente en ${t.name||'el negocio'}. Por favor comuníquese con nosotros para coordinar.` },
       ];
       const cont = document.getElementById('wa-plantillas');
       if (cont) {
@@ -85,12 +85,12 @@ Modulos.comunicaciones = {
     else if (this._tab === 'email') {
       const smtpOk = !!(t.config_smtp && t.config_smtp.host);
       const plantillasEmail = [
-        { label: 'OT Lista',       asunto: `Su vehículo está listo — ${t.name||'Taller'}`,
-          msg: `Estimado cliente,\n\nNos complace informarle que su vehículo ya está listo para ser retirado en ${t.name||'nuestro taller'}.\n\nHorario: Lunes a Viernes 8am-6pm.\n\nGracias por confiar en nosotros.\n\n${t.name||''}\n${t.tel||''}` },
-        { label: 'Presupuesto',    asunto: `Presupuesto de servicio — ${t.name||'Taller'}`,
+        { label: 'OT Lista',       asunto: `Su vehículo está listo — ${t.name||'Negocio'}`,
+          msg: `Estimado cliente,\n\nNos complace informarle que su vehículo ya está listo para ser retirado en ${t.name||'nuestro negocio'}.\n\nHorario: Lunes a Viernes 8am-6pm.\n\nGracias por confiar en nosotros.\n\n${t.name||''}\n${t.tel||''}` },
+        { label: 'Presupuesto',    asunto: `Presupuesto de servicio — ${t.name||'Negocio'}`,
           msg: `Estimado cliente,\n\nAdjuntamos el presupuesto solicitado para el servicio de su vehículo.\n\nQuedamos a sus órdenes para cualquier consulta.\n\n${t.name||''}\n${t.tel||''}` },
         { label: 'Pago pendiente', asunto: 'Recordatorio de pago pendiente',
-          msg: `Estimado cliente,\n\nLe informamos que tiene un saldo pendiente con ${t.name||'nuestro taller'}.\n\nPor favor comuníquese al ${t.tel||''} para coordinar el pago.\n\nGracias.` },
+          msg: `Estimado cliente,\n\nLe informamos que tiene un saldo pendiente con ${t.name||'nuestro negocio'}.\n\nPor favor comuníquese al ${t.tel||''} para coordinar el pago.\n\nGracias.` },
       ];
       el.innerHTML = `
         <div class="grid-2">
@@ -152,10 +152,10 @@ Modulos.comunicaciones = {
               </div>
             </div>
             <div class="form-group">
-              <label class="form-label">Número WhatsApp del Taller <span style="color:var(--text3);font-weight:400">(solo números, sin +)</span></label>
+              <label class="form-label">Número WhatsApp del Negocio <span style="color:var(--text3);font-weight:400">(solo números, sin +)</span></label>
               <input class="form-input" id="cfg-watel" placeholder="50255011234"
                      value="${t.whatsapp_tel || (t.tel||'').replace(/[^0-9]/g,'')}">
-              <div style="font-size:11px;color:var(--text3);margin-top:4px">Ejemplo: 50255011234 → código Guatemala (502) + 8 dígitos del taller</div>
+              <div style="font-size:11px;color:var(--text3);margin-top:4px">Ejemplo: 50255011234 → código Guatemala (502) + 8 dígitos del negocio</div>
             </div>
             <button class="btn btn-green" onclick="Modulos.comunicaciones.guardarWA()">💾 Guardar número WhatsApp</button>
           </div>
@@ -185,7 +185,7 @@ Modulos.comunicaciones = {
             </div>
             <div class="grid-2">
               <div class="form-group"><label class="form-label">Nombre del remitente</label>
-                <input class="form-input" id="cfg-smtp-name" placeholder="${t.name||'Mi Taller'}" value="${smtp.from_name||t.name||''}"></div>
+                <input class="form-input" id="cfg-smtp-name" placeholder="${t.name||'Mi Negocio'}" value="${smtp.from_name||t.name||''}"></div>
               <div class="form-group"><label class="form-label">Email visible al cliente</label>
                 <input class="form-input" id="cfg-smtp-from" type="email" placeholder="notificaciones@mitaller.com" value="${UI.esc(smtp.from_email||t.email||'')}"></div>
             </div>
@@ -280,7 +280,7 @@ Modulos.comunicaciones = {
 
   async guardarWA() {
     const tel = document.getElementById('cfg-watel')?.value.trim().replace(/[^0-9]/g,'');
-    if (!tel) { UI.toast('Ingresa el número WhatsApp del taller','warn'); return; }
+    if (!tel) { UI.toast('Ingresa el número WhatsApp del negocio','warn'); return; }
     const ok = await DB.updateTenant({ whatsapp_tel: tel, updated_at: new Date().toISOString() });
     if (ok) { Auth.tenant.whatsapp_tel = tel; UI.toast('Número WhatsApp guardado ✓'); }
     else UI.toast('Error al guardar','error');

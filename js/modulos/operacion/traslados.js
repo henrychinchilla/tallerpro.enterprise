@@ -48,7 +48,7 @@ Modulos.traslados = {
       </div>`;
   },
 
-  _nombreBodega(id) { return id ? (this._bodegas.find(b=>b.id===id)?.nombre||'Bodega') : 'Taller Principal'; },
+  _nombreBodega(id) { return id ? (this._bodegas.find(b=>b.id===id)?.nombre||'Bodega') : 'Negocio Principal'; },
 
   async _itemsDe(bodegaId) {
     let q = getSB().from('inventario').select('*').eq('tenant_id', getTID());
@@ -60,11 +60,11 @@ Modulos.traslados = {
   async nuevaSolicitud(origenId='') {
     const items = await this._itemsDe(origenId||null);
     const destinos = [
-      ...(origenId ? [{ id:'', nombre:`🏪 ${Auth.tenant?.name||'Taller Principal'}` }] : []),
+      ...(origenId ? [{ id:'', nombre:`🏪 ${Auth.tenant?.name||'Negocio Principal'}` }] : []),
       ...this._bodegas.filter(b=>b.id!==origenId && b.activa).map(b=>({ id:b.id, nombre:`🏭 ${b.nombre}` }))
     ];
     const origenes = [
-      { id:'', nombre:`🏪 ${Auth.tenant?.name||'Taller Principal'}` },
+      { id:'', nombre:`🏪 ${Auth.tenant?.name||'Negocio Principal'}` },
       ...this._bodegas.filter(b=>b.activa).map(b=>({ id:b.id, nombre:`🏭 ${b.nombre}` }))
     ];
     UI.modal('📝 Nueva solicitud de traslado', `

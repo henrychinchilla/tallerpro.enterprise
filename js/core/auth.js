@@ -161,7 +161,7 @@ const Auth = {
           .eq('id', userId).then(() => {});
       } else if (opciones.permitir_registro_google) {
         /* Una identidad Google autenticada puede no tener aún perfil porque
-           está completando el alta de su taller. No le damos acceso a datos;
+           está completando el alta de su negocio. No le damos acceso a datos;
            solo conservamos la sesión para la Edge Function de registro. */
         Auth.user = Auth.tenant = Auth.licencia = null;
         window._cachedTenantId = null;
@@ -207,7 +207,7 @@ const Auth = {
     return { ok:true };
   },
 
-  /* ── REGISTRAR NUEVO TALLER ───────────────────── */
+  /* ── REGISTRAR NUEVO NEGOCIO ───────────────────── */
   /* 1) signUp crea la cuenta (auto-inicia sesión si la confirmación de
         email está desactivada). 2) El RPC 'registrar_taller'
         (SECURITY DEFINER) crea tenant + licencia + config + usuario admin
@@ -236,9 +236,9 @@ const Auth = {
       tenant = rpcTenant;
     } else if (Auth._faltaBackend(rpcErr)) {
       tenant = await Auth._registrarTallerDirecto(fields, authData.user.id);
-      if (!tenant) return { ok:false, error:'No se pudo crear el taller' };
+      if (!tenant) return { ok:false, error:'No se pudo crear el negocio' };
     } else {
-      return { ok:false, error:'Error creando taller: ' + rpcErr.message };
+      return { ok:false, error:'Error creando negocio: ' + rpcErr.message };
     }
 
     Auth.supaUser = authData.user;
@@ -261,7 +261,7 @@ const Auth = {
       m.includes('not found');
   },
 
-  /* Fallback: crea taller sin RPC (compatible con RLS abierto, pre-001) */
+  /* Fallback: crea negocio sin RPC (compatible con RLS abierto, pre-001) */
   async _registrarTallerDirecto(fields, userId) {
     const sb = getSB();
     const slug = fields.nombre_taller.toLowerCase()

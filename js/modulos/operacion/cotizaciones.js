@@ -1,13 +1,13 @@
 /* NexusPro v3.0 — operacion/cotizaciones.js
    Cotización de Servicios: módulo UNIVERSAL, aplica a cualquier vertical
-   del taller (mecánica, herrería, peletería, electrónica, refrigeración...).
+   del negocio (mecánica, herrería, peletería, electrónica, refrigeración...).
    Flujo: pendiente → aprobada/rechazada → (aprobada) se puede convertir en
    una Orden de Trabajo con un clic. */
 Modulos.cotizaciones = {
   _data: [], _clientes: [], _vehiculos: [], _filtroEstado: '', _items: [],
 
   _ESTADOS: { pendiente:'Pendiente', aprobada:'Aprobada', rechazada:'Rechazada', vencida:'Vencida', convertida:'Convertida' },
-  _ORIGENES: { general:'General', taller:'Taller mecánico', herreria:'Herrería / Ventanería', peleteria:'Peletería', electronica:'Reparación Electrónica', refrigeracion:'Refrigeración y A/C' },
+  _ORIGENES: { general:'General', negocio:'Taller mecánico', herreria:'Herrería / Ventanería', peleteria:'Peletería', electronica:'Reparación Electrónica', refrigeracion:'Refrigeración y A/C' },
 
   async render(filtroEstado='') {
     const el = document.getElementById('page-content');

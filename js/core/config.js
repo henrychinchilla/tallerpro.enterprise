@@ -59,7 +59,7 @@ function pintarVersion() {
 
 if (typeof navigator !== 'undefined' && navigator.serviceWorker) cargarVersion();
 
-/* Site key pública de Cloudflare Turnstile (anti-bots en "Crear nuevo taller").
+/* Site key pública de Cloudflare Turnstile (anti-bots en "Crear nuevo negocio").
    Se crea en dash.cloudflare.com → Turnstile (el secret va en los secrets de
    Supabase como TURNSTILE_SECRET). Vacía = el captcha no se muestra. */
 const TURNSTILE_SITE_KEY = '0x4AAAAAADiKf8P4Nfiu4WBV';
@@ -81,7 +81,7 @@ const ROLES = {
   superadmin:   { label:'Super Admin',        icon:'⚡', color:'red',    oculto:true  },
   admin:        { label:'Administrador',       icon:'👑', color:'amber',  oculto:false },
   gerente_fin:  { label:'Gerente Financiero',  icon:'💰', color:'green',  oculto:false },
-  gerente_tal:  { label:'Gerente de Taller',   icon:'🔧', color:'cyan',   oculto:false },
+  gerente_tal:  { label:'Gerente de Negocio',   icon:'🔧', color:'cyan',   oculto:false },
   recepcionista:{ label:'Recepcionista',        icon:'📋', color:'purple', oculto:false },
   vendedor:     { label:'Vendedor (POS)',       icon:'🛒', color:'amber',  oculto:false },
   mecanico:     { label:'Mecánico',            icon:'🪛', color:'gray',   oculto:false },
@@ -237,7 +237,7 @@ const PERMISOS = {
 
 /* ── PLANES COMERCIALES (SaaS) ────────────────────────
    Cada plan define qué módulos incluye. El superadmin puede,
-   por taller, sobre-escribir la lista exacta (tenants.modulos_activos).
+   por negocio, sobre-escribir la lista exacta (tenants.modulos_activos).
    Módulos SIEMPRE disponibles (no se cobran / son de la cuenta):
    dashboard, configuración, usuarios, admin, mi_ot, calendario.        */
 const MODULOS_SIEMPRE = ['dashboard','descarga','configuracion','usuarios','admin','respaldos','mi_ot','calendario'];
@@ -245,7 +245,7 @@ const MODULOS_SIEMPRE = ['dashboard','descarga','configuracion','usuarios','admi
 const PLANES = {
   basico: {
     label: 'Básico / Emprendedor', precio: 199, color: 'cyan',
-    desc: 'Operación del taller: clientes, vehículos, OT, inventario y POS.',
+    desc: 'Operación del negocio: clientes, vehículos, OT, inventario y POS.',
     modulos: ['clientes','vehiculos','ordenes','inventario','pos']
   },
   pro: {
@@ -265,7 +265,7 @@ const PLANES = {
   },
   medida: {
     label: 'A la Medida', precio: 199, color: 'purple', negociable: true,
-    desc: 'Para negociar: arranca con la base del Emprendedor y suma solo los módulos que el taller necesita, cada uno con su precio.',
+    desc: 'Para negociar: arranca con la base del Emprendedor y suma solo los módulos que el negocio necesita, cada uno con su precio.',
     modulos: ['clientes','vehiculos','ordenes','inventario','pos']
   }
 };
@@ -278,7 +278,7 @@ const MODULOS_PRECIOS = {
   envios: 59,       facturacion: 99, bancos: 59,  finanzas: 99,
   presupuesto: 49,  contabilidad: 99, marketing: 59, comunicaciones: 49,
   rrhh: 149,        ia: 99,
-  /* Módulos verticales especializados (talleres no automotrices) */
+  /* Módulos verticales especializados (negocios no automotrices) */
   cotizaciones: 49, herreria: 89,  peleteria: 69, electronica: 79, refrigeracion: 89,
   agroservicio: 89, venta_granos: 79, diagnostico_obd: 99, bitacora: 49,
   /* Más cara que el resto de especializados: exige campos de cumplimiento
@@ -290,8 +290,8 @@ const MODULOS_PRECIOS = {
    'ia' (Nexus) viene incluido en Empresarial y es add-on para Básico/Pro.
    Los módulos VERTICALES (herrería, peletería, electrónica, refrigeración,
    armería, agroservicio, venta de granos) se activan a demanda según el tipo
-   de negocio del taller y no vienen incluidos en ningún plan por defecto —
-   el superadmin los prende por taller en el Panel SaaS (⚙️ → Módulos activos). */
+   de negocio del negocio y no vienen incluidos en ningún plan por defecto —
+   el superadmin los prende por negocio en el Panel SaaS (⚙️ → Módulos activos). */
 const MODULOS_VENDIBLES = [
   'clientes','vehiculos','ordenes','inventario','pos','proveedores','compras',
   'bodegas','activos','envios','facturacion','bancos','finanzas','presupuesto',
@@ -306,7 +306,7 @@ function labelModulo(id) {
     || ({ ia: '🤖 Nexus (Asistente IA)' })[id] || id;
 }
 
-/* Módulos activos del taller en sesión (override del tenant o, si no, su plan). */
+/* Módulos activos del negocio en sesión (override del tenant o, si no, su plan). */
 function modulosActivosTenant() {
   const t = window.Auth?.tenant;
   if (!t) return null;                       // sin tenant cargado → no bloquear
@@ -316,7 +316,7 @@ function modulosActivosTenant() {
   return plan.modulos;
 }
 
-/* ¿El módulo está incluido en el plan/paquete del taller? */
+/* ¿El módulo está incluido en el plan/paquete del negocio? */
 function moduloEnPlan(modId) {
   if (MODULOS_SIEMPRE.includes(modId)) return true;
   const act = modulosActivosTenant();
@@ -324,7 +324,7 @@ function moduloEnPlan(modId) {
   return act.includes(modId);
 }
 
-/* ── FIDELIZACIÓN (políticas configurables por taller) ──
+/* ── FIDELIZACIÓN (políticas configurables por negocio) ──
    Se guardan en tenants.fidelizacion (jsonb); estos son los defaults.
    puntos_por_q: puntos ganados por cada Q1 de compra (0 = no acumula)
    puntos_por_q1_canje: puntos que equivalen a Q1 al canjear
@@ -338,7 +338,7 @@ function fidelizacionCfg() {
   return { ...FIDELIZACION_DEFAULTS, ...(window.Auth?.tenant?.fidelizacion || {}) };
 }
 
-/* ¿La suscripción del taller está vigente? (vencida = solo lectura/bloqueo suave) */
+/* ¿La suscripción del negocio está vigente? (vencida = solo lectura/bloqueo suave) */
 function suscripcionVigente() {
   const t = window.Auth?.tenant;
   if (!t) return true;
@@ -385,7 +385,7 @@ function nivelAcceso(modulo) {
   if (!window.Auth?.user) return 'no';
   const rol = window.Auth.user.rol;
   if (rol === 'superadmin') return 'total';       // el dueño del SaaS ve todo
-  if (!moduloEnPlan(modulo)) return 'no';         // gating por plan (aplica también al admin del taller)
+  if (!moduloEnPlan(modulo)) return 'no';         // gating por plan (aplica también al admin del negocio)
   if (rol === 'admin') return 'total';            // el admin del comercio no se auto-restringe
   const custom = window.Auth.user.permisos_custom || {};
   if (custom[modulo] !== undefined) return nivelPermiso(custom[modulo]);
@@ -494,8 +494,8 @@ const PRODUCTIVIDAD_DEFAULTS = {
 
 /* ── KPIs POR ROL ─────────────────────────────────────
    Un gerente no ejecuta OTs: cada rol mide lo suyo.
-   tipo 'auto'  → lo calcula el sistema; scope 'taller' usa los datos
-                  de TODO el taller (gestión/ventas) en vez de las OTs propias.
+   tipo 'auto'  → lo calcula el sistema; scope 'negocio' usa los datos
+                  de TODO el negocio (gestión/ventas) en vez de las OTs propias.
    tipo 'manual'→ lo evalúa RRHH con un control 0-100.
    RRHH puede ajustar pesos/metas y AGREGAR KPIs personalizados por rol
    (se guardan en config_productividad.settings.kpis_rol del tenant). */
@@ -508,21 +508,21 @@ const KPIS_POR_ROL = {
     { id:'actitud',        label:'Actitud y disciplina',     peso:10, tipo:'manual'            }
   ],
   vendedor: [
-    { id:'ingresos_taller', label:'Ingresos del taller (Q)', peso:30, tipo:'auto',  meta:50000, scope:'taller' },
+    { id:'ingresos_taller', label:'Ingresos del negocio (Q)', peso:30, tipo:'auto',  meta:50000, scope:'negocio' },
     { id:'atencion',        label:'Atención al cliente',     peso:30, tipo:'manual' },
     { id:'orden_caja',      label:'Orden de caja y cobros',  peso:20, tipo:'manual' },
     { id:'actitud',         label:'Actitud y disciplina',    peso:20, tipo:'manual' }
   ],
   recepcionista: [
-    { id:'ots_taller',  label:'OTs entregadas del taller',   peso:25, tipo:'auto',  meta:30, scope:'taller' },
+    { id:'ots_taller',  label:'OTs entregadas del negocio',   peso:25, tipo:'auto',  meta:30, scope:'negocio' },
     { id:'atencion',    label:'Atención al cliente',         peso:35, tipo:'manual' },
     { id:'seguimiento', label:'Seguimiento de citas y OTs',  peso:20, tipo:'manual' },
     { id:'actitud',     label:'Actitud y disciplina',        peso:20, tipo:'manual' }
   ],
   gerente: [
-    { id:'ots_taller',          label:'OTs entregadas del taller',      peso:25, tipo:'auto', meta:30,    scope:'taller' },
-    { id:'ingresos_taller',     label:'Ingresos del taller (Q)',        peso:25, tipo:'auto', meta:80000, scope:'taller' },
-    { id:'cumplimiento_taller', label:'Cumplimiento de tiempos (taller)',peso:20, tipo:'auto',            scope:'taller' },
+    { id:'ots_taller',          label:'OTs entregadas del negocio',      peso:25, tipo:'auto', meta:30,    scope:'negocio' },
+    { id:'ingresos_taller',     label:'Ingresos del negocio (Q)',        peso:25, tipo:'auto', meta:80000, scope:'negocio' },
+    { id:'cumplimiento_taller', label:'Cumplimiento de tiempos (negocio)',peso:20, tipo:'auto',            scope:'negocio' },
     { id:'liderazgo',           label:'Liderazgo y gestión del equipo', peso:15, tipo:'manual' },
     { id:'objetivos',           label:'Objetivos del mes',              peso:15, tipo:'manual' }
   ],
@@ -613,35 +613,35 @@ const PERFILES_RECLUTAMIENTO = [
     requisitos:'Diversificado graduado. Experiencia en ventas o atención al cliente (deseable en repuestos/automotriz). Habilidad de negociación, orientación a resultados y buena comunicación.' },
 
   { puesto:'Gerente', departamento:'Gerencia', salario_min:8000, salario_max:15000,
-    descripcion:'Coordinación de las áreas operativas y administrativas del taller, supervisión de equipos de trabajo, control de indicadores (KPIs) y reporte a la Gerencia General.',
+    descripcion:'Coordinación de las áreas operativas y administrativas del negocio, supervisión de equipos de trabajo, control de indicadores (KPIs) y reporte a la Gerencia General.',
     requisitos:'Licenciatura en Administración de Empresas o carrera afín (deseable). 3+ años de experiencia en puestos de coordinación o gerencia media. Liderazgo, análisis de datos y manejo de personal.' },
 
-  { puesto:'Jefe de Taller', departamento:'Taller', salario_min:6000, salario_max:10000,
-    descripcion:'Supervisión diaria del taller: distribución de órdenes de trabajo entre mecánicos, control de calidad de reparaciones, cumplimiento de tiempos de entrega y seguridad del personal.',
+  { puesto:'Jefe de Negocio', departamento:'Negocio', salario_min:6000, salario_max:10000,
+    descripcion:'Supervisión diaria del negocio: distribución de órdenes de trabajo entre mecánicos, control de calidad de reparaciones, cumplimiento de tiempos de entrega y seguridad del personal.',
     requisitos:'Técnico en mecánica automotriz o carrera afín. 3+ años de experiencia como mecánico con al menos 1 año en supervisión de personal. Liderazgo, organización y conocimiento de diagnóstico mecánico/eléctrico.' },
 
   { puesto:'Gerente de RRHH', departamento:'RRHH', salario_min:7000, salario_max:12000,
     descripcion:'Gestión integral de recursos humanos: reclutamiento y selección, control de nómina y prestaciones, capacitación, disciplina laboral y cumplimiento del Código de Trabajo de Guatemala.',
     requisitos:'Licenciatura en Psicología Industrial, Administración de RRHH o carrera afín. 2+ años de experiencia en gestión de personal. Conocimiento de legislación laboral guatemalteca (IGSS, Código de Trabajo) y manejo de nómina.' },
 
-  { puesto:'Gerente de Taller', departamento:'Taller', salario_min:7000, salario_max:12000,
-    descripcion:'Responsable de la operación integral del taller: productividad de mecánicos, control de inventario de repuestos, satisfacción del cliente y rentabilidad del área operativa.',
-    requisitos:'Técnico o Licenciatura en Mecánica Automotriz, Ingeniería o Administración. 3+ años de experiencia en gestión de talleres automotrices. Habilidades de liderazgo, control de costos y atención al cliente.' },
+  { puesto:'Gerente de Negocio', departamento:'Negocio', salario_min:7000, salario_max:12000,
+    descripcion:'Responsable de la operación integral del negocio: productividad de mecánicos, control de inventario de repuestos, satisfacción del cliente y rentabilidad del área operativa.',
+    requisitos:'Técnico o Licenciatura en Mecánica Automotriz, Ingeniería o Administración. 3+ años de experiencia en gestión de negocios automotrices. Habilidades de liderazgo, control de costos y atención al cliente.' },
 
   { puesto:'Administrador / Gerente General', departamento:'Gerencia General', salario_min:10000, salario_max:20000,
     descripcion:'Dirección general del negocio: planificación estratégica, supervisión de todas las áreas (operación, finanzas, RRHH, ventas), toma de decisiones y representación legal ante terceros.',
     requisitos:'Licenciatura en Administración de Empresas, Ingeniería Industrial o carrera afín (MBA deseable). 5+ años de experiencia en dirección o gerencia general. Visión estratégica, liderazgo y manejo financiero.' },
 
-  { puesto:'Mecánico Junior', departamento:'Taller', salario_min:4300, salario_max:5500,
+  { puesto:'Mecánico Junior', departamento:'Negocio', salario_min:4300, salario_max:5500,
     descripcion:'Apoyo en reparaciones y mantenimientos básicos (cambio de aceite, frenos, llantas, revisiones de rutina) bajo la supervisión de mecánicos senior.',
     requisitos:'Perito en Mecánica Automotriz o formación técnica equivalente (INTECAP). 0-2 años de experiencia. Disposición para aprender, orden y responsabilidad con las herramientas.' },
 
-  { puesto:'Mecánico Senior', departamento:'Taller', salario_min:5000, salario_max:8000,
+  { puesto:'Mecánico Senior', departamento:'Negocio', salario_min:5000, salario_max:8000,
     descripcion:'Diagnóstico y reparación de fallas mecánicas, eléctricas y de inyección electrónica en vehículos. Soporte técnico a mecánicos junior y control de calidad de los trabajos entregados.',
     requisitos:'Perito en Mecánica Automotriz o técnico equivalente. 5+ años de experiencia comprobable. Manejo de escáner automotriz y diagnóstico computarizado. Responsabilidad y autonomía en el trabajo.' },
 
-  { puesto:'Auxiliar de Mecánica', departamento:'Taller', salario_min:4300, salario_max:5000,
-    descripcion:'Apoyo general en el taller: limpieza de vehículos y áreas de trabajo, traslado de herramientas y repuestos, y asistencia directa a los mecánicos durante las reparaciones.',
+  { puesto:'Auxiliar de Mecánica', departamento:'Negocio', salario_min:4300, salario_max:5000,
+    descripcion:'Apoyo general en el negocio: limpieza de vehículos y áreas de trabajo, traslado de herramientas y repuestos, y asistencia directa a los mecánicos durante las reparaciones.',
     requisitos:'Educación básica completa (deseable diversificado). No se requiere experiencia previa. Buena actitud, puntualidad y disposición para el trabajo físico.' },
 
   { puesto:'Bodeguero', departamento:'Bodega', salario_min:4300, salario_max:5200,
@@ -649,11 +649,11 @@ const PERFILES_RECLUTAMIENTO = [
     requisitos:'Diversificado graduado. Experiencia previa en manejo de inventarios (deseable). Orden, honestidad y manejo básico de sistemas/Excel.' },
 
   { puesto:'Gerente Financiero', departamento:'Finanzas', salario_min:8000, salario_max:14000,
-    descripcion:'Administración de las finanzas del taller: flujo de caja, presupuestos, relación con bancos, análisis de rentabilidad y reportes financieros para la Gerencia General.',
+    descripcion:'Administración de las finanzas del negocio: flujo de caja, presupuestos, relación con bancos, análisis de rentabilidad y reportes financieros para la Gerencia General.',
     requisitos:'Licenciatura en Administración de Empresas, Contaduría Pública y Auditoría o Economía. 3+ años de experiencia en finanzas. Manejo de presupuestos, análisis financiero y herramientas de Excel/ERP.' },
 
   { puesto:'Contador', departamento:'Contabilidad', salario_min:5000, salario_max:9000,
-    descripcion:'Registro y control contable de las operaciones del taller, elaboración de declaraciones ante la SAT (IVA, ISR), conciliaciones bancarias y apoyo en el cierre mensual.',
+    descripcion:'Registro y control contable de las operaciones del negocio, elaboración de declaraciones ante la SAT (IVA, ISR), conciliaciones bancarias y apoyo en el cierre mensual.',
     requisitos:'Perito Contador o estudiante avanzado/graduado de Contaduría Pública y Auditoría. Conocimiento de obligaciones fiscales guatemaltecas (SAT) y manejo de sistemas contables.' }
 ];
 

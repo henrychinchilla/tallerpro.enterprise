@@ -22,14 +22,14 @@ Modulos.bodegas = {
         </div>
       </div>
       <div class="page-body">
-        <!-- TALLER PRINCIPAL -->
+        <!-- NEGOCIO PRINCIPAL -->
         <div class="card card-amber" style="margin-bottom:20px">
           <div style="display:flex;justify-content:space-between;align-items:center">
             <div>
-              <div style="font-weight:800;font-size:15px">🏪 ${Auth.tenant?.name||'Taller Principal'}</div>
-              <div style="font-size:12px;color:var(--text3)">Inventario principal del taller</div>
+              <div style="font-weight:800;font-size:15px">🏪 ${Auth.tenant?.name||'Negocio Principal'}</div>
+              <div style="font-size:12px;color:var(--text3)">Inventario principal del negocio</div>
             </div>
-            <button class="btn btn-amber" onclick="Modulos.bodegas.verInventario(null,'Taller Principal')">
+            <button class="btn btn-amber" onclick="Modulos.bodegas.verInventario(null,'Negocio Principal')">
               📦 Ver Inventario
             </button>
           </div>
@@ -138,7 +138,7 @@ Modulos.bodegas = {
       <div class="alert alert-cyan" style="margin-bottom:12px">
         <div class="alert-icon">ℹ️</div>
         <div class="alert-body" style="font-size:11px">
-          Puedes agregar un artículo nuevo específico para esta bodega, o trasladar stock desde el taller principal o desde otra bodega.
+          Puedes agregar un artículo nuevo específico para esta bodega, o trasladar stock desde el negocio principal o desde otra bodega.
         </div>
       </div>
       <div class="form-row">
@@ -194,7 +194,7 @@ Modulos.bodegas = {
     const { error } = await DB.upsertInventario(fields);
     if (error) { UI.toast('Error: '+error.message,'error'); return; }
     UI.cerrarModal(); UI.toast('Artículo agregado ✓');
-    this.verInventario(bodegaId||null, bodegaId?'Bodega':'Taller Principal');
+    this.verInventario(bodegaId||null, bodegaId?'Bodega':'Negocio Principal');
   },
 
   modalMovimiento(invId, nombre, stockActual) {
@@ -235,7 +235,7 @@ Modulos.bodegas = {
       fecha: new Date().toISOString().slice(0,10)
     });
     UI.cerrarModal(); UI.toast('Movimiento registrado ✓');
-    this.verInventario(this._bodegaActiva || null, this._bodegaActiva ? (this._bodegas.find(b=>b.id===this._bodegaActiva)?.nombre||'Bodega') : 'Taller Principal');
+    this.verInventario(this._bodegaActiva || null, this._bodegaActiva ? (this._bodegas.find(b=>b.id===this._bodegaActiva)?.nombre||'Bodega') : 'Negocio Principal');
   },
 
   async modalTraslado(desdeBodegaId, desdeBodegaNombre, invId=null, invNombre=null) {
@@ -246,9 +246,9 @@ Modulos.bodegas = {
 
     /* Cargar bodegas destino */
     const bodegas = await DB.getBodegas();
-    /* El destino nunca incluye la ubicación de origen (ni la misma bodega/taller) */
+    /* El destino nunca incluye la ubicación de origen (ni la misma bodega/negocio) */
     const destinos = [
-      ...(desdeBodegaId ? [{ id: '', nombre: `🏪 ${Auth.tenant?.name||'Taller Principal'}` }] : []),
+      ...(desdeBodegaId ? [{ id: '', nombre: `🏪 ${Auth.tenant?.name||'Negocio Principal'}` }] : []),
       ...bodegas.filter(b=>b.id!==desdeBodegaId&&b.activa).map(b=>({ id:b.id, nombre:`🏭 ${b.nombre}` }))
     ];
 
@@ -372,13 +372,13 @@ Modulos.bodegas = {
 
       await DB.movimientoInventario({
         inventario_id: l.id, tipo: 'traslado', cantidad: l.cant,
-        referencia: `Traslado a ${destId ? 'bodega' : 'taller principal'}`, notas: motivo, fecha
+        referencia: `Traslado a ${destId ? 'bodega' : 'negocio principal'}`, notas: motivo, fecha
       });
       trasladados++;
     }
     if (!trasladados) { UI.toast('No se pudo trasladar','error'); return; }
 
-    const destNombre = destId ? (this._bodegas.find(b=>b.id===destId)?.nombre || 'Bodega') : `Taller Principal`;
+    const destNombre = destId ? (this._bodegas.find(b=>b.id===destId)?.nombre || 'Bodega') : `Negocio Principal`;
 
     /* Registrar flete / envío del traslado (uno para todo el traslado) */
     if (document.getElementById('trs-flete-on')?.checked) {
@@ -410,16 +410,16 @@ Modulos.bodegas = {
 
   async eliminarBodega(id, nombre) {
     const ok = await UI.confirmar(
-      `¿Eliminar bodega <b>${nombre}</b>?<br>Los artículos de su inventario se moverán al taller principal.`,
+      `¿Eliminar bodega <b>${nombre}</b>?<br>Los artículos de su inventario se moverán al negocio principal.`,
       'Eliminar Bodega'
     );
     if (!ok) return;
-    /* Mover inventario al taller principal */
+    /* Mover inventario al negocio principal */
     await getSB().from('inventario').update({ bodega_id: null }).eq('bodega_id', id);
     /* Eliminar bodega */
     const { error } = await getSB().from('bodegas').delete().eq('id', id);
     if (error) { UI.toast('Error: '+error.message,'error'); return; }
-    UI.toast('Bodega eliminada ✓ — inventario movido al taller principal');
+    UI.toast('Bodega eliminada ✓ — inventario movido al negocio principal');
     this.render();
   },
 

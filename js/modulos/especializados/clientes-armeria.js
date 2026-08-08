@@ -3,7 +3,7 @@
    ───────────────────────────────────────────────────────
    Antes vivía mezclado dentro de Modulos.clientes, como bloques de HTML
    condicionados por un booleano (_pideDatosArmeria). Henry pidió separarlo:
-   el alta de un cliente cualquiera (taller, ferretería, agroservicio...)
+   el alta de un cliente cualquiera (negocio, ferretería, agroservicio...)
    debe quedar simple, y los ~30 campos que exige una declaración jurada
    (DPI completo, vecindad, licencia, tenencias, documentos) no deberían
    aparecer ahí ni de reojo.
@@ -36,7 +36,7 @@ Modulos.clientesArmeria = {
   /* ══ LISTA PROPIA (pestaña "Clientes" de Armería) ════════════════════════
      El expediente ya vivía aparte como PANTALLA, pero se llegaba a él desde la
      lista de Clientes del comercio, que mezclaba a los compradores de armas
-     con los del taller. Henry lo revisó: no conviene confundirlos. Desde la
+     con los del negocio. Henry lo revisó: no conviene confundirlos. Desde la
      mig 133 el cliente declara su `giro` —igual que el artículo declara su
      tipo_item— y esta lista muestra sólo los de armería. La tabla sigue siendo
      una sola, así que el POS y la facturación le cobran a cualquiera. */

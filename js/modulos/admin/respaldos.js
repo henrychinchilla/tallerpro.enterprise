@@ -1,6 +1,6 @@
-/* Respaldos — exportación on-demand de los datos del taller + bitácora.
+/* Respaldos — exportación on-demand de los datos del negocio + bitácora.
    Los respaldos automáticos a nivel de base de datos los maneja la
-   infraestructura (Supabase: respaldo diario). Aquí el taller puede
+   infraestructura (Supabase: respaldo diario). Aquí el negocio puede
    descargar una copia completa de SUS datos cuando quiera y ver el historial. */
 Modulos.respaldos = {
   _data: [],
@@ -14,7 +14,7 @@ Modulos.respaldos = {
     el.innerHTML = `
       <div class="page-header">
         <div><h1 class="page-title">💾 Respaldos</h1>
-        <p class="page-subtitle">// copia de seguridad de los datos de tu taller</p></div>
+        <p class="page-subtitle">// copia de seguridad de los datos de tu negocio</p></div>
         <div class="page-actions">
           <button class="btn btn-amber" onclick="Modulos.respaldos.respaldarAhora()">⬇️ Respaldar ahora</button>
         </div>
@@ -60,7 +60,7 @@ Modulos.respaldos = {
       const dump = await DB.exportarDatosTenant();
       const json = JSON.stringify(dump, null, 2);
       const kb = Math.round(new Blob([json]).size / 1024);
-      const nombre = (Auth.tenant?.slug || Auth.tenant?.name || 'taller').replace(/\s+/g,'_').toLowerCase();
+      const nombre = (Auth.tenant?.slug || Auth.tenant?.name || 'negocio').replace(/\s+/g,'_').toLowerCase();
       const fecha = new Date().toISOString().slice(0,10);
 
       /* Descargar archivo */

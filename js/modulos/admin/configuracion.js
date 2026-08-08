@@ -1,9 +1,16 @@
 /* Configuración Module */
 Modulos.configuracion = {
+  _terminales: [],
+
   async render() {
     const el = document.getElementById('page-content');
     UI.loading(el);
     const t = Auth.tenant || {};
+    /* Las terminales del POS se administran acá. Antes no se administraban en
+       ningún lado: el POS mandaba a pedírselas al administrador y el
+       administrador no tenía dónde crearlas, así que un negocio con módulo POS
+       activo simplemente no podía cobrar nunca (le pasó a El Granjero). */
+    this._terminales = (await DB.getTodasTerminalesPOS().catch(() => ({ data: [] }))).data || [];
 
     el.innerHTML = `
       <div class="page-header">
@@ -13,8 +20,8 @@ Modulos.configuracion = {
       <div class="page-body">
         <div class="grid-2">
           <div class="card card-amber">
-            <div class="card-sub mb-4">🏪 Información del Taller</div>
-            <div class="form-group"><label class="form-label">Logo del taller</label>
+            <div class="card-sub mb-4">🏪 Información del Negocio</div>
+            <div class="form-group"><label class="form-label">Logo del negocio</label>
               <div style="display:flex;align-items:center;gap:12px">
                 <div id="cfg-logo-prev" style="width:64px;height:64px;border-radius:12px;border:1px solid var(--border);background:var(--surface2);display:flex;align-items:center;justify-content:center;overflow:hidden;flex-shrink:0">
                   ${t.logo_base64?`<img src="${t.logo_base64}" style="width:100%;height:100%;object-fit:contain">`:'<span style="font-size:24px">🏪</span>'}
@@ -88,7 +95,9 @@ Modulos.configuracion = {
                 <div style="font-size:10.5px;color:var(--text3);margin-top:3px">Se propone al abrir turno; cada cajero confirma el efectivo físico antes de cobrar.</div>
               </div>
               <button class="btn btn-amber" onclick="Modulos.configuracion.guardarCajaPOS()">Guardar configuración de caja</button>
+              ${Modulos.configuracion._terminalesHTML()}
             </div>`; })()}
+            ${Modulos.configuracion._correoMagaHTML(t)}
             <div class="card card-purple mb-4">
               <div class="card-sub mb-3">👥 Usuarios del Sistema</div>
               <button class="btn btn-cyan" style="width:100%" onclick="App.navegarA('usuarios')">
@@ -188,6 +197,94 @@ Modulos.configuracion = {
     else UI.toast('Error al guardar','error');
   },
 
+  /* ══ TERMINALES DEL POS — CRUD COMPLETO ═══════════════════════════════════
+     Crear, ver, editar (nombre / principal) y eliminar. La que está en uso no
+     se puede borrar sin más: una terminal con caja abierta o con ventas es
+     historial, así que se apaga en vez de borrarse (y el botón lo dice). */
+  _terminalesHTML() {
+    const filas = (this._terminales || []).map(t => `<tr>
+      <td><b>${UI.esc(t.nombre)}</b>${t.es_principal ? ' <span class="badge badge-cyan">Principal</span>' : ''}</td>
+      <td>${t.activo ? '<span class="badge badge-green">Activa</span>' : '<span class="badge badge-gray">Apagada</span>'}</td>
+      <td style="text-align:right;white-space:nowrap">
+        ${Modulos.btnAccion('editar', `Modulos.configuracion.modalTerminal('${t.id}')`)}
+        <button class="btn btn-sm btn-ghost" title="${t.activo ? 'Apagar: deja de ofrecerse en el POS' : 'Volver a encender'}"
+                onclick="Modulos.configuracion.alternarTerminal('${t.id}', ${t.activo ? 'false' : 'true'})">${t.activo ? '⏸️' : '▶️'}</button>
+        ${Modulos.btnAccion('eliminar', `Modulos.configuracion.eliminarTerminal('${t.id}','${UI.jsAttr(t.nombre)}')`)}
+      </td></tr>`).join('');
+
+    return `<div style="margin-top:14px;border-top:1px solid var(--border);padding-top:12px">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px">
+        <div style="font-size:12px;font-weight:700">🖥️ Terminales (cajas)</div>
+        <button class="btn btn-sm btn-cyan" onclick="Modulos.configuracion.modalTerminal()">＋ Nueva terminal</button>
+      </div>
+      ${filas
+        ? `<div class="table-wrap"><table class="data-table">
+             <thead><tr><th>Terminal</th><th>Estado</th><th style="text-align:right">Acciones</th></tr></thead>
+             <tbody>${filas}</tbody></table></div>`
+        : `<div style="font-size:11.5px;color:var(--amber)">
+             No hay ninguna terminal. <b>Sin al menos una, el Punto de Venta no abre</b> — creála acá.</div>`}
+    </div>`;
+  },
+
+  modalTerminal(id = null) {
+    const t = id ? (this._terminales || []).find(x => x.id === id) : null;
+    UI.modal(`${id ? '✏️ Editar' : '＋ Nueva'} terminal`, `
+      <div class="form-group"><label class="form-label">Nombre *</label>
+        <input class="form-input" id="term-nombre" value="${t ? UI.esc(t.nombre) : ''}" placeholder="Caja 1, Mostrador, Bodega...">
+        <div style="font-size:11px;color:var(--text3);margin-top:3px">Es el nombre que elige el cajero al entrar al POS.</div></div>
+      <label style="display:flex;align-items:center;gap:8px;font-size:13px;margin-bottom:12px;cursor:pointer">
+        <input type="checkbox" id="term-principal" ${t?.es_principal ? 'checked' : ''}> Es la terminal principal
+      </label>
+      <label style="display:flex;align-items:center;gap:8px;font-size:13px;margin-bottom:12px;cursor:pointer">
+        <input type="checkbox" id="term-activo" ${t ? (t.activo ? 'checked' : '') : 'checked'}> Activa (se ofrece en el POS)
+      </label>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" onclick="UI.cerrarModal()">Cancelar</button>
+        <button class="btn btn-amber" onclick="Modulos.configuracion.guardarTerminal(${id ? `'${id}'` : 'null'})">Guardar</button>
+      </div>`);
+  },
+
+  async guardarTerminal(id) {
+    const nombre = document.getElementById('term-nombre')?.value.trim();
+    if (!nombre) { UI.toast('Poné el nombre de la terminal', 'error'); return; }
+    const { error } = await DB.guardarTerminalPOS({
+      id,
+      nombre,
+      es_principal: !!document.getElementById('term-principal')?.checked,
+      activo: !!document.getElementById('term-activo')?.checked,
+    });
+    if (error) { UI.toast('No se pudo guardar: ' + error.message, 'error'); return; }
+    UI.toast(id ? 'Terminal actualizada ✓' : 'Terminal creada ✓');
+    UI.cerrarModal();
+    this.render();
+  },
+
+  async alternarTerminal(id, activo) {
+    const t = (this._terminales || []).find(x => x.id === id);
+    if (!t) return;
+    const { error } = await DB.guardarTerminalPOS({ id, nombre: t.nombre, es_principal: t.es_principal, activo });
+    if (error) { UI.toast('No se pudo cambiar: ' + error.message, 'error'); return; }
+    UI.toast(activo ? 'Terminal encendida ✓' : 'Terminal apagada');
+    this.render();
+  },
+
+  async eliminarTerminal(id, nombre) {
+    Modulos.eliminarRegistro('pos_terminales', id, nombre, () => this.render());
+  },
+
+  /* ══ CORREO DEL RESUMEN DIARIO DEL MAGA ════════════════════════════════════
+     Vivía sólo dentro de una pestaña del módulo de granos, y ahí no lo
+     encontraba quien administra el negocio — que es justo quien decide a qué
+     correo llega. La tarjeta es la MISMA (se reutiliza la del módulo, no se
+     copia): así no hay dos pantallas que se puedan desincronizar. */
+  _correoMagaHTML(t) {
+    const mods = t.modulos_activos;
+    const tieneGranos = Array.isArray(mods) ? mods.includes('venta_granos') : false;
+    if (!tieneGranos || !Modulos.precios_maga?._configCorreoHTML) return '';
+    const tarjeta = Modulos.precios_maga._configCorreoHTML(t);
+    return tarjeta ? `<div class="mb-4">${tarjeta}</div>` : '';
+  },
+
   async guardarCajaPOS() {
     const fondo = Number(document.getElementById('cfg-caja-fondo')?.value);
     if (!Number.isFinite(fondo) || fondo < 0) { UI.toast('Ingresa un fondo inicial válido','error'); return; }
@@ -209,7 +306,7 @@ Modulos.configuracion = {
     else UI.toast('Error al guardar','error');
   },
 
-  /* ── LOGO DEL TALLER ──────────────────────────────
+  /* ── LOGO DEL NEGOCIO ──────────────────────────────
      Se redimensiona a máx 320px y se guarda como base64 en tenants. */
   _onLogo(input) {
     const f = input.files?.[0];
@@ -239,7 +336,7 @@ Modulos.configuracion = {
   },
 
   async quitarLogo() {
-    if (!confirm('¿Quitar el logo del taller?')) return;
+    if (!confirm('¿Quitar el logo del negocio?')) return;
     const ok = await DB.updateTenant({ logo_base64: null, updated_at: new Date().toISOString() });
     if (!ok) { UI.toast('No se pudo quitar el logo','error'); return; }
     Auth.tenant.logo_base64 = null;

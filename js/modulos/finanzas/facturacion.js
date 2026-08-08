@@ -391,7 +391,7 @@ Modulos.facturacion = {
     if (!id && res.data?.id && fields.cotizacion_id) {
       await DB.marcarCotizacionConvertida(fields.cotizacion_id, res.data.id);
     }
-    /* Fidelización: acumula según la política del taller (solo al emitir) */
+    /* Fidelización: acumula según la política del negocio (solo al emitir) */
     if (!id && res.data?.id && cli?.programa_puntos) {
       const fid = fidelizacionCfg();
       const pts = Math.floor((Number(res.data.total ?? fields.total) || 0) * (Number(fid.puntos_por_q)||0));
@@ -511,11 +511,11 @@ Modulos.facturacion = {
     if (!f) return;
     const email = f.clientes?.email;
     if (!email) { UI.toast('El cliente no tiene email registrado','error'); return; }
-    const taller = Auth.tenant?.name || 'NexusPro';
+    const negocio = Auth.tenant?.name || 'NexusPro';
     const nro = f.fel_serie ? `${f.fel_serie}-${f.fel_numero||''}` : (f.num||'—');
     const html =
       `<div style="font-family:Arial,sans-serif;max-width:560px;margin:auto">` +
-      `<h2 style="color:#d97706">🧾 ${taller}</h2>` +
+      `<h2 style="color:#d97706">🧾 ${negocio}</h2>` +
       `<p>Estimado(a) <b>${UI.esc(f.nombre_receptor||f.clientes?.nombre||'cliente')}</b>, adjuntamos el detalle de su factura:</p>` +
       `<table style="width:100%;border-collapse:collapse;font-size:14px">` +
       `<tr><td style="padding:6px 0;color:#666">Factura</td><td style="text-align:right"><b>${nro}</b></td></tr>` +
@@ -530,7 +530,7 @@ Modulos.facturacion = {
       `<p style="margin-top:16px">¡Gracias por su preferencia! 🔧</p></div>`;
 
     UI.toast('Enviando factura por email...','info');
-    const r = await Email.enviar(email, `${taller} — Factura ${nro}`, { html, referencia_id: f.id });
+    const r = await Email.enviar(email, `${negocio} — Factura ${nro}`, { html, referencia_id: f.id });
     if (r.ok) UI.toast(`Factura enviada a ${email} ✓`);
     else UI.toast('No se pudo enviar: '+r.error,'error');
   },
