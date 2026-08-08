@@ -127,7 +127,7 @@ Modulos.rrhh = {
         <div class="card card-amber mb-4" style="padding:16px;display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap">
           <div>
             <div style="font-weight:700;font-size:14px;color:var(--text1)">🏛️ Registro Patronal del IGSS</div>
-            <div style="font-size:12px;color:var(--text3)">Configure el identificador oficial del taller ante el IGSS para deducciones del ISR.</div>
+            <div style="font-size:12px;color:var(--text3)">Configure el identificador oficial del negocio ante el IGSS para deducciones del ISR.</div>
           </div>
           <div style="display:flex;gap:8px;align-items:center">
             <input class="form-input mono-sm" id="igss-patronal-input" value="${Auth.tenant?.igss_patronal || ''}" placeholder="Ej. 1234567-8" style="width:160px">
@@ -238,7 +238,7 @@ Modulos.rrhh = {
         <div class="alert alert-cyan" style="margin-bottom:16px">
           <div class="alert-icon">🏢</div>
           <div class="alert-body" style="font-size:12px">
-            Cadena de mando del taller. Asigna el jefe de cada empleado desde
+            Cadena de mando del negocio. Asigna el jefe de cada empleado desde
             <b>Empleados → Editar → Reporta a</b>. La cúpula (CEO/Dueño/Gerente General) aparece arriba sin jefe.
           </div>
         </div>
@@ -611,7 +611,7 @@ Modulos.rrhh = {
         <div class="form-group"><label class="form-label">Fecha de Ingreso</label>
           <input class="form-input" id="emp-ingreso" type="date" value="${e.fecha_ingreso||''}"></div>
         <div class="form-group"><label class="form-label">Departamento / Área</label>
-          <input class="form-input" id="emp-departamento" value="${e.departamento||''}" placeholder="Taller, Administración..."></div>
+          <input class="form-input" id="emp-departamento" value="${e.departamento||''}" placeholder="Negocio, Administración..."></div>
       </div>
       <div class="form-group"><label class="form-label">Reporta a (jefe directo)</label>
         <select class="form-select" id="emp-jefe">
@@ -845,7 +845,7 @@ Modulos.rrhh = {
     return KPIS_POR_ROL[grupo];
   },
 
-  /* Métricas de un conjunto de OTs (del empleado o de todo el taller) */
+  /* Métricas de un conjunto de OTs (del empleado o de todo el negocio) */
   _metricasOts(ots) {
     const entregadasArr = ots.filter(o => ['entregado','listo'].includes(o.estado));
     const trabajadas = ots.length;
@@ -860,14 +860,14 @@ Modulos.rrhh = {
   },
 
   /* Calcula los KPIs (auto + manual) y el score ponderado de un empleado.
-     Los KPIs dependen del ROL: gerencia/ventas miden el TALLER (scope:'taller'),
+     Los KPIs dependen del ROL: gerencia/ventas miden el NEGOCIO (scope:'taller'),
      los mecánicos miden SUS OTs. Los personalizados son manuales (0-100). */
   _kpiScores(emp, ordenes, manual, cfg) {
     const propio = this._metricasOts(ordenes.filter(o => o.mecanico_id === emp.id));
-    const taller = this._metricasOts(ordenes);
+    const negocio = this._metricasOts(ordenes);
 
     const detail = this._kpisDe(emp, cfg).map(k => {
-      const m = k.scope === 'taller' ? taller : propio;
+      const m = k.scope === 'taller' ? negocio : propio;
       let score = 0, valor = '—';
       if (k.tipo === 'manual') {
         score = Math.max(0, Math.min(100, Number(manual?.[k.id]) || 0));
@@ -887,7 +887,7 @@ Modulos.rrhh = {
     });
     const pesoTotal = detail.reduce((s,d)=>s+d.peso,0) || 1;
     const score = Math.round(detail.reduce((s,d)=>s+d.score*d.peso,0)/pesoTotal);
-    return { detail, score, raw: propio, taller };
+    return { detail, score, raw: propio, negocio };
   },
 
   _calcBono(salario, score, cfg) {
@@ -985,7 +985,7 @@ Modulos.rrhh = {
       ${cuerpo}
       <div class="alert alert-cyan" style="margin-top:12px">
         <div class="alert-icon">ℹ️</div>
-        <div class="alert-body" style="font-size:12px">Los KPIs dependen del <b>rol</b> de cada empleado (gerencia mide el taller completo, mecánicos sus OTs). El <b>bono</b> = salario × ${cfg.bono_max_pct||30}% × score. Al <b>aprobar</b>, el bono se registra como egreso (categoría Bonos) del mes.</div>
+        <div class="alert-body" style="font-size:12px">Los KPIs dependen del <b>rol</b> de cada empleado (gerencia mide el negocio completo, mecánicos sus OTs). El <b>bono</b> = salario × ${cfg.bono_max_pct||30}% × score. Al <b>aprobar</b>, el bono se registra como egreso (categoría Bonos) del mes.</div>
       </div>`;
   },
 
@@ -1242,7 +1242,7 @@ Modulos.rrhh = {
     el.innerHTML = kpis.map(k=>`
       <div style="display:flex;align-items:center;gap:8px;background:var(--surface2);border-radius:8px;padding:8px">
         <span style="flex:1;font-size:12px">${k.label}
-          <span style="color:var(--text3)">(${k.tipo==='manual'?'manual':'auto'}${k.scope==='taller'?' · taller':''})</span></span>
+          <span style="color:var(--text3)">(${k.tipo==='manual'?'manual':'auto'}${k.scope==='taller'?' · negocio':''})</span></span>
         ${k.meta!==undefined?`<input class="form-input" style="width:90px" type="number" id="cfg-meta-${k.id}" value="${k.meta}" title="Meta" placeholder="meta">`:''}
         <input class="form-input" style="width:70px" type="number" id="cfg-peso-${k.id}" value="${k.peso}" min="0" max="100"> <span style="font-size:12px;color:var(--text3)">%</span>
         ${String(k.id).startsWith('custom_')?`<button class="btn btn-sm btn-danger" title="Quitar KPI personalizado" onclick="Modulos.rrhh._quitarKpiCustom('${k.id}')">✕</button>`:''}
@@ -1639,7 +1639,7 @@ Modulos.rrhh = {
       </style></head><body>
       <div class="head">
         ${t.logo_base64?`<img src="${t.logo_base64}">`:''}
-        <div><b style="font-size:16px">${t.name||'Taller'}</b><br>
+        <div><b style="font-size:16px">${t.name||'Negocio'}</b><br>
         <span style="font-size:11px;color:#555">NIT: ${t.nit||'—'} · Tel: ${t.tel||'—'} · ${t.address||''}</span></div>
       </div>
       <h1>ACTA DE ENTREGA Y RESPONSABILIDAD</h1>
@@ -2419,7 +2419,7 @@ Modulos.rrhh = {
               </div>
 
               <div class="back-disclaimer">
-                Este carné es personal e intransferible y de uso exclusivo en las instalaciones del taller. Si lo encuentra, por favor devuélvalo a la administración.
+                Este carné es personal e intransferible y de uso exclusivo en las instalaciones del negocio. Si lo encuentra, por favor devuélvalo a la administración.
               </div>
             </div>
           </div>
@@ -2556,7 +2556,7 @@ Modulos.rrhh = {
         <div class="form-group"><label class="form-label">Puesto *</label>
           <input class="form-input" id="vac-puesto" value="${v.puesto||''}" placeholder="Mecánico automotriz"></div>
         <div class="form-group"><label class="form-label">Departamento</label>
-          <input class="form-input" id="vac-depto" value="${v.departamento||''}" placeholder="Taller"></div>
+          <input class="form-input" id="vac-depto" value="${v.departamento||''}" placeholder="Negocio"></div>
       </div>
       <div class="form-row">
         <div class="form-group"><label class="form-label">Salario mínimo (Q)</label>
@@ -2706,7 +2706,7 @@ Modulos.rrhh = {
         <div class="alert-body" style="font-size:12px">
           Registro de medidas disciplinarias conforme al <b>Código de Trabajo de Guatemala</b> (Art. 60-64 obligaciones de los
           trabajadores, Art. 77 causas de despido justificado, Art. 82 indemnización). Documenta cada caso con fecha, motivo y
-          artículo aplicable para respaldar al taller ante una inconformidad o demanda laboral.
+          artículo aplicable para respaldar al negocio ante una inconformidad o demanda laboral.
         </div>
       </div>
       <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:16px">

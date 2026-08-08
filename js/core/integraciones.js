@@ -49,9 +49,9 @@ const WhatsApp = {
     const tel = cliente?.tel;
     if (!tel) return { ok: false, error: 'El cliente no tiene teléfono' };
     const estado = (ESTADOS_OT[orden.estado]?.label) || orden.estado;
-    const taller = Auth.tenant?.name || 'tu taller';
+    const negocio = Auth.tenant?.name || 'tu negocio';
     const texto =
-      `🔧 *${taller}*\n` +
+      `🔧 *${negocio}*\n` +
       `Hola${cliente.nombre ? ' ' + cliente.nombre : ''}, tu orden ${orden.num || ''} ` +
       `cambió a estado: *${estado}*.\n` +
       (orden.saldo ? `Saldo pendiente: ${UI.q(orden.saldo)}.\n` : '') +
@@ -74,15 +74,15 @@ const Email = {
     const email = cliente?.email;
     if (!email) return { ok: false, error: 'El cliente no tiene email' };
     const estado = (ESTADOS_OT[orden.estado]?.label) || orden.estado;
-    const taller = Auth.tenant?.name || 'tu taller';
+    const negocio = Auth.tenant?.name || 'tu negocio';
     const html =
       `<div style="font-family:Arial,sans-serif;max-width:520px">` +
-      `<h2 style="color:#d97706">🔧 ${taller}</h2>` +
+      `<h2 style="color:#d97706">🔧 ${negocio}</h2>` +
       `<p>Hola${UI.esc(cliente.nombre ? ' ' + cliente.nombre : '')},</p>` +
       `<p>Tu orden <b>${orden.num || ''}</b> cambió a estado: <b>${estado}</b>.</p>` +
       (orden.saldo ? `<p>Saldo pendiente: <b>${UI.q(orden.saldo)}</b>.</p>` : '') +
       `<p>¡Gracias por tu preferencia!</p></div>`;
-    return Email.enviar(email, `${taller} — Orden ${orden.num || ''}: ${estado}`, { html, referencia_id: orden.id });
+    return Email.enviar(email, `${negocio} — Orden ${orden.num || ''}: ${estado}`, { html, referencia_id: orden.id });
   }
 };
 

@@ -107,6 +107,15 @@ const UI = {
     return 'Q' + (n||0).toLocaleString('es-GT', { minimumFractionDigits:2, maximumFractionDigits:2 });
   },
 
+  /* Cantidad SIN moneda: kilos, quintales, unidades. Existe porque venta_granos
+     ya la llamaba (UI.numero) y no estaba escrita: la lista de transacciones
+     reventaba al pintar la primera fila. Hasta 3 decimales porque el inventario
+     guarda numeric(14,3) — 12.5 quintales tiene que verse como 12.5 y no como
+     12.500, y 0.125 no puede redondearse a 0.13. */
+  numero(n, decimales = 3) {
+    return (Number(n) || 0).toLocaleString('es-GT', { maximumFractionDigits: decimales });
+  },
+
   /* El 'T12:00:00' existe para que una fecha suelta (2026-07-29) no se corra un
      día por zona horaria al interpretarla como UTC. Pero se le estaba pegando
      TAMBIÉN a los timestamps completos que devuelve la base

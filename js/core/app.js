@@ -120,8 +120,8 @@ const App = {
     } catch (_) { /* el aviso nunca debe bloquear el ingreso */ }
   },
 
-  /* El trial de 30 días arranca con el PRIMER USO del taller (no al
-     registrarse ni mientras espera aprobación): si es un taller de
+  /* El trial de 30 días arranca con el PRIMER USO del negocio (no al
+     registrarse ni mientras espera aprobación): si es un negocio de
      prueba sin fecha de vencimiento, se fija hoy + 30. */
   async _iniciarTrialSiAplica() {
     const t = Auth.tenant;
@@ -656,7 +656,7 @@ const App = {
       if (m.id === 'mi_ot') return rol === 'cliente';
       if (m.id === 'superadmin') return rol === 'superadmin';
       if (rol === 'superadmin') return true;       // el dueño del SaaS ve todo
-      return tieneAcceso(m.id);                     // admin del taller queda sujeto a su plan
+      return tieneAcceso(m.id);                     // admin del negocio queda sujeto a su plan
     };
 
     const itemHtml = m => {
@@ -923,7 +923,7 @@ const App = {
   },
 
   /* ── CIERRE DE SESIÓN POR INACTIVIDAD ─────────────
-     Editable por taller (Configuración > Seguridad de Sesión,
+     Editable por negocio (Configuración > Seguridad de Sesión,
      tenants.session_timeout_minutes, default 15). Reinicia el
      contador en cualquier interacción del usuario. */
   iniciarInactividad(minutes) {

@@ -132,17 +132,43 @@ Modulos.formulas_alimento = {
     },
   },
 
+  /* Fórmulas propias del comercio (mig 134). Se cargan aparte de las de
+     referencia y se juntan por especie: para el usuario son todas "fórmulas",
+     la diferencia es que las suyas se editan y las de referencia se copian. */
+  _propias: [],
+
+  /* Las especies que se muestran como pestañas: las de referencia MÁS las que
+     el comercio inventó. Un agroservicio real formula para conejos, tilapia u
+     ovejas, y antes eso no cabía en ningún lado. */
+  _especies() {
+    const mapa = {};
+    Object.entries(this._ESPECIES).forEach(([k, v]) => {
+      mapa[k] = { label: v.label, nota: v.nota, formulas: v.formulas.slice() };
+    });
+    (this._propias || []).forEach(f => {
+      const k = f.especie || 'otros';
+      if (!mapa[k]) mapa[k] = { label: f.especie_label || k, formulas: [] };
+      mapa[k].formulas.push(f);
+    });
+    return mapa;
+  },
+
   async render() {
     const el = document.getElementById('page-content');
     UI.loading(el);
     const nombresMaga = [...new Set(Object.values(this._ING).map(i => i.maga).filter(Boolean))];
-    [this._insumos, this._ref, this._mercado] = await Promise.all([
+    [this._insumos, this._ref, this._mercado, this._propias] = await Promise.all([
       DB.getAgroInsumos(),
       DB.getRefDiariaMaga(nombresMaga).catch(() => ({})),
       DB.getPreciosMercado().catch(() => ({})),
+      DB.getAgroFormulas().catch(() => []),
     ]);
 
-    const esp = this._ESPECIES[this._especie];
+    const especies = this._especies();
+    /* Si la especie activa era una propia y se borró, no dejar la pantalla en
+       blanco: se cae a la primera que exista. */
+    if (!especies[this._especie]) this._especie = Object.keys(especies)[0];
+    const esp = especies[this._especie] || { formulas: [] };
     el.innerHTML = `
       <div class="page-header">
         <div>
@@ -150,7 +176,8 @@ Modulos.formulas_alimento = {
           <p class="page-subtitle">// Costeadas con el precio mayorista del día · maíz, maicillo y soya desde el MAGA</p>
         </div>
         <div class="page-actions">
-          <button class="btn btn-amber" onclick="Modulos.formulas_alimento.modalInsumo()">＋ Precio de insumo</button>
+          <button class="btn btn-ghost" onclick="Modulos.formulas_alimento.modalInsumo()">＋ Precio de insumo</button>
+          <button class="btn btn-amber" onclick="Modulos.formulas_alimento.modalFormula()">＋ Nueva fórmula</button>
         </div>
       </div>
       <div class="page-body">
@@ -165,14 +192,17 @@ Modulos.formulas_alimento = {
         </div>
         <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;justify-content:space-between;align-items:center">
           <div style="display:flex;gap:8px;flex-wrap:wrap">
-          ${Object.entries(this._ESPECIES).map(([k, v]) =>
+          ${Object.entries(especies).map(([k, v]) =>
             `<button class="btn btn-sm ${this._especie === k ? 'btn-cyan' : 'btn-ghost'}"
-                     onclick="Modulos.formulas_alimento._irEspecie('${k}')">${v.label}</button>`).join('')}
+                     onclick="Modulos.formulas_alimento._irEspecie('${UI.jsAttr(k)}')">${UI.esc(v.label)}</button>`).join('')}
           </div>
           ${this._selectorUnidadHTML()}
         </div>
         ${esp.nota ? `<div class="card" style="padding:10px 12px;margin-bottom:12px;border-left:3px solid var(--cyan);font-size:12px">${UI.esc(esp.nota)}</div>` : ''}
-        ${esp.formulas.map(f => this._formulaHTML(f)).join('')}
+        ${esp.formulas.length
+          ? esp.formulas.map(f => this._formulaHTML(f)).join('')
+          : `<div class="card" style="padding:16px;font-size:13px;color:var(--text3);margin-bottom:14px">
+               Esta especie todavía no tiene fórmulas. Creá una con <b>＋ Nueva fórmula</b>.</div>`}
         ${this._sustitucionHTML()}
         ${this._insumosHTML()}
       </div>`;
@@ -180,43 +210,91 @@ Modulos.formulas_alimento = {
 
   _irEspecie(k) { this._especie = k; this.render(); },
 
-  /* Precio por quintal de un ingrediente: primero el del MAGA (es de hoy y no
-     hay que mantenerlo), si no el que cargó el comercio. Devuelve null cuando
-     no hay ninguno — y entonces el costo se muestra como incompleto en vez de
-     inventar un número. */
-  _precioQq(clave) {
-    const def = this._ING[clave];
-    if (!def) return null;
+  /* Precio por quintal de un ingrediente, buscado POR NOMBRE. Se busca por
+     nombre y no por clave para que las fórmulas propias del comercio —donde el
+     ingrediente lo escribe el usuario— usen exactamente el mismo camino que
+     las de referencia. Devuelve null cuando no hay ningún precio: entonces el
+     costo se muestra incompleto en vez de inventar un número.
 
-    /* El precio que cargó el comercio manda sobre todo: es lo que de verdad
-       paga. Después el MAGA, que es mayorista y del día. De último el
-       menudeo, que es sólo un punto de partida. */
-    const propio = this._insumos.find(i => i.nombre === def.label);
-    if (propio) return { q: Number(propio.precio_quintal), fuente: 'tuyo', firme: true };
+     TODO PRECIO SE PUEDE PISAR. El orden es: lo que el comercio cargó a mano
+     (agro_insumos) manda SIEMPRE, incluso sobre el MAGA — es lo que de verdad
+     paga él, y el MAGA es un promedio mayorista nacional. Después el MAGA, que
+     es del día y no hay que mantener. De último el menudeo, que es sólo un
+     punto de partida y viaja marcado como tentativo. */
+  _precioDe(nombre) {
+    const propio = this._insumos.find(i => i.nombre === nombre);
+    if (propio) {
+      return { q: Number(propio.precio_quintal), fuente: 'tuyo', firme: true, insumoId: propio.id };
+    }
 
-    if (def.maga && this._ref[def.maga]) return { q: this._ref[def.maga].precio, fuente: 'MAGA', firme: true };
+    const def = Object.values(this._ING).find(x => x.label === nombre);
+    if (def) {
+      if (def.maga && this._ref[def.maga]) return { q: this._ref[def.maga].precio, fuente: 'MAGA', firme: true };
 
-    /* TENTATIVO. El supermercado vende presentacion de cocina, no de finca:
-       la melaza sale ~Q37/kg cuando la forrajera anda por Q3-5. Sirve para
-       tener una nocion y arrancar, NO para cotizar. Por eso viaja marcado y
-       con el precio listo para corregir de un clic. */
-    const m = def.mercado && this._mercado[def.mercado];
-    if (m) {
-      return {
-        q: +(m.precio_kg * 100 * this._LB_KG).toFixed(2),
-        fuente: 'menudeo', firme: false,
-        detalle: m.nombre + ' · ' + m.fuente + ' · ' + m.fecha,
-      };
+      /* TENTATIVO. El supermercado vende presentacion de cocina, no de finca:
+         la melaza sale ~Q37/kg cuando la forrajera anda por Q3-5. Sirve para
+         tener una nocion y arrancar, NO para cotizar. Por eso viaja marcado y
+         con el precio listo para corregir de un clic. */
+      const m = def.mercado && this._mercado[def.mercado];
+      if (m) {
+        return {
+          q: +(m.precio_kg * 100 * this._LB_KG).toFixed(2),
+          fuente: 'menudeo', firme: false,
+          detalle: m.nombre + ' · ' + m.fuente + ' · ' + m.fecha,
+        };
+      }
     }
     return null;
   },
 
-  /* Toma el precio tentativo y abre el editor con ese numero puesto, para
-     ajustarlo al que realmente paga. Un clic entre "nocion" y "dato". */
-  _ajustar(clave) {
+  /* Por clave del catálogo interno (lo usa la comparación maíz/maicillo). */
+  _precioQq(clave) {
     const def = this._ING[clave];
-    const p = this._precioQq(clave);
-    this.modalInsumo(null, { nombre: def ? def.label : '', precio: p ? p.q : '', nota: p && p.detalle ? p.detalle : '' });
+    return def ? this._precioDe(def.label) : null;
+  },
+
+  /* Advertencia del ingrediente, buscada por nombre: una fórmula propia que
+     lleve urea tiene que traer el mismo aviso que una de referencia. La urea
+     mata a un caballo — que el aviso dependa de cómo se creó la fórmula sería
+     el peor lugar posible para una inconsistencia. */
+  _avisoDe(nombre) {
+    return (Object.values(this._ING).find(x => x.label === nombre) || {}).aviso || '';
+  },
+
+  /* Los ingredientes de una fórmula, venga de donde venga: las de referencia
+     los traen como {clave: %}, las propias como [{nombre, pct}]. Acá se
+     emparejan para que todo lo de abajo no tenga que saber la diferencia. */
+  _ingredientes(f) {
+    if (Array.isArray(f.ingredientes)) {
+      return f.ingredientes
+        .filter(x => x && x.nombre)
+        .map(x => ({ nombre: x.nombre, pct: Number(x.pct) || 0 }));
+    }
+    return Object.entries(f.ing || {}).map(([k, pct]) => ({ nombre: this._ING[k]?.label || k, pct }));
+  },
+
+  /* Abre el editor de precio con el número actual puesto, sea de donde sea:
+     del MAGA, del menudeo o ninguno. Un clic entre "el dato que baja solo" y
+     "lo que yo pago". */
+  _ajustar(nombre) {
+    const p = this._precioDe(nombre);
+    if (p && p.insumoId) return this.modalInsumo(p.insumoId);   // ya es tuyo: editarlo
+    this.modalInsumo(null, { nombre, precio: p ? p.q : '', nota: p && p.detalle ? p.detalle : '' });
+  },
+
+  /* Vuelve al precio automático borrando la sobreescritura. Existe porque
+     pisar un precio no puede ser un camino de una sola dirección: el día que
+     el del MAGA vuelva a servir, hay que poder soltarlo. */
+  async _soltarPrecio(nombre) {
+    const p = this._precioDe(nombre);
+    if (!p?.insumoId) return;
+    const ok = await UI.confirmar(
+      `¿Volver al precio automático de <b>${UI.esc(nombre)}</b>? Se borra el precio que cargaste.`, 'Volver al automático');
+    if (!ok) return;
+    const exito = await DB.deleteRegistro('agro_insumos', p.insumoId);
+    if (!exito) { UI.toast('No se pudo quitar el precio', 'error'); return; }
+    UI.toast('Listo: vuelve a tomar el precio automático ✓');
+    this.render();
   },
 
   /* A cuantos animales les da un quintal en un dia. Es la cuenta que hace el
@@ -242,20 +320,32 @@ Modulos.formulas_alimento = {
   },
 
   _formulaHTML(f) {
-    const filas = Object.entries(f.ing);
+    const filas = this._ingredientes(f);
     let costo = 0, faltan = [], tentativos = [];
-    filas.forEach(([k, pct]) => {
-      const p = this._precioQq(k);
-      if (!p) { faltan.push(this._ING[k]?.label || k); return; }
+    filas.forEach(({ nombre, pct }) => {
+      const p = this._precioDe(nombre);
+      if (!p) { faltan.push(nombre); return; }
       costo += p.q * (pct / 100);
-      if (!p.firme) tentativos.push(this._ING[k]?.label || k);
+      if (!p.firme) tentativos.push(nombre);
     });
-    const avisos = filas.map(([k]) => this._ING[k]?.aviso).filter(Boolean);
-    const total = filas.reduce((s, [, p]) => s + p, 0);
+    const avisos = filas.map(x => this._avisoDe(x.nombre)).filter(Boolean);
+    const total = filas.reduce((s, x) => s + x.pct, 0);
+    const propia = !!f.id;                                  // las de referencia no tienen id
 
     return `<div class="card" style="padding:0;margin-bottom:14px">
       <div style="padding:10px 12px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:center">
-        <div style="font-weight:800;font-size:14px">${UI.esc(f.nombre)}</div>
+        <div>
+          <div style="font-weight:800;font-size:14px">${UI.esc(f.nombre)}
+            ${propia ? '<span class="badge badge-cyan" style="margin-left:6px">Tuya</span>'
+                     : '<span class="badge badge-gray" style="margin-left:6px">De referencia</span>'}</div>
+          <div style="display:flex;gap:4px;margin-top:6px;flex-wrap:wrap">
+            ${propia
+              ? `${Modulos.btnAccion('editar', `Modulos.formulas_alimento.modalFormula('${f.id}')`)}
+                 ${Modulos.btnAccion('eliminar', `Modulos.formulas_alimento.eliminarFormula('${f.id}','${UI.jsAttr(f.nombre)}')`)}`
+              : `<button class="btn btn-sm btn-ghost" title="Copiarla como fórmula tuya para ajustar porcentajes e ingredientes"
+                         onclick="Modulos.formulas_alimento.copiarFormula('${UI.jsAttr(f.nombre)}')">📋 Copiar y ajustar</button>`}
+          </div>
+        </div>
         <div style="text-align:right">
           ${faltan.length
             ? `<span class="badge badge-amber">Costo incompleto</span>`
@@ -267,18 +357,27 @@ Modulos.formulas_alimento = {
       <div class="table-wrap"><table class="data-table">
         <thead><tr><th>Ingrediente</th><th>%</th><th>${this._unidad === 'kg' ? 'Kilos' : 'Libras'} por quintal</th><th>Precio qq</th><th>Costo</th></tr></thead>
         <tbody>
-          ${filas.map(([k, pct]) => {
-            const p = this._precioQq(k);
+          ${filas.map(({ nombre, pct }) => {
+            const p = this._precioDe(nombre);
+            const aviso = this._avisoDe(nombre);
+            /* TODAS las filas llevan botón, incluidas las que trae el MAGA:
+               el precio de la bodega del comercio no es el promedio nacional,
+               y sin este botón el costo de la fórmula nunca era el suyo. */
+            const editar = `<button class="btn btn-xs btn-ghost" style="margin-left:4px"
+              title="${p ? 'Poner el precio que vos pagás (manda sobre el automático)' : 'Cargar el precio de este insumo'}"
+              onclick="Modulos.formulas_alimento._ajustar('${UI.jsAttr(nombre)}')">${p ? '✏️' : 'poner'}</button>`;
+            const soltar = p && p.insumoId
+              ? `<button class="btn btn-xs btn-ghost" title="Volver al precio automático"
+                   onclick="Modulos.formulas_alimento._soltarPrecio('${UI.jsAttr(nombre)}')">↩︎</button>` : '';
             return `<tr>
-              <td>${UI.esc(this._ING[k]?.label || k)}${this._ING[k]?.aviso ? ' <span title="tiene advertencia">⚠️</span>' : ''}</td>
+              <td>${UI.esc(nombre)}${aviso ? ' <span title="tiene advertencia">⚠️</span>' : ''}</td>
               <td>${pct}%</td>
               <td>${this._masa(pct)}</td>
               <td>${p
                 ? `Q${p.q.toFixed(2)}
                    <span style="font-size:10px;color:${p.firme ? 'var(--text3)' : 'var(--amber)'}">${p.firme ? p.fuente : 'tentativo · menudeo'}</span>
-                   ${p.firme ? '' : `<button class="btn btn-xs btn-ghost" style="margin-left:4px" title="${UI.esc(p.detalle || '')}" onclick="Modulos.formulas_alimento._ajustar('${k}')">ajustar</button>`}`
-                : `<span style="color:var(--amber)">falta precio</span>
-                   <button class="btn btn-xs btn-ghost" onclick="Modulos.formulas_alimento._ajustar('${k}')">poner</button>`}</td>
+                   ${editar}${soltar}`
+                : `<span style="color:var(--amber)">falta precio</span>${editar}`}</td>
               <td>${p ? 'Q' + (p.q * pct / 100).toFixed(2) : '—'}</td>
             </tr>`;
           }).join('')}
@@ -286,6 +385,7 @@ Modulos.formulas_alimento = {
               <td style="font-weight:800">${faltan.length ? '—' : 'Q' + costo.toFixed(2)}</td></tr>
         </tbody>
       </table></div>
+      ${f.nota ? `<div style="padding:8px 12px;font-size:11.5px;color:var(--text2)">📝 ${UI.esc(f.nota)}</div>` : ''}
       ${this._rendimiento(f, costo, !faltan.length)}
       ${tentativos.length ? `<div style="padding:8px 12px;font-size:11.5px;color:var(--amber)">
         ⚠️ Precio <b>tentativo</b> en: ${UI.esc(tentativos.join(', '))}. Salen del supermercado, que vende
@@ -339,7 +439,7 @@ Modulos.formulas_alimento = {
           <td style="font-size:12px;color:var(--text3)">${UI.esc(i.nota || '—')}</td>
           <td><div style="display:flex;gap:4px">
             ${Modulos.btnAccion('editar', `Modulos.formulas_alimento.modalInsumo('${i.id}')`)}
-            ${Modulos.btnAccion('eliminar', `Modulos.formulas_alimento.eliminarInsumo('${i.id}','${UI.escUI.jsAttr(i.nombre)}')`)}
+            ${Modulos.btnAccion('eliminar', `Modulos.formulas_alimento.eliminarInsumo('${i.id}','${UI.jsAttr(i.nombre)}')`)}
           </div></td>
         </tr>`).join('')}</tbody>
       </table></div>` : `<div style="padding:16px;font-size:13px;color:var(--text3)">
@@ -391,5 +491,166 @@ Modulos.formulas_alimento = {
 
   async eliminarInsumo(id, nombre) {
     Modulos.eliminarRegistro('agro_insumos', id, nombre, () => this.render());
+  },
+
+  /* ══ FÓRMULAS PROPIAS — CRUD COMPLETO ══════════════════════════════════════
+     Las de referencia se ven y se copian; las propias se crean, se editan y se
+     borran. La especie es texto libre con sugerencias: la app no puede tener
+     una lista cerrada de animales, porque el productor de al lado cría
+     codornices y el de más allá tilapia. */
+
+  /* Nombres de ingrediente que se ofrecen: los del catálogo interno (que traen
+     precio del MAGA o de menudeo) más los que el comercio ya cargó. */
+  _nombresIngrediente() {
+    const del = Object.values(this._ING).map(i => i.label);
+    const mios = (this._insumos || []).map(i => i.nombre);
+    return [...new Set([...del, ...mios])].sort();
+  },
+
+  /* Recibe el ingrediente ENTERO y no (nombre, pct) sueltos: así el nombre del
+     usuario no aparece nunca crudo en una interpolación —se escapa acá
+     adentro— y el detector de XSS (test/xss-escape.js) puede distinguir entre
+     "pintar un campo" y "llamar a un renderizador". */
+  _filaIngHTML(ing = {}) {
+    const nombre = ing.nombre || '', pct = ing.pct ?? '';
+    return `<div class="form-row form-ing" style="grid-template-columns:1fr 90px 40px;gap:6px;align-items:end;margin-bottom:6px">
+      <div class="form-group" style="margin:0">
+        <input class="form-input ing-nombre" list="form-ing-lista" value="${UI.esc(nombre)}" placeholder="Maíz amarillo">
+      </div>
+      <div class="form-group" style="margin:0">
+        <input class="form-input ing-pct" type="number" min="0" max="100" step="0.1" value="${pct}" placeholder="%"
+               oninput="Modulos.formulas_alimento._sumarPct()">
+      </div>
+      <button type="button" class="btn btn-sm btn-ghost" title="Quitar ingrediente"
+              onclick="this.parentElement.remove();Modulos.formulas_alimento._sumarPct()">✕</button>
+    </div>`;
+  },
+
+  /* El total tiene que verse mientras se escribe: una fórmula que suma 87% no
+     está mal escrita a propósito casi nunca, y descubrirlo al guardar es tarde. */
+  _sumarPct() {
+    const cont = document.getElementById('form-ing-cont');
+    const av = document.getElementById('form-ing-total');
+    if (!cont || !av) return;
+    const total = [...cont.querySelectorAll('.ing-pct')]
+      .reduce((s, i) => s + (parseFloat(i.value) || 0), 0);
+    const ok = Math.abs(total - 100) < 0.05;
+    av.innerHTML = `Suma: <b style="color:${ok ? 'var(--green)' : 'var(--amber)'}">${total.toFixed(1)}%</b>` +
+      (ok ? ' ✓' : ' — una fórmula completa suma 100%');
+  },
+
+  _agregarIng() {
+    const cont = document.getElementById('form-ing-cont');
+    if (cont) { cont.insertAdjacentHTML('beforeend', this._filaIngHTML()); this._sumarPct(); }
+  },
+
+  /* Copia una fórmula de referencia como propia: es la forma más rápida de
+     "ajustarla", que es lo que de verdad hace el que formula — parte de una
+     base conocida y le mueve los porcentajes. */
+  copiarFormula(nombre) {
+    const base = (this._ESPECIES[this._especie]?.formulas || []).find(f => f.nombre === nombre);
+    if (!base) { UI.toast('No se encontró la fórmula de referencia', 'error'); return; }
+    this.modalFormula(null, {
+      nombre: base.nombre + ' (ajustada)',
+      animal: base.animal, consumo: base.consumo,
+      especie: this._especie,
+      ingredientes: this._ingredientes(base),
+    });
+  },
+
+  modalFormula(id = null, base = null) {
+    const f = id ? (this._propias || []).find(x => x.id === id) : base;
+    const especies = this._especies();
+    const espActual = f?.especie || this._especie;
+    const ings = f ? this._ingredientes(f) : [{ nombre: '', pct: '' }, { nombre: '', pct: '' }];
+
+    UI.modal(`${id ? '✏️ Editar' : '＋ Nueva'} fórmula`, `
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Nombre de la fórmula *</label>
+          <input class="form-input" id="form-f-nombre" value="${f ? UI.esc(f.nombre) : ''}" placeholder="Conejo — engorde"></div>
+        <div class="form-group"><label class="form-label">Animal *</label>
+          <input class="form-input" id="form-f-animal" value="${f ? UI.esc(f.animal || '') : ''}" placeholder="conejo"
+                 list="form-animal-lista">
+          <datalist id="form-animal-lista">${['pollo','gallina','cerdo','vaca','novillo','caballo','conejo','oveja','cabra','pato','codorniz','tilapia','perro']
+            .map(a => `<option value="${a}">`).join('')}</datalist>
+          <div style="font-size:11px;color:var(--text3);margin-top:3px">En singular: se usa para decir "alimenta 38 conejos por un día".</div></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Grupo (pestaña) *</label>
+          <input class="form-input" id="form-f-especie" value="${UI.esc(espActual)}" list="form-esp-lista" placeholder="conejos">
+          <datalist id="form-esp-lista">${Object.keys(especies).map(k => `<option value="${UI.esc(k)}">`).join('')}</datalist>
+          <div style="font-size:11px;color:var(--text3);margin-top:3px">Poné uno que ya exista o inventá el tuyo (conejos, tilapia, ovinos…).</div></div>
+        <div class="form-group"><label class="form-label">Consumo por animal al día (kg) *</label>
+          <input class="form-input" id="form-f-consumo" type="number" min="0" step="0.001" value="${f?.consumo ?? ''}" placeholder="0.120">
+          <div style="font-size:11px;color:var(--text3);margin-top:3px">De acá sale a cuántos animales le alcanza un quintal.</div></div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Ingredientes y % de inclusión *</label>
+        <div id="form-ing-cont">${ings.map(i => this._filaIngHTML(i)).join('')}</div>
+        <datalist id="form-ing-lista">${this._nombresIngrediente().map(n => `<option value="${UI.esc(n)}">`).join('')}</datalist>
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-top:4px">
+          <button type="button" class="btn btn-sm btn-ghost" onclick="Modulos.formulas_alimento._agregarIng()">＋ Agregar ingrediente</button>
+          <span id="form-ing-total" style="font-size:12px;color:var(--text3)"></span>
+        </div>
+        <div style="font-size:11px;color:var(--text3);margin-top:6px">
+          Como el quintal son 100 libras exactas, el % es directamente las libras por quintal.
+          Si el ingrediente está en la lista, el costo se calcula solo con el precio del MAGA o el tuyo.
+        </div>
+      </div>
+      <div class="form-group"><label class="form-label">Nota</label>
+        <input class="form-input" id="form-f-nota" value="${f ? UI.esc(f.nota || '') : ''}" placeholder="Para la etapa de 30 a 60 días, con agua a voluntad"></div>
+      <div class="alert alert-amber" style="margin-bottom:10px"><div class="alert-icon">⚠️</div>
+        <div class="alert-body" style="font-size:11.5px">Las advertencias por ingrediente siguen aplicando en tu fórmula
+          (la urea es sólo para rumiantes; la soya cruda trae inhibidores de tripsina). Revisá con un zootecnista antes de producir.</div></div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" onclick="UI.cerrarModal()">Cancelar</button>
+        <button class="btn btn-amber" onclick="Modulos.formulas_alimento.guardarFormula(${id ? `'${id}'` : 'null'})">Guardar fórmula</button>
+      </div>`, '640px');
+    this._sumarPct();
+  },
+
+  async guardarFormula(id) {
+    const v = (el) => document.getElementById(el)?.value.trim() || '';
+    const nombre = v('form-f-nombre'), animal = v('form-f-animal'), especie = v('form-f-especie');
+    const consumo = parseFloat(document.getElementById('form-f-consumo')?.value);
+    if (!nombre) { UI.toast('Poné el nombre de la fórmula', 'error'); return; }
+    if (!animal) { UI.toast('Poné para qué animal es', 'error'); return; }
+    if (!especie) { UI.toast('Poné el grupo (la pestaña donde va)', 'error'); return; }
+    if (!isFinite(consumo) || consumo <= 0) { UI.toast('El consumo diario por animal tiene que ser mayor a cero', 'error'); return; }
+
+    const cont = document.getElementById('form-ing-cont');
+    const ingredientes = [...(cont?.querySelectorAll('.form-ing') || [])].map(fila => ({
+      nombre: fila.querySelector('.ing-nombre')?.value.trim() || '',
+      pct: parseFloat(fila.querySelector('.ing-pct')?.value) || 0,
+    })).filter(x => x.nombre && x.pct > 0);
+    if (!ingredientes.length) { UI.toast('Agregá al menos un ingrediente con su porcentaje', 'error'); return; }
+
+    /* La suma se AVISA, no se bloquea: hay quien carga la base al 95% y
+       completa con lo que tenga a mano. Bloquearlo sería inventarle una regla
+       a alguien que sabe más de su galera que la app. */
+    const total = ingredientes.reduce((s, x) => s + x.pct, 0);
+    if (Math.abs(total - 100) >= 0.05) {
+      const ok = await UI.confirmar(
+        `Los ingredientes suman <b>${total.toFixed(1)}%</b>, no 100%. El costo por quintal se calcula sobre lo que pusiste. ¿Guardar así?`,
+        'Guardar igual');
+      if (!ok) return;
+    }
+
+    /* La etiqueta de la pestaña sólo se guarda si el grupo es nuevo: los de
+       referencia (aves, porcinos…) ya tienen la suya en el código. */
+    const especie_label = this._ESPECIES[especie] ? null : especie;
+    const { error } = await DB.guardarAgroFormula({
+      id, especie, especie_label, nombre, animal, consumo,
+      ingredientes, nota: v('form-f-nota') || null,
+    });
+    if (error) { UI.toast('No se pudo guardar: ' + error.message, 'error'); return; }
+    UI.toast(id ? 'Fórmula actualizada ✓' : 'Fórmula creada ✓', 'success');
+    UI.cerrarModal();
+    this._especie = especie;
+    this.render();
+  },
+
+  async eliminarFormula(id, nombre) {
+    Modulos.eliminarRegistro('agro_formulas', id, nombre, () => this.render());
   },
 };

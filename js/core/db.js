@@ -96,7 +96,7 @@ const DB = {
     return { error };
   },
 
-  /* Solo para rollback del alta de taller (si falla la creación del admin) */
+  /* Solo para rollback del alta de negocio (si falla la creación del admin) */
   async deleteTenantById(id) {
     const { error } = await getSB().from('tenants').delete().eq('id', id);
     return { error };
@@ -147,7 +147,7 @@ const DB = {
   },
 
   /* ── RESPALDOS ────────────────────────────────────
-     Bitácora (tabla) + exportación on-demand de los datos del taller. */
+     Bitácora (tabla) + exportación on-demand de los datos del negocio. */
   async getBackups(tenantId=null) {
     let q = getSB().from('tenant_backups').select('*').order('fecha',{ascending:false});
     if (tenantId) q = q.eq('tenant_id', tenantId);
@@ -161,7 +161,7 @@ const DB = {
     return { data, error };
   },
 
-  /* Exporta los datos principales del taller en sesión (para descarga JSON). */
+  /* Exporta los datos principales del negocio en sesión (para descarga JSON). */
   async exportarDatosTenant() {
     const tid = getTID();
     /* Tablas con tenant_id, en orden de inserción (padres antes que hijos
@@ -421,7 +421,7 @@ const DB = {
     }
   },
 
-  /* Todos los mapas de acceso del taller, para la pantalla de cobertura: qué
+  /* Todos los mapas de acceso del negocio, para la pantalla de cobertura: qué
      vehículos sabemos escanear y hasta dónde. Devuelve [] si la columna
      todavía no existe (migración 097) en vez de romper la pantalla. */
   async getMapasVehiculos() {
@@ -482,7 +482,7 @@ const DB = {
   },
 
   /* Qué producto del MAGA es la referencia de cada tipo de grano que comercia
-     este comercio. Se elige por taller: venta_granos usa tipos genéricos y el
+     este comercio. Se elige por negocio: venta_granos usa tipos genéricos y el
      MAGA publica variedades (maíz blanco/amarillo, frijol negro/rojo/blanco). */
   async getMapeoGranos() {
     const { data } = await getSB().from('maga_mapeo_grano')
@@ -585,6 +585,34 @@ const DB = {
     return { error };
   },
 
+  /* Fórmulas propias del comercio (mig 134). Conviven con las de referencia
+     que trae el código: éstas se pueden editar y borrar, aquéllas se copian. */
+  async getAgroFormulas() {
+    const { data, error } = await getSB().from('agro_formulas')
+      .select('*').eq('tenant_id', getTID()).order('especie').order('nombre');
+    if (error) { console.error('agro_formulas:', error.message); return []; }
+    return data || [];
+  },
+
+  async guardarAgroFormula(f) {
+    const sb = getSB();
+    const fila = {
+      tenant_id: getTID(),
+      especie: f.especie, especie_label: f.especie_label || null,
+      nombre: f.nombre, animal: f.animal, consumo: f.consumo,
+      ingredientes: f.ingredientes || [], nota: f.nota || null,
+      updated_at: new Date().toISOString(),
+    };
+    if (f.id) {
+      const { error } = await sb.from('agro_formulas').update(fila).eq('id', f.id);
+      return { error };
+    }
+    /* Mismo criterio que los insumos: guardar una fórmula con un nombre que ya
+       existe la actualiza en vez de reventar con "duplicate key". */
+    const { error } = await sb.from('agro_formulas').upsert(fila, { onConflict: 'tenant_id,nombre' });
+    return { error };
+  },
+
   /* Precio mayorista más reciente de una lista de productos del MAGA.
      Devuelve el MÁS BARATO del último día con datos: para comprar, ese es el
      número que importa, y el mercado se devuelve para saber dónde. */
@@ -636,7 +664,7 @@ const DB = {
   },
 
   /* ── BITÁCORA DE SOLUCIONES TÉCNICAS ──────────── */
-  /* Lo que este taller ya resolvió para estos códigos o este modelo.
+  /* Lo que este negocio ya resolvió para estos códigos o este modelo.
      Es la única fuente que cubre lo que ningún manual gringo trae (Hilux,
      Canter, importados de Japón), así que se consulta durante el escaneo.
      Dos consultas a propósito: primero lo que coincide por código —lo más
@@ -1681,6 +1709,29 @@ const DB = {
     const { data, error } = await getSB().from('pos_terminales').select('*')
       .eq('tenant_id', getTID()).eq('activo', true).order('es_principal', { ascending:false }).order('nombre');
     return { data: data || [], error };
+  },
+
+  /* Igual que la anterior pero SIN filtrar por activo: es la que usa la
+     pantalla de configuración, donde hay que poder ver una terminal apagada
+     para volver a encenderla. */
+  async getTodasTerminalesPOS() {
+    const { data, error } = await getSB().from('pos_terminales').select('*')
+      .eq('tenant_id', getTID()).order('es_principal', { ascending:false }).order('nombre');
+    return { data: data || [], error };
+  },
+
+  /* Crear/editar terminal. Sin esto no había NINGUNA forma de dar de alta una
+     terminal en toda la app: el POS mandaba a pedírselo al administrador y el
+     administrador no tenía dónde crearla. */
+  async guardarTerminalPOS({ id, nombre, es_principal = false, activo = true }) {
+    const sb = getSB();
+    const fila = { tenant_id: getTID(), nombre, es_principal, activo };
+    if (id) {
+      const { data, error } = await sb.from('pos_terminales').update(fila).eq('id', id).select().single();
+      return { data, error };
+    }
+    const { data, error } = await sb.from('pos_terminales').insert(fila).select().single();
+    return { data, error };
   },
 
   async getCajaPosAbierta(terminalId) {

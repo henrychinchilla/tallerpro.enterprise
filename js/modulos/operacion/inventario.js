@@ -6,7 +6,7 @@ Modulos.inventario = {
   _catalogo: null,
 
   /* Los giros que le tocan a este comercio, segun sus modulos activos. Un
-     taller ve mecanico; El Granjero ve granos. 'general' siempre esta. */
+     negocio ve mecanico; El Granjero ve granos. 'general' siempre esta. */
   _giros() {
     return (typeof girosDelTenant === 'function')
       ? girosDelTenant(Auth.tenant?.modulos_activos)
@@ -27,7 +27,7 @@ Modulos.inventario = {
   },
   _perfil(giro) { return (typeof GIROS !== 'undefined' && GIROS[giro]) || { unidades: ['unidad'], categorias: [], campos: [], label: giro, icon: '' }; },
 
-  /* Campos propios del giro. Los del taller son COLUMNAS de la tabla (la app
+  /* Campos propios del giro. Los del negocio son COLUMNAS de la tabla (la app
      nacio asi); el resto vive en `atributos` jsonb. */
   _camposGiroHTML(giro, item) {
     const perfil = this._perfil(giro);
@@ -330,8 +330,8 @@ Modulos.inventario = {
       largo_cm:      parseFloat(document.getElementById('inv-largo')?.value)||null,
     };
 
-    /* Campos del giro. Los del taller son columnas reales; los demas van al
-       jsonb. Si el articulo cambia de giro, las columnas del taller se
+    /* Campos del giro. Los del negocio son columnas reales; los demas van al
+       jsonb. Si el articulo cambia de giro, las columnas del negocio se
        limpian: dejar "motor 1.8L" en un quintal de maiz es peor que perderlo,
        porque despues nadie sabe si es dato o basura. */
     const giro = document.getElementById('inv-giro')?.value || this._giroDe({});

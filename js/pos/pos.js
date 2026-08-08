@@ -32,7 +32,7 @@ const POS = {
       const acceso = await DB.getMisTalleresPOS();
       if (acceso.error) throw acceso.error;
       if (!acceso.data.length) return this.renderSinTaller();
-      /* No volver a preguntar lo que ya se respondió: con un solo taller, o con
+      /* No volver a preguntar lo que ya se respondió: con un solo negocio, o con
          el último recordado, se entra directo. El RPC valida la membresía igual. */
       const recordado = localStorage.getItem('pos_tenant_id');
       const directo = acceso.data.length === 1
@@ -66,18 +66,18 @@ const POS = {
 
   _seguro(texto) { const e = document.createElement('div'); e.textContent = texto || ''; return e.innerHTML; },
 
-  renderSelectorTalleres(talleres) {
-    const opciones = talleres.map(t => `<button class="pos-select-option" onclick="POS.seleccionarTaller('${t.tenant_id}')"><b>${this._seguro(t.tenant_nombre)}</b><span>${this._seguro(t.rol || 'Usuario')} · Elegir taller →</span></button>`).join('');
-    document.getElementById('pos-root').innerHTML = `<div class="pos-login-shell"><div class="pos-login-card"><div class="pos-login-brand"><div class="pos-brand-mark">N</div><div><strong>NexusPro</strong> <em>POS</em><span>Acceso seguro por ubicación</span></div></div><h1>¿En qué taller trabajarás?</h1><p>Elige únicamente entre los talleres que tu administrador te asignó.</p><div class="pos-select-list">${opciones}</div><div class="pos-login-back"><button class="btn btn-ghost btn-sm" onclick="POS.salir()">Cerrar sesión</button></div></div></div>`;
+  renderSelectorTalleres(negocios) {
+    const opciones = negocios.map(t => `<button class="pos-select-option" onclick="POS.seleccionarTaller('${t.tenant_id}')"><b>${this._seguro(t.tenant_nombre)}</b><span>${this._seguro(t.rol || 'Usuario')} · Elegir negocio →</span></button>`).join('');
+    document.getElementById('pos-root').innerHTML = `<div class="pos-login-shell"><div class="pos-login-card"><div class="pos-login-brand"><div class="pos-brand-mark">N</div><div><strong>NexusPro</strong> <em>POS</em><span>Acceso seguro por ubicación</span></div></div><h1>¿En qué negocio trabajarás?</h1><p>Elige únicamente entre los negocios que tu administrador te asignó.</p><div class="pos-select-list">${opciones}</div><div class="pos-login-back"><button class="btn btn-ghost btn-sm" onclick="POS.salir()">Cerrar sesión</button></div></div></div>`;
   },
 
   async seleccionarTaller(tenantId) {
     const r = await DB.seleccionarTallerPOS(tenantId);
-    /* Si el taller no abre, decirlo en pantalla: un toast solo dejaba la
+    /* Si el negocio no abre, decirlo en pantalla: un toast solo dejaba la
        pantalla congelada sin explicar nada. */
-    if (r.error) return this.renderErrorAcceso('No se pudo abrir el taller', r.error.message);
+    if (r.error) return this.renderErrorAcceso('No se pudo abrir el negocio', r.error.message);
     await Auth._cargarPerfil(Auth.supaUser.id, Auth.supaUser.email, null, { permitir_registro_google:true });
-    /* Cambiar de taller invalida la terminal recordada; volver al mismo la conserva. */
+    /* Cambiar de negocio invalida la terminal recordada; volver al mismo la conserva. */
     if (localStorage.getItem('pos_tenant_id') !== tenantId) {
       this._terminal = null; localStorage.removeItem('pos_terminal_id');
     }
@@ -96,7 +96,7 @@ const POS = {
       if (directa) return this.seleccionarTerminal(directa.id, r.data);
     }
     const opciones = r.data.map(t => `<button class="pos-select-option" onclick="POS.seleccionarTerminal('${t.id}')"><b>${UI.esc(this._seguro(t.nombre))}</b><span>${t.es_principal ? 'Terminal principal' : 'Terminal POS'} · Elegir terminal →</span></button>`).join('');
-    document.getElementById('pos-root').innerHTML = `<div class="pos-login-shell"><div class="pos-login-card"><div class="pos-login-brand"><div class="pos-brand-mark">N</div><div><strong>NexusPro</strong> <em>POS</em><span>${this._seguro(Auth.tenant?.name || 'Taller')}</span></div></div><h1>Elige tu terminal POS</h1><p>La caja, sus ventas y su cierre quedan registrados para esta terminal.</p><div class="pos-select-list">${opciones}</div><div class="pos-login-back"><button class="btn btn-ghost btn-sm" onclick="POS.cambiarTaller()">← Cambiar taller</button></div></div></div>`;
+    document.getElementById('pos-root').innerHTML = `<div class="pos-login-shell"><div class="pos-login-card"><div class="pos-login-brand"><div class="pos-brand-mark">N</div><div><strong>NexusPro</strong> <em>POS</em><span>${this._seguro(Auth.tenant?.name || 'Tu negocio')}</span></div></div><h1>Elige tu terminal POS</h1><p>La caja, sus ventas y su cierre quedan registrados para esta terminal.</p><div class="pos-select-list">${opciones}</div><div class="pos-login-back"><button class="btn btn-ghost btn-sm" onclick="POS.cambiarTaller()">← Cambiar negocio</button></div></div></div>`;
   },
 
   async seleccionarTerminal(id, lista=null) {
@@ -114,7 +114,7 @@ const POS = {
 
   cambiarTerminal() { this.renderSelectorTerminales(true); },
 
-  /* Olvida lo recordado para poder volver a elegir taller (y con él, terminal) */
+  /* Olvida lo recordado para poder volver a elegir negocio (y con él, terminal) */
   cambiarTaller() {
     localStorage.removeItem('pos_tenant_id');
     localStorage.removeItem('pos_terminal_id');
@@ -123,15 +123,46 @@ const POS = {
   },
 
   renderErrorAcceso(titulo, detalle) {
-    document.getElementById('pos-root').innerHTML = `<div class="pos-login-shell"><div class="pos-login-card"><div class="pos-login-brand"><div class="pos-brand-mark">N</div><div><strong>NexusPro</strong> <em>POS</em><span>No se pudo continuar</span></div></div><h1>${this._seguro(titulo)}</h1><p>${this._seguro(detalle || 'Intenta de nuevo. Si sigue igual, avisa al administrador.')}</p><div class="pos-select-list"><button class="pos-select-option" onclick="POS._procesarSesion({user:Auth.supaUser})"><b>Reintentar</b><span>Volver a cargar tus talleres</span></button></div><div class="pos-login-back"><button class="btn btn-ghost btn-sm" onclick="POS.salir()">Cerrar sesión</button></div></div></div>`;
+    document.getElementById('pos-root').innerHTML = `<div class="pos-login-shell"><div class="pos-login-card"><div class="pos-login-brand"><div class="pos-brand-mark">N</div><div><strong>NexusPro</strong> <em>POS</em><span>No se pudo continuar</span></div></div><h1>${this._seguro(titulo)}</h1><p>${this._seguro(detalle || 'Intenta de nuevo. Si sigue igual, avisa al administrador.')}</p><div class="pos-select-list"><button class="pos-select-option" onclick="POS._procesarSesion({user:Auth.supaUser})"><b>Reintentar</b><span>Volver a cargar tus negocios</span></button></div><div class="pos-login-back"><button class="btn btn-ghost btn-sm" onclick="POS.salir()">Cerrar sesión</button></div></div></div>`;
   },
 
   renderSinTaller() {
-    document.getElementById('pos-root').innerHTML = `<div class="pos-login-shell"><div class="pos-login-card"><div class="pos-login-brand"><div class="pos-brand-mark">N</div><div><strong>NexusPro</strong> <em>POS</em><span>Acceso pendiente</span></div></div><h1>Tu cuenta aún no tiene taller</h1><p>Google confirmó tu identidad, pero un administrador debe asignarte al taller y darte permiso de POS antes de cobrar.</p><div class="pos-login-back"><button class="btn btn-ghost" onclick="POS.salir()">Cerrar sesión</button></div></div></div>`;
+    document.getElementById('pos-root').innerHTML = `<div class="pos-login-shell"><div class="pos-login-card"><div class="pos-login-brand"><div class="pos-brand-mark">N</div><div><strong>NexusPro</strong> <em>POS</em><span>Acceso pendiente</span></div></div><h1>Tu cuenta aún no tiene negocio asignado</h1><p>Google confirmó tu identidad, pero un administrador debe asignarte al negocio y darte permiso de POS antes de cobrar.</p><div class="pos-login-back"><button class="btn btn-ghost" onclick="POS.salir()">Cerrar sesión</button></div></div></div>`;
   },
 
+  /* Roles que pueden dar de alta la terminal. No se usa _ROLES_OK: cobrar y
+     configurar la caja no son lo mismo — un vendedor cobra, pero no define
+     las terminales del negocio. */
+  _puedeAdministrar() {
+    return ['superadmin', 'admin', 'gerente', 'gerente_tal', 'gerente_fin'].includes(Auth.user?.rol);
+  },
+
+  /* ESTA PANTALLA ERA UN CALLEJÓN SIN SALIDA. Decía "pedíselo al
+     administrador" — y el administrador tampoco tenía dónde crearla: no
+     existía ninguna pantalla de terminales en toda la app. Un negocio nuevo
+     (El Granjero, con módulo POS activo) no podía abrir el punto de venta
+     nunca. Ahora quien administra la crea desde acá, en un clic, y sigue
+     cobrando; el resto sí tiene que pedirla, pero sabiendo a quién. */
   renderSinTerminal() {
-    document.getElementById('pos-root').innerHTML = `<div class="pos-login-shell"><div class="pos-login-card"><h1>No hay terminal POS disponible</h1><p>El administrador del taller debe crear o activar una terminal antes de iniciar cobros.</p><div class="pos-login-back"><button class="btn btn-ghost" onclick="POS.salir()">Cerrar sesión</button></div></div></div>`;
+    const puede = this._puedeAdministrar();
+    const accion = puede
+      ? `<div class="pos-select-list"><button class="pos-select-option" onclick="POS.crearPrimeraTerminal(this)"><b>＋ Crear la terminal principal</b><span>Se llama "Caja 1" y podés renombrarla en Configuración</span></button></div>`
+      : '';
+    const texto = puede
+      ? 'Todavía no hay ninguna caja dada de alta en este negocio. Creála ahora y empezá a cobrar.'
+      : 'Quien administra el negocio debe crear o activar una terminal antes de iniciar cobros.';
+    document.getElementById('pos-root').innerHTML = `<div class="pos-login-shell"><div class="pos-login-card"><div class="pos-login-brand"><div class="pos-brand-mark">N</div><div><strong>NexusPro</strong> <em>POS</em><span>${this._seguro(Auth.tenant?.name || 'Tu negocio')}</span></div></div><h1>No hay terminal POS disponible</h1><p>${texto}</p>${accion}<div class="pos-login-back"><button class="btn btn-ghost" onclick="POS.salir()">Cerrar sesión</button></div></div></div>`;
+  },
+
+  async crearPrimeraTerminal(btn) {
+    if (btn) { btn.disabled = true; btn.innerHTML = '<b>Creando…</b>'; }
+    const { data, error } = await DB.guardarTerminalPOS({ nombre: 'Caja 1', es_principal: true });
+    /* El error se muestra en pantalla y no en un toast: acá no hay ninguna
+       otra cosa que mirar, y un toast que se va deja la pantalla muda. */
+    if (error) return this.renderErrorAcceso('No se pudo crear la terminal', error.message);
+    this._terminal = data;
+    localStorage.setItem('pos_terminal_id', data.id);
+    return this._postLogin();
   },
 
   renderApertura() {
@@ -294,11 +325,11 @@ const POS = {
     const total = vivas.reduce((s,f)=>s+(Number(f.total)||0),0);
     const porMetodo = {};
     vivas.forEach(f=>{ const m=f.metodo_pago||'Efectivo'; porMetodo[m]=(porMetodo[m]||0)+(Number(f.total)||0); });
-    const taller = Auth.tenant?.name || 'NexusPro';
+    const negocio = Auth.tenant?.name || 'NexusPro';
     const dest = Auth.tenant?.email || Auth.user?.email;
     const html =
       `<div style="font-family:Arial,sans-serif;max-width:480px">`+
-      `<h2 style="color:#d97706">🧾 Cierre de caja — ${taller}</h2>`+
+      `<h2 style="color:#d97706">🧾 Cierre de caja — ${negocio}</h2>`+
       `<p>Fecha: <b>${UI.fecha(hoy)}</b><br>Cajero: <b>${UI.esc(Auth.user?.nombre||Auth.user?.email||'')}</b></p>`+
       `<p>Ventas del día: <b>${vivas.length}</b></p>`+
       `<table style="width:100%;border-collapse:collapse;font-size:14px">`+
@@ -307,7 +338,7 @@ const POS = {
       `</table></div>`;
     let nota = '';
     if (dest) {
-      const r = await Email.enviar(dest, `Cierre de caja ${taller} — ${UI.fecha(hoy)}`, { html });
+      const r = await Email.enviar(dest, `Cierre de caja ${negocio} — ${UI.fecha(hoy)}`, { html });
       nota = r.ok ? ` y enviado a ${dest}` : ` (no se pudo enviar el correo: ${r.error})`;
     } else {
       nota = ' (sin correo configurado para enviar el reporte)';
@@ -438,7 +469,7 @@ const POS = {
         <header class="pos-header">
           <div style="font-family:'Outfit','Bebas Neue',sans-serif;font-size:24px;font-weight:900;letter-spacing:-0.5px;color:var(--amber)">🛒 POS</div>
           <div style="font-size:12px;color:var(--text3);background:var(--surface3);padding:4px 10px;border-radius:6px;font-weight:700">${Auth.tenant?.name||''}</div>
-          <button class="btn btn-ghost btn-sm" style="font-size:12px" onclick="POS.cambiarTerminal()" title="Cambiar de terminal o de taller">🖥️ ${UI.esc(this._seguro(this._terminal?.nombre || 'Terminal'))}</button>
+          <button class="btn btn-ghost btn-sm" style="font-size:12px" onclick="POS.cambiarTerminal()" title="Cambiar de terminal o de negocio">🖥️ ${UI.esc(this._seguro(this._terminal?.nombre || 'Terminal'))}</button>
           <div style="margin-left:auto;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
             <button class="btn btn-ghost btn-sm" onclick="POS.modalCierreCaja()">🧾 Cerrar caja</button>
             <button class="btn btn-ghost btn-sm" onclick="POS.reportes()">📊 Reportes</button>
@@ -791,7 +822,7 @@ const POS = {
 
   /* Los giros que el comercio maneja DE VERDAD, mirando lo que hay cargado en
      el catalogo y no la teoria: si nunca cargo nada de electronica, ese filtro
-     solo estorbaria. Con un solo giro no se muestra nada — el POS de un taller
+     solo estorbaria. Con un solo giro no se muestra nada — el POS de un negocio
      no tiene por que llenarse de botones. */
   _girosPOS() {
     const usados = [...new Set((this._prod || []).map(p => p.tipo_item || 'general'))]
@@ -1359,7 +1390,7 @@ const POS = {
     await DB.insertFacturaItems(factura.id, items);
     await DB.descontarInventarioVenta(items, `Factura ${factura.num||factura.id.slice(0,8)}`);
 
-    /* Fidelización: canje (descuento) y acumulación según política del taller */
+    /* Fidelización: canje (descuento) y acumulación según política del negocio */
     const fid = fidelizacionCfg();
     if (cli?.programa_puntos) {
       if (this._canje > 0) {

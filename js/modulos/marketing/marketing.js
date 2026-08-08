@@ -169,7 +169,7 @@ Modulos.marketing = {
 
       el.innerHTML = `
         <div class="alert alert-cyan" style="margin-bottom:16px;display:flex;align-items:flex-start;gap:12px"><div class="alert-icon">⭐</div>
-          <div class="alert-body" style="font-size:12px;flex:1">Política del taller:
+          <div class="alert-body" style="font-size:12px;flex:1">Política del negocio:
             <b>Q1 = ${fid.puntos_por_q} punto${fid.puntos_por_q==1?'':'s'}</b> en cada compra ·
             <b>${tasa} puntos = Q1</b> en el canje ·
             <b>${fid.bono_afiliacion>0?`+${fid.bono_afiliacion} pts`:'sin bono'}</b> al afiliarse ·
@@ -208,7 +208,7 @@ Modulos.marketing = {
       const fb = await DB.getFeedback();
       const tid = Auth.tenant?.id || '';
       const url = `${location.origin}/feedback.html?t=${encodeURIComponent(tid)}`;
-      const taller = Auth.tenant?.name || 'NexusPro';
+      const negocio = Auth.tenant?.name || 'NexusPro';
       const ASP = [['rating_servicio','Servicio'],['rating_instalaciones','Instalaciones'],['rating_limpieza','Limpieza personal'],['rating_entrega','Condiciones de entrega'],['rating_documentos','Documentos']];
       const avg = a => a.length ? Math.round(a.reduce((x,y)=>x+y,0)/a.length*10)/10 : 0;
       const ratings = [];
@@ -225,7 +225,7 @@ Modulos.marketing = {
           <div class="card" style="text-align:center">
             <div class="card-sub mb-3">📱 Poster Oficial de Feedback</div>
             <div style="background:linear-gradient(135deg,var(--surface2) 0%,var(--border) 100%);border-radius:12px;padding:24px;border:1px solid var(--border);box-shadow:0 8px 20px rgba(0,0,0,0.02)">
-              <div style="font-weight:900;font-size:16px;color:var(--amber);margin-bottom:6px;font-family:Outfit,sans-serif">${taller.toUpperCase()}</div>
+              <div style="font-weight:900;font-size:16px;color:var(--amber);margin-bottom:6px;font-family:Outfit,sans-serif">${negocio.toUpperCase()}</div>
               <div style="font-size:13px;font-weight:800;margin-bottom:14px;color:var(--text)">¡TU OPINIÓN NOS IMPORTA!</div>
               <div id="qrbox" style="display:inline-flex;justify-content:center;align-items:center;background:#fff;border-radius:10px;padding:12px;box-shadow:0 4px 12px rgba(0,0,0,0.05)">Generando QR...</div>
               <div style="font-size:10px;color:var(--text3);margin-top:12px;word-break:break-all">${url}</div>
@@ -276,7 +276,7 @@ Modulos.marketing = {
   },
 
   /* ── Fidelización ───────────────────────────────── */
-  /* ── POLÍTICAS DE FIDELIZACIÓN (configurables por taller) ── */
+  /* ── POLÍTICAS DE FIDELIZACIÓN (configurables por negocio) ── */
   modalPoliticas() {
     const f = fidelizacionCfg();
     UI.modal('⚙️ Políticas de fidelización', `
@@ -365,11 +365,11 @@ Modulos.marketing = {
     if (!window.qrcode || !this._qrUrl) { UI.toast('Espera a que cargue el QR','warn'); return; }
     const qr = qrcode(0, 'M'); qr.addData(this._qrUrl); qr.make();
     const img = qr.createImgTag(10, 12);
-    const taller = Auth.tenant?.name || 'NexusPro';
+    const negocio = Auth.tenant?.name || 'NexusPro';
     const win = window.open('', '_blank');
     win.document.write(`<html><head><title>QR Feedback</title></head>
       <body style="text-align:center;font-family:Arial;padding:36px">
-      <h2>${taller}</h2><h3>📱 Escanea y déjanos tu opinión</h3>
+      <h2>${negocio}</h2><h3>📱 Escanea y déjanos tu opinión</h3>
       <p style="color:#64748b;font-size:12px">Las respuestas por QR ayudan a mejorar el servicio.</p>
       ${img}
       <p style="font-size:11px;color:#666;margin-top:10px">${this._qrUrl}</p>
@@ -390,17 +390,17 @@ Modulos.marketing = {
     const email = document.getElementById('enc-mail')?.value.trim();
     if (!email) { UI.toast('Ingresa un correo','error'); return; }
     const tid = Auth.tenant?.id || '';
-    const taller = Auth.tenant?.name || 'NexusPro';
+    const negocio = Auth.tenant?.name || 'NexusPro';
     UI.toast('Creando enlace seguro...', 'info');
     const { data: tokenData, error: tokenError } = await getSB().functions.invoke('create-feedback-token', { body: { email } });
     if (tokenError || tokenData?.error || !tokenData?.token) { UI.toast(tokenData?.error || 'No se pudo crear el enlace seguro.', 'error'); return; }
     const url = `${location.origin}/feedback.html?t=${encodeURIComponent(tid)}&o=email&token=${encodeURIComponent(tokenData.token)}`;
-    const html = `<div style="font-family:Arial,sans-serif;max-width:480px"><h2 style="color:#d97706">🔧 ${UI.esc(taller)}</h2>`+
+    const html = `<div style="font-family:Arial,sans-serif;max-width:480px"><h2 style="color:#d97706">🔧 ${UI.esc(negocio)}</h2>`+
       `<p>¡Tu opinión nos importa! Cuéntanos cómo te fue${fidelizacionCfg().bono_feedback>0?` y <b>gana ${fidelizacionCfg().bono_feedback} puntos</b> de fidelización`:''}.</p>`+
       `<p style="text-align:center;margin:18px 0"><a href="${url}" style="background:#d97706;color:#fff;padding:12px 22px;border-radius:8px;text-decoration:none;font-weight:700">Responder encuesta</a></p>`+
       `<p style="font-size:11px;color:#666">${url}</p></div>`;
     UI.toast('Enviando...','info');
-    const r = await Email.enviar(email, `${taller} — Tu opinión nos importa`, { html });
+    const r = await Email.enviar(email, `${negocio} — Tu opinión nos importa`, { html });
     if (r.ok) { UI.cerrarModal(); UI.toast(`Encuesta enviada a ${email} ✓`); }
     else UI.toast('No se pudo enviar: '+r.error,'error');
   },
@@ -412,7 +412,7 @@ Modulos.marketing = {
     const precEsp = document.getElementById('fl-precio-esp')?.value;
     const valido  = document.getElementById('fl-valido')?.value;
     const tel     = document.getElementById('fl-tel')?.value;
-    const taller  = Auth.tenant?.name || 'NexusPro';
+    const negocio  = Auth.tenant?.name || 'NexusPro';
     const temp    = document.getElementById('fl-template')?.value || 'neon';
 
     const descPct = precReg&&precEsp ? Math.round((1-precEsp/precReg)*100) : 0;
@@ -451,7 +451,7 @@ Modulos.marketing = {
     if (!previewEl) return;
     previewEl.innerHTML = `
       <div id="flyer-card" style="width:100%;max-width:440px;margin:0 auto;border-radius:18px;padding:32px;text-align:center;font-family:\'Outfit\',\'Inter\',sans-serif;position:relative;overflow:hidden;box-sizing:border-box;${style}">
-        <div style="font-size:12px;font-weight:800;text-transform:uppercase;margin-bottom:6px;${headerStyle}">${taller}</div>
+        <div style="font-size:12px;font-weight:800;text-transform:uppercase;margin-bottom:6px;${headerStyle}">${negocio}</div>
         <div style="font-size:10px;text-transform:uppercase;letter-spacing:1px;margin-bottom:20px;opacity:0.75">🔧 SERVICIO MECÁNICO PREMIUM</div>
         <div style="font-size:26px;line-height:1.2;margin-bottom:14px;${titleStyle}">${titulo.toUpperCase()}</div>
         ${desc?`<div style="font-size:13px;margin-bottom:20px;line-height:1.6;${textStyle}">${desc}</div>`:''}

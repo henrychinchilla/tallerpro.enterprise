@@ -2023,7 +2023,7 @@ Modulos.contabilidad.sat = {
           <tbody>
             <tr>
               <td style="padding:6px; width:50%;">Actividad Económica Principal *</td>
-              <td><input type="text" id="f-1431-actividad" class="form-control" value="${datos.actividad || 'Taller / Servicios'}" /></td>
+              <td><input type="text" id="f-1431-actividad" class="form-control" value="${datos.actividad || 'Negocio / Servicios'}" /></td>
             </tr>
             <tr style="background:#f9f9f9;">
               <td style="padding:6px;">NIT del Último Patrono *</td>
@@ -3417,7 +3417,7 @@ Modulos.contabilidad.sat = {
 
           <div style="margin-top: 15px; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 12px;">
             <div><strong>NIT del Contribuyente:</strong> ${nit}</div>
-            <div><strong>Nombre/Razón Social:</strong> Taller / Contribuyente</div>
+            <div><strong>Nombre/Razón Social:</strong> Negocio / Contribuyente</div>
             <div><strong>Formulario a Pagar:</strong> ${tipo} - ${label}</div>
             <div><strong>Período Impositivo:</strong> ${mes ? mes + '/' : ''}${anio}</div>
             <div><strong>Número de Formulario SAT:</strong> ${formNum}</div>
