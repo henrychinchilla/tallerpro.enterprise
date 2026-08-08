@@ -937,7 +937,7 @@ const POS = {
       </div>` : '';
 
     tot.innerHTML = `
-      <!-- Columna Izquierda: Cliente & Envío (Morado/Lavanda) -->
+      <!-- Columna Izquierda: Cliente, Envío & Pago (Morado/Lavanda) -->
       <div id="pos-cart-campos" style="flex:1.2; justify-content:space-between;">
         <div style="display:flex; flex-direction:column; gap:4px;">
           <button class="btn btn-ghost" style="width:100%; text-align:left; font-size:11.5px; padding:5px 8px; border:1px solid #ebd5ff; border-radius:6px; background:#fff; color:#1e1b4b; display:flex; align-items:center; justify-content:space-between;" onclick="POS.modalCliente()">
@@ -958,27 +958,27 @@ const POS = {
               <button class="btn btn-sm btn-ghost" style="padding:0px 4px; font-size:9px;" onclick="POS.modalEnvio()">Editar</button>
             </div>` : ''}
         </div>
-      </div>
 
-      <!-- Columna Derecha: Pago, Totales y Cobro (Naranja/Peach) -->
-      <div id="pos-cart-pie" style="flex:1;">
-        <!-- Descuento Manual -->
-        <div style="display:flex; align-items:center; justify-content:space-between; font-size:11.5px; height:22px;">
-          <span style="font-weight:700; color:#c2410c;">Descuento Manual:</span>
-          <div style="display:flex; align-items:center; gap:1px">
-            <span style="font-weight:800; color:#c2410c; font-size:10px;">Q</span>
-            <input class="form-input" style="width:58px; padding:2px 4px; font-size:11px; height:20px; border-radius:4px; background:#fff; text-align:right;" type="number" min="0" step="0.01"
-                   value="${this._descuento}" onchange="POS.setDescuento(this.value)">
+        <!-- Descuento Manual y Método de Pago (Movidos aquí) -->
+        <div style="display:flex; flex-direction:column; gap:4px; margin-top:2px; border-top:1px dashed #ebd5ff; padding-top:4px;">
+          <div style="display:flex; align-items:center; justify-content:space-between; font-size:11px;">
+            <span style="font-weight:700; color:#5b21b6;">Descuento Manual:</span>
+            <div style="display:flex; align-items:center; gap:1px">
+              <span style="font-weight:800; color:#5b21b6; font-size:10px;">Q</span>
+              <input class="form-input" style="width:58px; padding:2px 4px; font-size:11px; height:20px; border-radius:4px; background:#fff; text-align:right; border:1px solid #ebd5ff;" type="number" min="0" step="0.01"
+                     value="${this._descuento}" onchange="POS.setDescuento(this.value)">
+            </div>
+          </div>
+          <div class="pos-pay-compact-grid">
+            ${htmlMetodos}
           </div>
         </div>
+      </div>
 
-        <!-- Método de Pago Compacto -->
-        <div class="pos-pay-compact-grid" style="margin-top:2px;">
-          ${htmlMetodos}
-        </div>
-
+      <!-- Columna Derecha: Totales y Cobro (Naranja/Peach) -->
+      <div id="pos-cart-pie" style="flex:1; justify-content:space-between;">
         <!-- Totales Breakdown -->
-        <div style="background:rgba(255,255,255,0.7); border-radius:6px; padding:6px; border:1px solid #ffedd5; margin-top:2px;">
+        <div style="background:rgba(255,255,255,0.7); border-radius:6px; padding:6px; border:1px solid #ffedd5; margin-top:0;">
           ${htmlDescRow}
           <div style="display:flex; justify-content:space-between; font-size:10px; color:#7c2d12;">
             <span>Subtotal: ${UI.q(t.subtotal)}</span>
