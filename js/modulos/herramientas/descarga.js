@@ -2,7 +2,12 @@
    Página de descarga de la app: PWA, Android, Windows, iOS */
 Modulos.descarga = {
 
-  _WIN_URL: 'https://github.com/henrychinchilla/nexuspro.enterprise/releases/download/v3.0.0-win/NexusPro-Setup-3.0.0.exe',
+  /* El instalador se publica como release de GitHub porque pesa ~80 MB y los
+     assets del sitio tienen tope de 25 MB por archivo.
+     OJO: este enlace apuntaba a `nexuspro.enterprise`, un repositorio que NO
+     existe (el real es tallerpro.enterprise), así que el botón daba 404. */
+  _WIN_VER: '4.76.0',
+  _WIN_URL: 'https://github.com/henrychinchilla/tallerpro.enterprise/releases/download/v4.76.0-win/NexusPro-Setup-4.76.0.exe',
   _APP_URL: 'https://nexuspro.cmtelecommgt.com',
 
   async render() {
@@ -92,7 +97,7 @@ Modulos.descarga = {
             </p>
             <a class="btn btn-amber" style="width:100%;display:block;text-align:center;text-decoration:none;margin-bottom:10px"
                href="${this._WIN_URL}">
-              ⬇️ Descargar NexusPro-Setup-3.0.0.exe (~76 MB)
+              ⬇️ Descargar NexusPro-Setup-${this._WIN_VER}.exe (~80 MB)
             </a>
             <div style="font-size:11px;color:var(--text3);background:var(--surface2);border-radius:8px;padding:8px 10px">
               <b>ℹ️ SmartScreen:</b> Si Windows muestra "aplicación no reconocida", haz clic en <i>"Más información"</i> → <i>"Ejecutar de todas formas"</i>. Es normal para apps nuevas sin firma digital de Microsoft.
