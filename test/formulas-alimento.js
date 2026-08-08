@@ -10,7 +10,11 @@ const fs = require('fs');
 const vm = require('vm');
 const path = require('path');
 
-const ctx = { console, Modulos: {}, UI: { esc: (s) => s, fecha: (f) => f }, DB: {} };
+const ctx = { console, Modulos: {}, DB: {},
+  UI: { esc: (s) => s, fecha: (f) => f,
+        /* El rendimiento cuenta animales con separador de miles desde que hay
+           alevines (un quintal alimenta 453,592, no "453592"). */
+        numero: (v, d = 3) => (Number(v) || 0).toLocaleString('es-GT', { maximumFractionDigits: d }) } };
 ctx.window = ctx;
 vm.createContext(ctx);
 vm.runInContext(
