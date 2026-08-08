@@ -465,6 +465,14 @@ function renderLogin(vista='login') {
         </button>
       </div>`,
 
+    /* ESTA PANTALLA ERA UNA TRAMPA. No tenía salida: el usuario nuevo que no
+       quería cambiar la contraseña todavía se quedaba encerrado, y como la
+       sesión YA estaba abierta, recargar la página lo devolvía acá — así que
+       tampoco se podía entrar con otro usuario en el mismo navegador.
+       Ahora se puede salir. El cambio sigue siendo obligatorio para entrar:
+       salir cierra la sesión y vuelve al login, y la próxima vez se le pide de
+       nuevo, hasta que la cambie. Si se cae la conexión a medias pasa lo mismo,
+       porque la marca `debe_cambiar_password` sigue puesta en su perfil. */
     'cambiar-pass': `
       <div class="login-card">
         <div class="login-logo">
@@ -491,6 +499,16 @@ function renderLogin(vista='login') {
         <button class="btn btn-amber" style="width:100%" onclick="loginCambiarPass()">
           Guardar y Entrar →
         </button>
+
+        <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border)">
+          <p style="font-size:12px;color:var(--text3);margin-bottom:8px;text-align:center">
+            ¿Todavía no querés cambiarla? Podés salir, pero <b>no vas a poder entrar</b>
+            hasta que la cambies: se te va a volver a pedir en el siguiente ingreso.
+          </p>
+          <button class="btn btn-ghost" style="width:100%" onclick="loginSalirCambioPass()">
+            ← Salir y volver al inicio de sesión
+          </button>
+        </div>
       </div>`
   };
 
@@ -787,6 +805,28 @@ async function loginCambiarPass() {
   if (!r.ok) { UI.toast('Error: ' + r.error, 'error'); return; }
   UI.toast('¡Contraseña guardada! ✓');
   setTimeout(() => loginVerificarMFAYContinuar(), 800);
+}
+
+/* Salir del cambio obligatorio sin cambiarla.
+
+   CIERRA LA SESIÓN a propósito, y no es un detalle: la sesión de Supabase ya
+   estaba abierta cuando aparece esta pantalla. Con sólo volver a pintar el
+   login, el navegador seguiría teniendo la sesión del primero — recargar lo
+   devolvería al cambio de contraseña y NO se podría entrar con otro usuario en
+   ese mismo navegador, que es justo lo que estaba pasando.
+
+   No se toca `debe_cambiar_password`: sigue en true, así que la próxima vez que
+   entre se le vuelve a pedir. Es lo mismo que ocurre si se cae la conexión o
+   cierra la pestaña a la mitad. */
+async function loginSalirCambioPass() {
+  try { await Auth.logout(); }
+  catch (e) { console.warn('logout:', e?.message || e); }
+  /* Por si el logout falló (sin red): se limpia igual lo que quedó en memoria,
+     para no arrastrar el perfil del anterior al siguiente intento. */
+  Auth.user = Auth.tenant = Auth.supaUser = Auth.licencia = null;
+  window._cachedTenantId = null;
+  UI.toast('Podés entrar cuando quieras: se te pedirá cambiar la contraseña.', 'info', 6000);
+  renderLogin('login');
 }
 
 async function loginGuardarTipoNegocio() {
