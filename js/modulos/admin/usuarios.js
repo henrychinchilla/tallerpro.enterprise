@@ -516,7 +516,9 @@ Modulos.usuarios = {
       updated_at:      new Date().toISOString()
     });
 
-    if (!ok) { UI.toast('Error al guardar','error'); return; }
+    /* El motivo va en el aviso: "Error al guardar" a secas no deja ni
+       reportarlo (así se escondía el 23502 del upsert parcial). */
+    if (!ok.ok) { UI.toast('No se pudo guardar: ' + (ok.error || 'error desconocido'), 'error', 8000); return; }
     UI.cerrarModal();
     UI.toast('Usuario y permisos actualizados ✓');
     this.render();
@@ -546,11 +548,14 @@ Modulos.usuarios = {
   },
 
   async eliminar(id, nombre) {
-    const ok = await UI.confirmar(`¿Eliminar usuario <b>${nombre}</b>? Esta acción desactiva su acceso al sistema.`, 'Eliminar');
+    const ok = await UI.confirmar(
+      `¿Eliminar usuario <b>${nombre}</b>? Se le quita el acceso al sistema y queda marcado como Inactivo.<br><br>
+       <span style="font-size:12px;color:var(--text3)">No se borra la fila: sus órdenes, ventas y movimientos siguen diciendo quién los hizo.
+       Eso es lo que revisa una auditoría.</span>`, 'Eliminar');
     if (!ok) return;
-    const ok2 = await DB.upsertUsuario({ id, activo: false, updated_at: new Date().toISOString() });
-    if (ok2) { UI.toast('Usuario desactivado ✓'); this.render(); }
-    else UI.toast('Error al eliminar','error');
+    const r = await DB.upsertUsuario({ id, activo: false, updated_at: new Date().toISOString() });
+    if (r.ok) { UI.toast('Usuario desactivado ✓'); this.render(); }
+    else UI.toast('No se pudo eliminar: ' + (r.error || 'error desconocido'), 'error', 8000);
   },
 
   async ejecutarReset(id) {

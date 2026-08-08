@@ -222,11 +222,31 @@ const DB = {
     return data || [];
   },
 
+  /* NO usa upsert cuando ya hay id, y ésa es la corrección de un bug que rompía
+     el borrado de usuarios PARA TODOS (no sólo en modo soporte):
+
+     un upsert de PostgREST es un INSERT ... ON CONFLICT, así que la fila que se
+     manda tiene que ser válida como INSERT COMPLETO. `usuarios` tiene nombre y
+     email NOT NULL, y "eliminar" mandaba sólo { id, activo:false } → Postgres
+     respondía 23502 (null value in column "nombre") ANTES de llegar al
+     ON CONFLICT. Lo mismo le pasaba a los otros tres llamadores que mandan un
+     solo campo (reporta_a, debe_cambiar_password): un guardado parcial nunca
+     funcionó. Con id → UPDATE, que es lo que de verdad se quería.
+
+     Y el tenant_id NO se toca al actualizar: el superadmin edita usuarios de
+     cualquier negocio, y forzarle el tenant de la sesión se los movería al
+     suyo. Sólo se pone al crear. */
   async upsertUsuario(fields) {
-    const { error } = await getSB().from('usuarios')
-      .upsert({ ...fields, tenant_id: getTID() }, { onConflict:'id' });
+    const sb = getSB();
+    if (fields.id) {
+      const { id, ...cambios } = fields;
+      const { error } = await sb.from('usuarios').update(cambios).eq('id', id);
+      if (error) console.error('upsertUsuario:', error.message);
+      return { ok: !error, error: error?.message || null };
+    }
+    const { error } = await sb.from('usuarios').insert({ ...fields, tenant_id: getTID() });
     if (error) console.error('upsertUsuario:', error.message);
-    return !error;
+    return { ok: !error, error: error?.message || null };
   },
 
   async getConfigFiscal() {

@@ -407,6 +407,21 @@ function giroVisible(giro) {
   return g.modulos.some(m => puedeAccion(m, 'ver'));
 }
 
+/* ¿El rol en sesión está en esta lista? EL SUPERADMIN SIEMPRE ESTÁ.
+
+   Es el dueño del SaaS y el soporte de todos los negocios: entra a cualquier
+   comercio en modo soporte y tiene que poder hacer lo mismo que su dueño. Cada
+   lista de roles escrita a mano es una oportunidad de dejarlo afuera por
+   olvido — ya había pasado con el aviso de contabilidad. Con esta función la
+   regla vive en UN lugar y una lista nueva no puede romperla.
+
+   `nivelAcceso()` ya hace lo propio para los permisos por módulo; esto cubre
+   las listas sueltas (menús, pestañas, herramientas). */
+function rolEnLista(lista, rol = window.Auth?.user?.rol) {
+  if (rol === 'superadmin') return true;
+  return Array.isArray(lista) && lista.includes(rol);
+}
+
 /* ¿Puede realizar la acción ('ver' | 'editar' | 'eliminar') en el módulo? */
 function puedeAccion(modulo, accion) {
   const min = { ver:1, editar:2, eliminar:3 }[accion] || 3;
