@@ -73,7 +73,7 @@ Object.assign(Modulos.armeria, {
      `clienteId` permite elegir el cliente cuando no hay operación. */
   async modalDeclaraciones(operacionId, clienteId) {
     if (typeof DB !== 'undefined' && typeof DB.getClientes === 'function') {
-      const cs = await DB.getClientes().catch(() => []);
+      const cs = await DB.getClientes(null, 'armeria').catch(() => []);
       if (cs && cs.length) this._clientes = cs;
     }
     const o = operacionId ? this._data.find(x => x.id === operacionId) : null;
@@ -136,7 +136,7 @@ Object.assign(Modulos.armeria, {
     let cli = {};
     if (cid) {
       if (typeof DB !== 'undefined' && typeof DB.getClientes === 'function') {
-        const cs = await DB.getClientes().catch(() => []);
+        const cs = await DB.getClientes(null, 'armeria').catch(() => []);
         if (cs && cs.length) this._clientes = cs;
       }
       cli = (this._clientes || []).find(c => c.id === cid) || {};
@@ -146,8 +146,11 @@ Object.assign(Modulos.armeria, {
     const a = inv?.atributos || {};
 
     /* Una raya para llenar a mano cuando el dato no está. Se prefiere eso a
-       dejar el hueco invisible: un notario necesita ver qué falta. */
-    const L = (v, ancho = 220) => v
+       dejar el hueco invisible: un notario necesita ver qué falta.
+       Se llama escRaya y no L porque ESCAPA: con el nombre de una letra, el
+       detector de XSS (test/xss-escape.js) no podía saberlo y marcaba las 15
+       llamadas como campos crudos. El nombre lleva el "esc" a propósito. */
+    const escRaya = (v, ancho = 220) => v
       ? `<b>${UI.esc(v)}</b>`
       : `<span style="display:inline-block;border-bottom:1px solid #000;min-width:${ancho}px">&nbsp;</span>`;
 
@@ -260,14 +263,14 @@ Object.assign(Modulos.armeria, {
     const dpiTexto = obtenerDpiTextoCompleto(dpiVal);
 
     const identificacion = `
-      <p>Yo, ${L(cli.nombre, 300)}, de ${L(edad != null ? String(edad) : null, 60)} años de edad,
-      ${L(estadoCivil, 90)} (estado civil), de nacionalidad ${L(nacionalidadStr, 130)},
-      de profesión u oficio ${L(cli.profesion, 180)}, con residencia en
-      ${L(cli.direccion, 340)}${cli.vivienda ? ` (vivienda ${UI.esc(cli.vivienda)})` : ''},
-      del municipio de ${L(cli.residencia_municipio, 180)}, departamento de ${L(cli.residencia_departamento, 180)},
+      <p>Yo, ${escRaya(cli.nombre, 300)}, de ${escRaya(edad != null ? String(edad) : null, 60)} años de edad,
+      ${escRaya(estadoCivil, 90)} (estado civil), de nacionalidad ${escRaya(nacionalidadStr, 130)},
+      de profesión u oficio ${escRaya(cli.profesion, 180)}, con residencia en
+      ${escRaya(cli.direccion, 340)}${cli.vivienda ? ` (vivienda ${UI.esc(cli.vivienda)})` : ''},
+      del municipio de ${escRaya(cli.residencia_municipio, 180)}, departamento de ${escRaya(cli.residencia_departamento, 180)},
       me identifico con el Documento Personal de Identificación (DPI)
-      número ${L(dpiTexto, 380)} extendido por el Registro Nacional
-      de las Personas de la República de Guatemala${cli.nit || o.contraparte_nit ? `, con Número de Identificación Tributaria (NIT) ${L(cli.nit || o.contraparte_nit, 140)}` : ''}.</p>`;
+      número ${escRaya(dpiTexto, 380)} extendido por el Registro Nacional
+      de las Personas de la República de Guatemala${cli.nit || o.contraparte_nit ? `, con Número de Identificación Tributaria (NIT) ${escRaya(cli.nit || o.contraparte_nit, 140)}` : ''}.</p>`;
 
     const cuerpos = {
       ingresos: `
@@ -275,9 +278,9 @@ Object.assign(Modulos.armeria, {
         <p>Por este medio, y bajo juramento solemne de decir verdad, debidamente ${deGenero('enterado', 'enterada')}
         de las penas relativas al delito de perjurio, <b>DECLARO</b>:</p>
         <p><b>PRIMERO:</b> Que mis ingresos mensuales ascienden aproximadamente a la cantidad de
-        ${L(null, 200)} quetzales (Q ${L(null, 120)}).</p>
+        ${escRaya(null, 200)} quetzales (Q ${escRaya(null, 120)}).</p>
         <p><b>SEGUNDO:</b> Que dichos ingresos los obtengo de la siguiente actividad económica:
-        ${L(cli.profesion ? `Mi actividad económica y comercial como ${cli.profesion}` : null, 420)}<br>${L(null, 560)}<br>${L(null, 560)}</p>
+        ${escRaya(cli.profesion ? `Mi actividad económica y comercial como ${cli.profesion}` : null, 420)}<br>${escRaya(null, 560)}<br>${escRaya(null, 560)}</p>
         <p><b>TERCERO:</b> Que por la naturaleza de la actividad económica antes descrita no me es
         posible presentar constancia de empleo ni certificación de ingresos.</p>
         <p><b>CUARTO:</b> Que los fondos con los que realizo la presente compra provienen
@@ -300,12 +303,12 @@ Object.assign(Modulos.armeria, {
         ${identificacion}
         <p>Por este medio <b>DECLARO</b>, para efectos del control interno del establecimiento:</p>
         <p><b>PRIMERO:</b> Que el origen de los fondos con los que realizo la presente operación es
-        el siguiente: ${L(cli.profesion ? `Ingresos provenientes de mi actividad económica como ${cli.profesion}` : null, 400)}<br>${L(null, 560)}</p>
+        el siguiente: ${escRaya(cli.profesion ? `Ingresos provenientes de mi actividad económica como ${cli.profesion}` : null, 400)}<br>${escRaya(null, 560)}</p>
         <p><b>SEGUNDO:</b> Que dichos fondos provienen de actividades lícitas y no tienen relación
         alguna con el lavado de dinero u otros activos ni con el financiamiento del terrorismo.</p>
         <p><b>TERCERO:</b> Que la operación la realizo por cuenta propia
-        ${L('sí', 60)} (sí / no). En caso negativo, actúo por cuenta de:
-        ${L(null, 340)}</p>
+        ${escRaya('sí', 60)} (sí / no). En caso negativo, actúo por cuenta de:
+        ${escRaya(null, 340)}</p>
         <p style="font-size:11px;color:#555;border:1px solid #ccc;padding:8px;border-radius:4px">
         <b>Nota sobre este documento:</b> no es un formulario de la Intendencia de Verificación
         Especial (IVE). El artículo 18 del Decreto 67-2001 y el artículo 5 de su Reglamento
@@ -527,8 +530,8 @@ Object.assign(Modulos.armeria, {
     ${cuerpos[tipo]}
     ${detalleArma}
 
-    <p>En fe de lo declarado, firmo la presente en el municipio de ${L(cli.vecindad_municipio, 180)},
-    departamento de ${L(cli.vecindad_departamento, 180)}, a los ${fechaLetras}.</p>
+    <p>En fe de lo declarado, firmo la presente en el municipio de ${escRaya(cli.vecindad_municipio, 180)},
+    departamento de ${escRaya(cli.vecindad_departamento, 180)}, a los ${fechaLetras}.</p>
 
     <div class="firmas">
       <div class="firma">
@@ -629,7 +632,7 @@ Object.assign(Modulos.armeria, {
     const [decls, clientes] = await Promise.all([
       DB.getDeclaraciones().catch(() => []),
       (this._clientes && this._clientes.length) ? Promise.resolve(this._clientes)
-        : DB.getClientes().catch(() => []),
+        : DB.getClientes(null, 'armeria').catch(() => []),
     ]);
     this._declaraciones = decls;
     this._clientes = clientes;

@@ -4,23 +4,18 @@
    tenencias, documentos) NO viven acá: son ~30 campos que sólo le importan
    a una armería, y mezclarlos en el alta de cualquier cliente hacía el
    formulario una pared. Viven en su propio expediente —Modulos.clientesArmeria,
-   js/modulos/especializados/clientes-armeria.js— sobre la MISMA tabla
-   `clientes` (los nombres de columna no cambian), así que armeria.js y
-   armeria-declaraciones.js siguen leyendo cli.dpi, cli.licencia_tipo, etc.
-   sin enterarse de que la pantalla que los llena es otra. */
+   js/modulos/especializados/clientes-armeria.js— y desde la mig 133 tampoco
+   comparten LISTA: el cliente declara su `giro` igual que el artículo declara
+   su tipo_item, y esta pantalla muestra sólo los comunes. La tabla sigue
+   siendo la misma (`clientes`), así que el POS y la facturación le pueden
+   cobrar a cualquiera desde una sola fuente. */
 Modulos.clientes = {
   _data: [],
-
-  _pideDatosArmeria() {
-    const mods = window.Auth?.tenant?.modulos_activos;
-    return Array.isArray(mods) ? mods.includes('armeria') : false;
-  },
 
   async render(busca='') {
     const el = document.getElementById('page-content');
     UI.loading(el);
-    this._data = await DB.getClientes(busca||null);
-    const armeria = this._pideDatosArmeria();
+    this._data = await DB.getClientes(busca||null, 'general');
 
     el.innerHTML = `
       <div class="page-header">
@@ -56,7 +51,6 @@ Modulos.clientes = {
                 <td onclick="event.stopPropagation()">
                   <div style="display:flex;gap:4px">
                     <button class="btn btn-sm btn-cyan" onclick="Modulos.clientes.modalForm('${c.id}')" title="Editar">✏️ Editar</button>
-                    ${armeria ? `<button class="btn btn-sm btn-ghost" onclick="Modulos.clientesArmeria.modalForm('${c.id}')" title="Expediente de armería">🔫</button>` : ''}
                     <button class="btn btn-sm btn-ghost" onclick="Modulos.clientes.whatsapp('${UI.jsAttr(c.tel)}','${UI.jsAttr(c.nombre)}')" title="WhatsApp">💬</button>
                     <button class="btn btn-sm btn-ghost" onclick="Modulos.clientes.verVehiculos('${c.id}','${UI.jsAttr(c.nombre)}')" title="Vehículos">🚗</button>
                     <button class="btn btn-sm btn-danger" onclick="Modulos.clientes.eliminar('${c.id}','${UI.jsAttr(c.nombre)}')" title="Eliminar">🗑️</button>
@@ -79,16 +73,9 @@ Modulos.clientes = {
        tumbar la pantalla con "cannot read properties of undefined". */
     const c = (id ? this._data.find(x=>x.id===id) : {}) || {};
     const esEdicion = !!id;
-    const armeria = this._pideDatosArmeria();
     if (onGuardado !== null) this._onGuardado = onGuardado;
     UI.modal(`${esEdicion?'✏️ Editar':'＋ Nuevo'} Cliente`, `
       ${esEdicion?'<div class="alert alert-amber" style="margin-bottom:12px"><div class="alert-icon">⚠️</div><div class="alert-body" style="font-size:11px">Los cambios reemplazarán la información actual del cliente.</div></div>':''}
-      ${(esEdicion && armeria) ? `
-      <div class="alert alert-cyan" style="margin-bottom:12px;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
-        <div class="alert-body" style="font-size:11px">🔫 El DPI, la licencia, las tenencias y los documentos de este cliente
-          viven en su expediente de armería (lo que exige DIGECAM).</div>
-        <button type="button" class="btn btn-sm btn-cyan" onclick="UI.cerrarModal();Modulos.clientesArmeria.modalForm('${id}')">Abrir expediente →</button>
-      </div>` : ''}
       <div style="display:flex;gap:12px;margin-bottom:12px">
         <label style="flex:1;display:flex;align-items:center;gap:6px;padding:10px;background:var(--surface2);border-radius:8px;cursor:pointer">
           <input type="radio" name="cli-tipo" value="individual" ${(!c.tipo||c.tipo==='individual')?'checked':''} onchange="document.getElementById('cli-empresa-row').style.display='none'"> Individual
@@ -222,29 +209,13 @@ Modulos.clientes = {
 
     UI.cerrarModal();
 
-    /* Quien nos abrió desde otro módulo (ej. Armería) sigue su flujo con el
-       cliente ya creado, en vez de perder la operación a medio llenar. */
+    /* Quien nos abrió desde otro módulo sigue su flujo con el cliente ya
+       creado, en vez de perder la operación a medio llenar. */
     const cb = this._onGuardado;
-    const nuevoId = id || guardado?.id;
     if (cb) {
       this._onGuardado = null;
       UI.toast(id ? 'Cliente actualizado ✓' : 'Cliente creado ✓');
       await this.render(); cb(guardado || null); return;
-    }
-
-    /* Alta nueva en un comercio con armería activa: el cliente recién creado
-       casi siempre necesita su expediente (DPI, licencia...) para poder
-       venderle — se encadena directo en vez de dejarlo perdido en la lista. */
-    if (!id && this._pideDatosArmeria() && Modulos.clientesArmeria) {
-      UI.toast('Cliente creado ✓ — completá su expediente de armería');
-      await this.render();
-      /* Por si quedó un callback pendiente de un intento anterior cancelado
-         (ej. se abrió el expediente desde una venta de Armería y se canceló
-         sin guardar): se limpia antes de abrir, para no dispararlo a ciegas
-         cuando esta alta —que no tiene nada que ver con esa venta— se guarde. */
-      Modulos.clientesArmeria._onGuardado = null;
-      Modulos.clientesArmeria.modalForm(nuevoId);
-      return;
     }
 
     UI.toast(id ? 'Cliente actualizado ✓' : 'Cliente creado ✓');

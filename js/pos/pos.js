@@ -436,7 +436,7 @@ const POS = {
       </style>
       <div class="pos-shell">
         <header class="pos-header">
-          <div style="font-family:\'Outfit\',\'Bebas Neue\',sans-serif;font-size:24px;font-weight:900;letter-spacing:-0.5px;color:var(--amber)">🛒 POS</div>
+          <div style="font-family:'Outfit','Bebas Neue',sans-serif;font-size:24px;font-weight:900;letter-spacing:-0.5px;color:var(--amber)">🛒 POS</div>
           <div style="font-size:12px;color:var(--text3);background:var(--surface3);padding:4px 10px;border-radius:6px;font-weight:700">${Auth.tenant?.name||''}</div>
           <button class="btn btn-ghost btn-sm" style="font-size:12px" onclick="POS.cambiarTerminal()" title="Cambiar de terminal o de taller">🖥️ ${UI.esc(this._seguro(this._terminal?.nombre || 'Terminal'))}</button>
           <div style="margin-left:auto;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
@@ -456,8 +456,17 @@ const POS = {
                        value="${UI.esc(this._busca)}" autocomplete="off"
                        oninput="POS._busca=this.value;POS._pintarGrid()">
               </div>
+              <button class="btn btn-secondary" id="pos-btn-cats" style="padding:0 10px;height:38px;display:flex;align-items:center;justify-content:center;gap:4px;border-radius:8px;font-size:12px;font-weight:700;background:var(--surface);color:var(--text2);" title="Filtrar por Categoría">
+                <span>🏷️</span> <span id="pos-cat-label" style="max-width:80px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${UI.esc(this._cat || 'Todo')}</span>
+              </button>
               <button class="btn btn-secondary" id="pos-btn-numpad" style="padding:8px 12px;height:38px;display:flex;align-items:center;justify-content:center;border-radius:8px;font-size:15px;background:var(--surface);" title="Teclado numérico">⌨️</button>
               <button class="btn btn-secondary" id="pos-btn-options" style="padding:8px 12px;height:38px;display:flex;align-items:center;justify-content:center;border-radius:8px;font-size:15px;background:var(--surface);" title="Opciones">☰</button>
+
+              <!-- Popover Categorías. Su margen derecho se calcula al abrirlo: el
+                   botón cambia de ancho según la categoría activa, así que un
+                   valor fijo se desalinea. -->
+              <div class="options-dropdown" id="pos-cats-popover" style="left:auto; width:220px; max-height:280px; overflow-y:auto; display:none;">
+              </div>
 
               <!-- Popover Teclado Virtual -->
               <div class="numpad-popover" id="pos-numpad-popover">
@@ -487,8 +496,6 @@ const POS = {
             <div class="fpos-chips">
               ${POS._girosPOS().map(g => `<div class="fpos-chip ${this._giro===g?'on':''}" onclick="POS.setGiro('${g}', this)">${(GIROS[g]||{}).icon||''} ${UI.esc((GIROS[g]||{}).label||g)}</div>`).join('')}
             </div>` : ''}
-            <!-- Chips de categoría con conteo; se repintan con la rejilla -->
-            <div class="fpos-chips" id="pos-chips"></div>
             <div id="pos-grid" style="flex:1"></div>
             <div class="fpos-teclas">
               <span>⌨️ <kbd>F2</kbd>buscar</span>
@@ -510,11 +517,13 @@ const POS = {
         <div class="pos-mbar" id="pos-mbar" onclick="POS.toggleCart(true)"></div>
       </div>`;
 
-    // Configurar listeners interactivos para el Numpad y Opciones
+    // Configurar listeners interactivos para el Numpad, Opciones y Categorías
     const numpadBtn = document.getElementById('pos-btn-numpad');
     const numpadPop = document.getElementById('pos-numpad-popover');
     const optBtn = document.getElementById('pos-btn-options');
     const optPop = document.getElementById('pos-options-popover');
+    const catsBtn = document.getElementById('pos-btn-cats');
+    const catsPop = document.getElementById('pos-cats-popover');
 
     numpadBtn?.addEventListener('click', e => {
       e.stopPropagation();
@@ -523,6 +532,8 @@ const POS = {
       numpadBtn.style.background = isVisible ? 'var(--surface)' : 'color-mix(in srgb, var(--amber) 15%, var(--surface))';
       if (optPop) optPop.style.display = 'none';
       if (optBtn) optBtn.style.background = 'var(--surface)';
+      if (catsPop) catsPop.style.display = 'none';
+      if (catsBtn) catsBtn.style.background = 'var(--surface)';
     });
 
     optBtn?.addEventListener('click', e => {
@@ -532,6 +543,22 @@ const POS = {
       optBtn.style.background = isVisible ? 'var(--surface)' : 'color-mix(in srgb, var(--amber) 15%, var(--surface))';
       if (numpadPop) numpadPop.style.display = 'none';
       if (numpadBtn) numpadBtn.style.background = 'var(--surface)';
+      if (catsPop) catsPop.style.display = 'none';
+      if (catsBtn) catsBtn.style.background = 'var(--surface)';
+    });
+
+    catsBtn?.addEventListener('click', e => {
+      e.stopPropagation();
+      const isVisible = catsPop.style.display === 'block';
+      /* Se alinea el borde derecho del popover con el del botón. */
+      if (!isVisible) catsPop.style.right =
+        (catsBtn.parentElement.offsetWidth - catsBtn.offsetLeft - catsBtn.offsetWidth) + 'px';
+      catsPop.style.display = isVisible ? 'none' : 'block';
+      catsBtn.style.background = isVisible ? 'var(--surface)' : 'color-mix(in srgb, var(--amber) 15%, var(--surface))';
+      if (numpadPop) numpadPop.style.display = 'none';
+      if (numpadBtn) numpadBtn.style.background = 'var(--surface)';
+      if (optPop) optPop.style.display = 'none';
+      if (optBtn) optBtn.style.background = 'var(--surface)';
     });
 
     window.addEventListener('click', (e) => {
@@ -542,6 +569,10 @@ const POS = {
       if (optPop && !optPop.contains(e.target) && e.target !== optBtn) {
         optPop.style.display = 'none';
         if (optBtn) optBtn.style.background = 'var(--surface)';
+      }
+      if (catsPop && !catsPop.contains(e.target) && !catsBtn?.contains(e.target)) {
+        catsPop.style.display = 'none';
+        if (catsBtn) catsBtn.style.background = 'var(--surface)';
       }
     });
 
@@ -563,15 +594,6 @@ const POS = {
     bar.innerHTML = n
       ? `<span>🛒 ${n} artículo${n===1?'':'s'}</span><span>Cobrar ${UI.q(t.total)} →</span>`
       : `<span>🛒 Carrito vacío</span><span style="font-weight:700;font-size:13px">Ver carrito →</span>`;
-  },
-
-  _onCatChange(el) {
-    /* Los chips de categoría se repintan enteros en _pintarChips (el conteo
-       cambia), así que basta con repintar. Se conservan las pastillas de giro,
-       que sí viven fuera de ese repintado. */
-    document.querySelectorAll('.pos-cat-pill').forEach(p => p.classList.remove('active'));
-    if (el && el.classList.contains('pos-cat-pill')) el.classList.add('active');
-    this._pintarGrid();
   },
 
   /* ── ATAJOS DE TECLADO Y ESCÁNER ──
@@ -667,6 +689,12 @@ const POS = {
     const etiqueta = sinStock ? 'Agotado'
       : `${stock}${p.unidad_medida ? ' ' + UI.esc(p.unidad_medida) : ''} disp.`;
 
+    /* El inventario de la armería SÍ se ve y se vende acá (chalecos, camping,
+       limpieza, ropa). Lo que no se cobra en el mostrador es el arma de fuego
+       y la munición: la tarjeta lo dice antes de tocarla, y addToCart explica
+       por qué si alguien la toca igual. */
+    const regulado = typeof articuloRegulado === 'function' && articuloRegulado(p);
+
     const thumb = p.imagen_url
       ? `<img class="fpos-thumb" src="${encodeURI(p.imagen_url)}" alt="" loading="lazy">`
       : '<div class="fpos-thumb">📦</div>';
@@ -682,7 +710,7 @@ const POS = {
           ${codigo ? `<div class="fpos-meta">${UI.esc(codigo)}</div>` : ''}
           <div class="fpos-pie">
             <span class="fpos-precio">${UI.q(p.precio_venta)}</span>
-            <span class="fpos-stock ${clase}">${etiqueta}</span>
+            <span class="fpos-stock ${regulado ? 'out' : clase}">${regulado ? '🔒 Solo Armería' : etiqueta}</span>
           </div>
         </div>
       </div>`;
@@ -701,34 +729,58 @@ const POS = {
     this._pintarChips();
   },
 
-  /* Los chips se repintan junto con la rejilla porque su conteo depende del
-     buscador: al escribir "aceite", cada categoría debe decir cuántos aceites
-     tiene, no cuántos artículos tiene en total. */
+  /* Las categorías viven en el dropdown 🏷️ y no en una fila de chips: en un
+     catálogo real la fila crecía tanto que tapaba los productos. Se repintan
+     junto con la rejilla porque el conteo depende del buscador: al escribir
+     "aceite", cada categoría dice cuántos aceites tiene, no su total. */
   _pintarChips() {
-    const cont = document.getElementById('pos-chips');
-    if (!cont) return;
+    const pop = document.getElementById('pos-cats-popover');
+    if (!pop) return;
+
     /* Se cuenta sobre lo filtrado por texto y giro, pero SIN la categoría
-       activa: si no, el chip elegido diría su total y los demás cero. */
+       activa: si no, la elegida diría su total y las demás cero. */
     const catGuardada = this._cat;
     this._cat = '';
     const base = this._filtrados();
     this._cat = catGuardada;
 
     const cuenta = c => base.filter(p => (p.categoria || 'Sin categoría') === c).length;
-    const chip = (activo, txt, n, onclick) =>
-      `<div class="fpos-chip ${activo ? 'on' : ''}" onclick="${onclick}">${txt}<small>${n}</small></div>`;
+    const item = (activo, txt, n, catVal) => `
+      <div class="options-item" style="justify-content:space-between; padding:6px 10px; font-size:12px; font-weight:700; ${activo ? 'background:var(--purple-dim); color:var(--purple) !important;' : ''}" onclick="POS._setCatFilter('${UI.jsAttr(String(catVal))}')">
+        <span style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:140px;">${txt}</span>
+        <span style="font-size:10px; background:var(--surface3); padding:1px 5px; border-radius:4px; color:var(--text3); font-weight:700;"><small>${n}</small></span>
+      </div>`;
 
-    cont.innerHTML = [
-      chip(!this._cat, '📦 Todo', base.length, `POS._cat='';POS._onCatChange(this)`),
-      ...this._cats().map(c => chip(this._cat === c, UI.esc(c), cuenta(c),
-        `POS._cat='${UI.jsAttr(String(c))}';POS._onCatChange(this)`)),
+    pop.innerHTML = [
+      item(!this._cat, '📦 Todo', base.length, ''),
+      ...this._cats().map(c => item(this._cat === c, UI.esc(c), cuenta(c), c)),
     ].join('');
+
+    /* El botón carga la etiqueta activa, así que se actualiza aquí y no en cada
+       sitio que toca this._cat (setGiro también la limpia). */
+    const label = document.getElementById('pos-cat-label');
+    if (label) label.textContent = this._cat || 'Todo';
+  },
+
+  _setCatFilter(cat) {
+    this._cat = cat;
+    const pop = document.getElementById('pos-cats-popover');
+    if (pop) pop.style.display = 'none';
+    const btn = document.getElementById('pos-btn-cats');
+    if (btn) btn.style.background = 'var(--surface)';
+    this._pintarGrid();
   },
 
   /* ── CARRITO ─────────────────────────────────────── */
   addToCart(id) {
     const p = this._prod.find(x=>x.id===id);
     if (!p) return;
+    /* Único portón de entrada al carrito (la tarjeta, el escáner y el numpad
+       pasan todos por acá), así que la regla se pone una sola vez. */
+    if (typeof articuloRegulado === 'function' && articuloRegulado(p)) {
+      UI.toast('Las armas de fuego y la munición no se cobran en el POS: van por el módulo de Armería, que registra al comprador y su licencia (arts. 59 y 60 de la Ley de Armas).', 'warn', 9000);
+      return;
+    }
     const linea = this._cart.find(l=>l.id===id);
     const enCarrito = linea ? linea.cant : 0;
     if (enCarrito + 1 > (p.stock||0)) { UI.toast('No hay más stock disponible','warn'); return; }
@@ -751,11 +803,10 @@ const POS = {
     const apagar = this._giro === g;             // volver a tocarlo lo apaga
     this._giro = apagar ? '' : g;
     this._cat = '';                              // giro y categoria no se pisan
-    /* Se marca la pastilla a mano, igual que _onCatChange: repintar la pagina
-       entera por un filtro perderia el carrito a medio armar. */
-    document.querySelectorAll('.pos-cat-pill').forEach(p => p.classList.remove('active'));
-    if (!apagar && el) el.classList.add('active');
-    else document.querySelector('.pos-cat-pill')?.classList.add('active');
+    /* Se marca la pastilla a mano: repintar la pagina entera por un filtro
+       perderia el carrito a medio armar. */
+    el?.parentElement?.querySelectorAll('.fpos-chip').forEach(p => p.classList.remove('on'));
+    if (!apagar && el) el.classList.add('on');
     this._pintarGrid();
   },
 

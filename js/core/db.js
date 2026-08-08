@@ -258,9 +258,19 @@ const DB = {
   },
 
   /* ── CLIENTES ─────────────────────────────────── */
-  async getClientes(busca=null) {
+  /* `giro` (mig 133) separa los clientes de un vertical de los comunes, igual
+     que tipo_item separa el inventario:
+       null       → todos (POS, facturación: le pueden cobrar a cualquiera)
+       'general'  → sólo los comunes (los que no son de ningún vertical)
+       'armeria'  → sólo los de ese giro
+     Sin `busca` ni `giro` se comporta exactamente como antes. */
+  async getClientes(busca=null, giro=null) {
     let q = getSB().from('clientes').select('*').eq('tenant_id', getTID()).order('nombre');
     if (busca) q = q.or(`nombre.ilike.%${busca}%,nit.ilike.%${busca}%,tel.ilike.%${busca}%`);
+    /* Los comunes son los que tienen giro NULL (todo lo que existía antes de
+       la migración) más los marcados 'general' a mano. */
+    if (giro === 'general') q = q.or('giro.is.null,giro.eq.general');
+    else if (giro) q = q.eq('giro', giro);
     const { data } = await q;
     return data || [];
   },

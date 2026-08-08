@@ -24,7 +24,10 @@ const CAMPOS = /\.(nombre|nombre_completo|direccion|notas|observaciones|descripc
 /* Ya neutralizan el valor o lo convierten en número/fecha. */
 /* jsAttr() cubre el caso de una cadena JS dentro de un atributo (onclick), que
    es MÁS estricto que esc(): escapa además la barra invertida y la comilla. */
-const SEGURO = /esc\(|jsAttr\(|UI\.q\(|UI\.fecha\(|Number\(|parseInt|parseFloat|toFixed|\.length\b|JSON\.stringify|encodeURI/;
+/* escRaya() (armeria-declaraciones.js) envuelve UI.esc: o pinta el valor
+   escapado o una raya para llenar a mano. Va nombrado con "esc" justamente
+   para que se lo pueda reconocer acá. */
+const SEGURO = /esc\(|escRaya\(|jsAttr\(|UI\.q\(|UI\.fecha\(|Number\(|parseInt|parseFloat|toFixed|\.length\b|JSON\.stringify|encodeURI/;
 /* La expresión arma etiquetas a propósito (no es un dato suelto). */
 const PRODUCE_HTML = /<[a-z]/i;
 const TAG = /<(div|span|td|tr|li|p|h[1-6]|option|button|b|strong|a|img|label|small|input)\b/i;
