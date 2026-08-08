@@ -11,21 +11,27 @@
    sumar un giro nuevo es agregar una entrada — no tocar cinco pantallas.
 
    SOBRE LAS UNIDADES: son las que se usan de verdad en Guatemala, con su
-   equivalencia real, no las del sistema métrico de manual.
+   equivalencia real, no las del sistema métrico de manual. **El kilogramo casi
+   no se usa**: acá se pesa en libras y quintales, se mide en yardas y pies, y
+   se vende por galón. Va último en las listas, pero no se borra — hay
+   artículos cargados con él.
      · quintal = 100 libras = 45.359 kg  (grano, azúcar, cal, cemento)
      · arroba  = 25 libras  = 11.34 kg   (frutas, verduras, café)
-     · saco    = presentación, NO peso fijo: hay de 100 lb, de 5 kg y de 25 kg,
+     · saco    = presentación, NO peso fijo: hay de 100 lb, de 50 y de 25,
                  por eso lleva su propio campo de contenido en vez de asumir.
      · tonelada métrica = 1000 kg = 22.046 quintales
-   Las que NO son de masa (metro lineal, pie cuadrado, cilindro) no se
-   convierten a peso: forzarlas sería inventar.
+     · galón   = 3.785 l (el estadounidense; el imperial daría 20% de más)
+     · yarda = 0.9144 m · pie = 0.3048 m · pulgada = 0.0254 m
+     · vaso    = 250 ml POR CONVENCIÓN de cocina, no es unidad legal
+   Cada familia (peso, volumen, longitud) se convierte por separado: tres
+   galones no son metros, y forzar el número sería inventar.
 ═══════════════════════════════════════════════════════ */
 
 const GIROS = {
   mecanico: {
     label: 'Taller mecánico', icon: '🔧',
     modulos: ['ordenes', 'vehiculos', 'diagnostico_obd'],
-    unidades: ['pieza', 'unidad', 'juego', 'par', 'litro', 'galón', 'kg', 'metro', 'caja'],
+    unidades: ['pieza', 'unidad', 'juego', 'par', 'litro', 'galón', 'mililitro', 'onza', 'libra', 'metro', 'pulgada', 'pie', 'caja', 'kg'],
     categorias: ['Motor', 'Frenos', 'Suspensión', 'Eléctrico', 'Transmisión', 'Filtros',
                  'Lubricantes', 'Llantas', 'Carrocería', 'Accesorios', 'Herramienta'],
     /* Los campos de este giro son COLUMNAS reales de la tabla (la app nació
@@ -47,7 +53,7 @@ const GIROS = {
     modulos: ['venta_granos'],
     /* El quintal manda: es como se compra, como se vende y como lo publica el
        MAGA. El saco va aparte porque NO es una unidad de peso. */
-    unidades: ['quintal', 'libra', 'arroba', 'saco', 'kg', 'tonelada'],
+    unidades: ['quintal', 'libra', 'arroba', 'saco', 'bolsa', 'tonelada', 'gramo', 'onza', 'kg'],
     categorias: ['Maíz', 'Frijol', 'Arroz', 'Sorgo (maicillo)', 'Soya', 'Trigo',
                  'Ajonjolí', 'Semilla certificada', 'Subproducto'],
     campos: [
@@ -67,7 +73,7 @@ const GIROS = {
     modulos: ['refrigeracion'],
     /* El gas se cobra por libra aunque venga en cilindro: el cilindro es el
        envase. Por eso están los dos y el cilindro lleva su contenido. */
-    unidades: ['libra', 'cilindro', 'kg', 'onza', 'pieza', 'metro', 'juego'],
+    unidades: ['libra', 'cilindro', 'onza', 'gramo', 'litro', 'galón', 'pieza', 'metro', 'pie', 'pulgada', 'juego', 'kg'],
     categorias: ['Refrigerante', 'Compresores', 'Condensadores', 'Evaporadores',
                  'Filtros secadores', 'Tubería y accesorios', 'Controles y termostatos',
                  'Aceites y químicos', 'Herramienta especializada'],
@@ -86,7 +92,7 @@ const GIROS = {
   electronica: {
     label: 'Electrónica', icon: '📻',
     modulos: ['electronica'],
-    unidades: ['pieza', 'par', 'metro', 'rollo', 'juego', 'caja'],
+    unidades: ['pieza', 'par', 'metro', 'yarda', 'pie', 'pulgada', 'rollo', 'juego', 'caja', 'unidad'],
     categorias: ['Componentes', 'Tarjetas y módulos', 'Cables y conectores',
                  'Baterías y pilas', 'Pantallas', 'Repuestos de línea blanca',
                  'Herramienta y soldadura', 'Insumos'],
@@ -103,7 +109,7 @@ const GIROS = {
     modulos: ['herreria'],
     /* Se vende por metro lineal y por lámina; el hierro se compra por quintal.
        Los tres conviven en el mismo negocio. */
-    unidades: ['metro lineal', 'metro cuadrado', 'quintal', 'libra', 'lámina', 'tubo', 'varilla', 'pieza'],
+    unidades: ['metro lineal', 'metro', 'metro cuadrado', 'yarda', 'pie', 'pulgada', 'quintal', 'libra', 'lámina', 'tubo', 'varilla', 'pieza'],
     categorias: ['Tubo y perfil', 'Lámina', 'Varilla y hierro', 'PVC y aluminio',
                  'Vidrio', 'Soldadura y electrodos', 'Pintura y anticorrosivo',
                  'Herrajes y cerradura', 'Herramienta'],
@@ -120,7 +126,7 @@ const GIROS = {
   peleteria: {
     label: 'Peletería y tapicería', icon: '🧵',
     modulos: ['peleteria'],
-    unidades: ['yarda', 'metro', 'pie cuadrado', 'pieza', 'rollo', 'par'],
+    unidades: ['yarda', 'metro', 'pie', 'pie cuadrado', 'metro cuadrado', 'pulgada', 'pieza', 'rollo', 'par'],
     categorias: ['Cuero', 'Tela y vinil', 'Espuma y relleno', 'Hilo y costura',
                  'Herrajes y accesorios', 'Pegamentos', 'Herramienta'],
     campos: [
@@ -135,7 +141,7 @@ const GIROS = {
   agroservicio: {
     label: 'Agroservicio', icon: '🌱',
     modulos: ['agroservicio'],
-    unidades: ['quintal', 'libra', 'saco', 'litro', 'galón', 'kg', 'bolsa', 'pieza'],
+    unidades: ['quintal', 'libra', 'arroba', 'saco', 'bolsa', 'litro', 'galón', 'mililitro', 'gramo', 'onza', 'tonelada', 'pieza', 'kg'],
     categorias: ['Fertilizante', 'Semilla', 'Plaguicida', 'Herbicida', 'Fungicida',
                  'Alimento balanceado', 'Veterinario', 'Riego', 'Herramienta agrícola'],
     campos: [
@@ -158,7 +164,7 @@ const GIROS = {
     /* Un arma es pieza única (número de serie propio); la munición se cuenta
        por caja o por cartucho suelto. El par existe por los guantes y las
        botas de camping, que se venden así. No hay quintal ni metro aquí. */
-    unidades: ['pieza', 'caja', 'unidad', 'par', 'juego'],
+    unidades: ['pieza', 'unidad', 'caja', 'par', 'juego', 'libra', 'onza', 'gramo'],
     /* La tienda no vende sólo armas: vive también de la tienda de campo
        (chalecos, camping, aventura). Las categorías siguen la clasificación
        de la Ley de Armas donde ésta aplica (arts. 9, 11, 12, 13) y se
@@ -212,7 +218,7 @@ const GIROS = {
   ferreteria: {
     label: 'Ferretería', icon: '🔩',
     modulos: [],
-    unidades: ['pieza', 'unidad', 'caja', 'libra', 'quintal', 'metro', 'galón', 'litro', 'saco', 'bolsa'],
+    unidades: ['pieza', 'unidad', 'caja', 'libra', 'quintal', 'onza', 'metro', 'yarda', 'pie', 'pulgada', 'metro cuadrado', 'galón', 'litro', 'mililitro', 'saco', 'bolsa', 'rollo', 'kg'],
     categorias: ['Tornillería', 'Herramienta manual', 'Herramienta eléctrica', 'Pintura',
                  'Plomería', 'Eléctrico', 'Construcción', 'Jardinería', 'Seguridad'],
     campos: [
@@ -224,14 +230,43 @@ const GIROS = {
   general: {
     label: 'General', icon: '📦',
     modulos: [],
-    unidades: ['unidad', 'pieza', 'caja', 'kg', 'libra', 'litro', 'metro', 'servicio'],
+    unidades: ['unidad', 'pieza', 'caja', 'libra', 'quintal', 'onza', 'gramo', 'litro', 'galón', 'mililitro', 'vaso', 'metro', 'yarda', 'pie', 'pulgada', 'kilómetro', 'metro cuadrado', 'metro cúbico', 'tonelada', 'servicio', 'kg'],
     categorias: ['Producto', 'Servicio', 'Insumo', 'Otro'],
     campos: [],
   },
 };
 
-/* Equivalencias reales, para convertir sin inventar. Sólo unidades de MASA:
-   un metro lineal o un cilindro no tienen peso definido. */
+/* ── LAS MEDIDAS QUE SE USAN EN GUATEMALA ───────────────────────────────────
+   Henry lo pidió por su nombre: gramos, litros, galones, quintales, toneladas,
+   onzas, metros, yardas, pies, pulgadas, kilómetros, metros cuadrados, metros
+   cúbicos, mililitros y vasos. **El kilogramo casi no se usa acá** — el
+   mostrador pesa en libras y quintales, la ferretería mide en yardas y pies, y
+   la gasolinera vende por galón. Queda al final de las listas, no afuera:
+   borrarlo dejaría sin unidad válida a los artículos que ya están cargados con
+   él, y editarlos se los cambiaría en silencio.
+
+   Van en SINGULAR porque es como ya están guardados en `inventario.unidad_medida`
+   y como se lee en la etiqueta de un artículo ("stock 12 quintal"). */
+const UNIDADES_GT = {
+  /* Peso — el orden es el de uso real en el mostrador. */
+  peso:      ['libra', 'quintal', 'onza', 'arroba', 'gramo', 'tonelada', 'kg'],
+  /* Volumen */
+  volumen:   ['litro', 'galón', 'mililitro', 'vaso', 'metro cúbico'],
+  /* Longitud y superficie */
+  longitud:  ['metro', 'metro lineal', 'yarda', 'pie', 'pulgada', 'kilómetro'],
+  superficie:['metro cuadrado', 'pie cuadrado', 'vara cuadrada'],
+  /* Conteo y presentación: no se convierten a nada, son formas de vender. */
+  conteo:    ['unidad', 'pieza', 'par', 'juego', 'caja', 'bolsa', 'saco', 'rollo',
+              'cilindro', 'lámina', 'tubo', 'varilla', 'servicio'],
+};
+
+/* Todas juntas, para validar y para los giros que venden de todo. */
+const UNIDADES_TODAS = [].concat(
+  UNIDADES_GT.peso, UNIDADES_GT.volumen, UNIDADES_GT.longitud,
+  UNIDADES_GT.superficie, UNIDADES_GT.conteo);
+
+/* Equivalencias reales, para convertir sin inventar. Cada familia por
+   separado: un metro lineal no tiene peso y un galón no tiene largo. */
 const UNIDAD_KG = {
   /* Derivadas de la libra, no tecleadas redondeadas: con 11.339809 la arroba
      devolvía 24.99999 libras, y ese arrastre se acumula al convertir stock. */
@@ -239,19 +274,57 @@ const UNIDAD_KG = {
   arroba: 25 * 0.45359237,
   libra: 0.45359237,
   kg: 1,
+  gramo: 0.001,
   tonelada: 1000,
-  onza: 0.0283495,
+  onza: 0.028349523125,          // 1/16 de libra exacta
 };
 
-/* Convierte entre unidades de masa. Devuelve null cuando alguna de las dos no
-   es de masa — que es la respuesta honesta: "3 metros lineales" no son kilos
-   y forzar el número sería mentir. */
+/* Volumen en litros. El GALÓN es el estadounidense (3.785 l), que es el que se
+   usa en Guatemala — el imperial británico (4.546 l) daría 20% de más en cada
+   pipa de diésel. El VASO no es una unidad legal: son 250 ml por convención de
+   cocina, y por eso va anotado (sirve para recetas y refresquería, no para
+   facturar combustible). */
+const UNIDAD_L = {
+  litro: 1,
+  mililitro: 0.001,
+  'galón': 3.785411784,
+  vaso: 0.25,
+  'metro cúbico': 1000,
+};
+
+/* Longitud en metros. La YARDA y el PIE son de uso diario en telas, madera y
+   construcción; la vara castellana (0.835 m) sigue viva en terrenos, pero no
+   se incluye como unidad de inventario para no confundirla con la yarda. */
+const UNIDAD_M = {
+  metro: 1,
+  'metro lineal': 1,        /* el mismo metro, pero es como lo dice la herrería */
+  yarda: 0.9144,
+  pie: 0.3048,
+  pulgada: 0.0254,
+  'kilómetro': 1000,
+};
+
+const _FAMILIAS = [UNIDAD_KG, UNIDAD_L, UNIDAD_M];
+
+/* Convierte entre unidades de la MISMA familia. Devuelve null cuando alguna no
+   se puede convertir o cuando son de familias distintas — que es la respuesta
+   honesta: "3 galones" no son metros y forzar el número sería mentir. */
 function convertirUnidad(cantidad, desde, hasta) {
-  const a = UNIDAD_KG[desde], b = UNIDAD_KG[hasta];
-  if (!a || !b) return null;
   const n = Number(cantidad);
   if (!isFinite(n)) return null;
-  return (n * a) / b;
+  for (const familia of _FAMILIAS) {
+    const a = familia[desde], b = familia[hasta];
+    if (a && b) return (n * a) / b;
+  }
+  return null;
+}
+
+/* ¿Esta unidad se pesa? Lo usa el POS para decidir si ofrece la báscula. Sale
+   de la tabla de masa y no de una lista aparte: una lista copiada se queda
+   vieja el día que se agrega una unidad (le pasó al gramo). */
+function esUnidadDePeso(unidad) {
+  const u = String(unidad || '').toLowerCase().trim();
+  return !!UNIDAD_KG[u] || ['lb', 'g', 'kgs', 'qq'].includes(u);
 }
 
 /* Giros que le tocan a este comercio, deducidos de sus módulos activos: un
@@ -303,7 +376,12 @@ function articuloRegulado(art) {
 
 if (typeof window !== 'undefined') {
   window.GIROS = GIROS;
+  window.UNIDADES_GT = UNIDADES_GT;
+  window.UNIDADES_TODAS = UNIDADES_TODAS;
   window.UNIDAD_KG = UNIDAD_KG;
+  window.UNIDAD_L = UNIDAD_L;
+  window.UNIDAD_M = UNIDAD_M;
+  window.esUnidadDePeso = esUnidadDePeso;
   window.convertirUnidad = convertirUnidad;
   window.girosDelTenant = girosDelTenant;
   window.giroPorDefecto = giroPorDefecto;
