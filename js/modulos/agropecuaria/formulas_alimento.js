@@ -161,11 +161,25 @@ Modulos.formulas_alimento = {
         { nombre: 'Codorniz — ponedora', consumo: 0.025, animal: 'codorniz',  ing: { maiz: 55, soya: 30, carbonato: 6.5, h_pescado: 3, aceite: 2.8, fosfato: 1.5, premezcla: 0.5, sal: 0.4, metionina: 0.3 } },
       ],
     },
+    /* LA TILAPIA NO COME LO MISMO TODA SU VIDA, y la diferencia no es un
+       matiz: el alevín necesita casi el DOBLE de proteína que el pez de
+       engorde, y en polvo en vez de pellet. Darle el alimento de engorde a un
+       alevín no lo mata — crece lento y se muere más, que es plata perdida
+       justo en la fase más cara. Por eso son tres fórmulas y no una.
+       La proteína baja a medida que el pez crece; lo que sube es el maíz. */
     peces: {
       label: '🐟 Tilapia', icon: '🐟',
-      nota: 'ESTA MEZCLA HAY QUE PELETIZARLA. En harina se deshace en el agua: el pez no la come, se pierde el alimento y se ensucia el estanque. Si no tenés peletizadora, conviene comprar el alimento hecho y usar esta fórmula sólo para comparar precios.',
+      nota: 'La forma FÍSICA del alimento cambia con la etapa: polvo para el alevín, migaja para el dedino y pellet para el engorde. Un alevín no puede morder un pellet de 3 mm, y el pellet en harina se deshace en el agua — se pierde el alimento y se ensucia el estanque. Si no tenés peletizadora, usá estas fórmulas para comparar precios contra el alimento hecho.',
       formulas: [
-        { nombre: 'Tilapia — engorde (28-30% proteína)', consumo: 0.02, animal: 'tilapia', ing: { soya: 38, maiz: 25, salvado: 18, h_pescado: 12, aceite: 3, fosfato: 1.5, carbonato: 1, premezcla: 1, metionina: 0.5 } },
+        { nombre: 'Tilapia — alevín (40-45% proteína)', consumo: 0.0001, animal: 'alevín',
+          ing: { soya: 42, h_pescado: 30, maiz: 12, salvado: 7, aceite: 4, premezcla: 2, fosfato: 1.5, carbonato: 1, metionina: 0.5 },
+          nota: 'Va en POLVO fino, repartido 6 a 8 veces al día: el alevín tiene el estómago del tamaño de su ojo y no aguanta la ración de un día de una sola vez. El consumo de acá es un promedio de la etapa (~0.1 g por alevín al día); en la práctica se da del 10 al 20% del peso vivo. La harina de pescado es la que sostiene la proteína — bajarla para abaratar es lo que frena el crecimiento en la etapa que más se nota.' },
+        { nombre: 'Tilapia — dedino/juvenil (35% proteína)', consumo: 0.0005, animal: 'dedino',
+          ing: { soya: 45, h_pescado: 18, maiz: 17, salvado: 12, aceite: 3.5, premezcla: 1.5, fosfato: 1.5, carbonato: 1, metionina: 0.5 },
+          nota: 'De 1 a 30 gramos, en migaja o pellet fino, 4 veces al día. El cambio de ración se hace en varios días, no de golpe.' },
+        { nombre: 'Tilapia — engorde (28-30% proteína)', consumo: 0.02, animal: 'tilapia',
+          ing: { soya: 38, maiz: 25, salvado: 18, h_pescado: 12, aceite: 3, fosfato: 1.5, carbonato: 1, premezcla: 1, metionina: 0.5 },
+          nota: 'De 30 gramos a cosecha, en pellet de 3-4 mm, 2 a 3 veces al día.' },
       ],
     },
   },
@@ -337,6 +351,19 @@ Modulos.formulas_alimento = {
 
   /* A cuantos animales les da un quintal en un dia. Es la cuenta que hace el
      productor de cabeza y la que decide la compra. */
+  /* Plural del animal. Con "pollo" bastaba pegarle una s, pero al entrar los
+     alevines quedaba "453592 alevíns". Las reglas que hacen falta de verdad:
+     -ín/-ón pierden el acento y suman -es (alevín → alevines), lo que termina
+     en consonante suma -es, y el resto la s de siempre. */
+  _plural(animal) {
+    const a = String(animal || '');
+    if (/ín$/i.test(a)) return a.replace(/ín$/i, 'ines');
+    if (/ón$/i.test(a)) return a.replace(/ón$/i, 'ones');
+    if (/z$/i.test(a))  return a.replace(/z$/i, 'ces');   // codorniz → codornices
+    if (/[aeiouáéíóú]$/i.test(a)) return a + 's';
+    return a + 'es';
+  },
+
   _rendimiento(f, costoQq, completo) {
     if (!f.consumo) return '';
     const animales = (100 * this._LB_KG) / f.consumo;
@@ -347,9 +374,16 @@ Modulos.formulas_alimento = {
           : (f.consumo / this._LB_KG).toFixed(2) + ' lb');
     const porAnimal = completo ? costoQq / animales : null;
     return `<div style="padding:9px 12px;border-top:1px solid var(--border);font-size:12.5px;background:var(--surface2)">
-      🐾 Un quintal alimenta <b>${Math.floor(animales)} ${UI.esc(f.animal)}${Math.floor(animales) === 1 ? '' : 's'}</b> por un día
+      🐾 Un quintal alimenta <b>${UI.numero(Math.floor(animales), 0)} ${UI.esc(Math.floor(animales) === 1 ? f.animal : this._plural(f.animal))}</b> por un día
       <span style="color:var(--text3)">(ración de ${racion} por animal al día)</span>
-      ${porAnimal !== null ? ' · <b style="color:var(--green)">Q' + porAnimal.toFixed(2) + ' por ' + UI.esc(f.animal) + ' al día</b>' : ''}
+      ${porAnimal !== null ? ' · <b style="color:var(--green)">' + (
+        /* Un alevín come tan poco que el costo por cabeza sale "Q0.00", que no
+           le dice nada a nadie. Por debajo del centavo se muestra por MILLAR,
+           que además es como se compran y se cuentan los alevines. */
+        porAnimal < 0.01
+          ? 'Q' + (porAnimal * 1000).toFixed(2) + ' por millar al día'
+          : 'Q' + porAnimal.toFixed(2) + ' por ' + UI.esc(f.animal) + ' al día'
+      ) + '</b>' : ''}
       <div style="font-size:11px;color:var(--text3);margin-top:3px">
         El consumo es un promedio de la etapa: varía con el peso, el clima y la genética.
         Pesá lo que realmente comen una semana y ajustá.

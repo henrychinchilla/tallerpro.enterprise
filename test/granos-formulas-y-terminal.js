@@ -40,6 +40,9 @@ const ctx = {
   console, Math, Date, JSON, String, Number, Object, Array, RegExp, isNaN, isFinite, Promise, setTimeout,
   UI: {
     esc: v => String(v ?? ''), jsAttr: v => String(v ?? ''), q: v => 'Q' + Number(v || 0).toFixed(2),
+    /* Que exista en el doble no prueba que exista en la app: de eso se encarga
+       test/referencias-vivas.js, que es el que atrapó UI.numero cuando faltaba. */
+    numero: (v, d = 3) => (Number(v) || 0).toLocaleString('es-GT', { maximumFractionDigits: d }),
     modal: (t, h) => modales.push({ t, h }), cerrarModal() {}, toast() {}, loading() {},
     confirmar: async () => true,
   },
@@ -300,8 +303,41 @@ const F = ctx.Modulos.formulas_alimento;
   ok('el conejo lleva fibra de verdad (alfalfa ≥ 35%)',
      F._ESPECIES.conejos.formulas.every(f => (f.ing.alfalfa || 0) >= 35));
   ok('...y la alfalfa avisa que no se cambia por grano', /diarreas/i.test(F._avisoDe('Harina de alfalfa')));
-  ok('la tilapia avisa que hay que peletizar (en harina se pierde en el agua)',
-     /PELETIZAR/i.test(F._ESPECIES.peces.nota));
+  ok('la tilapia avisa de la forma física del alimento (polvo/migaja/pellet)',
+     /polvo/i.test(F._ESPECIES.peces.nota) && /pellet/i.test(F._ESPECIES.peces.nota));
+
+  /* LA TILAPIA NO COME LO MISMO TODA SU VIDA. Un alevín necesita casi el doble
+     de proteína que el pez de engorde: darle el alimento de engorde no lo mata,
+     lo hace crecer lento y morirse más — en la fase más cara. Se prueba que las
+     tres etapas existan y que la proteína vaya BAJANDO, no al revés. */
+  {
+    const peces = F._ESPECIES.peces.formulas;
+    ok('la tilapia tiene sus tres etapas', peces.length === 3);
+    const alevin = peces.find(f => /alev/i.test(f.nombre));
+    const dedino = peces.find(f => /dedino|juvenil/i.test(f.nombre));
+    const engorde = peces.find(f => /engorde/i.test(f.nombre));
+    ok('...alevín, dedino y engorde', !!alevin && !!dedino && !!engorde);
+
+    /* La proteína la sostienen la harina de pescado y la soya. */
+    const prot = f => (f.ing.h_pescado || 0) + (f.ing.soya || 0);
+    ok('el alevín lleva MÁS proteína que el dedino', prot(alevin) > prot(dedino));
+    ok('...y el dedino más que el engorde', prot(dedino) > prot(engorde));
+    ok('la harina de pescado del alevín es la más alta de las tres',
+       alevin.ing.h_pescado > dedino.ing.h_pescado && dedino.ing.h_pescado >= engorde.ing.h_pescado);
+    ok('el maíz sube a medida que el pez crece',
+       alevin.ing.maiz < dedino.ing.maiz && dedino.ing.maiz < engorde.ing.maiz);
+    ok('el alevín come muchísimo menos por cabeza', alevin.consumo < engorde.consumo / 100);
+    ok('cada etapa explica cómo se da (polvo, migaja, pellet)',
+       /POLVO/i.test(alevin.nota) && /migaja/i.test(dedino.nota) && /pellet/i.test(engorde.nota));
+    ok('...y el alevín avisa de repartirlo en varias tomas', /6 a 8 veces/.test(alevin.nota));
+  }
+
+  /* El plural: con "pollo" bastaba una s, pero "alevín" daba "alevíns". */
+  ok('alevín → alevines', F._plural('alevín') === 'alevines');
+  ok('pollo → pollos', F._plural('pollo') === 'pollos');
+  ok('codorniz → codornices (la z pasa a c)', F._plural('codorniz') === 'codornices');
+  ok('cuy → cuyes', F._plural('cuy') === 'cuyes');
+  ok('vaca → vacas', F._plural('vaca') === 'vacas');
   ok('el nombre del ingrediente de cada fórmula existe en el catálogo',
      especies.every(([, esp]) => esp.formulas.every(f =>
        F._ingredientes(f).every(i => labels.includes(i.nombre)))));
