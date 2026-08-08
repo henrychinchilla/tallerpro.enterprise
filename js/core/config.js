@@ -242,6 +242,12 @@ const PERMISOS = {
    dashboard, configuración, usuarios, admin, mi_ot, calendario.        */
 const MODULOS_SIEMPRE = ['dashboard','descarga','configuracion','usuarios','admin','respaldos','mi_ot','calendario'];
 
+/* Pantallas que son del DUEÑO DEL SAAS y no de ningún comercio: no dependen de
+   lo que un negocio tenga contratado, así que no pasan por el filtro de
+   módulos activos. Todo lo demás sí — incluso para el superadmin, para que al
+   entrar a un comercio vea el menú DE ESE COMERCIO. */
+const MODULOS_SUPERADMIN = ['superadmin'];
+
 const PLANES = {
   basico: {
     label: 'Básico / Emprendedor', precio: 199, color: 'cyan',
@@ -384,8 +390,19 @@ function nivelPermiso(v) {
 function nivelAcceso(modulo) {
   if (!window.Auth?.user) return 'no';
   const rol = window.Auth.user.rol;
-  if (rol === 'superadmin') return 'total';       // el dueño del SaaS ve todo
+  /* EL MENÚ ES DEL COMERCIO, LOS PERMISOS SON DE LA PERSONA. El superadmin
+     pasaba antes que este filtro y veía TODOS los módulos dentro de cualquier
+     negocio: entrar a un comercio de granos se veía igual que estar en el
+     propio, como si nunca hubiera entrado. Un comercio muestra lo que tiene
+     contratado y activo — eso vale para todos, incluido el dueño del SaaS.
+     Lo que el superadmin sí conserva es poder hacer TODO dentro de los módulos
+     que ese negocio sí tiene (ver, editar y eliminar), que es lo que necesita
+     para dar soporte.
+     El Panel SaaS y las pantallas propias del superadmin no dependen de ningún
+     comercio: van en MODULOS_SIEMPRE / MODULOS_SUPERADMIN y no se filtran. */
+  if (rol === 'superadmin' && MODULOS_SUPERADMIN.includes(modulo)) return 'total';
   if (!moduloEnPlan(modulo)) return 'no';         // gating por plan (aplica también al admin del negocio)
+  if (rol === 'superadmin') return 'total';       // dentro de lo que el negocio tiene, puede todo
   if (rol === 'admin') return 'total';            // el admin del comercio no se auto-restringe
   const custom = window.Auth.user.permisos_custom || {};
   if (custom[modulo] !== undefined) return nivelPermiso(custom[modulo]);

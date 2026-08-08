@@ -59,17 +59,35 @@ Modulos.superadmin = {
     if (!t) { UI.toast('Comercio no encontrado','error'); return; }
     if (this._soporteReturn === undefined) this._soporteReturn = Auth.tenant || null;
     Auth.tenant = t; window._cachedTenantId = t.id;
+    /* Se deja marcado para que un F5 no lo saque del comercio que está
+       atendiendo: App._restaurarSoporte() lo vuelve a entrar al arrancar.
+       Sólo se sale de soporte cuando él lo decide. */
+    try {
+      localStorage.setItem('tp_soporte_tenant', t.id);
+      localStorage.setItem('tp_soporte_volver', this._soporteReturn?.id || '');
+    } catch (_) {}
     this._pintarBarraSoporte(t);
     UI.toast(`Entraste a "${t.name||t.slug}" en modo soporte`, 'success');
     App.paginaActual = 'dashboard'; App._subActivo = null; App._guardarRuta();
     App.renderSidebar(); App.navegarA('dashboard');
   },
-  salirSoporte(){
+  async salirSoporte(){
+    /* Tras un F5, _soporteReturn se perdió con la memoria: el comercio propio
+       se recupera del id que quedó guardado al entrar. Sin esto, salir de
+       soporte después de recargar dejaba la sesión en el comercio ajeno. */
+    if (this._soporteReturn === undefined) {
+      const propio = localStorage.getItem('tp_soporte_volver');
+      this._soporteReturn = propio ? (await DB.getTenantPorId(propio).catch(() => null)) : null;
+    }
     if (this._soporteReturn !== undefined) {
       Auth.tenant = this._soporteReturn;
       window._cachedTenantId = this._soporteReturn?.id || null;
       this._soporteReturn = undefined;
     }
+    try {
+      localStorage.removeItem('tp_soporte_tenant');
+      localStorage.removeItem('tp_soporte_volver');
+    } catch (_) {}
     document.getElementById('sa-soporte-bar')?.remove();
     this._tab = 'comercios'; App.paginaActual = 'superadmin'; App._subActivo = 'comercios'; App._guardarRuta();
     App.renderSidebar(); App.navegarA('superadmin');

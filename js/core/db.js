@@ -236,6 +236,17 @@ const DB = {
      Y el tenant_id NO se toca al actualizar: el superadmin edita usuarios de
      cualquier negocio, y forzarle el tenant de la sesión se los movería al
      suyo. Sólo se pone al crear. */
+  /* Un comercio por id. La usa el modo soporte al recargar la página: hay que
+     volver a traer el tenant entero (nombre, plan, módulos activos) porque de
+     él dependen el menú y los permisos, y en localStorage sólo queda el id.
+     Devuelve null si ya no existe — mejor eso que dejar la sesión apuntando a
+     un comercio borrado. */
+  async getTenantPorId(id) {
+    if (!id) return null;
+    const { data } = await getSB().from('tenants').select('*').eq('id', id).maybeSingle();
+    return data || null;
+  },
+
   async upsertUsuario(fields) {
     const sb = getSB();
     if (fields.id) {

@@ -66,6 +66,12 @@ const App = {
     if (App._bloqueadoPorSuscripcion()) {
       return App.pantallaSuspendido();
     }
+    /* El modo soporte tiene que sobrevivir a un F5. Antes vivía sólo en
+       memoria, así que recargar devolvía al superadmin a su propio comercio
+       sin avisar — y lo que estaba viendo pasaba a ser de OTRO negocio, que
+       además de molesto es peligroso. Se restaura ANTES de pintar el menú:
+       los módulos que se muestran dependen del tenant. */
+    await App._restaurarSoporte();
     App.renderSidebar();
     App._initSidebarToggle();
     App.navegarA(App._restaurarRuta());
@@ -74,6 +80,26 @@ const App = {
     App.avisoSAT();
     App.registrarSW();
     App.iniciarInactividad(Auth.tenant?.session_timeout_minutes);
+  },
+
+  /* Vuelve a entrar al comercio que el superadmin estaba atendiendo. Sólo para
+     el superadmin (es el único que puede estar en otro tenant) y sólo si el
+     comercio sigue existiendo — si lo borraron, se limpia la marca en vez de
+     dejar la sesión apuntando a un tenant fantasma. */
+  async _restaurarSoporte() {
+    try {
+      if (Auth.user?.rol !== 'superadmin') { localStorage.removeItem('tp_soporte_tenant'); return; }
+      const id = localStorage.getItem('tp_soporte_tenant');
+      if (!id || id === Auth.tenant?.id) return;
+      const t = await DB.getTenantPorId(id);
+      if (!t) { localStorage.removeItem('tp_soporte_tenant'); return; }
+      Auth.tenant = t;
+      window._cachedTenantId = t.id;
+      Modulos.superadmin?._pintarBarraSoporte?.(t);
+    } catch (e) {
+      console.warn('No se pudo restaurar el modo soporte:', e?.message || e);
+      localStorage.removeItem('tp_soporte_tenant');
+    }
   },
 
   /* ── AVISO SAT AL ENTRAR ──────────────────────────
@@ -658,8 +684,13 @@ const App = {
       if (!Auth.user) return false;
       if (m.id === 'mi_ot') return rol === 'cliente';
       if (m.id === 'superadmin') return rol === 'superadmin';
-      if (rol === 'superadmin') return true;       // el dueño del SaaS ve todo
-      return tieneAcceso(m.id);                     // admin del negocio queda sujeto a su plan
+      /* Antes había acá un "if superadmin → true" que pintaba TODOS los
+         módulos. Por eso entrar a un comercio en modo soporte se veía igual
+         que no haber entrado: el menú no cambiaba. El menú lo decide EL
+         COMERCIO (qué módulos tiene activos) y tieneAcceso ya lo resuelve para
+         todos; lo que el superadmin conserva es poder hacer todo DENTRO de
+         esos módulos. */
+      return tieneAcceso(m.id);
     };
 
     const itemHtml = m => {
@@ -715,7 +746,10 @@ const App = {
 
     /* Botón del asistente IA: oculto para clientes y gateado por el
        módulo 'ia' (incluido en Empresarial; add-on para Básico/Pro) */
-    const iaBtn = (rol === 'cliente' || (rol !== 'superadmin' && !moduloEnPlan('ia'))) ? '' : `
+    /* El módulo 'ia' también es del comercio: si el negocio en el que estoy no
+       lo tiene contratado, el botón no aparece — tampoco para el superadmin, o
+       volvería a parecer que nunca entró al negocio. */
+    const iaBtn = (rol === 'cliente' || !moduloEnPlan('ia')) ? '' : `
       <div class="sidebar-ia">
         <button class="btn-ia" onclick="IA.abrirChat()">
           <span class="btn-ia-icon">🔧</span>
