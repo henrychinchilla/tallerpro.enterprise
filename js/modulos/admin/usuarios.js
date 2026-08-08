@@ -50,8 +50,17 @@ Modulos.usuarios = {
                   <td>
                     <div style="display:flex;gap:4px">
                       <button class="btn btn-sm btn-cyan" onclick="Modulos.usuarios.modalEditar('${u.id}')">✏️ Editar</button>
-                      <button class="btn btn-sm btn-ghost" onclick="Modulos.usuarios.modalReset('${u.id}','${UI.esc(u.nombre)}')">🔑</button>
-                  <button class="btn btn-sm btn-danger" onclick="Modulos.usuarios.eliminar('${u.id}','${UI.esc(u.nombre)}')" title="Eliminar">🗑️</button>
+                      <button class="btn btn-sm btn-ghost" onclick="Modulos.usuarios.modalReset('${u.id}','${UI.jsAttr(u.nombre)}')">🔑</button>
+                      <!-- INACTIVAR y ELIMINAR son cosas distintas y ahora son
+                           dos botones distintos. Antes había uno solo, con
+                           bote de basura, que lo único que hacía era inactivar:
+                           el que quería borrar creía que había borrado. -->
+                      <button class="btn btn-sm btn-ghost"
+                              title="${u.activo?'Inactivar: pierde el acceso pero sigue existiendo':'Activar: le devuelve el acceso'}"
+                              onclick="Modulos.usuarios.alternarActivo('${u.id}','${UI.jsAttr(u.nombre)}',${u.activo?'false':'true'})">${u.activo?'⏸️':'▶️'}</button>
+                      <button class="btn btn-sm btn-danger"
+                              title="Eliminar: lo borra del sistema y de la base de datos, sin vuelta atrás"
+                              onclick="Modulos.usuarios.eliminar('${u.id}','${UI.jsAttr(u.nombre)}')">🗑️</button>
                     </div>
                   </td>
                 </tr>`;
@@ -547,15 +556,42 @@ Modulos.usuarios = {
       </div>`);
   },
 
+  /* INACTIVAR: le quita el acceso a alguien que sigue existiendo (se fue de
+     vacaciones, renunció, está suspendido). Se puede deshacer con el mismo
+     botón. NO es lo mismo que eliminar, y por eso son dos botones. */
+  async alternarActivo(id, nombre, activar) {
+    const ok = await UI.confirmar(
+      activar
+        ? `¿Activar a <b>${UI.esc(nombre)}</b>? Vuelve a poder entrar al sistema con su misma contraseña.`
+        : `¿Inactivar a <b>${UI.esc(nombre)}</b>? Pierde el acceso al sistema pero <b>no se borra</b>:
+           su historial queda igual y lo podés reactivar cuando quieras.`,
+      activar ? 'Activar' : 'Inactivar');
+    if (!ok) return;
+    const r = await DB.upsertUsuario({ id, activo: !!activar, updated_at: new Date().toISOString() });
+    if (r.ok) { UI.toast(activar ? 'Usuario activado ✓' : 'Usuario inactivado ✓'); this.render(); }
+    else UI.toast('No se pudo cambiar: ' + (r.error || 'error desconocido'), 'error', 8000);
+  },
+
+  /* ELIMINAR: lo saca por completo — perfil, membresías y ACCESO. Va por la
+     Edge Function porque borrar el auth user necesita la service role, que
+     nunca puede estar en el navegador; sin eso quedaría una cuenta capaz de
+     iniciar sesión sin perfil. */
   async eliminar(id, nombre) {
     const ok = await UI.confirmar(
-      `¿Eliminar usuario <b>${nombre}</b>? Se le quita el acceso al sistema y queda marcado como Inactivo.<br><br>
-       <span style="font-size:12px;color:var(--text3)">No se borra la fila: sus órdenes, ventas y movimientos siguen diciendo quién los hizo.
-       Eso es lo que revisa una auditoría.</span>`, 'Eliminar');
+      `¿Eliminar a <b>${UI.esc(nombre)}</b>?<br><br>
+       Se borra del sistema <b>y de la base de datos</b>: su perfil, sus permisos y su acceso.
+       <b>No se puede deshacer</b> — para volver a dárselo habría que crearlo de nuevo.<br><br>
+       <span style="font-size:12px;color:var(--text3)">Si sólo querés quitarle el acceso por un tiempo, usá ⏸️ Inactivar.</span>`,
+      'Eliminar definitivamente');
     if (!ok) return;
-    const r = await DB.upsertUsuario({ id, activo: false, updated_at: new Date().toISOString() });
-    if (r.ok) { UI.toast('Usuario desactivado ✓'); this.render(); }
-    else UI.toast('No se pudo eliminar: ' + (r.error || 'error desconocido'), 'error', 8000);
+    UI.toast('Eliminando…', 'info');
+    const r = await Auth.eliminarUsuario(id);
+    if (!r.ok) { UI.toast(r.error || 'No se pudo eliminar', 'error', 10000); return; }
+    /* Si el perfil se borró pero el acceso no, decirlo: dar por bueno un
+       borrado a medias es peor que el error. */
+    if (r.advertencia) UI.toast(r.advertencia, 'warn', 12000);
+    else UI.toast(`${nombre} eliminado ✓`);
+    this.render();
   },
 
   async ejecutarReset(id) {

@@ -77,6 +77,25 @@ const Auth = {
     return { ok:false, error: msg || 'No se pudo crear el usuario' };
   },
 
+  /* Borrado COMPLETO de un usuario: perfil, membresías y acceso.
+     Va por Edge Function porque borrar el auth user exige la service role, que
+     nunca puede viajar al navegador. Sin ese paso quedaría una cuenta que
+     todavía puede iniciar sesión, sin perfil y sin permisos — un fantasma.
+     Por eso, si la función no está desplegada NO se hace un borrado parcial
+     desde el cliente: se dice que falta desplegarla. */
+  async eliminarUsuario(id) {
+    const { data, error } = await getSB().functions.invoke('eliminar-usuario', { body: { id } });
+    if (!error && data?.ok) {
+      return { ok: true, advertencia: data.advertencia || null };
+    }
+    if (error && Auth._edgeNoDisponible(error)) {
+      return { ok: false, error: 'Falta desplegar la función eliminar-usuario (supabase functions deploy eliminar-usuario). Mientras tanto podés inactivarlo.' };
+    }
+    let msg = error?.message || data?.error;
+    if (error) { try { const j = await error.context.json(); if (j?.error) msg = j.error; } catch (_) {} }
+    return { ok: false, error: msg || 'No se pudo eliminar el usuario' };
+  },
+
   /* Detecta si una Edge Function no está disponible (no desplegada) */
   _edgeNoDisponible(error) {
     const m = (error?.message || '').toLowerCase();
