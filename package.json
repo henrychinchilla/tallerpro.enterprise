@@ -7,7 +7,7 @@
   "scripts": {
     "dev": "npx --yes serve@latest -l 8080 .",
     "preview": "npx --yes wrangler dev",
-    "predeploy": "npm test && npm run humo:todo",
+    "predeploy": "npm test && npm run humo:todo && npm run humo:movil",
     "deploy": "npx --yes wrangler deploy",
     "deploy:sin-pruebas": "npx --yes wrangler deploy",
     "electron": "npx --yes electron electron/main.js",
@@ -16,10 +16,12 @@
     "humo": "node test/humo/correr.mjs",
     "humo:crud": "node test/humo/correr.mjs crud.mjs",
     "humo:venta": "node test/humo/correr.mjs venta.mjs",
-    "humo:todo": "node test/humo/correr.mjs humo.mjs crud.mjs venta.mjs permisos.mjs calculos.mjs primeriza.mjs",
-    "humo:movil": "node test/humo/correr.mjs --movil humo.mjs",
+    "humo:todo": "node test/humo/correr.mjs humo.mjs crud.mjs venta.mjs permisos.mjs calculos.mjs primeriza.mjs visibles.mjs impresos.mjs",
+    "humo:movil": "node test/humo/correr.mjs --movil humo.mjs visibles.mjs",
     "humo:permisos": "node test/humo/correr.mjs permisos.mjs",
-    "humo:calculos": "node test/humo/correr.mjs calculos.mjs"
+    "humo:calculos": "node test/humo/correr.mjs calculos.mjs",
+    "humo:visibles": "node test/humo/correr.mjs visibles.mjs",
+    "humo:impresos": "node test/humo/correr.mjs impresos.mjs"
   },
   "keywords": [
     "taller",
