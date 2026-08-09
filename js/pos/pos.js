@@ -480,7 +480,7 @@ const POS = {
         <div class="pos-layout">
           <!-- Catálogo -->
           <div class="pos-catalogo">
-            <div style="display:flex;gap:8px;align-items:center;position:relative;">
+            <div style="display:flex;gap:8px;align-items:center;position:sticky;top:0;z-index:20;background:var(--surface);padding:8px 0;margin:-16px 0 0 0;border-bottom:1px solid var(--border);">
               <div class="pos-search-wrapper" style="flex:1;">
                 <span style="color:var(--text3);font-size:14px">🔍</span>
                 <input id="pos-busca" placeholder="Buscar por nombre, código o código de barras…"
