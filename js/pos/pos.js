@@ -423,7 +423,7 @@ const POS = {
         .pos-layout { flex:1; display:grid;
           grid-template-columns:minmax(0,1fr) 630px;
           gap:0; overflow:hidden; min-height:0; }
-        .pos-catalogo { padding:16px; overflow-y:auto; display:flex; flex-direction:column; gap:12px; min-width:0; }
+        .pos-catalogo { padding:0 16px 16px 16px; overflow-y:auto; display:flex; flex-direction:column; gap:12px; min-width:0; }
         .pos-cart-panel { border-left:1px solid var(--border); background:var(--surface);
           display:flex; flex-direction:column; min-height:0; overflow:hidden; }
         .pos-ticket { flex:1 1 0; display:flex; flex-direction:column; min-height:0; min-width:0; }
@@ -480,7 +480,7 @@ const POS = {
         <div class="pos-layout">
           <!-- Catálogo -->
           <div class="pos-catalogo">
-            <div style="display:flex;gap:8px;align-items:center;position:sticky;top:0;z-index:20;background:var(--surface);padding:8px 0;margin:-16px 0 0 0;border-bottom:1px solid var(--border);">
+            <div style="display:flex;gap:8px;align-items:center;position:sticky;top:0;z-index:20;background:var(--surface);padding:10px 0;border-bottom:1px solid var(--border);">
               <div class="pos-search-wrapper" style="flex:1;">
                 <span style="color:var(--text3);font-size:14px">🔍</span>
                 <input id="pos-busca" placeholder="Buscar por nombre, código o código de barras…"
