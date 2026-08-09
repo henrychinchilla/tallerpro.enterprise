@@ -28,26 +28,30 @@
    que jamás toca datos reales. Las credenciales van en test/humo/credenciales.json
    (fuera de git). Si el archivo no está, la prueba lo dice y no falla el deploy.
 ═══════════════════════════════════════════════════════════════════════════ */
-import { chromium } from 'playwright';
-import fs from 'fs';
-import path from 'path';
-import { fileURLToPath } from 'url';
+import { abrirSesion, marcador, cerrar, BASE } from './ayuda.mjs';
 
-const aqui = path.dirname(fileURLToPath(import.meta.url));
-const RAIZ = path.join(aqui, '..', '..');
-const BASE = process.env.HUMO_URL || 'http://localhost:8099';
+/* Mismo recorrido, distinto tamaño de pantalla. En teléfono es donde se tapan
+   las cosas: las categorías del POS sobre los productos, el total fuera de
+   vista. `npm run humo:movil` corre esto en 390x844, que es un teléfono real. */
+const MOVIL = process.env.HUMO_MOVIL === '1';
+const viewport = MOVIL ? { width: 390, height: 844 } : { width: 1440, height: 900 };
+console.log(MOVIL ? 'Pantalla de TELÉFONO (390x844)' : 'Pantalla de escritorio (1440x900)');
 
-const credFile = path.join(aqui, 'credenciales.json');
-if (!fs.existsSync(credFile)) {
-  console.log('⚠️  Falta test/humo/credenciales.json — el humo no corre.');
-  console.log('   (Es el usuario del comercio de PRUEBAS; no va a git a propósito.)');
-  process.exit(0);
-}
-const CRED = JSON.parse(fs.readFileSync(credFile, 'utf8'));
+const sesion = await abrirSesion({ viewport });
+if (!sesion) { console.log('⚠️  Sin credenciales o sin poder entrar — el humo no corre.'); process.exit(0); }
+const { pagina, errores, CRED } = sesion;
 
-/* Los módulos que se abren. Es la lista de MODULOS de config.js menos los
-   encabezados de grupo (no son pantallas) y mi_ot (es el portal del cliente,
-   con su propio login). */
+const fallos = [];
+const anotar = (modulo, motivo, detalle) => {
+  fallos.push({ modulo, motivo, detalle });
+  console.log(`FAIL — ${modulo}: ${motivo}`);
+  if (detalle) console.log('        ↳ ' + String(detalle).replace(/\s+/g, ' ').slice(0, 220));
+};
+
+
+/* Los módulos que se abren: la lista de MODULOS de config.js menos los
+   encabezados de grupo (no son pantallas) y mi_ot (portal del cliente, con su
+   propio login). */
 const MODULOS = [
   'dashboard', 'clientes', 'vehiculos', 'diagnostico_obd', 'bitacora', 'ordenes',
   'cotizaciones', 'inventario', 'bodegas', 'proveedores', 'activos', 'envios',
@@ -57,108 +61,9 @@ const MODULOS = [
   'comunicaciones', 'configuracion', 'usuarios', 'admin', 'respaldos', 'descarga',
 ];
 
-/* Ruido conocido que NO es un fallo de la pantalla: recursos externos que el
-   entorno local no tiene y avisos del navegador. Se lista explícitamente para
-   que agregar una excepción sea una decisión visible y no un filtro vago. */
-const RUIDO = [
-  /favicon/i,
-  /Failed to load resource.*(sw\.js|manifest)/i,
-  /ServiceWorker/i,
-  /Tracking Prevention/i,
-  /net::ERR_INTERNET_DISCONNECTED/i,
-];
-const esRuido = (t) => RUIDO.some(r => r.test(t));
-
-const fallos = [];
-const anotar = (modulo, motivo, detalle) => {
-  fallos.push({ modulo, motivo, detalle });
-  console.log(`FAIL — ${modulo}: ${motivo}`);
-  if (detalle) console.log('        ↳ ' + String(detalle).replace(/\s+/g, ' ').slice(0, 220));
-};
-
-const navegador = await chromium.launch();
-const contexto = await navegador.newContext({ viewport: { width: 1440, height: 900 } });
-/* El 2FA es posponible para una cuenta sin factores. La marca se pone con un
-   script de inicialización —corre ANTES de cada carga— en vez de con un
-   evaluate suelto: el servidor redirige /index.html a /, y un evaluate en medio
-   de esa navegación muere con "Execution context was destroyed". */
-await contexto.addInitScript(() => {
-  try { localStorage.setItem('mfa_enroll_later', 'true'); } catch (_) {}
-});
-const pagina = await contexto.newPage();
-
-let errores = [];
-pagina.on('console', (m) => { if (m.type() === 'error' && !esRuido(m.text())) errores.push(m.text()); });
-pagina.on('pageerror', (e) => { if (!esRuido(String(e))) errores.push('EXCEPCIÓN: ' + e.message); });
-
-/* ── Entrar ─────────────────────────────────────────────────────────────── */
-/* CON REINTENTOS a propósito. La app carga sus scripts y puede navegar sola
-   justo mientras se ejecuta el signIn, y entonces el evaluate muere con
-   "Execution context was destroyed". No es un fallo de la app ni del usuario:
-   es una carrera, y una carrera se pierde de vez en cuando. Reintentar hace
-   que el humo diga la verdad sobre las PANTALLAS y no sobre el azar del
-   arranque — un humo que falla solo es un humo que nadie mira. */
-async function entrar(intento) {
-  await pagina.goto(BASE + '/', { waitUntil: 'load' });
-  await pagina.waitForFunction(() => typeof window.getSB === 'function', null, { timeout: 20000 });
-  /* Que la pantalla de login esté quieta antes de tocar nada. */
-  await pagina.waitForTimeout(500);
-
-  const r = await pagina.evaluate(async (c) => {
-    const x = await getSB().auth.signInWithPassword({ email: c.email, password: c.password });
-    return x.error ? ('error: ' + x.error.message) : 'ok';
-  }, CRED).catch((e) => 'carrera: ' + e.message.slice(0, 60));
-
-  /* Un error de credenciales no se reintenta: no va a mejorar solo. */
-  if (String(r).startsWith('error:')) return { ok: false, fatal: true, motivo: r };
-
-  await pagina.waitForFunction(
-    () => Object.keys(localStorage).some(k => /-auth-token$/.test(k)),
-    null, { timeout: 15000 }).catch(() => {});
-
-  await pagina.goto(BASE + '/', { waitUntil: 'load' }).catch(() => {});
-
-  const dentro = await pagina.waitForFunction(
-    /* `App` y `POS` se declaran con const en un script clásico: existen en el
-       ámbito global del documento pero NO como propiedad de window. Preguntar
-       por window.App da undefined aunque la app esté corriendo. */
-    () => document.getElementById('app')?.classList.contains('visible') && typeof App !== 'undefined',
-    null, { timeout: 30000 }).then(() => true).catch(() => false);
-
-  return { ok: dentro, motivo: dentro ? 'ok' : ('intento ' + intento + ': ' + r) };
-}
-
-let entro = false;
-for (let i = 1; i <= 3 && !entro; i++) {
-  const r = await entrar(i);
-  entro = r.ok;
-  if (!entro) console.log('reintentando el ingreso (' + r.motivo + ')');
-  if (r.fatal) break;
-}
-
-if (!entro) {
-  const diag = await pagina.evaluate(() => ({
-    url: location.href,
-    token: Object.keys(localStorage).filter(k => /auth-token/.test(k)),
-    appVisible: document.getElementById('app')?.className,
-    hayApp: typeof App,
-    vistaLogin: document.getElementById('login-screen')?.style.display,
-    texto: (document.body.innerText || '').replace(/\s+/g, ' ').slice(0, 200),
-  })).catch(e => ({ err: e.message }));
-  console.log('DIAGNÓSTICO: ' + JSON.stringify(diag));
-}
-
-if (!entro) {
-  console.log('FAIL — no se pudo entrar con el usuario de pruebas');
-  await pagina.screenshot({ path: path.join(RAIZ, 'humo-fallo.png') }).catch(() => {});
-  await navegador.close();
-  process.exit(1);
-}
-console.log('Sesión iniciada.');
-
 /* ── Cada módulo ────────────────────────────────────────────────────────── */
 for (const mod of MODULOS) {
-  errores = [];
+  errores.length = 0;
   try {
     await pagina.evaluate((m) => App.navegarA(m), mod);
     /* Los módulos cargan datos: se espera a que el "cargando" se vaya o a que
@@ -188,7 +93,7 @@ for (const mod of MODULOS) {
 
 /* ── EL POS Y SU MATEMÁTICA ─────────────────────────────────────────────── */
 {
-  errores = [];
+  errores.length = 0;
   const mod = 'pos (total y cambio)';
   try {
     await pagina.goto(BASE + '/pos.html', { waitUntil: 'domcontentloaded' });
@@ -239,5 +144,5 @@ if (fallos.length) {
 } else {
   console.log(`\n${MODULOS.length + 1} pantallas abiertas, ninguna rota.`);
 }
-await navegador.close();
+if (!fallos.length) await cerrar(sesion, 0);
 process.exit(fallos.length ? 1 : 0);

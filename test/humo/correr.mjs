@@ -16,7 +16,13 @@ const aqui = path.dirname(fileURLToPath(import.meta.url));
 const RAIZ = path.join(aqui, '..', '..');
 const PUERTO = process.env.HUMO_PORT || '8099';
 const BASE = `http://localhost:${PUERTO}`;
-const SUITES = process.argv.slice(2).length ? process.argv.slice(2) : ['humo.mjs'];
+/* --movil corre el mismo recorrido en pantalla de teléfono (390x844), que es
+   donde se tapan las cosas: las categorías sobre los productos, el total fuera
+   de vista. */
+const args = process.argv.slice(2);
+const MOVIL = args.includes('--movil');
+const SUITES = args.filter(a => a !== '--movil');
+if (!SUITES.length) SUITES.push('humo.mjs');
 
 const servidor = spawn(process.platform === 'win32' ? 'npx.cmd' : 'npx',
   ['--yes', 'serve@latest', '-l', PUERTO, '.'],
@@ -48,7 +54,8 @@ for (const suite of SUITES) {
   console.log(`\n═══ ${suite} ═══`);
   const code = await new Promise((res) => {
     const p = spawn(process.execPath, [path.join(aqui, suite)],
-      { cwd: RAIZ, stdio: 'inherit', env: { ...process.env, HUMO_URL: BASE } });
+      { cwd: RAIZ, stdio: 'inherit',
+        env: { ...process.env, HUMO_URL: BASE, ...(MOVIL ? { HUMO_MOVIL: '1' } : {}) } });
     p.on('exit', (c) => res(c ?? 1));
   });
   if (code !== 0) fallaron++;
