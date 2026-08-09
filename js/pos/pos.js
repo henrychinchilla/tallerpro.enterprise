@@ -919,6 +919,30 @@ const POS = {
     return { bruto, desc, descCanje, total, subtotal, iva };
   },
 
+  /* Montos con los que el cliente suele pagar en efectivo, para el botón
+     rápido del vuelto: el billete siguiente que cubre la cuenta y los redondeos
+     de arriba. Con Q630 ofrece Q650, Q700 y Q1000.
+
+     ESTA FUNCIÓN NO EXISTÍA Y ERA LA CAUSA DE QUE NO SE VIERA EL TOTAL: se
+     llamaba desde _pintarCart dentro de `if (t.total > 0)`, así que con el
+     carrito vacío no pasaba nada (por eso se veía "Total Q0.00"), pero al
+     agregar el primer producto reventaba a media pintada y el bloque de
+     totales se quedaba sin escribir. Y como el método por defecto es Efectivo,
+     le pasaba a todo el mundo, siempre.
+
+     Los cortes son los billetes que circulan en Guatemala: 20, 50, 100, 200 y
+     el redondeo a mil. */
+  _montosRapidos(total) {
+    const t = Number(total) || 0;
+    if (t <= 0) return [];
+    const arriba = (paso) => Math.ceil(t / paso) * paso;
+    /* Se descartan los que dan exactamente el total: para eso ya está el botón
+       "Exacto", y repetirlo ocuparía lugar sin servir. */
+    const candidatos = [arriba(20), arriba(50), arriba(100), arriba(500), arriba(1000)]
+      .filter(m => m > t + 0.001);
+    return [...new Set(candidatos)].sort((a, b) => a - b).slice(0, 3);
+  },
+
   _pintarCart() {
     this._pisoOk = false;   // el aviso de margen mínimo se re-evalúa al cambiar el carrito
     const cont = document.getElementById('pos-cart');
