@@ -92,29 +92,49 @@ pagina.on('console', (m) => { if (m.type() === 'error' && !esRuido(m.text())) er
 pagina.on('pageerror', (e) => { if (!esRuido(String(e))) errores.push('EXCEPCIÓN: ' + e.message); });
 
 /* ── Entrar ─────────────────────────────────────────────────────────────── */
-await pagina.goto(BASE + '/', { waitUntil: 'domcontentloaded' });
-await pagina.waitForFunction(() => typeof window.getSB === 'function', null, { timeout: 20000 });
+/* CON REINTENTOS a propósito. La app carga sus scripts y puede navegar sola
+   justo mientras se ejecuta el signIn, y entonces el evaluate muere con
+   "Execution context was destroyed". No es un fallo de la app ni del usuario:
+   es una carrera, y una carrera se pierde de vez en cuando. Reintentar hace
+   que el humo diga la verdad sobre las PANTALLAS y no sobre el azar del
+   arranque — un humo que falla solo es un humo que nadie mira. */
+async function entrar(intento) {
+  await pagina.goto(BASE + '/', { waitUntil: 'load' });
+  await pagina.waitForFunction(() => typeof window.getSB === 'function', null, { timeout: 20000 });
+  /* Que la pantalla de login esté quieta antes de tocar nada. */
+  await pagina.waitForTimeout(500);
 
-/* La app NO entra sola al iniciar sesión: lee la sesión cuando CARGA la
-   página. Así que se firma, se le da un instante para que el token quede
-   guardado en localStorage, y recién ahí se recarga. Hacer el goto antes de
-   eso corría una carrera y terminaba en "Execution context was destroyed". */
-const rLogin = await pagina.evaluate(async (c) => {
-  const r = await getSB().auth.signInWithPassword({ email: c.email, password: c.password });
-  return r.error ? ('error: ' + r.error.message) : ('ok, token=' + Object.keys(localStorage).filter(k=>/auth-token/.test(k)).length);
-}, CRED).catch((e) => 'excepcion: ' + e.message.slice(0, 80));
-console.log('login -> ' + rLogin);
-await pagina.waitForFunction(
-  () => Object.keys(localStorage).some(k => /-auth-token$/.test(k)),
-  null, { timeout: 15000 }).catch(() => {});
-await pagina.goto(BASE + '/', { waitUntil: 'domcontentloaded' }).catch(() => {});
+  const r = await pagina.evaluate(async (c) => {
+    const x = await getSB().auth.signInWithPassword({ email: c.email, password: c.password });
+    return x.error ? ('error: ' + x.error.message) : 'ok';
+  }, CRED).catch((e) => 'carrera: ' + e.message.slice(0, 60));
 
-const entro = await pagina.waitForFunction(
-  /* `App` y `POS` se declaran con const en un script clásico: existen en el
-     ámbito global del documento pero NO como propiedad de window. Preguntar
-     por window.App da undefined aunque la app esté corriendo. */
-  () => document.getElementById('app')?.classList.contains('visible') && typeof App !== 'undefined',
-  null, { timeout: 30000 }).then(() => true).catch(() => false);
+  /* Un error de credenciales no se reintenta: no va a mejorar solo. */
+  if (String(r).startsWith('error:')) return { ok: false, fatal: true, motivo: r };
+
+  await pagina.waitForFunction(
+    () => Object.keys(localStorage).some(k => /-auth-token$/.test(k)),
+    null, { timeout: 15000 }).catch(() => {});
+
+  await pagina.goto(BASE + '/', { waitUntil: 'load' }).catch(() => {});
+
+  const dentro = await pagina.waitForFunction(
+    /* `App` y `POS` se declaran con const en un script clásico: existen en el
+       ámbito global del documento pero NO como propiedad de window. Preguntar
+       por window.App da undefined aunque la app esté corriendo. */
+    () => document.getElementById('app')?.classList.contains('visible') && typeof App !== 'undefined',
+    null, { timeout: 30000 }).then(() => true).catch(() => false);
+
+  return { ok: dentro, motivo: dentro ? 'ok' : ('intento ' + intento + ': ' + r) };
+}
+
+let entro = false;
+for (let i = 1; i <= 3 && !entro; i++) {
+  const r = await entrar(i);
+  entro = r.ok;
+  if (!entro) console.log('reintentando el ingreso (' + r.motivo + ')');
+  if (r.fatal) break;
+}
 
 if (!entro) {
   const diag = await pagina.evaluate(() => ({
