@@ -10,7 +10,7 @@ import { fileURLToPath } from 'url';
 
 export const AQUI = path.dirname(fileURLToPath(import.meta.url));
 export const RAIZ = path.join(AQUI, '..', '..');
-export const BASE = process.env.HUMO_URL || 'http://localhost:8099';
+export const BASE = process.env.HUMO_URL || 'http://127.0.0.1:8199';
 
 /* Credenciales del comercio de PRUEBAS. Fuera de git a propósito. */
 export function credenciales() {
@@ -82,10 +82,8 @@ export async function abrirSesion({ viewport = { width: 1440, height: 900 } } = 
   async function entrar() {
    try {
     await pagina.goto(BASE + '/', { waitUntil: 'load' });
-    /* Si los scripts no cargaron, se reintenta: que el timeout salga como
-       "reintentando" y no como una excepción que mata toda la suite. */
-    await pagina.waitForFunction(() => typeof window.getSB === 'function', null, { timeout: 20000 });
-    await pagina.waitForTimeout(500);
+     await pagina.waitForFunction(() => typeof window.getSB === 'function', null, { timeout: 20000 });
+     await pagina.waitForTimeout(500);
 
     const r = await pagina.evaluate(async (c) => {
       const x = await getSB().auth.signInWithPassword({ email: c.email, password: c.password });

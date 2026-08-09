@@ -14,8 +14,8 @@ import { fileURLToPath } from 'url';
 
 const aqui = path.dirname(fileURLToPath(import.meta.url));
 const RAIZ = path.join(aqui, '..', '..');
-const PUERTO = process.env.HUMO_PORT || '8099';
-const BASE = `http://localhost:${PUERTO}`;
+const PUERTO = process.env.HUMO_PORT || '8199';
+const BASE = `http://127.0.0.1:${PUERTO}`;
 /* --movil corre el mismo recorrido en pantalla de teléfono (390x844), que es
    donde se tapan las cosas: las categorías sobre los productos, el total fuera
    de vista. */
