@@ -41,3 +41,11 @@ puente-obd/*.exe
 
 # Snapshots temporales del MCP de Playwright (basura de sesiones)
 .playwright-mcp/
+
+# Credenciales del comercio de PRUEBAS (humo automatizado) y su evidencia
+test/humo/credenciales.json
+humo-fallo.png
+
+# Capturas del navegador de pruebas
+.playwright-mcp/
+pos-total-*.png

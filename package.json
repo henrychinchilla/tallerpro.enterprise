@@ -7,12 +7,13 @@
   "scripts": {
     "dev": "npx --yes serve@latest -l 8080 .",
     "preview": "npx --yes wrangler dev",
-    "predeploy": "npm test",
+    "predeploy": "npm test && npm run humo",
     "deploy": "npx --yes wrangler deploy",
     "deploy:sin-pruebas": "npx --yes wrangler deploy",
     "electron": "npx --yes electron electron/main.js",
     "build": "echo \"Sitio estático — no requiere build\"",
-    "test": "node test/obd/run.js"
+    "test": "node test/obd/run.js",
+    "humo": "node test/humo/correr.mjs"
   },
   "keywords": [
     "taller",
