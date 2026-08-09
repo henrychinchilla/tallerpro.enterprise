@@ -46,6 +46,10 @@ puente-obd/*.exe
 test/humo/credenciales.json
 humo-fallo.png
 
-# Capturas del navegador de pruebas
-.playwright-mcp/
+# Capturas y reportes del navegador de pruebas
 pos-total-*.png
+/test-results/
+/playwright-report/
+/blob-report/
+/playwright/.cache/
+/playwright/.auth/
