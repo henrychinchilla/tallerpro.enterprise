@@ -16,12 +16,13 @@
     "humo": "node test/humo/correr.mjs",
     "humo:crud": "node test/humo/correr.mjs crud.mjs",
     "humo:venta": "node test/humo/correr.mjs venta.mjs",
-    "humo:todo": "node test/humo/correr.mjs humo.mjs crud.mjs venta.mjs permisos.mjs calculos.mjs primeriza.mjs visibles.mjs impresos.mjs",
+    "humo:todo": "node test/humo/correr.mjs humo.mjs crud.mjs venta.mjs permisos.mjs calculos.mjs primeriza.mjs visibles.mjs impresos.mjs app-android.mjs",
     "humo:movil": "node test/humo/correr.mjs --movil humo.mjs visibles.mjs",
     "humo:permisos": "node test/humo/correr.mjs permisos.mjs",
     "humo:calculos": "node test/humo/correr.mjs calculos.mjs",
     "humo:visibles": "node test/humo/correr.mjs visibles.mjs",
-    "humo:impresos": "node test/humo/correr.mjs impresos.mjs"
+    "humo:impresos": "node test/humo/correr.mjs impresos.mjs",
+    "humo:app": "node test/humo/correr.mjs app-android.mjs"
   },
   "keywords": [
     "taller",
