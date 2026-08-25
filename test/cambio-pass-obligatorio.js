@@ -98,7 +98,16 @@ const login = leer('js', 'core', 'login.js');
      repositorio equivocado justamente para explicar por qué daba 404. */
   ok('...y ninguna URL apunta al que no existe',
      !/github\.com\/henrychinchilla\/nexuspro\.enterprise/.test(desc));
-  ok('la descarga de Android sigue ofreciéndose', /href="\/nexuspro\.apk"/.test(desc));
+  /* La tarjeta ya no trae el enlace escrito a mano: la URL, la versión y el
+     peso salen de /app-version.json (el mismo archivo que dispara el aviso de
+     "hay versión nueva" al entrar). Así que se comprueba lo que de verdad
+     importaba — que el APK se siga ofreciendo — por los dos extremos: el
+     respaldo que usa el código si el JSON no carga, y lo que el JSON declara. */
+  ok('la descarga de Android sigue ofreciéndose', /download="NexusPro\.apk"/.test(desc));
+  ok('...y si el archivo de versión no carga, cae al APK publicado',
+     /apkUrl \|\| '\/nexuspro\.apk'/.test(desc));
+  ok('...y el archivo de versión apunta a ese mismo APK',
+     JSON.parse(leer('app-version.json')).android.apkUrl === '/nexuspro.apk');
 }
 
 console.log(`\n${pasadas} pasadas, ${fallidas} fallidas`);

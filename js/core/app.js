@@ -78,6 +78,7 @@ const App = {
     await App._iniciarTrialSiAplica();
     App.checkSuscripcion();
     App.avisoSAT();
+    App.avisoAppAndroid();
     App.registrarSW();
     App.iniciarInactividad(Auth.tenant?.session_timeout_minutes);
   },
@@ -147,6 +148,161 @@ const App = {
           <button class="btn btn-amber" onclick="UI.cerrarModal();App.navegarA('contabilidad')">🧮 Ir a Contabilidad</button>
         </div>`, '480px');
     } catch (_) { /* el aviso nunca debe bloquear el ingreso */ }
+  },
+
+  /* ═══ APP DE ANDROID: ¿el teléfono trae la versión nueva? ═══════
+     El sistema web se actualiza solo con cada deploy, pero el CASCARÓN nativo
+     (la app de Android) no: hay que instalar el APK nuevo — o, cuando esté
+     publicada, dejar que Google Play lo haga. Esto avisa al entrar.
+
+     El problema a resolver: una TWA renderiza con el motor de Chrome, así que
+     desde el sitio es indistinguible de una pestaña normal — el user-agent NO
+     dice "voy dentro de la app v4". Por eso la app se identifica ella misma:
+     abre el sitio en `/?app=android&appvc=N&appvn=X.Y.Z` (DEFAULT_URL del
+     AndroidManifest, con los valores que inyecta build.gradle) y aquí se
+     guardan. La versión publicada vive en /app-version.json. */
+
+  _APP_LS: 'np_android_app',          // versión instalada, según se auto-reportó
+  _APP_LS_AVISO: 'np_android_aviso',  // aviso pospuesto: { vc, modo, hasta }
+  _APP_PAQUETE: 'com.cmtelecom.nexuspro',
+
+  /* Corre en CADA carga de página, antes del login (ver el final del archivo).
+     Devuelve lo que se sabe de la app instalada, o null si nunca se abrió. */
+  _detectarAppAndroid() {
+    let info = null;
+    try { info = JSON.parse(localStorage.getItem(App._APP_LS) || 'null'); } catch (_) { info = null; }
+    try {
+      const p = new URLSearchParams(location.search);
+      if (p.get('app') === 'android') {
+        sessionStorage.setItem('np_twa', '1');
+        const vc = parseInt(p.get('appvc') || '', 10);
+        if (Number.isFinite(vc)) {
+          info = { vc, vn: p.get('appvn') || '', visto: new Date().toISOString().slice(0, 10) };
+          localStorage.setItem(App._APP_LS, JSON.stringify(info));
+        }
+        /* Limpiar la URL: los parámetros ya cumplieron y no deben viajar en los
+           enlaces que el usuario comparta desde adentro de la app. Se conserva
+           el hash porque ahí llegan los tokens de recuperación de Supabase. */
+        history.replaceState(null, '', location.pathname + location.hash);
+      }
+    } catch (_) { /* navegador viejo: se sigue sin esto */ }
+    App._appAndroid = info;
+    return info;
+  },
+
+  /* ¿La página se está renderizando DENTRO de la app nativa? En una TWA el
+     referrer del documento es android-app://<paquete>. Se memoriza en la
+     sesión porque un F5 más adelante puede llegar ya sin referrer. */
+  _dentroDeAppAndroid() {
+    try {
+      if (sessionStorage.getItem('np_twa') === '1') return true;
+      const dentro = (document.referrer || '').startsWith('android-app://' + App._APP_PAQUETE);
+      if (dentro) sessionStorage.setItem('np_twa', '1');
+      return dentro;
+    } catch (_) { return false; }
+  },
+
+  /* Versión publicada de la app. /app-version.json viaja con el sitio, así que
+     publicar una app nueva es editar ese archivo — no hay que tocar la BD. */
+  async _ultimaVersionAndroid() {
+    if (App._verAndroid !== undefined) return App._verAndroid;
+    try {
+      const r = await fetch('/app-version.json', { cache: 'no-cache' });
+      const j = r.ok ? await r.json() : null;
+      App._verAndroid = (j && j.android && Number.isFinite(j.android.versionCode)) ? j.android : null;
+    } catch (_) { App._verAndroid = null; }
+    return App._verAndroid;
+  },
+
+  async avisoAppAndroid() {
+    try {
+      if (!/android/i.test(navigator.userAgent || '')) return;   // sólo Android
+      const ultima = await App._ultimaVersionAndroid();
+      if (!ultima) return;
+
+      const info   = App._appAndroid !== undefined ? App._appAndroid : App._detectarAppAndroid();
+      const dentro = App._dentroDeAppAndroid();
+      const vc     = Number.isFinite(info && info.vc) ? info.vc : 0;
+
+      /* Tres situaciones, y sólo dos merecen aviso:
+         · dentro de la app con versión vieja  → ACTUALIZAR. Ojo: los APK
+           anteriores al 4 no reportan versión (vc=0), y estar adentro sin
+           reportarla es justamente la prueba de que son viejos.
+         · en el navegador y sin rastro de la app → INSTALAR.
+         · al día → nada. */
+      let modo = null;
+      if (dentro || info) modo = vc < ultima.versionCode ? 'actualizar' : null;
+      else modo = 'instalar';
+      if (!modo) return;
+
+      /* Posposición: el aviso no puede volverse ruido. "Después" lo calla 1 día
+         si es una actualización (interesa que se instale) y 7 si es la primera
+         invitación a instalar. Una versión NUEVA reabre el aviso igual: la
+         posposición se guarda atada al versionCode al que aplicaba. */
+      try {
+        const prev = JSON.parse(localStorage.getItem(App._APP_LS_AVISO) || 'null');
+        if (prev && prev.vc === ultima.versionCode &&
+            prev.hasta > new Date().toISOString().slice(0, 10)) return;
+      } catch (_) { /* dato corrupto: mostrar el aviso */ }
+
+      /* No pisar otro modal (p. ej. el aviso SAT): esperar a que se cierre. */
+      const overlay = document.getElementById('modal-overlay');
+      if (overlay && overlay.classList.contains('open')) {
+        App._esperaAvisoApp = (App._esperaAvisoApp || 0) + 1;
+        if (App._esperaAvisoApp > 40) return;          // ~1 minuto y se rinde
+        setTimeout(() => App.avisoAppAndroid(), 1500);
+        return;
+      }
+
+      const porPlay  = ultima.enPlayStore === true && !!ultima.playUrl;
+      const destino  = porPlay ? ultima.playUrl : (ultima.apkUrl || '/nexuspro.apk');
+      const peso     = ultima.apkKB ? ` · ${ultima.apkKB} KB` : '';
+      const novedades = Array.isArray(ultima.novedades) ? ultima.novedades.slice(0, 4) : [];
+      const actualizar = modo === 'actualizar';
+
+      UI.modal(actualizar ? '🤖 Hay una versión nueva de la app' : '🤖 Instala la app de Android', `
+        <div style="display:flex;gap:14px;align-items:flex-start;background:var(--surface2);color:var(--text1);border-left:3px solid var(--green);border-radius:0 8px 8px 0;padding:12px;margin-bottom:14px">
+          <img src="/icons/icon-192.png" alt="" width="48" height="48" style="border-radius:10px;flex-shrink:0">
+          <div>
+            <div style="font-weight:800;font-size:14px">NexusPro para Android</div>
+            <div style="font-size:12px;color:var(--text3)">
+              ${actualizar
+                ? `Tienes la versión <b>${UI.esc((info && info.vn) || 'anterior')}</b> · nueva: <b>${UI.esc(ultima.versionName || '')}</b>${peso}`
+                : `Versión <b>${UI.esc(ultima.versionName || '')}</b>${peso} · Android ${UI.esc(ultima.minAndroid || '8.0')} o superior`}
+            </div>
+          </div>
+        </div>
+        ${novedades.length ? `
+        <div style="font-size:12px;color:var(--text2);margin-bottom:14px">
+          <div style="font-weight:700;margin-bottom:6px">Qué trae:</div>
+          <ul style="margin:0;padding-left:18px;line-height:1.7">${novedades.map(n => `<li>${UI.esc(n)}</li>`).join('')}</ul>
+        </div>` : ''}
+        ${porPlay ? '' : `
+        <div style="font-size:11px;color:var(--text3);background:var(--surface2);border-radius:8px;padding:8px 10px;margin-bottom:14px">
+          <b>⚠️ Al instalar:</b> Android pedirá permiso para "instalar apps de esta fuente" — acéptalo.
+          ${actualizar ? 'La actualización conserva tu sesión y tus datos: se instala encima de la app que ya tienes.' : ''}
+        </div>`}
+        <div class="modal-footer">
+          <button class="btn btn-ghost" onclick="App._posponerAvisoApp(${ultima.versionCode},'${actualizar ? 'actualizar' : 'instalar'}')">Después</button>
+          <a class="btn btn-green" style="text-decoration:none" href="${UI.esc(destino)}"
+             ${porPlay ? 'target="_blank" rel="noopener"' : 'download="NexusPro.apk"'}
+             onclick="App._posponerAvisoApp(${ultima.versionCode},'${actualizar ? 'actualizar' : 'instalar'}')">
+            ${porPlay ? '▶️ Abrir en Google Play' : (actualizar ? '⬇️ Actualizar ahora' : '⬇️ Descargar app')}
+          </a>
+        </div>`, '460px');
+    } catch (_) { /* el aviso nunca debe bloquear el ingreso */ }
+  },
+
+  /* Cierra el aviso y lo calla hasta la fecha que toque (o hasta que salga una
+     versión más nueva, porque la posposición va atada al versionCode). */
+  _posponerAvisoApp(vc, modo) {
+    const dias = modo === 'actualizar' ? 1 : 7;
+    try {
+      localStorage.setItem(App._APP_LS_AVISO, JSON.stringify({
+        vc, modo, hasta: new Date(Date.now() + dias * 86400000).toISOString().slice(0, 10)
+      }));
+    } catch (_) { /* sin localStorage el aviso vuelve al siguiente ingreso */ }
+    UI.cerrarModal();
   },
 
   /* El trial de 30 días arranca con el PRIMER USO del negocio (no al
@@ -1310,3 +1466,11 @@ Modulos._importarCSV = function (onRows) {
   };
   input.click();
 };
+
+/* ── La app de Android se presenta al abrir el sitio ──────────────────
+   Corre en CADA carga, antes del login: la app nativa arranca en
+   `/?app=android&appvc=N&appvn=X.Y.Z` y hay que guardar esos datos (y limpiar
+   la URL) antes de que la sesión se restaure o el usuario navegue. Lo que se
+   guarda aquí es lo que App.avisoAppAndroid() compara luego contra
+   /app-version.json para decidir si toca avisar "hay versión nueva". */
+try { App._detectarAppAndroid(); } catch (_) { /* nunca debe tumbar la carga */ }

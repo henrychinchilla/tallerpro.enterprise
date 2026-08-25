@@ -9,6 +9,14 @@ if (keystoreFile.exists()) {
     keystoreProps.load(new FileInputStream(keystoreFile))
 }
 
+/* UN SOLO lugar donde vive la version del cascaron nativo: de aqui salen
+   versionCode/versionName Y los parametros que la app se pasa a si misma al
+   abrir el sitio (ver DEFAULT_URL en AndroidManifest.xml). Sin eso la web no
+   tendria forma de saber que version de APK esta corriendo el telefono: una
+   TWA se presenta al servidor como Chrome, no como la app. */
+def appVersionCode = 4
+def appVersionName = "4.77.0"
+
 android {
     namespace 'com.cmtelecom.nexuspro'
     compileSdk 35
@@ -17,8 +25,15 @@ android {
         applicationId "com.cmtelecom.nexuspro"
         minSdk 24
         targetSdk 35
-        versionCode 3
-        versionName "4.76.0"
+        /* Subir SIEMPRE versionCode al publicar (Play rechaza repetirlo) y
+           reflejar el mismo par en /app-version.json: de ahi lo lee el aviso
+           de "hay version nueva" que sale al entrar al sistema. */
+        versionCode appVersionCode
+        versionName appVersionName
+        manifestPlaceholders = [
+            appVersionCode: appVersionCode,
+            appVersionName: appVersionName
+        ]
     }
 
     signingConfigs {

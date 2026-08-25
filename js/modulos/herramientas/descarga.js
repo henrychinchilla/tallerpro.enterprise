@@ -6,12 +6,30 @@ Modulos.descarga = {
      assets del sitio tienen tope de 25 MB por archivo.
      OJO: este enlace apuntaba a `nexuspro.enterprise`, un repositorio que NO
      existe (el real es tallerpro.enterprise), así que el botón daba 404. */
+  /* Windows sigue con su version en constantes (su instalador vive en una
+     release de GitHub). Android NO: su version se lee de /app-version.json,
+     que es tambien lo que decide el aviso de actualizacion al entrar. */
   _WIN_VER: '4.76.0',
   _WIN_URL: 'https://github.com/henrychinchilla/tallerpro.enterprise/releases/download/v4.76.0-win/NexusPro-Setup-4.76.0.exe',
   _APP_URL: 'https://nexuspro.cmtelecommgt.com',
 
   async render() {
     const el = document.getElementById('page-content');
+
+    /* Version y peso de la app Android salen de /app-version.json, el mismo
+       archivo que dispara el aviso de "hay version nueva" al entrar. Antes
+       estaban escritos a mano en el HTML de abajo y quedaron desfasados: la
+       tarjeta decia "424 KB - version 4.76.0" mientras el APK publicado ya era
+       otro. Un solo lugar donde subir la version, y esta pantalla lo sigue. */
+    const app = (typeof App !== 'undefined' && App._ultimaVersionAndroid)
+      ? await App._ultimaVersionAndroid().catch(() => null) : null;
+    const appVer   = app?.versionName || '';
+    const appPeso  = app?.apkKB ? `${app.apkKB} KB` : '';
+    const appUrl   = app?.apkUrl || '/nexuspro.apk';
+    const enPlay   = app?.enPlayStore === true && !!app?.playUrl;
+    /* Que trae instalado ESTE telefono (la app nativa lo reporta al abrir) */
+    const instalada = (typeof App !== 'undefined' && App._appAndroid) || null;
+    const alDia     = !!(instalada && app && instalada.vc >= app.versionCode);
 
     const esPWA      = matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
     const esAndroid  = /android/i.test(navigator.userAgent);
@@ -69,16 +87,39 @@ Modulos.descarga = {
                 <div style="font-weight:800;font-size:15px">Android</div>
                 <div style="font-size:11px;color:var(--text3)">Android 8.0 o superior</div>
               </div>
-              <span class="badge badge-amber" style="margin-left:auto">APK directa</span>
+              <span class="badge badge-${enPlay ? 'green' : 'amber'}" style="margin-left:auto">${enPlay ? 'Google Play' : 'APK directa'}</span>
             </div>
+
+            ${instalada ? `
+            <div style="font-size:12px;background:var(--surface2);color:var(--text1);border-left:3px solid var(--${alDia ? 'green' : 'amber'});border-radius:0 8px 8px 0;padding:8px 10px;margin-bottom:12px">
+              ${alDia
+                ? `✅ Tienes instalada la versión <b>${UI.esc(instalada.vn || appVer)}</b> — está al día.`
+                : `⚠️ Tienes la versión <b>${UI.esc(instalada.vn || 'anterior')}</b>. Hay una más reciente: <b>${UI.esc(appVer)}</b>.`}
+            </div>` : ''}
+
             <p style="font-size:12px;color:var(--text3);margin-bottom:14px">
-              Descarga e instala el APK directamente. La publicación en Google Play está en trámite — cuando esté disponible este botón se actualizará con el enlace oficial.
+              ${enPlay
+                ? 'Instálala desde Google Play: las actualizaciones te llegan solas, sin permisos de "origen desconocido".'
+                : 'Descarga e instala el APK directamente. La ficha de Google Play ya está autorizada y en preparación — en cuanto esté publicada, este botón llevará a Play y las actualizaciones serán automáticas.'}
             </p>
-            <a class="btn btn-green" style="width:100%;display:block;text-align:center;text-decoration:none" href="/nexuspro.apk" download="NexusPro.apk">
-              ⬇️ Descargar APK (Android)
+
+            ${enPlay ? `
+            <a class="btn btn-green" style="width:100%;display:block;text-align:center;text-decoration:none;margin-bottom:8px"
+               href="${UI.esc(app.playUrl)}" target="_blank" rel="noopener">
+              ▶️ Ver en Google Play
             </a>
+            <a class="btn btn-ghost btn-sm" style="width:100%;display:block;text-align:center;text-decoration:none"
+               href="${UI.esc(appUrl)}" download="NexusPro.apk">
+              ⬇️ o descargar el APK directo${appPeso ? ` (${appPeso})` : ''}
+            </a>` : `
+            <a class="btn btn-green" style="width:100%;display:block;text-align:center;text-decoration:none"
+               href="${UI.esc(appUrl)}" download="NexusPro.apk">
+              ${instalada && !alDia ? '⬆️ Actualizar app' : '⬇️ Descargar APK (Android)'}${appPeso ? ` · ${appPeso}` : ''}
+            </a>`}
+
             <div style="margin-top:10px;font-size:11px;color:var(--text3);background:var(--surface2);border-radius:8px;padding:8px 10px">
-              <b>⚠️ Antes de instalar:</b> en tu teléfono ve a <i>Configuración → Seguridad → Fuentes desconocidas</i> y actívalo. Tamaño: ~424 KB · versión 4.76.0.
+              ${enPlay ? '' : '<b>⚠️ Antes de instalar:</b> tu teléfono pedirá permiso para <i>instalar apps de esta fuente</i> — acéptalo. La actualización se instala encima de la app que ya tienes: no pierdes sesión ni datos.<br>'}
+              ${appVer ? `Versión <b>${UI.esc(appVer)}</b>${appPeso ? ` · ${appPeso}` : ''} · Android ${UI.esc(app?.minAndroid || '8.0')} o superior` : ''}
             </div>
           </div>
 

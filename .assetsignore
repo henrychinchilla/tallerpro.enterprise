@@ -53,3 +53,27 @@ test/
 tools/
 data/tsb/**/_modelos.json.map
 prueba-*.html
+
+# ══ PROYECTO ANDROID: NO es parte del sitio y contiene la LLAVE DE FIRMA ══
+# Ojo: wrangler sube el DIRECTORIO DE TRABAJO, no lo que esta en git. Que
+# android/tallerpro.keystore y android/keystore.properties esten en
+# .gitignore NO los protegia: el 2026-08-25 se comprobo que
+# https://nexuspro.cmtelecommgt.com/android/tallerpro.keystore respondia 200
+# con el keystore real (2814 bytes) y keystore.properties con su contrasena.
+# Con eso cualquiera podia firmar un APK que Android aceptara como
+# actualizacion legitima de NexusPro. Estuvo publico desde que existe el
+# directorio (2026-07-01). .gitignore protege el REPO; esto protege el CDN.
+android/
+*.aab
+*.jks
+*.keystore
+keystore.properties
+
+# El APK que se ofrece para descargar es UNO: /nexuspro.apk — y ese SI debe
+# subirse (por eso no hay ninguna regla *.apk aca; test/cambio-pass-obligatorio.js
+# lo vigila, porque el boton ya dio 404 una vez por taparlo).
+# Los builds viejos sueltos en la raiz se excluyen POR NOMBRE, uno a uno: un
+# patron generico con negacion (`*.apk` + `!/nexuspro.apk`) dependeria de que
+# wrangler honre la negacion, y si no lo hiciera el fallo seria justamente el
+# que ya nos paso: el boton de descargar deja de funcionar en produccion.
+NexusPro-build-henry.apk

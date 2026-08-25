@@ -1,0 +1,45 @@
+{
+  "_comentario": [
+    "FUENTE DE VERDAD de la version publicada de la app movil. Se despliega con",
+    "el sitio, asi que anunciar una app nueva es editar este archivo — no hay",
+    "nada que tocar en la base de datos.",
+    "",
+    "Quien lo lee:",
+    "  · App.avisoAppAndroid() (js/core/app.js) — el aviso 'hay version nueva'",
+    "    que sale al entrar al sistema. Compara 'versionCode' contra el que la",
+    "    app instalada reporta al abrir el sitio (?app=android&appvc=N).",
+    "  · Modulos.descarga (js/modulos/herramientas/descarga.js) — la pantalla",
+    "    de Descargas, para no repetir version y peso a mano en el HTML.",
+    "",
+    "AL PUBLICAR UNA VERSION NUEVA, los tres numeros deben coincidir:",
+    "  android/app/build.gradle (appVersionCode / appVersionName)",
+    "  el APK copiado a /nexuspro.apk",
+    "  este archivo",
+    "Si 'versionCode' queda por debajo del APK publicado, nadie recibe el aviso;",
+    "si queda por encima, todos ven un aviso que no pueden satisfacer.",
+    "",
+    "'enPlayStore': ponerlo en true EN CUANTO la ficha este viva en Google Play.",
+    "A partir de ahi el aviso manda a Play (que actualiza solo, sin pedirle al",
+    "usuario que acepte 'origen desconocido') en vez de al APK directo."
+  ],
+
+  "android": {
+    "versionCode": 4,
+    "versionName": "4.77.0",
+    "fecha": "2026-08-25",
+    "paquete": "com.cmtelecom.nexuspro",
+    "minAndroid": "8.0",
+
+    "apkUrl": "/nexuspro.apk",
+    "apkKB": 424,
+
+    "enPlayStore": false,
+    "playUrl": "https://play.google.com/store/apps/details?id=com.cmtelecom.nexuspro",
+
+    "novedades": [
+      "La app avisa sola cuando hay una version nueva para instalar",
+      "Buscador del punto de venta siempre visible al abrir el catalogo",
+      "Categorias del punto de venta en un desplegable compacto"
+    ]
+  }
+}
