@@ -131,12 +131,78 @@ export async function abrirSesion({ viewport = { width: 1440, height: 900 }, ...
 }
 
 /* Va a un módulo y espera a que termine de cargar sus datos. */
-export async function irA(pagina, modulo, { timeout = 8000 } = {}) {
-  await pagina.evaluate((m) => App.navegarA(m), modulo);
-  await pagina.waitForFunction(() => {
+/* OJO con la espera, que era un falso positivo de manual: sólo pedía que
+   #page-content tuviera texto y no dijera "cargando". Viniendo de otra
+   pantalla eso YA se cumple con el contenido VIEJO, así que la espera
+   terminaba en el primer intento y la prueba leía la pantalla ANTERIOR
+   creyendo estar en la nueva. Se notaba únicamente con módulos lentos: el
+   2026-08-26 tumbó un despliegue con "la pantalla de Descargas muestra la
+   versión publicada" enseñando el Dashboard, porque Descargas pide
+   app-version.json y pesa el APK por red — varios segundos.
+
+   Lo que sirve es esperar a que el contenido CAMBIE. No se compara contra
+   App.paginaActual: desde page.evaluate ese valor no refleja la navegación
+   (se comprobó que sigue en null tras navegar), así que condicionarlo a eso
+   deja la espera colgada hasta el timeout. */
+export async function irA(pagina, modulo, { timeout = 12000 } = {}) {
+  const leer = () => pagina.evaluate(() =>
+    document.getElementById('page-content')?.innerText.trim() || '');
+
+  /* Espera a que la pantalla deje de moverse: el mismo texto en dos sondeos
+     seguidos. Sin esto, "el texto cambió" se cumple con las KPIs del Dashboard
+     terminando de cargar — seguía siendo el Dashboard, y la navegación se daba
+     por buena cuando aún no había pasado nada. */
+  const asentar = (ms) => pagina.waitForFunction(() => {
     const el = document.getElementById('page-content');
-    return el && el.innerText.trim().length > 0 && !/^\s*(cargando|⏳)/i.test(el.innerText);
-  }, null, { timeout }).catch(() => {});
+    const t = el ? el.innerText.trim() : '';
+    const w = window.__irA || (window.__irA = {});
+    const igual = t.length > 0 && w.prev === t;
+    w.prev = t;
+    return igual;
+  }, null, { timeout: ms, polling: 300 }).then(() => true).catch(() => false);
+
+  const cambio = (previo, ms) => pagina.waitForFunction((p) => {
+    const el = document.getElementById('page-content');
+    if (!el) return false;
+    const t = el.innerText.trim();
+    if (!t || /^\s*(cargando|⏳)/i.test(t) || t === p) return false;
+    const w = window.__irA || (window.__irA = {});
+    const igual = w.prev2 === t;   // ya no se está repintando
+    w.prev2 = t;
+    return igual;
+  }, previo, { timeout: ms, polling: 300 }).then(() => true).catch(() => false);
+
+  await asentar(6000);
+  const antes = await leer();
+  await pagina.evaluate((m) => App.navegarA(m), modulo);
+  if (await cambio(antes, timeout)) return;
+
+  /* App.navegarA tiene varias salidas silenciosas (sin permiso, cambios sin
+     guardar, módulo ya activo) y ademas render() es async: si no hubo cambio,
+     lo mas probable es que la navegacion no surtiera efecto. Un reintento
+     distingue "no navego" de "esta pantalla no muestra lo que esperabamos", que
+     es lo que confundio el diagnostico del 2026-08-26. */
+  await pagina.evaluate((m) => App.navegarA(m), modulo);
+  if (await cambio(antes, timeout)) return;
+
+  /* Si tras dos intentos la pantalla no cambió, el fallo se manifestaría más
+     abajo como "esta pantalla no dice lo que esperaba" mostrando el contenido
+     ANTERIOR — que fue exactamente lo que despistó el 2026-08-26. Se deja dicho
+     aquí, con el estado que permite distinguir las salidas silenciosas de
+     App.navegarA (sin sesión, sin permiso, cambios sin guardar, módulo
+     inexistente). OJO: App y Modulos son globales LÉXICOS, no viven en window. */
+  const porque = await pagina.evaluate((m) => ({
+    paginaActual: typeof App !== 'undefined' ? App.paginaActual : 'sin App',
+    haySesion   : typeof Auth !== 'undefined' && !!Auth.user,
+    puedeSalir  : (() => { try { return App.puedeSalir(); } catch (e) { return 'throw:' + e.message; } })(),
+    acceso      : (() => { try { return tieneAcceso(m); } catch (e) { return 'throw:' + e.message; } })(),
+    hayModulo   : typeof Modulos !== 'undefined' && !!Modulos[m],
+    pantalla    : (document.getElementById('page-content')?.innerText || '').slice(0, 60)
+  }), modulo).catch(e => ({ error: e.message }));
+  /* Llegar al módulo que YA estaba en pantalla es normal (App.navegarA sólo
+     colapsa el submenú y no repinta): ahí no hay nada que avisar. */
+  if (porque.paginaActual !== modulo)
+    console.log(`   ⚠️  irA('${modulo}') no cambió la pantalla — ${JSON.stringify(porque)}`);
 }
 
 /* Texto visible de la pantalla, para buscar en él. */

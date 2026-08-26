@@ -204,14 +204,35 @@ const App = {
 
   /* Versión publicada de la app. /app-version.json viaja con el sitio, así que
      publicar una app nueva es editar ese archivo — no hay que tocar la BD. */
+  /* Dos cosas que este fetch hacía mal y se pagaban en pantalla:
+
+     · No tenía LÍMITE DE TIEMPO. Modulos.descarga.render() lo espera antes de
+       pintar, así que una red que no contesta —ni error ni respuesta— dejaba la
+       pantalla de Descargas EN BLANCO para siempre, sin mensaje ni botón. Se
+       destapó el 2026-08-26: el servidor de las pruebas se atascó y la pantalla
+       no llegó a pintarse nunca.
+
+     · Cacheaba el FALLO. Al guardar null en App._verAndroid, el primer parpadeo
+       de red dejaba la tarjeta de descarga vacía el resto de la sesión, porque
+       la caché corta el reintento en la primera línea. Ahora sólo se cachea el
+       resultado bueno; un fallo se vuelve a intentar en el siguiente render. */
   async _ultimaVersionAndroid() {
     if (App._verAndroid !== undefined) return App._verAndroid;
     try {
-      const r = await fetch('/app-version.json', { cache: 'no-cache' });
+      /* typeof, no `AbortSignal.timeout ?`: nombrar un global que no existe
+         lanza ReferenceError, y aquí lo tragaba el catch dejando la versión en
+         null. Pasa en WebViews viejas y pasó en las pruebas, que ejecutan este
+         archivo en un contexto vm mínimo sin AbortSignal. */
+      const corta = (typeof AbortSignal !== 'undefined' && AbortSignal.timeout)
+        ? AbortSignal.timeout(6000) : undefined;
+      const r = await fetch('/app-version.json', { cache: 'no-cache', signal: corta });
       const j = r.ok ? await r.json() : null;
-      App._verAndroid = (j && j.android && Number.isFinite(j.android.versionCode)) ? j.android : null;
-    } catch (_) { App._verAndroid = null; }
-    return App._verAndroid;
+      if (j && j.android && Number.isFinite(j.android.versionCode)) {
+        App._verAndroid = j.android;
+        return App._verAndroid;
+      }
+    } catch (_) { /* sin red, o tardó demasiado */ }
+    return null;
   },
 
   async avisoAppAndroid() {
