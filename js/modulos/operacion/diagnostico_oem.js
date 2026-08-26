@@ -22,6 +22,9 @@
     {did:'F189',nombre:'Versión de software de la ECU',decoder:{tipo:'ascii'},fuente:'ISO 14229-1, identificadores de datos de vehículo'},
     {did:'F18C',nombre:'Número de serie de la ECU',decoder:{tipo:'ascii'},fuente:'ISO 14229-1, identificadores de datos de vehículo'}
   ];
+  const MARCAS_OEM = ['Toyota','Nissan','Hyundai','Kia','Mitsubishi','Honda','Mazda','Isuzu','Suzuki','Chevrolet / GM','Ford','Volkswagen','Mercedes-Benz','Hino','Fuso','JAC','Foton','Otro'];
+  const ECUS_OEM = ['ECM / PCM (motor)','TCM (transmisión)','ABS / EBCM (frenos)','BCM (carrocería)','SRS / ACM (airbag)','EPS / PSCM (dirección)','IPC (tablero)','HVAC (climatización)','4WD / AWD','Inmovilizador','Gateway','ADAS','Otro'];
+  const PROTOCOLOS_OEM = ['uds','kwp2000','obd2','j1939','j1708_j1587','iso9141','fabricante'];
   const PERFILES_SIMULADOS = {
     ford:{marca:'Ford',modelo:'Perfil de laboratorio',redes:[
       {id:'hs',modulos:[{req:0x7E0,resp:0x7E8,nombre:'PCM'},{req:0x7E1,resp:0x7E9,nombre:'TCM'},{req:0x760,resp:0x768,nombre:'ABS'}]},
@@ -30,12 +33,17 @@
     gm:{marca:'GM',modelo:'Perfil de laboratorio',redes:[
       {id:'hs',modulos:[{req:0x7E0,resp:0x7E8,nombre:'ECM'},{req:0x7E1,resp:0x7E9,nombre:'TCM'},{req:0x760,resp:0x768,nombre:'EBCM'}]},
       {id:'sw',modulos:[{req:0x241,resp:0x641,nombre:'BCM'},{req:0x244,resp:0x644,nombre:'IPC'}]}
-    ]}
+    ]},
+    toyota:{marca:'Toyota',modelo:'Perfil de laboratorio',redes:[{id:'hs',modulos:[{req:0x7E0,resp:0x7E8,nombre:'ECM'},{req:0x7E1,resp:0x7E9,nombre:'TCM'},{req:0x750,resp:0x758,nombre:'ABS'},{req:0x7A0,resp:0x7A8,nombre:'SRS'}]}]},
+    nissan:{marca:'Nissan',modelo:'Perfil de laboratorio',redes:[{id:'hs',modulos:[{req:0x7E0,resp:0x7E8,nombre:'ECM'},{req:0x7E1,resp:0x7E9,nombre:'TCM'},{req:0x740,resp:0x748,nombre:'BCM'},{req:0x760,resp:0x768,nombre:'ABS'}]}]},
+    hyundai_kia:{marca:'Hyundai / Kia',modelo:'Perfil de laboratorio',redes:[{id:'hs',modulos:[{req:0x7E0,resp:0x7E8,nombre:'ECM'},{req:0x7E1,resp:0x7E9,nombre:'TCM'},{req:0x7D1,resp:0x7D9,nombre:'ABS'},{req:0x7A0,resp:0x7A8,nombre:'SRS'}]}]},
+    mitsubishi:{marca:'Mitsubishi',modelo:'Perfil de laboratorio',redes:[{id:'hs',modulos:[{req:0x7E0,resp:0x7E8,nombre:'ECM'},{req:0x7E1,resp:0x7E9,nombre:'TCM'},{req:0x760,resp:0x768,nombre:'ABS'},{req:0x720,resp:0x728,nombre:'ETACS'}]}]},
+    isuzu:{marca:'Isuzu',modelo:'Perfil de laboratorio',redes:[{id:'hs',modulos:[{req:0x7E0,resp:0x7E8,nombre:'ECM'},{req:0x7E1,resp:0x7E9,nombre:'TCM'},{req:0x760,resp:0x768,nombre:'ABS'}]},{id:'ch',modulos:[{req:0x18DA00F1,resp:0x18DAF100,nombre:'ECM/J1939 gateway'}]}]}
   };
   const hex = b => (b || []).map(x => Number(x).toString(16).padStart(2,'0').toUpperCase()).join(' ');
   const propsBLE = p => ['broadcast','read','writeWithoutResponse','write','notify','indicate','authenticatedSignedWrites','reliableWrite','writableAuxiliaries'].filter(k=>!!p?.[k]);
   const Motor = {
-    canales: CANALES, familias:FAMILIAS, didsBase:DIDS_BASE, perfilesSimulados:PERFILES_SIMULADOS, propsBLE,
+    canales: CANALES, familias:FAMILIAS, didsBase:DIDS_BASE, perfilesSimulados:PERFILES_SIMULADOS, marcas:MARCAS_OEM, ecus:ECUS_OEM, protocolos:PROTOCOLOS_OEM, propsBLE,
     construirTopologia(redes=[], meta={}) {
       const conocidas=new Set(CANALES.map(c=>c.id));
       const salida=CANALES.map(c=>({id:c.id,nombre:c.nombre,estado:'no_escaneada',modulos:[]}));
@@ -63,6 +71,8 @@
       for (const k of ['nombre','marca','ecu','tipo','fuente']) if (!String(d?.[k]||'').trim()) e.push(`Falta ${k}`);
       if (!TIPOS.includes(d?.tipo)) e.push('Tipo no permitido');
       if (d?.tipo === 'did' && !/^[0-9A-Fa-f]{4}$/.test(String(d.identificador||''))) e.push('El DID debe tener 4 hexadecimales');
+      if (d?.protocolo && !PROTOCOLOS_OEM.includes(d.protocolo)) e.push('Protocolo no permitido');
+      if (d?.definicion?.red && !CANALES.some(c=>c.id===d.definicion.red)) e.push('Red no permitida');
       if (d?.riesgo !== 'lectura' && d?.estado !== 'verificado') e.push('Una acción no puede habilitarse sin estado verificado');
       return e;
     },
@@ -149,8 +159,8 @@
         <button class="btn btn-sm btn-ghost" style="margin-top:10px" onclick="Modulos.diagnostico_obd.detectarAdaptadorOEM()">🔎 Detectar adaptador conectado</button>
         <button class="btn btn-sm btn-cyan" style="margin-top:10px" onclick="Modulos.diagnostico_obd.inspeccionarBluetooth()">🔬 Inspeccionar cualquier BLE</button>
         <button class="btn btn-sm btn-brand" style="margin-top:10px" onclick="Modulos.diagnostico_obd.explorarRedesOEM()">🗺 Explorar módulos</button>
-        <button class="btn btn-sm btn-ghost" style="margin-top:10px" onclick="Modulos.diagnostico_obd.simularRedOEM('ford')">🧪 Simular Ford</button>
-        <button class="btn btn-sm btn-ghost" style="margin-top:10px" onclick="Modulos.diagnostico_obd.simularRedOEM('gm')">🧪 Simular GM</button>
+        <select class="form-select" id="oem-simulador" style="display:inline-block;width:auto;margin-top:10px"><option value="">Simulador de red…</option>${Object.entries(PERFILES_SIMULADOS).map(([id,p])=>`<option value="${id}">${UI.esc(p.marca)}</option>`).join('')}</select>
+        <button class="btn btn-sm btn-ghost" style="margin-top:10px" onclick="Modulos.diagnostico_obd.simularRedOEM(document.getElementById('oem-simulador').value)">🧪 Ejecutar simulador</button>
         <div style="margin-top:10px;font-size:11px;color:var(--text3)">${FAMILIAS.map(f=>`<b>${f.nombre}</b>: ${f.nota}`).join(' · ')}</div></div>
         <div class="card" style="padding:14px"><div style="display:flex;justify-content:space-between"><b>Catálogo OEM (${this._oemDefs.length})</b>${puede?'<button class="btn btn-sm btn-brand" onclick="Modulos.diagnostico_obd.editarOEM()">＋ Nueva definición</button>':''}</div>
         <div style="overflow:auto;margin-top:9px"><table class="table"><thead><tr><th>Marca/modelo</th><th>ECU</th><th>Función</th><th>Evidencia</th><th>Riesgo</th><th>Acciones</th></tr></thead><tbody>${this._oemDefs.length?this._oemDefs.map(d=>`<tr><td><b>${UI.esc(d.marca)}</b> ${UI.esc(d.modelo||'')}</td><td>${UI.esc(d.ecu)}</td><td>${UI.esc(d.nombre)}<br><small>${UI.esc(d.tipo)} ${UI.esc(d.identificador||'')}</small></td><td><span class="badge badge-${d.estado==='verificado'?'green':'amber'}">${UI.esc(d.estado)}</span><br><small>${UI.esc(d.fuente)}</small></td><td>${UI.esc(d.riesgo)}</td><td>${Modulos.btnAccion('ver',`Modulos.diagnostico_obd.verOEM('${d.id}')`)}${Modulos.btnAccion('editar',`Modulos.diagnostico_obd.editarOEM('${d.id}')`)}${Modulos.btnAccion('eliminar',`Modulos.diagnostico_obd.eliminarOEM('${d.id}','${UI.jsAttr(d.nombre)}')`)}</td></tr>`).join(''):'<tr><td colspan="6">Aún no hay definiciones. Agrega únicamente información con fuente comprobable.</td></tr>'}</tbody></table></div></div>
@@ -164,6 +174,7 @@
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:8px;margin-top:10px">${t.redes.map(r=>`<div style="border:1px solid var(--border);border-radius:8px;padding:9px"><b>${UI.esc(r.nombre)}</b><br><small>${UI.esc(r.estado)}</small>${r.modulos.map(m=>`<div style="margin-top:6px;font-size:12px"><b>${UI.esc(m.nombre)}</b><br><code>${m.req.toString(16).toUpperCase()} → ${m.resp.toString(16).toUpperCase()}</code></div>`).join('')||'<div style="margin-top:6px;color:var(--text3);font-size:12px">Sin resultados</div>'}</div>`).join('')}</div></div>`;
     },
     async simularRedOEM(marca) {
+      if(!marca) return UI.toast('Selecciona una marca para el simulador','warn');
       this._oemTopologia=Motor.simularTopologia(marca);
       await DB.registrarEjecucionOEM({operacion:`mapa_redes_simulado_${marca}`,estado:'exitosa',evidencia:this._oemTopologia}).catch(()=>{});
       this.modalOEM();
@@ -200,18 +211,34 @@
     },
     editarOEM(id) {
       const d=this._oemDefs.find(x=>x.id===id)||{};
+      this._oemEditandoDef=d.definicion||{};
+      const modelos=(Modulos.vehiculos?._modelosComunes?.[d.marca]||[]);
+      const pares=[{req:0x7E0,resp:0x7E8,nombre:'Motor'},{req:0x7E1,resp:0x7E9,nombre:'Transmisión'},...((this._oemTopologia?.redes||[]).flatMap(r=>r.modulos||[]))]
+        .filter((x,i,a)=>a.findIndex(y=>y.req===x.req&&y.resp===x.resp)===i);
+      const parActual=Number.isInteger(Number(d.definicion?.request_id))?`${Number(d.definicion.request_id)}|${Number(d.definicion.response_id)}`:'';
       UI.modal(id?'Editar definición OEM':'Nueva definición OEM',`<div class="form-grid">
-        <div><label class="form-label">Nombre</label><input class="form-input" id="oem-nombre" value="${UI.esc(d.nombre||'')}"></div><div><label class="form-label">Marca</label><input class="form-input" id="oem-marca" value="${UI.esc(d.marca||'')}"></div>
-        <div><label class="form-label">Modelo (opcional)</label><input class="form-input" id="oem-modelo" value="${UI.esc(d.modelo||'')}"></div><div><label class="form-label">ECU</label><input class="form-input" id="oem-ecu" value="${UI.esc(d.ecu||'')}"></div>
-        <div><label class="form-label">Tipo</label><select class="form-select" id="oem-tipo">${TIPOS.map(x=>`<option ${d.tipo===x?'selected':''}>${x}</option>`).join('')}</select></div><div><label class="form-label">DID/identificador</label><input class="form-input" id="oem-idf" value="${UI.esc(d.identificador||'')}"></div>
+        <div><label class="form-label">Nombre de la función</label><input class="form-input" id="oem-nombre" value="${UI.esc(d.nombre||'')}"></div><div><label class="form-label">Marca</label><select class="form-select" id="oem-marca" onchange="Modulos.diagnostico_obd.actualizarModelosOEM()"><option value="">Seleccionar…</option>${MARCAS_OEM.map(x=>`<option ${d.marca===x?'selected':''}>${x}</option>`).join('')}</select></div>
+        <div><label class="form-label">Modelo (opcional)</label><select class="form-select" id="oem-modelo"><option value="">Todos los modelos</option>${modelos.map(x=>`<option ${d.modelo===x?'selected':''}>${UI.esc(x)}</option>`).join('')}${d.modelo&&!modelos.includes(d.modelo)?`<option selected>${UI.esc(d.modelo)}</option>`:''}</select></div><div><label class="form-label">ECU</label><select class="form-select" id="oem-ecu"><option value="">Seleccionar…</option>${ECUS_OEM.map(x=>`<option ${d.ecu===x?'selected':''}>${x}</option>`).join('')}${d.ecu&&!ECUS_OEM.includes(d.ecu)?`<option selected>${UI.esc(d.ecu)}</option>`:''}</select></div>
+        <div><label class="form-label">Tipo</label><select class="form-select" id="oem-tipo">${TIPOS.map(x=>`<option ${d.tipo===x?'selected':''} value="${x}">${x.replaceAll('_',' ')}</option>`).join('')}</select></div><div><label class="form-label">DID / identificador</label><select class="form-select" id="oem-idf"><option value="">No corresponde</option>${DIDS_BASE.map(x=>`<option value="${x.did}" ${d.identificador===x.did?'selected':''}>${x.did} · ${UI.esc(x.nombre)}</option>`).join('')}${d.identificador&&!DIDS_BASE.some(x=>x.did===d.identificador)?`<option selected value="${UI.esc(d.identificador)}">${UI.esc(d.identificador)} · definición existente</option>`:''}</select></div>
+        <div><label class="form-label">Protocolo</label><select class="form-select" id="oem-protocolo">${PROTOCOLOS_OEM.map(x=>`<option ${d.protocolo===x?'selected':''} value="${x}">${x.toUpperCase().replaceAll('_',' / ')}</option>`).join('')}</select></div><div><label class="form-label">Red física</label><select class="form-select" id="oem-red">${CANALES.map(x=>`<option value="${x.id}" ${d.definicion?.red===x.id?'selected':''}>${x.nombre}</option>`).join('')}</select></div>
+        <div style="grid-column:1/-1"><label class="form-label">Dirección ECU (solicitud → respuesta)</label><select class="form-select" id="oem-par"><option value="">Pendiente de descubrir en el vehículo</option>${pares.map(x=>{const val=`${x.req}|${x.resp}`;return `<option value="${val}" ${parActual===val?'selected':''}>${UI.esc(x.nombre)} · ${x.req.toString(16).toUpperCase()} → ${x.resp.toString(16).toUpperCase()}</option>`}).join('')}</select></div>
+        <div><label class="form-label">Decodificación</label><select class="form-select" id="oem-decoder">${['ascii','numero','hex'].map(x=>`<option ${d.definicion?.decoder?.tipo===x?'selected':''}>${x}</option>`).join('')}</select></div><div><label class="form-label">Unidad</label><select class="form-select" id="oem-unidad">${['','texto','°C','rpm','km/h','V','A','kPa','bar','%','km','horas'].map(x=>`<option value="${x}" ${d.definicion?.decoder?.unidad===x?'selected':''}>${x||'Sin unidad'}</option>`).join('')}</select></div>
         <div><label class="form-label">Estado</label><select class="form-select" id="oem-estado">${['borrador','laboratorio','verificado','retirado'].map(x=>`<option ${d.estado===x?'selected':''}>${x}</option>`).join('')}</select></div><div><label class="form-label">Riesgo</label><select class="form-select" id="oem-riesgo">${['lectura','controlado','alto','critico'].map(x=>`<option ${d.riesgo===x?'selected':''}>${x}</option>`).join('')}</select></div>
-        <div style="grid-column:1/-1"><label class="form-label">Fuente verificable</label><input class="form-input" id="oem-fuente" value="${UI.esc(d.fuente||'')}"></div>
-        <div style="grid-column:1/-1"><label class="form-label">Definición JSON</label><textarea class="form-input" id="oem-def" rows="4">${UI.esc(JSON.stringify(d.definicion||{},null,2))}</textarea></div></div>
+        <div><label class="form-label">Tipo de fuente</label><select class="form-select" id="oem-fuente-tipo">${['Manual OEM','Boletín técnico OEM','Norma ISO / SAE','Captura de laboratorio validada','Proveedor autorizado'].map(x=>`<option ${String(d.fuente||'').startsWith(x)?'selected':''}>${x}</option>`).join('')}</select></div><div><label class="form-label">Referencia / documento</label><input class="form-input" id="oem-fuente" value="${UI.esc(String(d.fuente||'').replace(/^[^:]+:\s*/,''))}" placeholder="Número, edición, página o URL"></div></div>
         <div class="modal-footer"><button class="btn btn-ghost" onclick="UI.cerrarModal()">Cancelar</button><button class="btn btn-brand" onclick="Modulos.diagnostico_obd.guardarOEM('${id||''}')">Guardar</button></div>`,'760px');
     },
+    actualizarModelosOEM() {
+      const marca=document.getElementById('oem-marca')?.value, sel=document.getElementById('oem-modelo'); if(!sel)return;
+      const clave=marca==='Chevrolet / GM'?'Chevrolet':marca;
+      const modelos=Modulos.vehiculos?._modelosComunes?.[clave]||[];
+      sel.innerHTML='<option value="">Todos los modelos</option>'+modelos.map(x=>`<option>${UI.esc(x)}</option>`).join('');
+    },
     async guardarOEM(id) {
-      let definicion; try{definicion=JSON.parse(document.getElementById('oem-def').value||'{}');}catch(e){return UI.toast('La definición JSON no es válida','error');}
-      const v=x=>document.getElementById(x).value.trim(); const d={id:id||undefined,nombre:v('oem-nombre'),marca:v('oem-marca'),modelo:v('oem-modelo')||null,ecu:v('oem-ecu'),tipo:v('oem-tipo'),identificador:v('oem-idf')||null,estado:v('oem-estado'),riesgo:v('oem-riesgo'),fuente:v('oem-fuente'),protocolo:'uds',definicion,precondiciones:[],activa:true};
+      const v=x=>document.getElementById(x).value.trim(), par=v('oem-par').split('|').map(Number);
+      const definicion={...(this._oemEditandoDef||{}),red:v('oem-red'),decoder:{...(this._oemEditandoDef?.decoder||{}),tipo:v('oem-decoder'),unidad:v('oem-unidad')||null}};
+      if(par.length===2&&par.every(Number.isInteger)){definicion.request_id=par[0];definicion.response_id=par[1];}else{delete definicion.request_id;delete definicion.response_id;}
+      const referencia=v('oem-fuente');
+      const d={id:id||undefined,nombre:v('oem-nombre'),marca:v('oem-marca'),modelo:v('oem-modelo')||null,ecu:v('oem-ecu'),tipo:v('oem-tipo'),identificador:v('oem-idf')||null,estado:v('oem-estado'),riesgo:v('oem-riesgo'),fuente:referencia?`${v('oem-fuente-tipo')}: ${referencia}`:'',protocolo:v('oem-protocolo'),definicion,precondiciones:[],activa:true};
       const e=Motor.validar(d); if(e.length)return UI.toast(e.join('. '),'error'); const r=await DB.upsertDefinicionOEM(d); if(r.error)return UI.toast(r.error.message,'error'); UI.cerrarModal(); this.modalOEM();
     },
     eliminarOEM(id,nombre) { Modulos.eliminarRegistro('obd_oem_definiciones',id,nombre,()=>this.modalOEM()); }

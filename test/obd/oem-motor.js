@@ -26,4 +26,7 @@ ok('simulador Ford produce topología marcada y multired',ford.modo==='simulador
 const gm=O.simularTopologia('gm');
 ok('simulador GM incluye SW-CAN sin habilitarla como real',gm.redes.find(x=>x.id==='sw').modulos.length===2&&gm.redes.find(x=>x.id==='sw').modulos.every(x=>x.simulado));
 ok('paquete base expone DIDs UDS trazables',O.didsBase.map(x=>x.did).join(',')==='F190,F187,F189,F18C'&&O.didsBase.every(x=>x.fuente));
+ok('incluye simuladores de marcas comunes en Guatemala',['toyota','nissan','hyundai_kia','mitsubishi','isuzu'].every(x=>O.perfilesSimulados[x]));
+ok('catálogo guiado incluye marcas, ECUs y protocolos',O.marcas.includes('Toyota')&&O.marcas.includes('Isuzu')&&O.ecus.some(x=>x.includes('ABS'))&&O.protocolos.includes('j1939'));
+ok('rechaza una red fuera del catálogo',O.validar({...base,protocolo:'uds',definicion:{red:'inventada'}}).some(x=>x.includes('Red')));
 fin();
