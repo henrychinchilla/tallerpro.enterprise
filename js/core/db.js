@@ -479,6 +479,32 @@ const DB = {
     return { data, error };
   },
 
+  async getDefinicionesOEM() {
+    const { data, error } = await getSB().from('obd_oem_definiciones').select('*')
+      .eq('tenant_id', getTID()).order('marca').order('nombre');
+    if (error) { console.error('getDefinicionesOEM:', error.message); return []; }
+    return data || [];
+  },
+
+  async upsertDefinicionOEM(fields) {
+    const payload = { ...fields, tenant_id:getTID(), updated_at:new Date().toISOString() };
+    if (!payload.creado_por && typeof Auth !== 'undefined') payload.creado_por = Auth.user?.id || null;
+    if (payload.id) {
+      const { id, ...cambios } = payload;
+      const { data, error } = await getSB().from('obd_oem_definiciones').update(cambios)
+        .eq('tenant_id',getTID()).eq('id',id).select().single();
+      return { data, error };
+    }
+    const { data, error } = await getSB().from('obd_oem_definiciones').insert(payload).select().single();
+    return { data, error };
+  },
+
+  async registrarEjecucionOEM(fields) {
+    const payload = { ...fields, tenant_id:getTID() };
+    if (!payload.usuario_id && typeof Auth !== 'undefined') payload.usuario_id = Auth.user?.id || null;
+    return getSB().from('obd_oem_ejecuciones').insert(payload).select().single();
+  },
+
   /* ── PRECIOS DE REFERENCIA MAGA ────────────────
      Datos públicos y globales (sin tenant): sirven para comparar el precio de
      hoy contra la propia historia del producto. Los escribe la Edge Function

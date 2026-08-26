@@ -4233,6 +4233,7 @@ Modulos.diagnostico_obd = {
           </select>
           <button class="btn btn-ghost" onclick="Modulos.diagnostico_obd.modalCampanas()">🔔 Campañas de fábrica</button>
           <button class="btn btn-ghost" onclick="Modulos.diagnostico_obd.modalMapaVehiculos()" title="Qué vehículos sabe escanear el taller y hasta dónde llega en cada uno">🗺 Mapa de vehículos</button>
+          <button class="btn btn-ghost" onclick="Modulos.diagnostico_obd.modalOEM()" title="Catálogo por fabricante, redes y procedimientos verificados">🧠 OEM</button>
           <button class="btn btn-ghost" onclick="Modulos.diagnostico_obd.render()">↻ Actualizar</button>
           ${puedeEditar ? `<button class="btn btn-brand" onclick="Modulos.diagnostico_obd.modalEscanear()">📡 Nuevo Escaneo</button>` : ''}
         </div>
@@ -4831,6 +4832,7 @@ Modulos.diagnostico_obd = {
         <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap">
           <button class="btn btn-sm btn-ghost" id="obd-btn-live" onclick="Modulos.diagnostico_obd.toggleLive()">▶️ Monitor en vivo</button>
           <button class="btn btn-sm btn-ghost" id="obd-btn-rec" style="display:none" onclick="Modulos.diagnostico_obd.toggleRec()">⏺ Grabar sesión</button>
+          <button class="btn btn-sm btn-ghost" id="obd-btn-marca" style="display:none" onclick="Modulos.diagnostico_obd.modalMarcadorGrabacion()">📍 Marcar evento</button>
           ${(s.dtcs.length || s.mil) ? `<button class="btn btn-sm btn-danger" onclick="Modulos.diagnostico_obd.borrarDTCs()">🧹 Borrar códigos</button>` : ''}
           ${(typeof moduloEnPlan !== 'function' || moduloEnPlan('ia')) ? `<button class="btn btn-sm btn-cyan" onclick="Modulos.diagnostico_obd.analizarIA()">🤖 Analizar con IA</button>` : ''}
         </div>
@@ -5357,7 +5359,7 @@ Modulos.diagnostico_obd = {
       if (!el) { this._stopLive(); return; }
       el.innerHTML = this._tilesMonitor();
       const info = document.getElementById('obd-rec-info');
-      if (info && this._rec) info.textContent = `⏺ Grabando: ${this._rec.muestras.length} muestras · ${Math.round((Date.now() - this._rec.t0) / 1000)}s`;
+      if (info && this._rec) info.textContent = `⏺ Grabando: ${this._rec.muestras.length} muestras · ${Math.round((Date.now() - this._rec.t0) / 1000)}s · ${(this._rec.marcadores||[]).length} marcador(es)`;
       if (this._liveTimer) this._liveTimer = setTimeout(tick, 150);
     };
     this._liveTimer = setTimeout(tick, 0);
@@ -5372,9 +5374,10 @@ Modulos.diagnostico_obd = {
 
   toggleRec() {
     if (this._rec) { this._detenerGrab(true); return; }
-    this._rec = { t0: Date.now(), inicio: new Date().toISOString(), muestras: [] };
+    this._rec = { t0: Date.now(), inicio: new Date().toISOString(), muestras: [], marcadores: [] };
     const b = document.getElementById('obd-btn-rec');
     if (b) b.textContent = '⏹ Detener grabación';
+    const bm = document.getElementById('obd-btn-marca'); if(bm)bm.style.display='';
     if (!this._liveTimer) this.toggleLive();
   },
 
@@ -5382,13 +5385,27 @@ Modulos.diagnostico_obd = {
     const rec = this._rec; this._rec = null;
     const b = document.getElementById('obd-btn-rec');
     if (b) b.textContent = '⏺ Grabar sesión';
+    const bm = document.getElementById('obd-btn-marca'); if(bm)bm.style.display='none';
     const info = document.getElementById('obd-rec-info');
     if (rec && rec.muestras.length && this._scan) {
       const seg = Math.round((Date.now() - rec.t0) / 1000);
-      this._scan.grabacion = { inicio: rec.inicio, seg, muestras: rec.muestras };
+      this._scan.grabacion = { inicio: rec.inicio, seg, muestras: rec.muestras, marcadores:rec.marcadores||[] };
       if (info) info.textContent = `💾 Grabación lista: ${rec.muestras.length} muestras · ${seg}s — se guarda con el escaneo`;
       if (avisar) UI.toast(`Grabación capturada (${rec.muestras.length} muestras) — presiona Guardar`);
     } else if (info) info.textContent = '';
+  },
+
+  modalMarcadorGrabacion() {
+    if(!this._rec)return UI.toast('Inicia una grabación antes de marcar un evento','warn');
+    UI.modal('📍 Marcar evento',`<label class="form-label">¿Qué ocurrió en este momento?</label><select class="form-select" id="obd-marca-tipo"><option>Aceleración</option><option>Falla / tirón</option><option>Ralentí</option><option>Frenado</option><option>Cambio de marcha</option><option>Ventilador activado</option><option>Prueba del técnico</option><option>Otro</option></select><label class="form-label" style="margin-top:10px">Nota</label><input class="form-input" id="obd-marca-nota" maxlength="160" placeholder="Descripción breve"><div class="modal-footer"><button class="btn btn-ghost" onclick="UI.cerrarModal()">Cancelar</button><button class="btn btn-brand" onclick="Modulos.diagnostico_obd.guardarMarcadorGrabacion()">Guardar marcador</button></div>`,'520px');
+  },
+
+  guardarMarcadorGrabacion() {
+    if(!this._rec)return;
+    const tipo=document.getElementById('obd-marca-tipo')?.value||'Otro',nota=document.getElementById('obd-marca-nota')?.value.trim()||'';
+    const ultimo=this._rec.muestras[this._rec.muestras.length-1]||{};
+    this._rec.marcadores.push({t:Math.round((Date.now()-this._rec.t0)/100)/10,tipo,nota,valores:{...ultimo}});
+    UI.cerrarModal();UI.toast(`Marcador “${tipo}” guardado ✓`);
   },
 
   /* Estadísticas de una grabación: [{l, u, vals, min, avg, max}] */
@@ -5399,10 +5416,37 @@ Modulos.diagnostico_obd = {
     return [...llaves].map(k => {
       const vals = g.muestras.map(m => m[k]).filter(v => typeof v === 'number');
       if (!vals.length || !labels[k]) return null;
-      return { l: labels[k][0], u: labels[k][1], vals,
+      return { k, l: labels[k][0], u: labels[k][1], vals,
                min: Math.min(...vals), max: Math.max(...vals),
                avg: Math.round(vals.reduce((a, b) => a + b, 0) / vals.length * 10) / 10 };
     }).filter(Boolean);
+  },
+
+  _compararGrabaciones(antes, despues) {
+    const a=new Map(this._grabStats(antes).map(x=>[x.k,x])), b=this._grabStats(despues);
+    return b.filter(x=>a.has(x.k)).map(x=>({k:x.k,l:x.l,u:x.u,antes:a.get(x.k).avg,despues:x.avg,cambio:Math.round((x.avg-a.get(x.k).avg)*10)/10}));
+  },
+
+  _grabAnterior(d) {
+    return (this._data||[]).filter(x=>x.id!==d.id&&x.vehiculo_id===d.vehiculo_id&&x.grabacion?.muestras?.length&&new Date(x.created_at)<new Date(d.created_at)).sort((a,b)=>new Date(b.created_at)-new Date(a.created_at))[0]||null;
+  },
+
+  _grabComparacionHTML(d) {
+    const ant=this._grabAnterior(d), filas=ant?this._compararGrabaciones(ant.grabacion,d.grabacion):[];
+    if(!filas.length)return '';
+    return `<div class="card" style="padding:14px;margin-top:12px"><b>↔ COMPARACIÓN CON GRABACIÓN ANTERIOR</b><table class="table" style="margin-top:8px"><thead><tr><th>Sensor</th><th>Antes</th><th>Después</th><th>Cambio</th></tr></thead><tbody>${filas.map(x=>`<tr><td>${UI.esc(x.l)}</td><td>${x.antes}${UI.esc(x.u)}</td><td>${x.despues}${UI.esc(x.u)}</td><td>${x.cambio>0?'+':''}${x.cambio}${UI.esc(x.u)}</td></tr>`).join('')}</tbody></table></div>`;
+  },
+
+  _grabMuestrasPDF(g) {
+    if(!g?.muestras?.length)return '';
+    const labels=this._labels(),claves=[...new Set(g.muestras.flatMap(m=>Object.keys(m).filter(k=>k!=='t'&&typeof m[k]==='number')))];
+    const marcas=g.marcadores||[],marcaEn=t=>marcas.filter(x=>Math.abs(Number(x.t)-Number(t))<0.11).map(x=>`${x.tipo}${x.nota?': '+x.nota:''}`).join(' · ');
+    return `<div class="section page-break"><b>ANEXO — TODAS LAS MUESTRAS (${g.muestras.length}):</b><table style="margin-top:8px;font-size:9px"><thead><tr><th>t (s)</th>${claves.map(k=>`<th>${UI.esc(labels[k]?.[0]||k)} ${UI.esc(labels[k]?.[1]||'')}</th>`).join('')}<th>Evento</th></tr></thead><tbody>${g.muestras.map(m=>`<tr><td>${m.t}</td>${claves.map(k=>`<td>${typeof m[k]==='number'?m[k]:'—'}</td>`).join('')}<td>${UI.esc(marcaEn(m.t))}</td></tr>`).join('')}</tbody></table></div>`;
+  },
+
+  _grabComparacionPDF(d) {
+    const ant=this._grabAnterior(d),filas=ant?this._compararGrabaciones(ant.grabacion,d.grabacion):[];if(!filas.length)return '';
+    return `<div class="section"><b>COMPARACIÓN ANTES / DESPUÉS:</b><p style="font-size:11px">Contra la grabación del ${UI.fecha(ant.created_at)}.</p><table><thead><tr><th>Sensor</th><th>Antes</th><th>Después</th><th>Cambio</th></tr></thead><tbody>${filas.map(x=>`<tr><td>${UI.esc(x.l)}</td><td>${x.antes}${UI.esc(x.u)}</td><td>${x.despues}${UI.esc(x.u)}</td><td>${x.cambio>0?'+':''}${x.cambio}${UI.esc(x.u)}</td></tr>`).join('')}</tbody></table></div>`;
   },
 
   _grabHTML(g) {
@@ -5426,6 +5470,12 @@ Modulos.diagnostico_obd = {
       'Borrar códigos');
     if (!ok) return;
     try {
+      const guardado = await this._guardarAntesDeBorrar();
+      if (!guardado) {
+        this._log('<span style="color:var(--red)">Borrado cancelado: no se pudo guardar la copia previa de los DTC.</span>');
+        return UI.toast('No se borró nada: primero debe guardarse el historial de DTC','error');
+      }
+      this._log('💾 Copia de DTC guardada antes de borrar ✓');
       if (this._via === 'j1939') {
         await this._j39Solicitar(65235);   // DM11: borra códigos activos
         await this._j39Solicitar(65228);   // DM3: borra códigos previos
@@ -5648,8 +5698,11 @@ Modulos.diagnostico_obd = {
     if (!ok) return;
 
     const guardado = await this._guardarAntesDeBorrar();
-    this._log(guardado ? '💾 Escaneo guardado antes de borrar ✓'
-                       : '<span style="color:var(--amber)">No se pudo guardar el escaneo previo — se borra igual, pero sin registro</span>');
+    if (!guardado) {
+      this._log('<span style="color:var(--red)">Borrado cancelado: no se pudo guardar la copia previa.</span>');
+      return UI.toast('No se borró nada: primero debe guardarse el historial de DTC','error');
+    }
+    this._log('💾 Escaneo guardado antes de borrar ✓');
 
     let bien = 0, mal = 0;
     for (const m of conFallas) {
@@ -5754,6 +5807,7 @@ Modulos.diagnostico_obd = {
           <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px;margin-top:10px">${this._vivoHTML(d.datos||{})}</div>
         </div>
         ${this._grabHTML(d.grabacion)}
+        ${this._grabComparacionHTML(d)}
         <div id="obd-ia">${this._iaHTML(d.ia_analisis)}</div>
         ${d.notas ? `<p style="margin-top:8px"><b>Notas:</b> ${d.notas}</p>` : ''}
       </div>
@@ -5823,7 +5877,7 @@ Modulos.diagnostico_obd = {
         th{background:#3B82F6;color:#fff;padding:6px 8px;text-align:left}
         td{padding:6px 8px;border-bottom:1px solid #eee}
         .mil-on{color:#DC2626;font-weight:bold}.mil-off{color:green;font-weight:bold}
-        @media print{button{display:none}}
+        .page-break{break-before:page;page-break-before:always} @media print{button{display:none}thead{display:table-header-group}tr{break-inside:avoid}}
       </style></head><body>
       <h2>${Auth.tenant?.name||'NexusPro'} — Diagnóstico OBD-II</h2>
       <div class="section">
@@ -5866,9 +5920,11 @@ Modulos.diagnostico_obd = {
       </div>` : ''}
       ${(() => { const st = this._grabStats(d.grabacion); return st.length ? `<div class="section">
         <b>GRABACIÓN DE SESIÓN (${d.grabacion.muestras.length} muestras · ${d.grabacion.seg||'?'} s):</b>
-        <table style="margin-top:8px"><thead><tr><th>Sensor</th><th>Mín</th><th>Promedio</th><th>Máx</th></tr></thead>
-        <tbody>${st.map(s=>`<tr><td>${s.l}</td><td>${s.min}${s.u}</td><td>${s.avg}${s.u}</td><td>${s.max}${s.u}</td></tr>`).join('')}</tbody></table>
+        <table style="margin-top:8px"><thead><tr><th>Sensor</th><th>Mín</th><th>Promedio</th><th>Máx</th><th>Gráfica</th></tr></thead>
+        <tbody>${st.map(s=>`<tr><td>${s.l}</td><td>${s.min}${s.u}</td><td>${s.avg}${s.u}</td><td>${s.max}${s.u}</td><td style="width:150px;height:34px">${this._spark(s.vals)}</td></tr>`).join('')}</tbody></table>
       </div>` : ''; })()}
+      ${this._grabComparacionPDF(d)}
+      ${this._grabMuestrasPDF(d.grabacion)}
       ${d.ia_analisis ? `<div class="section"><b>ANÁLISIS DE NEXUS (IA):</b><p style="white-space:pre-wrap">${d.ia_analisis}</p></div>` : ''}
       ${d.notas ? `<div class="section"><b>NOTAS DEL TÉCNICO:</b><p>${d.notas}</p></div>` : ''}
       <p style="text-align:center;color:#888;font-size:11px">Generado por NexusPro · ${new Date().toLocaleString('es-GT')}</p>
