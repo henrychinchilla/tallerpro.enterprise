@@ -23,6 +23,17 @@ pnpm-lock.yaml
 yarn.lock
 wrangler.jsonc
 schema_v3.sql
+
+# Configuracion del proyecto que se estaba sirviendo publica (comprobado el
+# 2026-08-26: /.npmrc, /playwright.config.js y /worker.js respondian 200).
+# No habia secretos dentro, pero llegaron al CDN por el MISMO mecanismo que
+# publico la llave de firma: wrangler sube el directorio de trabajo, incluidos
+# archivos que ni siquiera estan en git (playwright.config.js no lo esta).
+# worker.js es ademas el codigo que define QUE se bloquea: servirlo es regalar
+# la lista de lo que no esta cubierto.
+.npmrc
+playwright.config.js
+worker.js
 *.md
 .playwright-mcp/
 screenshots/*.html
