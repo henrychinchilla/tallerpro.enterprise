@@ -1,0 +1,120 @@
+/* NexusPro — capa OEM segura. Una definición no verificada nunca transmite. */
+(function () {
+  'use strict';
+  const TIPOS = ['did','prueba_activa','calibracion','regeneracion_dpf','purga_abs','codificacion','reflash','security_access','procedimiento'];
+  const CANALES = [
+    {id:'hs',nombre:'HS-CAN',estado:'operativo',nota:'CAN principal por comandos estándar ELM/ISO 15765'},
+    {id:'ms',nombre:'MS-CAN',estado:'validar',nota:'Capacidad del vLinker MS; comando de selección pendiente de prueba física'},
+    {id:'sw',nombre:'SW-CAN / GMLAN',estado:'validar',nota:'Capacidad del vLinker MS; no transmitir sin comando oficial validado'},
+    {id:'ch',nombre:'CH-CAN',estado:'validar',nota:'Capacidad declarada; selección pendiente de validar'},
+    {id:'ls',nombre:'LS-CAN',estado:'validar',nota:'Capacidad declarada; selección pendiente de validar'}
+  ];
+  const FAMILIAS = [
+    {id:'elm',nombre:'ELM/ST por BLE',transportes:['ble'],protocolos:['obd2','uds','kwp2000','j1939'],nota:'Vgate, OBDLink, ELM327 y compatibles'},
+    {id:'rp1210',nombre:'RP1210',transportes:['usb'],protocolos:['j1939','j1708','j1587','can','iso15765'],nota:'NEXIQ, DPA, Dearborn y cualquier DLL registrada'},
+    {id:'j2534',nombre:'J2534 Pass-Thru',transportes:['usb'],protocolos:['can','iso15765','iso9141','iso14230'],nota:'Capa prevista; requiere proveedor J2534 instalado'},
+    {id:'fabricante',nombre:'SDK de fabricante',transportes:['ble','classic','wifi','usb'],protocolos:[],nota:'Thinkcar y otros VCI cerrados: se integra cuando el fabricante entrega SDK/API autorizada'},
+    {id:'vci',nombre:'VCI futuro',transportes:['usb','ble','wifi'],protocolos:[],nota:'Contrato abierto para interfaces OEM o multimarca'}
+  ];
+  const hex = b => (b || []).map(x => Number(x).toString(16).padStart(2,'0').toUpperCase()).join(' ');
+  const Motor = {
+    canales: CANALES, familias:FAMILIAS,
+    validar(d) {
+      const e=[];
+      for (const k of ['nombre','marca','ecu','tipo','fuente']) if (!String(d?.[k]||'').trim()) e.push(`Falta ${k}`);
+      if (!TIPOS.includes(d?.tipo)) e.push('Tipo no permitido');
+      if (d?.tipo === 'did' && !/^[0-9A-Fa-f]{4}$/.test(String(d.identificador||''))) e.push('El DID debe tener 4 hexadecimales');
+      if (d?.riesgo !== 'lectura' && d?.estado !== 'verificado') e.push('Una acción no puede habilitarse sin estado verificado');
+      return e;
+    },
+    aplica(d,v) {
+      const eq=(a,b)=>String(a||'').trim().toUpperCase()===String(b||'').trim().toUpperCase();
+      const an=Number(v?.anio)||null;
+      return !!d?.activa && eq(d.marca,v?.marca) && (!d.modelo || eq(d.modelo,v?.modelo)) &&
+        (!an || (!d.anio_desde || an>=d.anio_desde) && (!d.anio_hasta || an<=d.anio_hasta));
+    },
+    decodificar(bytes, def={}) {
+      if (!bytes?.length) return null;
+      const tipo=def.tipo||'hex';
+      if (tipo==='ascii') return bytes.map(x=>x?String.fromCharCode(x):'').join('').trim();
+      let n=0; for (const b of bytes) n=n*256+b;
+      if (def.signed) { const bits=bytes.length*8, max=2**bits; if(n>=max/2)n-=max; }
+      if (tipo==='numero') return n*(Number(def.escala)||1)+(Number(def.offset)||0);
+      return hex(bytes);
+    },
+    puedeEjecutar(d) {
+      const errores=this.validar(d);
+      if (errores.length) return {ok:false,motivo:errores.join('. ')};
+      if (d.estado!=='verificado') return {ok:false,motivo:'La definición todavía no está verificada'};
+      if (d.tipo!=='did' || d.riesgo!=='lectura') return {ok:false,motivo:'Esta versión solo habilita lecturas DID verificadas; la operación queda bloqueada'};
+      return {ok:true};
+    }
+  };
+  globalThis.OEMMotor=Motor;
+  const M=globalThis.Modulos?.diagnostico_obd;
+  if (!M) return;
+  Object.assign(M, {
+    _oemDefs:[], _oemAdaptador:null,
+    async detectarAdaptadorOEM() {
+      if (this._via!=='ble' || !this._listo) {
+        if (this._via==='usb' && this._listo) {
+          this._oemAdaptador={modelo:'Interfaz RP1210',familia:'rp1210',firmware:null,volt:'por bus',canales:[CANALES[0]],nota:'La API y protocolos instalados se enumeran desde RP121032.INI'};
+          return this.modalOEM();
+        }
+        return UI.toast('Conecta primero un adaptador BLE o RP1210','warn');
+      }
+      const consultar=async c=>{ try{return String(await this._cmd(c,1800)).replace(/\s+/g,' ').trim();}catch(e){return 'sin respuesta';} };
+      const [ati,desc,serie,volt,sti]=await Promise.all([consultar('ATI'),consultar('AT@1'),consultar('AT@2'),consultar('ATRV'),consultar('STI')]);
+      const esMS=/vlinker\s*ms|mic3425/i.test([ati,desc,sti].join(' '));
+      this._oemAdaptador={ati,desc,serie,volt,sti,familia:'elm',modelo:esMS?'Vgate vLinker MS':(ati||desc||'ELM/ST compatible'),firmware:(ati+' '+sti).match(/\d+\.\d+(?:\.\d+)?/)?.[0]||null,canales:esMS?CANALES:CANALES.slice(0,1)};
+      this.modalOEM();
+    },
+    async modalOEM() {
+      this._oemDefs=await DB.getDefinicionesOEM();
+      const a=this._oemAdaptador;
+      const puede=typeof rolEnLista==='function' ? rolEnLista(['admin','gerente_tal']) : false;
+      UI.modal('🧠 Diagnóstico OEM',`<div style="display:grid;gap:14px">
+        <div class="card" style="padding:14px"><b>Adaptador y redes</b><div style="margin-top:8px">${a?`<b>${UI.esc(a.modelo)}</b> · firmware ${UI.esc(a.firmware||'no identificado')} · ${UI.esc(a.volt)}`:'Conecta el adaptador durante un escaneo para interrogarlo.'}</div>
+        <div style="display:flex;gap:7px;flex-wrap:wrap;margin-top:9px">${CANALES.map(c=>`<span class="badge badge-${c.estado==='operativo'?'green':'amber'}" title="${UI.esc(c.nota)}">${c.nombre} · ${c.estado}</span>`).join('')}</div>
+        <button class="btn btn-sm btn-ghost" style="margin-top:10px" onclick="Modulos.diagnostico_obd.detectarAdaptadorOEM()">🔎 Detectar adaptador</button>
+        <div style="margin-top:10px;font-size:11px;color:var(--text3)">${FAMILIAS.map(f=>`<b>${f.nombre}</b>: ${f.nota}`).join(' · ')}</div></div>
+        <div class="card" style="padding:14px"><div style="display:flex;justify-content:space-between"><b>Catálogo OEM (${this._oemDefs.length})</b>${puede?'<button class="btn btn-sm btn-brand" onclick="Modulos.diagnostico_obd.editarOEM()">＋ Nueva definición</button>':''}</div>
+        <div style="overflow:auto;margin-top:9px"><table class="table"><thead><tr><th>Marca/modelo</th><th>ECU</th><th>Función</th><th>Evidencia</th><th>Riesgo</th><th>Acciones</th></tr></thead><tbody>${this._oemDefs.length?this._oemDefs.map(d=>`<tr><td><b>${UI.esc(d.marca)}</b> ${UI.esc(d.modelo||'')}</td><td>${UI.esc(d.ecu)}</td><td>${UI.esc(d.nombre)}<br><small>${UI.esc(d.tipo)} ${UI.esc(d.identificador||'')}</small></td><td><span class="badge badge-${d.estado==='verificado'?'green':'amber'}">${UI.esc(d.estado)}</span><br><small>${UI.esc(d.fuente)}</small></td><td>${UI.esc(d.riesgo)}</td><td>${Modulos.btnAccion('ver',`Modulos.diagnostico_obd.verOEM('${d.id}')`)}${Modulos.btnAccion('editar',`Modulos.diagnostico_obd.editarOEM('${d.id}')`)}${Modulos.btnAccion('eliminar',`Modulos.diagnostico_obd.eliminarOEM('${d.id}','${UI.jsAttr(d.nombre)}')`)}</td></tr>`).join(''):'<tr><td colspan="6">Aún no hay definiciones. Agrega únicamente información con fuente comprobable.</td></tr>'}</tbody></table></div></div>
+        <div class="card" style="padding:14px"><b>Paquetes iniciales</b><p>Ford y GM están preparados como objetivos. Las pruebas activas, calibraciones, DPF, purga ABS, codificación, Security Access y reflash permanecen bloqueadas hasta incorporar una definición verificada y sus precondiciones.</p></div>
+      </div>`, '1100px');
+    },
+    verOEM(id) { const d=this._oemDefs.find(x=>x.id===id); if(!d)return; const p=Motor.puedeEjecutar(d); UI.modal(d.nombre,`<div class="card" style="padding:12px"><b>${UI.esc(d.marca)} ${UI.esc(d.modelo||'')} · ${UI.esc(d.ecu)}</b><p>Fuente: ${UI.esc(d.fuente)} · estado: ${UI.esc(d.estado)} · riesgo: ${UI.esc(d.riesgo)}</p></div><pre style="white-space:pre-wrap">${UI.esc(JSON.stringify(d.definicion||{},null,2))}</pre><div class="modal-footer"><button class="btn btn-ghost" onclick="UI.cerrarModal()">Cerrar</button><button class="btn btn-${p.ok?'cyan':'ghost'}" ${p.ok?'':'disabled'} title="${UI.esc(p.motivo||'Lectura verificada')}" onclick="Modulos.diagnostico_obd.ejecutarOEM('${d.id}')">▶ Ejecutar lectura</button></div>`,'720px'); },
+    async ejecutarOEM(id) {
+      const d=this._oemDefs.find(x=>x.id===id); if(!d)return;
+      const permiso=Motor.puedeEjecutar(d); if(!permiso.ok)return UI.toast(permiso.motivo,'error');
+      if (!this._listo) return UI.toast('El vehículo y el adaptador deben seguir conectados','error');
+      const cfg=d.definicion||{}, req=Number(cfg.request_id), resp=Number(cfg.response_id);
+      if (!Number.isInteger(req)||!Number.isInteger(resp)) return UI.toast('La definición verificada no incluye request_id y response_id numéricos','error');
+      const did=parseInt(d.identificador,16), base={definicion_id:d.id,diagnostico_id:this._scan?.id||null,vehiculo_id:this._scan?.vehiculo_id||null,operacion:`UDS 22 ${d.identificador}`,solicitud_hex:`22 ${d.identificador.slice(0,2)} ${d.identificador.slice(2)}`};
+      try {
+        const bytes=await this._leerDID(req,resp,did);
+        if(!bytes) { await DB.registrarEjecucionOEM({...base,estado:'rechazada',error:'Sin respuesta positiva 0x62'}); return UI.toast('La ECU no entregó ese DID','warn'); }
+        const valor=Motor.decodificar(bytes,cfg.decoder||{});
+        await DB.registrarEjecucionOEM({...base,estado:'exitosa',respuesta_hex:hex(bytes),evidencia:{valor,unidad:cfg.decoder?.unidad||null}});
+        UI.modal(d.nombre,`<div class="card" style="padding:18px"><div style="font-size:11px;color:var(--text3)">DID ${UI.esc(d.identificador)} · ${UI.esc(d.ecu)}</div><div style="font-size:28px;font-weight:700;margin-top:8px">${UI.esc(valor)} ${UI.esc(cfg.decoder?.unidad||'')}</div><div style="font-family:monospace;margin-top:10px">${UI.esc(hex(bytes))}</div></div>`,'560px');
+      } catch(e) { await DB.registrarEjecucionOEM({...base,estado:'fallida',error:e.message}); UI.toast('Falló la lectura OEM: '+e.message,'error'); }
+    },
+    editarOEM(id) {
+      const d=this._oemDefs.find(x=>x.id===id)||{};
+      UI.modal(id?'Editar definición OEM':'Nueva definición OEM',`<div class="form-grid">
+        <div><label class="form-label">Nombre</label><input class="form-input" id="oem-nombre" value="${UI.esc(d.nombre||'')}"></div><div><label class="form-label">Marca</label><input class="form-input" id="oem-marca" value="${UI.esc(d.marca||'')}"></div>
+        <div><label class="form-label">Modelo (opcional)</label><input class="form-input" id="oem-modelo" value="${UI.esc(d.modelo||'')}"></div><div><label class="form-label">ECU</label><input class="form-input" id="oem-ecu" value="${UI.esc(d.ecu||'')}"></div>
+        <div><label class="form-label">Tipo</label><select class="form-select" id="oem-tipo">${TIPOS.map(x=>`<option ${d.tipo===x?'selected':''}>${x}</option>`).join('')}</select></div><div><label class="form-label">DID/identificador</label><input class="form-input" id="oem-idf" value="${UI.esc(d.identificador||'')}"></div>
+        <div><label class="form-label">Estado</label><select class="form-select" id="oem-estado">${['borrador','laboratorio','verificado','retirado'].map(x=>`<option ${d.estado===x?'selected':''}>${x}</option>`).join('')}</select></div><div><label class="form-label">Riesgo</label><select class="form-select" id="oem-riesgo">${['lectura','controlado','alto','critico'].map(x=>`<option ${d.riesgo===x?'selected':''}>${x}</option>`).join('')}</select></div>
+        <div style="grid-column:1/-1"><label class="form-label">Fuente verificable</label><input class="form-input" id="oem-fuente" value="${UI.esc(d.fuente||'')}"></div>
+        <div style="grid-column:1/-1"><label class="form-label">Definición JSON</label><textarea class="form-input" id="oem-def" rows="4">${UI.esc(JSON.stringify(d.definicion||{},null,2))}</textarea></div></div>
+        <div class="modal-footer"><button class="btn btn-ghost" onclick="UI.cerrarModal()">Cancelar</button><button class="btn btn-brand" onclick="Modulos.diagnostico_obd.guardarOEM('${id||''}')">Guardar</button></div>`,'760px');
+    },
+    async guardarOEM(id) {
+      let definicion; try{definicion=JSON.parse(document.getElementById('oem-def').value||'{}');}catch(e){return UI.toast('La definición JSON no es válida','error');}
+      const v=x=>document.getElementById(x).value.trim(); const d={id:id||undefined,nombre:v('oem-nombre'),marca:v('oem-marca'),modelo:v('oem-modelo')||null,ecu:v('oem-ecu'),tipo:v('oem-tipo'),identificador:v('oem-idf')||null,estado:v('oem-estado'),riesgo:v('oem-riesgo'),fuente:v('oem-fuente'),protocolo:'uds',definicion,precondiciones:[],activa:true};
+      const e=Motor.validar(d); if(e.length)return UI.toast(e.join('. '),'error'); const r=await DB.upsertDefinicionOEM(d); if(r.error)return UI.toast(r.error.message,'error'); UI.cerrarModal(); this.modalOEM();
+    },
+    eliminarOEM(id,nombre) { Modulos.eliminarRegistro('obd_oem_definiciones',id,nombre,()=>this.modalOEM()); }
+  });
+})();
