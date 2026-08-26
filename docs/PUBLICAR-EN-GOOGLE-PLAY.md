@@ -22,6 +22,47 @@ Lo que sigue está en el orden en que Play Console lo pide. Lo que **bloquea** v
 
 ---
 
+## 0.b ¿Y si mejor cuenta Personal? — evaluado y descartado (2026-08-25)
+
+Surgió la duda de si pasarse a cuenta **Personal** para no esperar el D-U-N-S. Los números no
+dan lo que parece:
+
+| | **Personal** | **Organización** (la actual) |
+|---|---|---|
+| D-U-N-S | No hace falta | Hasta 30 días · **0 si ya existe** · ~8 días hábiles con exprés de pago |
+| Prueba cerrada obligatoria | **12 testers opt-in, 14 días continuos** | **Exenta** |
+| Depende de terceros | Sí: 12 personas con cuenta de Google que se unan **y no se salgan** | No |
+| Tiempo realista hasta producción | 3–5 semanas | 1–4 semanas (0 si el D-U-N-S ya existe) |
+| Nombre visible en la tienda | El de una persona | El de la empresa |
+| Ingresos y perfil fiscal | A título personal | A nombre de la S.A. |
+
+**Lo que decide el asunto:** una cuenta **Personal no se puede convertir en Organización**
+después. Cambiar más adelante obliga a crear otra cuenta y transferir la app, con su propio
+trámite. Y NexusPro es un ERP B2B que factura FEL: publicarlo bajo un nombre personal le resta
+credibilidad ante empresas y desordena la contabilidad de la sociedad.
+
+Además, la ruta personal **no es más rápida**: cambia "esperar un trámite" por "conseguir 12
+personas y sostenerlas 14 días seguidos" — que depende de terceros y se rompe si alguien se sale.
+
+**Se mantiene Organización.**
+
+### Cómo acelerar de verdad
+
+1. **Busca primero si el D-U-N-S ya existe** en https://service.dnb.com/ — muchas empresas ya
+   están en la base de D&B por bancos, aduanas o proveedores, sin saberlo. Si aparece, la espera
+   es **cero**. Son cinco minutos y es lo primero que hay que hacer.
+2. Si no existe, evalúa el **exprés de pago** (~8 días hábiles): sale más barato y más rápido que
+   organizar 12 testers.
+3. **Mientras tanto, sube el AAB a una prueba interna.** No requiere la verificación completa ni
+   pasa por revisión, y sirve para comprobar hoy mismo que la app instala, abre y funciona
+   firmada. Nada de lo administrativo te impide avanzar por ahí.
+
+> **El tema del representante legal NO atrasa el lanzamiento.** El nombramiento se puede cambiar
+> cuando se quiera; no hay que esperarlo para publicar. Se verifica con quien está inscrito hoy
+> y se actualiza después.
+
+---
+
 ## 1. 🔴 D-U-N-S — es lo que bloquea la cuenta
 
 Google exige un **D-U-N-S Number** para cuentas de organización. Es gratis y puede tardar
