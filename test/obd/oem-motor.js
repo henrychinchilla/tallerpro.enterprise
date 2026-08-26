@@ -53,4 +53,21 @@ ok('plan incluye la flota real de pruebas',O.planValidacion.length===7&&O.planVa
 ok('pruebas activas tienen objetivos guiados',O.objetivosActivos.some(x=>x.id==='ventilador')&&O.objetivosActivos.every(x=>x.precondiciones.length));
 ok('preparación activa exige estado verificado',!O.puedePrepararActiva({tipo:'prueba_activa',estado:'laboratorio',riesgo:'controlado',definicion:{objetivo_activo:'bocina'}},{contacto:true}).ok);
 ok('preparación activa acepta precondiciones confirmadas',O.puedePrepararActiva({tipo:'prueba_activa',estado:'verificado',riesgo:'controlado',definicion:{objetivo_activo:'bocina'}},{contacto:true}).ok);
+
+/* El plan de validación recomendaba interfaces que la app NO implementa: al
+   Nissan Juke lo mandaba por "Thinkcar / J2534", y ahí se perdió una tarde
+   entera de pruebas el 2026-08-26. El campo era texto libre, así que nada podía
+   detectar la incoherencia. Ahora son IDs de familia y se comprueban. */
+ok('toda interfaz del plan existe como familia',
+   O.planValidacion.every(p => p.interfaces.every(id => !!O.familiaPorId(id))));
+ok('cada vehículo del plan tiene al menos una interfaz USABLE hoy',
+   O.planValidacion.every(p => p.interfaces.some(id => O.interfazUsable(id))));
+ok('sólo ELM y RP1210 están disponibles; J2534, SDK de fabricante y VCI no',
+   O.familias.filter(f => f.disponible).map(f => f.id).join(',') === 'elm,rp1210');
+ok('los livianos se atacan por ELM/BLE, no por Thinkcar',
+   O.planValidacion.filter(p => p.familia === 'liviano')
+    .every(p => p.interfaces.filter(id => O.interfazUsable(id)).join(',') === 'elm'));
+ok('el Nissan Juke ya no recomienda una interfaz no implementada',
+   O.planValidacion.find(p => p.id === 'nissan_juke').interfaces
+    .filter(id => O.interfazUsable(id)).join(',') === 'elm');
 fin();

@@ -9,13 +9,20 @@
     {id:'ch',nombre:'CH-CAN',estado:'validar',nota:'Capacidad declarada; selección pendiente de validar'},
     {id:'ls',nombre:'LS-CAN',estado:'validar',nota:'Capacidad declarada; selección pendiente de validar'}
   ];
+  /* 'disponible' = el software puede hablar HOY por esa via. Sin este dato, el
+     plan de validacion recomendaba interfaces que la app no implementa: el
+     2026-08-26 mandaba a conectar un Nissan Juke por "Thinkcar / J2534" y se
+     perdio una tarde entera intentandolo. Un VCI de protocolo cerrado no se
+     vuelve compatible por listarlo en una tabla. */
   const FAMILIAS = [
-    {id:'elm',nombre:'ELM/ST por BLE',transportes:['ble'],protocolos:['obd2','uds','kwp2000','j1939'],nota:'Vgate, OBDLink, ELM327 y compatibles'},
-    {id:'rp1210',nombre:'RP1210',transportes:['usb'],protocolos:['j1939','j1708','j1587','can','iso15765'],nota:'NEXIQ, DPA, Dearborn y cualquier DLL registrada'},
-    {id:'j2534',nombre:'J2534 Pass-Thru',transportes:['usb'],protocolos:['can','iso15765','iso9141','iso14230'],nota:'Capa prevista; requiere proveedor J2534 instalado'},
-    {id:'fabricante',nombre:'SDK de fabricante',transportes:['ble','classic','wifi','usb'],protocolos:[],nota:'Thinkcar y otros VCI cerrados: se integra cuando el fabricante entrega SDK/API autorizada'},
-    {id:'vci',nombre:'VCI futuro',transportes:['usb','ble','wifi'],protocolos:[],nota:'Contrato abierto para interfaces OEM o multimarca'}
+    {id:'elm',nombre:'ELM/ST por BLE',transportes:['ble'],protocolos:['obd2','uds','kwp2000','j1939'],disponible:true,nota:'Vgate, OBDLink, ELM327 y compatibles'},
+    {id:'rp1210',nombre:'RP1210',transportes:['usb'],protocolos:['j1939','j1708','j1587','can','iso15765'],disponible:true,nota:'NEXIQ, DPA, Dearborn y cualquier DLL registrada. Necesita el puente local (puente-obd) corriendo en la PC'},
+    {id:'j2534',nombre:'J2534 Pass-Thru',transportes:['usb'],protocolos:['can','iso15765','iso9141','iso14230'],disponible:false,nota:'Capa prevista; requiere proveedor J2534 instalado. AUN NO IMPLEMENTADA'},
+    {id:'fabricante',nombre:'SDK de fabricante',transportes:['ble','classic','wifi','usb'],protocolos:[],disponible:false,nota:'Thinkcar y otros VCI cerrados: se integra cuando el fabricante entrega SDK/API autorizada. AUN NO IMPLEMENTADA'},
+    {id:'vci',nombre:'VCI futuro',transportes:['usb','ble','wifi'],protocolos:[],disponible:false,nota:'Contrato abierto para interfaces OEM o multimarca. AUN NO IMPLEMENTADA'}
   ];
+  const familiaPorId = id => FAMILIAS.find(f => f.id === id) || null;
+  const interfazUsable = id => !!(familiaPorId(id) || {}).disponible;
   const DIDS_BASE = [
     {did:'F190',nombre:'VIN',decoder:{tipo:'ascii'},fuente:'ISO 14229-1, ReadDataByIdentifier'},
     {did:'F187',nombre:'Número de pieza de repuesto de la ECU',decoder:{tipo:'ascii'},fuente:'ISO 14229-1, identificadores de datos de vehículo'},
@@ -56,13 +63,13 @@
     {id:'actuador_otro',nombre:'Otro actuador con procedimiento OEM',riesgo:'alto',precondiciones:['contacto','velocidad_max']}
   ];
   const PLAN_VALIDACION = [
-    {id:'mitsubishi',vehiculo:'Mitsubishi camioneta',familia:'liviano',protocolos:['uds','obd2'],interfaces:['vLinker MS','Thinkcar / J2534'],estado:'pendiente'},
-    {id:'nissan_rogue',vehiculo:'Nissan Rogue',familia:'liviano',protocolos:['uds','obd2'],interfaces:['vLinker MS','Thinkcar / J2534'],estado:'pendiente'},
-    {id:'nissan_juke',vehiculo:'Nissan Juke',familia:'liviano',protocolos:['uds','obd2'],interfaces:['vLinker MS','Thinkcar / J2534'],estado:'pendiente'},
-    {id:'kia_picanto',vehiculo:'Kia Picanto',familia:'liviano',protocolos:['uds','obd2'],interfaces:['vLinker MS','Thinkcar / J2534'],estado:'pendiente'},
-    {id:'isuzu_npr',vehiculo:'Isuzu NPR',familia:'camion_ligero',protocolos:['j1939','uds'],interfaces:['USB-Link / RP1210','vLinker MS'],estado:'pendiente'},
-    {id:'foton_aumark',vehiculo:'Foton Aumark',familia:'camion',protocolos:['j1939','uds'],interfaces:['USB-Link / RP1210'],estado:'pendiente'},
-    {id:'international_dt466',vehiculo:'International DT466',familia:'camion_pesado',protocolos:['j1939','j1708_j1587'],interfaces:['USB-Link / RP1210'],estado:'pendiente'}
+    {id:'mitsubishi',vehiculo:'Mitsubishi camioneta',familia:'liviano',protocolos:['uds','obd2'],interfaces:['elm','j2534','fabricante'],estado:'pendiente'},
+    {id:'nissan_rogue',vehiculo:'Nissan Rogue',familia:'liviano',protocolos:['uds','obd2'],interfaces:['elm','j2534','fabricante'],estado:'pendiente'},
+    {id:'nissan_juke',vehiculo:'Nissan Juke',familia:'liviano',protocolos:['uds','obd2'],interfaces:['elm','j2534','fabricante'],estado:'pendiente'},
+    {id:'kia_picanto',vehiculo:'Kia Picanto',familia:'liviano',protocolos:['uds','obd2'],interfaces:['elm','j2534','fabricante'],estado:'pendiente'},
+    {id:'isuzu_npr',vehiculo:'Isuzu NPR',familia:'camion_ligero',protocolos:['j1939','uds'],interfaces:['rp1210','elm'],estado:'pendiente'},
+    {id:'foton_aumark',vehiculo:'Foton Aumark',familia:'camion',protocolos:['j1939','uds'],interfaces:['rp1210'],estado:'pendiente'},
+    {id:'international_dt466',vehiculo:'International DT466',familia:'camion_pesado',protocolos:['j1939','j1708_j1587'],interfaces:['rp1210'],estado:'pendiente'}
   ];
   const REFERENCIAS_VEHICULOS = PLAN_VALIDACION.flatMap(p => {
     const partes=p.vehiculo.split(' '), marca=p.id.startsWith('nissan_')?'Nissan':p.id==='kia_picanto'?'Kia':p.id==='isuzu_npr'?'Isuzu':p.id==='foton_aumark'?'Foton':p.id==='international_dt466'?'International':p.id==='mitsubishi'?'Mitsubishi':partes[0];
@@ -92,7 +99,7 @@
   const hex = b => (b || []).map(x => Number(x).toString(16).padStart(2,'0').toUpperCase()).join(' ');
   const propsBLE = p => ['broadcast','read','writeWithoutResponse','write','notify','indicate','authenticatedSignedWrites','reliableWrite','writableAuxiliaries'].filter(k=>!!p?.[k]);
   const Motor = {
-    canales: CANALES, familias:FAMILIAS, didsBase:DIDS_BASE, perfilesSimulados:PERFILES_SIMULADOS, planValidacion:PLAN_VALIDACION, referenciasVehiculos:REFERENCIAS_VEHICULOS, marcas:MARCAS_OEM, ecus:ECUS_OEM, protocolos:PROTOCOLOS_OEM, objetivosReset:OBJETIVOS_RESET, objetivosImmo:OBJETIVOS_IMMO, objetivosActivos:OBJETIVOS_ACTIVOS, propsBLE,
+    canales: CANALES, familias:FAMILIAS, familiaPorId, interfazUsable, didsBase:DIDS_BASE, perfilesSimulados:PERFILES_SIMULADOS, planValidacion:PLAN_VALIDACION, referenciasVehiculos:REFERENCIAS_VEHICULOS, marcas:MARCAS_OEM, ecus:ECUS_OEM, protocolos:PROTOCOLOS_OEM, objetivosReset:OBJETIVOS_RESET, objetivosImmo:OBJETIVOS_IMMO, objetivosActivos:OBJETIVOS_ACTIVOS, propsBLE,
     construirTopologia(redes=[], meta={}) {
       const conocidas=new Set(CANALES.map(c=>c.id));
       const salida=CANALES.map(c=>({id:c.id,nombre:c.nombre,estado:'no_escaneada',modulos:[]}));
@@ -322,7 +329,7 @@
         ${this._oemTopologia?this._topologiaOEMHTML(this._oemTopologia):''}
         <div class="card" style="padding:14px"><b>Paquete base UDS de identificación</b><p>${DIDS_BASE.map(d=>`<code>${d.did}</code> ${UI.esc(d.nombre)}`).join(' · ')}</p><small>Son DIDs normalizados para descubrir identidad; una ECU puede no implementarlos. No se presentan como parámetros exclusivos de Ford o GM.</small></div>
         <div class="card" style="padding:14px"><div style="display:flex;justify-content:space-between;gap:10px;align-items:center"><b>Referencias predeterminadas de tu flota</b>${puede?`<button class="btn btn-sm btn-brand" onclick="Modulos.diagnostico_obd.agregarReferenciasOEM()">＋ Cargar ${REFERENCIAS_VEHICULOS.length} borradores</button>`:''}</div><p style="margin:8px 0">Incluye identificación, reset de mantenimiento y diagnóstico IMMO para los 7 vehículos listados. Todo queda en <b>borrador</b>, sin transmisión, porque dirección, ECU, protocolo y procedimiento todavía deben confirmarse.</p><small>IMMO sólo contiene identificación/estado/diagnóstico; no contiene llaves, PIN, secretos, clonación ni bypass.</small></div>
-        <div class="card" style="padding:14px"><b>Plan de validación preparado</b><div style="overflow:auto;margin-top:8px"><table class="table"><thead><tr><th>Vehículo</th><th>Familia</th><th>Protocolos previstos</th><th>Interfaces</th><th>Estado</th></tr></thead><tbody>${PLAN_VALIDACION.map(x=>`<tr><td>${UI.esc(x.vehiculo)}</td><td>${UI.esc(x.familia)}</td><td><code>${x.protocolos.join(' · ')}</code></td><td>${UI.esc(x.interfaces.join(' · '))}</td><td><span class="badge badge-amber">${x.estado}</span></td></tr>`).join('')}</tbody></table></div><small>“Previsto” no significa compatible confirmado: se actualizará con la respuesta real de cada interfaz.</small></div>
+        <div class="card" style="padding:14px"><b>Plan de validación preparado</b><div style="overflow:auto;margin-top:8px"><table class="table"><thead><tr><th>Vehículo</th><th>Familia</th><th>Protocolos previstos</th><th>Interfaces</th><th>Estado</th></tr></thead><tbody>${PLAN_VALIDACION.map(x=>`<tr><td>${UI.esc(x.vehiculo)}</td><td>${UI.esc(x.familia)}</td><td><code>${x.protocolos.join(' · ')}</code></td><td>${x.interfaces.map(id=>{const f=familiaPorId(id);const ok=!!(f&&f.disponible);return `<span class="badge badge-${ok?'green':'amber'}" title="${UI.esc(f?f.nota:'Interfaz desconocida')}">${UI.esc(f?f.nombre:id)}${ok?'':' · no implementada'}</span>`;}).join(' ')}</td><td><span class="badge badge-amber">${x.estado}</span></td></tr>`).join('')}</tbody></table></div><small>“Previsto” no significa compatible confirmado: se actualizará con la respuesta real de cada interfaz.</small></div>
         <div class="card" style="padding:14px"><b>Paquetes iniciales</b><p>Ford y GM están preparados como objetivos. Las pruebas activas, calibraciones, DPF, purga ABS, codificación, Security Access y reflash permanecen bloqueadas hasta incorporar una definición verificada y sus precondiciones.</p></div>
       </div>`, '1100px');
     },
