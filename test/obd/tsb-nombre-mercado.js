@@ -126,6 +126,8 @@ const NISSAN = ['ALTIMA', 'ARMADA', 'FRONTIER', 'KICKS', 'MURANO', 'PATHFINDER',
      /'Rogue'/.test(lineaNissan));
   ok('el catálogo de alta de vehículos conserva X-Trail',
      /'X-Trail'/.test(lineaNissan));
+  ok('el catálogo de alta de vehículos ofrece Juke',
+     /'Juke'/.test(lineaNissan));
 
   fin();
 })();

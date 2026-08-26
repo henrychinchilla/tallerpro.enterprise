@@ -202,7 +202,7 @@ Modulos.vehiculos = {
   _modelosPorMarca: {
     'Toyota': ['Corolla','Yaris','Camry','Hilux','RAV4','Land Cruiser','Land Cruiser Prado','Fortuner','4Runner','Tacoma','Tundra','Highlander','Avanza','Rush','Raize','Corolla Cross','Sienna','Sequoia','Coaster','Dyna','Hiace'],
     'Honda': ['Civic','Accord','CR-V','HR-V','Pilot','Fit','City','BR-V','Ridgeline','Odyssey','CB125','CB190R','XR150L','CRF250','Navi','Dio','PCX','Cargo 150'],
-    'Nissan': ['Sentra','Versa','Altima','Frontier','Rogue','Rogue Sport','X-Trail','Kicks','Qashqai','Pathfinder','Murano','March','Navara','NP300','Urvan','Patrol','Xterra','Titan'],
+    'Nissan': ['Sentra','Versa','Altima','Frontier','Rogue','Rogue Sport','Juke','X-Trail','Kicks','Qashqai','Pathfinder','Murano','March','Navara','NP300','Urvan','Patrol','Xterra','Titan'],
     'Hyundai': ['Accent','Elantra','Sonata','Tucson','Santa Fe','Creta','Kona','Grand i10','Venue','Palisade','H100','HD65','HD78','Porter'],
     'Kia': ['Rio','Cerato','Forte','Sportage','Sorento','Seltos','Picanto','Soul','Carnival','Stonic','K2500','K2700','Frontier'],
     'Mazda': ['Mazda2','Mazda3','Mazda6','CX-3','CX-30','CX-5','CX-9','BT-50'],
