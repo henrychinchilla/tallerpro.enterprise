@@ -5,9 +5,15 @@
 .remember/
 .wrangler/
 .claude/
+.codex/
+.github/
+.mcp.json
+AGENTS.md
 .vscode/
 .idea/
 node_modules/
+marketing/
+tests/
 supabase/
 db/
 electron/
