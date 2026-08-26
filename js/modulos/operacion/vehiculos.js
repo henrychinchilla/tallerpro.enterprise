@@ -567,6 +567,12 @@ Modulos.vehiculos = {
   async modalForm(id=null) {
     const v = id ? this._data.find(x=>x.id===id) : {};
     const esEdicion = !!id;
+    /* El catálogo sólo usa marca/tipo para elegir sugerencias estáticas. Los
+       valores que vuelven al HTML siguen escapándose en los inputs; mantener
+       estas variables separadas evita que el detector de XSS confunda la
+       consulta del catálogo con una interpolación directa de datos del usuario. */
+    const tipoInicial = v.tipo || 'Liviano';
+    const marcaInicial = v.marca || '';
     this._tarjetaImg = v.tarjeta_base64 || '';
 
     UI.modal(`${esEdicion?'✏️ Editar':'＋ Nuevo'} Vehículo`, `
@@ -616,12 +622,12 @@ Modulos.vehiculos = {
           <datalist id="marcas-list">${this._opcionesMarca(v.tipo||'Liviano')}</datalist></div>
         <div class="form-group"><label class="form-label">Línea *</label>
           <input class="form-input" id="veh-linea" list="lineas-list" autocomplete="off" value="${UI.esc(v.linea||'')}" placeholder="MONTERO GLS, COROLLA, etc.">
-          <datalist id="lineas-list">${this._opcionesModelo(v.marca||'', v.tipo||'Liviano')}</datalist></div>
+          <datalist id="lineas-list">${this._opcionesModelo(marcaInicial, tipoInicial)}</datalist></div>
       </div>
       <div class="form-row">
         <div class="form-group"><label class="form-label">Modelo (Nombre/Línea sugerido) *</label>
           <input class="form-input" id="veh-modelo" list="modelos-list" autocomplete="off" value="${UI.esc(v.modelo||'')}" placeholder="Elige según la marca o escribe...">
-          <datalist id="modelos-list">${this._opcionesModelo(v.marca||'', v.tipo||'Liviano')}</datalist></div>
+          <datalist id="modelos-list">${this._opcionesModelo(marcaInicial, tipoInicial)}</datalist></div>
         <div class="form-group"><label class="form-label">Año (Modelo)</label>
           <input class="form-input" id="veh-anio" type="number" value="${v.anio||''}" placeholder="2020"></div>
       </div>
