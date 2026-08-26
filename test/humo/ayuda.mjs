@@ -47,12 +47,22 @@ export function marcador() {
 
 /* Abre el navegador ya con sesión iniciada en el comercio de pruebas.
    `viewport` permite correr lo mismo en teléfono. */
-export async function abrirSesion({ viewport = { width: 1440, height: 900 } } = {}) {
+export async function abrirSesion({ viewport = { width: 1440, height: 900 }, ...opcionesContexto } = {}) {
   const CRED = credenciales();
   if (!CRED) return null;
 
-  const navegador = await chromium.launch();
-  const contexto = await navegador.newContext({ viewport });
+  /* En español, como el usuario real. No es cosmético: los controles NATIVOS
+     del navegador (el <input type="month"> del panel, por ejemplo) se pintan en
+     el idioma de la INTERFAZ de Chromium — no en el `locale` del contexto, que
+     sólo cambia navigator.language e Intl. Sin esto el selector de mes sale
+     "August 2026" en mitad de una pantalla en español, y así salió en la
+     primera tanda de capturas para Play. */
+  const navegador = await chromium.launch({ args: ['--lang=es-GT'] });
+  /* Lo que venga de más (deviceScaleFactor, isMobile, hasTouch...) pasa tal
+     cual al contexto: las capturas de la ficha de Play necesitan un teléfono
+     de verdad y a 3x, y no vale la pena tener un segundo login copiado — el
+     de aquí ya sabe posponer el 2FA y reintentar la carrera del arranque. */
+  const contexto = await navegador.newContext({ viewport, ...opcionesContexto });
   /* El 2FA es posponible para una cuenta sin factores. Va como script de
      inicialización —corre ANTES de cada carga— y no como un evaluate suelto:
      el servidor redirige /index.html a /, y un evaluate en medio de esa

@@ -172,7 +172,11 @@ Modulos.dashboard = {
           <p class="page-subtitle">// ${esMesActual ? ahora.toLocaleDateString('es-GT', { weekday: 'long', day: 'numeric', month: 'long' }) + ' · ' : 'Periodo: '}${mes}${esMesActual ? '' : ' (histórico)'}</p>
         </div>
         <div class="page-actions">
-          <input type="month" class="form-input" style="width:160px" value="${this._mes}" title="Ver otro mes" onchange="Modulos.dashboard._setMes(this.value)">
+          <!-- El ancho NO puede ser fijo: este control lo dibuja el navegador y
+               su texto depende del idioma. Con 160px, en español se corta
+               ("agosto de 202…") — en inglés cabía porque "August 2026" es más
+               corto. Se descubrió al sacar las capturas para Google Play. -->
+          <input type="month" class="form-input" style="width:auto;min-width:185px" value="${this._mes}" title="Ver otro mes" onchange="Modulos.dashboard._setMes(this.value)">
           ${esMesActual ? '' : `<button class="btn btn-ghost" onclick="Modulos.dashboard._setMes('${ahora.getFullYear()}-${String(ahora.getMonth()+1).padStart(2,'0')}')" title="Volver al mes actual">📅 Mes actual</button>`}
           <button class="btn btn-ghost" onclick="Modulos.dashboard.render()" title="Actualizar">🔄 Actualizar</button>
         </div>

@@ -1,0 +1,279 @@
+# Publicar NexusPro en Google Play — guía de trabajo
+
+> Estado al 2026-08-25. Cuenta de desarrollador: **Organización** (confirmado por Henry).
+> App lista: `4.77.0` (versionCode 4), AAB firmado en `android/play/NexusPro-4.77.0-play.aab`.
+
+Lo que sigue está en el orden en que Play Console lo pide. Lo que **bloquea** va primero.
+
+---
+
+## 0. Lo que ya está resuelto ✅
+
+| Cosa | Estado |
+|---|---|
+| AAB firmado para subir | `android/play/NexusPro-4.77.0-play.aab` |
+| Paquete | `com.cmtelecom.nexuspro` |
+| Capturas de teléfono (8) | `play-movil-01..08-*.png` — 1080×1920, **9:16** |
+| Capturas tablet 7" y 10" | `play-tablet7-*.png`, `play-tablet10-*.png` |
+| Ícono 512×512 PNG | `icons/icon-512.png` |
+| Gráfico destacado 1024×500 | `nexuspro_grafico_funciones.jpg` |
+| Política de privacidad | https://nexuspro.cmtelecommgt.com/privacidad |
+| Términos | https://nexuspro.cmtelecommgt.com/terminos |
+
+---
+
+## 1. 🔴 D-U-N-S — es lo que bloquea la cuenta
+
+Google exige un **D-U-N-S Number** para cuentas de organización. Es gratis y puede tardar
+**hasta 30 días**, así que se pide **hoy**.
+
+### Antes de llenar nada: revisa si ya lo tienes
+Muchas empresas ya están en la base de D&B sin saberlo (aparecen por importaciones, bancos,
+proveedores). Búscalo primero — si ya existe, te ahorras las 4 semanas:
+👉 https://service.dnb.com/ (buscador de D-U-N-S)
+
+### Si no existe, solicítalo aquí
+👉 https://www.dnb.com/duns/get-a-duns.html — es el enlace que da Google en su propia ayuda.
+Gratis, hasta 30 días hábiles. Hay opción exprés de pago (unos 8 días hábiles) si urge.
+
+### ⚠️ LA REGLA QUE TUMBA CUENTAS
+El **nombre legal y la dirección** que registres en D&B tienen que coincidir **carácter por
+carácter** con lo que pongas en el perfil de pagos de Play Console. Si Google detecta una
+diferencia, te da un plazo para corregir y, si no se corrige, **retira todas tus apps de
+Google Play**. No es una advertencia teórica: está en su documentación.
+
+Consecuencia práctica: **decide AHORA el nombre exacto** y úsalo idéntico en los dos lados.
+Cópialo tal cual de la **patente de comercio**. Ojo con:
+- `S.A.` vs `Sociedad Anónima` vs `, S.A.`
+- tildes y mayúsculas
+- si el nombre legal lleva "CM" delante o no
+
+### 📄 Los datos ya están listos
+
+Se sacaron del **RTU de la SAT** y de la **Patente de Comercio de Sociedad**, y están en:
+
+```
+D:\CM documentos\DUNS - hoja de datos para el formulario.md
+```
+
+Esa hoja va **fuera del repositorio** a propósito: lleva NIT y datos de la representante legal.
+Ahí está cada campo del formulario con lo que hay que escribir.
+
+Lo esencial, para que quede dicho aquí:
+
+- La entidad que se registra es **`CM INVESTMENTS, SOCIEDAD ANÓNIMA`** — con coma y escrito
+  completo, **no "S.A."**. Las cuatro marcas (CM TELECOMM, CM MULTISERVICIOS, CM TRANSLOGISTICS,
+  CM INVESTMENTS) son empresas mercantiles de esa única sociedad.
+- **CM TELECOMM** es el nombre comercial correcto para NexusPro (Empresa Mercantil No. 336514):
+  de ahí salen el dominio `cmtelecommgt.com` y el paquete `com.cmtelecom.nexuspro`.
+- Domicilio en **Fraijanes, departamento de Guatemala**. Dirección física, **nunca** el
+  apartado postal.
+- Actividad para D&B: **NAICS 541511** (*Custom Computer Programming Services*).
+
+**Ojo con la llamada de verificación:** D&B llama al teléfono registrado. Si no contestas, el
+trámite se queda parado sin avisarte. Contesta números desconocidos esas semanas.
+
+### 🔴 El representante legal no es Henry
+
+Según el RTU, quien representa a CM INVESTMENTS, S.A. es **Karen Olanda Chinchilla Corleto de
+Ruano**, como **Administradora Única** (nombramiento vigente hasta el **22/12/2027**).
+
+Google verifica la identidad del **representante autorizado** de la organización. Si la cuenta
+la gestiona otra persona, la verificación puede rechazarse. Hay que elegir antes de enviarla:
+
+1. **Que la verificación la haga Karen** — su DPI ya está en la carpeta, más el acta de
+   nombramiento. Es el camino directo.
+2. **Acreditar a Henry** con un mandato/poder o acta que lo autorice a representar a la
+   sociedad.
+
+### Documentos que Google pedirá aparte (además del D-U-N-S)
+- `Patente de Comercio de Sociedad CM Investments SA.pdf` (constitución)
+- `CM INVESTMENTS SA RTU.pdf` (identificación tributaria y domicilio)
+- `KAREN CHINCHILLA DPI.pdf` (identidad del representante autorizado)
+
+> El RTU disponible es del 09/07/2026 y **aún no incluye el establecimiento CM TELECOMM** (su
+> patente es del 11/08/2026). Si Google pide un documento donde figure ese nombre comercial,
+> baja un **RTU actualizado** desde la Agencia Virtual de la SAT.
+
+---
+
+## 2. ⚠️ Correos: `telecommgt.com` NO EXISTE
+
+Verificado el 2026-08-25: el dominio `telecommgt.com` **no resuelve y no tiene servidor de
+correo**. O sea que `privacidad@telecommgt.com` — el correo que aparecía en la política de
+privacidad y en la ficha borrador — **rebota**. Un correo de contacto que rebota es motivo de
+rechazo, y además te haría perder los avisos de Google.
+
+El bueno es **`cmtelecommgt.com`**, que sí tiene correo (Microsoft 365).
+Ya se corrigieron `privacidad.html` y `terminos.html`.
+
+**Falta que confirmes** que estos buzones existen y los lees:
+- `privacidad@cmtelecommgt.com`
+- `legal@cmtelecommgt.com`
+- el de soporte que pongas en la ficha
+
+Si alguno no existe, créalo en Microsoft 365 antes de enviar la ficha a revisión.
+
+---
+
+## 3. 🔴 Acceso para el revisor de Google ("App access")
+
+NexusPro **no se puede usar sin iniciar sesión**, así que Google exige credenciales de prueba.
+Si el revisor no logra entrar, **rechaza la app** — y este es el motivo de rechazo más común
+en apps de gestión.
+
+Hay dos trampas específicas de NexusPro:
+
+1. **El 2FA.** A una cuenta sin segundo factor, la app le muestra la pantalla de activación de
+   2FA al entrar. **Es posponible** (botón para omitir por ahora), pero el revisor no tiene por
+   qué adivinarlo: hay que decírselo por escrito.
+2. **El vencimiento de la prueba.** Si la cuenta demo se queda sin suscripción, el revisor ve
+   una pantalla de bloqueo. La cuenta que le des a Google **no debe vencer**.
+
+### La cuenta ya existe — verificado en la base el 2026-08-25
+
+No hay que crear nada. El comercio **`PRUEBAS (automatizadas)`** (slug `pruebas-humo`) está
+`active = true`, con plan **empresarial** (o sea, todos los módulos a la vista) y
+**`suscripcion_vence = NULL`** — es decir, **no caduca**, que es justo lo que hace falta para
+que el revisor pueda entrar hoy y dentro de seis meses. Su único usuario es `admin` y activo.
+
+| | |
+|---|---|
+| Usuario | `robot.pruebas@nexuspro.test` |
+| Contraseña | la de `test/humo/credenciales.json` (fuera de git) |
+| Comercio | PRUEBAS (automatizadas) · plan empresarial · sin vencimiento |
+| Rol | admin — ve todos los módulos |
+
+> El dominio `.test` no es real y da igual: Google no manda correo ahí, sólo la usa para
+> entrar. Si prefieres no compartir la misma cuenta que usan las pruebas automáticas, crea una
+> gemela en ese mismo comercio; pero **no** le pongas fecha de vencimiento.
+
+### Qué poner en "Acceso a la app" (cópialo tal cual)
+
+```
+La aplicación requiere iniciar sesión con una cuenta de negocio.
+
+Usuario:    robot.pruebas@nexuspro.test
+Contraseña: <la de test/humo/credenciales.json>
+
+Instrucciones:
+1. Abre la app y escribe el usuario y la contraseña de arriba.
+2. Aparecerá una pantalla que propone activar la verificación en dos pasos.
+   Pulsa el botón "Ahora no — activarlo después". No es obligatoria para
+   revisar la aplicación.
+3. Entrarás al panel principal, con datos de demostración cargados.
+
+La app es un sistema de gestión (ERP) para talleres y pequeños comercios de
+Guatemala. No tiene contenido generado por usuarios ni compras dentro de la
+aplicación: la suscripción se contrata fuera de Google Play.
+```
+
+> El texto del botón está copiado **literal** de `js/core/login.js`. Es la diferencia entre que
+> el revisor entre o se dé por vencido en la pantalla del 2FA: sin esa frase, lo normal es
+> pensar que la verificación es obligatoria y cerrar la app.
+
+**Antes de enviar:** entra tú mismo desde un teléfono limpio, sin sesión previa, siguiendo esos
+tres pasos al pie de la letra. Si tú te trabas, el revisor también.
+
+---
+
+## 4. Seguridad de los datos (Data Safety)
+
+Formulario obligatorio. Estas respuestas salen de lo que declara `privacidad.html`:
+
+| Pregunta | Respuesta |
+|---|---|
+| ¿Recopila o comparte datos? | **Sí** |
+| ¿Se transmiten cifrados? | **Sí** (HTTPS/TLS) |
+| ¿El usuario puede pedir que se borren sus datos? | **Sí** — se pide al correo de privacidad |
+| ¿Hay compras dentro de la app? | **No** (la suscripción se cobra fuera de Play) |
+| ¿Hay anuncios? | **No** |
+
+**Tipos de datos a declarar** (recopilados, vinculados a la identidad, para funcionalidad de la app):
+- Información personal: **nombre**, **correo**, **teléfono**, **otros ID** (NIT)
+- Información financiera: **otra información financiera** (facturación, ventas del comercio)
+- Fotos y videos: **fotos** (adjuntos de órdenes, documentos, vouchers)
+- Archivos y documentos
+- Actividad en la app: **interacciones**
+- Registros: **registros de fallos** y **diagnósticos**, si aplica
+
+> Los datos de los **clientes finales del taller** los sube el comercio, no el usuario de la
+> app. Aun así se declaran: Play mira lo que la app envía a un servidor, sin importar de quién
+> sea el dato.
+
+---
+
+## 5. Resto del cuestionario
+
+| Sección | Respuesta |
+|---|---|
+| Categoría | **Empresa / Negocios** |
+| Etiquetas | Gestión, Productividad, Facturación |
+| Clasificación de contenido | Cuestionario todo **NO** → resultado "Para todos" |
+| Público objetivo | **18 años en adelante** (herramienta de trabajo) |
+| ¿Dirigida a menores? | **No** |
+| Anuncios | **No contiene anuncios** |
+| Países | Guatemala + Centroamérica (o todos) |
+| Gratis / de pago | **Gratis** (suscripción externa) |
+| App financiera / gubernamental | **No** — factura con FEL, pero no es una app financiera regulada |
+
+---
+
+## 6. ⚠️ DESPUÉS de subir el AAB: la app perderá la pantalla completa
+
+Esto no lo avisa nadie y es el error más difícil de diagnosticar después.
+
+NexusPro es una **TWA**: se abre a pantalla completa sólo si Android verifica que la app y el
+sitio se reconocen mutuamente (`/.well-known/assetlinks.json` ↔ huella del certificado).
+
+Con **Play App Signing** (obligatorio), **Google re-firma tu AAB con SU propia llave**. La
+huella del APK que instala el usuario **ya no es la tuya** → assetlinks deja de coincidir → la
+app se abre **con la barra de URL de Chrome encima**. Se ve como una página web, no como app.
+
+### Cómo arreglarlo (hazlo apenas subas la primera versión)
+1. Play Console → **Integridad de la app** → **Firma de apps**.
+2. Copia el **SHA-256 del "certificado de firma de la app"** (el de Google, **no** el de carga).
+3. Agrégalo al array `sha256_cert_fingerprints` de `.well-known/assetlinks.json`,
+   **sin borrar el actual** (`8B:D8:...:F8:75`): admite varias huellas, y la tuya sigue
+   haciendo falta para quien instaló el APK directo.
+4. `npm run deploy` y reinstala la app para comprobar que abre sin barra.
+
+---
+
+## 7. 🔴 Decisión pendiente: rotar la llave de firma
+
+El keystore (`android/tallerpro.keystore`) y su contraseña **estuvieron públicos en el CDN**
+casi dos meses (2026-07-01 → 2026-08-25). Ya está tapado, pero hay que asumir la llave
+comprometida: con ella, un tercero puede firmar un APK que Android acepta como actualización
+legítima de NexusPro.
+
+**Ahora es el momento de decidir**, porque después de publicar ya no se puede:
+
+| | Rotar la llave ahora | Seguir con la actual |
+|---|---|---|
+| Quien tenga el APK directo | Debe **desinstalar y reinstalar** (no pierde datos: están en Supabase) | No hace nada |
+| Riesgo | Se elimina | Queda abierto para siempre |
+| Esfuerzo | Generar keystore nuevo + actualizar assetlinks | Cero |
+
+Como aún **no has publicado nada en Play**, al inscribirte en Play App Signing con una llave
+nueva, Google pasa a custodiar la llave definitiva y una fuga local deja de ser fatal.
+**Recomendación: rotarla.** Dime y lo hago.
+
+---
+
+## 8. Orden sugerido
+
+1. **Hoy:** buscar/solicitar el D-U-N-S (es lo que tarda semanas).
+2. Confirmar los buzones `@cmtelecommgt.com`.
+3. Decidir si rotamos la llave de firma.
+4. Crear la cuenta `demo.play@` y probarla en un teléfono limpio.
+5. Subir el AAB a una **prueba interna** (no requiere revisión, sirve para validar que instala).
+6. Llenar ficha, Data Safety, clasificación y acceso.
+7. Enviar a revisión.
+8. **Apenas quede publicada:** arreglar `assetlinks.json` con la huella de Google (punto 6).
+
+## Fuentes
+- [Información necesaria para crear una cuenta de Play Console](https://support.google.com/googleplay/android-developer/answer/13628312?hl=es)
+- [Elegir tipo de cuenta de desarrollador](https://support.google.com/googleplay/android-developer/answer/13634885)
+- [Solicitar un D-U-N-S gratis (enlace que da Google)](https://www.dnb.com/duns/get-a-duns.html)
+- [Buscador de D-U-N-S existente](https://service.dnb.com/)
