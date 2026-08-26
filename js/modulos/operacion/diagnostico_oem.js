@@ -259,8 +259,52 @@
         ? `No se detectó un adaptador activo. ${errorUSB.message}`
         : 'Conecta primero un adaptador BLE o RP1210','warn');
     },
+    async _estadoPlanValidacion() {
+      const normaliza=s=>String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase();
+      const coincide=(p,v)=>{
+        const marca=normaliza(v?.marca), modelo=normaliza(v?.modelo);
+        const reglas={
+          mitsubishi:['MITSUBISHI'], nissan_rogue:['NISSAN','ROGUE','X-TRAIL'], nissan_juke:['NISSAN','JUKE'],
+          kia_picanto:['KIA','PICANTO'], isuzu_npr:['ISUZU','NPR','ELF','N-SERIES'],
+          foton_aumark:['FOTON','AUMARK'], international_dt466:['INTERNATIONAL','DT466']
+        }[p.id]||[];
+        if(!reglas.length||!marca||!marca.includes(reglas[0]))return false;
+        return reglas.length===1||reglas.slice(1).some(x=>modelo.includes(x));
+      };
+      let scans=[...(Array.isArray(this._data)?this._data:[])];
+      if(this._scan)scans.push(this._scan);
+      try {
+        const historico=await DB.getDiagnosticosOBD('1980-01-01','2200-01-01',500);
+        scans=scans.concat(historico||[]);
+      } catch(_) {}
+      const unicos=new Map();
+      for(const s of scans) {
+        const v=s.vehiculos||((this._vehiculos||[]).find(x=>x.id===s.vehiculo_id));
+        for(const p of PLAN_VALIDACION) if(coincide(p,v)) {
+          const anterior=unicos.get(p.id);
+          if(!anterior||String(s.created_at||'')>String(anterior.created_at||''))unicos.set(p.id,{s,v});
+        }
+      }
+      return Object.fromEntries(PLAN_VALIDACION.map(p=>{
+        const hallado=unicos.get(p.id);
+        if(!hallado)return [p.id,{estado:'pendiente',etiqueta:'Pendiente prueba real'}];
+        const s=hallado.s, mapa=s.mapa_acceso, modulos=Array.isArray(s.por_modulo)?s.por_modulo:Array.isArray(s.modulos)?s.modulos:[];
+        let estado='bus_confirmado', etiqueta='Bus/OBD confirmado';
+        if(s.vin){estado='vin_confirmado';etiqueta='VIN leído';}
+        if((mapa?.modulos||[]).length||modulos.length){estado='modulos_mapeados';etiqueta='Módulos mapeados';}
+        return [p.id,{estado,etiqueta,fecha:s.created_at||null,adaptador:s.adaptador||null,protocolo:s.protocolo||null}];
+      }));
+    },
     async modalOEM() {
       this._oemDefs=await DB.getDefinicionesOEM();
+      const estadosPlan=await this._estadoPlanValidacion();
+      /* La tabla existente usa `x.estado`; actualizarlo aquí mantiene el
+         catálogo compatible y evita mostrar siempre "pendiente" después de
+         guardar un escaneo real. */
+      for(const p of PLAN_VALIDACION) {
+        const e=estadosPlan[p.id];
+        p.estado=e?.adaptador?`${e.etiqueta} · ${e.adaptador}`:(e?.etiqueta||'Pendiente prueba real');
+      }
       const a=this._oemAdaptador;
       const puede=typeof rolEnLista==='function' ? rolEnLista(['admin','gerente_tal']) : false;
       UI.modal('🧠 Diagnóstico OEM',`<div style="display:grid;gap:14px">
@@ -305,6 +349,20 @@
       this.modalOEM();
     },
     async explorarRedesOEM() {
+      /* Detectar el adaptador carga la DLL, pero no abre un canal hacia el
+         vehÃ­culo. Si el usuario entra directo aquÃ­, preparar una conexiÃ³n CAN
+         de lectura automÃ¡ticamente; no obliga a repetir todo el escaneo OBD. */
+      if(!this._listo && this._via==='usb') {
+        UI.toast('Abriendo canal CAN para explorar modulos...','info');
+        try {
+          const via=await this._detectarVia(()=>{});
+          if(via!=='usb') {
+            await this._puenteOp({op:'desconectar'},5000).catch(()=>{});
+            return UI.toast('El adaptador no detecto un canal CAN OBD-II para este vehiculo','warn');
+          }
+          this._via='usb';
+        } catch(e) { return UI.toast('No hay comunicacion con el vehiculo: '+e.message,'warn'); }
+      }
       if(!this._listo) return UI.toast('Conecta y prepara primero un adaptador; también puedes usar Simular Ford/GM','warn');
       UI.toast('Explorando HS-CAN sin ejecutar actuadores…','info');
       try {

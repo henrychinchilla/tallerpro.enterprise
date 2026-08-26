@@ -346,12 +346,14 @@ const DB = {
   },
 
   /* ── DIAGNÓSTICO OBD-II ───────────────────────── */
-  async getDiagnosticosOBD(ini, fin) {
-    const { data, error } = await getSB().from('diagnosticos_obd')
+  async getDiagnosticosOBD(ini, fin, limite = null) {
+    let q = getSB().from('diagnosticos_obd')
       .select('*, vehiculos(placa,marca,modelo,anio,clientes(nombre))')
       .eq('tenant_id', getTID())
       .gte('created_at', ini).lte('created_at', fin + 'T23:59:59')
       .order('created_at', { ascending:false });
+    if (limite) q = q.limit(Number(limite));
+    const { data, error } = await q;
     /* Descartar el error hacía que un fallo de permisos se viera EXACTAMENTE
        igual que "no hay escaneos": el módulo estuvo roto sin que nadie se
        enterara. Si falla la consulta, que se note. */
