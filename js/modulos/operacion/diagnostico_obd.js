@@ -4387,7 +4387,7 @@ Modulos.diagnostico_obd = {
       </div>
       <div id="obd-result"></div>
       <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px">
-        <button class="btn btn-ghost" id="obd-btn-test" title="Prueba cada adaptador instalado y dice cuál responde" onclick="Modulos.diagnostico_obd.probarAdaptador()" style="margin-right:auto">🔧 Probar adaptador</button>
+        <button class="btn btn-ghost" id="obd-btn-test" title="Verifica los canales y busca una respuesta OBD real cuando es posible" onclick="Modulos.diagnostico_obd.probarAdaptador()" style="margin-right:auto">🔧 Verificar adaptadores</button>
         <button class="btn btn-ghost" onclick="Modulos.diagnostico_obd._cerrarEscaneo()">Cancelar</button>
         <button class="btn btn-brand" id="obd-btn-scan" onclick="Modulos.diagnostico_obd.escanear()">🔌 Conectar y Escanear</button>
         <button class="btn btn-ghost" id="obd-btn-traza" style="display:none"
@@ -4468,7 +4468,8 @@ Modulos.diagnostico_obd = {
     if (btn) { btn.disabled = true; btn.textContent = '⏳ Probando...'; }
     const log = m => this._log(m);
     const apiPrevia = this._api;
-    let algunoRespondio = false;
+    let algunoAbierto = false;
+    let vehiculoRespondio = false;
     try {
       await this._puenteConectar();
       const r = await this._puenteOp({ op:'apis' }, 5000);
@@ -4478,6 +4479,10 @@ Modulos.diagnostico_obd = {
       log(`<b>Probando ${apis.length} adaptador(es)...</b>`);
       for (const a of apis) {
         const nombre = a.nombre || a.api;
+        if (/^SERIAL:/i.test(String(a.api || ''))) {
+          log(`&nbsp;&nbsp;<b>${nombre}</b> - Bluetooth clasico: se valida con su via COM, no como RP1210`);
+          continue;
+        }
         const soporta = ((a.protocolos) || []).map(p => String(p).split(',')[0].toUpperCase());
         /* Se prueban SOLO los protocolos que el adaptador declara. Intentar los
            demás sería medio minuto de esperas para llegar al mismo "no". */
@@ -4495,8 +4500,23 @@ Modulos.diagnostico_obd = {
           const c = await this._puenteOp({ op:'conectar', protocolo:t.p, device:1, api:a.api }, 8000)
             .catch(() => ({ ok:false, error:'sin respuesta del puente' }));
           if (c.ok) {
-            algunoRespondio = true;
-            detalle.push(`<span style="color:var(--green)">✓ ${t.et}</span>`);
+            algunoAbierto = true;
+            let respuesta = null;
+            /* Abrir CAN solo confirma que el driver acepta el canal. En el
+               canal generico hacemos ademas la consulta OBD minima 01 00 y
+               buscamos 41 00; es lectura de capacidades y no modifica la ECU. */
+            if (t.p === 'CAN:Baud=500') {
+              const viaAntes = this._via, extAntes = this._canExt;
+              try {
+                this._via = 'usb'; this._canExt = false;
+                const r0100 = await this._usbElm('0100', 1800).catch(() => 'NO DATA');
+                respuesta = /4100/.test(String(r0100).replace(/\s/g, ''));
+                if (respuesta) vehiculoRespondio = true;
+              } finally { this._via = viaAntes; this._canExt = extAntes; this._canRx = null; }
+            }
+            detalle.push(respuesta === true
+              ? `<span style="color:var(--green)">✓ ${t.et} · el vehículo respondió 01 00</span>`
+              : `<span style="color:var(--green)">✓ ${t.et} · canal abierto (vehículo no confirmado)</span>`);
             await this._puenteOp({ op:'desconectar' }, 5000).catch(() => {});
           } else {
             detalle.push(`<span style="color:var(--text3)">✗ ${t.et} — ${this._errLimpio(c)}</span>`);
@@ -4506,8 +4526,10 @@ Modulos.diagnostico_obd = {
         for (const d of detalle) log(`&nbsp;&nbsp;&nbsp;&nbsp;${d}`);
       }
 
-      if (algunoRespondio) {
-        log('<b style="color:var(--green)">✓ Hay al menos un adaptador respondiendo.</b> Elegí arriba el que dio ✓ en el protocolo de este vehículo y escaneá.');
+      if (vehiculoRespondio) {
+        log('<b style="color:var(--green)">✓ El vehículo respondió por CAN 500k.</b> El adaptador y el bus están comunicando; ya podés escanear.');
+      } else if (algunoAbierto) {
+        log('<b style="color:var(--amber)">⚠️ El driver abre el canal, pero no se confirmó respuesta del vehículo.</b> Esto no equivale a que la Juke haya contestado: verificá switch, alimentación del DLC, pines 6/14 y que ninguna otra aplicación tenga el USB-Link ocupado.');
       } else {
         /* El caso más común y el más frustrante: todo "instalado" pero nada
            enchufado. Conviene decirlo con todas las letras. */
@@ -4529,7 +4551,7 @@ Modulos.diagnostico_obd = {
          escaneo saldría con el último que se probó acá. */
       if (apiPrevia) await this._puenteOp({ op:'cargar', api:apiPrevia }, 6000).catch(() => {});
       this._api = apiPrevia;
-      if (btn) { btn.disabled = false; btn.textContent = '🔧 Probar adaptador'; }
+      if (btn) { btn.disabled = false; btn.textContent = '🔧 Verificar adaptadores'; }
     }
   },
 
