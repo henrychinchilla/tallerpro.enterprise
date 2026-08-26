@@ -16,10 +16,48 @@
     {id:'fabricante',nombre:'SDK de fabricante',transportes:['ble','classic','wifi','usb'],protocolos:[],nota:'Thinkcar y otros VCI cerrados: se integra cuando el fabricante entrega SDK/API autorizada'},
     {id:'vci',nombre:'VCI futuro',transportes:['usb','ble','wifi'],protocolos:[],nota:'Contrato abierto para interfaces OEM o multimarca'}
   ];
+  const DIDS_BASE = [
+    {did:'F190',nombre:'VIN',decoder:{tipo:'ascii'},fuente:'ISO 14229-1, ReadDataByIdentifier'},
+    {did:'F187',nombre:'Número de pieza de repuesto de la ECU',decoder:{tipo:'ascii'},fuente:'ISO 14229-1, identificadores de datos de vehículo'},
+    {did:'F189',nombre:'Versión de software de la ECU',decoder:{tipo:'ascii'},fuente:'ISO 14229-1, identificadores de datos de vehículo'},
+    {did:'F18C',nombre:'Número de serie de la ECU',decoder:{tipo:'ascii'},fuente:'ISO 14229-1, identificadores de datos de vehículo'}
+  ];
+  const PERFILES_SIMULADOS = {
+    ford:{marca:'Ford',modelo:'Perfil de laboratorio',redes:[
+      {id:'hs',modulos:[{req:0x7E0,resp:0x7E8,nombre:'PCM'},{req:0x7E1,resp:0x7E9,nombre:'TCM'},{req:0x760,resp:0x768,nombre:'ABS'}]},
+      {id:'ms',modulos:[{req:0x726,resp:0x72E,nombre:'BCM'},{req:0x720,resp:0x728,nombre:'IPC'}]}
+    ]},
+    gm:{marca:'GM',modelo:'Perfil de laboratorio',redes:[
+      {id:'hs',modulos:[{req:0x7E0,resp:0x7E8,nombre:'ECM'},{req:0x7E1,resp:0x7E9,nombre:'TCM'},{req:0x760,resp:0x768,nombre:'EBCM'}]},
+      {id:'sw',modulos:[{req:0x241,resp:0x641,nombre:'BCM'},{req:0x244,resp:0x644,nombre:'IPC'}]}
+    ]}
+  };
   const hex = b => (b || []).map(x => Number(x).toString(16).padStart(2,'0').toUpperCase()).join(' ');
   const propsBLE = p => ['broadcast','read','writeWithoutResponse','write','notify','indicate','authenticatedSignedWrites','reliableWrite','writableAuxiliaries'].filter(k=>!!p?.[k]);
   const Motor = {
-    canales: CANALES, familias:FAMILIAS, propsBLE,
+    canales: CANALES, familias:FAMILIAS, didsBase:DIDS_BASE, perfilesSimulados:PERFILES_SIMULADOS, propsBLE,
+    construirTopologia(redes=[], meta={}) {
+      const conocidas=new Set(CANALES.map(c=>c.id));
+      const salida=CANALES.map(c=>({id:c.id,nombre:c.nombre,estado:'no_escaneada',modulos:[]}));
+      for(const r of redes||[]) {
+        if(!conocidas.has(r?.id)) continue;
+        const destino=salida.find(x=>x.id===r.id);
+        destino.estado=r.estado||'escaneada';
+        const unicos=new Map();
+        for(const m of r.modulos||[]) {
+          const req=Number(m.req), resp=Number(m.resp);
+          if(!Number.isInteger(req)||!Number.isInteger(resp)) continue;
+          unicos.set(`${req}:${resp}`,{req,resp,nombre:String(m.nombre||'ECU desconocida'),protocolo:m.protocolo||'UDS/ISO-TP',simulado:!!m.simulado});
+        }
+        destino.modulos=[...unicos.values()];
+      }
+      return {version:1,fecha:new Date().toISOString(),modo:meta.modo||'real',marca:meta.marca||null,modelo:meta.modelo||null,adaptador:meta.adaptador||null,redes:salida,total_modulos:salida.reduce((n,r)=>n+r.modulos.length,0)};
+    },
+    simularTopologia(marca) {
+      const p=PERFILES_SIMULADOS[String(marca||'').toLowerCase()];
+      if(!p) throw new Error('Perfil simulado no disponible');
+      return this.construirTopologia(p.redes.map(r=>({...r,estado:'simulada',modulos:r.modulos.map(m=>({...m,simulado:true}))})),{modo:'simulador',marca:p.marca,modelo:p.modelo,adaptador:'ECU virtual NexusPro'});
+    },
     validar(d) {
       const e=[];
       for (const k of ['nombre','marca','ecu','tipo','fuente']) if (!String(d?.[k]||'').trim()) e.push(`Falta ${k}`);
@@ -55,7 +93,7 @@
   const M=globalThis.Modulos?.diagnostico_obd;
   if (!M) return;
   Object.assign(M, {
-    _oemDefs:[], _oemAdaptador:null, _inspeccionBLE:null,
+    _oemDefs:[], _oemAdaptador:null, _inspeccionBLE:null, _oemTopologia:null,
     async inspeccionarBluetooth() {
       if (!navigator.bluetooth) return UI.toast('Este navegador no ofrece Web Bluetooth','error');
       const svcs=[...new Set([...(this._SVC_CANDIDATOS||[]),...(this._UUIDS||[]).map(x=>x.svc),'0000180a-0000-1000-8000-00805f9b34fb'])];
@@ -110,11 +148,39 @@
         <div style="display:flex;gap:7px;flex-wrap:wrap;margin-top:9px">${CANALES.map(c=>`<span class="badge badge-${c.estado==='operativo'?'green':'amber'}" title="${UI.esc(c.nota)}">${c.nombre} · ${c.estado}</span>`).join('')}</div>
         <button class="btn btn-sm btn-ghost" style="margin-top:10px" onclick="Modulos.diagnostico_obd.detectarAdaptadorOEM()">🔎 Detectar adaptador conectado</button>
         <button class="btn btn-sm btn-cyan" style="margin-top:10px" onclick="Modulos.diagnostico_obd.inspeccionarBluetooth()">🔬 Inspeccionar cualquier BLE</button>
+        <button class="btn btn-sm btn-brand" style="margin-top:10px" onclick="Modulos.diagnostico_obd.explorarRedesOEM()">🗺 Explorar módulos</button>
+        <button class="btn btn-sm btn-ghost" style="margin-top:10px" onclick="Modulos.diagnostico_obd.simularRedOEM('ford')">🧪 Simular Ford</button>
+        <button class="btn btn-sm btn-ghost" style="margin-top:10px" onclick="Modulos.diagnostico_obd.simularRedOEM('gm')">🧪 Simular GM</button>
         <div style="margin-top:10px;font-size:11px;color:var(--text3)">${FAMILIAS.map(f=>`<b>${f.nombre}</b>: ${f.nota}`).join(' · ')}</div></div>
         <div class="card" style="padding:14px"><div style="display:flex;justify-content:space-between"><b>Catálogo OEM (${this._oemDefs.length})</b>${puede?'<button class="btn btn-sm btn-brand" onclick="Modulos.diagnostico_obd.editarOEM()">＋ Nueva definición</button>':''}</div>
         <div style="overflow:auto;margin-top:9px"><table class="table"><thead><tr><th>Marca/modelo</th><th>ECU</th><th>Función</th><th>Evidencia</th><th>Riesgo</th><th>Acciones</th></tr></thead><tbody>${this._oemDefs.length?this._oemDefs.map(d=>`<tr><td><b>${UI.esc(d.marca)}</b> ${UI.esc(d.modelo||'')}</td><td>${UI.esc(d.ecu)}</td><td>${UI.esc(d.nombre)}<br><small>${UI.esc(d.tipo)} ${UI.esc(d.identificador||'')}</small></td><td><span class="badge badge-${d.estado==='verificado'?'green':'amber'}">${UI.esc(d.estado)}</span><br><small>${UI.esc(d.fuente)}</small></td><td>${UI.esc(d.riesgo)}</td><td>${Modulos.btnAccion('ver',`Modulos.diagnostico_obd.verOEM('${d.id}')`)}${Modulos.btnAccion('editar',`Modulos.diagnostico_obd.editarOEM('${d.id}')`)}${Modulos.btnAccion('eliminar',`Modulos.diagnostico_obd.eliminarOEM('${d.id}','${UI.jsAttr(d.nombre)}')`)}</td></tr>`).join(''):'<tr><td colspan="6">Aún no hay definiciones. Agrega únicamente información con fuente comprobable.</td></tr>'}</tbody></table></div></div>
+        ${this._oemTopologia?this._topologiaOEMHTML(this._oemTopologia):''}
+        <div class="card" style="padding:14px"><b>Paquete base UDS de identificación</b><p>${DIDS_BASE.map(d=>`<code>${d.did}</code> ${UI.esc(d.nombre)}`).join(' · ')}</p><small>Son DIDs normalizados para descubrir identidad; una ECU puede no implementarlos. No se presentan como parámetros exclusivos de Ford o GM.</small></div>
         <div class="card" style="padding:14px"><b>Paquetes iniciales</b><p>Ford y GM están preparados como objetivos. Las pruebas activas, calibraciones, DPF, purga ABS, codificación, Security Access y reflash permanecen bloqueadas hasta incorporar una definición verificada y sus precondiciones.</p></div>
       </div>`, '1100px');
+    },
+    _topologiaOEMHTML(t) {
+      return `<div class="card" style="padding:14px"><div style="display:flex;justify-content:space-between;gap:10px"><b>Mapa de redes · ${UI.esc(t.modo)}</b><span class="badge badge-${t.modo==='simulador'?'amber':'green'}">${t.total_modulos} módulo(s)</span></div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:8px;margin-top:10px">${t.redes.map(r=>`<div style="border:1px solid var(--border);border-radius:8px;padding:9px"><b>${UI.esc(r.nombre)}</b><br><small>${UI.esc(r.estado)}</small>${r.modulos.map(m=>`<div style="margin-top:6px;font-size:12px"><b>${UI.esc(m.nombre)}</b><br><code>${m.req.toString(16).toUpperCase()} → ${m.resp.toString(16).toUpperCase()}</code></div>`).join('')||'<div style="margin-top:6px;color:var(--text3);font-size:12px">Sin resultados</div>'}</div>`).join('')}</div></div>`;
+    },
+    async simularRedOEM(marca) {
+      this._oemTopologia=Motor.simularTopologia(marca);
+      await DB.registrarEjecucionOEM({operacion:`mapa_redes_simulado_${marca}`,estado:'exitosa',evidencia:this._oemTopologia}).catch(()=>{});
+      this.modalOEM();
+    },
+    async explorarRedesOEM() {
+      if(!this._listo) return UI.toast('Conecta y prepara primero un adaptador; también puedes usar Simular Ford/GM','warn');
+      UI.toast('Explorando HS-CAN sin ejecutar actuadores…','info');
+      try {
+        const mods=await this._escanearModulos(null,null);
+        const hs=(mods||[]).map(m=>({req:Number(m.req??m.ecu),resp:Number(m.resp),nombre:m.nombre||'ECU desconocida',protocolo:m.servicio||m.protocolo}));
+        this._oemTopologia=Motor.construirTopologia([{id:'hs',estado:'escaneada',modulos:hs}],{modo:'real',adaptador:this._oemAdaptador?.modelo||this._via});
+        await DB.registrarEjecucionOEM({operacion:'mapa_redes_lectura',estado:'exitosa',diagnostico_id:this._scan?.id||null,vehiculo_id:this._scan?.vehiculo_id||null,evidencia:this._oemTopologia});
+        this.modalOEM();
+      } catch(e) {
+        await DB.registrarEjecucionOEM({operacion:'mapa_redes_lectura',estado:'fallida',error:e.message}).catch(()=>{});
+        UI.toast('No se pudo completar el mapa: '+e.message,'error');
+      }
     },
     verOEM(id) { const d=this._oemDefs.find(x=>x.id===id); if(!d)return; const p=Motor.puedeEjecutar(d); UI.modal(d.nombre,`<div class="card" style="padding:12px"><b>${UI.esc(d.marca)} ${UI.esc(d.modelo||'')} · ${UI.esc(d.ecu)}</b><p>Fuente: ${UI.esc(d.fuente)} · estado: ${UI.esc(d.estado)} · riesgo: ${UI.esc(d.riesgo)}</p></div><pre style="white-space:pre-wrap">${UI.esc(JSON.stringify(d.definicion||{},null,2))}</pre><div class="modal-footer"><button class="btn btn-ghost" onclick="UI.cerrarModal()">Cerrar</button><button class="btn btn-${p.ok?'cyan':'ghost'}" ${p.ok?'':'disabled'} title="${UI.esc(p.motivo||'Lectura verificada')}" onclick="Modulos.diagnostico_obd.ejecutarOEM('${d.id}')">▶ Ejecutar lectura</button></div>`,'720px'); },
     async ejecutarOEM(id) {
