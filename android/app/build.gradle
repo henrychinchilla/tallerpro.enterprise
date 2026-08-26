@@ -2,11 +2,32 @@ plugins {
     id 'com.android.application'
 }
 
-/* Credenciales de firma: viven en android/keystore.properties (NO va a git) */
+/* Credenciales de firma: viven en android/keystore.properties (NO va a git).
+   2026-08-25: se ROTO la llave. La anterior (tallerpro.keystore) estuvo servida
+   publicamente en el CDN casi dos meses, asi que hay que darla por comprometida:
+   con ella se podia firmar un APK que Android aceptara como actualizacion
+   legitima de NexusPro. La nueva es nexuspro-2026.keystore (RSA 4096, vigente
+   hasta 2054) y su huella es la unica que declara /.well-known/assetlinks.json.
+   OJO: Android RECHAZA actualizar sobre una firma distinta - quien tenga
+   instalado un APK anterior al versionCode 5 debe DESINSTALAR antes. El aviso
+   de version nueva ya se lo advierte (ver app-version.json). */
 def keystoreProps = new Properties()
 def keystoreFile = rootProject.file("keystore.properties")
 if (keystoreFile.exists()) {
-    keystoreProps.load(new FileInputStream(keystoreFile))
+    keystoreFile.withInputStream { keystoreProps.load(it) }
+}
+
+/* Falla ruidosamente si falta una credencial, en vez de firmar con otra cosa. */
+def exigir(props, clave) {
+    def v = props.getProperty(clave)
+    if (!v?.trim()) {
+        throw new GradleException(
+            "android/keystore.properties no trae '" + clave + "'. Sin eso NO se firma. " +
+            "El archivo debe existir y estar SIN BOM: Gradle lo lee como .properties y un BOM " +
+            "se pega a la primera clave, que deja de reconocerse. " +
+            "Keystore vigente: nexuspro-2026.keystore (ver android/README.md).")
+    }
+    return v.trim()
 }
 
 /* UN SOLO lugar donde vive la version del cascaron nativo: de aqui salen
@@ -14,8 +35,8 @@ if (keystoreFile.exists()) {
    abrir el sitio (ver DEFAULT_URL en AndroidManifest.xml). Sin eso la web no
    tendria forma de saber que version de APK esta corriendo el telefono: una
    TWA se presenta al servidor como Chrome, no como la app. */
-def appVersionCode = 4
-def appVersionName = "4.77.0"
+def appVersionCode = 5
+def appVersionName = "4.78.0"
 
 android {
     namespace 'com.cmtelecom.nexuspro'
@@ -38,10 +59,15 @@ android {
 
     signingConfigs {
         release {
-            storeFile rootProject.file(keystoreProps.getProperty('storeFile', 'tallerpro.keystore'))
-            storePassword keystoreProps.getProperty('storePassword', '')
-            keyAlias keystoreProps.getProperty('keyAlias', 'tallerpro')
-            keyPassword keystoreProps.getProperty('keyPassword', '')
+            /* SIN VALORES POR DEFECTO, a proposito. Antes el default era
+               'tallerpro.keystore': si keystore.properties faltaba o se leia
+               mal (un BOM basta), la compilacion NO fallaba — se firmaba en
+               silencio con la llave VIEJA, hoy comprometida, y el APK salia
+               aparentemente bien. Mejor reventar aqui con un mensaje claro. */
+            storeFile rootProject.file(exigir(keystoreProps, 'storeFile'))
+            storePassword exigir(keystoreProps, 'storePassword')
+            keyAlias exigir(keystoreProps, 'keyAlias')
+            keyPassword exigir(keystoreProps, 'keyPassword')
         }
     }
 

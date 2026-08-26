@@ -155,6 +155,35 @@ const publicada = JSON.parse(fs.readFileSync(VERSION_JSON, 'utf8')).android;
        Math.abs(Math.round(fs.statSync(APK).size / 1024) - publicada.apkKB) <= 2);
   }
 
+  /* ══ 1.b La llave de firma rotada (2026-08-25) ════════════════════════════
+     La llave anterior estuvo servida públicamente en el CDN casi dos meses, así
+     que se dio por comprometida y se generó otra. Dos cosas no pueden fallar:
+     que su huella VIEJA no siga autorizada en assetlinks.json —si siguiera,
+     quien tenga esa llave podría publicar una app que Android abre a pantalla
+     completa como si fuera NexusPro—, y que se le avise al usuario de que esta
+     vez tiene que desinstalar antes, porque Android rechaza instalar encima
+     cuando la firma cambia y sólo dice "aplicación no instalada". */
+  {
+    const al = JSON.parse(fs.readFileSync(path.join(RAIZ, '.well-known', 'assetlinks.json'), 'utf8'));
+    const huellas = al?.[0]?.target?.sha256_cert_fingerprints || [];
+    const VIEJA = '8B:D8:E8:84:CE:2C:CA:68:59:4D:90:70:AB:F2:75:E3:00:C7:9A:3A:00:5D:E2:45:75:6F:95:75:5C:F7:F8:75';
+    ok('assetlinks declara al menos una huella', huellas.length >= 1);
+    ok('la huella COMPROMETIDA ya no está autorizada',
+       !huellas.some(h => h.toUpperCase() === VIEJA));
+    ok('las huellas tienen forma de SHA-256 (32 bytes en hexadecimal)',
+       huellas.every(h => /^([0-9A-F]{2}:){31}[0-9A-F]{2}$/i.test(h)));
+    ok('assetlinks apunta al paquete de la app', al?.[0]?.target?.package_name === publicada.paquete);
+
+    ok('app-version.json avisa desde qué versión hay que reinstalar',
+       Number.isFinite(publicada.reinstalarSiMenorQue));
+    ok('…y ese número es el de la versión firmada con la llave nueva',
+       publicada.reinstalarSiMenorQue === publicada.versionCode);
+
+    const appjs = fs.readFileSync(APP_JS, 'utf8');
+    ok('el aviso contempla el caso "hay que desinstalar primero"',
+       /reinstalarSiMenorQue/.test(appjs) && /DESINSTALAR primero/i.test(appjs));
+  }
+
   /* ══ 2. La app se presenta y la URL queda limpia ══════════════════════════ */
   {
     const { App, localStorage, historial, sessionStorage } =
@@ -187,6 +216,28 @@ const publicada = JSON.parse(fs.readFileSync(VERSION_JSON, 'utf8')).android;
       publicada });
     await App.avisoAppAndroid();
     ok('app al día → NO molesta', modales.length === 0);
+  }
+
+  /* Firma vieja: instalar encima es imposible, y hay que decirlo. */
+  {
+    const { App, modales } = cargar({
+      local: { np_android_app: JSON.stringify({ vc: publicada.reinstalarSiMenorQue - 1, vn: '4.77.0' }) },
+      publicada });
+    await App.avisoAppAndroid();
+    ok('con la firma anterior, avisa que hay que DESINSTALAR primero',
+       modales.length === 1 && /DESINSTALAR primero/i.test(modales[0].cuerpo));
+    ok('…y explica que no se pierden los datos',
+       modales.length === 1 && /no pierdes nada|no está[n]? en el teléfono/i.test(modales[0].cuerpo));
+  }
+  {
+    /* Una futura versión ya firmada con la llave nueva NO debe pedir desinstalar */
+    const futura = Object.assign({}, publicada, { versionCode: publicada.versionCode + 1, versionName: '9.9.9' });
+    const { App, modales } = cargar({
+      local: { np_android_app: JSON.stringify({ vc: publicada.versionCode, vn: publicada.versionName }) },
+      publicada: futura });
+    await App.avisoAppAndroid();
+    ok('una actualización normal posterior NO pide desinstalar',
+       modales.length === 1 && !/DESINSTALAR primero/i.test(modales[0].cuerpo));
   }
 
   {

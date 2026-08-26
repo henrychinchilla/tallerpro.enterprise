@@ -259,6 +259,12 @@ const App = {
       const peso     = ultima.apkKB ? ` · ${ultima.apkKB} KB` : '';
       const novedades = Array.isArray(ultima.novedades) ? ultima.novedades.slice(0, 4) : [];
       const actualizar = modo === 'actualizar';
+      /* Si la LLAVE DE FIRMA cambió después de la versión que trae el teléfono,
+         Android rechazará instalar encima: hay que desinstalar antes. Sin este
+         aviso el usuario ve "aplicación no instalada", no entiende nada y se
+         queda con la versión vieja para siempre. */
+      const reinstalar = actualizar && Number.isFinite(ultima.reinstalarSiMenorQue)
+                         && vc < ultima.reinstalarSiMenorQue;
 
       UI.modal(actualizar ? '🤖 Hay una versión nueva de la app' : '🤖 Instala la app de Android', `
         <div style="display:flex;gap:14px;align-items:flex-start;background:var(--surface2);color:var(--text1);border-left:3px solid var(--green);border-radius:0 8px 8px 0;padding:12px;margin-bottom:14px">
@@ -277,11 +283,21 @@ const App = {
           <div style="font-weight:700;margin-bottom:6px">Qué trae:</div>
           <ul style="margin:0;padding-left:18px;line-height:1.7">${novedades.map(n => `<li>${UI.esc(n)}</li>`).join('')}</ul>
         </div>` : ''}
-        ${porPlay ? '' : `
+        ${porPlay ? '' : (reinstalar ? `
+        <div style="font-size:11.5px;color:var(--text1);background:var(--surface2);border-left:3px solid var(--amber);border-radius:0 8px 8px 0;padding:10px 12px;margin-bottom:14px;line-height:1.55">
+          <b>⚠️ Esta vez hay que DESINSTALAR primero.</b><br>
+          Renovamos la llave de seguridad con que se firma la app, y Android no permite
+          instalar encima cuando la firma cambia: diría <i>"aplicación no instalada"</i> sin
+          explicar por qué.<br>
+          <b>1.</b> Mantén pulsado el ícono de NexusPro → Desinstalar.<br>
+          <b>2.</b> Vuelve aquí y descarga la versión nueva.<br>
+          <span style="color:var(--text3)">Tus datos no están en el teléfono sino en tu cuenta:
+          no pierdes nada.</span>
+        </div>` : `
         <div style="font-size:11px;color:var(--text3);background:var(--surface2);border-radius:8px;padding:8px 10px;margin-bottom:14px">
           <b>⚠️ Al instalar:</b> Android pedirá permiso para "instalar apps de esta fuente" — acéptalo.
           ${actualizar ? 'La actualización conserva tu sesión y tus datos: se instala encima de la app que ya tienes.' : ''}
-        </div>`}
+        </div>`)}
         <div class="modal-footer">
           <button class="btn btn-ghost" onclick="App._posponerAvisoApp(${ultima.versionCode},'${actualizar ? 'actualizar' : 'instalar'}')">Después</button>
           <a class="btn btn-green" style="text-decoration:none" href="${UI.esc(destino)}"

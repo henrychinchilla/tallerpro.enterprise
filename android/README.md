@@ -6,7 +6,7 @@ línea de comandos. Es una **Trusted Web Activity**: un binario nativo cuyo moto
 adjuntos y todo el runtime funcionan al 100%, y cada deploy web actualiza la app
 sin recompilar ni re-publicar.
 
-**Versión actual: `4.77.0` (versionCode 4)** · paquete `com.cmtelecom.nexuspro`
+**Versión actual: `4.78.0` (versionCode 5)** · paquete `com.cmtelecom.nexuspro`
 
 ## Requisitos (ya instalados en esta máquina)
 - JDK 17+ (tienes Temurin 21)
@@ -45,17 +45,21 @@ vuelve mentira:
 | 2 | *(compilar)* → copiar el APK a la **raíz del repo** como `nexuspro.apk` | es lo que sirve `/nexuspro.apk`, el botón de Descargas |
 | 3 | `app-version.json` (raíz) | `versionCode`, `versionName`, `apkKB`, `fecha`, `novedades` |
 
+> `reinstalarSiMenorQue` de ese archivo **NO se toca en cada versión**: sólo
+> cuando cambia la LLAVE DE FIRMA. Es lo que dispara el aviso de "desinstala
+> primero", y subirlo sin motivo obligaría a todo el mundo a reinstalar de balde.
+
 Luego el deploy normal (`git push` + `npm run deploy`) y **subir `CACHE_VERSION`
 en `sw.js`**, como cualquier cambio de JS.
 
 ### Cómo sabe la web qué versión trae el teléfono
 Una TWA renderiza con Chrome: para el servidor es **indistinguible de una
-pestaña normal**, el user-agent no dice "voy dentro de la app v4". Por eso la
+pestaña normal**, el user-agent no dice "voy dentro de la app v5". Por eso la
 app se identifica ella misma — `DEFAULT_URL` en `AndroidManifest.xml` abre el
 sitio en:
 
 ```
-https://nexuspro.cmtelecommgt.com/?app=android&appvc=4&appvn=4.77.0
+https://nexuspro.cmtelecommgt.com/?app=android&appvc=5&appvn=4.78.0
 ```
 
 Esos valores los inyecta `build.gradle` vía `manifestPlaceholders` (no se
@@ -72,14 +76,20 @@ contra `app-version.json` al iniciar sesión y decide si avisar.
 
 ## 🔐 FIRMA — LEER ESTO
 
-- `tallerpro.keystore` + `keystore.properties` contienen la identidad de firma.
+- **Keystore vigente: `nexuspro-2026.keystore`** (RSA 4096, válido hasta 2054),
+  alias `nexuspro`. Junto a `keystore.properties` contiene la identidad de firma:
   **NO van a git** (.gitignore) — **RESPÁLDALOS** (Drive/USB cifrado): sin el
   keystore es IMPOSIBLE publicar actualizaciones de la app en Play Store.
-- Huella SHA256 del certificado (usada en `/.well-known/assetlinks.json` del
-  sitio para que la app abra sin barra de URL):
-  `8B:D8:E8:84:CE:2C:CA:68:59:4D:90:70:AB:F2:75:E3:00:C7:9A:3A:00:5D:E2:45:75:6F:95:75:5C:F7:F8:75`
+- Huella SHA256 del certificado (la única declarada en
+  `/.well-known/assetlinks.json`, que es lo que hace que la app abra sin barra
+  de URL):
+  `48:C9:1A:8C:47:51:3D:4A:F4:73:D7:78:44:A0:D5:36:FE:6D:3C:5F:28:37:EF:B6:EB:E8:8C:93:C8:6A:46:7C`
+- ⚠️ `keystore.properties` debe guardarse **SIN BOM**. Gradle lo lee como
+  `.properties` y un BOM se pega a la primera clave: `storeFile` deja de
+  reconocerse, cae al valor por defecto y la compilación falla con un confuso
+  "keystore password was incorrect" apuntando al archivo equivocado.
 
-### ⚠️ 2026-08-25 — el keystore estuvo PÚBLICO en el CDN
+### ✅ 2026-08-25 — RESUELTO: el keystore estuvo público y se ROTÓ la llave
 
 `.gitignore` protege el **repositorio**, no el **despliegue**: `wrangler deploy`
 sube el *directorio de trabajo*. Como `.assetsignore` no excluía `android/`,
@@ -96,13 +106,17 @@ Con ambos, cualquiera podía firmar un APK que Android aceptaría como
 `*.keystore` / `*.jks` / `keystore.properties`), pero **hay que asumir la llave
 comprometida**: no hay forma de saber si alguien la descargó.
 
-**Rotar la llave es una decisión pendiente de Henry**, porque no es gratis:
-- Android **rechaza** una actualización firmada con otra llave. Quien tenga el
-  APK instalado tendría que **desinstalar y volver a instalar** (pierde solo la
-  app, no los datos: viven en Supabase).
-- El momento es bueno: **aún no se ha publicado nada en Play**. Al inscribirse en
-  **Play App Signing** con una llave nueva, Google pasa a custodiar la llave de
-  firma y una fuga del keystore local deja de ser fatal.
+**La llave se rotó el 2026-08-25**, antes de publicar nada en Play — que era el
+único momento en que salía barato. La vieja (`tallerpro.keystore`) queda
+**muerta**: su huella ya no aparece en `assetlinks.json`, así que aunque alguien
+la tenga no puede hacer pasar una app por NexusPro.
+
+Consecuencia asumida: **Android rechaza actualizar sobre una firma distinta**.
+Quien tenga instalado un APK anterior al versionCode 5 debe **desinstalar y
+volver a instalar** (no pierde datos: viven en Supabase). El aviso de versión
+nueva ya se lo explica paso a paso — lo dispara el campo
+`reinstalarSiMenorQue` de `app-version.json`, y `test/app-android-version.js`
+vigila que ese aviso siga saliendo.
 
 ### ⚠️ Al subir a Google Play: la app perderá la pantalla completa si no haces esto
 
@@ -124,7 +138,7 @@ Después de la primera subida:
 Pon `"enPlayStore": true` en `app-version.json`. A partir de ahí, tanto el aviso
 de login como la pantalla de Descargas mandan a Play (que actualiza solo, sin
 pedirle al usuario permisos de "origen desconocido") en vez de al APK directo.
-El AAB listo para subir queda en `android/play/`.
+El AAB listo para subir queda en `android/play/NexusPro-4.78.0-play.aab`.
 
 ## Cómo funciona el vínculo dominio ↔ app
 1. La app declara confianza al sitio (`res/values/strings.xml → asset_statements`).

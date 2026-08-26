@@ -1,7 +1,8 @@
 # Publicar NexusPro en Google Play — guía de trabajo
 
 > Estado al 2026-08-25. Cuenta de desarrollador: **Organización** (confirmado por Henry).
-> App lista: `4.77.0` (versionCode 4), AAB firmado en `android/play/NexusPro-4.77.0-play.aab`.
+> App lista: **`4.78.0` (versionCode 5)**, AAB firmado con la LLAVE NUEVA en
+> `android/play/NexusPro-4.78.0-play.aab`.
 
 Lo que sigue está en el orden en que Play Console lo pide. Lo que **bloquea** va primero.
 
@@ -11,12 +12,12 @@ Lo que sigue está en el orden en que Play Console lo pide. Lo que **bloquea** v
 
 | Cosa | Estado |
 |---|---|
-| AAB firmado para subir | `android/play/NexusPro-4.77.0-play.aab` |
+| AAB firmado para subir | `android/play/NexusPro-4.78.0-play.aab` |
 | Paquete | `com.cmtelecom.nexuspro` |
 | Capturas de teléfono (8) | `play-movil-01..08-*.png` — 1080×1920, **9:16** |
 | Capturas tablet 7" y 10" | `play-tablet7-*.png`, `play-tablet10-*.png` |
 | Ícono 512×512 PNG | `icons/icon-512.png` |
-| Gráfico destacado 1024×500 | `nexuspro_grafico_funciones.jpg` |
+| Gráfico destacado 1024×500 | `play-grafico-destacado.png` |
 | Política de privacidad | https://nexuspro.cmtelecommgt.com/privacidad |
 | Términos | https://nexuspro.cmtelecommgt.com/terminos |
 
@@ -295,24 +296,26 @@ app se abre **con la barra de URL de Chrome encima**. Se ve como una página web
 
 ---
 
-## 7. 🔴 Decisión pendiente: rotar la llave de firma
+## 7. ✅ Llave de firma ROTADA (2026-08-25)
 
-El keystore (`android/tallerpro.keystore`) y su contraseña **estuvieron públicos en el CDN**
-casi dos meses (2026-07-01 → 2026-08-25). Ya está tapado, pero hay que asumir la llave
-comprometida: con ella, un tercero puede firmar un APK que Android acepta como actualización
-legítima de NexusPro.
+El keystore anterior y su contraseña estuvieron públicos en el CDN casi dos meses
+(2026-07-01 → 2026-08-25), así que se dio la llave por comprometida y **se rotó antes de
+publicar nada en Play** — el único momento en que salía barato.
 
-**Ahora es el momento de decidir**, porque después de publicar ya no se puede:
+| | |
+|---|---|
+| Keystore vigente | `android/nexuspro-2026.keystore` (RSA 4096, válido hasta 2054) |
+| Huella SHA-256 | `48:C9:1A:8C:47:51:3D:4A:F4:73:D7:78:44:A0:D5:36:FE:6D:3C:5F:28:37:EF:B6:EB:E8:8C:93:C8:6A:46:7C` |
+| `assetlinks.json` | Declara **sólo** esa huella. La comprometida ya no está autorizada |
+| App firmada con ella | `4.78.0` (versionCode 5) |
 
-| | Rotar la llave ahora | Seguir con la actual |
-|---|---|---|
-| Quien tenga el APK directo | Debe **desinstalar y reinstalar** (no pierde datos: están en Supabase) | No hace nada |
-| Riesgo | Se elimina | Queda abierto para siempre |
-| Esfuerzo | Generar keystore nuevo + actualizar assetlinks | Cero |
+🔐 **RESPÁLDALO YA** (Drive o USB cifrado), junto con `android/keystore.properties`. Sin ese
+archivo **no podrás publicar ninguna actualización nunca más**. No está en git, a propósito.
 
-Como aún **no has publicado nada en Play**, al inscribirte en Play App Signing con una llave
-nueva, Google pasa a custodiar la llave definitiva y una fuga local deja de ser fatal.
-**Recomendación: rotarla.** Dime y lo hago.
+**Consecuencia asumida:** Android rechaza instalar encima cuando la firma cambia. Quien tenga un
+APK anterior al versionCode 5 debe **desinstalar y volver a instalar** — no pierde datos, viven
+en Supabase. El aviso de versión nueva ya se lo explica paso a paso; lo dispara el campo
+`reinstalarSiMenorQue` de `app-version.json` y hay pruebas que vigilan que siga saliendo.
 
 ---
 
@@ -323,7 +326,7 @@ nueva, Google pasa a custodiar la llave definitiva y una fuga local deja de ser 
 2. **Hoy también:** llevarle la carpeta al notario para el nombramiento de Henry (camino 2 del
    punto 1). Corre en paralelo, no bloquea.
 3. Confirmar los buzones `@cmtelecommgt.com`.
-4. Decidir si rotamos la llave de firma (punto 7).
+4. ~~Rotar la llave de firma~~ ✅ hecho el 2026-08-25 — **respalda el keystore** (punto 7).
 5. Probar el ingreso del revisor en un teléfono limpio (punto 3).
 6. Subir el AAB a una **prueba interna** — no requiere revisión y sirve para comprobar que
    instala y abre.

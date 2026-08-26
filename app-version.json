@@ -18,14 +18,21 @@
     "Si 'versionCode' queda por debajo del APK publicado, nadie recibe el aviso;",
     "si queda por encima, todos ven un aviso que no pueden satisfacer.",
     "",
+    "'reinstalarSiMenorQue': versionCode a partir del cual cambio la LLAVE DE FIRMA.",
+    "  Android rechaza actualizar sobre una firma distinta, asi que a quien traiga",
+    "  una version anterior a ese numero hay que decirle que DESINSTALE primero, o",
+    "  su telefono responde 'app no instalada' y se queda sin entender por que.",
+    "  Se subio a 5 el 2026-08-25, cuando se roto la llave. Solo tocarlo si la",
+    "  llave vuelve a cambiar; NO en cada version.",
+    "",
     "'enPlayStore': ponerlo en true EN CUANTO la ficha este viva en Google Play.",
     "A partir de ahi el aviso manda a Play (que actualiza solo, sin pedirle al",
     "usuario que acepte 'origen desconocido') en vez de al APK directo."
   ],
 
   "android": {
-    "versionCode": 4,
-    "versionName": "4.77.0",
+    "versionCode": 5,
+    "versionName": "4.78.0",
     "fecha": "2026-08-25",
     "paquete": "com.cmtelecom.nexuspro",
     "minAndroid": "8.0",
@@ -33,10 +40,13 @@
     "apkUrl": "/nexuspro.apk",
     "apkKB": 424,
 
+    "reinstalarSiMenorQue": 5,
+
     "enPlayStore": false,
     "playUrl": "https://play.google.com/store/apps/details?id=com.cmtelecom.nexuspro",
 
     "novedades": [
+      "Llave de firma renovada (mas segura)",
       "La app avisa sola cuando hay una version nueva para instalar",
       "Buscador del punto de venta siempre visible al abrir el catalogo",
       "Categorias del punto de venta en un desplegable compacto"
