@@ -30,6 +30,9 @@ ok('paquete base expone DIDs UDS trazables',O.didsBase.map(x=>x.did).join(',')==
 ok('incluye simuladores de marcas comunes en Guatemala',['toyota','nissan','hyundai_kia','mitsubishi','isuzu'].every(x=>O.perfilesSimulados[x]));
 ok('catálogo guiado incluye marcas, ECUs y protocolos',O.marcas.includes('Toyota')&&O.marcas.includes('Isuzu')&&O.ecus.some(x=>x.includes('ABS'))&&O.protocolos.includes('j1939'));
 ok('rechaza una red fuera del catálogo',O.validar({...base,protocolo:'uds',definicion:{red:'inventada'}}).some(x=>x.includes('Red')));
+ok('genera referencias para los siete vehículos de prueba',O.referenciasVehiculos.length===42&&O.referenciasVehiculos.filter(x=>x.tipo==='did').length===28);
+ok('las referencias IMMO son sólo diagnósticas',O.referenciasVehiculos.filter(x=>x.tipo==='immo_diagnostico').every(x=>x.definicion.objetivo_immo==='identificacion'&&x.estado==='borrador'));
+ok('las referencias de mantenimiento son borradores',O.referenciasVehiculos.filter(x=>x.tipo==='reset').every(x=>x.definicion.objetivo_reset==='mantenimiento'&&x.estado==='borrador'));
 ok('rechaza un rango de años invertido',O.validar({...base,anio_desde:2020,anio_hasta:2010}).some(x=>x.includes('año')));
 ok('precondiciones aprobadas con estado confirmado',O.evaluarPrecondiciones([{clave:'motor',valor:false},{clave:'velocidad_max',valor:0},{clave:'voltaje_min',valor:12}],{motor:false,velocidad:0,voltaje:12.6}).ok);
 ok('precondición sin telemetría bloquea, no adivina',!O.evaluarPrecondiciones([{clave:'freno',valor:true}],{}).ok);
@@ -44,4 +47,8 @@ ok('borrado por módulo cancela si falla el historial',/borrarPorModulo[\s\S]*?_
 ok('IMMO ofrece diagnóstico y aprendizaje autorizado',O.objetivosImmo.some(x=>x.id==='estado_llave')&&O.objetivosImmo.some(x=>x.id==='reaprendizaje_oem'));
 ok('IMMO no ofrece clonación ni bypass',!O.objetivosImmo.some(x=>/clon|bypass|secreto/i.test(x.id+' '+x.nombre)));
 ok('programación IMMO real permanece bloqueada',!O.puedeEjecutar({...base,tipo:'immo_programacion',riesgo:'critico',definicion:{objetivo_immo:'reaprendizaje_oem'}}).ok);
+ok('plan incluye la flota real de pruebas',O.planValidacion.length===7&&O.planValidacion.some(x=>x.id==='international_dt466'));
+ok('pruebas activas tienen objetivos guiados',O.objetivosActivos.some(x=>x.id==='ventilador')&&O.objetivosActivos.every(x=>x.precondiciones.length));
+ok('preparación activa exige estado verificado',!O.puedePrepararActiva({tipo:'prueba_activa',estado:'laboratorio',riesgo:'controlado',definicion:{objetivo_activo:'bocina'}},{contacto:true}).ok);
+ok('preparación activa acepta precondiciones confirmadas',O.puedePrepararActiva({tipo:'prueba_activa',estado:'verificado',riesgo:'controlado',definicion:{objetivo_activo:'bocina'}},{contacto:true}).ok);
 fin();
