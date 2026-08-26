@@ -17,4 +17,5 @@ ok('aplica escala y offset',O.decodificar([0,10],{tipo:'numero',escala:0.5,offse
 ok('declara cinco canales',O.canales.length===5);
 ok('solo HS está operativo',O.canales.filter(x=>x.estado==='operativo').map(x=>x.id).join(',')==='hs');
 ok('la arquitectura incluye BLE, RP1210, J2534, SDK de fabricante y VCI',O.familias.map(x=>x.id).join(',')==='elm,rp1210,j2534,fabricante,vci');
+ok('describe propiedades BLE sin inventar las ausentes',O.propsBLE({read:true,notify:true,write:false}).join(',')==='read,notify');
 fin();

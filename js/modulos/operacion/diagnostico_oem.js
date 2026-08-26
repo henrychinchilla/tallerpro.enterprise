@@ -17,8 +17,9 @@
     {id:'vci',nombre:'VCI futuro',transportes:['usb','ble','wifi'],protocolos:[],nota:'Contrato abierto para interfaces OEM o multimarca'}
   ];
   const hex = b => (b || []).map(x => Number(x).toString(16).padStart(2,'0').toUpperCase()).join(' ');
+  const propsBLE = p => ['broadcast','read','writeWithoutResponse','write','notify','indicate','authenticatedSignedWrites','reliableWrite','writableAuxiliaries'].filter(k=>!!p?.[k]);
   const Motor = {
-    canales: CANALES, familias:FAMILIAS,
+    canales: CANALES, familias:FAMILIAS, propsBLE,
     validar(d) {
       const e=[];
       for (const k of ['nombre','marca','ecu','tipo','fuente']) if (!String(d?.[k]||'').trim()) e.push(`Falta ${k}`);
@@ -54,7 +55,38 @@
   const M=globalThis.Modulos?.diagnostico_obd;
   if (!M) return;
   Object.assign(M, {
-    _oemDefs:[], _oemAdaptador:null,
+    _oemDefs:[], _oemAdaptador:null, _inspeccionBLE:null,
+    async inspeccionarBluetooth() {
+      if (!navigator.bluetooth) return UI.toast('Este navegador no ofrece Web Bluetooth','error');
+      const svcs=[...new Set([...(this._SVC_CANDIDATOS||[]),...(this._UUIDS||[]).map(x=>x.svc),'0000180a-0000-1000-8000-00805f9b34fb'])];
+      let dev,server;
+      try {
+        dev=await navigator.bluetooth.requestDevice({acceptAllDevices:true,optionalServices:svcs});
+        server=await dev.gatt.connect();
+        const servicios=[];
+        for(const s of await server.getPrimaryServices()) {
+          const chars=[];
+          try { for(const c of await s.getCharacteristics()) chars.push({uuid:c.uuid,propiedades:propsBLE(c.properties)}); }
+          catch(e){ chars.push({error:e.message}); }
+          servicios.push({uuid:s.uuid,caracteristicas:chars});
+        }
+        this._inspeccionBLE={fecha:new Date().toISOString(),nombre:dev.name||null,id:dev.id||null,tipo:'BLE Web Bluetooth',servicios,limitacion:'Chrome solo revela servicios UUID solicitados previamente; un resultado vacío no significa que el dongle no tenga servicios.',agente:navigator.userAgent||null};
+        await DB.registrarEjecucionOEM({operacion:'inspeccion_ble_pasiva',estado:'exitosa',evidencia:this._inspeccionBLE});
+      } catch(e) {
+        if(e?.name==='NotFoundError') return UI.toast('Inspección cancelada','info');
+        this._inspeccionBLE={fecha:new Date().toISOString(),nombre:dev?.name||null,id:dev?.id||null,tipo:'BLE Web Bluetooth',servicios:[],error:e.message};
+        await DB.registrarEjecucionOEM({operacion:'inspeccion_ble_pasiva',estado:'fallida',evidencia:this._inspeccionBLE,error:e.message}).catch(()=>{});
+      } finally { try{server?.disconnect();}catch(_){} }
+      this.modalInspeccionBLE();
+    },
+    modalInspeccionBLE() {
+      const r=this._inspeccionBLE; if(!r)return;
+      const total=(r.servicios||[]).reduce((n,s)=>n+(s.caracteristicas||[]).filter(c=>c.uuid).length,0);
+      UI.modal('🔬 Inspector de interfaz Bluetooth',`<div class="card" style="padding:14px"><b>${UI.esc(r.nombre||'Dispositivo sin nombre')}</b><p>${r.error?`<span style="color:var(--red)">${UI.esc(r.error)}</span>`:`${r.servicios.length} servicio(s) accesible(s) · ${total} característica(s)`}</p><small>${UI.esc(r.limitacion||'')}</small></div>
+      <div style="max-height:52vh;overflow:auto;margin-top:12px">${(r.servicios||[]).map(s=>`<div class="card" style="padding:11px;margin-bottom:8px"><b style="font-family:monospace">${UI.esc(s.uuid)}</b>${(s.caracteristicas||[]).map(c=>`<div style="font-family:monospace;font-size:11px;margin-top:6px">↳ ${UI.esc(c.uuid||c.error)} <span style="color:var(--text3)">${UI.esc((c.propiedades||[]).join(', '))}</span></div>`).join('')}</div>`).join('')||'<p>No se revelaron servicios autorizados. La capa Android nativa será necesaria para inspección completa o Bluetooth Classic.</p>'}</div>
+      <div class="modal-footer"><button class="btn btn-ghost" onclick="UI.cerrarModal()">Cerrar</button><button class="btn btn-cyan" onclick="Modulos.diagnostico_obd.copiarInspeccionBLE()">📋 Copiar reporte</button></div>`,'820px');
+    },
+    async copiarInspeccionBLE() { if(!this._inspeccionBLE)return; await navigator.clipboard.writeText(JSON.stringify(this._inspeccionBLE,null,2)); UI.toast('Reporte Bluetooth copiado ✓'); },
     async detectarAdaptadorOEM() {
       if (this._via!=='ble' || !this._listo) {
         if (this._via==='usb' && this._listo) {
@@ -76,7 +108,8 @@
       UI.modal('🧠 Diagnóstico OEM',`<div style="display:grid;gap:14px">
         <div class="card" style="padding:14px"><b>Adaptador y redes</b><div style="margin-top:8px">${a?`<b>${UI.esc(a.modelo)}</b> · firmware ${UI.esc(a.firmware||'no identificado')} · ${UI.esc(a.volt)}`:'Conecta el adaptador durante un escaneo para interrogarlo.'}</div>
         <div style="display:flex;gap:7px;flex-wrap:wrap;margin-top:9px">${CANALES.map(c=>`<span class="badge badge-${c.estado==='operativo'?'green':'amber'}" title="${UI.esc(c.nota)}">${c.nombre} · ${c.estado}</span>`).join('')}</div>
-        <button class="btn btn-sm btn-ghost" style="margin-top:10px" onclick="Modulos.diagnostico_obd.detectarAdaptadorOEM()">🔎 Detectar adaptador</button>
+        <button class="btn btn-sm btn-ghost" style="margin-top:10px" onclick="Modulos.diagnostico_obd.detectarAdaptadorOEM()">🔎 Detectar adaptador conectado</button>
+        <button class="btn btn-sm btn-cyan" style="margin-top:10px" onclick="Modulos.diagnostico_obd.inspeccionarBluetooth()">🔬 Inspeccionar cualquier BLE</button>
         <div style="margin-top:10px;font-size:11px;color:var(--text3)">${FAMILIAS.map(f=>`<b>${f.nombre}</b>: ${f.nota}`).join(' · ')}</div></div>
         <div class="card" style="padding:14px"><div style="display:flex;justify-content:space-between"><b>Catálogo OEM (${this._oemDefs.length})</b>${puede?'<button class="btn btn-sm btn-brand" onclick="Modulos.diagnostico_obd.editarOEM()">＋ Nueva definición</button>':''}</div>
         <div style="overflow:auto;margin-top:9px"><table class="table"><thead><tr><th>Marca/modelo</th><th>ECU</th><th>Función</th><th>Evidencia</th><th>Riesgo</th><th>Acciones</th></tr></thead><tbody>${this._oemDefs.length?this._oemDefs.map(d=>`<tr><td><b>${UI.esc(d.marca)}</b> ${UI.esc(d.modelo||'')}</td><td>${UI.esc(d.ecu)}</td><td>${UI.esc(d.nombre)}<br><small>${UI.esc(d.tipo)} ${UI.esc(d.identificador||'')}</small></td><td><span class="badge badge-${d.estado==='verificado'?'green':'amber'}">${UI.esc(d.estado)}</span><br><small>${UI.esc(d.fuente)}</small></td><td>${UI.esc(d.riesgo)}</td><td>${Modulos.btnAccion('ver',`Modulos.diagnostico_obd.verOEM('${d.id}')`)}${Modulos.btnAccion('editar',`Modulos.diagnostico_obd.editarOEM('${d.id}')`)}${Modulos.btnAccion('eliminar',`Modulos.diagnostico_obd.eliminarOEM('${d.id}','${UI.jsAttr(d.nombre)}')`)}</td></tr>`).join(''):'<tr><td colspan="6">Aún no hay definiciones. Agrega únicamente información con fuente comprobable.</td></tr>'}</tbody></table></div></div>
