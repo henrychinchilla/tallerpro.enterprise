@@ -222,18 +222,42 @@
     },
     async copiarInspeccionBLE() { if(!this._inspeccionBLE)return; await navigator.clipboard.writeText(JSON.stringify(this._inspeccionBLE,null,2)); UI.toast('Reporte Bluetooth copiado ✓'); },
     async detectarAdaptadorOEM() {
-      if (this._via!=='ble' || !this._listo) {
-        if (this._via==='usb' && this._listo) {
-          this._oemAdaptador={modelo:'Interfaz RP1210',familia:'rp1210',firmware:null,volt:'por bus',canales:[CANALES[0]],nota:'La API y protocolos instalados se enumeran desde RP121032.INI'};
-          return this.modalOEM();
-        }
-        return UI.toast('Conecta primero un adaptador BLE o RP1210','warn');
+      /* Una sesión de escaneo activa es necesaria para leer el vehículo, no
+         para saber si Windows ve un adaptador. Antes este botón exigía
+         `_listo`, por eso siempre decía "conecta primero" cuando el USB-Link
+         estaba enchufado pero aún no se había iniciado un escaneo. */
+      if (this._via==='ble' && this._listo) {
+        const consultar=async c=>{ try{return String(await this._cmd(c,1800)).replace(/\s+/g,' ').trim();}catch(e){return 'sin respuesta';} };
+        const [ati,desc,serie,volt,sti]=await Promise.all([consultar('ATI'),consultar('AT@1'),consultar('AT@2'),consultar('ATRV'),consultar('STI')]);
+        const esMS=/vlinker\s*ms|mic3425/i.test([ati,desc,sti].join(' '));
+        this._oemAdaptador={ati,desc,serie,volt,sti,familia:'elm',modelo:esMS?'Vgate vLinker MS':(ati||desc||'ELM/ST compatible'),firmware:(ati+' '+sti).match(/\d+\.\d+(?:\.\d+)?/)?.[0]||null,canales:esMS?CANALES:CANALES.slice(0,1)};
+        return this.modalOEM();
       }
-      const consultar=async c=>{ try{return String(await this._cmd(c,1800)).replace(/\s+/g,' ').trim();}catch(e){return 'sin respuesta';} };
-      const [ati,desc,serie,volt,sti]=await Promise.all([consultar('ATI'),consultar('AT@1'),consultar('AT@2'),consultar('ATRV'),consultar('STI')]);
-      const esMS=/vlinker\s*ms|mic3425/i.test([ati,desc,sti].join(' '));
-      this._oemAdaptador={ati,desc,serie,volt,sti,familia:'elm',modelo:esMS?'Vgate vLinker MS':(ati||desc||'ELM/ST compatible'),firmware:(ati+' '+sti).match(/\d+\.\d+(?:\.\d+)?/)?.[0]||null,canales:esMS?CANALES:CANALES.slice(0,1)};
-      this.modalOEM();
+
+      /* El puente puede enumerar las DLL RP1210 aunque todavía no exista una
+         sesión CAN/J1939 abierta. Elegimos la API cargada (o la primera
+         instalada), la cargamos y mostramos sus capacidades sin transmitir al
+         vehículo. Los puertos SERIAL se dejan para el flujo Bluetooth clásico. */
+      let errorUSB=null;
+      try {
+        await this._puenteConectar();
+        const r=await this._puenteOp({op:'apis'},5000);
+        const apis=((r&&r.apis)||[]).filter(a=>a.instalado&&!/^SERIAL:/i.test(String(a.api||'')));
+        if(!apis.length) throw new Error('No hay adaptadores RP1210 instalados en esta PC');
+        const elegido=(this._api&&apis.find(a=>a.api===this._api))||apis.find(a=>a.cargada)||apis[0];
+        const carga=await this._puenteOp({op:'cargar',api:elegido.api},6000);
+        if(!carga?.ok) throw new Error(carga?.error||'No se pudo cargar la DLL RP1210');
+        const est=await this._puenteOp({op:'estado'},5000).catch(()=>carga);
+        this._api=elegido.api;
+        this._via='usb';
+        const protocolos=(elegido.protocolos||[]).map(p=>String(p).split(',')[0].toUpperCase());
+        this._oemAdaptador={modelo:est.dispositivo||elegido.nombre||'Interfaz RP1210',familia:'rp1210',firmware:est.version||carga.version||null,volt:'por bus',canales:CANALES,protocolos,nota:'Adaptador enumerado y DLL cargada. El vehículo aún no fue interrogado; inicia Conectar y Escanear para abrir CAN/J1939.'};
+        return this.modalOEM();
+      } catch(e) { errorUSB=e; }
+
+      return UI.toast(errorUSB
+        ? `No se detectó un adaptador activo. ${errorUSB.message}`
+        : 'Conecta primero un adaptador BLE o RP1210','warn');
     },
     async modalOEM() {
       this._oemDefs=await DB.getDefinicionesOEM();

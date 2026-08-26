@@ -37,7 +37,15 @@ Modulos.diagnostico_obd = {
 
   get _conectado() { return !!(this._dev?.gatt?.connected && this._char); },
   /* "listo para leer" según la vía activa (BLE o puente USB) */
-  get _listo() { return this._via === 'ble' ? this._conectado : !!(this._ws && this._ws.readyState === 1 && (this._via !== 'serial' || this._serialReady)); },
+  get _listo() {
+    if (this._via === 'ble') return this._conectado;
+    if (!this._ws || this._ws.readyState !== 1) return false;
+    if (this._via === 'serial') return this._serialReady;
+    /* Tener el puente WebSocket abierto solo significa que Windows está
+       disponible; para leer el vehículo también debe existir un canal RP1210
+       CAN/J1939/J1708 abierto. */
+    return !!this._puenteCanalActivo;
+  },
 
   /* La identidad Device Information es lectura pasiva. Muchos VCI no
      publican un canal OBD por GATT, pero sí dejan ver modelo/firmware en 180A.
@@ -1364,14 +1372,14 @@ Modulos.diagnostico_obd = {
     this._dev = this._char = null;
     this._serialReady = false;
     try { if (this._ws?.readyState === 1) { this._ws.send(JSON.stringify({ op:'desconectar' })); this._ws.close(); } } catch (_) {}
-    this._ws = null; this._j39 = null; this._canRx = null; this._via = 'ble';
+    this._ws = null; this._j39 = null; this._canRx = null; this._puenteCanalActivo = false; this._via = 'ble';
   },
 
   /* ═══════════ PUENTE USB (RP1210 — NEXIQ USB-Link y compatibles) ═══════════
      Un programa local pequeño (carpeta puente-obd del repo) expone el adaptador
      USB por WebSocket en localhost:17210. El puente es una tubería tonta: toda
      la lógica de protocolo vive aquí (se actualiza con deploy, sin recompilar). */
-  _ws: null, _wsPend: {}, _via: 'ble', _j39: null, _canExt: false, _canRx: null,
+  _ws: null, _wsPend: {}, _via: 'ble', _j39: null, _canExt: false, _canRx: null, _puenteCanalActivo: false,
 
   async _puenteConectar() {
     if (this._ws && this._ws.readyState === 1) return;
@@ -1389,6 +1397,8 @@ Modulos.diagnostico_obd = {
   },
 
   _puenteMsg(m) {
+    if (m.op === 'conectar') this._puenteCanalActivo = !!m.ok;
+    else if (m.op === 'desconectar' || (m.op === 'cargar' && m.ok)) this._puenteCanalActivo = false;
     if (m.op === 'mensaje') {
       if (this._sniff) this._sniff(m.datos);          // observa sin desviar la ruta normal
       if (this._via === 'j1939') this._j39Frame(m.datos);
