@@ -331,6 +331,8 @@ Modulos.vehiculos = {
     if (dl) dl.innerHTML = this._opcionesMarca(tipo);
     const dlMod = document.getElementById('modelos-list');
     if (dlMod) dlMod.innerHTML = this._opcionesModelo(document.getElementById('veh-marca')?.value, tipo);
+    const dlLinea = document.getElementById('lineas-list');
+    if (dlLinea) dlLinea.innerHTML = this._opcionesModelo(document.getElementById('veh-marca')?.value, tipo);
   },
 
   /* Al cambiar la marca, repuebla los modelos sugeridos según el tipo */
@@ -339,6 +341,8 @@ Modulos.vehiculos = {
     const tipo = this._valorLista('veh-tipo');
     const dl = document.getElementById('modelos-list');
     if (dl) dl.innerHTML = this._opcionesModelo(marca, tipo);
+    const dlLinea = document.getElementById('lineas-list');
+    if (dlLinea) dlLinea.innerHTML = this._opcionesModelo(marca, tipo);
   },
 
   async render(clienteId=null) {
@@ -611,12 +615,13 @@ Modulos.vehiculos = {
                  oninput="Modulos.vehiculos._onMarcaChange()" onchange="Modulos.vehiculos._onMarcaChange()">
           <datalist id="marcas-list">${this._opcionesMarca(v.tipo||'Liviano')}</datalist></div>
         <div class="form-group"><label class="form-label">Línea *</label>
-          <input class="form-input" id="veh-linea" value="${v.linea||''}" placeholder="MONTERO GLS, COROLLA, etc."></div>
+          <input class="form-input" id="veh-linea" list="lineas-list" autocomplete="off" value="${UI.esc(v.linea||'')}" placeholder="MONTERO GLS, COROLLA, etc.">
+          <datalist id="lineas-list">${this._opcionesModelo(v.marca||'', v.tipo||'Liviano')}</datalist></div>
       </div>
       <div class="form-row">
         <div class="form-group"><label class="form-label">Modelo (Nombre/Línea sugerido) *</label>
           <input class="form-input" id="veh-modelo" list="modelos-list" autocomplete="off" value="${UI.esc(v.modelo||'')}" placeholder="Elige según la marca o escribe...">
-          <datalist id="modelos-list">${UI.esc(this._opcionesModelo(v.marca||'', v.tipo||'Liviano'))}</datalist></div>
+          <datalist id="modelos-list">${this._opcionesModelo(v.marca||'', v.tipo||'Liviano')}</datalist></div>
         <div class="form-group"><label class="form-label">Año (Modelo)</label>
           <input class="form-input" id="veh-anio" type="number" value="${v.anio||''}" placeholder="2020"></div>
       </div>
