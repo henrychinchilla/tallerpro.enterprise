@@ -12,7 +12,7 @@ AGENTS.md
 .vscode/
 .idea/
 node_modules/
-marketing/
+/marketing/
 tests/
 supabase/
 db/
