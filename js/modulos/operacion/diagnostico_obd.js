@@ -9,6 +9,7 @@ Modulos.diagnostico_obd = {
 
   /* ═══════════ DRIVER BLE / ELM327 ═══════════ */
   _dev: null, _char: null, _buf: '', _resolve: null, _serialReady: false,
+  _bleIdentity: null,
   _protoNum: 0, _liveTimer: null, _busy: false,
   /* Callback activo mientras el adaptador esta en monitoreo continuo (ATMA).
      Ver _monInicio: ahi el ELM no manda prompt y hay que leer por linea. */
@@ -24,6 +25,7 @@ Modulos.diagnostico_obd = {
     '0000ffe5-0000-1000-8000-00805f9b34fb',   // variante de escritura del anterior
     'e7810a71-73ae-499d-8c15-faa9aef0c3f2',   // LELink
     '6e400001-b5a3-f393-e0a9-e50e24dcca9e',   // Nordic UART, usado por varios puentes serie BLE
+    '0000180a-0000-1000-8000-00805f9b34fb',   // Device Information (identidad del VCI)
   ],
 
   _UUIDS: [
@@ -37,6 +39,34 @@ Modulos.diagnostico_obd = {
   /* "listo para leer" según la vía activa (BLE o puente USB) */
   get _listo() { return this._via === 'ble' ? this._conectado : !!(this._ws && this._ws.readyState === 1 && (this._via !== 'serial' || this._serialReady)); },
 
+  /* La identidad Device Information es lectura pasiva. Muchos VCI no
+     publican un canal OBD por GATT, pero sí dejan ver modelo/firmware en 180A.
+     Guardarla permite distinguir "Bluetooth conectado" de "protocolo de datos
+     disponible" sin mandar ninguna trama al vehículo. */
+  async _leerIdentidadBLE(server) {
+    const uuids = {
+      '00002a24-0000-1000-8000-00805f9b34fb':'modelo',
+      '00002a27-0000-1000-8000-00805f9b34fb':'hardware',
+      '00002a28-0000-1000-8000-00805f9b34fb':'firmware',
+      '00002a29-0000-1000-8000-00805f9b34fb':'fabricante'
+    };
+    const out = {};
+    try {
+      const s = await server.getPrimaryService('0000180a-0000-1000-8000-00805f9b34fb');
+      for (const [uuid, clave] of Object.entries(uuids)) {
+        try {
+          const c = await s.getCharacteristic(uuid);
+          if (!c.properties?.read) continue;
+          const v = await c.readValue();
+          const txt = new TextDecoder().decode(v).replace(/\0/g, '').trim();
+          if (txt) out[clave] = txt;
+        } catch (_) {}
+      }
+    } catch (_) {}
+    this._bleIdentity = out;
+    return out;
+  },
+
   async _conectar() {
     if (!navigator.bluetooth)
       throw new Error('Este navegador no tiene Bluetooth. Usa Chrome/Edge en Android o en una PC con Bluetooth.');
@@ -49,6 +79,7 @@ Modulos.diagnostico_obd = {
     const svcs = [...new Set([...this._UUIDS.map(u => u.svc), ...this._SVC_CANDIDATOS])];
     const dev = await navigator.bluetooth.requestDevice({ acceptAllDevices:true, optionalServices:svcs });
     const server = await dev.gatt.connect();
+    const identidad = await this._leerIdentidadBLE(server);
 
     let wr = null, nt = null;
     for (const u of this._UUIDS) {
@@ -70,8 +101,14 @@ Modulos.diagnostico_obd = {
         }
       } catch (_) {}
     }
-    if (!wr || !nt) { try { dev.gatt.disconnect(); } catch(_){}
-      throw new Error('El dispositivo no parece ser un adaptador OBD BLE compatible.'); }
+    if (!wr || !nt) {
+      let accesibles = [];
+      try { accesibles = (await server.getPrimaryServices()).map(s => s.uuid); } catch (_) {}
+      try { dev.gatt.disconnect(); } catch(_){}
+      const id = [identidad.fabricante, identidad.modelo, identidad.firmware].filter(Boolean).join(' ');
+      const svc = accesibles.length ? ` Servicios GATT accesibles: ${accesibles.join(', ')}.` : '';
+      throw new Error(`Bluetooth conectado${id ? ` (${id})` : ''}, pero no expone una característica de datos OBD (write + notify).${svc} El canal puede ser SPP/protocolo propietario; no se enviaron comandos al vehículo.`);
+    }
 
     await nt.startNotifications();
     nt.addEventListener('characteristicvaluechanged', e => {
