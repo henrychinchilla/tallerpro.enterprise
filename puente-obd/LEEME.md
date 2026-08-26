@@ -8,6 +8,12 @@ Habilita el escaneo por **USB**:
   VIN, datos del motor en vivo.
 - 🚗 **Vehículos livianos** (beta): OBD-II sobre CAN por el mismo cable USB.
 
+También publica los puertos **Bluetooth clásico (SPP)** que Windows asigna como
+`COMx`. Sirve para VCI que exponen un canal ELM327 por RFCOMM; se elige el puerto
+desde NexusPro. Un VCI multimarca que use un protocolo binario propietario puede
+conectarse físicamente, pero necesita un perfil de protocolo documentado antes
+de enviar órdenes de diagnóstico.
+
 ## Instalación (una sola vez por PC)
 
 1. En NexusPro → **Diagnóstico OBD-II → 📡 Nuevo Escaneo** hay un enlace

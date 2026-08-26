@@ -1,5 +1,5 @@
 @echo off
-rem NexusPro - Instalador del Puente OBD USB (RP1210)
+rem NexusPro - Instalador del Puente OBD USB/RP1210 y Bluetooth clasico SPP
 rem Un doble clic: descarga el puente, lo deja arrancando AUTOMATICAMENTE con
 rem Windows (oculto, sin ventana) y lo inicia ya. No hay que correr nada a mano.
 setlocal

@@ -19,6 +19,7 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.IO;
+using System.IO.Ports;
 using System.Net;
 using System.Net.Sockets;
 using System.Runtime.InteropServices;
@@ -135,7 +136,89 @@ public class PuenteOBD {
   const int PUERTO = 17210;
   static readonly JavaScriptSerializer JSON = new JavaScriptSerializer();
 
+  // Bluetooth Classic SPP aparece en Windows como COM. Esto permite usar
+  // VCI que hablan ELM por RFCOMM sin depender de la app del fabricante.
+  static SerialPort Serie;
+  static string SerieApi;
+  static readonly object SerieLock = new object();
+
   static void Log(string s) { Console.WriteLine(DateTime.Now.ToString("HH:mm:ss") + "  " + s); }
+
+  static bool EsSerie(string api) {
+    return !string.IsNullOrEmpty(api) && api.StartsWith("SERIAL:", StringComparison.OrdinalIgnoreCase);
+  }
+
+  static List<object> PuertosSerie() {
+    var lista = new List<object>();
+    try {
+      var ports = SerialPort.GetPortNames();
+      Array.Sort(ports, StringComparer.OrdinalIgnoreCase);
+      foreach (var port in ports) {
+        var d = new Dictionary<string, object>();
+        d["api"] = "SERIAL:" + port;
+        d["tipo"] = "serial";
+        d["instalado"] = true;
+        d["cargada"] = string.Equals(SerieApi, "SERIAL:" + port, StringComparison.OrdinalIgnoreCase);
+        d["nombre"] = "Bluetooth / puerto serie (" + port + ")";
+        d["protocolos"] = new List<string> { "OBDII", "CAN", "ISO15765", "ISO9141", "ISO14230" };
+        d["puerto"] = port;
+        lista.Add(d);
+      }
+    } catch (Exception) { }
+    return lista;
+  }
+
+  static bool AbrirSerie(string api, int baud, out string error) {
+    error = null;
+    if (!EsSerie(api)) { error = "Puerto serie no valido."; return false; }
+    var port = api.Substring(7);
+    lock (SerieLock) {
+      try {
+        if (Serie != null && Serie.IsOpen && string.Equals(Serie.PortName, port, StringComparison.OrdinalIgnoreCase)) {
+          SerieApi = api; return true;
+        }
+        if (Serie != null) { try { Serie.Close(); } catch (Exception) { } Serie.Dispose(); Serie = null; }
+        Serie = new SerialPort(port, baud > 0 ? baud : 115200, Parity.None, 8, StopBits.One);
+        Serie.Handshake = System.IO.Ports.Handshake.None;
+        Serie.ReadTimeout = 100;
+        Serie.WriteTimeout = 1500;
+        Serie.DtrEnable = true;
+        Serie.RtsEnable = true;
+        Serie.Open();
+        SerieApi = api;
+        return true;
+      } catch (Exception ex) {
+        if (Serie != null) { try { Serie.Close(); } catch (Exception) { } Serie.Dispose(); Serie = null; }
+        error = "No se pudo abrir " + port + ": " + ex.Message;
+        return false;
+      }
+    }
+  }
+
+  static string ComandoSerie(string comando, int esperaMs) {
+    lock (SerieLock) {
+      if (Serie == null || !Serie.IsOpen) throw new InvalidOperationException("Bluetooth clasico desconectado.");
+      Serie.DiscardInBuffer();
+      Serie.Write((comando ?? "").Trim() + "\r");
+      var sb = new StringBuilder();
+      var inicio = DateTime.UtcNow;
+      var ultima = inicio;
+      while ((DateTime.UtcNow - inicio).TotalMilliseconds < Math.Max(250, esperaMs)) {
+        var n = Serie.ReadExisting();
+        if (!string.IsNullOrEmpty(n)) { sb.Append(n); ultima = DateTime.UtcNow; if (n.IndexOf('>') >= 0) break; }
+        else if (sb.Length > 0 && (DateTime.UtcNow - ultima).TotalMilliseconds >= 250) break;
+        Thread.Sleep(25);
+      }
+      return sb.ToString();
+    }
+  }
+
+  static void CerrarSerie() {
+    lock (SerieLock) {
+      if (Serie != null) { try { Serie.Close(); } catch (Exception) { } try { Serie.Dispose(); } catch (Exception) { } }
+      Serie = null; SerieApi = null;
+    }
+  }
 
   const string API_DEFECTO = "NXULNK32";     // NEXIQ USB-Link, el más común en taller
 
@@ -208,7 +291,9 @@ public class PuenteOBD {
           switch (op) {
             case "apis": {
               resp["ok"] = true;
-              resp["apis"] = ApisInstaladas();
+              var disponibles = ApisInstaladas();
+              disponibles.AddRange(PuertosSerie());
+              resp["apis"] = disponibles;
               break;
             }
             case "estado": {
@@ -217,6 +302,7 @@ public class PuenteOBD {
               resp["dispositivo"] = NombreApi(RP1210.Api);
               var v = RP1210.Version();
               if (v != null) resp["version"] = v;
+              if (EsSerie(SerieApi)) { resp["version"] = "SPP/COM"; if ((bool)resp["ok"]) resp.Remove("error"); }
               if (!RP1210.Listo) resp["error"] = "Ningún adaptador RP1210 cargado.";
               break;
             }
@@ -226,6 +312,12 @@ public class PuenteOBD {
             case "cargar": {
               var api = m.ContainsKey("api") ? (string)m["api"] : null;
               if (cliente >= 0) { leyendo[0] = false; Thread.Sleep(50); RP1210.ClientDisconnect(cliente); cliente = -1; }
+              CerrarSerie();
+              if (EsSerie(api)) {
+                resp["ok"] = true; resp["api"] = api; resp["dispositivo"] = "Bluetooth clasico " + api.Substring(7);
+                SerieApi = api; Log("Puerto Bluetooth seleccionado: " + api.Substring(7));
+                break;
+              }
               string e2;
               if (RP1210.Cargar(api, out e2)) {
                 resp["ok"] = true; resp["api"] = RP1210.Api;
@@ -240,8 +332,18 @@ public class PuenteOBD {
             }
             case "conectar": {
               if (cliente >= 0) { leyendo[0] = false; Thread.Sleep(50); RP1210.ClientDisconnect(cliente); cliente = -1; }
+              if (!m.ContainsKey("api") || m["api"] == null || !EsSerie((string)m["api"])) CerrarSerie();
               /* Permite cambiar de adaptador en la misma llamada */
               if (m.ContainsKey("api") && m["api"] != null) {
+                if (EsSerie((string)m["api"])) {
+                  CerrarSerie();
+                  var baud = m.ContainsKey("baud") ? Convert.ToInt32(m["baud"]) : 115200;
+                  string es;
+                  if (!AbrirSerie((string)m["api"], baud, out es)) { resp["ok"] = false; resp["error"] = es; break; }
+                  resp["ok"] = true; resp["api"] = SerieApi; resp["puerto"] = SerieApi.Substring(7);
+                  Log("Bluetooth clasico abierto: " + SerieApi.Substring(7) + " @" + baud);
+                  break;
+                }
                 string e3;
                 if (!RP1210.Cargar((string)m["api"], out e3)) {
                   resp["ok"] = false; resp["error"] = e3;
@@ -271,6 +373,7 @@ public class PuenteOBD {
               break;
             }
             case "enviar": {
+              if (EsSerie(SerieApi)) { resp["ok"] = false; resp["error"] = "Use serial_cmd para Bluetooth clasico."; break; }
               var datos = ABytes(m.ContainsKey("datos") ? m["datos"] : null);
               short r = RP1210.SendMessage(cliente, datos, (short)datos.Length, 0, 0);
               resp["ok"] = r == 0;
@@ -278,6 +381,7 @@ public class PuenteOBD {
               break;
             }
             case "comando": {
+              if (EsSerie(SerieApi)) { resp["ok"] = false; resp["error"] = "Use serial_cmd para Bluetooth clasico."; break; }
               short num = Convert.ToInt16(m["numero"]);
               var datos = ABytes(m.ContainsKey("datos") ? m["datos"] : null);
               short r = RP1210.SendCommand(num, cliente, datos.Length > 0 ? datos : new byte[1], (short)datos.Length);
@@ -288,18 +392,28 @@ public class PuenteOBD {
             case "desconectar": {
               leyendo[0] = false;
               if (cliente >= 0) { Thread.Sleep(50); RP1210.ClientDisconnect(cliente); cliente = -1; Log("Cliente RP1210 cerrado"); }
+              CerrarSerie();
               resp["ok"] = true;
+              break;
+            }
+            case "serial_cmd": {
+              if (!EsSerie(SerieApi) || Serie == null || !Serie.IsOpen) { resp["ok"] = false; resp["error"] = "Bluetooth clasico desconectado."; break; }
+              var cmd = m.ContainsKey("cmd") ? (string)m["cmd"] : "";
+              var ms = m.ContainsKey("timeout") ? Convert.ToInt32(m["timeout"]) : 2500;
+              resp["ok"] = true; resp["respuesta"] = ComandoSerie(cmd, ms);
               break;
             }
             default: resp["ok"] = false; resp["error"] = "Operacion desconocida: " + op; break;
           }
         } catch (Exception ex) { resp["ok"] = false; resp["error"] = ex.Message; }
+        if (EsSerie(SerieApi) && (bool)resp["ok"]) resp.Remove("error");
         enviar(resp);
       }
     } catch (Exception) { }
     finally {
       activo[0] = false; leyendo[0] = false;
       if (cliente >= 0) { try { RP1210.ClientDisconnect(cliente); } catch (Exception) { } }
+      CerrarSerie();
       try { tcp.Close(); } catch (Exception) { }
       Log("NexusPro desconectado");
     }

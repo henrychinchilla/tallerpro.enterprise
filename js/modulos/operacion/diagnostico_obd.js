@@ -8,7 +8,7 @@ Modulos.diagnostico_obd = {
   _mes: null, _anio: null,
 
   /* ═══════════ DRIVER BLE / ELM327 ═══════════ */
-  _dev: null, _char: null, _buf: '', _resolve: null,
+  _dev: null, _char: null, _buf: '', _resolve: null, _serialReady: false,
   _protoNum: 0, _liveTimer: null, _busy: false,
   /* Callback activo mientras el adaptador esta en monitoreo continuo (ATMA).
      Ver _monInicio: ahi el ELM no manda prompt y hay que leer por linea. */
@@ -35,7 +35,7 @@ Modulos.diagnostico_obd = {
 
   get _conectado() { return !!(this._dev?.gatt?.connected && this._char); },
   /* "listo para leer" según la vía activa (BLE o puente USB) */
-  get _listo() { return this._via === 'ble' ? this._conectado : !!(this._ws && this._ws.readyState === 1); },
+  get _listo() { return this._via === 'ble' ? this._conectado : !!(this._ws && this._ws.readyState === 1 && (this._via !== 'serial' || this._serialReady)); },
 
   async _conectar() {
     if (!navigator.bluetooth)
@@ -196,6 +196,14 @@ Modulos.diagnostico_obd = {
       while (this._busy) await new Promise(r => setTimeout(r, 50));
       this._busy = true;
       try { return await this._usbElm(c, timeout); } finally { this._busy = false; }
+    }
+    if (this._via === 'serial') {
+      while (this._busy) await new Promise(r => setTimeout(r, 50));
+      this._busy = true;
+      try {
+        const r = await this._puenteOp({ op:'serial_cmd', cmd:c, timeout }, timeout + 1000);
+        return String(r?.respuesta || '');
+      } finally { this._busy = false; }
     }
     if (!this._conectado) throw new Error('Adaptador desconectado');
     while (this._busy) await new Promise(r => setTimeout(r, 50));
@@ -1317,6 +1325,7 @@ Modulos.diagnostico_obd = {
     this._stopLive();
     try { this._dev?.gatt?.disconnect(); } catch (_) {}
     this._dev = this._char = null;
+    this._serialReady = false;
     try { if (this._ws?.readyState === 1) { this._ws.send(JSON.stringify({ op:'desconectar' })); this._ws.close(); } } catch (_) {}
     this._ws = null; this._j39 = null; this._canRx = null; this._via = 'ble';
   },
@@ -1527,6 +1536,25 @@ Modulos.diagnostico_obd = {
     'Si no es ese el caso: revisá el switch en contacto y el cable bien puesto.',
 
   /* ── Vehículos livianos por USB: OBD-II sobre CAN crudo con ISO-TP propio ── */
+  /* Bluetooth clasico/SPP: Windows lo publica como SERIAL:COMx y el puente
+     solo transporta el dialogo ELM; el protocolo OBD sigue aqui, igual que BLE. */
+  async _serialInit(log) {
+    await this._puenteConectar();
+    const api = this._api || '';
+    if (!/^SERIAL:/i.test(api)) throw new Error('Selecciona el puerto COM del Thinkcar.');
+    const port = api.substring(7);
+    const c = await this._puenteOp({ op:'conectar', api, protocolo:'SPP', baud:115200 }, 6000);
+    if (!c.ok) throw new Error(c.error || `No se pudo abrir Bluetooth clasico en ${port}.`);
+    this._serialReady = true;
+    log(`Bluetooth clasico: <b>${port}</b> @115200`);
+    /* ATI es una sonda inocua: si el VCI no es ELM abierto, se informa aqui y
+       no se presenta un escaneo vacio como si el vehiculo estuviera sano. */
+    const identidad = await this._cmd('ATI', 3000).catch(() => '');
+    const sonda = identidad.trim() ? identidad : await this._cmd('ATZ', 3000).catch(() => '');
+    if (!sonda.trim()) throw new Error(`El VCI Bluetooth ${port} no expone un canal ELM/OBD estandar. Abre el ThinkDiag+ para confirmar el modelo o usa un Vgate/OBDLink ELM.`);
+    return { nombre:`Thinkcar / Bluetooth ${port}`, protocolo:'Bluetooth clasico SPP' };
+  },
+
   async _usbInit(log) {
     await this._puenteConectar();
     const est = await this._puenteEstado();
@@ -4297,6 +4325,7 @@ Modulos.diagnostico_obd = {
         <select class="form-select" id="obd-via" onchange="Modulos.diagnostico_obd._verApis()">
           <option value="auto">🔎 USB — detectar solo (recomendado: liviano o camión)</option>
           <option value="ble">📶 Bluetooth — ELM327 / Vgate / OBDLink (BLE)</option>
+          <option value="classic">📶 Bluetooth clásico — Thinkcar/ELM por puerto COM</option>
           <option value="j1939ble">🚚 Bluetooth — camión J1939 (dongle con protocolo A)</option>
           <option value="j1939">🚚 USB — forzar camión J1939 (puente RP1210)</option>
           <option value="j1708">🚛 USB — forzar camión antiguo J1708/J1587 (MID/PID/FMI)</option>
@@ -4304,8 +4333,8 @@ Modulos.diagnostico_obd = {
         </select>
       </div>
       <div class="form-group" id="obd-api-wrap">
-        <label class="form-label">Adaptador USB</label>
-        <select class="form-select" id="obd-api">
+        <label class="form-label">Adaptador / puerto local</label>
+        <select class="form-select" id="obd-api" onchange="Modulos.diagnostico_obd._api=this.value||null">
           <option value="">Buscando adaptadores…</option>
         </select>
         <div style="font-size:11px;color:var(--text3);margin-top:4px">
@@ -4315,6 +4344,7 @@ Modulos.diagnostico_obd = {
       <div id="obd-log" style="background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:10px 12px;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12.5px;line-height:1.8;min-height:70px;max-height:220px;overflow:auto;margin:10px 0">
         Conecta el adaptador al puerto de diagnóstico del vehículo y enciende el switch.<br>
         · Bluetooth: presiona <b>Conectar y Escanear</b> y elige el adaptador (ej. "OBDII", "Vgate", "iCar Pro").<br>
+        · Bluetooth clásico: elige la vía <b>Thinkcar/ELM por puerto COM</b> y el COM que Windows muestra.<br>
         · USB: solo enchufa el USB-Link a esta PC — el puente arranca solo con Windows.<br>
         &nbsp;&nbsp;¿Primera vez en esta PC? <a href="/puente-obd/instalar-puente.bat" download style="color:var(--cyan)">⬇️ Instalar el puente USB</a> (doble clic al archivo descargado, una sola vez).
       </div>
@@ -4530,11 +4560,17 @@ Modulos.diagnostico_obd = {
   /* Oculta el selector y la prueba en Bluetooth, donde no aplican */
   _verApis() {
     const via = document.getElementById('obd-via')?.value;
-    const usb = via !== 'ble' && via !== 'j1939ble';
+    const clasico = via === 'classic';
+    const usb = via !== 'ble' && via !== 'j1939ble' && !clasico;
     const wrap = document.getElementById('obd-api-wrap');
-    if (wrap) wrap.style.display = usb ? '' : 'none';
+    if (wrap) wrap.style.display = (usb || clasico) ? '' : 'none';
     const test = document.getElementById('obd-btn-test');
     if (test) test.style.display = usb ? '' : 'none';
+    if (clasico) {
+      const s = document.getElementById('obd-api');
+      const opt = s && Array.from(s.options).find(o => /^SERIAL:/i.test(o.value));
+      if (s && opt && !/^SERIAL:/i.test(s.value)) { s.value = opt.value; this._api = opt.value; }
+    }
   },
 
   async _cargarApis() {
@@ -4576,6 +4612,7 @@ Modulos.diagnostico_obd = {
     const vehId = document.getElementById('obd-veh')?.value;
     if (!vehId) { UI.toast('Selecciona el vehículo a escanear', 'error'); return; }
     this._via = document.getElementById('obd-via')?.value || 'ble';
+    if (this._via === 'classic') this._via = 'serial';
     /* El camión por Bluetooth es transporte BLE con bus J1939. Se normaliza la
        vía a 'ble' para que todo lo que pregunta por ella —el driver, el monitor
        en vivo, la bitácora— siga viendo lo que de verdad hay del otro lado, y el
@@ -4601,6 +4638,9 @@ Modulos.diagnostico_obd = {
       if (this._via === 'usb') {
         log('Conectando al puente USB local...');
         ({ nombre, protocolo } = await this._usbInit(log));
+      } else if (this._via === 'serial') {
+        log('Conectando Bluetooth clasico por puerto COM...');
+        ({ nombre, protocolo } = await this._serialInit(log));
       } else {
         log('Buscando adaptador Bluetooth...');
         nombre = await this._conectar();

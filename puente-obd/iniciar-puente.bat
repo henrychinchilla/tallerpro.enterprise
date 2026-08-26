@@ -1,5 +1,5 @@
 @echo off
-rem NexusPro - Puente OBD USB (RP1210)
+rem NexusPro - Puente OBD USB (RP1210) y Bluetooth clasico (SPP/COM)
 rem Ejecuta el puente dentro de PowerShell de 32 bits (la DLL RP1210 es x86).
 rem No genera .exe: evita falsos positivos de antivirus en las PCs del taller.
 cd /d "%~dp0"
