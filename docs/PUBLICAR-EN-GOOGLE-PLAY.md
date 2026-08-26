@@ -1,8 +1,15 @@
 # Publicar NexusPro en Google Play — guía de trabajo
 
-> Estado al 2026-08-25. Cuenta de desarrollador: **Organización** (confirmado por Henry).
-> App lista: **`4.78.0` (versionCode 5)**, AAB firmado con la LLAVE NUEVA en
-> `android/play/NexusPro-4.78.0-play.aab`.
+> Estado al 2026-08-26. Cuenta de desarrollador: **Organización — ya creada y VERIFICADA**
+> (`CMTELECOMM`, región GT). Google lo confirmó por escrito el **2026-08-25 21:02**: la cuenta
+> cumple *todos* los requisitos de verificación y está «in good standing» (punto 1).
+> App firmada disponible: **`4.78.0` (versionCode 5)** en `android/play/NexusPro-4.78.0-play.aab`.
+>
+> ⏸️ **EN ESPERA (2026-08-26).** Codex está trabajando en el proyecto y va por **4.81**. La
+> versión que se suba a Play debe salir de ese trabajo ya terminado, **no del 4.78.0**. Ojo:
+> la rotación de llave (punto 7) sigue **sin mergear a `main` y sin desplegar** — vive sólo en
+> la rama `worktree-app-android-actualizacion`, así que **producción todavía sirve la huella
+> comprometida** en `/.well-known/assetlinks.json`.
 
 Lo que sigue está en el orden en que Play Console lo pide. Lo que **bloquea** va primero.
 
@@ -64,10 +71,54 @@ personas y sostenerlas 14 días seguidos" — que depende de terceros y se rompe
 
 ---
 
-## 1. 🔴 D-U-N-S — es lo que bloquea la cuenta
+## 1. ✅ Verificación de la cuenta — RESUELTA (2026-08-25)
+
+**La cuenta de desarrollador ya existía y ya está verificada.** Eso invalida la premisa con la
+que nació esta guía («el D-U-N-S bloquea y tarda hasta 30 días»): nunca hubo que *crear* una
+cuenta, había que **destrabar** la que ya estaba restringida.
+
+### Lo que de verdad pasó — fechas y evidencia
+
+Encontrado el 2026-08-26 al revisar el correo de `henry.chinchilla@gmail.com`:
+
+| Fecha (Guatemala) | Qué llegó |
+|---|---|
+| 2026-07-02 → 07-16 | Seis avisos «Notification from Google Play about CMTELECOMM»: estado **`Restricted developer account`** — perfil y apps **retirados** de Google Play, sin poder publicar. Dos problemas citados: **verificación de teléfono** e **identidad** |
+| 2026-07-08 | Ticket de soporte `5-0879000040717` |
+| 2026-08-19 | Ticket de soporte `7-8624000040975` (escalado el 08-20) |
+| **2026-08-23 22:22** | «**Se verificó tu identidad**» — identidad ✅ |
+| 2026-08-23 22:23 | Último aviso automático: ya sólo quedaba **Developer Phone Verification** |
+| **2026-08-25 21:02** | Soporte (Jepoy) cierra el caso: «*We've reviewed your account and confirmed that you've met **all verification requirements**. Your account status is now updated and **in good standing**.*» |
+
+> Ese último correo está en la bandeja como **«Re: [7-8624000040975] Your message about Google
+> Play»**. Henry creía no haber recibido nada: sí llegó, anoche.
+
+### ¿Y el D-U-N-S, entonces?
+
+**No hay un solo correo de D&B ni de `dnb.com`** en la cuenta de Gmail, y la hoja de datos
+(`D:\CM documentos\DUNS - hoja de datos para el formulario.md`) **no registra ningún número
+asignado**. No hay evidencia de que el trámite se haya hecho por esa vía.
+
+Y aun así Google afirma que la cuenta cumple *todos* los requisitos — y a una organización el
+D-U-N-S se lo exige sin excepción. Sólo caben dos explicaciones:
+
+1. El D-U-N-S **ya estaba en la cuenta** desde que se creó (es anterior a julio de 2026), o
+2. la correspondencia de D&B llegó al buzón **`@cmtelecommgt.com`** (Microsoft 365), que no se
+   puede consultar desde aquí.
+
+**Cómo salir de la duda en un minuto** — es lo único pendiente de este punto:
+Play Console → **Configuración** → **Detalles del desarrollador**. Si el campo **D-U-N-S** trae
+número y no hay banner rojo de cuenta restringida, el tema está cerrado y **no hay que pedirle
+nada a D&B**. Si estuviera vacío, o el banner siguiera, se sigue el trámite de más abajo.
+
+> ⚠️ **No te fíes sólo del correo.** El automático del 08-23 aún decía «Restricted» y el humano
+> del 08-25 dice que todo está bien. Manda el más nuevo, pero **el estado real se ve en Play
+> Console**, no en la bandeja de entrada.
+
+### Si hiciera falta pedirlo (referencia — ya no es la ruta principal)
 
 Google exige un **D-U-N-S Number** para cuentas de organización. Es gratis y puede tardar
-**hasta 30 días**, así que se pide **hoy**.
+**hasta 30 días**.
 
 ### Antes de llenar nada: revisa si ya lo tienes
 Muchas empresas ya están en la base de D&B sin saberlo (aparecen por importaciones, bancos,
@@ -289,9 +340,11 @@ app se abre **con la barra de URL de Chrome encima**. Se ve como una página web
 ### Cómo arreglarlo (hazlo apenas subas la primera versión)
 1. Play Console → **Integridad de la app** → **Firma de apps**.
 2. Copia el **SHA-256 del "certificado de firma de la app"** (el de Google, **no** el de carga).
-3. Agrégalo al array `sha256_cert_fingerprints` de `.well-known/assetlinks.json`,
-   **sin borrar el actual** (`8B:D8:...:F8:75`): admite varias huellas, y la tuya sigue
-   haciendo falta para quien instaló el APK directo.
+3. Agrégalo al array `sha256_cert_fingerprints` de `.well-known/assetlinks.json`, **junto a la
+   huella vigente** (`48:C9:1A:8C:…:6A:46:7C`, la de `android/nexuspro-2026.keystore`): el
+   array admite varias, y la propia sigue haciendo falta para quien instale el APK directo.
+   ⚠️ **NO vuelvas a meter `8B:D8:…:F8:75`.** Esa es la llave que estuvo publicada en el CDN y
+   se dio por comprometida (punto 7): volver a autorizarla desharía la rotación entera.
 4. `npm run deploy` y reinstala la app para comprobar que abre sin barra.
 
 ---
@@ -321,19 +374,25 @@ en Supabase. El aviso de versión nueva ya se lo explica paso a paso; lo dispara
 
 ## 8. Orden sugerido
 
-1. **Hoy:** buscar/solicitar el D-U-N-S — Henry como contacto, sin esperar a nada. Es lo único
-   que tarda semanas.
-2. **Hoy también:** llevarle la carpeta al notario para el nombramiento de Henry (camino 2 del
-   punto 1). Corre en paralelo, no bloquea.
-3. Confirmar los buzones `@cmtelecommgt.com`.
+> Reordenado el 2026-08-26. **Lo administrativo dejó de ser el cuello de botella** (punto 1);
+> ahora lo que falta es la app final y un despliegue nuestro.
+
+1. ⏸️ **Esperar a que Codex termine** el trabajo en curso (va por 4.81). El AAB que se suba a
+   Play sale de ahí, no del 4.78.0.
+2. 🔴 **Mergear a `main` y desplegar la rotación de llave.** Hoy vive sólo en la rama
+   `worktree-app-android-actualizacion`: **producción sigue sirviendo la huella comprometida**
+   en `/.well-known/assetlinks.json`. Compilar el AAB definitivo ya con la llave nueva.
+3. Confirmar en Play Console que no queda banner de cuenta restringida y que el D-U-N-S figura
+   (punto 1). Un minuto.
 4. ~~Rotar la llave de firma~~ ✅ hecho el 2026-08-25 — **respalda el keystore** (punto 7).
-5. Probar el ingreso del revisor en un teléfono limpio (punto 3).
-6. Subir el AAB a una **prueba interna** — no requiere revisión y sirve para comprobar que
+5. Confirmar los buzones `@cmtelecommgt.com` (punto 2).
+6. Probar el ingreso del revisor en un teléfono limpio (punto 3).
+7. Subir el AAB a una **prueba interna** — no requiere revisión y sirve para comprobar que
    instala y abre.
-7. Llenar ficha, Data Safety, clasificación y acceso.
-8. Invitar a `henry.chinchilla@gmail.com` como Administrador en *Usuarios y permisos*.
-9. Enviar a revisión.
-10. **Apenas quede publicada:** arreglar `assetlinks.json` con la huella de Google (punto 6),
+8. Llenar ficha, Data Safety, clasificación y acceso.
+9. Invitar a `henry.chinchilla@gmail.com` como Administrador en *Usuarios y permisos*.
+10. Enviar a revisión.
+11. **Apenas quede publicada:** arreglar `assetlinks.json` con la huella de Google (punto 6),
     o la app abrirá con la barra de Chrome encima.
 
 ## Fuentes
