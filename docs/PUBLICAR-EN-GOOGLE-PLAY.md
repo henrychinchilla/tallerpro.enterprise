@@ -1,8 +1,10 @@
 # Publicar NexusPro en Google Play — guía de trabajo
 
-> Estado al 2026-08-26. Cuenta de desarrollador: **Organización — ya creada y VERIFICADA**
-> (`CMTELECOMM`, región GT). Google lo confirmó por escrito el **2026-08-25 21:02**: la cuenta
-> cumple *todos* los requisitos de verificación y está «in good standing» (punto 1).
+> Estado al 2026-08-26. Cuenta de desarrollador: **PERSONAL** (`CMTELECOMM`, región GT) — no
+> de organización, como se creyó hasta hoy (punto 0.b). Ya está **VERIFICADA**: Google lo
+> confirmó por escrito el **2026-08-25 21:02** (punto 1).
+> **Lo que bloquea ahora es una sola cosa: la prueba cerrada con 12 verificadores durante 14
+> días** (punto 1.b). El D-U-N-S **nunca hizo falta** y queda descartado.
 > App firmada disponible: **`4.78.0` (versionCode 5)** en `android/play/NexusPro-4.78.0-play.aab`.
 >
 > ⏸️ **EN ESPERA (2026-08-26).** Codex está trabajando en el proyecto y va por **4.81**. La
@@ -30,44 +32,59 @@ Lo que sigue está en el orden en que Play Console lo pide. Lo que **bloquea** v
 
 ---
 
-## 0.b ¿Y si mejor cuenta Personal? — evaluado y descartado (2026-08-25)
+## 0.b La cuenta es PERSONAL, no de organización (2026-08-26)
 
-Surgió la duda de si pasarse a cuenta **Personal** para no esperar el D-U-N-S. Los números no
-dan lo que parece:
+Esta guía dio por sentado durante días que la cuenta era de **Organización**. **No lo es.** Lo
+delata la propia pantalla de Play Console que exige *«Ten al menos 12 verificadores que acepten
+participar en la prueba cerrada»*: ese requisito **sólo aplica a cuentas personales creadas
+después del 13/11/2023**, y las de organización están **exentas**. Si la cuenta fuera de
+organización, esa pantalla no existiría.
 
-| | **Personal** | **Organización** (la actual) |
+Con eso encajan de golpe todas las piezas que no cuadraban:
+
+| Lo que se observó | Qué significa, siendo cuenta personal |
+|---|---|
+| Cero correos de D&B / `dnb.com`, nunca | **El D-U-N-S nunca hizo falta**: sólo se lo exigen a las organizaciones |
+| Los seis avisos de julio citaban **teléfono** e **identidad**, jamás el D-U-N-S | Son exactamente los requisitos de una cuenta personal |
+| Google cerró la verificación el 25-ago sin que existiera ningún D-U-N-S | Coherente: no había nada que pedir |
+
+**El D-U-N-S queda cerrado: ni se tramita, ni se necesita.** Todo el punto 1 pasa a ser historia.
+
+### ¿Convertir la cuenta a Organización para saltarse los 12 verificadores?
+
+Se puede — y aquí esta guía se equivocaba. Afirmaba que *«una cuenta Personal no se puede
+convertir en Organización»*: **es falso**. Google sí admite ese sentido (crear un perfil de
+pagos del tipo correcto, verificarlo y enlazarlo a la cuenta). Lo que **no** admite es el
+inverso, de organización a personal.
+
+**Aun así, ahora NO conviene:**
+
+| | **Quedarse en Personal** ✅ recomendado | **Convertir a Organización** |
 |---|---|---|
-| D-U-N-S | No hace falta | Hasta 30 días · **0 si ya existe** · ~8 días hábiles con exprés de pago |
-| Prueba cerrada obligatoria | **12 testers opt-in, 14 días continuos** | **Exenta** |
-| Depende de terceros | Sí: 12 personas con cuenta de Google que se unan **y no se salgan** | No |
-| Tiempo realista hasta producción | 3–5 semanas | 1–4 semanas (0 si el D-U-N-S ya existe) |
-| Nombre visible en la tienda | El de una persona | El de la empresa |
-| Ingresos y perfil fiscal | A título personal | A nombre de la S.A. |
+| Qué exige | 12 verificadores × 14 días | **D-U-N-S** (no se tiene: hasta 30 días, ~8 hábiles con exprés) + perfil de pagos nuevo |
+| Verificación de la cuenta | **Ya está lista** | **Se vuelve a disparar** |
+| Depende de | 12 personas que tú convocas | D&B y una revisión de Google |
+| Plazo realista | ~2 semanas | 4–6 semanas |
+| Riesgo | Que un verificador se salga y reinicie el conteo | **Volver a caer en cuenta restringida** |
 
-**Lo que decide el asunto:** una cuenta **Personal no se puede convertir en Organización**
-después. Cambiar más adelante obliga a crear otra cuenta y transferir la app, con su propio
-trámite. Y NexusPro es un ERP B2B que factura FEL: publicarlo bajo un nombre personal le resta
-credibilidad ante empresas y desordena la contabilidad de la sociedad.
+El riesgo de la derecha no es teórico: la cuenta acaba de pasar **casi dos meses restringida**
+(2 julio → 25 agosto) con el perfil y las apps **retiradas de Google Play**. Y el correo con el
+que soporte cerró el caso avisa literalmente: *«any future changes or updates to your account
+details **may trigger another verification process**»*. Tocar los datos de la cuenta justo ahora
+es meter la mano en el mismo agujero del que se acaba de salir.
 
-Además, la ruta personal **no es más rápida**: cambia "esperar un trámite" por "conseguir 12
-personas y sostenerlas 14 días seguidos" — que depende de terceros y se rompe si alguien se sale.
+**Decisión: quedarse en Personal, hacer la prueba cerrada y publicar.** La conversión sigue
+disponible **después**, con la app ya viva y sin prisa. Y como sí se puede convertir, publicar
+hoy en Personal **no es una puerta de un solo sentido** — que era justamente el argumento con
+el que esta guía la había descartado.
 
-**Se mantiene Organización.**
+> Sobre la credibilidad comercial: el nombre con el que Google ya se dirige a la cuenta en sus
+> propios correos es **CMTELECOMM**, no el de una persona, así que la ficha no sale a nombre de
+> «Henry».
 
-### Cómo acelerar de verdad
-
-1. **Busca primero si el D-U-N-S ya existe** en https://service.dnb.com/ — muchas empresas ya
-   están en la base de D&B por bancos, aduanas o proveedores, sin saberlo. Si aparece, la espera
-   es **cero**. Son cinco minutos y es lo primero que hay que hacer.
-2. Si no existe, evalúa el **exprés de pago** (~8 días hábiles): sale más barato y más rápido que
-   organizar 12 testers.
-3. **Mientras tanto, sube el AAB a una prueba interna.** No requiere la verificación completa ni
-   pasa por revisión, y sirve para comprobar hoy mismo que la app instala, abre y funciona
-   firmada. Nada de lo administrativo te impide avanzar por ahí.
-
-> **El tema del representante legal NO atrasa el lanzamiento.** El nombramiento se puede cambiar
-> cuando se quiera; no hay que esperarlo para publicar. Se verifica con quien está inscrito hoy
-> y se actualiza después.
+> **El representante legal (Karen) y el notario NO atrasan el lanzamiento** — y con cuenta
+> personal dejan de ser parte de este trámite. El nombramiento sigue teniendo sentido por lo
+> mercantil, pero ya no toca a Google Play.
 
 ---
 
@@ -99,26 +116,22 @@ Encontrado el 2026-08-26 al revisar el correo de `henry.chinchilla@gmail.com`:
 (`D:\CM documentos\DUNS - hoja de datos para el formulario.md`) **no registra ningún número
 asignado**. No hay evidencia de que el trámite se haya hecho por esa vía.
 
-Y aun así Google afirma que la cuenta cumple *todos* los requisitos — y a una organización el
-D-U-N-S se lo exige sin excepción. Sólo caben dos explicaciones:
+Durante unas horas eso pareció un misterio: Google decía que la cuenta cumplía *todos* los
+requisitos, y a una organización el D-U-N-S se lo exige sin excepción. **La explicación llegó
+esa misma tarde: la cuenta no es de organización, es PERSONAL** (punto 0.b), y a las personales
+no se les pide D-U-N-S. No hay correos de D&B porque **nunca hubo trámite que hacer**.
 
-1. El D-U-N-S **ya estaba en la cuenta** desde que se creó (es anterior a julio de 2026), o
-2. la correspondencia de D&B llegó al buzón **`@cmtelecommgt.com`** (Microsoft 365), que no se
-   puede consultar desde aquí.
+**Pregunta cerrada: el D-U-N-S no se necesita.** Lo que queda de este punto es sólo confirmar de
+un vistazo, en Play Console, que ya no hay banner rojo de cuenta restringida.
 
-**Cómo salir de la duda en un minuto** — es lo único pendiente de este punto:
-Play Console → **Configuración** → **Detalles del desarrollador**. Si el campo **D-U-N-S** trae
-número y no hay banner rojo de cuenta restringida, el tema está cerrado y **no hay que pedirle
-nada a D&B**. Si estuviera vacío, o el banner siguiera, se sigue el trámite de más abajo.
+> ⚠️ **No te fíes sólo del correo.** El aviso automático del 08-23 aún decía «Restricted» y el
+> humano del 08-25 dice que todo está bien. Manda el más nuevo, pero **el estado real se ve en
+> Play Console**, no en la bandeja de entrada.
 
-> ⚠️ **No te fíes sólo del correo.** El automático del 08-23 aún decía «Restricted» y el humano
-> del 08-25 dice que todo está bien. Manda el más nuevo, pero **el estado real se ve en Play
-> Console**, no en la bandeja de entrada.
+### Si algún día se convierte a Organización (referencia — hoy NO es la ruta)
 
-### Si hiciera falta pedirlo (referencia — ya no es la ruta principal)
-
-Google exige un **D-U-N-S Number** para cuentas de organización. Es gratis y puede tardar
-**hasta 30 días**.
+Sólo entonces Google exige un **D-U-N-S Number**. Es gratis y puede tardar **hasta 30 días**.
+Ver el porqué de no hacerlo ahora en el punto 0.b.
 
 ### Antes de llenar nada: revisa si ya lo tienes
 Muchas empresas ya están en la base de D&B sin saberlo (aparecen por importaciones, bancos,
@@ -128,6 +141,11 @@ proveedores). Búscalo primero — si ya existe, te ahorras las 4 semanas:
 ### Si no existe, solicítalo aquí
 👉 https://www.dnb.com/duns/get-a-duns.html — es el enlace que da Google en su propia ayuda.
 Gratis, hasta 30 días hábiles. Hay opción exprés de pago (unos 8 días hábiles) si urge.
+
+> 📌 **De aquí al final del punto 1, todo aplica SÓLO si algún día se convierte la cuenta a
+> Organización.** Con la cuenta personal de hoy, Google **no** pide D-U-N-S, ni patente, ni
+> RTU, ni nombramiento del representante legal. Se conserva porque la información costó
+> reunirla y sigue siendo válida el día que se decida convertir.
 
 ### ⚠️ LA REGLA QUE TUMBA CUENTAS
 El **nombre legal y la dirección** que registres en D&B tienen que coincidir **carácter por
@@ -201,6 +219,56 @@ Detalle completo, modelo de carta de autorización y el encargo para el notario:
 > El RTU disponible es del 09/07/2026 y **aún no incluye el establecimiento CM TELECOMM** (su
 > patente es del 11/08/2026). Si Google pide un documento donde figure ese nombre comercial,
 > baja un **RTU actualizado** desde la Agencia Virtual de la SAT.
+
+---
+
+## 1.b 🔴 LO QUE BLOQUEA HOY: prueba cerrada con 12 verificadores
+
+Texto literal de Play Console, 2026-08-26:
+
+> *Para poder solicitarlo, debes ejecutar una prueba cerrada que cumpla con nuestros criterios.*
+> · Publica una versión de prueba cerrada
+> · Ten al menos 12 verificadores que acepten participar — **actualmente, 0 aceptaron**
+> · Ejecuta la prueba cerrada con un mínimo de 12 verificadores durante al menos **14 días**
+
+### Las reglas que hacen fallar el conteo
+
+- Los 14 días **no empiezan al subir el AAB**: empiezan cuando la versión está aprobada **y**
+  hay **12 o más** verificadores con la participación **aceptada**.
+- Si en algún momento el número **baja de 12, la continuidad se rompe** y el conteo vuelve a
+  cero. Por eso se invita a **15–18**, no a doce justos: alguien siempre se sale o cambia de
+  teléfono.
+- Tienen que ser **personas reales, con cuenta de Google real y teléfono Android real**.
+  Emuladores, cuentas duplicadas o granjas de testers no cuentan, y usarlas es motivo de rechazo.
+- Aceptar la invitación **no basta**: al pedir producción, Google pregunta **cómo se reclutó a
+  los verificadores y qué se cambió con lo que reportaron**. Conviene que de verdad abran la app
+  y comenten algo.
+
+### Cómo se hace
+
+1. Play Console → **Prueba y lanzamiento** → **Pruebas** → **Prueba cerrada** → crear versión.
+2. **Verificadores** → crear una **lista de correos** con 15–18 direcciones de Gmail.
+3. Copiar el **enlace de participación** y mandárselo a cada uno: tiene que abrirlo y pulsar
+   *Convertirme en verificador*. **Ese** es el "aceptar" que Google cuenta — no el correo.
+4. Que instalen desde Play y entren al menos una vez (credenciales del punto 3).
+5. Cumplidos los 14 días con ≥12 dentro: **Solicitar acceso a producción** y responder el
+   cuestionario.
+
+### Lo que conviene hacer YA, sin esperar a nadie
+
+El cronómetro de 14 días es el camino largo que queda, y **se puede arrancar con el AAB que ya
+existe** (`4.78.0`, firmado). Subir después la versión de Codex (4.81) a esa misma pista **no
+reinicia el conteo**: lo que se cuenta es que los verificadores sigan dentro, no que el binario
+no cambie.
+
+> Secuencia correcta: **abrir la prueba cerrada y juntar a los verificadores hoy**; y mientras
+> corren los 14 días, terminar la app, desplegar la rotación de llave y arreglar `assetlinks`.
+
+### De dónde salen 12 personas
+
+Empleados de CM Telecomm, familia, y los talleres y comercios que ya usan NexusPro — a estos
+últimos les sirve de verdad, porque van a tener la app en Play. Sólo se necesita que tengan
+teléfono Android y cuenta de Google.
 
 ---
 
@@ -377,26 +445,30 @@ en Supabase. El aviso de versión nueva ya se lo explica paso a paso; lo dispara
 > Reordenado el 2026-08-26. **Lo administrativo dejó de ser el cuello de botella** (punto 1);
 > ahora lo que falta es la app final y un despliegue nuestro.
 
-1. ⏸️ **Esperar a que Codex termine** el trabajo en curso (va por 4.81). El AAB que se suba a
-   Play sale de ahí, no del 4.78.0.
-2. 🔴 **Mergear a `main` y desplegar la rotación de llave.** Hoy vive sólo en la rama
+1. 🔴 **HOY, sin esperar a nada: abrir la prueba cerrada y juntar 15–18 verificadores**
+   (punto 1.b). Es el cronómetro de 14 días y el único camino largo que queda. Arranca con el
+   AAB `4.78.0` que ya está firmado; subir luego el 4.81 **no reinicia el conteo**.
+2. **Apenas suba ese primer AAB:** copiar de Play Console la huella de *Firma de apps* de Google
+   y agregarla a `assetlinks.json` (punto 6), o los verificadores verán la barra de Chrome
+   encima de la app.
+3. ⏸️ **Esperar a que Codex termine** (va por 4.81) para el AAB definitivo.
+4. 🔴 **Mergear a `main` y desplegar la rotación de llave.** Hoy vive sólo en la rama
    `worktree-app-android-actualizacion`: **producción sigue sirviendo la huella comprometida**
-   en `/.well-known/assetlinks.json`. Compilar el AAB definitivo ya con la llave nueva.
-3. Confirmar en Play Console que no queda banner de cuenta restringida y que el D-U-N-S figura
-   (punto 1). Un minuto.
-4. ~~Rotar la llave de firma~~ ✅ hecho el 2026-08-25 — **respalda el keystore** (punto 7).
-5. Confirmar los buzones `@cmtelecommgt.com` (punto 2).
-6. Probar el ingreso del revisor en un teléfono limpio (punto 3).
-7. Subir el AAB a una **prueba interna** — no requiere revisión y sirve para comprobar que
-   instala y abre.
+   en `/.well-known/assetlinks.json`.
+5. ~~Rotar la llave de firma~~ ✅ hecho el 2026-08-25 — **respalda el keystore** (punto 7).
+6. Confirmar los buzones `@cmtelecommgt.com` (punto 2).
+7. Probar el ingreso del revisor en un teléfono limpio (punto 3) — y dárselo también a los
+   verificadores.
 8. Llenar ficha, Data Safety, clasificación y acceso.
-9. Invitar a `henry.chinchilla@gmail.com` como Administrador en *Usuarios y permisos*.
+9. Cumplidos los 14 días: **Solicitar acceso a producción** y responder el cuestionario sobre
+   la prueba cerrada.
 10. Enviar a revisión.
-11. **Apenas quede publicada:** arreglar `assetlinks.json` con la huella de Google (punto 6),
-    o la app abrirá con la barra de Chrome encima.
 
 ## Fuentes
 - [Información necesaria para crear una cuenta de Play Console](https://support.google.com/googleplay/android-developer/answer/13628312?hl=es)
 - [Elegir tipo de cuenta de desarrollador](https://support.google.com/googleplay/android-developer/answer/13634885)
 - [Solicitar un D-U-N-S gratis (enlace que da Google)](https://www.dnb.com/duns/get-a-duns.html)
 - [Buscador de D-U-N-S existente](https://service.dnb.com/)
+- [Requisitos de prueba para cuentas personales nuevas — 12 verificadores / 14 días](https://support.google.com/googleplay/android-developer/answer/14151465)
+- [Guía de la comunidad: todo sobre el requisito de los 12 verificadores](https://support.google.com/googleplay/android-developer/community-guide/255621488/everything-about-the-12-testers-requirement)
+- [Mantener actualizada la información de tu cuenta de desarrollador (cambio de tipo de cuenta)](https://support.google.com/googleplay/android-developer/answer/13634888)
