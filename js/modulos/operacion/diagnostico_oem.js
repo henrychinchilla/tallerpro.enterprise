@@ -182,6 +182,7 @@
     async inspeccionarBluetooth() {
       if (!navigator.bluetooth) return UI.toast('Este navegador no ofrece Web Bluetooth','error');
       const svcs=[...new Set([...(this._SVC_CANDIDATOS||[]),...(this._UUIDS||[]).map(x=>x.svc),'0000180a-0000-1000-8000-00805f9b34fb'])];
+      const infoBLE={'00002a24-0000-1000-8000-00805f9b34fb':'modelo','00002a27-0000-1000-8000-00805f9b34fb':'hardware','00002a28-0000-1000-8000-00805f9b34fb':'firmware','00002a29-0000-1000-8000-00805f9b34fb':'fabricante'};
       let dev,server;
       try {
         dev=await navigator.bluetooth.requestDevice({acceptAllDevices:true,optionalServices:svcs});
@@ -189,11 +190,19 @@
         const servicios=[];
         for(const s of await server.getPrimaryServices()) {
           const chars=[];
-          try { for(const c of await s.getCharacteristics()) chars.push({uuid:c.uuid,propiedades:propsBLE(c.properties)}); }
+          try { for(const c of await s.getCharacteristics()) {
+            const item={uuid:c.uuid,propiedades:propsBLE(c.properties)};
+            /* Sólo se leen las cuatro características estándar de Device
+               Information. Es una lectura pasiva; no se toca el canal OBD ni
+               se escribe en el adaptador. */
+            if(infoBLE[c.uuid]&&c.properties?.read) { try { const v=await c.readValue(); const bytes=Array.from(new Uint8Array(v.buffer,v.byteOffset,v.byteLength)); item.valor=new TextDecoder().decode(v).replace(/\0/g,'').trim(); item.hex=hex(bytes); } catch(e) { item.error_lectura=e.message; } }
+            chars.push(item);
+          } }
           catch(e){ chars.push({error:e.message}); }
           servicios.push({uuid:s.uuid,caracteristicas:chars});
         }
-        this._inspeccionBLE={fecha:new Date().toISOString(),nombre:dev.name||null,id:dev.id||null,tipo:'BLE Web Bluetooth',servicios,limitacion:'Chrome solo revela servicios UUID solicitados previamente; un resultado vacío no significa que el dongle no tenga servicios.',agente:navigator.userAgent||null};
+        const identidad={};servicios.flatMap(s=>s.caracteristicas||[]).forEach(c=>{if(infoBLE[c.uuid]&&c.valor)identidad[infoBLE[c.uuid]]=c.valor;});
+        this._inspeccionBLE={fecha:new Date().toISOString(),nombre:dev.name||null,id:dev.id||null,tipo:'BLE Web Bluetooth',identidad,servicios,limitacion:'Chrome solo revela servicios UUID solicitados previamente; un resultado vacío no significa que el dongle no tenga servicios.',agente:navigator.userAgent||null};
         await DB.registrarEjecucionOEM({operacion:'inspeccion_ble_pasiva',estado:'exitosa',evidencia:this._inspeccionBLE});
       } catch(e) {
         if(e?.name==='NotFoundError') return UI.toast('Inspección cancelada','info');
@@ -205,8 +214,9 @@
     modalInspeccionBLE() {
       const r=this._inspeccionBLE; if(!r)return;
       const total=(r.servicios||[]).reduce((n,s)=>n+(s.caracteristicas||[]).filter(c=>c.uuid).length,0);
-      UI.modal('🔬 Inspector de interfaz Bluetooth',`<div class="card" style="padding:14px"><b>${UI.esc(r.nombre||'Dispositivo sin nombre')}</b><p>${r.error?`<span style="color:var(--red)">${UI.esc(r.error)}</span>`:`${r.servicios.length} servicio(s) accesible(s) · ${total} característica(s)`}</p><small>${UI.esc(r.limitacion||'')}</small></div>
-      <div style="max-height:52vh;overflow:auto;margin-top:12px">${(r.servicios||[]).map(s=>`<div class="card" style="padding:11px;margin-bottom:8px"><b style="font-family:monospace">${UI.esc(s.uuid)}</b>${(s.caracteristicas||[]).map(c=>`<div style="font-family:monospace;font-size:11px;margin-top:6px">↳ ${UI.esc(c.uuid||c.error)} <span style="color:var(--text3)">${UI.esc((c.propiedades||[]).join(', '))}</span></div>`).join('')}</div>`).join('')||'<p>No se revelaron servicios autorizados. La capa Android nativa será necesaria para inspección completa o Bluetooth Classic.</p>'}</div>
+      const ident=r.identidad||{};
+      UI.modal('🔬 Inspector de interfaz Bluetooth',`<div class="card" style="padding:14px"><b>${UI.esc(r.nombre||'Dispositivo sin nombre')}</b><p>${r.error?`<span style="color:var(--red)">${UI.esc(r.error)}</span>`:`${r.servicios.length} servicio(s) accesible(s) · ${total} característica(s)`}</p>${Object.keys(ident).length?`<p><b>Identidad leída:</b> ${Object.entries(ident).map(([k,v])=>`${UI.esc(k)}: ${UI.esc(v)}`).join(' · ')}</p>`:''}<small>${UI.esc(r.limitacion||'')}</small></div>
+      <div style="max-height:52vh;overflow:auto;margin-top:12px">${(r.servicios||[]).map(s=>`<div class="card" style="padding:11px;margin-bottom:8px"><b style="font-family:monospace">${UI.esc(s.uuid)}</b>${(s.caracteristicas||[]).map(c=>`<div style="font-family:monospace;font-size:11px;margin-top:6px">↳ ${UI.esc(c.uuid||c.error)} <span style="color:var(--text3)">${UI.esc((c.propiedades||[]).join(', '))}</span>${c.valor?`<br><b>${UI.esc(c.valor)}</b> <span style="opacity:.6">[${UI.esc(c.hex||'')}]</span>`:''}${c.error_lectura?`<br><span style="color:var(--amber)">${UI.esc(c.error_lectura)}</span>`:''}</div>`).join('')}</div>`).join('')||'<p>No se revelaron servicios autorizados. La capa Android nativa será necesaria para inspección completa o Bluetooth Classic.</p>'}</div>
       <div class="modal-footer"><button class="btn btn-ghost" onclick="UI.cerrarModal()">Cerrar</button><button class="btn btn-cyan" onclick="Modulos.diagnostico_obd.copiarInspeccionBLE()">📋 Copiar reporte</button></div>`,'820px');
     },
     async copiarInspeccionBLE() { if(!this._inspeccionBLE)return; await navigator.clipboard.writeText(JSON.stringify(this._inspeccionBLE,null,2)); UI.toast('Reporte Bluetooth copiado ✓'); },

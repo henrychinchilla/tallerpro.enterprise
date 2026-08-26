@@ -47,6 +47,7 @@ ok('borrado por módulo cancela si falla el historial',/borrarPorModulo[\s\S]*?_
 ok('IMMO ofrece diagnóstico y aprendizaje autorizado',O.objetivosImmo.some(x=>x.id==='estado_llave')&&O.objetivosImmo.some(x=>x.id==='reaprendizaje_oem'));
 ok('IMMO no ofrece clonación ni bypass',!O.objetivosImmo.some(x=>/clon|bypass|secreto/i.test(x.id+' '+x.nombre)));
 ok('programación IMMO real permanece bloqueada',!O.puedeEjecutar({...base,tipo:'immo_programacion',riesgo:'critico',definicion:{objetivo_immo:'reaprendizaje_oem'}}).ok);
+ok('inspector BLE lee identidad estándar sin escribir',fuenteOEM.includes('readValue()')&&fuenteOEM.includes('infoBLE'));
 ok('plan incluye la flota real de pruebas',O.planValidacion.length===7&&O.planValidacion.some(x=>x.id==='international_dt466'));
 ok('pruebas activas tienen objetivos guiados',O.objetivosActivos.some(x=>x.id==='ventilador')&&O.objetivosActivos.every(x=>x.precondiciones.length));
 ok('preparación activa exige estado verificado',!O.puedePrepararActiva({tipo:'prueba_activa',estado:'laboratorio',riesgo:'controlado',definicion:{objetivo_activo:'bocina'}},{contacto:true}).ok);
