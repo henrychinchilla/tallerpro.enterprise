@@ -73,18 +73,32 @@ Lo esencial, para que quede dicho aquí:
 **Ojo con la llamada de verificación:** D&B llama al teléfono registrado. Si no contestas, el
 trámite se queda parado sin avisarte. Contesta números desconocidos esas semanas.
 
-### 🔴 El representante legal no es Henry
+### El representante legal inscrito es Karen — plan decidido
 
-Según el RTU, quien representa a CM INVESTMENTS, S.A. es **Karen Olanda Chinchilla Corleto de
-Ruano**, como **Administradora Única** (nombramiento vigente hasta el **22/12/2027**).
+Quien está **inscrito** como representante de CM INVESTMENTS, S.A. es **Karen Olanda Chinchilla
+Corleto de Ruano**, **Administradora Única** (acta del 23/12/2024, Registro 770625, Folio 44,
+Libro 841 de Auxiliares de Comercio; **plazo definido de 3 años, vence el 20/12/2027**).
 
-Google verifica la identidad del **representante autorizado** de la organización. Si la cuenta
-la gestiona otra persona, la verificación puede rechazarse. Hay que elegir antes de enviarla:
+Henry es el **dueño**, pero eso no es lo mismo ni es verificable por Google: las acciones de una
+S.A. no constan en el Registro Mercantil, así que un revisor no tiene cómo comprobarlo. Sólo
+puede mirar el nombramiento inscrito.
 
-1. **Que la verificación la haga Karen** — su DPI ya está en la carpeta, más el acta de
-   nombramiento. Es el camino directo.
-2. **Acreditar a Henry** con un mandato/poder o acta que lo autorice a representar a la
-   sociedad.
+**Plan acordado — los dos a la vez:**
+
+1. **Ahora (no bloquea nada):** la verificación de organización la respalda Karen —su DPI y el
+   acta de nombramiento ya están en `D:\CM documentos`— y en Play Console se invita a
+   **`henry.chinchilla@gmail.com`** como **Administrador** desde *Usuarios y permisos*. Henry
+   gestiona todo: versiones, ficha, precios, reseñas.
+2. **En paralelo, con el notario:** asamblea + acta notarial que nombre a Henry Administrador
+   Único y Representante Legal, e inscripción en el Registro Mercantil. Al ser el dueño,
+   controla la asamblea y no necesita autorización de nadie. Después se actualiza el
+   representante en Play Console y en el RTU.
+
+> **Para el D-U-N-S esto NO aplica:** D&B pide un *contacto*, no un representante inscrito, así
+> que Henry va como contacto y el trámite arranca hoy.
+
+Detalle completo, modelo de carta de autorización y el encargo para el notario:
+`D:\CM documentos\Acreditar a Henry ante Google Play.md` (fuera del repo).
 
 ### Documentos que Google pedirá aparte (además del D-U-N-S)
 - `Patente de Comercio de Sociedad CM Investments SA.pdf` (constitución)
@@ -263,14 +277,20 @@ nueva, Google pasa a custodiar la llave definitiva y una fuga local deja de ser 
 
 ## 8. Orden sugerido
 
-1. **Hoy:** buscar/solicitar el D-U-N-S (es lo que tarda semanas).
-2. Confirmar los buzones `@cmtelecommgt.com`.
-3. Decidir si rotamos la llave de firma.
-4. Crear la cuenta `demo.play@` y probarla en un teléfono limpio.
-5. Subir el AAB a una **prueba interna** (no requiere revisión, sirve para validar que instala).
-6. Llenar ficha, Data Safety, clasificación y acceso.
-7. Enviar a revisión.
-8. **Apenas quede publicada:** arreglar `assetlinks.json` con la huella de Google (punto 6).
+1. **Hoy:** buscar/solicitar el D-U-N-S — Henry como contacto, sin esperar a nada. Es lo único
+   que tarda semanas.
+2. **Hoy también:** llevarle la carpeta al notario para el nombramiento de Henry (camino 2 del
+   punto 1). Corre en paralelo, no bloquea.
+3. Confirmar los buzones `@cmtelecommgt.com`.
+4. Decidir si rotamos la llave de firma (punto 7).
+5. Probar el ingreso del revisor en un teléfono limpio (punto 3).
+6. Subir el AAB a una **prueba interna** — no requiere revisión y sirve para comprobar que
+   instala y abre.
+7. Llenar ficha, Data Safety, clasificación y acceso.
+8. Invitar a `henry.chinchilla@gmail.com` como Administrador en *Usuarios y permisos*.
+9. Enviar a revisión.
+10. **Apenas quede publicada:** arreglar `assetlinks.json` con la huella de Google (punto 6),
+    o la app abrirá con la barra de Chrome encima.
 
 ## Fuentes
 - [Información necesaria para crear una cuenta de Play Console](https://support.google.com/googleplay/android-developer/answer/13628312?hl=es)
