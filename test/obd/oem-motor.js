@@ -1,7 +1,8 @@
 const fs=require('fs'),vm=require('vm'),path=require('path');
 const {ok,fin}=require('./harness');
+const fuenteOEM=fs.readFileSync(path.join(__dirname,'../../js/modulos/operacion/diagnostico_oem.js'),'utf8');
 const ctx={globalThis:null,Modulos:{},console}; ctx.globalThis=ctx; vm.createContext(ctx);
-vm.runInContext(fs.readFileSync(path.join(__dirname,'../../js/modulos/operacion/diagnostico_oem.js'),'utf8'),ctx);
+vm.runInContext(fuenteOEM,ctx);
 const O=ctx.OEMMotor;
 const base={nombre:'Temperatura',marca:'Ford',ecu:'PCM',tipo:'did',identificador:'1234',fuente:'Manual OEM',estado:'verificado',riesgo:'lectura',activa:true};
 ok('expone el motor OEM',!!O);
@@ -29,4 +30,18 @@ ok('paquete base expone DIDs UDS trazables',O.didsBase.map(x=>x.did).join(',')==
 ok('incluye simuladores de marcas comunes en Guatemala',['toyota','nissan','hyundai_kia','mitsubishi','isuzu'].every(x=>O.perfilesSimulados[x]));
 ok('catálogo guiado incluye marcas, ECUs y protocolos',O.marcas.includes('Toyota')&&O.marcas.includes('Isuzu')&&O.ecus.some(x=>x.includes('ABS'))&&O.protocolos.includes('j1939'));
 ok('rechaza una red fuera del catálogo',O.validar({...base,protocolo:'uds',definicion:{red:'inventada'}}).some(x=>x.includes('Red')));
+ok('rechaza un rango de años invertido',O.validar({...base,anio_desde:2020,anio_hasta:2010}).some(x=>x.includes('año')));
+ok('precondiciones aprobadas con estado confirmado',O.evaluarPrecondiciones([{clave:'motor',valor:false},{clave:'velocidad_max',valor:0},{clave:'voltaje_min',valor:12}],{motor:false,velocidad:0,voltaje:12.6}).ok);
+ok('precondición sin telemetría bloquea, no adivina',!O.evaluarPrecondiciones([{clave:'freno',valor:true}],{}).ok);
+ok('precondición desconocida se bloquea',O.evaluarPrecondiciones([{clave:'misterio',valor:1}],{}).fallos[0].includes('desconocida'));
+ok('catálogo incluye resets de ABS, TPMS y módulos',['abs_aprendizajes','tpms_reaprendizaje','ecu_reinicio'].every(x=>O.objetivosReset.some(y=>y.id===x)));
+ok('reset sin objetivo guiado se rechaza',O.validar({...base,tipo:'reset',riesgo:'alto'}).some(x=>x.includes('objetivo')));
+ok('reset verificado sigue sin transmitirse en esta etapa',!O.puedeEjecutar({...base,tipo:'reset',riesgo:'alto',definicion:{objetivo_reset:'ecu_reinicio'}}).ok);
+ok('reporte de parámetros ofrece guardar PDF',fuenteOEM.includes('Guardar PDF / imprimir')&&fuenteOEM.includes('imprimirParametrosOEM'));
+const fuenteOBD=fs.readFileSync(path.join(__dirname,'../../js/modulos/operacion/diagnostico_obd.js'),'utf8');
+ok('borrado general exige copia previa',/borrarDTCs[\s\S]*?_guardarAntesDeBorrar\(\)[\s\S]*?if \(!guardado\)/.test(fuenteOBD));
+ok('borrado por módulo cancela si falla el historial',/borrarPorModulo[\s\S]*?_guardarAntesDeBorrar\(\)[\s\S]*?if \(!guardado\)/.test(fuenteOBD));
+ok('IMMO ofrece diagnóstico y aprendizaje autorizado',O.objetivosImmo.some(x=>x.id==='estado_llave')&&O.objetivosImmo.some(x=>x.id==='reaprendizaje_oem'));
+ok('IMMO no ofrece clonación ni bypass',!O.objetivosImmo.some(x=>/clon|bypass|secreto/i.test(x.id+' '+x.nombre)));
+ok('programación IMMO real permanece bloqueada',!O.puedeEjecutar({...base,tipo:'immo_programacion',riesgo:'critico',definicion:{objetivo_immo:'reaprendizaje_oem'}}).ok);
 fin();

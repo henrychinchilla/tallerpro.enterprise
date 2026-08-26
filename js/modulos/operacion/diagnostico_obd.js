@@ -5427,6 +5427,12 @@ Modulos.diagnostico_obd = {
       'Borrar códigos');
     if (!ok) return;
     try {
+      const guardado = await this._guardarAntesDeBorrar();
+      if (!guardado) {
+        this._log('<span style="color:var(--red)">Borrado cancelado: no se pudo guardar la copia previa de los DTC.</span>');
+        return UI.toast('No se borró nada: primero debe guardarse el historial de DTC','error');
+      }
+      this._log('💾 Copia de DTC guardada antes de borrar ✓');
       if (this._via === 'j1939') {
         await this._j39Solicitar(65235);   // DM11: borra códigos activos
         await this._j39Solicitar(65228);   // DM3: borra códigos previos
@@ -5649,8 +5655,11 @@ Modulos.diagnostico_obd = {
     if (!ok) return;
 
     const guardado = await this._guardarAntesDeBorrar();
-    this._log(guardado ? '💾 Escaneo guardado antes de borrar ✓'
-                       : '<span style="color:var(--amber)">No se pudo guardar el escaneo previo — se borra igual, pero sin registro</span>');
+    if (!guardado) {
+      this._log('<span style="color:var(--red)">Borrado cancelado: no se pudo guardar la copia previa.</span>');
+      return UI.toast('No se borró nada: primero debe guardarse el historial de DTC','error');
+    }
+    this._log('💾 Escaneo guardado antes de borrar ✓');
 
     let bien = 0, mal = 0;
     for (const m of conFallas) {

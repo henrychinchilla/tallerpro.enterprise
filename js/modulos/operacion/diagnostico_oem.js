@@ -1,7 +1,7 @@
 /* NexusPro — capa OEM segura. Una definición no verificada nunca transmite. */
 (function () {
   'use strict';
-  const TIPOS = ['did','prueba_activa','calibracion','regeneracion_dpf','purga_abs','codificacion','reflash','security_access','procedimiento'];
+  const TIPOS = ['did','reset','immo_diagnostico','immo_programacion','prueba_activa','calibracion','regeneracion_dpf','purga_abs','codificacion','reflash','security_access','procedimiento'];
   const CANALES = [
     {id:'hs',nombre:'HS-CAN',estado:'operativo',nota:'CAN principal por comandos estándar ELM/ISO 15765'},
     {id:'ms',nombre:'MS-CAN',estado:'validar',nota:'Capacidad del vLinker MS; comando de selección pendiente de prueba física'},
@@ -25,6 +25,28 @@
   const MARCAS_OEM = ['Toyota','Nissan','Hyundai','Kia','Mitsubishi','Honda','Mazda','Isuzu','Suzuki','Chevrolet / GM','Ford','Volkswagen','Mercedes-Benz','Hino','Fuso','JAC','Foton','Otro'];
   const ECUS_OEM = ['ECM / PCM (motor)','TCM (transmisión)','ABS / EBCM (frenos)','BCM (carrocería)','SRS / ACM (airbag)','EPS / PSCM (dirección)','IPC (tablero)','HVAC (climatización)','4WD / AWD','Inmovilizador','Gateway','ADAS','Otro'];
   const PROTOCOLOS_OEM = ['uds','kwp2000','obd2','j1939','j1708_j1587','iso9141','fabricante'];
+  const OBJETIVOS_RESET = [
+    {id:'dtc_modulo',nombre:'Borrar DTC del módulo',riesgo:'controlado'},
+    {id:'ecu_reinicio',nombre:'Reiniciar ECU / módulo',riesgo:'alto'},
+    {id:'abs_aprendizajes',nombre:'ABS: borrar aprendizajes',riesgo:'alto'},
+    {id:'tpms_reaprendizaje',nombre:'TPMS: iniciar reaprendizaje',riesgo:'controlado'},
+    {id:'sas_cero',nombre:'Dirección: punto cero / SAS',riesgo:'alto'},
+    {id:'transmision_adaptativos',nombre:'Transmisión: borrar adaptativos',riesgo:'alto'},
+    {id:'acelerador_aprendizaje',nombre:'Acelerador / ralentí: reaprendizaje',riesgo:'controlado'},
+    {id:'mantenimiento',nombre:'Aceite / mantenimiento: restablecer',riesgo:'controlado'},
+    {id:'bateria_registro',nombre:'Batería: registrar reemplazo / BMS',riesgo:'controlado'},
+    {id:'dpf_aprendizajes',nombre:'DPF: restablecer valores aprendidos',riesgo:'alto'},
+    {id:'otro',nombre:'Otro reset OEM verificado',riesgo:'alto'}
+  ];
+  const OBJETIVOS_IMMO = [
+    {id:'identificacion',nombre:'Identificar IMMO / BCM / ECU',riesgo:'lectura'},
+    {id:'dtc',nombre:'Leer DTC del inmovilizador',riesgo:'lectura'},
+    {id:'estado_llave',nombre:'Estado de reconocimiento de llave',riesgo:'lectura'},
+    {id:'cantidad_llaves',nombre:'Cantidad de llaves registradas',riesgo:'lectura'},
+    {id:'antena',nombre:'Diagnóstico de antena transpondedor',riesgo:'lectura'},
+    {id:'reaprendizaje_oem',nombre:'Reaprendizaje autorizado de llave',riesgo:'critico'},
+    {id:'sincronizacion_oem',nombre:'Sincronización IMMO–ECU autorizada',riesgo:'critico'}
+  ];
   const PERFILES_SIMULADOS = {
     ford:{marca:'Ford',modelo:'Perfil de laboratorio',redes:[
       {id:'hs',modulos:[{req:0x7E0,resp:0x7E8,nombre:'PCM'},{req:0x7E1,resp:0x7E9,nombre:'TCM'},{req:0x760,resp:0x768,nombre:'ABS'}]},
@@ -43,7 +65,7 @@
   const hex = b => (b || []).map(x => Number(x).toString(16).padStart(2,'0').toUpperCase()).join(' ');
   const propsBLE = p => ['broadcast','read','writeWithoutResponse','write','notify','indicate','authenticatedSignedWrites','reliableWrite','writableAuxiliaries'].filter(k=>!!p?.[k]);
   const Motor = {
-    canales: CANALES, familias:FAMILIAS, didsBase:DIDS_BASE, perfilesSimulados:PERFILES_SIMULADOS, marcas:MARCAS_OEM, ecus:ECUS_OEM, protocolos:PROTOCOLOS_OEM, propsBLE,
+    canales: CANALES, familias:FAMILIAS, didsBase:DIDS_BASE, perfilesSimulados:PERFILES_SIMULADOS, marcas:MARCAS_OEM, ecus:ECUS_OEM, protocolos:PROTOCOLOS_OEM, objetivosReset:OBJETIVOS_RESET, objetivosImmo:OBJETIVOS_IMMO, propsBLE,
     construirTopologia(redes=[], meta={}) {
       const conocidas=new Set(CANALES.map(c=>c.id));
       const salida=CANALES.map(c=>({id:c.id,nombre:c.nombre,estado:'no_escaneada',modulos:[]}));
@@ -66,6 +88,20 @@
       if(!p) throw new Error('Perfil simulado no disponible');
       return this.construirTopologia(p.redes.map(r=>({...r,estado:'simulada',modulos:r.modulos.map(m=>({...m,simulado:true}))})),{modo:'simulador',marca:p.marca,modelo:p.modelo,adaptador:'ECU virtual NexusPro'});
     },
+    evaluarPrecondiciones(requisitos=[], estado={}) {
+      const fallos=[];
+      for(const r of requisitos||[]) {
+        const clave=typeof r==='string'?r:r.clave, valor=typeof r==='object'?r.valor:undefined;
+        if(clave==='contacto' && estado.contacto!==valor) fallos.push(`Contacto debe estar ${valor?'encendido':'apagado'}`);
+        else if(clave==='motor' && estado.motor!==valor) fallos.push(`Motor debe estar ${valor?'encendido':'apagado'}`);
+        else if(clave==='velocidad_max' && (!Number.isFinite(estado.velocidad)||estado.velocidad>Number(valor))) fallos.push(`Velocidad máxima ${valor} km/h no confirmada`);
+        else if(clave==='voltaje_min' && (!Number.isFinite(estado.voltaje)||estado.voltaje<Number(valor))) fallos.push(`Voltaje mínimo ${valor} V no confirmado`);
+        else if(clave==='voltaje_max' && (!Number.isFinite(estado.voltaje)||estado.voltaje>Number(valor))) fallos.push(`Voltaje máximo ${valor} V no confirmado`);
+        else if(clave==='freno' && estado.freno!==valor) fallos.push(`Estado del freno no confirmado`);
+        else if(!['contacto','motor','velocidad_max','voltaje_min','voltaje_max','freno'].includes(clave)) fallos.push(`Precondición desconocida: ${clave||'sin clave'}`);
+      }
+      return {ok:fallos.length===0,fallos};
+    },
     validar(d) {
       const e=[];
       for (const k of ['nombre','marca','ecu','tipo','fuente']) if (!String(d?.[k]||'').trim()) e.push(`Falta ${k}`);
@@ -73,6 +109,9 @@
       if (d?.tipo === 'did' && !/^[0-9A-Fa-f]{4}$/.test(String(d.identificador||''))) e.push('El DID debe tener 4 hexadecimales');
       if (d?.protocolo && !PROTOCOLOS_OEM.includes(d.protocolo)) e.push('Protocolo no permitido');
       if (d?.definicion?.red && !CANALES.some(c=>c.id===d.definicion.red)) e.push('Red no permitida');
+      if (d?.tipo==='reset' && !OBJETIVOS_RESET.some(x=>x.id===d?.definicion?.objetivo_reset)) e.push('Selecciona un objetivo de reset permitido');
+      if (String(d?.tipo||'').startsWith('immo_') && !OBJETIVOS_IMMO.some(x=>x.id===d?.definicion?.objetivo_immo)) e.push('Selecciona un objetivo de inmovilizador permitido');
+      if (d?.anio_desde && d?.anio_hasta && Number(d.anio_desde)>Number(d.anio_hasta)) e.push('El año inicial no puede ser mayor al final');
       if (d?.riesgo !== 'lectura' && d?.estado !== 'verificado') e.push('Una acción no puede habilitarse sin estado verificado');
       return e;
     },
@@ -159,6 +198,7 @@
         <button class="btn btn-sm btn-ghost" style="margin-top:10px" onclick="Modulos.diagnostico_obd.detectarAdaptadorOEM()">🔎 Detectar adaptador conectado</button>
         <button class="btn btn-sm btn-cyan" style="margin-top:10px" onclick="Modulos.diagnostico_obd.inspeccionarBluetooth()">🔬 Inspeccionar cualquier BLE</button>
         <button class="btn btn-sm btn-brand" style="margin-top:10px" onclick="Modulos.diagnostico_obd.explorarRedesOEM()">🗺 Explorar módulos</button>
+        <button class="btn btn-sm btn-cyan" style="margin-top:10px" onclick="Modulos.diagnostico_obd.leerParametrosOEM()">📈 Parámetros OEM</button>
         <select class="form-select" id="oem-simulador" style="display:inline-block;width:auto;margin-top:10px"><option value="">Simulador de red…</option>${Object.entries(PERFILES_SIMULADOS).map(([id,p])=>`<option value="${id}">${UI.esc(p.marca)}</option>`).join('')}</select>
         <button class="btn btn-sm btn-ghost" style="margin-top:10px" onclick="Modulos.diagnostico_obd.simularRedOEM(document.getElementById('oem-simulador').value)">🧪 Ejecutar simulador</button>
         <div style="margin-top:10px;font-size:11px;color:var(--text3)">${FAMILIAS.map(f=>`<b>${f.nombre}</b>: ${f.nota}`).join(' · ')}</div></div>
@@ -193,6 +233,31 @@
         UI.toast('No se pudo completar el mapa: '+e.message,'error');
       }
     },
+    async leerParametrosOEM() {
+      if(!this._listo||!this._scan?.vehiculo_id) return UI.toast('Realiza primero un escaneo del vehículo y mantenlo conectado','warn');
+      const veh=(this._vehiculos||[]).find(v=>v.id===this._scan.vehiculo_id)||{};
+      const defs=this._oemDefs.filter(d=>d.tipo==='did'&&d.estado==='verificado'&&d.riesgo==='lectura'&&Motor.aplica(d,veh)).slice(0,20);
+      if(!defs.length) return UI.toast(`No hay parámetros OEM verificados aplicables a ${veh.marca||'este vehículo'}`,'warn');
+      const resultados=[];
+      for(const d of defs) {
+        const cfg=d.definicion||{}, req=Number(cfg.request_id), resp=Number(cfg.response_id);
+        if(!Number.isInteger(req)||!Number.isInteger(resp)){resultados.push({d,error:'Dirección ECU pendiente'});continue;}
+        try {
+          const bytes=await this._leerDID(req,resp,parseInt(d.identificador,16));
+          if(!bytes){resultados.push({d,error:'Sin respuesta'});continue;}
+          const valor=Motor.decodificar(bytes,cfg.decoder||{}); resultados.push({d,valor,unidad:cfg.decoder?.unidad||'',hex:hex(bytes)});
+          await DB.registrarEjecucionOEM({definicion_id:d.id,diagnostico_id:this._scan.id||null,vehiculo_id:veh.id,operacion:`parámetro UDS ${d.identificador}`,estado:'exitosa',respuesta_hex:hex(bytes),evidencia:{valor,unidad:cfg.decoder?.unidad||null}});
+        } catch(e){resultados.push({d,error:e.message});}
+      }
+      this._oemParametros={fecha:new Date().toISOString(),vehiculo:veh,resultados};
+      await DB.registrarEjecucionOEM({operacion:'reporte_parametros_oem',estado:'exitosa',diagnostico_id:this._scan.id||null,vehiculo_id:veh.id,evidencia:{fecha:this._oemParametros.fecha,resultados:resultados.map(x=>({definicion_id:x.d.id,nombre:x.d.nombre,ecu:x.d.ecu,did:x.d.identificador,valor:x.valor??null,unidad:x.unidad||null,error:x.error||null}))}}).catch(()=>{});
+      UI.modal('📈 Parámetros OEM',`<div class="card" style="padding:12px;margin-bottom:10px"><b>${UI.esc(veh.marca||'')} ${UI.esc(veh.modelo||'')} ${veh.anio||''}</b><br><small>${resultados.length} definición(es) verificadas consultadas</small></div><div style="max-height:58vh;overflow:auto"><table class="table"><thead><tr><th>ECU</th><th>Parámetro</th><th>Valor</th><th>DID</th></tr></thead><tbody>${resultados.map(x=>`<tr><td>${UI.esc(x.d.ecu)}</td><td>${UI.esc(x.d.nombre)}</td><td>${x.error?`<span style="color:var(--amber)">${UI.esc(x.error)}</span>`:`<b>${UI.esc(x.valor)} ${UI.esc(x.unidad)}</b>`}</td><td><code>${UI.esc(x.d.identificador)}</code></td></tr>`).join('')}</tbody></table></div><div class="modal-footer"><button class="btn btn-ghost" onclick="UI.cerrarModal()">Cerrar</button><button class="btn btn-brand" onclick="Modulos.diagnostico_obd.imprimirParametrosOEM()">🖨 Guardar PDF / imprimir</button></div>`,'850px');
+    },
+    imprimirParametrosOEM() {
+      const r=this._oemParametros;if(!r)return;
+      const v=r.vehiculo||{},w=window.open('','_blank');if(!w)return UI.toast('Permite ventanas emergentes para generar el PDF','warn');
+      w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Parámetros OEM</title><style>body{font-family:Arial;padding:24px;color:#111}h2{border-bottom:2px solid #2563eb}table{width:100%;border-collapse:collapse}th,td{padding:7px;border-bottom:1px solid #ddd;text-align:left}th{background:#2563eb;color:white}@media print{button{display:none}}</style></head><body><h2>${UI.esc(Auth.tenant?.name||'NexusPro')} · Parámetros OEM</h2><p><b>Vehículo:</b> ${UI.esc(v.placa||'')} · ${UI.esc(v.marca||'')} ${UI.esc(v.modelo||'')} ${v.anio||''}<br><b>Fecha:</b> ${UI.fecha(r.fecha)}</p><table><thead><tr><th>ECU</th><th>Parámetro</th><th>Valor</th><th>DID</th></tr></thead><tbody>${r.resultados.map(x=>`<tr><td>${UI.esc(x.d.ecu)}</td><td>${UI.esc(x.d.nombre)}</td><td>${UI.esc(x.error||`${x.valor} ${x.unidad||''}`)}</td><td>${UI.esc(x.d.identificador)}</td></tr>`).join('')}</tbody></table><p><small>Resultado registrado por NexusPro. Una lectura fuera de rango debe interpretarse con el procedimiento OEM correspondiente.</small></p><button onclick="window.print()">Guardar como PDF / imprimir</button><script>setTimeout(()=>window.print(),300)<\/script></body></html>`);w.document.close();
+    },
     verOEM(id) { const d=this._oemDefs.find(x=>x.id===id); if(!d)return; const p=Motor.puedeEjecutar(d); UI.modal(d.nombre,`<div class="card" style="padding:12px"><b>${UI.esc(d.marca)} ${UI.esc(d.modelo||'')} · ${UI.esc(d.ecu)}</b><p>Fuente: ${UI.esc(d.fuente)} · estado: ${UI.esc(d.estado)} · riesgo: ${UI.esc(d.riesgo)}</p></div><pre style="white-space:pre-wrap">${UI.esc(JSON.stringify(d.definicion||{},null,2))}</pre><div class="modal-footer"><button class="btn btn-ghost" onclick="UI.cerrarModal()">Cerrar</button><button class="btn btn-${p.ok?'cyan':'ghost'}" ${p.ok?'':'disabled'} title="${UI.esc(p.motivo||'Lectura verificada')}" onclick="Modulos.diagnostico_obd.ejecutarOEM('${d.id}')">▶ Ejecutar lectura</button></div>`,'720px'); },
     async ejecutarOEM(id) {
       const d=this._oemDefs.find(x=>x.id===id); if(!d)return;
@@ -212,15 +277,20 @@
     editarOEM(id) {
       const d=this._oemDefs.find(x=>x.id===id)||{};
       this._oemEditandoDef=d.definicion||{};
+      this._oemEditandoPre=d.precondiciones||[];
       const modelos=(Modulos.vehiculos?._modelosComunes?.[d.marca]||[]);
       const pares=[{req:0x7E0,resp:0x7E8,nombre:'Motor'},{req:0x7E1,resp:0x7E9,nombre:'Transmisión'},...((this._oemTopologia?.redes||[]).flatMap(r=>r.modulos||[]))]
         .filter((x,i,a)=>a.findIndex(y=>y.req===x.req&&y.resp===x.resp)===i);
       const parActual=Number.isInteger(Number(d.definicion?.request_id))?`${Number(d.definicion.request_id)}|${Number(d.definicion.response_id)}`:'';
+      const anios=Array.from({length:new Date().getFullYear()-1979},(_,i)=>new Date().getFullYear()-i);
       UI.modal(id?'Editar definición OEM':'Nueva definición OEM',`<div class="form-grid">
         <div><label class="form-label">Nombre de la función</label><input class="form-input" id="oem-nombre" value="${UI.esc(d.nombre||'')}"></div><div><label class="form-label">Marca</label><select class="form-select" id="oem-marca" onchange="Modulos.diagnostico_obd.actualizarModelosOEM()"><option value="">Seleccionar…</option>${MARCAS_OEM.map(x=>`<option ${d.marca===x?'selected':''}>${x}</option>`).join('')}</select></div>
         <div><label class="form-label">Modelo (opcional)</label><select class="form-select" id="oem-modelo"><option value="">Todos los modelos</option>${modelos.map(x=>`<option ${d.modelo===x?'selected':''}>${UI.esc(x)}</option>`).join('')}${d.modelo&&!modelos.includes(d.modelo)?`<option selected>${UI.esc(d.modelo)}</option>`:''}</select></div><div><label class="form-label">ECU</label><select class="form-select" id="oem-ecu"><option value="">Seleccionar…</option>${ECUS_OEM.map(x=>`<option ${d.ecu===x?'selected':''}>${x}</option>`).join('')}${d.ecu&&!ECUS_OEM.includes(d.ecu)?`<option selected>${UI.esc(d.ecu)}</option>`:''}</select></div>
         <div><label class="form-label">Tipo</label><select class="form-select" id="oem-tipo">${TIPOS.map(x=>`<option ${d.tipo===x?'selected':''} value="${x}">${x.replaceAll('_',' ')}</option>`).join('')}</select></div><div><label class="form-label">DID / identificador</label><select class="form-select" id="oem-idf"><option value="">No corresponde</option>${DIDS_BASE.map(x=>`<option value="${x.did}" ${d.identificador===x.did?'selected':''}>${x.did} · ${UI.esc(x.nombre)}</option>`).join('')}${d.identificador&&!DIDS_BASE.some(x=>x.did===d.identificador)?`<option selected value="${UI.esc(d.identificador)}">${UI.esc(d.identificador)} · definición existente</option>`:''}</select></div>
+        <div style="grid-column:1/-1"><label class="form-label">Objetivo de reset (sólo cuando el tipo sea reset)</label><select class="form-select" id="oem-reset"><option value="">No corresponde</option>${OBJETIVOS_RESET.map(x=>`<option value="${x.id}" ${d.definicion?.objetivo_reset===x.id?'selected':''}>${UI.esc(x.nombre)} · riesgo ${x.riesgo}</option>`).join('')}</select></div>
+        <div style="grid-column:1/-1"><label class="form-label">Objetivo de inmovilizador (trabajo autorizado)</label><select class="form-select" id="oem-immo"><option value="">No corresponde</option>${OBJETIVOS_IMMO.map(x=>`<option value="${x.id}" ${d.definicion?.objetivo_immo===x.id?'selected':''}>${UI.esc(x.nombre)} · riesgo ${x.riesgo}</option>`).join('')}</select><small>No incluye extracción de secretos, clonación ni bypass.</small></div>
         <div><label class="form-label">Protocolo</label><select class="form-select" id="oem-protocolo">${PROTOCOLOS_OEM.map(x=>`<option ${d.protocolo===x?'selected':''} value="${x}">${x.toUpperCase().replaceAll('_',' / ')}</option>`).join('')}</select></div><div><label class="form-label">Red física</label><select class="form-select" id="oem-red">${CANALES.map(x=>`<option value="${x.id}" ${d.definicion?.red===x.id?'selected':''}>${x.nombre}</option>`).join('')}</select></div>
+        <div><label class="form-label">Año desde</label><select class="form-select" id="oem-anio-desde"><option value="">Sin límite</option>${anios.map(x=>`<option ${Number(d.anio_desde)===x?'selected':''}>${x}</option>`).join('')}</select></div><div><label class="form-label">Año hasta</label><select class="form-select" id="oem-anio-hasta"><option value="">Sin límite</option>${anios.map(x=>`<option ${Number(d.anio_hasta)===x?'selected':''}>${x}</option>`).join('')}</select></div>
         <div style="grid-column:1/-1"><label class="form-label">Dirección ECU (solicitud → respuesta)</label><select class="form-select" id="oem-par"><option value="">Pendiente de descubrir en el vehículo</option>${pares.map(x=>{const val=`${x.req}|${x.resp}`;return `<option value="${val}" ${parActual===val?'selected':''}>${UI.esc(x.nombre)} · ${x.req.toString(16).toUpperCase()} → ${x.resp.toString(16).toUpperCase()}</option>`}).join('')}</select></div>
         <div><label class="form-label">Decodificación</label><select class="form-select" id="oem-decoder">${['ascii','numero','hex'].map(x=>`<option ${d.definicion?.decoder?.tipo===x?'selected':''}>${x}</option>`).join('')}</select></div><div><label class="form-label">Unidad</label><select class="form-select" id="oem-unidad">${['','texto','°C','rpm','km/h','V','A','kPa','bar','%','km','horas'].map(x=>`<option value="${x}" ${d.definicion?.decoder?.unidad===x?'selected':''}>${x||'Sin unidad'}</option>`).join('')}</select></div>
         <div><label class="form-label">Estado</label><select class="form-select" id="oem-estado">${['borrador','laboratorio','verificado','retirado'].map(x=>`<option ${d.estado===x?'selected':''}>${x}</option>`).join('')}</select></div><div><label class="form-label">Riesgo</label><select class="form-select" id="oem-riesgo">${['lectura','controlado','alto','critico'].map(x=>`<option ${d.riesgo===x?'selected':''}>${x}</option>`).join('')}</select></div>
@@ -236,9 +306,12 @@
     async guardarOEM(id) {
       const v=x=>document.getElementById(x).value.trim(), par=v('oem-par').split('|').map(Number);
       const definicion={...(this._oemEditandoDef||{}),red:v('oem-red'),decoder:{...(this._oemEditandoDef?.decoder||{}),tipo:v('oem-decoder'),unidad:v('oem-unidad')||null}};
+      if(v('oem-reset')) definicion.objetivo_reset=v('oem-reset'); else delete definicion.objetivo_reset;
+      if(v('oem-immo')) definicion.objetivo_immo=v('oem-immo'); else delete definicion.objetivo_immo;
       if(par.length===2&&par.every(Number.isInteger)){definicion.request_id=par[0];definicion.response_id=par[1];}else{delete definicion.request_id;delete definicion.response_id;}
       const referencia=v('oem-fuente');
-      const d={id:id||undefined,nombre:v('oem-nombre'),marca:v('oem-marca'),modelo:v('oem-modelo')||null,ecu:v('oem-ecu'),tipo:v('oem-tipo'),identificador:v('oem-idf')||null,estado:v('oem-estado'),riesgo:v('oem-riesgo'),fuente:referencia?`${v('oem-fuente-tipo')}: ${referencia}`:'',protocolo:v('oem-protocolo'),definicion,precondiciones:[],activa:true};
+      const desde=Number(v('oem-anio-desde'))||null,hasta=Number(v('oem-anio-hasta'))||null;
+      const d={id:id||undefined,nombre:v('oem-nombre'),marca:v('oem-marca'),modelo:v('oem-modelo')||null,anio_desde:desde,anio_hasta:hasta,ecu:v('oem-ecu'),tipo:v('oem-tipo'),identificador:v('oem-idf')||null,estado:v('oem-estado'),riesgo:v('oem-riesgo'),fuente:referencia?`${v('oem-fuente-tipo')}: ${referencia}`:'',protocolo:v('oem-protocolo'),definicion,precondiciones:Array.isArray(this._oemEditandoPre)?this._oemEditandoPre:[],activa:true};
       const e=Motor.validar(d); if(e.length)return UI.toast(e.join('. '),'error'); const r=await DB.upsertDefinicionOEM(d); if(r.error)return UI.toast(r.error.message,'error'); UI.cerrarModal(); this.modalOEM();
     },
     eliminarOEM(id,nombre) { Modulos.eliminarRegistro('obd_oem_definiciones',id,nombre,()=>this.modalOEM()); }
