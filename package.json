@@ -7,8 +7,9 @@
   "scripts": {
     "dev": "npx --yes serve@latest -l 8080 .",
     "preview": "npx --yes wrangler dev",
-    "predeploy": "npm test && npm run humo:todo && npm run humo:movil",
-    "deploy": "npx --yes wrangler deploy",
+    "pruebas:completas": "npm test && npm run humo:todo && npm run humo:movil",
+    "predeploy": "npm run pruebas:completas",
+    "deploy": "npm run pruebas:completas && npx --yes wrangler deploy",
     "deploy:sin-pruebas": "npx --yes wrangler deploy",
     "electron": "npx --yes electron electron/main.js",
     "build": "echo \"Sitio estático — no requiere build\"",
