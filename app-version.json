@@ -31,9 +31,9 @@
   ],
 
   "android": {
-    "versionCode": 5,
-    "versionName": "4.78.0",
-    "fecha": "2026-08-25",
+    "versionCode": 6,
+    "versionName": "4.94.0",
+    "fecha": "2026-08-26",
     "paquete": "com.cmtelecom.nexuspro",
     "minAndroid": "8.0",
 
@@ -46,10 +46,10 @@
     "playUrl": "https://play.google.com/store/apps/details?id=com.cmtelecom.nexuspro",
 
     "novedades": [
-      "Llave de firma renovada (mas segura)",
-      "La app avisa sola cuando hay una version nueva para instalar",
-      "Buscador del punto de venta siempre visible al abrir el catalogo",
-      "Categorias del punto de venta en un desplegable compacto"
+      "Diagnostico OEM: catalogo por fabricante, redes y procedimientos verificados",
+      "Escaner: mapa de modulos por red y simuladores para practicar sin vehiculo",
+      "La pantalla de Descargas ya no se queda en blanco cuando la red falla",
+      "Llave de firma renovada (mas segura)"
     ]
   }
 }

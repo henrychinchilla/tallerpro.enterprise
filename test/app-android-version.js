@@ -176,8 +176,17 @@ const publicada = JSON.parse(fs.readFileSync(VERSION_JSON, 'utf8')).android;
 
     ok('app-version.json avisa desde qué versión hay que reinstalar',
        Number.isFinite(publicada.reinstalarSiMenorQue));
-    ok('…y ese número es el de la versión firmada con la llave nueva',
-       publicada.reinstalarSiMenorQue === publicada.versionCode);
+    /* La regla NO es que sea igual al versionCode. Ese número marca la versión
+       en la que CAMBIÓ LA LLAVE (la 5, el 2026-08-25) y se queda ahí: la 6 y
+       las siguientes van firmadas con la misma llave, así que quien esté en la
+       5 actualiza normal y sólo los anteriores deben desinstalar. La igualdad
+       era una coincidencia de que la rotación y la versión publicada fueran la
+       misma, y al publicar la 4.94.0 (vc6) esta prueba falló sin que hubiera
+       nada roto. Lo que sí es un bug es que apunte al FUTURO: mandaría a
+       reinstalar por una versión que todavía no existe. */
+    ok('…y ese número no apunta a una versión que aún no existe',
+       publicada.reinstalarSiMenorQue >= 1 &&
+       publicada.reinstalarSiMenorQue <= publicada.versionCode);
 
     const appjs = fs.readFileSync(APP_JS, 'utf8');
     ok('el aviso contempla el caso "hay que desinstalar primero"',
