@@ -35,17 +35,23 @@ def exigir(props, clave) {
    abrir el sitio (ver DEFAULT_URL en AndroidManifest.xml). Sin eso la web no
    tendria forma de saber que version de APK esta corriendo el telefono: una
    TWA se presenta al servidor como Chrome, no como la app. */
-def appVersionCode = 8
-def appVersionName = "4.94.2"
+def appVersionCode = 9
+def appVersionName = "4.95.0"
 
 android {
     namespace 'com.cmtelecom.nexuspro'
-    compileSdk 35
+    /* API 36 (Android 16) y no 35: Play exige que el nivel objetivo no tenga
+       mas de un año respecto de la ultima version de Android, y desde el
+       2026-08-30 deja de aceptar actualizaciones de apps en 35. Lo reporto la
+       consola el 2026-08-27, con tres dias de margen.
+       compileSdk sube con targetSdk: no se puede apuntar a una API contra la
+       que no se compila. */
+    compileSdk 36
 
     defaultConfig {
         applicationId "com.cmtelecom.nexuspro"
         minSdk 24
-        targetSdk 35
+        targetSdk 36
         /* Subir SIEMPRE versionCode al publicar (Play rechaza repetirlo) y
            reflejar el mismo par en /app-version.json: de ahi lo lee el aviso
            de "hay version nueva" que sale al entrar al sistema. */

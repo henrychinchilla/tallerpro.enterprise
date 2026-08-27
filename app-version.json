@@ -31,9 +31,9 @@
   ],
 
   "android": {
-    "versionCode": 8,
-    "versionName": "4.94.2",
-    "fecha": "2026-08-26",
+    "versionCode": 9,
+    "versionName": "4.95.0",
+    "fecha": "2026-08-27",
     "paquete": "com.cmtelecom.nexuspro",
     "minAndroid": "8.0",
 
@@ -46,6 +46,7 @@
     "playUrl": "https://play.google.com/store/apps/details?id=com.cmtelecom.nexuspro",
 
     "novedades": [
+      "Compatible con Android 16",
       "Diagnostico OEM: catalogo por fabricante, redes y procedimientos verificados",
       "Escaner: mapa de modulos por red y simuladores para practicar sin vehiculo",
       "La pantalla de Descargas ya no se queda en blanco cuando la red falla",
