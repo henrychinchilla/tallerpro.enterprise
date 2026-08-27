@@ -28,7 +28,13 @@
    que jamás toca datos reales. Las credenciales van en test/humo/credenciales.json
    (fuera de git). Si el archivo no está, la prueba lo dice y no falla el deploy.
 ═══════════════════════════════════════════════════════════════════════════ */
-import { abrirSesion, marcador, cerrar, BASE } from './ayuda.mjs';
+import path from 'path';
+/* `path` y `RAIZ` se usan abajo para guardar la captura del fallo y NO estaban
+   importados: la rama de error moría con "ReferenceError: path is not defined"
+   antes de escribir la captura y antes de imprimir el resumen. O sea que la
+   evidencia se perdía exactamente cuando hacía falta. Detectado el 2026-08-26
+   persiguiendo por qué el POS daba 0. */
+import { abrirSesion, marcador, cerrar, BASE, RAIZ } from './ayuda.mjs';
 
 /* Mismo recorrido, distinto tamaño de pantalla. En teléfono es donde se tapan
    las cosas: las categorías del POS sobre los productos, el total fuera de
@@ -108,26 +114,56 @@ for (const mod of MODULOS) {
       () => typeof POS !== 'undefined' && (POS._prod || []).length > 0 && document.getElementById('pos-totales'),
       null, { timeout: 20000 }).catch(() => {});
 
-    const r = await pagina.evaluate((codigo) => {
-      const p = (POS._prod || []).find(x => x.codigo === codigo);
+    const r = await pagina.evaluate(async (codigo) => {
+      let p = (POS._prod || []).find(x => x.codigo === codigo);
       if (!p) return { error: 'el producto de prueba no está en el inventario' };
+
+      /* REPONER LA FICHA ANTES DE CONTAR. Estas pruebas VENDEN, así que cada
+         corrida le baja el stock a este producto. El 2026-08-26 se agotó
+         después de varias corridas seguidas y el POS dejó de admitirlo
+         ("No hay más stock disponible"): el carrito quedaba vacío, el total
+         daba 0 y el mensaje acusaba al CÁLCULO. Se perdió un buen rato
+         buscando un bug de matemática que no existía. */
+      const NECESITA = 3, REPONER = 60;
+      let repuesto = null;
+      if ((Number(p.stock) || 0) < NECESITA) {
+        if (typeof DB === 'undefined' || !DB.upsertInventario)
+          return { error: `${codigo} está agotado y esta pantalla no puede reponerlo` };
+        /* Fila COMPLETA, no parcial: el upsert de PostgREST es INSERT..ON
+           CONFLICT y con pocos campos revienta por NOT NULL (23502). */
+        const { error } = await DB.upsertInventario({ ...p, stock: REPONER });
+        if (error) return { error: `${codigo} está agotado y no se pudo reponer: ${error.message || error}` };
+        p = { ...p, stock: REPONER };
+        const i = (POS._prod || []).findIndex(x => x.codigo === codigo);
+        if (i >= 0) POS._prod[i] = p;
+        repuesto = REPONER;
+      }
+
       POS._cart = [];
       POS.addToCart(p.id);
       POS.setCant(p.id, 3);
       const tot = document.getElementById('pos-totales');
       return {
         precio: Number(p.precio_venta),
+        stock: Number(p.stock) || 0,
+        enCarrito: ((POS._cart || []).find(l => l.id === p.id) || {}).cant || 0,
+        repuesto,
         total: POS._totales().total,
         enPantalla: tot ? tot.innerText.replace(/\s+/g, ' ') : '',
       };
     }, CRED.producto || 'PRB-001');
+    if (r.repuesto) console.log(`   (inventario de prueba repuesto a ${r.repuesto} para poder cobrar)`);
 
     if (r.error) anotar(mod, r.error);
     else if (errores.length) anotar(mod, 'error de JavaScript al cobrar', errores[0]);
     else {
       const esperado = +(r.precio * 3).toFixed(2);
       const enPantalla = r.enPantalla.includes(`Q${esperado.toFixed(2)}`);
-      if (Math.abs(r.total - esperado) > 0.001) anotar(mod, `la cuenta da mal: ${r.total} y debería dar ${esperado}`);
+      /* El stock se revisa ANTES que la cuenta: si el carrito no aceptó las 3
+         unidades, el total va a dar 0 y culpar a la matemática manda a buscar
+         un bug donde no lo hay. */
+      if (r.enCarrito < 3) anotar(mod, `el carrito sólo aceptó ${r.enCarrito} de 3 unidades — hay ${r.stock} en existencia, no es la cuenta`);
+      else if (Math.abs(r.total - esperado) > 0.001) anotar(mod, `la cuenta da mal: ${r.total} y debería dar ${esperado}`);
       else if (!enPantalla) anotar(mod, `el total NO aparece en pantalla (se esperaba Q${esperado.toFixed(2)})`, r.enPantalla);
       else console.log(`PASS — ${mod}: 3 x Q${r.precio} = Q${esperado.toFixed(2)} en pantalla`);
     }
