@@ -31,8 +31,8 @@
   ],
 
   "android": {
-    "versionCode": 6,
-    "versionName": "4.94.0",
+    "versionCode": 8,
+    "versionName": "4.94.2",
     "fecha": "2026-08-26",
     "paquete": "com.cmtelecom.nexuspro",
     "minAndroid": "8.0",

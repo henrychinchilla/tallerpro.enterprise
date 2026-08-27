@@ -182,9 +182,21 @@ const publicada = JSON.parse(fs.readFileSync(VERSION_JSON, 'utf8')).android;
        directo desde el sitio. Se vigilan por separado porque el sintoma es
        identico y mudo — nada falla, solo aparece una barra. */
     const NUESTRA = '48:C9:1A:8C:47:51:3D:4A:F4:73:D7:78:44:A0:D5:36:FE:6D:3C:5F:28:37:EF:B6:EB:E8:8C:93:C8:6A:46:7C';
-    const GOOGLE  = '8F:7E:99:B0:20:4F:6F:31:22:AA:9A:EA:F3:8F:DC:F9:6E:16:8D:21:73:68:25:4C:51:2B:E1:4F:60:A6:60:E7';
     ok('autoriza la llave propia (APK descargado del sitio)',
        huellas.some(h => h.toUpperCase() === NUESTRA));
+
+    /* La llave de Play App Signing la genera GOOGLE y es DISTINTA para cada app
+       de la consola — está atada a esta ficha, no al proyecto. Se fija aquí
+       porque quitarla no rompe nada visible: no hay error ni traza, la app
+       simplemente se abre CON LA BARRA DE CHROME encima y parece un sitio web.
+       Sin esta prueba, eso se descubre cuando lo reporta un usuario.
+
+       El 2026-08-26 se evaluó renombrar el paquete a com.cmtelecommgt.nexuspro
+       para que casara con el dominio. Se descartó: el identificador no lo ve
+       nadie —en la tienda salen "NexusPro" y "CM TELECOMM"— y cambiarlo obliga
+       a crear otra app en Play y a rellenar de nuevo ficha y declaraciones. Si
+       alguna vez se hace, esta constante cambia con él. */
+    const GOOGLE = '8F:7E:99:B0:20:4F:6F:31:22:AA:9A:EA:F3:8F:DC:F9:6E:16:8D:21:73:68:25:4C:51:2B:E1:4F:60:A6:60:E7';
     ok('autoriza la llave de Play App Signing (APK instalado desde la tienda)',
        huellas.some(h => h.toUpperCase() === GOOGLE));
 
