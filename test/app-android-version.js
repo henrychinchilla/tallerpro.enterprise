@@ -174,6 +174,20 @@ const publicada = JSON.parse(fs.readFileSync(VERSION_JSON, 'utf8')).android;
        huellas.every(h => /^([0-9A-F]{2}:){31}[0-9A-F]{2}$/i.test(h)));
     ok('assetlinks apunta al paquete de la app', al?.[0]?.target?.package_name === publicada.paquete);
 
+    /* DOS huellas, y las dos hacen falta: Play App Signing RE-FIRMA el AAB con
+       una llave de Google, asi que el APK que instala un usuario desde la
+       tienda NO lleva la nuestra. Si falta la de Google, la TWA no verifica y
+       se abre CON LA BARRA DE CHROME encima: se ve como una pagina web, no como
+       app. Si falta la nuestra, el mismo problema para quien instala el APK
+       directo desde el sitio. Se vigilan por separado porque el sintoma es
+       identico y mudo — nada falla, solo aparece una barra. */
+    const NUESTRA = '48:C9:1A:8C:47:51:3D:4A:F4:73:D7:78:44:A0:D5:36:FE:6D:3C:5F:28:37:EF:B6:EB:E8:8C:93:C8:6A:46:7C';
+    const GOOGLE  = '8F:7E:99:B0:20:4F:6F:31:22:AA:9A:EA:F3:8F:DC:F9:6E:16:8D:21:73:68:25:4C:51:2B:E1:4F:60:A6:60:E7';
+    ok('autoriza la llave propia (APK descargado del sitio)',
+       huellas.some(h => h.toUpperCase() === NUESTRA));
+    ok('autoriza la llave de Play App Signing (APK instalado desde la tienda)',
+       huellas.some(h => h.toUpperCase() === GOOGLE));
+
     ok('app-version.json avisa desde qué versión hay que reinstalar',
        Number.isFinite(publicada.reinstalarSiMenorQue));
     /* La regla NO es que sea igual al versionCode. Ese número marca la versión
