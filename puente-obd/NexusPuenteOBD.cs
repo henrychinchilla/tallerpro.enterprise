@@ -15,6 +15,7 @@
      · 'conectar'— acepta {api:"..."} para elegir y conectar de una vez
    Al arrancar intenta NXULNK32 (NEXIQ, el más común), pero que falte ya no es
    fatal: la app puede pedir otro. */
+using Microsoft.Win32;
 using System;
 using System.Collections;
 using System.Collections.Generic;
@@ -148,22 +149,107 @@ public class PuenteOBD {
     return !string.IsNullOrEmpty(api) && api.StartsWith("SERIAL:", StringComparison.OrdinalIgnoreCase);
   }
 
+  /* Nombre real del equipo Bluetooth que hay detrás de cada COM.
+     Sin esto, una PC con varios emparejamientos muestra cuatro entradas
+     idénticas ("Bluetooth / puerto serie (COM3..COM6)") y no hay forma de
+     saber cuál es el dongle: Windows crea un COM por cada perfil SPP, y los
+     que terminan en MAC 000000000000 son puertos LOCALES entrantes, sin nada
+     del otro lado. Elegir uno de esos daba un fallo que culpaba al VCI.
+
+     El dato está en el registro: cada instancia SPP se llama
+     ...\7&xxxx&0&<MAC>_C00000000 y trae PortName; el nombre del equipo vive
+     en la clave hermana Dev_<MAC>. Se lee el registro y no WMI para no
+     agregar la referencia a System.Management ni su medio segundo de arranque. */
+  static void MapaBluetooth(Dictionary<string, string> macPorPuerto, Dictionary<string, string> nombrePorMac) {
+    try {
+      using (var bth = Registry.LocalMachine.OpenSubKey(@"SYSTEM\CurrentControlSet\Enum\BTHENUM")) {
+        if (bth == null) return;
+        foreach (var svc in bth.GetSubKeyNames()) {
+          using (var k = bth.OpenSubKey(svc)) {
+            if (k == null) continue;
+            foreach (var inst in k.GetSubKeyNames()) {
+              using (var i = k.OpenSubKey(inst)) {
+                if (i == null) continue;
+                var mac = MacDeInstancia(inst);
+                if (svc.StartsWith("Dev_", StringComparison.OrdinalIgnoreCase)) {
+                  var fn = i.GetValue("FriendlyName") as string;
+                  var m = svc.Substring(4).ToUpperInvariant();
+                  if (!string.IsNullOrEmpty(fn) && !nombrePorMac.ContainsKey(m)) nombrePorMac[m] = fn;
+                  continue;
+                }
+                using (var dp = i.OpenSubKey("Device Parameters")) {
+                  var port = dp == null ? null : dp.GetValue("PortName") as string;
+                  if (!string.IsNullOrEmpty(port) && mac != null) macPorPuerto[port.ToUpperInvariant()] = mac;
+                }
+              }
+            }
+          }
+        }
+      }
+    } catch (Exception) { }
+  }
+
+  // ...&0&0425E85B35B6_C00000000 -> "0425E85B35B6"; el puerto local trae ceros.
+  static string MacDeInstancia(string inst) {
+    if (string.IsNullOrEmpty(inst)) return null;
+    var corte = inst.LastIndexOf('&');
+    if (corte < 0) return null;
+    var cola = inst.Substring(corte + 1);
+    var us = cola.IndexOf('_');
+    if (us > 0) cola = cola.Substring(0, us);
+    if (cola.Length != 12) return null;
+    foreach (var c in cola) if (!Uri.IsHexDigit(c)) return null;
+    return cola.ToUpperInvariant();
+  }
+
+  // Dongles OBD conocidos: se ofrecen primero para que la selección automática
+  // caiga en el escáner y no en el manos-libres del carro o un puerto local.
+  static bool PareceOBD(string nombre) {
+    if (string.IsNullOrEmpty(nombre)) return false;
+    var n = nombre.ToUpperInvariant();
+    return n.Contains("VLINKER") || n.Contains("VGATE") || n.Contains("OBD") || n.Contains("ELM")
+        || n.Contains("OBDLINK") || n.Contains("THINK") || n.Contains("VEEPEAK") || n.Contains("KONNWEI");
+  }
+
   static List<object> PuertosSerie() {
     var lista = new List<object>();
     try {
+      var macPorPuerto = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+      var nombrePorMac = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+      MapaBluetooth(macPorPuerto, nombrePorMac);
+
       var ports = SerialPort.GetPortNames();
       Array.Sort(ports, StringComparer.OrdinalIgnoreCase);
+      var filas = new List<Dictionary<string, object>>();
       foreach (var port in ports) {
+        string mac, equipo = null;
+        macPorPuerto.TryGetValue(port.ToUpperInvariant(), out mac);
+        var local = mac != null && mac == "000000000000";
+        if (mac != null && !local) nombrePorMac.TryGetValue(mac, out equipo);
+
         var d = new Dictionary<string, object>();
         d["api"] = "SERIAL:" + port;
         d["tipo"] = "serial";
         d["instalado"] = true;
         d["cargada"] = string.Equals(SerieApi, "SERIAL:" + port, StringComparison.OrdinalIgnoreCase);
-        d["nombre"] = "Bluetooth / puerto serie (" + port + ")";
+        d["nombre"] = !string.IsNullOrEmpty(equipo) ? equipo + " (" + port + ")"
+                    : local ? "Puerto local entrante — sin equipo (" + port + ")"
+                    : "Puerto serie (" + port + ")";
         d["protocolos"] = new List<string> { "OBDII", "CAN", "ISO15765", "ISO9141", "ISO14230" };
         d["puerto"] = port;
-        lista.Add(d);
+        d["equipo"] = equipo;      // null si no es un emparejamiento Bluetooth
+        d["local"] = local;        // true = puerto entrante, nunca hay VCI ahí
+        d["obd"] = PareceOBD(equipo);
+        filas.Add(d);
       }
+      // dongle OBD primero, después el resto, y los puertos locales al final
+      filas.Sort(delegate(Dictionary<string, object> a, Dictionary<string, object> b) {
+        Func<Dictionary<string, object>, int> rango = f =>
+          (bool)f["obd"] ? 0 : (bool)f["local"] ? 2 : 1;
+        var r = rango(a).CompareTo(rango(b));
+        return r != 0 ? r : string.Compare((string)a["puerto"], (string)b["puerto"], StringComparison.OrdinalIgnoreCase);
+      });
+      foreach (var f in filas) lista.Add(f);
     } catch (Exception) { }
     return lista;
   }

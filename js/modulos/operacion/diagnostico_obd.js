@@ -85,7 +85,23 @@ Modulos.diagnostico_obd = {
        La lista va ancha a propósito, aunque de varios no sepamos el par exacto de
        características: de eso se encarga la autodetección. */
     const svcs = [...new Set([...this._UUIDS.map(u => u.svc), ...this._SVC_CANDIDATOS])];
-    const dev = await navigator.bluetooth.requestDevice({ acceptAllDevices:true, optionalServices:svcs });
+    /* El chooser de Chrome SOLO escucha anuncios BLE. Un dongle en modo
+       MFi/iPhone o de Bluetooth clasico (SPP) no se anuncia por ahi y no
+       aparece nunca en la lista, por bien emparejado que este en el sistema
+       operativo: emparejar es del sistema, y esto no lo usa. Verificado con un
+       Vgate vLinker MS, que en modo MFi publica iAP + SPP y cero BLE.
+       Sin este aviso, el sintoma es "la lista sale vacia" y no hay pista de por que. */
+    let dev;
+    try {
+      dev = await navigator.bluetooth.requestDevice({ acceptAllDevices:true, optionalServices:svcs });
+    } catch (e) {
+      if (e && e.name === 'NotFoundError')
+        throw new Error('No se eligió ningún adaptador. Si el escáner NO aparecía en la lista: el navegador solo ve adaptadores en ' +
+          '<b>modo BLE</b>. Uno en modo MFi/iPhone o de Bluetooth clásico (SPP) no se anuncia por BLE y no va a aparecer, ' +
+          'aunque el sistema lo tenga emparejado. Pasalo a modo BLE con la app del fabricante' +
+          (this._esMovil() ? '.' : ', o en esta PC usá la vía <b>Bluetooth clásico</b>, que sí habla SPP por puerto COM.'));
+      throw e;
+    }
     const server = await dev.gatt.connect();
     const identidad = await this._leerIdentidadBLE(server);
 
@@ -1381,6 +1397,9 @@ Modulos.diagnostico_obd = {
      la lógica de protocolo vive aquí (se actualiza con deploy, sin recompilar). */
   _ws: null, _wsPend: {}, _via: 'ble', _j39: null, _canExt: false, _canRx: null, _puenteCanalActivo: false,
 
+  /* Telefono o tablet: ahi no hay puente ni Web Serial, solo Web Bluetooth. */
+  _esMovil() { return /Android|iPhone|iPad|iPod/i.test(navigator.userAgent || ''); },
+
   async _puenteConectar() {
     if (this._ws && this._ws.readyState === 1) return;
     await new Promise((res, rej) => {
@@ -1391,7 +1410,14 @@ Modulos.diagnostico_obd = {
       ws.onclose = ws.onerror = () => {
         this._ws = null;
         if (!resuelto) { resuelto = true;
-          rej(new Error('No se encontró el puente USB en esta PC. Ejecuta iniciar-puente.bat (carpeta puente-obd), deja su ventana abierta y reintenta.')); }
+          /* El puente es un programa de Windows: en telefono o tablet no falta,
+             no existe. Mandar ahi a "ejecutar iniciar-puente.bat" es una pista
+             falsa que hace perder la tarde; en movil la unica via es Bluetooth BLE. */
+          rej(new Error(this._esMovil()
+            ? 'Las vías USB y Bluetooth clásico necesitan el puente, que es un programa de Windows y no existe en teléfono ni tablet. ' +
+              'Acá la única vía es <b>Bluetooth (BLE)</b>, y el escáner tiene que estar en modo BLE — un dongle en modo MFi/iPhone ' +
+              'o solo Bluetooth clásico no se anuncia por BLE y el navegador no lo puede ver.'
+            : 'No se encontró el puente USB en esta PC. Ejecuta iniciar-puente.bat (carpeta puente-obd), deja su ventana abierta y reintenta.')); }
       };
     });
   },
@@ -1588,18 +1614,24 @@ Modulos.diagnostico_obd = {
   async _serialInit(log) {
     await this._puenteConectar();
     const api = this._api || '';
-    if (!/^SERIAL:/i.test(api)) throw new Error('Selecciona el puerto COM del Thinkcar.');
+    if (!/^SERIAL:/i.test(api)) throw new Error('Selecciona el puerto COM del escaner en "Adaptador / puerto local".');
     const port = api.substring(7);
+    const equipo = (document.getElementById('obd-api')?.selectedOptions?.[0]?.textContent || '').trim();
     const c = await this._puenteOp({ op:'conectar', api, protocolo:'SPP', baud:115200 }, 6000);
     if (!c.ok) throw new Error(c.error || `No se pudo abrir Bluetooth clasico en ${port}.`);
     this._serialReady = true;
-    log(`Bluetooth clasico: <b>${port}</b> @115200`);
+    log(`Bluetooth clasico: <b>${equipo || port}</b> @115200`);
     /* ATI es una sonda inocua: si el VCI no es ELM abierto, se informa aqui y
        no se presenta un escaneo vacio como si el vehiculo estuviera sano. */
     const identidad = await this._cmd('ATI', 3000).catch(() => '');
     const sonda = identidad.trim() ? identidad : await this._cmd('ATZ', 3000).catch(() => '');
-    if (!sonda.trim()) throw new Error(`El VCI Bluetooth ${port} no expone un canal ELM/OBD estandar. Abre el ThinkDiag+ para confirmar el modelo o usa un Vgate/OBDLink ELM.`);
-    return { nombre:`Thinkcar / Bluetooth ${port}`, protocolo:'Bluetooth clasico SPP' };
+    /* Windows crea un COM por cada perfil SPP y varios son puertos locales
+       entrantes: el silencio casi siempre es "elegiste el COM equivocado",
+       no "este escaner no sirve". El mensaje dice primero lo probable. */
+    if (!sonda.trim()) throw new Error(`${port} no contesto a ATI/ATZ. Revisa que en "Adaptador / puerto local" este elegido el COM de tu escaner ` +
+      `(el desplegable ya muestra el nombre del equipo emparejado; los que dicen "puerto local entrante" nunca sirven), ` +
+      `que el escaner este enchufado al vehiculo y con el switch en contacto.`);
+    return { nombre: equipo || `Bluetooth ${port}`, protocolo:'Bluetooth clasico SPP' };
   },
 
   async _usbInit(log) {
@@ -4372,7 +4404,7 @@ Modulos.diagnostico_obd = {
         <select class="form-select" id="obd-via" onchange="Modulos.diagnostico_obd._verApis()">
           <option value="auto">🔎 USB — detectar solo (recomendado: liviano o camión)</option>
           <option value="ble">📶 Bluetooth — ELM327 / Vgate / OBDLink (BLE)</option>
-          <option value="classic">📶 Bluetooth clásico — Thinkcar/ELM por puerto COM</option>
+          <option value="classic">📶 Bluetooth clásico (SPP) — vLinker/Thinkcar/ELM por COM · solo PC Windows</option>
           <option value="j1939ble">🚚 Bluetooth — camión J1939 (dongle con protocolo A)</option>
           <option value="j1939">🚚 USB — forzar camión J1939 (puente RP1210)</option>
           <option value="j1708">🚛 USB — forzar camión antiguo J1708/J1587 (MID/PID/FMI)</option>
@@ -4636,8 +4668,15 @@ Modulos.diagnostico_obd = {
     const test = document.getElementById('obd-btn-test');
     if (test) test.style.display = usb ? '' : 'none';
     if (clasico) {
+      /* Windows crea un COM por cada perfil SPP emparejado, y varios son
+         puertos LOCALES entrantes sin nada del otro lado. Tomar "el primero
+         que diga SERIAL" caía en uno de esos y el escaneo moría con un error
+         que culpaba al dongle. Se elige el que el puente reconoció como
+         escáner OBD; si no hay ninguno, el primero, pero ya con nombre
+         visible para poder corregirlo a mano. */
       const s = document.getElementById('obd-api');
-      const opt = s && Array.from(s.options).find(o => /^SERIAL:/i.test(o.value));
+      const seriales = s ? Array.from(s.options).filter(o => /^SERIAL:/i.test(o.value)) : [];
+      const opt = seriales.find(o => o.dataset.obd === '1') || seriales[0];
       if (s && opt && !/^SERIAL:/i.test(s.value)) { s.value = opt.value; this._api = opt.value; }
     }
   },
@@ -4651,6 +4690,12 @@ Modulos.diagnostico_obd = {
       const apis = ((r && r.apis) || []).filter(a => a.instalado);
       if (!apis.length) { poner('<option value="">No hay ningún adaptador RP1210 instalado</option>'); return; }
       poner(apis.map(a => {
+        /* Un COM de Bluetooth no declara protocolos: la lista que manda el
+           puente es un valor por defecto, no algo que el dongle haya dicho.
+           Mostrarla prometía "ISO9141, KWP2000" de cualquier puerto. Acá va el
+           nombre del equipo emparejado, que es el dato con el que se elige. */
+        if (/^SERIAL:/i.test(String(a.api || '')))
+          return `<option value="${UI.esc(a.api)}"${a.obd ? ' data-obd="1"' : ''}>${UI.esc(a.nombre || a.api)}</option>`;
         /* Los protocolos dicen de un vistazo si ese adaptador sirve para el
            camión que se tiene enfrente (J1708 para los viejos, J1939 para los
            nuevos). Es la información que hace útil al selector. */
