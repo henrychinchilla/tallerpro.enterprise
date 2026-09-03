@@ -1,12 +1,33 @@
 # 📱 NexusPro — App Android nativa (sin Android Studio)
 
 App Android **real** (APK firmado, publicable en Play Store) construida 100% por
-línea de comandos. Es una **Trusted Web Activity**: un binario nativo cuyo motor
-(Chrome) renderiza el sistema a pantalla completa — cámara, descargas CSV,
-adjuntos y todo el runtime funcionan al 100%, y cada deploy web actualiza la app
-sin recompilar ni re-publicar.
+línea de comandos. Desde la 4.96.0 es un **cascarón nativo con WebView**
+(`MainActivity` + `PuenteBluetooth`), no una TWA. El sitio se sigue desplegando
+con `npm run deploy` y la app se actualiza sola: acá adentro no vive ninguna
+regla de negocio.
 
-**Versión actual: `4.78.0` (versionCode 5)** · paquete `com.cmtelecom.nexuspro`
+**Versión actual: `4.96.0` (versionCode 10)** · paquete `com.cmtelecom.nexuspro`
+
+### Por qué dejó de ser una Trusted Web Activity
+No fue por gusto. Una TWA **renderiza con Chrome**, así que solo tiene Web
+Bluetooth — que es **BLE y nada más**. La mayoría de los dongles OBD hablan
+Bluetooth **clásico (SPP/RFCOMM)**: el Vgate vLinker MS en modo MFi, los
+Thinkcar y casi todo lo barato. Verificado el 2026-09-02 contra un vLinker MS
+09327: en ese modo publica iAP + SPP y **cero BLE**, así que ningún navegador lo
+ve, por bien emparejado que esté el teléfono. Eso explica que InfoCar conecte y
+NexusPro no: no era un bug, era el techo de la arquitectura.
+
+`PuenteBluetooth.java` expone **las dos radios** al JavaScript
+(`@JavascriptInterface`, objeto `NexusBT`) y solo mueve bytes: el protocolo
+ELM327 / ISO-TP / J1939 sigue viviendo en
+`js/modulos/operacion/diagnostico_obd.js` y se actualiza con cada deploy, sin
+recompilar la app. Expone BLE **además** de SPP a propósito: la WebView tampoco
+implementa Web Bluetooth, así que sin eso se cambiaría un hueco por otro.
+
+**Lo que se paga a cambio** (y por eso `MainActivity` es larga): la WebView no
+trae de fábrica lo que Chrome regalaba — selector de archivos, cámara,
+descargas, geolocalización y el botón Atrás van cableados a mano. Si algo de eso
+deja de funcionar, se arregla ahí, no en la web.
 
 ## Requisitos (ya instalados en esta máquina)
 - JDK 17+ (tienes Temurin 21)
@@ -53,17 +74,18 @@ Luego el deploy normal (`git push` + `npm run deploy`) y **subir `CACHE_VERSION`
 en `sw.js`**, como cualquier cambio de JS.
 
 ### Cómo sabe la web qué versión trae el teléfono
-Una TWA renderiza con Chrome: para el servidor es **indistinguible de una
-pestaña normal**, el user-agent no dice "voy dentro de la app v5". Por eso la
-app se identifica ella misma — `DEFAULT_URL` en `AndroidManifest.xml` abre el
-sitio en:
+El servidor no puede saberlo solo: la WebView se presenta como un Chrome de
+Android, el user-agent no dice "voy dentro de la app v10". Por eso la app se
+identifica ella misma — `MainActivity.INICIO` abre el sitio en:
 
 ```
-https://nexuspro.cmtelecommgt.com/?app=android&appvc=5&appvn=4.78.0
+https://nexuspro.cmtelecommgt.com/?app=android&nativo=1&appvc=10&appvn=4.96.0
 ```
 
-Esos valores los inyecta `build.gradle` vía `manifestPlaceholders` (no se
-escriben a mano en el manifest: se desincronizarían). `App._detectarAppAndroid()`
+Los valores salen de `BuildConfig`, que los inyecta `build.gradle`
+(`buildConfigField`): un solo origen, para que no se desincronicen. `nativo=1`
+avisa que acá SÍ hay puente Bluetooth — aunque el módulo de diagnóstico decide
+mirando si existe `window.NexusBT`, que es lo que de verdad importa. `App._detectarAppAndroid()`
 los guarda en `localStorage` y limpia la URL; `App.avisoAppAndroid()` los compara
 contra `app-version.json` al iniciar sesión y decide si avisar.
 
@@ -118,12 +140,18 @@ nueva ya se lo explica paso a paso — lo dispara el campo
 `reinstalarSiMenorQue` de `app-version.json`, y `test/app-android-version.js`
 vigila que ese aviso siga saliendo.
 
-### ⚠️ Al subir a Google Play: la app perderá la pantalla completa si no haces esto
+### ⚠️ Al subir a Google Play: agregar la huella con la que Play re-firma
 
 Con **Play App Signing** (obligatorio para apps nuevas), Google **re-firma** el
-AAB con su propia llave. La huella SHA-256 del APK que reciben los usuarios ya
-**no será la de arriba** → `assetlinks.json` deja de coincidir → la TWA se abre
-**con la barra de URL de Chrome** en vez de a pantalla completa.
+AAB con su propia llave, así que la huella SHA-256 del APK que reciben los
+usuarios **no será la de arriba** y `assetlinks.json` deja de coincidir.
+
+> Ojo, esto cambió con el cascarón nativo: **ya no se pierde la pantalla
+> completa**. Eso era un síntoma de la TWA (Chrome mostraba su barra de URL
+> cuando el vínculo no verificaba); una WebView nunca dibuja esa barra. Lo que
+> sí se rompe es que los **enlaces del sistema** —un correo, un WhatsApp— abran
+> dentro de la app en vez del navegador. Sigue valiendo la pena hacerlo, pero no
+> es lo que era: no bloquea el uso normal de la app.
 
 Después de la primera subida:
 1. Play Console → **Integridad de la app** → **Firma de apps**.
@@ -138,11 +166,12 @@ Después de la primera subida:
 Pon `"enPlayStore": true` en `app-version.json`. A partir de ahí, tanto el aviso
 de login como la pantalla de Descargas mandan a Play (que actualiza solo, sin
 pedirle al usuario permisos de "origen desconocido") en vez de al APK directo.
-El AAB listo para subir queda en `android/play/NexusPro-4.78.0-play.aab`.
+El AAB listo para subir queda en `android/play/` (el más reciente manda).
 
 ## Cómo funciona el vínculo dominio ↔ app
 1. La app declara confianza al sitio (`res/values/strings.xml → asset_statements`).
 2. El sitio declara confianza a la app (`https://nexuspro.cmtelecommgt.com/.well-known/assetlinks.json`
    con el package id `com.cmtelecom.nexuspro` y la huella de arriba).
-3. Android verifica ambos al instalar → la app abre a pantalla completa.
-   Si cambias de keystore o dominio, regenera ambos lados.
+3. Android verifica ambos al instalar → los enlaces al dominio abren dentro de
+   la app. Si cambias de keystore o dominio, regenera ambos lados.
+   (La pantalla completa ya no depende de esto: la dibuja la propia app.)

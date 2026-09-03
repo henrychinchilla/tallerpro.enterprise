@@ -35,10 +35,96 @@ Modulos.diagnostico_obd = {
     { svc:'0000fff0-0000-1000-8000-00805f9b34fb', wr:'0000fff1-0000-1000-8000-00805f9b34fb', nt:'0000fff1-0000-1000-8000-00805f9b34fb' },
   ],
 
-  get _conectado() { return !!(this._dev?.gatt?.connected && this._char); },
+  /* Todo lo que llega del dongle entra por acá, venga de una notificación BLE
+     del navegador o del puente nativo de la app Android. Es un solo lugar a
+     propósito: cuando esto estaba escrito adentro del listener de Web
+     Bluetooth, cualquier transporte nuevo tenía que copiarlo — y una copia de
+     esta lógica que se desincronice no falla, contesta MAL. */
+  _recibir(texto) {
+    this._buf += texto;
+    /* Monitoreo continuo: el ELM327 NO manda '>' hasta que se lo detiene, asi
+       que esperar el prompt seria esperar para siempre. Mientras dura, cada
+       linea completa se entrega apenas llega. El try/catch es para que una
+       trama con basura no mate el listener y con el las que vienen atras. */
+    if (this._monLinea) {
+      let i;
+      while ((i = this._buf.search(/[\r\n]/)) >= 0) {
+        const l = this._buf.slice(0, i).trim();
+        this._buf = this._buf.slice(i + 1);
+        if (l) { try { this._monLinea(l); } catch (_) {} }
+      }
+    }
+    if (this._buf.includes('>') && this._resolve) {
+      const r = this._resolve; this._resolve = null;
+      r(this._buf.replace(/>/g, '').trim());
+    }
+  },
+
+  /* ═══════════ PUENTE NATIVO (app Android) ═══════════
+     La app deja de ser una TWA justamente por esto: renderizando con Chrome
+     solo hay Web Bluetooth, que es BLE, y la mayoria de los dongles OBD
+     hablan Bluetooth CLASICO (SPP). Verificado contra un Vgate vLinker MS en
+     modo MFi: publica iAP + SPP y cero BLE, asi que ningun navegador lo ve.
+     El puente expone las DOS radios y entrega los bytes crudos: la logica de
+     protocolo no se movio de aqui, y se sigue actualizando con deploy. */
+  _bt: null, _btEsperando: null, _btEnganchado: false, _escanerElegido: null,
+
+  get _nativo() { return typeof window !== 'undefined' && !!window.NexusBT; },
+
+  /* La pregunta util NO es "¿el navegador tiene Web Bluetooth?" sino "¿hay
+     alguna radio alcanzable?". Adentro de la app la primera da NO —la WebView
+     no implementa Web Bluetooth— y sin embargo es el unico lugar donde estan
+     LAS DOS radios. Preguntar lo que no era mostraba "este navegador no
+     soporta Bluetooth, usa la app NexusPro" a alguien que YA estaba en la app. */
+  get _hayBluetooth() {
+    return this._nativo || (typeof navigator !== 'undefined' && !!navigator.bluetooth);
+  },
+
+  /* Se engancha una sola vez; el puente llama a estas funciones por nombre. */
+  _engancharNativo() {
+    if (this._btEnganchado || !this._nativo) return;
+    this._btEnganchado = true;
+    window.NexusBT_rx = t => this._recibir(String(t || ''));
+    window.NexusBT_lista = json => {
+      const cb = this._btEsperando; this._btEsperando = null;
+      if (cb) { try { cb.res(JSON.parse(json)); } catch (_) { cb.res([]); } }
+    };
+    window.NexusBT_evt = json => {
+      let e = {}; try { e = JSON.parse(json); } catch (_) {}
+      if (e.evento === 'conectado') { this._bt = { nombre: e.detalle || 'Escáner' }; }
+      if (e.evento === 'cerrado' || e.evento === 'error') { this._bt = null; this._stopLive(); }
+      const cb = this._btEsperando;
+      if (cb && cb.tipo === 'conectar') {
+        this._btEsperando = null;
+        if (e.evento === 'conectado') cb.res(e.detalle || 'Escáner');
+        else cb.rej(new Error(e.detalle || 'No se pudo conectar.'));
+      }
+    };
+  },
+
+  /* El puente es asincrono y contesta por evento, no por retorno: cada espera
+     se resuelve cuando llega NexusBT_lista o NexusBT_evt. */
+  _btPedir(tipo, accion, timeout = 20000) {
+    this._engancharNativo();
+    return new Promise((res, rej) => {
+      this._btEsperando = { tipo, res, rej };
+      setTimeout(() => {
+        if (this._btEsperando && this._btEsperando.res === res) {
+          this._btEsperando = null;
+          rej(new Error('El puente Bluetooth de la app no contestó a tiempo.'));
+        }
+      }, timeout);
+      try { accion(); } catch (e) { this._btEsperando = null; rej(e); }
+    });
+  },
+
+  get _conectado() {
+    if (this._via === 'android') return !!this._bt;
+    return !!(this._dev?.gatt?.connected && this._char);
+  },
   /* "listo para leer" según la vía activa (BLE o puente USB) */
   get _listo() {
-    if (this._via === 'ble') return this._conectado;
+    if (this._via === 'ble' || this._via === 'android') return this._conectado;
     if (!this._ws || this._ws.readyState !== 1) return false;
     if (this._via === 'serial') return this._serialReady;
     /* Tener el puente WebSocket abierto solo significa que Windows está
@@ -77,7 +163,12 @@ Modulos.diagnostico_obd = {
 
   async _conectar() {
     if (!navigator.bluetooth)
-      throw new Error('Este navegador no tiene Bluetooth. Usa Chrome/Edge en Android o en una PC con Bluetooth.');
+      /* Adentro de la app esta via no existe —la WebView no trae Web Bluetooth—
+         pero el puente si, y alcanza MAS aparatos que ella: mandar a "usa la app
+         NexusPro" a quien ya esta en la app es el peor callejon sin salida. */
+      throw new Error(this._nativo
+        ? 'Adentro de la app esta vía no aplica: elegí <b>📲 Bluetooth de la app</b>, que llega a más escáneres (BLE y clásico).'
+        : 'Este navegador no tiene Bluetooth. Usa Chrome/Edge en Android o en una PC con Bluetooth.');
     /* Web Bluetooth SÓLO deja ver los servicios declarados acá: getPrimaryServices()
        no devuelve nada fuera de esta lista. Por eso la autodetección de más abajo
        era letra muerta —no podía descubrir un servicio que no estuviera ya pedido—
@@ -135,25 +226,8 @@ Modulos.diagnostico_obd = {
     }
 
     await nt.startNotifications();
-    nt.addEventListener('characteristicvaluechanged', e => {
-      this._buf += new TextDecoder().decode(e.target.value);
-      /* Monitoreo continuo: el ELM327 NO manda '>' hasta que se lo detiene, asi
-         que esperar el prompt seria esperar para siempre. Mientras dura, cada
-         linea completa se entrega apenas llega. El try/catch es para que una
-         trama con basura no mate el listener y con el las que vienen atras. */
-      if (this._monLinea) {
-        let i;
-        while ((i = this._buf.search(/[\r\n]/)) >= 0) {
-          const l = this._buf.slice(0, i).trim();
-          this._buf = this._buf.slice(i + 1);
-          if (l) { try { this._monLinea(l); } catch (_) {} }
-        }
-      }
-      if (this._buf.includes('>') && this._resolve) {
-        const r = this._resolve; this._resolve = null;
-        r(this._buf.replace(/>/g, '').trim());
-      }
-    });
+    nt.addEventListener('characteristicvaluechanged',
+      e => this._recibir(new TextDecoder().decode(e.target.value)));
     dev.addEventListener('gattserverdisconnected', () => { this._char = null; this._stopLive(); });
     this._dev = dev; this._char = wr; this._buf = '';
     return dev.name || 'Adaptador OBD';
@@ -280,6 +354,9 @@ Modulos.diagnostico_obd = {
   },
 
   async _escribirBLE(txt) {
+    /* Por el puente nativo el texto va tal cual: del otro lado hay un socket
+       SPP o un GATT, y quien decide como partirlo en tramas es el puente. */
+    if (this._via === 'android') { window.NexusBT.escribir(txt); return; }
     const data = new TextEncoder().encode(txt);
     if (this._char.properties.writeWithoutResponse) await this._char.writeValueWithoutResponse(data);
     else await this._char.writeValue(data);
@@ -1611,6 +1688,76 @@ Modulos.diagnostico_obd = {
   /* ── Vehículos livianos por USB: OBD-II sobre CAN crudo con ISO-TP propio ── */
   /* Bluetooth clasico/SPP: Windows lo publica como SERIAL:COMx y el puente
      solo transporta el dialogo ELM; el protocolo OBD sigue aqui, igual que BLE. */
+  /* ── Bluetooth por el puente nativo de la app Android (SPP + BLE) ── */
+  async _androidInit(log) {
+    if (!this._nativo)
+      throw new Error('Esta vía necesita la app de Android de NexusPro. En el navegador usá <b>Bluetooth (BLE)</b>.');
+    this._engancharNativo();
+
+    let est = {};
+    try { est = JSON.parse(window.NexusBT.estado() || '{}'); } catch (_) {}
+    if (!est.disponible) throw new Error('Este teléfono no tiene Bluetooth.');
+    if (!est.encendido) throw new Error('El Bluetooth del teléfono está apagado. Encendelo y reintentá.');
+
+    log('Buscando escáneres (emparejados y BLE cercanos)...');
+    const lista = await this._btPedir('lista', () => window.NexusBT.listar(), 20000);
+    if (!lista.length)
+      throw new Error('No se encontró ningún escáner. Si es de Bluetooth clásico, emparejalo primero ' +
+        'desde los ajustes del teléfono; si es BLE, alcanza con que esté enchufado y encendido.');
+
+    /* Ordena por probabilidad de ser el escáner, pero NO elige solo: en un
+       taller hay manos libres, balanzas e impresoras emparejadas, y conectarse
+       al aparato equivocado deja al mecánico esperando una respuesta que nunca
+       llega. Con el nombre a la vista, elegir es inmediato. */
+    const esOBD = n => /vlinker|vgate|obd|elm|obdlink|think|veepeak|konnwei|icar/i.test(n || '');
+    lista.sort((a, b) => (esOBD(b.nombre) ? 1 : 0) - (esOBD(a.nombre) ? 1 : 0));
+
+    const elegido = await this._elegirEscaner(lista);
+    if (!elegido) throw new Error('No se eligió ningún escáner.');
+
+    log(`Conectando a <b>${UI.esc(elegido.nombre)}</b> (${elegido.tipo === 'ble' ? 'BLE' : 'Bluetooth clásico'})...`);
+    const nombre = await this._btPedir('conectar',
+      () => window.NexusBT.conectar(elegido.mac, elegido.tipo), 30000);
+    this._buf = '';
+    return { nombre, protocolo: elegido.tipo === 'ble' ? 'BLE (app)' : 'Bluetooth clásico SPP (app)' };
+  },
+
+  /* Se pinta DENTRO del panel de resultados del escaneo, no en otro modal:
+     UI.modal reemplaza el modal abierto, y eso se llevaría por delante el log,
+     los botones y el estado del escaneo en curso. */
+  _elegirEscaner(lista) {
+    return new Promise(res => {
+      const caja = document.getElementById('obd-result');
+      if (!caja) { res(lista[0] || null); return; }
+
+      const terminar = elegido => {
+        this._escanerElegido = null;
+        caja.innerHTML = '';
+        res(elegido);
+      };
+      this._escanerElegido = i => terminar(i === null ? null : (lista[i] || null));
+
+      caja.innerHTML = `
+        <div style="background:var(--surface2);color:var(--text);border-radius:8px;padding:10px;margin-top:10px">
+          <div style="font-weight:600;margin-bottom:8px">📡 Elegí el escáner</div>
+          ${lista.map((d, i) => `
+            <button class="btn btn-ghost" style="width:100%;text-align:left;margin-bottom:6px"
+              onclick="Modulos.diagnostico_obd._escanerElegido(${i})">
+              <b>${UI.esc(d.nombre)}</b>
+              <span style="font-size:11px;color:var(--text3)">
+                — ${d.tipo === 'ble' ? 'BLE' : 'Bluetooth clásico'}${d.vinculado ? ' · emparejado' : ''} · ${UI.esc(d.mac)}
+              </span>
+            </button>`).join('')}
+          <div style="font-size:11.5px;color:var(--text3);margin-top:6px">
+            ¿No aparece el tuyo? Los de <b>Bluetooth clásico</b> tienen que estar emparejados en los ajustes
+            del teléfono; los <b>BLE</b>, enchufados al vehículo y encendidos.
+          </div>
+          <button class="btn btn-ghost" style="margin-top:6px"
+            onclick="Modulos.diagnostico_obd._escanerElegido(null)">Cancelar</button>
+        </div>`;
+    });
+  },
+
   async _serialInit(log) {
     await this._puenteConectar();
     const api = this._api || '';
@@ -4346,7 +4493,7 @@ Modulos.diagnostico_obd = {
         </div>
       </div>
       <div class="page-body">
-        ${!navigator.bluetooth ? `<div class="card" style="border-left:3px solid var(--amber);padding:12px;margin-bottom:12px">
+        ${!this._hayBluetooth ? `<div class="card" style="border-left:3px solid var(--amber);padding:12px;margin-bottom:12px">
           ⚠️ Este navegador no soporta Bluetooth. Para escanear por Bluetooth usa <b>Chrome o Edge en Android</b> (o la app NexusPro) o una PC con Bluetooth. El escaneo por <b>USB (puente RP1210)</b> sí está disponible desde esta PC.
         </div>` : ''}
         <div class="card" style="padding:0;overflow:auto">
@@ -4370,7 +4517,7 @@ Modulos.diagnostico_obd = {
                     ${Modulos.btnAccion('eliminar', `Modulos.diagnostico_obd.eliminar('${d.id}')`)}
                   </td></tr>`;
               }).join('') : `<tr><td colspan="7" style="text-align:center;padding:30px;color:var(--text3)">
-                Sin escaneos en ${meses[this._mes-1]} ${this._anio}. ${puedeEditar&&navigator.bluetooth?'Conecta un adaptador OBD-II BLE y presiona 📡 Nuevo Escaneo.':''}
+                Sin escaneos en ${meses[this._mes-1]} ${this._anio}. ${puedeEditar&&this._hayBluetooth?'Conecta un adaptador OBD-II BLE y presiona 📡 Nuevo Escaneo.':''}
               </td></tr>`}
             </tbody>
           </table>
@@ -4402,6 +4549,7 @@ Modulos.diagnostico_obd = {
       <div class="form-group">
         <label class="form-label">Conexión</label>
         <select class="form-select" id="obd-via" onchange="Modulos.diagnostico_obd._verApis()">
+          ${this._nativo ? `<option value="android" selected>📲 Bluetooth de la app — BLE y clásico (SPP) · recomendado</option>` : ''}
           <option value="auto">🔎 USB — detectar solo (recomendado: liviano o camión)</option>
           <option value="ble">📶 Bluetooth — ELM327 / Vgate / OBDLink (BLE)</option>
           <option value="classic">📶 Bluetooth clásico (SPP) — vLinker/Thinkcar/ELM por COM · solo PC Windows</option>
@@ -4422,8 +4570,12 @@ Modulos.diagnostico_obd = {
       </div>
       <div id="obd-log" style="background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:10px 12px;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12.5px;line-height:1.8;min-height:70px;max-height:220px;overflow:auto;margin:10px 0">
         Conecta el adaptador al puerto de diagnóstico del vehículo y enciende el switch.<br>
-        · Bluetooth: presiona <b>Conectar y Escanear</b> y elige el adaptador (ej. "OBDII", "Vgate", "iCar Pro").<br>
-        · Bluetooth clásico: elige la vía <b>Thinkcar/ELM por puerto COM</b> y el COM que Windows muestra.<br>
+        ${this._nativo ? `· <b>Bluetooth de la app</b>: presiona <b>Conectar y Escanear</b> y elegí tu escáner de la lista.
+          Alcanza las dos radios — BLE y clásico (SPP) — así que sirve también con dongles que el navegador no puede ver.<br>`
+        : `· <b>Bluetooth (BLE)</b>: presiona <b>Conectar y Escanear</b> y elige el adaptador (ej. "OBDII", "Vgate", "iCar Pro").<br>
+           &nbsp;&nbsp;Ojo: el navegador SOLO ve dongles en modo BLE. Uno en modo MFi/iPhone o de Bluetooth clásico no aparece
+           en la lista aunque el sistema lo tenga emparejado — y desemparejarlo no ayuda.<br>
+           · <b>Bluetooth clásico (SPP)</b>, solo en PC: elegí esa vía y el puerto COM, que ya sale con el nombre del equipo.<br>`}
         · USB: solo enchufa el USB-Link a esta PC — el puente arranca solo con Windows.<br>
         &nbsp;&nbsp;¿Primera vez en esta PC? <a href="/puente-obd/instalar-puente.bat" download style="color:var(--cyan)">⬇️ Instalar el puente USB</a> (doble clic al archivo descargado, una sola vez).
       </div>
@@ -4662,7 +4814,9 @@ Modulos.diagnostico_obd = {
   _verApis() {
     const via = document.getElementById('obd-via')?.value;
     const clasico = via === 'classic';
-    const usb = via !== 'ble' && via !== 'j1939ble' && !clasico;
+    /* La vía nativa elige el escáner en su propio listado (emparejados + BLE
+       cercanos): el selector de puerto local no le aplica. */
+    const usb = via !== 'ble' && via !== 'j1939ble' && via !== 'android' && !clasico;
     const wrap = document.getElementById('obd-api-wrap');
     if (wrap) wrap.style.display = (usb || clasico) ? '' : 'none';
     const test = document.getElementById('obd-btn-test');
@@ -4750,14 +4904,32 @@ Modulos.diagnostico_obd = {
     try {
       let nombre, protocolo;
       if (this._via === 'usb') {
+        /* El USB no habla ELM de verdad: se emula sobre RP1210, y su puesta a
+           punto es otra (abrir canal CAN, probar 11/29 bits). */
         log('Conectando al puente USB local...');
         ({ nombre, protocolo } = await this._usbInit(log));
-      } else if (this._via === 'serial') {
-        log('Conectando Bluetooth clasico por puerto COM...');
-        ({ nombre, protocolo } = await this._serialInit(log));
       } else {
-        log('Buscando adaptador Bluetooth...');
-        nombre = await this._conectar();
+        /* Todo lo que del otro lado tiene un ELM327 —BLE del navegador, puente
+           nativo de la app, Bluetooth clasico por COM— comparte transporte
+           distinto pero MISMA puesta a punto, y tiene que pasar por _init.
+
+           La via serial no lo hacia: solo sondeaba con ATI/ATZ y se daba por
+           conectada. Eso deja el adaptador con el ECO ENCENDIDO (el ELM327
+           arranca asi) y sin ATSP0, de modo que cada respuesta viene con el
+           comando pegado adelante. Se ve en el dialogo crudo: "ATZ" contesta
+           "ATZ | ELM327 v2.3 | >". Como el eco de un comando OBD es hexadecimal
+           (0902, 0100...), _hexLines lo toma por datos del vehiculo y lo mezcla
+           con la respuesta real: no revienta, contesta MAL, que es peor. */
+        if (this._via === 'serial') {
+          log('Conectando Bluetooth clasico por puerto COM...');
+          ({ nombre } = await this._serialInit(log));
+        } else if (this._via === 'android') {
+          log('Conectando por el puente Bluetooth de la app...');
+          ({ nombre } = await this._androidInit(log));
+        } else {
+          log('Buscando adaptador Bluetooth...');
+          nombre = await this._conectar();
+        }
         log(`Conectado a <b>${nombre}</b> ✓`);
         protocolo = await this._init(log);
       }
