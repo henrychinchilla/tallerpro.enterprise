@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- La TWA usaba Theme.Translucent.NoTitleBar porque no dibujaba nada: solo
+     lanzaba Chrome. El cascarón nativo SÍ dibuja la ventana, así que necesita
+     un tema real; con el translúcido la WebView queda sobre un fondo
+     transparente y se ve el escritorio de atrás mientras carga.
+     El fondo va en el azul oscuro del sistema para que el arranque no pegue un
+     flash blanco antes de que pinte la página. -->
+<resources>
+    <style name="Tema.NexusPro" parent="Theme.AppCompat.NoActionBar">
+        <item name="android:windowBackground">@color/colorNav</item>
+        <item name="android:statusBarColor">@color/colorNav</item>
+        <item name="android:navigationBarColor">@color/colorNav</item>
+    </style>
+</resources>

@@ -1,38 +1,52 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
+    <!-- Bluetooth. Android partió estos permisos en dos épocas y hay que
+         declarar las dos, o la app falla en los teléfonos de la otra:
+         · hasta Android 11 (API 30): BLUETOOTH / BLUETOOTH_ADMIN, y el escaneo
+           BLE se consideraba ubicación (sin ACCESS_FINE_LOCATION el barrido
+           devuelve lista VACÍA sin dar error — la peor forma de fallar).
+         · desde Android 12 (API 31): BLUETOOTH_CONNECT / BLUETOOTH_SCAN, en
+           tiempo de ejecución. `neverForLocation` declara que no usamos el
+           escaneo para ubicar a nadie, que es lo que Play pregunta. -->
+    <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
+    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" android:maxSdkVersion="30" />
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+    <uses-permission android:name="android.permission.BLUETOOTH_SCAN"
+        android:usesPermissionFlags="neverForLocation"
+        tools:targetApi="s" />
+
+    <!-- La web las pide para la foto del vehículo y la lectura de vouchers.
+         Opcionales: un teléfono sin cámara igual debe poder instalar la app. -->
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
+    <uses-feature android:name="android.hardware.bluetooth_le" android:required="false" />
 
     <application
         android:label="@string/app_name"
         android:icon="@mipmap/ic_launcher"
         android:supportsRtl="true"
-        android:theme="@android:style/Theme.Translucent.NoTitleBar">
+        android:usesCleartextTraffic="false"
+        android:theme="@style/Tema.NexusPro">
 
-        <!-- Vincula la app con el dominio (junto a /.well-known/assetlinks.json) -->
+        <!-- Se conserva aunque ya no seamos TWA: sigue sirviendo para que los
+             enlaces del sistema (un correo, un WhatsApp) abran en la app. -->
         <meta-data
             android:name="asset_statements"
             android:resource="@string/asset_statements" />
 
         <activity
-            android:name="com.google.androidbrowserhelper.trusted.LauncherActivity"
+            android:name=".MainActivity"
             android:exported="true"
-            android:label="@string/app_name">
-
-            <!-- La app se identifica ante la web con su propia version.
-                 Una TWA renderiza con Chrome, asi que del lado del sitio es
-                 indistinguible de una pestana normal: sin estos parametros no
-                 hay manera de saber si el telefono trae un APK viejo. app.js
-                 los guarda al abrir y con eso decide si avisar "actualiza".
-                 Los valores los inyecta build.gradle (manifestPlaceholders),
-                 no se escriben a mano: asi no se desincronizan. -->
-            <meta-data
-                android:name="android.support.customtabs.trusted.DEFAULT_URL"
-                android:value="https://nexuspro.cmtelecommgt.com/?app=android&amp;appvc=${appVersionCode}&amp;appvn=${appVersionName}" />
-            <meta-data
-                android:name="android.support.customtabs.trusted.STATUS_BAR_COLOR"
-                android:resource="@color/colorPrimary" />
-            <meta-data
-                android:name="android.support.customtabs.trusted.NAVIGATION_BAR_COLOR"
-                android:resource="@color/colorNav" />
+            android:label="@string/app_name"
+            android:launchMode="singleTask"
+            android:configChanges="orientation|screenSize|keyboardHidden|screenLayout|uiMode"
+            android:windowSoftInputMode="adjustResize">
 
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />

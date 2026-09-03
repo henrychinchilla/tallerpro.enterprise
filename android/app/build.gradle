@@ -35,8 +35,8 @@ def exigir(props, clave) {
    abrir el sitio (ver DEFAULT_URL en AndroidManifest.xml). Sin eso la web no
    tendria forma de saber que version de APK esta corriendo el telefono: una
    TWA se presenta al servidor como Chrome, no como la app. */
-def appVersionCode = 9
-def appVersionName = "4.95.0"
+def appVersionCode = 10
+def appVersionName = "4.96.0"
 
 android {
     namespace 'com.cmtelecom.nexuspro'
@@ -61,6 +61,15 @@ android {
             appVersionCode: appVersionCode,
             appVersionName: appVersionName
         ]
+        /* Antes la version viajaba en la URL escrita en el manifiesto. Ahora la
+           arma MainActivity, asi que tiene que llegar al codigo Java. Mismo
+           origen unico, para que no se desincronicen. */
+        buildConfigField "int", "APP_VERSION_CODE", "${appVersionCode}"
+        buildConfigField "String", "APP_VERSION_NAME", "\"${appVersionName}\""
+    }
+
+    buildFeatures {
+        buildConfig true
     }
 
     signingConfigs {
@@ -91,8 +100,20 @@ android {
 }
 
 dependencies {
-    /* Trusted Web Activity: la app nativa que renderiza el sistema a
-       pantalla completa con el motor de Chrome (cámara, descargas,
-       notificaciones y todo el runtime web funcionan al 100%). */
-    implementation 'com.google.androidbrowserhelper:androidbrowserhelper:2.5.0'
+    /* Se fue androidbrowserhelper (TWA). Una TWA renderiza con Chrome y por eso
+       SOLO tiene Web Bluetooth, que es BLE: el Bluetooth clasico (SPP/RFCOMM)
+       de la mayoria de los dongles OBD es inalcanzable desde ahi. El cascaron
+       nativo con WebView + PuenteBluetooth alcanza las dos radios.
+       Lo que se paga a cambio, y por eso MainActivity es tan larga: la WebView
+       no trae de fabrica el selector de archivos, la camara, las descargas ni
+       la geolocalizacion que Chrome regalaba. */
+    /* appcompat arrastra kotlinx-coroutines 1.6.4, que fija kotlin-stdlib-jdk7
+       y -jdk8 en 1.6.21 mientras el stdlib sube a 1.8.22. Desde Kotlin 1.8 esas
+       clases se mudaron ADENTRO del stdlib, asi que quedan duplicadas y el
+       empaquetado falla con 'Duplicate class kotlin.*'. El BOM alinea las tres
+       en la misma version (los -jdk7/-jdk8 pasan a ser cascarones vacios).
+       No compilamos Kotlin: esto es solo para desempatar dependencias ajenas. */
+    implementation platform('org.jetbrains.kotlin:kotlin-bom:1.8.22')
+    implementation 'androidx.appcompat:appcompat:1.7.0'
+    implementation 'androidx.activity:activity:1.9.3'
 }

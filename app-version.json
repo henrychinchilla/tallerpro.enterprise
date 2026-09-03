@@ -31,14 +31,14 @@
   ],
 
   "android": {
-    "versionCode": 9,
-    "versionName": "4.95.0",
-    "fecha": "2026-08-27",
+    "versionCode": 10,
+    "versionName": "4.96.0",
+    "fecha": "2026-09-02",
     "paquete": "com.cmtelecom.nexuspro",
     "minAndroid": "8.0",
 
     "apkUrl": "/nexuspro.apk",
-    "apkKB": 424,
+    "apkKB": 2488,
 
     "reinstalarSiMenorQue": 5,
 
@@ -46,11 +46,11 @@
     "playUrl": "https://play.google.com/store/apps/details?id=com.cmtelecom.nexuspro",
 
     "novedades": [
-      "Compatible con Android 16",
-      "Diagnostico OEM: catalogo por fabricante, redes y procedimientos verificados",
-      "Escaner: mapa de modulos por red y simuladores para practicar sin vehiculo",
-      "La pantalla de Descargas ya no se queda en blanco cuando la red falla",
-      "Llave de firma renovada (mas segura)"
+      "App NATIVA: ya no es un envoltorio de Chrome. Trae puente Bluetooth propio",
+      "El escaner ya conecta con dongles de Bluetooth CLASICO (SPP): vLinker, Thinkcar y los genericos que el navegador nunca pudo ver",
+      "Tambien sigue conectando por BLE, desde la misma lista de escaneres",
+      "Los permisos de Bluetooth se piden al tocar Escanear, no al abrir la app",
+      "Camara, descargas y el boton Atras cableados dentro de la app"
     ]
   }
 }

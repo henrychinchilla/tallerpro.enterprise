@@ -144,9 +144,18 @@ const publicada = JSON.parse(fs.readFileSync(VERSION_JSON, 'utf8')).android;
     /* Y sobre todo: el APK que de verdad se sirve. Se lee del binario, que es
        lo único que el teléfono va a instalar. La URL de arranque lleva dentro
        el versionCode, así que sirve de huella. */
+    /* La URL de arranque cambio de lugar en la 4.96.0: la TWA la declaraba como
+       meta-data en el manifiesto, y el cascaron nativo la arma en MainActivity.
+       Sigue siendo UNA cadena dentro del binario —el compilador pega las
+       constantes de BuildConfig—, solo que ahora vive en classes.dex. Se miran
+       los dos lados a proposito: la prueba tiene que seguir sirviendo si algun
+       dia se vuelve a mover, y lo que importa no es en que archivo esta sino
+       que el APK que se instala anuncie la version que el sitio promete. */
     const manifest = leerDelZip(APK, 'AndroidManifest.xml');
     ok('el APK publicado se puede leer', !!manifest && manifest.length > 0);
-    const texto = manifest ? manifest.toString('utf16le') : '';
+    const dex = leerDelZip(APK, 'classes.dex');
+    const texto = (manifest ? manifest.toString('utf16le') : '')
+      + ' ' + (dex ? dex.toString('utf8') : '');
     const m = /appvc=(\d+)&appvn=([0-9][0-9.]*)/.exec(texto);
     ok('el APK publicado se identifica al abrir el sitio (?app=android&appvc=…)', !!m);
     ok('el APK publicado ES la versión que anuncia app-version.json',
