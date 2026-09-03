@@ -1038,7 +1038,7 @@ const App = {
       : null;
     App._guardarRuta();
     App.renderSidebar();
-    App._vigilarPermisosUI();
+    App._lienzoLimpio();   // que un render pendiente no pise al que viene
 
     /* Cargar módulo */
     if (modulo?.render) {
@@ -1062,6 +1062,7 @@ const App = {
       if (modulo) modulo._tab = tab;
       App._guardarRuta();
       App.renderSidebar();
+      App._lienzoLimpio();
       modulo?.render?.();
       return;
     }
@@ -1096,6 +1097,28 @@ const App = {
      editar/eliminar en el módulo activo se ocultan los botones de crear
      (＋ Nuevo), editar (✏️) y eliminar (🗑️) que aparezcan en la página.
      Los módulos que usan Modulos.btnAccion ya ni siquiera los renderizan. */
+  /* ── LIENZO LIMPIO AL CAMBIAR DE MÓDULO ────────────
+     Un render que quedó a medio `await` sigue teniendo agarrado el
+     #page-content de ANTES —lo pide en su primera línea, no al final— así que
+     cuando termina escribe su HTML encima de la pantalla a la que el usuario YA
+     se movió. El Dashboard es el caso típico: pide 5 consultas en paralelo
+     antes de pintar. No revienta: pinta la pantalla EQUIVOCADA, con el menú y
+     la ruta diciendo otra cosa, que es peor porque nadie lo lee como un error.
+     Se ve al tocar dos módulos seguidos, y con la base cargada se ve solo.
+
+     Se cambia el nodo por uno vacío igual: el render viejo termina escribiendo
+     en un nodo ya desconectado del documento —o sea, en la nada— y el nuevo
+     encuentra el suyo limpio. Hay que reenganchar el MutationObserver de
+     permisos, que se ata a UN nodo concreto y si no se quedaría vigilando el
+     que se fue: esa es la red que oculta editar/eliminar a quien no puede. */
+  _lienzoLimpio() {
+    const viejo = document.getElementById('page-content');
+    if (!viejo) return;
+    viejo.replaceWith(viejo.cloneNode(false));   // mismo id y clases, sin hijos
+    if (App._permObs) { App._permObs.disconnect(); App._permObs = null; }
+    App._vigilarPermisosUI();
+  },
+
   _vigilarPermisosUI() {
     if (App._permObs) return;
     const cont = document.getElementById('page-content');
