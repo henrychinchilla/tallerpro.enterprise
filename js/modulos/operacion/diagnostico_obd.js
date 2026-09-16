@@ -1722,13 +1722,9 @@ Modulos.diagnostico_obd = {
       throw new Error('No se encontró ningún escáner. Si es de Bluetooth clásico, emparejalo primero ' +
         'desde los ajustes del teléfono; si es BLE, alcanza con que esté enchufado y encendido.');
 
-    /* Ordena por probabilidad de ser el escáner, pero NO elige solo: en un
-       taller hay manos libres, balanzas e impresoras emparejadas, y conectarse
-       al aparato equivocado deja al mecánico esperando una respuesta que nunca
-       llega. Con el nombre a la vista, elegir es inmediato. */
-    const esOBD = n => /vlinker|vgate|obd|elm|obdlink|think|veepeak|konnwei|icar/i.test(n || '');
-    lista.sort((a, b) => (esOBD(b.nombre) ? 1 : 0) - (esOBD(a.nombre) ? 1 : 0));
-
+    /* Ordenar y etiquetar es de _elegirEscaner, que es quien lo pinta. Aca habia
+       una segunda copia del reconocedor de nombres OBD con una lista de marcas
+       mas corta: dos regex para lo mismo no fallan, se desincronizan. */
     const elegido = await this._elegirEscaner(lista);
     if (!elegido) throw new Error('No se eligió ningún escáner.');
 
