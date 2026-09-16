@@ -77,6 +77,13 @@ tools/
 data/tsb/**/_modelos.json.map
 prueba-*.html
 
+# ══ APP NATIVA (Flutter): NO es parte del sitio ══
+# El 2026-09-16 el proyecto entero se publico en el CDN por crearlo mientras un
+# deploy corria y sin excluirlo antes. No habia secretos (android/ ya estaba
+# cubierto y la anon key de Supabase es publica por diseno), pero el codigo
+# fuente de la app no tiene por que servirse desde el sitio.
+app_flutter/
+
 # ══ PROYECTO ANDROID: NO es parte del sitio y contiene la LLAVE DE FIRMA ══
 # Ojo: wrangler sube el DIRECTORIO DE TRABAJO, no lo que esta en git. Que
 # android/tallerpro.keystore y android/keystore.properties esten en

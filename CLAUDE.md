@@ -45,7 +45,27 @@ Al terminar cambios OK: commit + push a `main` y `npm run deploy`, automáticame
   y si la migración trae reglas de seguridad, probarlas con un `do $$ ... $$` que termine
   en `raise exception` para que la transacción se aborte y no escriba nada.
 
-## 6. Datos / integridad
+## 6. LA APP MÓVIL ES NATIVA. SIN EXCEPCIONES (innegociable)
+Henry lo pidió el 2026-09-16, después de dos arquitecturas fallidas:
+**se acabaron las apps que no son nativas.** Nada de TWA, nada de cascarón WebView,
+nada de "envolver el sitio". Si el entregable es una app de Android, es **Flutter
+nativo** (`app_flutter/`, SDK en `D:\flutter`).
+
+- **NO proponer** una TWA ni una WebView como atajo, ni "por ahora", ni "para salir
+  rápido". Ese atajo ya se tomó dos veces y las dos veces terminó igual: el Bluetooth
+  no alcanzaba los dongles (una TWA renderiza con Chrome = solo BLE), y cuando se
+  cambió a WebView + puente Java se rompió el login con Google, porque Google rechaza
+  OAuth dentro de una WebView (`disallowed_useragent`).
+- **No decirle "nativa" a algo que no lo es.** La 4.96.0 se anunció como "app NATIVA"
+  siendo un cascarón WebView. Es exactamente lo que lo hizo perder la confianza.
+  Cascarón nativo + UI web = **híbrida**, y así hay que llamarla.
+- Lo que SÍ se conserva: **Supabase entero** (auth, RLS, datos, Edge Functions) y la
+  lógica de protocolo OBD ya depurada en Java (`PuenteBluetooth.java`), que se reusa
+  desde Flutter por *platform channel* — Flutter no trae Bluetooth clásico/SPP.
+- El sitio web sigue existiendo para escritorio. Lo que se termina es **envolverlo y
+  llamarlo app**.
+
+## 7. Datos / integridad
 - Importaciones idempotentes (upsert con `onConflict`), nunca crear duplicados.
 - Excluir del CDN archivos sensibles vía `.assetsignore` (*.pdf, *.xls, *.xlsx).
   OJO: `wrangler deploy` **ignora** `.cfignore` — ese archivo no excluye nada.
