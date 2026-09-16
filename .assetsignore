@@ -1,5 +1,11 @@
 # Archivos que NO deben publicarse como sitio estático (solo runtime: index.html, css/, js/, icons/, manifest.json, sw.js)
 .git/
+# Con barra solo excluye el DIRECTORIO. En un worktree `.git` es un ARCHIVO de
+# una linea con la ruta local del repositorio, y se subia al CDN: comprobado el
+# 2026-09-16 al desplegar desde .claude/worktrees (worker.js lo tapa en runtime
+# con un 404 de 9 bytes, pero el archivo ya estaba arriba — que es exactamente
+# como quedo publica la llave de firma en agosto).
+.git
 .gitignore
 .assetsignore
 .remember/

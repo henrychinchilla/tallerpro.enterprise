@@ -31,14 +31,14 @@
   ],
 
   "android": {
-    "versionCode": 10,
-    "versionName": "4.96.0",
-    "fecha": "2026-09-02",
+    "versionCode": 11,
+    "versionName": "4.96.1",
+    "fecha": "2026-09-16",
     "paquete": "com.cmtelecom.nexuspro",
     "minAndroid": "8.0",
 
     "apkUrl": "/nexuspro.apk",
-    "apkKB": 2488,
+    "apkKB": 2490,
 
     "reinstalarSiMenorQue": 5,
 
@@ -46,11 +46,11 @@
     "playUrl": "https://play.google.com/store/apps/details?id=com.cmtelecom.nexuspro",
 
     "novedades": [
-      "App NATIVA: ya no es un envoltorio de Chrome. Trae puente Bluetooth propio",
-      "El escaner ya conecta con dongles de Bluetooth CLASICO (SPP): vLinker, Thinkcar y los genericos que el navegador nunca pudo ver",
-      "Tambien sigue conectando por BLE, desde la misma lista de escaneres",
-      "Los permisos de Bluetooth se piden al tocar Escanear, no al abrir la app",
-      "Camara, descargas y el boton Atras cableados dentro de la app"
+      "El escaner ya abre el canal con dongles que antes rechazaba: se prueban TRES formas de abrir Bluetooth clasico, no una",
+      "Se acabo el 'Conectado' sin haber hablado con el escaner: se le manda ATI y se muestra lo que contesta",
+      "La lista de escaneres dice que es cada aparato y si esta emparejado; los que no publican nombre van aparte",
+      "Boton Probar Bluetooth: separa si falla el telefono, el dongle o el vehiculo",
+      "Los fallos de Bluetooth ya no se quedan callados 30 segundos esperando: dicen que paso"
     ]
   }
 }
