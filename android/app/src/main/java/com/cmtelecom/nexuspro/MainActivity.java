@@ -69,6 +69,7 @@ public class MainActivity extends AppCompatActivity {
      niegue en bloque. */
   private ActivityResultLauncher<String[]> pedirPermisos;
   private Runnable trasPermisos;
+  private Runnable trasNegados;
 
   @Override
   protected void onCreate(Bundle estado) {
@@ -93,8 +94,16 @@ public class MainActivity extends AppCompatActivity {
     pedirPermisos = registerForActivityResult(
         new ActivityResultContracts.RequestMultiplePermissions(),
         r -> {
-          Runnable t = trasPermisos;
+          /* Antes se corria `despues` pasara lo que pasara. Si el mecanico
+             negaba el permiso, el codigo seguia igual, la llamada de Bluetooth
+             tiraba SecurityException adentro de un catch mudo y la pantalla
+             decia "no se encontro ningun escaner" — culpando al dongle por algo
+             que se contesto en un dialogo del sistema. */
+          boolean todos = true;
+          for (Boolean v : r.values()) if (!Boolean.TRUE.equals(v)) todos = false;
+          Runnable t = todos ? trasPermisos : trasNegados;
           trasPermisos = null;
+          trasNegados = null;
           if (t != null) t.run();
         });
 
@@ -222,11 +231,12 @@ public class MainActivity extends AppCompatActivity {
      BLUETOOTH_CONNECT/SCAN, y en los anteriores el escaneo BLE exige ubicación.
      Se pide en el momento en que el mecánico toca "Escanear", con el aparato
      enfrente, que es cuando la pregunta tiene sentido. */
-  void asegurarPermisos(String[] permisos, Runnable despues) {
+  void asegurarPermisos(String[] permisos, Runnable despues, Runnable siNiega) {
     java.util.List<String> faltan = new java.util.ArrayList<>();
     for (String p : permisos) if (!concedido(p)) faltan.add(p);
     if (faltan.isEmpty()) { despues.run(); return; }
     trasPermisos = despues;
+    trasNegados = siNiega;
     runOnUiThread(() -> pedirPermisos.launch(faltan.toArray(new String[0])));
   }
 

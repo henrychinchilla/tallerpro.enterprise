@@ -86,6 +86,11 @@ public class PuenteBluetooth {
   private BluetoothGattCharacteristic escritura, notificacion;
   private final ConcurrentLinkedQueue<byte[]> colaBle = new ConcurrentLinkedQueue<>();
   private volatile boolean bleOcupado = false;
+  /* Un GATT que nunca llega a conectar aterriza en el mismo callback que uno que
+     se cierra a proposito, y con `gatt` en null en los dos casos. Sin esta
+     bandera el fallo no emitia NINGUN evento: la pagina esperaba 30 s y decia
+     "el puente no contesto a tiempo", que manda a buscar el problema al reves. */
+  private volatile boolean bleConectando = false;
 
   /* Lo que vio el último escaneo, para poder resolver una MAC a su aparato. */
   private final Map<String, BluetoothDevice> vistos = new LinkedHashMap<>();
@@ -137,7 +142,7 @@ public class PuenteBluetooth {
       evento("error", "El Bluetooth del teléfono está apagado.");
       return;
     }
-    act.asegurarPermisos(MainActivity.permisosBluetooth(), this::listarYa);
+    act.asegurarPermisos(MainActivity.permisosBluetooth(), this::listarYa, this::sinPermiso);
   }
 
   private void listarYa() {
@@ -199,6 +204,14 @@ public class PuenteBluetooth {
     }
   }
 
+  /* Un permiso negado deja a las llamadas de Bluetooth tirando SecurityException
+     dentro de catch mudos: la lista sale vacia y la pantalla termina culpando al
+     dongle por algo que se contesto en un dialogo del sistema. */
+  private void sinPermiso() {
+    evento("error", "La app no tiene permiso de Bluetooth. Concedelo en "
+        + "Ajustes › Aplicaciones › NexusPro › Permisos › Dispositivos cercanos, y reintentá.");
+  }
+
   private void entregar(List<JSONObject> filas) {
     JSONArray a = new JSONArray();
     for (JSONObject o : filas) a.put(o);
@@ -225,7 +238,7 @@ public class PuenteBluetooth {
       }
       if (d == null) { evento("error", "No se encontró el aparato " + mac + "."); return; }
       if ("ble".equalsIgnoreCase(tipo)) abrirBle(d); else abrirSpp(d);
-    });
+    }, this::sinPermiso);
   }
 
   @JavascriptInterface
@@ -256,8 +269,7 @@ public class PuenteBluetooth {
         /* Descubrir y conectar a la vez arruina las dos cosas: el radio no da
            abasto y el connect() falla con un "read failed" que no dice nada. */
         try { adaptador.cancelDiscovery(); } catch (Exception ignorada) { }
-        BluetoothSocket s = d.createRfcommSocketToServiceRecord(SPP);
-        s.connect();
+        BluetoothSocket s = abrirSocket(d);
         socket = s;
         salida = s.getOutputStream();
         arrancarLector(s.getInputStream());
@@ -268,6 +280,35 @@ public class PuenteBluetooth {
             + ". Revisá que esté emparejado y enchufado al vehículo.");
       }
     }, "nexus-spp-connect").start();
+  }
+
+  /* Tres intentos, y no por supersticion: el camino "correcto" —pedir el canal
+     por SDP con createRfcommSocketToServiceRecord— falla en buena parte de los
+     clones ELM327, que publican un registro SDP incompleto. El sintoma es
+     siempre el mismo y no dice nada: "read failed, socket might closed or
+     timeout, read ret: -1". Por eso se prueba, en orden: SDP seguro, SDP
+     inseguro (varios clones no completan el emparejamiento seguro) y por ultimo
+     el canal 1 a mano, que es donde el perfil serie vive en la practica.
+     Cada socket fallido se cierra antes del siguiente: dejarlo abierto ocupa el
+     radio y hace fallar tambien al intento que si habria funcionado. */
+  private BluetoothSocket abrirSocket(BluetoothDevice d) throws Exception {
+    Exception primera = null;
+    for (int intento = 0; intento < 3; intento++) {
+      BluetoothSocket s = null;
+      try {
+        if (intento == 0)      s = d.createRfcommSocketToServiceRecord(SPP);
+        else if (intento == 1) s = d.createInsecureRfcommSocketToServiceRecord(SPP);
+        else s = (BluetoothSocket) d.getClass()
+            .getMethod("createRfcommSocket", int.class).invoke(d, 1);
+        if (s == null) continue;
+        s.connect();
+        return s;
+      } catch (Exception e) {
+        if (primera == null) primera = e;
+        if (s != null) { try { s.close(); } catch (Exception ignorada) { } }
+      }
+    }
+    throw primera != null ? primera : new Exception("sin canal serie (SPP)");
   }
 
   private void arrancarLector(final InputStream in) {
@@ -293,18 +334,37 @@ public class PuenteBluetooth {
     final BluetoothGattCallback cb = new BluetoothGattCallback() {
       @Override public void onConnectionStateChange(BluetoothGatt g, int estado, int nuevo) {
         if (nuevo == BluetoothGatt.STATE_CONNECTED) {
+          bleConectando = false;
           gatt = g;
           try { g.requestMtu(247); } catch (Exception e) { g.discoverServices(); }
         } else if (nuevo == BluetoothGatt.STATE_DISCONNECTED) {
-          boolean intencional = gatt == null;
+          boolean fallaAlAbrir = bleConectando;
+          boolean intencional = gatt == null && !fallaAlAbrir;
+          bleConectando = false;
           cerrar();
-          if (!intencional) evento("cerrado", "El escáner se desconectó.");
+          if (fallaAlAbrir)
+            /* El 133 es el error mas comun de BLE en Android y casi nunca es del
+               dongle: se resuelve apagando y encendiendo el Bluetooth, o el
+               aparato ya esta tomado por otra app (Torque, la del fabricante). */
+            evento("error", "No se pudo abrir BLE con " + nombre(d) + " (estado " + estado + ")."
+                + (estado == 133 ? " Apagá y encendé el Bluetooth del teléfono, y cerrá cualquier otra"
+                                 + " app de escaneo que lo tenga tomado." : "")
+                + " Si el escáner es de Bluetooth clásico, emparejalo en los ajustes del teléfono"
+                + " y elegílo de la lista.");
+          else if (!intencional) evento("cerrado", "El escáner se desconectó.");
         }
       }
 
       @Override public void onMtuChanged(BluetoothGatt g, int mtu, int estado) { g.discoverServices(); }
 
       @Override public void onServicesDiscovered(BluetoothGatt g, int estado) {
+        /* Sin esto, un descubrimiento fallido llegaba acá con la lista vacia y
+           se reportaba como "protocolo propietario" — acusando al dongle. */
+        if (estado != BluetoothGatt.GATT_SUCCESS) {
+          cerrar();
+          evento("error", "No se pudieron leer los servicios BLE (estado " + estado + "). Reintentá.");
+          return;
+        }
         /* Autodetección: cualquier servicio que tenga una característica que
            notifique y otra en la que se pueda escribir. Es la misma regla que
            usa el driver web, y por eso sirve para dongles cuyo par exacto de
@@ -363,8 +423,10 @@ public class PuenteBluetooth {
     };
 
     try {
+      bleConectando = true;
       d.connectGatt(act, false, cb, BluetoothDevice.TRANSPORT_LE);
     } catch (Exception e) {
+      bleConectando = false;
       evento("error", "No se pudo abrir BLE: " + e.getMessage());
     }
   }

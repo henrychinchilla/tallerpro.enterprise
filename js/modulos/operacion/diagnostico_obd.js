@@ -94,10 +94,18 @@ Modulos.diagnostico_obd = {
       if (e.evento === 'conectado') { this._bt = { nombre: e.detalle || 'Escáner' }; }
       if (e.evento === 'cerrado' || e.evento === 'error') { this._bt = null; this._stopLive(); }
       const cb = this._btEsperando;
-      if (cb && cb.tipo === 'conectar') {
+      if (!cb) return;
+      if (cb.tipo === 'conectar') {
         this._btEsperando = null;
         if (e.evento === 'conectado') cb.res(e.detalle || 'Escáner');
         else cb.rej(new Error(e.detalle || 'No se pudo conectar.'));
+      } else if (e.evento === 'error') {
+        /* Un error mientras se esperaba la LISTA no lo miraba nadie: la espera
+           moria a los 20 s con "el puente no contesto a tiempo" y tapaba el
+           motivo real —permiso negado, radio apagada— que el puente SI habia
+           mandado. El unico caso en que el puente calla es el que ya no existe. */
+        this._btEsperando = null;
+        cb.rej(new Error(e.detalle || 'El puente Bluetooth de la app falló.'));
       }
     };
   },
@@ -279,6 +287,15 @@ Modulos.diagnostico_obd = {
     L.push('fecha: ' + new Date().toISOString());
     L.push(`vehiculo: ${[v.marca, v.modelo, v.anio].filter(Boolean).join(' ') || '?'}  placa: ${v.placa || '?'}`);
     L.push(`via: ${this._via}  protocolo: ${s.protocolo || '?'}  adaptador: ${s.adaptador || '?'}`);
+    /* Que aparato es y por que radio se intento: sin esto, un "no conecta"
+       mandado desde el taller no distingue la app del navegador, que es la
+       primera bifurcacion de todo el diagnostico. */
+    let entorno = 'navegador sin Bluetooth';
+    try {
+      if (this._nativo) entorno = `app (puente v${JSON.parse(window.NexusBT.estado() || '{}').version || '?'})`;
+      else if (navigator.bluetooth) entorno = 'navegador con Web Bluetooth';
+    } catch (_) { entorno = 'app'; }
+    L.push(`entorno: ${entorno}  ua: ${(navigator.userAgent || '').slice(0, 120)}`);
     L.push(`protoNum: ${this._protoNum}  canExt: ${this._canExt}  baud: ${this._canBaud}`);
     L.push(`VIN: ${s.vin || '—'}  MIL: ${s.mil ? 'ON' : 'off'}  voltaje: ${s.voltaje || '—'}`);
     const mp = s.mapa_acceso;
@@ -1719,6 +1736,26 @@ Modulos.diagnostico_obd = {
     const nombre = await this._btPedir('conectar',
       () => window.NexusBT.conectar(elegido.mac, elegido.tipo), 30000);
     this._buf = '';
+    this._via = 'android';
+
+    /* Decir "Conectado ✓" apenas abre el socket es una promesa sin respaldo: el
+       socket abre igual contra unos audifonos o una balanza, y la pantalla
+       igual felicita. La via serial ya sondeaba con ATI por exactamente esta
+       razon; la de la app se agrego despues y se quedo sin la sonda.
+       ATI le habla al DONGLE, no al vehiculo, asi que no toca ninguna ECU, y lo
+       que conteste se imprime CRUDO: es lo unico que separa "hay enlace" de
+       "parece que hay enlace". */
+    let sonda = await this._cmd('ATI', 4000).catch(() => '');
+    if (!sonda.trim()) sonda = await this._cmd('ATZ', 5000).catch(() => '');
+    if (!sonda.trim()) {
+      try { window.NexusBT.desconectar(); } catch (_) {}
+      this._bt = null;
+      throw new Error(`Se abrió el Bluetooth con <b>${UI.esc(nombre)}</b>, pero no contestó ni a ATI ni a ATZ: ` +
+        `NO hay enlace con un escáner OBD. Lo más común es haber elegido el aparato equivocado de la lista ` +
+        `(manos libres, audífonos, balanza, el celular de alguien). Si es el correcto, desenchufalo del ` +
+        `vehículo, volvé a enchufarlo y reintentá.`);
+    }
+    log(`El escáner contesta: <b>${UI.esc(sonda.replace(/[\r\n>]+/g, ' ').trim())}</b> ✓`);
     return { nombre, protocolo: elegido.tipo === 'ble' ? 'BLE (app)' : 'Bluetooth clásico SPP (app)' };
   },
 
@@ -1737,17 +1774,58 @@ Modulos.diagnostico_obd = {
       };
       this._escanerElegido = i => terminar(i === null ? null : (lista[i] || null));
 
+      /* Un barrido BLE en la calle levanta TODO lo que este anunciando cerca
+         —llaveros, sensores de presion, audifonos, el celular del cliente— y la
+         mayoria no publica nombre: el puente cae a la MAC y llegan como un
+         numero pelado. Mezclados y en crudo, el mecanico elige entre veinte
+         filas identicas. Aca se ordenan por probabilidad, cada una dice QUE es,
+         y las anonimas se pliegan: no estorban por feas, estorban porque casi
+         nunca son el escaner. */
+      const esOBD = n => /vlinker|vgate|obd|elm|obdlink|think|veepeak|konnwei|icar|viecar|panlong|scan/i.test(n || '');
+      const soloHex = t => String(t || '').replace(/[^0-9A-F]/gi, '').toUpperCase();
+      /* "Anonimo" no es "sin nombre" a secas: el puente ya sustituyo el nombre
+         faltante por la MAC, asi que hay que reconocer esa sustitucion. */
+      const anonimo = d => !String(d.nombre || '').trim() || soloHex(d.nombre) === soloHex(d.mac);
+      const rango = d => esOBD(d.nombre) ? 0 : anonimo(d) ? 3 : d.vinculado ? 1 : 2;
+      const orden = [...lista].sort((a, b) => rango(a) - rango(b));
+
+      const fila = d => {
+        const r = rango(d);
+        const etiqueta = r === 0 ? ' <span style="color:var(--green);font-size:11px">🔌 parece un escáner OBD</span>' : '';
+        return `<button class="btn btn-ghost" style="width:100%;text-align:left;margin-bottom:6px"
+            onclick="Modulos.diagnostico_obd._escanerElegido(${lista.indexOf(d)})">
+            <b>${anonimo(d) ? '<span style="color:var(--text3)">(sin nombre)</span>' : UI.esc(d.nombre)}</b>${etiqueta}
+            <span style="display:block;font-size:11px;color:var(--text3)">
+              ${d.tipo === 'ble' ? 'BLE' : 'Bluetooth clásico (SPP)'} ·
+              ${d.vinculado ? 'emparejado con el teléfono' : 'no emparejado'} · ${UI.esc(d.mac)}
+            </span>
+          </button>`;
+      };
+
+      const probables = orden.filter(d => rango(d) < 3);
+      const anon = orden.filter(d => rango(d) === 3);
+
       caja.innerHTML = `
         <div style="background:var(--surface2);color:var(--text);border-radius:8px;padding:10px;margin-top:10px">
-          <div style="font-weight:600;margin-bottom:8px">📡 Elegí el escáner</div>
-          ${lista.map((d, i) => `
-            <button class="btn btn-ghost" style="width:100%;text-align:left;margin-bottom:6px"
-              onclick="Modulos.diagnostico_obd._escanerElegido(${i})">
-              <b>${UI.esc(d.nombre)}</b>
-              <span style="font-size:11px;color:var(--text3)">
-                — ${d.tipo === 'ble' ? 'BLE' : 'Bluetooth clásico'}${d.vinculado ? ' · emparejado' : ''} · ${UI.esc(d.mac)}
-              </span>
-            </button>`).join('')}
+          <div style="font-weight:600;margin-bottom:2px">📡 Elegí el escáner</div>
+          <div style="font-size:11.5px;color:var(--text3);margin-bottom:8px">
+            ${lista.length} aparato(s) alrededor. Ninguno está conectado todavía: al elegir uno se le
+            manda <b>ATI</b> y solo se sigue si contesta.
+          </div>
+          ${probables.length ? probables.map(fila).join('')
+            : '<div style="font-size:12px;color:var(--amber);margin-bottom:6px">Ninguno se anuncia con nombre de escáner. Si el tuyo es de Bluetooth clásico, emparejalo primero en los ajustes del teléfono.</div>'}
+          ${anon.length ? `
+            <button class="btn btn-ghost" style="width:100%;font-size:12px"
+              onclick="this.style.display='none';this.nextElementSibling.style.display=''">
+              ▾ Ver ${anon.length} aparato(s) sin nombre
+            </button>
+            <div style="display:none">
+              <div style="font-size:11.5px;color:var(--text3);margin:4px 0">
+                No publican nombre, así que solo se ve su MAC. Casi siempre son llaveros, sensores de
+                presión o audífonos — rara vez el escáner.
+              </div>
+              ${anon.map(fila).join('')}
+            </div>` : ''}
           <div style="font-size:11.5px;color:var(--text3);margin-top:6px">
             ¿No aparece el tuyo? Los de <b>Bluetooth clásico</b> tienen que estar emparejados en los ajustes
             del teléfono; los <b>BLE</b>, enchufados al vehículo y encendidos.
@@ -4537,6 +4615,11 @@ Modulos.diagnostico_obd = {
     if (!this._vehiculos || !this._vehiculos.length) {
       try { this._vehiculos = await DB.getVehiculos() || []; } catch (_) { this._vehiculos = []; }
     }
+    /* El puente USB es un programa de WINDOWS: en telefono y tablet no falta,
+       no existe. Dejarlo como primera opcion hacia que el arranque por defecto
+       en un celular fuera la unica via imposible, y el mecanico veia "no hay
+       conexion" sin haber elegido nada mal. */
+    const viaPorDefecto = this._nativo ? 'android' : (this._esMovil() ? 'ble' : 'auto');
     UI.modal('📡 Nuevo Escaneo OBD-II', `
       <div class="form-group">
         <label class="form-label">Vehículo *</label>
@@ -4550,8 +4633,8 @@ Modulos.diagnostico_obd = {
         <label class="form-label">Conexión</label>
         <select class="form-select" id="obd-via" onchange="Modulos.diagnostico_obd._verApis()">
           ${this._nativo ? `<option value="android" selected>📲 Bluetooth de la app — BLE y clásico (SPP) · recomendado</option>` : ''}
-          <option value="auto">🔎 USB — detectar solo (recomendado: liviano o camión)</option>
-          <option value="ble">📶 Bluetooth — ELM327 / Vgate / OBDLink (BLE)</option>
+          <option value="auto"${viaPorDefecto === 'auto' ? ' selected' : ''}>🔎 USB — detectar solo (recomendado: liviano o camión)</option>
+          <option value="ble"${viaPorDefecto === 'ble' ? ' selected' : ''}>📶 Bluetooth — ELM327 / Vgate / OBDLink (BLE)</option>
           <option value="classic">📶 Bluetooth clásico (SPP) — vLinker/Thinkcar/ELM por COM · solo PC Windows</option>
           <option value="j1939ble">🚚 Bluetooth — camión J1939 (dongle con protocolo A)</option>
           <option value="j1939">🚚 USB — forzar camión J1939 (puente RP1210)</option>
@@ -4658,6 +4741,10 @@ Modulos.diagnostico_obd = {
   },
 
   async probarAdaptador() {
+    /* Dos mundos detras del mismo boton: por USB hay que recorrer los drivers
+       RP1210; por Bluetooth lo unico que se prueba es que el dongle elegido
+       conteste. Un solo boton porque la pregunta del mecanico es una sola. */
+    if (document.getElementById('obd-via')?.value === 'android') return this._probarBluetooth();
     const btn = document.getElementById('obd-btn-test');
     if (btn) { btn.disabled = true; btn.textContent = '⏳ Probando...'; }
     const log = m => this._log(m);
@@ -4749,6 +4836,42 @@ Modulos.diagnostico_obd = {
     }
   },
 
+  /* Prueba del enlace sola, sin escaneo y sin elegir vehiculo: conecta, hace
+     hablar al dongle y despues le pregunta al vehiculo. Separa de una vez las
+     tres cosas que "no conecta" confunde — el telefono con el dongle, el dongle
+     consigo mismo, y el dongle con el bus. */
+  async _probarBluetooth() {
+    const btn = document.getElementById('obd-btn-test');
+    if (btn) { btn.disabled = true; btn.textContent = '⏳ Probando...'; }
+    const log = m => this._log(m);
+    this._traza = [];
+    this._via = 'android';
+    try {
+      const { nombre, protocolo } = await this._androidInit(log);
+      log(`<b style="color:var(--green)">✓ Enlace con ${UI.esc(nombre)}</b> — ${protocolo}`);
+      log('Preguntándole al vehículo (01 00)...');
+      for (const c of ['ATE0', 'ATL0', 'ATSP0']) await this._cmd(c, 4000).catch(() => '');
+      const r = String(await this._cmd('0100', 15000).catch(e => 'ERROR: ' + e.message));
+      if (/4100/.test(r.replace(/\s/g, '')))
+        log('<b style="color:var(--green)">✓ El vehículo respondió.</b> Bluetooth y bus comunicando: ya podés escanear.');
+      else
+        log(`<b style="color:var(--amber)">⚠️ El escáner responde, pero el vehículo no</b> ` +
+            `(contestó "${UI.esc(r.replace(/[\r\n>]+/g, ' ').trim()) || 'nada'}"). ` +
+            `El Bluetooth está bien; el problema está del dongle hacia el vehículo: switch en contacto ` +
+            `y dongle bien metido en el conector de diagnóstico.`);
+    } catch (e) {
+      log(`<span style="color:var(--red)">✗ ${e.message}</span>`);
+    } finally {
+      /* Se suelta siempre: dejar el socket abierto hace que el escaneo que viene
+         despues encuentre el dongle ocupado por esta misma app. */
+      try { window.NexusBT.desconectar(); } catch (_) {}
+      this._bt = null;
+      if (btn) { btn.disabled = false; btn.textContent = '🔧 Probar Bluetooth'; }
+      const bt = document.getElementById('obd-btn-traza');
+      if (bt && this._traza.length) bt.style.display = '';
+    }
+  },
+
   /* ═══ Antes de conectar: qué se sabe de este vehículo ══════════════════════
      "Revisá que tengamos todo para poder escanearla" no deberia ser una pregunta
      que haya que hacer por chat. El año y la marca ya dicen por que enlace
@@ -4820,7 +4943,13 @@ Modulos.diagnostico_obd = {
     const wrap = document.getElementById('obd-api-wrap');
     if (wrap) wrap.style.display = (usb || clasico) ? '' : 'none';
     const test = document.getElementById('obd-btn-test');
-    if (test) test.style.display = usb ? '' : 'none';
+    /* Por Bluetooth tambien hay algo que verificar, y es LA pregunta del taller:
+       "¿esto esta conectado de verdad?". Antes el boton se escondia justo en la
+       via donde mas falta hacia. */
+    if (test) {
+      test.style.display = (usb || via === 'android') ? '' : 'none';
+      test.textContent = via === 'android' ? '🔧 Probar Bluetooth' : '🔧 Verificar adaptadores';
+    }
     if (clasico) {
       /* Windows crea un COM por cada perfil SPP emparejado, y varios son
          puertos LOCALES entrantes sin nada del otro lado. Tomar "el primero
@@ -4869,6 +4998,12 @@ Modulos.diagnostico_obd = {
   },
 
   _log(msg) {
+    /* La bitacora se lleva TAMBIEN el log de pantalla, y antes del early return.
+       Cuando el escaner no llega a conectar no hay un solo comando ELM que
+       trazar, asi que estas lineas son el unico rastro de que paso — y como el
+       boton de la bitacora solo aparece si hay entradas, la falla mas comun
+       ("no conecta") era justo la que no dejaba nada para mandar a soporte. */
+    this._trazaNota(String(msg).replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ').trim());
     const el = document.getElementById('obd-log');
     if (!el) return;
     /* la flecha en color de acento hace la lista escaneable de un vistazo */
