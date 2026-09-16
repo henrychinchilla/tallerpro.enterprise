@@ -18,7 +18,22 @@ function renderLogin(vista='login') {
       <hr style="flex:1;border:none;border-top:1px solid var(--border)">
     </div>`;
 
-  const btnGoogle = (intent, label) => `
+  /* Google NO puede completar su OAuth dentro del cascaron Android: la WebView
+     manda cualquier host ajeno al navegador externo (MainActivity.
+     shouldOverrideUrlLoading), asi que el usuario termina logueado en Chrome y
+     la app nunca recibe la sesion. Google ademas rechaza OAuth en WebViews
+     ("disallowed_useragent"). Ofrecer el boton ahi es ofrecer un callejon sin
+     salida que se siente como "la app no me deja entrar".
+     El arreglo de verdad es Custom Tab + deep link, y va en la app nativa. */
+  let _enApp = false;
+  try { _enApp = !!(window.App && App._dentroDeAppAndroid && App._dentroDeAppAndroid()); } catch (_) {}
+
+  const btnGoogle = (intent, label) => _enApp ? `
+    <div style="font-size:12px;color:var(--text3);text-align:center;padding:8px;
+                border:1px dashed var(--border);border-radius:8px">
+      Dentro de la app, entrá con <b>correo y contraseña</b>.
+      El acceso con Google se abre en el navegador y la sesión no vuelve a la app.
+    </div>` : `
     <button onclick="loginConGoogle('${intent}')"
       style="width:100%;padding:11px;border:1.5px solid var(--border);border-radius:8px;
              background:var(--card);cursor:pointer;font-size:14px;font-weight:600;
@@ -522,6 +537,8 @@ function renderLogin(vista='login') {
   if (vista === 'nuevo-taller-google') _cargarInfoGoogle();
   if (vista === 'mfa-enroll') _iniciarMfaEnroll();
   if (vista === 'mfa-challenge') _iniciarMfaChallenge();
+  /* Si se vuelve al login por un fallo, el motivo viaja con la pantalla. */
+  if (vista === 'login') _loginPintarFallo();
 }
 
 /* ── TURNSTILE ────────────────────────────────────── */
@@ -905,11 +922,45 @@ async function loginVerificarMFAYContinuar() {
     }
     App.iniciar();
   } catch (err) {
-    /* Fail-closed: si no se pudo verificar el estado 2FA, no se entra */
+    /* Fail-closed: si no se pudo verificar el estado 2FA, no se entra.
+       Pero NO se entra EN SILENCIO: antes esto era un toast que se desvanecia
+       y devolvia al login, y desde un telefono eso es indistinguible de "la
+       contrasena esta mal" — manda a buscar el problema donde no esta. El
+       motivo real queda escrito en pantalla y se puede copiar. */
     console.error('Error en el enrutamiento de 2FA:', err);
-    UI.toast('No se pudo verificar tu 2FA. Intenta iniciar sesión de nuevo.', 'error');
+    _loginGuardarFallo('No se pudo verificar tu 2FA', err);
     getSB().auth.signOut().then(() => renderLogin('login')).catch(() => renderLogin('login'));
   }
+}
+
+/* El ultimo fallo de ingreso, para poder MOSTRARLO. Vive en una variable y no
+   en localStorage a proposito: es de esta sesion, no algo que reaparezca
+   semanas despues confundiendo a quien ya entro bien. */
+let _loginUltimoFallo = null;
+
+function _loginGuardarFallo(donde, err) {
+  const detalle = (err && (err.message || err.error_description || err.msg)) || String(err || '');
+  _loginUltimoFallo = `${donde}: ${detalle}`.slice(0, 400);
+  try { UI.toast(donde, 'error'); } catch (_) {}
+}
+
+/* Se pinta DENTRO de la tarjeta de login, no como toast: tiene que seguir ahi
+   cuando el usuario levante la vista del teclado, y tiene que poder copiarse
+   para mandarlo por chat. */
+function _loginPintarFallo() {
+  if (!_loginUltimoFallo) return;
+  const screen = document.getElementById('login-screen');
+  const card = screen && screen.querySelector('.login-card');
+  if (!card) return;
+  const caja = document.createElement('div');
+  caja.style.cssText = 'margin-top:12px;padding:10px;border-radius:8px;border:1px solid var(--red);'
+    + 'background:var(--surface2);color:var(--text);font-size:12px;text-align:left;word-break:break-word';
+  caja.innerHTML = `<b style="color:var(--red)">No se pudo entrar</b>
+    <div style="margin-top:4px;font-family:ui-monospace,Menlo,Consolas,monospace">${UI.esc(_loginUltimoFallo)}</div>
+    <button class="btn btn-ghost btn-sm" style="margin-top:6px"
+      onclick="navigator.clipboard && navigator.clipboard.writeText('${UI.jsAttr(_loginUltimoFallo)}').then(() => UI.toast('Copiado'))">
+      📋 Copiar el error</button>`;
+  card.appendChild(caja);
 }
 
 /* Posponer solo la ACTIVACIÓN de 2FA (cuentas que aún no lo tienen).
