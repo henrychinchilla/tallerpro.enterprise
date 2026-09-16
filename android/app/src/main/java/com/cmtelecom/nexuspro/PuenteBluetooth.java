@@ -71,6 +71,20 @@ public class PuenteBluetooth {
   /** Descriptor obligatorio para que un GATT empiece a notificar. */
   private static final UUID CCCD = UUID.fromString("00002902-0000-1000-8000-00805F9B34FB");
 
+  /* Pares servicio/escritura/notificacion de los dongles OBD conocidos — los
+     mismos que usa el driver web. Se miran ANTES de la autodeteccion porque
+     "primer servicio con un write y un notify" acierta casi siempre pero no
+     siempre: un servicio generico del fabricante puede traer ese par y
+     quedarse con la conexion, y entonces el dongle acepta comandos y no
+     contesta jamas. Con el par correcto a mano, no hay que adivinar. */
+  private static final String[][] PARES_OBD = {
+    { "0000fff0-0000-1000-8000-00805f9b34fb", "0000fff2-0000-1000-8000-00805f9b34fb", "0000fff1-0000-1000-8000-00805f9b34fb" },
+    { "0000ffe0-0000-1000-8000-00805f9b34fb", "0000ffe1-0000-1000-8000-00805f9b34fb", "0000ffe1-0000-1000-8000-00805f9b34fb" },
+    { "e7810a71-73ae-499d-8c15-faa9aef0c3f2", "bef8d6c9-9c21-4c9e-b632-bd58c1009f9f", "bef8d6c9-9c21-4c9e-b632-bd58c1009f9f" },
+    { "6e400001-b5a3-f393-e0a9-e50e24dcca9e", "6e400002-b5a3-f393-e0a9-e50e24dcca9e", "6e400003-b5a3-f393-e0a9-e50e24dcca9e" },
+    { "0000fff0-0000-1000-8000-00805f9b34fb", "0000fff1-0000-1000-8000-00805f9b34fb", "0000fff1-0000-1000-8000-00805f9b34fb" },
+  };
+
   private final MainActivity act;
   private final WebView web;
   private final Handler ui = new Handler(Looper.getMainLooper());
@@ -336,7 +350,14 @@ public class PuenteBluetooth {
         if (nuevo == BluetoothGatt.STATE_CONNECTED) {
           bleConectando = false;
           gatt = g;
-          try { g.requestMtu(247); } catch (Exception e) { g.discoverServices(); }
+          /* Las dos devuelven BOOLEAN, no lanzan: el try/catch que habia aca no
+             se disparaba nunca. Si requestMtu devolvia false, discoverServices
+             no llegaba a llamarse y el GATT se quedaba conectado pero mudo,
+             para siempre y sin un solo evento. La MTU grande es una mejora, no
+             un requisito — si no se puede, se sigue con la de fabrica. */
+          boolean pedida = false;
+          try { pedida = g.requestMtu(247); } catch (Exception ignorada) { }
+          if (!pedida) descubrir(g);
         } else if (nuevo == BluetoothGatt.STATE_DISCONNECTED) {
           boolean fallaAlAbrir = bleConectando;
           boolean intencional = gatt == null && !fallaAlAbrir;
@@ -355,7 +376,7 @@ public class PuenteBluetooth {
         }
       }
 
-      @Override public void onMtuChanged(BluetoothGatt g, int mtu, int estado) { g.discoverServices(); }
+      @Override public void onMtuChanged(BluetoothGatt g, int mtu, int estado) { descubrir(g); }
 
       @Override public void onServicesDiscovered(BluetoothGatt g, int estado) {
         /* Sin esto, un descubrimiento fallido llegaba acá con la lista vacia y
@@ -369,7 +390,14 @@ public class PuenteBluetooth {
            notifique y otra en la que se pueda escribir. Es la misma regla que
            usa el driver web, y por eso sirve para dongles cuyo par exacto de
            UUID no conocemos — que son la mayoría de los genéricos. */
-        for (BluetoothGattService s : g.getServices()) {
+        for (String[] par : PARES_OBD) {
+          BluetoothGattService s = g.getService(UUID.fromString(par[0]));
+          if (s == null) continue;
+          BluetoothGattCharacteristic w = s.getCharacteristic(UUID.fromString(par[1]));
+          BluetoothGattCharacteristic n = s.getCharacteristic(UUID.fromString(par[2]));
+          if (w != null && n != null) { escritura = w; notificacion = n; break; }
+        }
+        for (BluetoothGattService s : escritura != null ? new java.util.ArrayList<BluetoothGattService>() : g.getServices()) {
           BluetoothGattCharacteristic wr = null, nt = null;
           for (BluetoothGattCharacteristic c : s.getCharacteristics()) {
             int p = c.getProperties();
@@ -428,6 +456,19 @@ public class PuenteBluetooth {
     } catch (Exception e) {
       bleConectando = false;
       evento("error", "No se pudo abrir BLE: " + e.getMessage());
+    }
+  }
+
+  /* Arrancar el descubrimiento es lo unico que mueve la conexion hacia
+     adelante. Si devuelve false y nadie mira, la pagina espera 30 s contra un
+     GATT que ya no va a hacer nada mas. */
+  private void descubrir(BluetoothGatt g) {
+    boolean ok = false;
+    try { ok = g.discoverServices(); } catch (Exception ignorada) { }
+    if (!ok) {
+      cerrar();
+      evento("error", "El escáner conectó por BLE pero no dejó leer sus servicios. "
+          + "Apagá y encendé el Bluetooth del teléfono y reintentá.");
     }
   }
 

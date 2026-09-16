@@ -35,8 +35,8 @@ def exigir(props, clave) {
    abrir el sitio (ver DEFAULT_URL en AndroidManifest.xml). Sin eso la web no
    tendria forma de saber que version de APK esta corriendo el telefono: una
    TWA se presenta al servidor como Chrome, no como la app. */
-def appVersionCode = 10
-def appVersionName = "4.96.0"
+def appVersionCode = 11
+def appVersionName = "4.96.1"
 
 android {
     namespace 'com.cmtelecom.nexuspro'
