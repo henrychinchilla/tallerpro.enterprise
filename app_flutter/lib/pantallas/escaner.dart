@@ -214,7 +214,7 @@ class _PantallaEscanerState extends State<PantallaEscaner> {
         dense: true,
         leading: Icon(d.esBle ? Icons.bluetooth : Icons.settings_input_antenna,
             color: d.pareceOBD ? Colors.green : null),
-        title: Text(d.anonimo ? '(sin nombre)' : d.nombre),
+        title: Text(d.titulo),
         subtitle: Text([
           d.esBle ? 'BLE' : 'Bluetooth clásico (SPP)',
           d.vinculado ? 'emparejado' : 'no emparejado',

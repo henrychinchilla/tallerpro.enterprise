@@ -28,6 +28,9 @@ class Escaner {
   final String tipo; // 'spp' | 'ble'
   final bool vinculado;
   final int rssi; // -1 si no se sabe (los emparejados no lo reportan)
+  /// El puente dice explícitamente si el aparato NO tiene nombre, en vez de
+  /// dejar que esto se adivine comparando el texto contra la MAC.
+  final bool sinNombre;
 
   const Escaner({
     required this.nombre,
@@ -35,6 +38,7 @@ class Escaner {
     required this.tipo,
     required this.vinculado,
     this.rssi = -1,
+    this.sinNombre = false,
   });
 
   factory Escaner.desdeMapa(Map<dynamic, dynamic> m) => Escaner(
@@ -43,6 +47,7 @@ class Escaner {
         tipo: (m['tipo'] ?? 'spp') as String,
         vinculado: m['vinculado'] == true,
         rssi: (m['rssi'] as int?) ?? -1,
+        sinNombre: m['sin_nombre'] == true,
       );
 
   bool get esBle => tipo == 'ble';
@@ -52,11 +57,17 @@ class Escaner {
   /// MAC. Reconocer esa sustitución es lo que permite no mezclarlos con los
   /// aparatos de verdad identificables.
   bool get anonimo {
+    if (sinNombre) return true;
     final n = nombre.trim();
     if (n.isEmpty) return true;
     String hex(String t) => t.replaceAll(RegExp(r'[^0-9A-Fa-f]'), '').toUpperCase();
     return hex(n) == hex(mac);
   }
+
+  /// Lo que se pinta en la lista. Un aparato sin nombre se muestra como lo que
+  /// es —"(sin nombre)" y su MAC aparte— en vez de hacer pasar la MAC por
+  /// nombre, que es lo que hacía creer que NINGÚN aparato tenía nombre.
+  String get titulo => anonimo ? '(sin nombre)' : nombre.trim();
 
   static final _reOBD = RegExp(
       r'vlinker|vgate|obd|elm|obdlink|think|veepeak|konnwei|icar|viecar|panlong|scan',

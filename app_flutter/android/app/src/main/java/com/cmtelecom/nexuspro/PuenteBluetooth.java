@@ -179,11 +179,20 @@ public class PuenteBluetooth {
   private void listarYa(final Listado alTerminar) {
     vistos.clear();
     final List<Map<String, Object>> filas = new ArrayList<>();
+    /* Misma fila, alcanzable por MAC: un BLE suele anunciarse varias veces y
+       el nombre no siempre viene en el primer paquete (va en el SCAN_RSP). Sin
+       poder volver a tocar la fila ya creada, el primer anuncio sin nombre
+       condenaba al aparato a quedar como MAC durante todo el barrido. */
+    final Map<String, Map<String, Object>> porMac = new HashMap<>();
     try {
       for (BluetoothDevice d : adaptador.getBondedDevices()) {
         vistos.put(d.getAddress(), d);
         Map<String, Object> o = new HashMap<>();
-        o.put("nombre", nombre(d));
+        String n = nombre(d);
+        o.put("nombre", n != null ? n : d.getAddress());
+        /* Que la pantalla pueda decir "sin nombre" en vez de hacer pasar una
+           MAC por nombre: son dos cosas distintas y el mecánico las distingue. */
+        o.put("sin_nombre", n == null);
         o.put("mac", d.getAddress());
         /* Un emparejado de tipo LE no habla SPP y al revés: decirlo acá evita
            que Dart intente el transporte equivocado y culpe al aparato. */
@@ -191,6 +200,7 @@ public class PuenteBluetooth {
         o.put("vinculado", true);
         o.put("rssi", -1);
         filas.add(o);
+        porMac.put(d.getAddress(), o);
       }
     } catch (SecurityException e) {
       /* Antes esto caía en un catch mudo: la lista salía vacía y la pantalla
@@ -208,23 +218,38 @@ public class PuenteBluetooth {
     final ScanCallback cb = new ScanCallback() {
       @Override public void onScanResult(int tipo, ScanResult r) {
         BluetoothDevice d = r.getDevice();
-        if (d == null || vistos.containsKey(d.getAddress())) return;
-        vistos.put(d.getAddress(), d);
+        if (d == null) return;
         try {
-          Map<String, Object> o = new HashMap<>();
+          final String mac = d.getAddress();
+          /* getName() sirve para el que ya se emparejó alguna vez; para el
+             resto, el nombre está en el anuncio y en ningún otro lado. */
           String n = nombre(d);
-          if (n == null || n.trim().isEmpty()) {
-            String anunciado = r.getScanRecord() != null ? r.getScanRecord().getDeviceName() : null;
-            n = (anunciado != null && !anunciado.trim().isEmpty()) ? anunciado : d.getAddress();
+          if (n == null) n = nombreAnunciado(r);
+
+          Map<String, Object> ya = porMac.get(mac);
+          if (ya != null) {
+            /* Ya estaba, pero puede llegar mejor información después. */
+            if (n != null && Boolean.TRUE.equals(ya.get("sin_nombre"))) {
+              ya.put("nombre", n);
+              ya.put("sin_nombre", false);
+            }
+            Object rssiPrevio = ya.get("rssi");
+            if (!(rssiPrevio instanceof Integer) || r.getRssi() > (Integer) rssiPrevio)
+              ya.put("rssi", r.getRssi());
+            return;
           }
-          o.put("nombre", n);
-          o.put("mac", d.getAddress());
+          vistos.put(mac, d);
+          Map<String, Object> o = new HashMap<>();
+          o.put("nombre", n != null ? n : mac);
+          o.put("sin_nombre", n == null);
+          o.put("mac", mac);
           o.put("tipo", "ble");
           o.put("vinculado", false);
           /* La potencia identifica al dongle mejor que su nombre: el que está
              enchufado al vehículo a un metro se destaca entre los llaveros. */
           o.put("rssi", r.getRssi());
           filas.add(o);
+          porMac.put(mac, o);
         } catch (Exception ignorada) { }
       }
 
@@ -263,9 +288,34 @@ public class PuenteBluetooth {
     void error(String codigo, String mensaje);
   }
 
+  /* El NOMBRE de verdad, o null si el aparato no tiene ninguno.
+     Antes esto devolvía la MAC cuando getName() daba null, y esa MAC pasaba
+     por "nombre": la comprobación de más abajo —"si no hay nombre, usá el que
+     viene en el anuncio BLE"— no se disparaba NUNCA, porque siempre había
+     "nombre". Resultado: la lista de escáneres salía con puras MAC aunque el
+     dongle estuviera anunciando su nombre en cada paquete. Un aparato BLE sin
+     emparejar no tiene nombre en getName() hasta que Android lo cachea; el
+     único que hay está en el anuncio. */
   private String nombre(BluetoothDevice d) {
-    try { String n = d.getName(); return n != null ? n : d.getAddress(); }
-    catch (Exception e) { return d.getAddress(); }
+    try { String n = d.getName(); return (n != null && !n.trim().isEmpty()) ? n.trim() : null; }
+    catch (Exception e) { return null; }
+  }
+
+  /* Para mensajes: lo que se le muestra a una persona. Acá sí, a falta de
+     nombre, la MAC es mejor que "null". */
+  private String etiqueta(BluetoothDevice d) {
+    String n = nombre(d);
+    if (n != null) return n;
+    try { return d.getAddress(); } catch (Exception e) { return "el escáner"; }
+  }
+
+  /* El nombre que trae el anuncio BLE (Local Name). Es la única fuente para un
+     aparato que nunca se emparejó. */
+  private String nombreAnunciado(ScanResult r) {
+    try {
+      String n = r.getScanRecord() != null ? r.getScanRecord().getDeviceName() : null;
+      return (n != null && !n.trim().isEmpty()) ? n.trim() : null;
+    } catch (Exception e) { return null; }
   }
 
   /** tipo: "spp" | "ble". El resultado llega por evento. */
@@ -316,10 +366,10 @@ public class PuenteBluetooth {
         socket = s;
         salida = s.getOutputStream();
         arrancarLector(s.getInputStream());
-        evento("conectado", nombre(d));
+        evento("conectado", etiqueta(d));
       } catch (Exception e) {
         cerrar();
-        evento("error", "No se pudo abrir " + nombre(d) + ": " + e.getMessage()
+        evento("error", "No se pudo abrir " + etiqueta(d) + ": " + e.getMessage()
             + ". Revisá que esté emparejado y enchufado al vehículo.");
       }
     }, "nexus-spp-connect").start();
@@ -397,7 +447,7 @@ public class PuenteBluetooth {
             /* El 133 es el error más común de BLE en Android y casi nunca es
                del dongle: se resuelve apagando y encendiendo el Bluetooth, o el
                aparato ya está tomado por otra app. */
-            evento("error", "No se pudo abrir BLE con " + nombre(d) + " (estado " + estado + ")."
+            evento("error", "No se pudo abrir BLE con " + etiqueta(d) + " (estado " + estado + ")."
                 + (estado == 133 ? " Apagá y encendé el Bluetooth del teléfono, y cerrá cualquier"
                                  + " otra app de escaneo que lo tenga tomado." : "")
                 + " Si el escáner es de Bluetooth clásico, emparejalo en los ajustes del teléfono.");
@@ -457,12 +507,12 @@ public class PuenteBluetooth {
             g.writeDescriptor(desc);
           }
         } else {
-          evento("conectado", nombre(d));
+          evento("conectado", etiqueta(d));
         }
       }
 
       @Override public void onDescriptorWrite(BluetoothGatt g, BluetoothGattDescriptor desc, int estado) {
-        evento("conectado", nombre(d));
+        evento("conectado", etiqueta(d));
       }
 
       @Override public void onCharacteristicWrite(BluetoothGatt g, BluetoothGattCharacteristic c, int estado) {
