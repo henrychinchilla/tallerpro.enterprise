@@ -12,11 +12,12 @@ import '../nucleo/sesion.dart';
    se desvanece y devuelve al login es, desde un teléfono, indistinguible de
    "escribiste mal la contraseña" — y manda a buscar el problema donde no está.
 
-   Acá no hay botón de Google a propósito, y no es un olvido: en el cascarón
-   WebView anterior ese botón era un callejón sin salida (Google rechaza OAuth
-   dentro de una WebView y la sesión se quedaba en el navegador). Siendo app
-   nativa se puede hacer bien —OAuth por Custom Tab con deep link de vuelta— y
-   se va a agregar así, no copiando el botón roto. */
+   El botón de Google SÍ está, y ahora puede estar: en el cascarón WebView era
+   un callejón sin salida —Google rechaza OAuth dentro de una WebView y la
+   sesión se quedaba en el navegador—, pero una app nativa abre el navegador de
+   verdad y recibe el control de vuelta por su propio esquema
+   (`com.cmtelecom.nexuspro.nativa://login-callback`, declarado en el
+   manifiesto). Esa era la razón por la que faltaba, y murió con el cascarón. */
 class PantallaLogin extends StatefulWidget {
   final bool retoMfa;
   final String? fallo;
@@ -140,6 +141,26 @@ class _PantallaLoginState extends State<PantallaLogin> {
     }
   }
 
+  /* Abre el navegador del sistema (no una WebView: Google las rechaza con
+     "disallowed_useragent") y vuelve a la app por el esquema propio. La sesión
+     la recoge supabase_flutter sola y la compuerta reacciona al cambio de
+     estado, igual que con correo y contraseña. */
+  Future<void> _google() async {
+    if (_ocupado) return;
+    setState(() { _ocupado = true; _error = null; _aviso = null; });
+    try {
+      await sb.auth.signInWithOAuth(
+        OAuthProvider.google,
+        redirectTo: 'com.cmtelecom.nexuspro.nativa://login-callback',
+        authScreenLaunchMode: LaunchMode.externalApplication,
+      );
+    } catch (e) {
+      _fallar(e);
+    } finally {
+      if (mounted) setState(() => _ocupado = false);
+    }
+  }
+
   Future<void> _salir() async {
     await sb.auth.signOut();
     Sesion.limpiar();
@@ -214,6 +235,17 @@ class _PantallaLoginState extends State<PantallaLogin> {
         TextButton(
           onPressed: _ocupado ? null : _recuperar,
           child: const Text('¿Olvidaste tu contraseña?'),
+        ),
+        const Row(children: [
+          Expanded(child: Divider()),
+          Padding(padding: EdgeInsets.symmetric(horizontal: 8), child: Text('o')),
+          Expanded(child: Divider()),
+        ]),
+        const SizedBox(height: 8),
+        OutlinedButton.icon(
+          onPressed: _ocupado ? null : _google,
+          icon: const Icon(Icons.g_mobiledata, size: 28),
+          label: const Text('Entrar con Google'),
         ),
       ];
 

@@ -32,25 +32,25 @@
     "Va como release de GitHub, igual que el instalador de Windows."
   ],
   "android": {
-    "versionCode": 3,
-    "versionName": "1.0.2",
+    "versionCode": 4,
+    "versionName": "1.1.0",
     "fecha": "2026-09-16",
     "paquete": "com.cmtelecom.nexuspro.nativa",
     "minAndroid": "7.0",
     "nativa": true,
     "apkUrl": "/nexuspro-nativa.apk",
-    "apkKB": 17945,
+    "apkKB": 18009,
     "apk32Url": "/nexuspro-nativa-32bits.apk",
-    "apk32KB": 15386,
+    "apk32KB": 15434,
     "apkUniversalUrl": "https://github.com/henrychinchilla/tallerpro.enterprise/releases/tag/nativa-v1.0.0",
     "reinstalarSiMenorQue": 1,
     "enPlayStore": false,
     "playUrl": "https://play.google.com/store/apps/details?id=com.cmtelecom.nexuspro.nativa",
     "novedades": [
-      "ARREGLADO: la app autenticaba y se caia sola con AuthApiException. mfa.listFactors() del SDK de Dart refresca la sesion (el de JavaScript no) y chocaba con el refresco automatico",
-      "Agregado: recuperar contrasena, por la misma Edge Function que usa el sitio",
-      "El error de ingreso ahora muestra mensaje, codigo y estado HTTP, no solo 'AuthApiException'",
-      "Icono de NexusPro (la 1.0.0 salio con el logo de Flutter por error)",
+      "Entrar con Google: ahora SI se puede. En el cascaron WebView era imposible (Google rechaza OAuth ahi); la app nativa abre el navegador de verdad y recibe el control de vuelta",
+      "Recuperar contrasena, por la misma Edge Function que usa el sitio",
+      "ARREGLADO: la app autenticaba y se caia sola con AuthApiException",
+      "El error de ingreso muestra mensaje, codigo y estado HTTP",
       "Escaner OBD-II por Bluetooth clasico (SPP) y BLE"
     ]
   }
