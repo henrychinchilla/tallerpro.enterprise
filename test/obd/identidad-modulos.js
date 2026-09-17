@@ -152,5 +152,49 @@ const { M, ctx } = cargar();
        require('path').join(__dirname, '../../js/modulos/operacion/diagnostico_obd.js'), 'utf8')
        .match(/_iniciarLatido\(\)[\s\S]*?\n  \},/)[0]));
 
+  /* ── El eco del adaptador dejaba el escaneo sin protocolo ──────────────
+     Picanto por COM, 2026-09-17 22:47: el escaneo se guardó con el protocolo
+     `ATDPISO 15765-4 (CAN 11/500)>` — con el eco del comando pegado adelante y
+     el prompt detrás. Y `ATDPN` devolvía `ATDPNA6>`: la expresión que buscaba
+     el dígito AL FINAL de la cadena no encontraba nada por el '>', así que
+     `_protoNum` quedaba en 0. Con 0 el barrido por módulo NO CORRE, y el
+     escaneo salió con cero módulos y sin mapa, sin un solo error en pantalla. */
+  ok('limpia el eco y el prompt de una respuesta AT',
+     M._limpiarAT('ATDP', 'ATDPISO 15765-4 (CAN 11/500)>') === 'ISO 15765-4 (CAN 11/500)');
+  ok('y no rompe una respuesta que ya venía limpia',
+     M._limpiarAT('ATDP', 'ISO 15765-4 (CAN 11/500)') === 'ISO 15765-4 (CAN 11/500)');
+
+  const pedidos = [];
+  M._via = 'serial'; M._protoNum = 0;
+  M._cmd = async c => {
+    pedidos.push(c);
+    /* Adaptador con el eco ENCENDIDO: contesta el comando y después el dato. */
+    if (c === 'ATDPN') return 'ATDPNA6>';
+    if (c === 'ATDP')  return 'ATDPISO 15765-4 (CAN 11/500)>';
+    if (c === '0100')  return '41 00 BE 3F A8 13';
+    if (c === 'ATI')   return 'ATIELM327 v2.3>';
+    return 'OK';
+  };
+  const proto = await M._init(() => {});
+  ok('saca el protocolo aunque venga con eco y prompt', M._protoNum === 6);
+  ok('y por lo tanto el barrido por módulo SÍ corre', M._elmPuedeModulos() === true);
+  ok('el nombre del protocolo se guarda limpio', proto === 'ISO 15765-4 (CAN 11/500)');
+  ok('al detectar el eco lo vuelve a apagar',
+     pedidos.filter(c => c === 'ATE0').length >= 2);
+
+  /* Un adaptador sano no gasta el ATE0 de más. */
+  pedidos.length = 0;
+  M._cmd = async c => {
+    pedidos.push(c);
+    if (c === 'ATDPN') return 'A6';
+    if (c === 'ATDP')  return 'ISO 15765-4 (CAN 11/500)';
+    if (c === '0100')  return '41 00 BE 3F A8 13';
+    if (c === 'ATI')   return 'ELM327 v2.3';
+    return 'OK';
+  };
+  await M._init(() => {});
+  ok('con el eco ya apagado, el protocolo sale igual', M._protoNum === 6);
+  ok('y no se repite el ATE0 sin motivo', pedidos.filter(c => c === 'ATE0').length === 1);
+
   fin();
 })();

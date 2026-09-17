@@ -87,38 +87,39 @@ const escaneo = {
   const dirs = ctx.guardados.map(g => g.req);
   ok('no declara 0x7DF: es la dirección de difusión', !dirs.includes(0x7DF));
   ok('no declara 0x7E8: es una dirección de respuesta', !dirs.includes(0x7E8));
-  ok('no declara el que no dice NADA de sí mismo', !dirs.includes(0x7D4));
+  /* TODOS los módulos reales se declaran, tengan nombre o no. Esconder los que
+     no se pudieron identificar dejaba la pregunta "el escaneo encontró 13 y
+     quedaron 2, ¿dónde están los otros?" — y de paso el próximo escaneo dejaba
+     de preguntarles primero. */
+  ok('declara los 4 módulos reales de los 6 que contestaron', dirs.length === 4);
   ok('sí declara los que tienen nombre de verdad',
      dirs.includes(0x7D2) && dirs.includes(0x7E0));
   /* El que solo entregó su número de pieza SÍ vale: ese número se busca, se
      compara y se pide. Lo que no vale es declararlo llamándose 0x7B3 otra vez. */
   ok('el que solo dio su número de pieza se declara CON ese número',
      ctx.guardados.find(g => g.req === 0x7B3)?.nombre === 'Pieza 58920-G6300');
-  ok('y avisa cuántos quedaron sin identificar', /sin identificar/.test(ctx.toasts.join(' ')));
+  ok('el que no dijo NADA se declara igual, como pendiente',
+     ctx.guardados.find(g => g.req === 0x7D4)?.nombre === 'Sin identificar 0x7D4');
+  ok('y avisa cuántos quedan por nombrar', /POR NOMBRAR/.test(ctx.toasts.join(' ')));
 
-  /* Si NINGUNO se pudo identificar, no declara nada y lo dice: trece
-     direcciones declaradas no ayudan más que las trece de antes. */
-  ctx.guardados.length = 0; ctx.toasts.length = 0;
-  M._modsDelEscaneo = { veh: escaneo.vehiculos,
-                        nuevos: [{ ecu:0x7B3, resp:null, nombre:'Módulo 0x7B3', codigos:[] }] };
-  await M.declararTodosDelEscaneo();
-  ok('con ninguno identificable no declara nada', ctx.guardados.length === 0);
-  ok('y explica por qué', /nombralos de a uno/i.test(ctx.toasts.join(' ')));
+  ok('reconoce un nombre inútil',
+     M._nombreInutil('Módulo 0x7B3') && M._nombreInutil('Sin identificar 0x7D4') && M._nombreInutil('  '));
+  ok('y no confunde uno bueno',
+     !M._nombreInutil('Airbag / SRS') && !M._nombreInutil('Motor (ECM)') && !M._nombreInutil('Pieza 58920-G6300'));
 
-  ok('reconoce un nombre inútil', M._nombreInutil('Módulo 0x7B3') && M._nombreInutil('  '));
-  ok('y no confunde uno bueno', !M._nombreInutil('Airbag / SRS') && !M._nombreInutil('Motor (ECM)'));
-
-  /* ── Limpiar lo que ya quedó mal declarado ── */
+  /* ── Limpiar quita SOLO lo que no es un módulo ── */
   M._modsDeclarados = [
     { id:'a', req:0x7DF, ext:false, nombre:'Módulo 0x7DF' },
     { id:'b', req:0x7E8, ext:false, nombre:'Módulo 0x7E8' },
-    { id:'c', req:0x7B3, ext:false, nombre:'Módulo 0x7B3' },
+    { id:'c', req:0x7B3, ext:false, nombre:'Sin identificar 0x7B3' },
     { id:'d', req:0x7D2, ext:false, nombre:'Carrocería' },
   ];
   borrados.length = 0;
-  await M.limpiarModulosSinIdentificar();
-  ok('limpia los dos fantasmas y el que no dice nada', borrados.length === 3);
-  ok('y NO toca el que sí tiene nombre', !borrados.includes('d'));
+  await M.limpiarFantasmas();
+  ok('quita las dos direcciones que no son módulos', borrados.length === 2);
+  ok('NO toca el que tiene nombre', !borrados.includes('d'));
+  ok('y sobre todo NO borra el que falta nombrar: ese SÍ es un módulo',
+     !borrados.includes('c'));
 
   /* ── Resumen ordenado por gravedad ── */
   M._modsDeclarados = [];

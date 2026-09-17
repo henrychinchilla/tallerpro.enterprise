@@ -372,6 +372,7 @@
         <div style="font-size:12.5px;color:var(--text2);line-height:1.55">
           Mandale un servicio a una dirección y mirá la respuesta cruda. Sirve para
           <b>cualquier vehículo</b>: es la forma de averiguar qué soporta un módulo sin adivinar.
+          <b>No hace falta escanear antes</b>: si no hay conexión, la abre solo.
           <div style="color:var(--text3);margin-top:4px">Los servicios de <b>lectura</b> no cambian nada en el vehículo.
           Los que sí hacen algo lo dicen antes de mandarse.</div>
         </div>
@@ -415,6 +416,15 @@
     },
 
     async ejecutarPrueba() {
+      /* Conexión propia: el banco de pruebas es para PROBAR, y exigir un
+         escaneo previo lo vuelve inútil justo cuando más sirve —un vehículo
+         nuevo del que no se sabe nada—. Si no hay enlace, lo abre él mismo. */
+      if (!this._listo) {
+        UI.toast('Conectando el adaptador…', 'info');
+        try { await this._asegurarConexion(() => {}); }
+        catch (e) { return UI.toast('No se pudo conectar: ' + String(e.message).replace(/<[^>]*>/g, ''), 'error'); }
+        this._pintarEstadoConexion();
+      }
       const permiso = this._puedePuntoAPunto();
       if (!permiso.ok) return UI.toast(permiso.motivo, 'error');
       const req = this._leerHex(document.getElementById('bp-dir')?.value);

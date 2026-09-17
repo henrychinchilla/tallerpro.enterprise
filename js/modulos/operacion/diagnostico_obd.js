@@ -528,10 +528,38 @@ Modulos.diagnostico_obd = {
     });
   },
 
+  /* La respuesta de un comando AT puede volver con el ECO del propio comando
+     delante y con el prompt '>' detrás. Limpiarla es barato; no hacerlo costó
+     un escaneo entero.
+
+     Verificado en el Picanto el 2026-09-17 por COM: el escaneo guardó como
+     protocolo la cadena `ATDPISO 15765-4 (CAN 11/500)>`, o sea con el eco
+     pegado. Y `ATDPN` devolvió `ATDPNA6>`: la expresión que buscaba el dígito
+     hexadecimal AL FINAL de la cadena no encontraba nada por culpa del '>',
+     así que `_protoNum` quedaba en 0. Con 0, `_elmPuedeModulos()` da false y
+     EL BARRIDO POR MÓDULO NO CORRE: el escaneo salió con cero módulos y sin
+     mapa de acceso, sin un solo error en pantalla. */
+  _limpiarAT(cmd, r) {
+    return String(r == null ? '' : r)
+      .replace(/[\r\n]+/g, ' ')
+      .replace(new RegExp('^\\s*' + cmd.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i'), '')
+      .replace(/>/g, '')
+      .trim();
+  },
+
   async _init(log) {
     log('Reiniciando adaptador (ATZ)...');
     await this._cmd('ATZ', 8000);
     for (const c of ['ATE0','ATL0','ATS0','ATH0']) await this._cmd(c);
+    /* Si el eco quedó encendido, TODAS las respuestas vienen con el comando
+       pegado adelante — y el eco de un comando OBD es hexadecimal (0100, 0902),
+       así que el parser lo toma por datos del vehículo y contesta MAL, que es
+       peor que fallar. Se verifica y se reintenta una vez antes de seguir. */
+    const eco = String(await this._cmd('ATI', 4000).catch(() => ''));
+    if (/^\s*ATI/i.test(eco)) {
+      log('El adaptador seguía con el eco encendido: apagándolo de nuevo...');
+      await this._cmd('ATE0').catch(() => {});
+    }
     await this._cmd('ATSP0');                      // autoprotocolo: CAN / ISO9141 / KWP2000 / J1850
     log('Buscando protocolo del vehículo...');
     let r = '';
@@ -542,9 +570,15 @@ Modulos.diagnostico_obd = {
     }
     if (/UNABLE|ERROR|NO DATA/i.test(r) && !/4100/i.test(r.replace(/\s/g,'')))
       throw new Error('No se pudo comunicar con el vehículo. Verifica que el switch esté encendido y el adaptador bien conectado al puerto OBD.');
-    const dpn = await this._cmd('ATDPN');          // ej. 'A6' = auto, protocolo 6 (CAN)
-    this._protoNum = parseInt((dpn.match(/[0-9A-F]$/i) || ['0'])[0], 16) || 0;
-    const dp = await this._cmd('ATDP');
+    /* 'A6' = automático, protocolo 6 (CAN 11/500). Se lee el ÚLTIMO dígito
+       hexadecimal de la respuesta ya limpia, no del texto crudo. */
+    const dpn = this._limpiarAT('ATDPN', await this._cmd('ATDPN'));
+    const digitos = dpn.replace(/[^0-9A-Fa-f]/g, '');
+    this._protoNum = digitos ? (parseInt(digitos.slice(-1), 16) || 0) : 0;
+    if (!this._protoNum)
+      log(`<span style="color:var(--amber)">El adaptador no dijo qué protocolo negoció (contestó "${UI.esc(dpn || 'nada')}"): ` +
+          'el barrido por módulo no va a correr.</span>');
+    const dp = this._limpiarAT('ATDP', await this._cmd('ATDP'));
     return dp.replace(/AUTO,?\s*/i, '').trim();
   },
 
@@ -3383,6 +3417,11 @@ Modulos.diagnostico_obd = {
     const cabecera = `
       <div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:center">
         <div style="font-size:12px;color:var(--text2);max-width:620px;line-height:1.55">
+            ${filas.length ? `<div style="font-size:12.5px;margin-bottom:6px">
+              <b>${filas.length} módulo(s) declarado(s)</b> ·
+              <span style="color:var(--green)">${filas.filter(m => !this._nombreInutil(m.nombre)).length} con nombre</span> ·
+              <span style="color:var(--amber)">${filas.filter(m => this._nombreInutil(m.nombre)).length} por nombrar</span>
+            </div>` : ''}
           Acá se declara <b>qué módulos trae cada modelo</b> y en qué dirección contestan.
           El escaneo les pregunta siempre —aunque el barrido automático no los alcance, por estar
           en otra red o en 29 bits— y usa este nombre en el reporte en vez de “Módulo 0x745”.
@@ -3392,9 +3431,9 @@ Modulos.diagnostico_obd = {
         <div style="display:flex;gap:7px;flex-wrap:wrap">
           <button class="btn btn-sm btn-ghost" onclick="Modulos.diagnostico_obd.modalTomarDelEscaneo()"
             title="Declarar los módulos que encontró el último escaneo">📡 Tomar del escaneo</button>
-          ${puedeEditar && filas.some(m => (!m.ext && this._DIR_NO_ES_MODULO(Number(m.req))) || this._nombreInutil(m.nombre))
-            ? `<button class="btn btn-sm btn-ghost" onclick="Modulos.diagnostico_obd.limpiarModulosSinIdentificar()"
-                 title="Quitar los que no son módulos y los que se llaman como su dirección">🧹 Limpiar sin identificar</button>` : ''}
+          ${puedeEditar && filas.some(m => !m.ext && this._DIR_NO_ES_MODULO(Number(m.req)))
+            ? `<button class="btn btn-sm btn-ghost" onclick="Modulos.diagnostico_obd.limpiarFantasmas()"
+                 title="Quitar 0x7DF y 0x7E8-0x7EF, que contestan pero no son módulos">🧹 Quitar direcciones falsas</button>` : ''}
           ${puedeEditar ? `<button class="btn btn-sm btn-brand" onclick="Modulos.diagnostico_obd.editarModuloVehiculo()">＋ Agregar módulo</button>` : ''}
         </div>
       </div>`;
@@ -3420,8 +3459,11 @@ Modulos.diagnostico_obd = {
           <table class="table" style="font-size:12px;margin-top:7px">
             <thead><tr><th>Módulo</th><th>Dirección</th><th>Red</th><th>Años</th><th style="text-align:right">Acciones</th></tr></thead>
             <tbody>${ms.map(m => `<tr${m.activo ? '' : ' style="opacity:.5"'}>
-              <td><b>${UI.esc(m.nombre)}</b>
-                <div style="font-size:10.5px;color:var(--text3)">${UI.esc(this._nombreSistema(m.sistema))}${m.origen === 'escaneo' ? ' · tomado del escaneo' : ''}${m.activo ? '' : ' · desactivado'}</div></td>
+              <td>${this._nombreInutil(m.nombre)
+                    ? `<b style="color:var(--amber)">${UI.esc(m.nombre)}</b>
+                       <div style="font-size:10.5px;color:var(--amber)">⚠ falta ponerle nombre — el vehículo sí lo tiene</div>`
+                    : `<b>${UI.esc(m.nombre)}</b>
+                       <div style="font-size:10.5px;color:var(--text3)">${UI.esc(this._nombreSistema(m.sistema))}${m.origen === 'escaneo' ? ' · tomado del escaneo' : ''}${m.activo ? '' : ' · desactivado'}</div>`}</td>
               <td style="font-family:ui-monospace,Consolas,monospace;white-space:nowrap">${this._hexDir(m.req)} →
                 ${m.resp == null ? '<span style="color:var(--text3)">?</span>' : this._hexDir(m.resp)}
                 ${m.ext ? '<div style="font-size:10px;color:var(--text3)">29 bits</div>' : ''}</td>
@@ -3718,32 +3760,44 @@ Modulos.diagnostico_obd = {
      "Módulo 0x7B3" deja la lista exactamente igual que antes —trece renglones
      que no dicen nada— y encima con la sensación de que ya está resuelto. */
   _nombreInutil(n) {
-    return !String(n || '').trim() || /^(módulo|modulo)\s+0x[0-9A-F]+$/i.test(String(n).trim());
+    const t = String(n || '').trim();
+    return !t || /^(módulo|modulo|sin identificar)\s+0x[0-9A-F]+$/i.test(t);
+  },
+
+  /* El nombre con el que se declara un módulo recién descubierto. Tres casos, y
+     ninguno miente:
+       · el módulo publicó su nombre       → ese
+       · solo publicó su número de pieza   → "Pieza 58920-G6300" (se busca y se pide)
+       · no publicó nada                   → "Sin identificar 0x7B3"
+     El tercero NO es lo mismo que "Módulo 0x7B3": es un estado, dice que falta
+     hacer algo, y la pantalla lo cuenta aparte y le pone el botón de nombrar. */
+  _nombreParaDeclarar(m) {
+    const id = m.ident || {};
+    if (id.nombre) return String(id.nombre).slice(0, 60);
+    if (!this._nombreInutil(m.nombre)) return String(m.nombre).slice(0, 60);
+    if (id.referencia) return `Pieza ${id.referencia}`.slice(0, 60);
+    return `Sin identificar ${this._hexDir(m.ecu)}`;
   },
 
   async declararTodosDelEscaneo() {
     const d = this._modsDelEscaneo;
     if (!d || !d.nuevos.length) return;
-    /* Los fantasmas no se declaran ni en lote ni a mano: 0x7DF es la difusión
-       y 0x7E8-0x7EF son direcciones de respuesta. */
+    /* Los fantasmas no se declaran nunca: 0x7DF es la difusión y 0x7E8-0x7EF
+       son direcciones de respuesta. Todo LO DEMÁS sí, tenga nombre o no.
+
+       Antes se saltaban los que no se podían identificar, y eso dejaba una
+       pregunta sin respuesta: "el escaneo encontró 13 y quedaron 2, ¿dónde
+       están los otros?". Los otros existen: son módulos del vehículo que
+       todavía no tienen nombre. Ocultarlos no los identifica, solo los
+       esconde — y de paso el próximo escaneo deja de preguntarles primero. */
     const candidatos = d.nuevos.filter(m => !(!m.ext && this._DIR_NO_ES_MODULO(m.ecu)));
-    const conNombre = candidatos.filter(m => !this._nombreInutil(m.nombre) ||
-                                             (m.ident && (m.ident.nombre || m.ident.referencia)));
-    const sinNombre = candidatos.filter(m => !conNombre.includes(m));
-    if (!conNombre.length) {
-      return UI.toast(`Ninguno de los ${candidatos.length} módulos se pudo identificar solo. ` +
-        'Nombralos de a uno con "Revisar y declarar": una lista de direcciones declaradas no ayuda más que la de antes.', 'warn');
-    }
+    const sinNombre = candidatos.filter(m => this._nombreInutil(this._nombreParaDeclarar(m)));
     let bien = 0, mal = 0;
-    for (const m of conNombre) {
+    for (const m of candidatos) {
       const id = m.ident || {};
       const nota = [id.referencia ? `referencia ${id.referencia}` : null,
                     id.proveedor ? `fabricante ${id.proveedor}` : null].filter(Boolean).join(' · ');
-      /* Si lo unico que se sabe de el es su numero de pieza, ESE es el nombre.
-         "Pieza 58920-G6300" se puede buscar, comparar y pedir; "Modulo 0x7B3"
-         no es mas que la direccion escrita otra vez. */
-      const nombre = id.nombre
-        || (this._nombreInutil(m.nombre) ? (id.referencia ? `Pieza ${id.referencia}` : m.nombre) : m.nombre);
+      const nombre = this._nombreParaDeclarar(m);
       const r = await DB.upsertModuloVehiculo({
         marca: d.veh.marca, modelo: d.veh.modelo || null,
         nombre: String(nombre).slice(0, 60),
@@ -3755,34 +3809,33 @@ Modulos.diagnostico_obd = {
       if (r.error) mal++; else bien++;
     }
     const pendientes = sinNombre.length
-      ? ` · ${sinNombre.length} sin identificar: nombralos de a uno o escaneá de nuevo para leer su referencia`
+      ? ` · ${sinNombre.length} quedan POR NOMBRAR (están en la lista, marcados)`
       : '';
     UI.toast((mal ? `${bien} declarado(s), ${mal} no se pudieron` : `${bien} módulo(s) declarados ✓`) + pendientes,
-             mal || sinNombre.length ? 'warn' : 'success');
+             mal ? 'warn' : 'success');
     this._modsDeclarados = null;
     this.modalModulosVehiculo();
   },
 
-  /* Limpieza de lo que ya quedó mal declarado: los fantasmas y los que se
-     guardaron llamándose como su propia dirección. */
-  async limpiarModulosSinIdentificar() {
+  /* Quita SOLO lo que no es un módulo. Lo que falta nombrar NO se borra: es un
+     módulo del vehículo, existe, y borrarlo fue exactamente lo que hizo
+     preguntar "eran 13 o 2, y dónde están los otros 11". */
+  async limpiarFantasmas() {
     const filas = this._modsDeclarados || [];
-    const basura = filas.filter(m =>
-      (!m.ext && this._DIR_NO_ES_MODULO(Number(m.req))) || this._nombreInutil(m.nombre));
-    if (!basura.length) return UI.toast('No hay nada que limpiar: todos los declarados tienen nombre', 'info');
-    const fantasmas = basura.filter(m => !m.ext && this._DIR_NO_ES_MODULO(Number(m.req)));
+    const fantasmas = filas.filter(m => !m.ext && this._DIR_NO_ES_MODULO(Number(m.req)));
+    if (!fantasmas.length) return UI.toast('No hay direcciones falsas declaradas', 'info');
     const ok = await UI.confirmar(
-      `¿Quitar ${basura.length} declaración(es) que no aportan?<br><br>` +
-      (fantasmas.length ? `<b>${fantasmas.length} no son módulos</b> (${fantasmas.map(m => UI.esc(this._hexDir(m.req))).join(', ')}):
-         0x7DF es la dirección de difusión y 0x7E8-0x7EF son direcciones de respuesta.<br><br>` : '') +
-      `<b>${basura.length - fantasmas.length} se llaman como su propia dirección</b>, así que no dicen nada
-       que la dirección no dijera ya.<br><br>
-       <small>No se pierde nada del vehículo: las direcciones siguen en el mapa de los escaneos.</small>`,
-      'Limpiar declaraciones');
+      `¿Quitar ${fantasmas.length} dirección(es) que NO son un módulo?<br><br>` +
+      `<b>${fantasmas.map(m => UI.esc(this._hexDir(m.req))).join(', ')}</b><br><br>
+       <small>0x7DF es la dirección de <b>difusión</b>: preguntar ahí le pregunta a todos a la vez.
+       0x7E8-0x7EF son direcciones de <b>respuesta</b>: nadie escucha ahí.
+       Contestan, pero no son módulos.<br><br>
+       Los que están <b>por nombrar</b> no se tocan: esos sí son módulos del vehículo.</small>`,
+      'Quitar direcciones falsas');
     if (!ok) return;
     let n = 0;
-    for (const m of basura) if (await DB.deleteRegistro('obd_modulos_vehiculo', m.id)) n++;
-    UI.toast(`${n} declaración(es) quitadas`, 'success');
+    for (const m of fantasmas) if (await DB.deleteRegistro('obd_modulos_vehiculo', m.id)) n++;
+    UI.toast(`${n} dirección(es) falsas quitadas`, 'success');
     this.modalModulosVehiculo();
   },
 
