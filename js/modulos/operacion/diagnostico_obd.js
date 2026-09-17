@@ -2185,6 +2185,8 @@ Modulos.diagnostico_obd = {
   },
 
   _nombreUDS(req, codigos) {
+    const propio = this._nombreDeclarado(req);
+    if (propio) return propio;
     if (this._UDS_NOMBRES[req]) return this._UDS_NOMBRES[req];
     /* En 29 bits lo que identifica al modulo es el byte de destino, no el id
        entero: 0x18DA10F1 es "el modulo 0x10". La tabla de nombres es de
@@ -2841,10 +2843,51 @@ Modulos.diagnostico_obd = {
           porDir.set(k, { req:m.req, resp:m.resp, ext:!!m.ext, nombre:m.nombre, servicio:m.servicio, visto:1 });
         }
       }
+      /* Y encima, lo que el TALLER declaró a mano para este modelo. El barrido
+         solo encuentra lo que contesta en 0x700-0x7EF: un módulo en otra red,
+         en 29 bits o en una dirección propia no aparece nunca por su cuenta.
+         Declarado, se le pregunta siempre — y si no contesta sale en la lista
+         de ausentes, que es distinto de "este modelo no lo trae". */
+      /* El guard NO es paranoia de pruebas: el Service Worker puede estar
+         sirviendo un db.js viejo junto a este archivo nuevo (son dos recursos
+         distintos con dos vidas de caché distintas). Sin él, llamar a una
+         función que todavía no existe tira TypeError, lo atrapa el catch de
+         abajo y `_mapaConocido` devuelve null — o sea que el mapa conocido
+         entero, que funcionaba desde hace meses, deja de funcionar por una
+         función nueva. Un agregado no puede tumbar lo que ya andaba. */
+      const declarados = typeof DB.getModulosVehiculo === 'function'
+        ? await DB.getModulosVehiculo({ marca:v.marca, modelo:v.modelo, anio:v.anio }).catch(() => [])
+        : [];
+      this._modulosDeclarados = declarados;
+      for (const d of declarados) {
+        const req = Number(d.req);
+        if (!Number.isInteger(req)) continue;
+        const y = porDir.get(req);
+        if (y) {
+          /* Ya lo conocíamos por los escaneos: el nombre que le puso el taller
+             manda sobre el que dedujo el barrido. */
+          y.nombre = d.nombre;
+          y.declarado = true;
+          if (y.resp == null && d.resp != null) y.resp = Number(d.resp);
+          continue;
+        }
+        porDir.set(req, { req, resp: d.resp == null ? null : Number(d.resp), ext: !!d.ext,
+                          nombre: d.nombre, servicio: null, visto: 0, declarado: true });
+      }
+
       if (!porDir.size) return null;
-      return { marca:v.marca, modelo:v.modelo, anio:v.anio, n: conMapa,
+      return { marca:v.marca, modelo:v.modelo, anio:v.anio, n: conMapa, declarados: declarados.length,
                modulos: [...porDir.values()].sort((a, b) => b.visto - a.visto || a.req - b.req) };
     } catch (e) { console.warn('_mapaConocido:', e.message); return null; }
+  },
+
+  /* El nombre que el taller le puso a esta dirección en ESTE modelo. Es la
+     fuente más específica que hay: gana sobre la tabla de direcciones comunes
+     y sobre lo que el módulo diga de sí mismo, porque quien lo escribió tenía
+     el vehículo enfrente. */
+  _nombreDeclarado(req) {
+    const d = (this._modulosDeclarados || []).find(x => Number(x.req) === Number(req));
+    return d ? d.nombre : null;
   },
 
   /* Pregunta sólo a las direcciones que ya se sabe que contestan en este
@@ -2866,7 +2909,8 @@ Modulos.diagnostico_obd = {
            el id de vuelta no siempre es el mismo que la vez pasada. */
         const r = await this._tocarPuerta(c.req);
         if (r) vivos.push({ req: c.req, resp: r.resp != null ? r.resp : c.resp,
-                            ext: !!c.ext, servicio: c.servicio || null });
+                            ext: !!c.ext, servicio: c.servicio || null,
+                            declarado: !!c.declarado });
       }
     } finally { this._canExt = extPrev; }
     return vivos;
@@ -2879,7 +2923,14 @@ Modulos.diagnostico_obd = {
     /* Primero el mapa conocido: da resultados en segundos y deja ver de una
        cuáles de los módulos habituales del modelo faltan hoy. */
     if (conocidas.length) {
-      if (log) log(`&nbsp;&nbsp;Mapa conocido de ${UI.esc(mapa.marca)} ${UI.esc(mapa.modelo)}${mapa.anio ? ' ' + mapa.anio : ''}: <b>${conocidas.length} módulo(s)</b> en ${mapa.n} escaneo(s) previo(s) — preguntando ahí primero...`);
+      if (log) {
+        /* De dónde salió cada dirección: decir "en 0 escaneos previos" cuando
+           las direcciones las escribió el taller a mano es confuso. */
+        const dec = (mapa.declarados || 0);
+        const origen = [mapa.n ? `${mapa.n} escaneo(s) previo(s)` : null,
+                        dec ? `${dec} declarado(s) por el taller` : null].filter(Boolean).join(' + ');
+        log(`&nbsp;&nbsp;Mapa conocido de ${UI.esc(mapa.marca)} ${UI.esc(mapa.modelo)}${mapa.anio ? ' ' + mapa.anio : ''}: <b>${conocidas.length} módulo(s)</b>${origen ? ` (${origen})` : ''} — preguntando ahí primero...`);
+      }
       mods = await this._probarConocidas(conocidas);
       if (log) log(`&nbsp;&nbsp;${mods.length} de ${conocidas.length} del mapa respondieron`);
     }
@@ -2915,7 +2966,10 @@ Modulos.diagnostico_obd = {
     if (log && faltantes.length)
       log(`<span style="color:var(--amber)">⚠️ ${faltantes.length} módulo(s) del mapa NO respondieron: ` +
           `${faltantes.map(f => UI.esc(f.nombre || '0x' + f.req.toString(16).toUpperCase())).join(', ')}` +
-          ` — en ${UI.esc(mapa.marca)} ${UI.esc(mapa.modelo)} sí contestan. Puede estar dañado, desconectado o sin alimentación.</span>`);
+          ` — en ${UI.esc(mapa.marca)} ${UI.esc(mapa.modelo)} se esperaban. ` +
+          (faltantes.every(f => f.declarado && !f.visto)
+            ? 'Están declarados por el taller pero todavía nunca contestaron: revisá la dirección antes de culpar al vehículo.'
+            : 'Puede estar dañado, desconectado o sin alimentación.') + '</span>');
 
     if (log) log(`<b>${mods.length} módulo(s) encontrados</b> — leyendo códigos de cada uno...`);
 
@@ -2990,7 +3044,7 @@ Modulos.diagnostico_obd = {
          pero NO sobre las dos que la norma fija (motor y transmision): ahi la
          tabla es mas clara para el mecanico que la cadena interna del ECU. */
       let nombre = this._nombreUDS(m.req, cods);
-      if (!this._UDS_NOMBRES[m.req]) {
+      if (!this._UDS_NOMBRES[m.req] && !this._nombreDeclarado(m.req)) {
         const propio = await this._nombrePropio(m).catch(() => null);
         if (propio) nombre = propio;
       }
@@ -3062,6 +3116,11 @@ Modulos.diagnostico_obd = {
       <div style="display:flex;justify-content:flex-end;margin-top:12px">
         <button class="btn btn-ghost" onclick="UI.cerrarModal()">Cerrar</button></div>`, '760px');
     const filas = await DB.getMapasVehiculos();
+    /* Los declarados a mano cuentan igual: un modelo al que el taller le
+       escribió sus módulos ya se sabe escanear, aunque todavía no haya un
+       escaneo que lo demuestre. Sin esto, la pantalla de cobertura contestaba
+       a medias. */
+    const declarados = await this._declaradosDelTaller();
     const el = document.getElementById('obd-mapa-lista');
     const porModelo = new Map();
     for (const f of filas) {
@@ -3081,16 +3140,33 @@ Modulos.diagnostico_obd = {
         g.dirs.set(x.req, x.nombre || ('0x' + x.req.toString(16).toUpperCase()));
       porModelo.set(clave, g);
     }
+    for (const d of declarados) {
+      if (!d.activo) continue;
+      /* Un declarado no trae año: aplica al modelo entero. Se suma al grupo del
+         modelo que coincida, y si no hay ninguno estrena el suyo. */
+      const claves = [...porModelo.keys()].filter(k =>
+        k.toUpperCase().startsWith([d.marca, d.modelo || ''].join(' ').trim().toUpperCase()));
+      const destinos = claves.length ? claves : [[d.marca, d.modelo || '(todos los modelos)'].join(' ').trim()];
+      for (const clave of destinos) {
+        const g = porModelo.get(clave) || { clave, escaneos:0, vehiculos:new Set(), dirs:new Map(),
+                                            bits:null, baud:null, vias:new Set(), declarados:0, ultimo:d.created_at };
+        g.dirs.set(Number(d.req), d.nombre);   // el nombre del taller manda sobre el deducido
+        g.declarados = (g.declarados || 0) + 1;
+        porModelo.set(clave, g);
+      }
+    }
     const grupos = [...porModelo.values()].sort((a, b) => b.dirs.size - a.dirs.size);
     const cuerpo = !grupos.length
       ? `<p style="font-size:13px;color:var(--text3)">Todavía no hay ningún mapa. El mapa se arma solo:
          cada escaneo de un vehículo liviano guarda por dónde se le entró —por USB, y también por
          Bluetooth cuando el dongle acepta ATSH y el vehículo está en CAN de 11 bits— y desde el
-         segundo del mismo modelo el escaneo empieza a usarlo.</p>`
+         segundo del mismo modelo el escaneo empieza a usarlo.
+         También se puede escribir a mano en <b>🧩 Módulos</b>, para el módulo que sabés que está
+         aunque todavía no haya contestado.</p>`
       : `<table class="table" style="font-size:12px">
           <thead><tr><th>Modelo</th><th>Módulos que sabemos alcanzar</th><th style="text-align:center">Unidades</th><th style="text-align:center">Bus</th></tr></thead>
           <tbody>${grupos.map(g => `<tr>
-            <td><b>${UI.esc(g.clave)}</b><div style="font-size:10px;color:var(--text3)">${g.escaneos} escaneo(s) · último ${UI.fecha(g.ultimo)}</div></td>
+            <td><b>${UI.esc(g.clave)}</b><div style="font-size:10px;color:var(--text3)">${g.escaneos} escaneo(s)${g.escaneos ? ` · último ${UI.fecha(g.ultimo)}` : ''}${g.declarados ? ` · ${g.declarados} declarado(s) a mano` : ''}</div></td>
             <td><span class="badge badge-cyan">${g.dirs.size}</span>
               <div style="font-size:10.5px;color:var(--text3);margin-top:3px;line-height:1.5">${[...g.dirs.values()].map(n => UI.esc(n)).join(' · ')}</div></td>
             <td style="text-align:center">${g.vehiculos.size}</td>
@@ -3104,6 +3180,404 @@ Modulos.diagnostico_obd = {
           <b>Módulos alcanzados</b> es lo que contestó en ese modelo, no todo lo que el vehículo trae.
         </div>`;
     if (el) el.innerHTML = cuerpo;
+  },
+
+  /* ═══════════ MÓDULOS DECLARADOS POR EL TALLER ═══════════
+     El barrido automático solo encuentra lo que contesta en 0x700-0x7EF, y a lo
+     que encuentra le pone el nombre que puede deducir. Esto es lo otro: la
+     libreta donde el taller escribe qué módulos trae un modelo, en qué
+     dirección contestan y cómo se llaman. Se pregunta siempre por ellos, aunque
+     el barrido no los alcance, y si no contestan salen como AUSENTES — que es
+     distinto de "este modelo no lo trae".
+
+     No transmite nada. Una declaración es un nombre y una dirección a la que se
+     pregunta con 3E 00 (Tester Present), que es de solo lectura. Lo que
+     transmite vive en el catálogo OEM, con su escalera de verificación. */
+  _SISTEMAS_MODULO: [
+    { id:'ecm',       nombre:'Motor (ECM/PCM)' },
+    { id:'tcm',       nombre:'Transmisión (TCM)' },
+    { id:'abs',       nombre:'Frenos / ABS' },
+    { id:'srs',       nombre:'Airbag / SRS' },
+    { id:'eps',       nombre:'Dirección asistida (EPS/MDPS)' },
+    { id:'bcm',       nombre:'Carrocería (BCM)' },
+    { id:'ipc',       nombre:'Tablero (IPC)' },
+    { id:'hvac',      nombre:'Climatización (HVAC)' },
+    { id:'awd',       nombre:'Tracción 4x4 / AWD' },
+    { id:'immo',      nombre:'Inmovilizador' },
+    { id:'gateway',   nombre:'Puerta de enlace (gateway)' },
+    { id:'adas',      nombre:'Asistencias a la conducción (ADAS)' },
+    { id:'tpms',      nombre:'Presión de neumáticos (TPMS)' },
+    { id:'suspension',nombre:'Suspensión' },
+    { id:'carga',     nombre:'Carga / batería' },
+    { id:'otro',      nombre:'Otro módulo' },
+  ],
+  _REDES_MODULO: [
+    { id:'hs', nombre:'HS-CAN (principal)' }, { id:'ms', nombre:'MS-CAN' },
+    { id:'sw', nombre:'SW-CAN / GMLAN' }, { id:'ch', nombre:'CH-CAN' },
+    { id:'ls', nombre:'LS-CAN' }, { id:'kline', nombre:'K-line' },
+  ],
+  _PROTOS_MODULO: ['uds', 'kwp2000', 'obd2', 'j1939', 'iso9141', 'fabricante'],
+
+  /* Igual que en _mapaConocido: el Service Worker puede servir un db.js viejo
+     junto a este archivo nuevo. Una pantalla que ya existía no puede quedar en
+     blanco porque se agregó una función. */
+  async _declaradosDelTaller() {
+    if (typeof DB.getTodosModulosVehiculo !== 'function') return [];
+    try { return await DB.getTodosModulosVehiculo() || []; }
+    catch (e) { console.warn('_declaradosDelTaller:', e.message); return []; }
+  },
+
+  _nombreSistema(id) {
+    const x = this._SISTEMAS_MODULO.find(s => s.id === id);
+    return x ? x.nombre : 'Otro módulo';
+  },
+
+  /* Marcas y modelos sugeridos. Salen del catálogo de alta de vehículos MÁS los
+     vehículos que el taller ya tiene cargados: un modelo que está en el taller
+     pero no en el catálogo general es el que más falta hace acá. */
+  _marcasConocidas() {
+    const set = new Set();
+    for (const lista of Object.values(Modulos.vehiculos?._marcasPorTipo || {}))
+      for (const m of lista) set.add(m);
+    for (const v of (this._vehiculos || [])) if (v.marca) set.add(String(v.marca).trim());
+    return [...set].filter(Boolean).sort((a, b) => a.localeCompare(b));
+  },
+  _modelosConocidos(marca) {
+    const set = new Set();
+    const igual = (a, b) => String(a || '').trim().toUpperCase() === String(b || '').trim().toUpperCase();
+    for (const m of (Modulos.vehiculos?._modelosPorMarca?.[marca] || [])) set.add(m);
+    for (const porMarca of Object.values(Modulos.vehiculos?._modelosEspeciales || {}))
+      for (const m of (porMarca[marca] || [])) set.add(m);
+    for (const v of (this._vehiculos || []))
+      if (igual(v.marca, marca) && v.modelo) set.add(String(v.modelo).trim());
+    return [...set].filter(Boolean).sort((a, b) => a.localeCompare(b));
+  },
+
+  _hexDir(n) { return n == null ? '—' : '0x' + Number(n).toString(16).toUpperCase(); },
+
+  /* Acepta "7E0", "0x7E0" y "7e0". Devuelve null si no es una dirección. */
+  _leerHex(txt) {
+    const t = String(txt || '').trim().replace(/^0x/i, '');
+    if (!t) return null;
+    if (!/^[0-9A-Fa-f]{1,8}$/.test(t)) return NaN;
+    return parseInt(t, 16);
+  },
+
+  async modalModulosVehiculo() {
+    UI.modal('🧩 Módulos por vehículo', `<div id="obd-mods-cuerpo" style="font-size:13px">
+      Cargando módulos declarados…</div>`, '980px');
+    if (!this._vehiculos || !this._vehiculos.length) {
+      try { this._vehiculos = await DB.getVehiculos() || []; } catch (_) { this._vehiculos = []; }
+    }
+    this._modsDeclarados = await this._declaradosDelTaller();
+    this._pintarModulosVehiculo();
+  },
+
+  _pintarModulosVehiculo() {
+    const el = document.getElementById('obd-mods-cuerpo');
+    if (!el) return;
+    const filas = this._modsDeclarados || [];
+    const puedeEditar = typeof puedeAccion !== 'function' || puedeAccion('diagnostico_obd', 'editar');
+
+    const porModelo = new Map();
+    for (const f of filas) {
+      const clave = [f.marca, f.modelo || '(todos los modelos)'].join(' · ');
+      if (!porModelo.has(clave)) porModelo.set(clave, []);
+      porModelo.get(clave).push(f);
+    }
+
+    const cabecera = `
+      <div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:center">
+        <div style="font-size:12px;color:var(--text2);max-width:620px;line-height:1.55">
+          Acá se declara <b>qué módulos trae cada modelo</b> y en qué dirección contestan.
+          El escaneo les pregunta siempre —aunque el barrido automático no los alcance, por estar
+          en otra red o en 29 bits— y usa este nombre en el reporte en vez de “Módulo 0x745”.
+          Si un módulo declarado no contesta, sale como <b>ausente</b>, que no es lo mismo que inexistente.
+          <div style="color:var(--text3);margin-top:4px">Esto no transmite nada: solo se pregunta “¿hay alguien?”.</div>
+        </div>
+        <div style="display:flex;gap:7px;flex-wrap:wrap">
+          <button class="btn btn-sm btn-ghost" onclick="Modulos.diagnostico_obd.modalTomarDelEscaneo()"
+            title="Declarar los módulos que encontró el último escaneo">📡 Tomar del escaneo</button>
+          ${puedeEditar ? `<button class="btn btn-sm btn-brand" onclick="Modulos.diagnostico_obd.editarModuloVehiculo()">＋ Agregar módulo</button>` : ''}
+        </div>
+      </div>`;
+
+    if (!filas.length) {
+      el.innerHTML = cabecera + `
+        <div class="card" style="padding:16px;margin-top:12px;color:var(--text3);font-size:13px">
+          Todavía no hay ningún módulo declarado. Dos formas de empezar:
+          <b>Tomar del escaneo</b> convierte en nombres lo que el último escaneo ya encontró, y
+          <b>Agregar módulo</b> sirve para el que sabés que está aunque todavía no haya contestado.
+        </div>`;
+      return;
+    }
+
+    el.innerHTML = cabecera + `
+      <div style="max-height:56vh;overflow:auto;margin-top:12px">
+      ${[...porModelo.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([clave, ms]) => `
+        <div class="card" style="padding:12px;margin-bottom:9px">
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+            <b>${UI.esc(clave)}</b>
+            <span class="badge badge-cyan">${ms.length} módulo(s)</span>
+          </div>
+          <table class="table" style="font-size:12px;margin-top:7px">
+            <thead><tr><th>Módulo</th><th>Dirección</th><th>Red</th><th>Años</th><th style="text-align:right">Acciones</th></tr></thead>
+            <tbody>${ms.map(m => `<tr${m.activo ? '' : ' style="opacity:.5"'}>
+              <td><b>${UI.esc(m.nombre)}</b>
+                <div style="font-size:10.5px;color:var(--text3)">${UI.esc(this._nombreSistema(m.sistema))}${m.origen === 'escaneo' ? ' · tomado del escaneo' : ''}${m.activo ? '' : ' · desactivado'}</div></td>
+              <td style="font-family:ui-monospace,Consolas,monospace;white-space:nowrap">${this._hexDir(m.req)} →
+                ${m.resp == null ? '<span style="color:var(--text3)">?</span>' : this._hexDir(m.resp)}
+                ${m.ext ? '<div style="font-size:10px;color:var(--text3)">29 bits</div>' : ''}</td>
+              <td style="font-size:11px">${UI.esc((this._REDES_MODULO.find(r => r.id === m.red) || {}).nombre || m.red)}<div style="font-size:10px;color:var(--text3)">${UI.esc(m.protocolo)}</div></td>
+              <td style="font-size:11px;white-space:nowrap">${m.anio_desde || m.anio_hasta ? `${m.anio_desde || '…'}–${m.anio_hasta || '…'}` : 'todos'}</td>
+              <td style="text-align:right;white-space:nowrap">
+                ${Modulos.btnAccion('ver', `Modulos.diagnostico_obd.verModuloVehiculo('${m.id}')`)}
+                ${Modulos.btnAccion('editar', `Modulos.diagnostico_obd.editarModuloVehiculo('${m.id}')`)}
+                ${Modulos.btnAccion('eliminar', `Modulos.diagnostico_obd.eliminarModuloVehiculo('${m.id}','${UI.jsAttr(m.nombre)}')`)}
+              </td></tr>`).join('')}</tbody>
+          </table>
+        </div>`).join('')}
+      </div>`;
+  },
+
+  verModuloVehiculo(id) {
+    const m = (this._modsDeclarados || []).find(x => x.id === id);
+    if (!m) return;
+    UI.modal(`🧩 ${m.nombre}`, `<div class="card" style="padding:14px;font-size:13px">
+      <b>${UI.esc(m.marca)} ${UI.esc(m.modelo || '(todos los modelos)')}</b>
+      ${m.anio_desde || m.anio_hasta ? ` · ${m.anio_desde || '…'}–${m.anio_hasta || '…'}` : ''}
+      <table class="table" style="margin-top:9px;font-size:12.5px"><tbody>
+        <tr><td style="color:var(--text3)">Sistema</td><td>${UI.esc(this._nombreSistema(m.sistema))}</td></tr>
+        <tr><td style="color:var(--text3)">Se le pregunta en</td><td style="font-family:ui-monospace,Consolas,monospace">${this._hexDir(m.req)}${m.ext ? ' (29 bits)' : ''}</td></tr>
+        <tr><td style="color:var(--text3)">Contesta desde</td><td style="font-family:ui-monospace,Consolas,monospace">${m.resp == null ? 'no se sabe — por Bluetooth el ELM327 no lo revela' : this._hexDir(m.resp)}</td></tr>
+        <tr><td style="color:var(--text3)">Red / protocolo</td><td>${UI.esc((this._REDES_MODULO.find(r => r.id === m.red) || {}).nombre || m.red)} · ${UI.esc(m.protocolo)}</td></tr>
+        <tr><td style="color:var(--text3)">Origen</td><td>${m.origen === 'escaneo' ? 'Tomado de un escaneo real' : m.origen === 'paquete' ? 'Vino en un paquete' : 'Escrito a mano'}</td></tr>
+        ${m.nota ? `<tr><td style="color:var(--text3)">Nota</td><td>${UI.esc(m.nota)}</td></tr>` : ''}
+      </tbody></table>
+      <div style="font-size:11px;color:var(--text3);margin-top:8px">
+        Declarar un módulo no transmite nada: el escaneo le pregunta “¿hay alguien?” (Tester Present),
+        que es de solo lectura.</div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="Modulos.diagnostico_obd.modalModulosVehiculo()">Volver</button>
+      ${Modulos.btnAccion('editar', `Modulos.diagnostico_obd.editarModuloVehiculo('${m.id}')`)}
+    </div>`, '600px');
+  },
+
+  editarModuloVehiculo(id) {
+    const m = (this._modsDeclarados || []).find(x => x.id === id) || {};
+    const anios = Array.from({ length: new Date().getFullYear() - 1979 }, (_, i) => new Date().getFullYear() - i);
+    const marcas = this._marcasConocidas();
+    const modelos = this._modelosConocidos(m.marca || '');
+    UI.modal(id ? 'Editar módulo declarado' : 'Agregar módulo al vehículo', `
+      <div class="form-grid">
+        <div><label class="form-label">Marca *</label>
+          <input class="form-input" id="mod-marca" list="mod-marcas-list" autocomplete="off"
+            value="${UI.esc(m.marca || '')}" placeholder="Kia, Toyota, Hyundai…"
+            oninput="Modulos.diagnostico_obd._onMarcaModulo()">
+          <datalist id="mod-marcas-list">${marcas.map(x => `<option value="${UI.esc(x)}">`).join('')}</datalist></div>
+        <div><label class="form-label">Modelo</label>
+          <input class="form-input" id="mod-modelo" list="mod-modelos-list" autocomplete="off"
+            value="${UI.esc(m.modelo || '')}" placeholder="Vacío = toda la marca">
+          <datalist id="mod-modelos-list">${modelos.map(x => `<option value="${UI.esc(x)}">`).join('')}</datalist></div>
+
+        <div><label class="form-label">Sistema</label>
+          <select class="form-select" id="mod-sistema" onchange="Modulos.diagnostico_obd._sugerirNombreModulo()">
+            ${this._SISTEMAS_MODULO.map(x => `<option value="${x.id}" ${m.sistema === x.id ? 'selected' : ''}>${UI.esc(x.nombre)}</option>`).join('')}
+          </select></div>
+        <div><label class="form-label">Nombre que verá el mecánico *</label>
+          <input class="form-input" id="mod-nombre" maxlength="60" value="${UI.esc(m.nombre || '')}"
+            placeholder="Airbag / SRS"></div>
+
+        <div><label class="form-label">Dirección de solicitud * (hex)</label>
+          <input class="form-input" id="mod-req" autocomplete="off" placeholder="7E0"
+            value="${m.req != null ? Number(m.req).toString(16).toUpperCase() : ''}"
+            style="font-family:ui-monospace,Consolas,monospace"></div>
+        <div><label class="form-label">Dirección de respuesta (hex, opcional)</label>
+          <input class="form-input" id="mod-resp" autocomplete="off" placeholder="Vacío si no se sabe"
+            value="${m.resp != null ? Number(m.resp).toString(16).toUpperCase() : ''}"
+            style="font-family:ui-monospace,Consolas,monospace"></div>
+
+        <div><label class="form-label">Red</label>
+          <select class="form-select" id="mod-red">
+            ${this._REDES_MODULO.map(x => `<option value="${x.id}" ${(m.red || 'hs') === x.id ? 'selected' : ''}>${UI.esc(x.nombre)}</option>`).join('')}
+          </select></div>
+        <div><label class="form-label">Protocolo</label>
+          <select class="form-select" id="mod-proto">
+            ${this._PROTOS_MODULO.map(x => `<option value="${x}" ${(m.protocolo || 'uds') === x ? 'selected' : ''}>${x.toUpperCase()}</option>`).join('')}
+          </select></div>
+
+        <div><label class="form-label">Año desde</label>
+          <select class="form-select" id="mod-anio-desde"><option value="">Sin límite</option>
+            ${anios.map(x => `<option ${Number(m.anio_desde) === x ? 'selected' : ''}>${x}</option>`).join('')}</select></div>
+        <div><label class="form-label">Año hasta</label>
+          <select class="form-select" id="mod-anio-hasta"><option value="">Sin límite</option>
+            ${anios.map(x => `<option ${Number(m.anio_hasta) === x ? 'selected' : ''}>${x}</option>`).join('')}</select></div>
+
+        <div style="grid-column:1/-1"><label class="form-label">
+          <input type="checkbox" id="mod-ext" ${m.ext ? 'checked' : ''}> Direccionamiento de 29 bits</label>
+          <div style="font-size:11px;color:var(--text3)">Marcalo solo si la dirección es de la forma 18DAxxF1. Por Bluetooth (ELM327) no se puede preguntar en 29 bits.</div></div>
+
+        <div style="grid-column:1/-1"><label class="form-label">Nota (opcional)</label>
+          <input class="form-input" id="mod-nota" maxlength="200" value="${UI.esc(m.nota || '')}"
+            placeholder="Dónde está, en qué versiones aparece, de dónde salió el dato…"></div>
+
+        <div style="grid-column:1/-1"><label class="form-label">
+          <input type="checkbox" id="mod-activo" ${m.id && !m.activo ? '' : 'checked'}> Activo
+          </label><div style="font-size:11px;color:var(--text3)">Desactivado deja de preguntarse en los escaneos, pero no se borra.</div></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" onclick="Modulos.diagnostico_obd.modalModulosVehiculo()">Cancelar</button>
+        <button class="btn btn-brand" onclick="Modulos.diagnostico_obd.guardarModuloVehiculo('${id || ''}')">Guardar</button>
+      </div>`, '760px');
+  },
+
+  _onMarcaModulo() {
+    const marca = document.getElementById('mod-marca')?.value || '';
+    const dl = document.getElementById('mod-modelos-list');
+    if (dl) dl.innerHTML = this._modelosConocidos(marca).map(x => `<option value="${UI.esc(x)}">`).join('');
+  },
+
+  /* Poner el nombre sugerido del sistema, sin pisar lo que el usuario escribió:
+     el nombre es lo que va a leer el mecánico y puede querer el suyo. */
+  _sugerirNombreModulo() {
+    const sel = document.getElementById('mod-sistema'), nom = document.getElementById('mod-nombre');
+    if (!sel || !nom) return;
+    const sugeridos = this._SISTEMAS_MODULO.map(x => x.nombre);
+    if (nom.value.trim() && !sugeridos.includes(nom.value.trim())) return;
+    nom.value = this._nombreSistema(sel.value);
+  },
+
+  async guardarModuloVehiculo(id) {
+    const v = x => (document.getElementById(x)?.value || '').trim();
+    const marca = v('mod-marca'), nombre = v('mod-nombre');
+    if (!marca) return UI.toast('La marca es obligatoria', 'error');
+    if (!nombre) return UI.toast('Ponele un nombre: es lo que va a leer el mecánico en el reporte', 'error');
+
+    const ext = !!document.getElementById('mod-ext')?.checked;
+    const req = this._leerHex(v('mod-req'));
+    if (req == null) return UI.toast('Falta la dirección de solicitud (por ejemplo 7E0)', 'error');
+    if (Number.isNaN(req)) return UI.toast('La dirección de solicitud no es un hexadecimal válido', 'error');
+    if (!ext && req > 0x7FF)
+      return UI.toast('Una dirección de 11 bits llega hasta 0x7FF. Si es de 29 bits, marcá la casilla.', 'error');
+    if (req > 0x1FFFFFFF) return UI.toast('Esa dirección no existe ni en 29 bits', 'error');
+
+    const resp = this._leerHex(v('mod-resp'));
+    if (Number.isNaN(resp)) return UI.toast('La dirección de respuesta no es un hexadecimal válido', 'error');
+    if (resp != null && resp > 0x1FFFFFFF) return UI.toast('La dirección de respuesta no existe', 'error');
+
+    const desde = Number(v('mod-anio-desde')) || null, hasta = Number(v('mod-anio-hasta')) || null;
+    if (desde && hasta && desde > hasta) return UI.toast('El año inicial no puede ser mayor al final', 'error');
+
+    const fila = {
+      id: id || undefined, marca, modelo: v('mod-modelo') || null,
+      anio_desde: desde, anio_hasta: hasta,
+      nombre, sistema: v('mod-sistema') || 'otro',
+      req, resp, ext, red: v('mod-red') || 'hs', protocolo: v('mod-proto') || 'uds',
+      nota: v('mod-nota') || null,
+      activo: !!document.getElementById('mod-activo')?.checked,
+    };
+    if (!id) fila.origen = 'manual';
+
+    const r = await DB.upsertModuloVehiculo(fila);
+    if (r.error) {
+      /* 23505 es el índice único: la misma dirección ya está declarada en ese
+         modelo. Decirlo así evita que alguien lea "error 23505" y crea que la
+         herramienta se rompió. */
+      const msg = /23505|duplicate|unique/i.test(r.error.message || '')
+        ? `La dirección ${this._hexDir(req)} ya está declarada en ${marca} ${fila.modelo || '(todos los modelos)'}`
+        : r.error.message;
+      return UI.toast(msg, 'error');
+    }
+    UI.toast(id ? 'Módulo actualizado ✓' : 'Módulo agregado ✓');
+    this.modalModulosVehiculo();
+  },
+
+  eliminarModuloVehiculo(id, nombre) {
+    Modulos.eliminarRegistro('obd_modulos_vehiculo', id, nombre, () => this.modalModulosVehiculo());
+  },
+
+  /* Convertir en nombres lo que el escaneo ya encontró. Es el camino corto: el
+     vehículo ya contestó desde esas direcciones, así que no hay nada que
+     adivinar — solo falta decir cómo se llama cada una. */
+  async modalTomarDelEscaneo() {
+    const s = this._scan;
+    const ms = (s && s.por_modulo) || [];
+    if (!ms.length)
+      return UI.toast('No hay un escaneo con módulos a la vista. Abrí un escaneo que haya barrido módulos y volvé.', 'warn');
+    const veh = (s.vehiculos) || (this._vehiculos || []).find(v => v.id === s.vehiculo_id) || {};
+    if (!veh.marca)
+      return UI.toast('El escaneo no tiene marca de vehículo: no se sabe a qué modelo declarárselos', 'warn');
+
+    if (!this._modsDeclarados) this._modsDeclarados = await this._declaradosDelTaller();
+    const igual = (a, b) => String(a || '').trim().toUpperCase() === String(b || '').trim().toUpperCase();
+    const yaEsta = req => (this._modsDeclarados || []).some(d =>
+      Number(d.req) === Number(req) && igual(d.marca, veh.marca) && (!d.modelo || igual(d.modelo, veh.modelo)));
+
+    const nuevos = ms.filter(m => !yaEsta(m.ecu));
+    this._modsDelEscaneo = { veh, nuevos };
+
+    UI.modal('📡 Tomar módulos del escaneo', `
+      <div style="font-size:13px;color:var(--text2);line-height:1.55">
+        El escaneo de <b>${UI.esc(veh.marca)} ${UI.esc(veh.modelo || '')} ${veh.anio || ''}</b> encontró
+        ${ms.length} módulo(s). ${nuevos.length
+          ? `<b>${nuevos.length}</b> todavía no están declarados para este modelo.`
+          : 'Todos ya están declarados.'}
+        <div style="color:var(--text3);margin-top:4px">Declararlos hace que el próximo escaneo del modelo
+        les pregunte primero, los nombre igual, y avise si alguno falta.</div>
+      </div>
+      ${nuevos.length ? `<div style="max-height:44vh;overflow:auto;margin-top:12px">
+        <table class="table" style="font-size:12px">
+          <thead><tr><th>Nombre detectado</th><th>Dirección</th><th style="text-align:right">Acción</th></tr></thead>
+          <tbody>${nuevos.map((m, i) => `<tr>
+            <td>${UI.esc(m.nombre || 'Módulo')}</td>
+            <td style="font-family:ui-monospace,Consolas,monospace">${this._hexDir(m.ecu)} → ${m.resp == null ? '?' : this._hexDir(m.resp)}${m.ext ? ' · 29 bits' : ''}</td>
+            <td style="text-align:right"><button class="btn btn-sm btn-ghost"
+              onclick="Modulos.diagnostico_obd.declararUnoDelEscaneo(${i})">✏️ Revisar y declarar</button></td>
+          </tr>`).join('')}</tbody></table></div>` : ''}
+      <div class="modal-footer">
+        <button class="btn btn-ghost" onclick="Modulos.diagnostico_obd.modalModulosVehiculo()">Volver</button>
+        ${nuevos.length ? `<button class="btn btn-brand" onclick="Modulos.diagnostico_obd.declararTodosDelEscaneo()">Declarar los ${nuevos.length}</button>` : ''}
+      </div>`, '720px');
+  },
+
+  /* Abre el formulario ya lleno con lo que contestó el vehículo. Se revisa el
+     nombre antes de guardar: "Módulo 0x745" declarado con ese nombre no sirve
+     de nada, y es justo lo que esta pantalla vino a arreglar. */
+  declararUnoDelEscaneo(i) {
+    const d = this._modsDelEscaneo;
+    const m = d && d.nuevos[i];
+    if (!m) return;
+    this._modsDeclarados = this._modsDeclarados || [];
+    this.editarModuloVehiculo();
+    const pon = (id, val) => { const el = document.getElementById(id); if (el != null && val != null) el.value = val; };
+    pon('mod-marca', d.veh.marca);
+    pon('mod-modelo', d.veh.modelo || '');
+    pon('mod-nombre', m.nombre || '');
+    pon('mod-req', Number(m.ecu).toString(16).toUpperCase());
+    pon('mod-resp', m.resp == null ? '' : Number(m.resp).toString(16).toUpperCase());
+    const ext = document.getElementById('mod-ext'); if (ext) ext.checked = !!m.ext;
+    this._onMarcaModulo();
+  },
+
+  async declararTodosDelEscaneo() {
+    const d = this._modsDelEscaneo;
+    if (!d || !d.nuevos.length) return;
+    let bien = 0, mal = 0;
+    for (const m of d.nuevos) {
+      const r = await DB.upsertModuloVehiculo({
+        marca: d.veh.marca, modelo: d.veh.modelo || null,
+        nombre: String(m.nombre || `Módulo ${this._hexDir(m.ecu)}`).slice(0, 60),
+        sistema: 'otro', req: Number(m.ecu),
+        resp: m.resp == null ? null : Number(m.resp), ext: !!m.ext,
+        red: 'hs', protocolo: 'uds', origen: 'escaneo', activo: true,
+      });
+      if (r.error) mal++; else bien++;
+    }
+    UI.toast(mal ? `${bien} declarado(s), ${mal} no se pudieron` : `${bien} módulo(s) declarados ✓`,
+             mal ? 'warn' : 'success');
+    this._modsDeclarados = null;
+    this.modalModulosVehiculo();
   },
 
   _NOMBRE_VIA: { ble:'Bluetooth BLE', android:'Bluetooth de la app', serial:'Bluetooth clásico', usb:'USB' },
@@ -4771,6 +5245,7 @@ Modulos.diagnostico_obd = {
           </select>
           <button class="btn btn-ghost" onclick="Modulos.diagnostico_obd.modalCampanas()">🔔 Campañas de fábrica</button>
           <button class="btn btn-ghost" onclick="Modulos.diagnostico_obd.modalMapaVehiculos()" title="Qué vehículos sabe escanear el taller y hasta dónde llega en cada uno">🗺 Mapa de vehículos</button>
+          <button class="btn btn-ghost" onclick="Modulos.diagnostico_obd.modalModulosVehiculo()" title="Declarar qué módulos trae cada modelo: airbag, ABS, EPS, TCM, carrocería…">🧩 Módulos</button>
           <button class="btn btn-ghost" onclick="Modulos.diagnostico_obd.modalOEM()" title="Catálogo por fabricante, redes y procedimientos verificados">🧠 OEM</button>
           <button class="btn btn-ghost" onclick="Modulos.diagnostico_obd.render()">↻ Actualizar</button>
           ${puedeEditar ? `<button class="btn btn-brand" onclick="Modulos.diagnostico_obd.modalEscanear()">📡 Nuevo Escaneo</button>` : ''}

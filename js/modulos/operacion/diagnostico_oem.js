@@ -665,7 +665,11 @@
         /* Por ELM la direccion es estado del dongle: hay que fijarla antes y
            devolverla despues, o el monitor en vivo queda hablandole al ultimo
            modulo consultado. */
-        const mods=await this._elmPuntoAPunto(()=>this._escanearModulos(null,null));
+        /* Los modulos que el taller declaro para este modelo entran al barrido:
+           si no, el explorador OEM encuentra menos que el escaneo normal. */
+        const vehId=this._scan?.vehiculo_id||this._oemVehiculoId||null;
+        const mapa=vehId?await this._mapaConocido(vehId).catch(()=>null):null;
+        const mods=await this._elmPuntoAPunto(()=>this._escanearModulos(null,mapa));
         const hs=(mods||[]).map(m=>({req:Number(m.req??m.ecu),resp:(m.resp===null||m.resp===undefined)?null:Number(m.resp),nombre:m.nombre||'ECU desconocida',protocolo:m.servicio||m.protocolo}));
         this._oemTopologia=Motor.construirTopologia([{id:'hs',estado:'escaneada',modulos:hs}],{modo:'real',adaptador:this._oemAdaptador?.modelo||this._via});
         await DB.registrarEjecucionOEM({operacion:'mapa_redes_lectura',estado:'exitosa',diagnostico_id:this._scan?.id||null,vehiculo_id:this._scan?.vehiculo_id||null,evidencia:this._oemTopologia});
@@ -756,7 +760,10 @@
       const d=this._oemDefs.find(x=>x.id===id)||{};
       this._oemEditandoDef=d.definicion||{};
       this._oemEditandoPre=d.precondiciones||[];
-      const modelos=(Modulos.vehiculos?._modelosComunes?.[d.marca]||[]);
+      /* `Modulos.vehiculos._modelosComunes` NO existe: el encadenamiento
+         opcional se tragaba el error y el desplegable de modelo salia SIEMPRE
+         vacio, asi que nunca se pudo elegir un modelo en una definicion nueva. */
+      const modelos=M._modelosConocidos(d.marca||'');
       const pares=[{req:0x7E0,resp:0x7E8,nombre:'Motor'},{req:0x7E1,resp:0x7E9,nombre:'Transmisión'},...((this._oemTopologia?.redes||[]).flatMap(r=>r.modulos||[]))]
         .filter((x,i,a)=>a.findIndex(y=>y.req===x.req&&y.resp===x.resp)===i);
       const parActual=Number.isInteger(Number(d.definicion?.request_id))?`${Number(d.definicion.request_id)}|${Number(d.definicion.response_id)}`:'';
@@ -779,7 +786,7 @@
     actualizarModelosOEM() {
       const marca=document.getElementById('oem-marca')?.value, sel=document.getElementById('oem-modelo'); if(!sel)return;
       const clave=marca==='Chevrolet / GM'?'Chevrolet':marca;
-      const modelos=Modulos.vehiculos?._modelosComunes?.[clave]||[];
+      const modelos=M._modelosConocidos(clave);
       sel.innerHTML='<option value="">Todos los modelos</option>'+modelos.map(x=>`<option>${UI.esc(x)}</option>`).join('');
     },
     async guardarOEM(id) {

@@ -454,6 +454,62 @@ const DB = {
     }
   },
 
+  /* ── MÓDULOS DECLARADOS POR EL TALLER (migración 141) ──────────────────
+     La libreta: qué módulos trae un modelo y en qué dirección contestan. Solo
+     se usa para PREGUNTAR (Tester Present, lectura); lo que transmite vive en
+     obd_oem_definiciones con su escalera de verificación.
+
+     Devuelve [] si la tabla todavía no existe: el código se despliega antes
+     que la migración, y un escaneo no puede caerse por eso. */
+  async getModulosVehiculo({ marca = null, modelo = null, anio = null } = {}) {
+    try {
+      let q = getSB().from('obd_modulos_vehiculo').select('*')
+        .eq('tenant_id', getTID()).eq('activo', true);
+      if (marca) q = q.ilike('marca', marca);
+      const { data, error } = await q.order('marca').order('modelo').order('req');
+      if (error) { console.warn('getModulosVehiculo:', error.message); return []; }
+      /* El filtro por modelo y año se hace acá y no en la consulta porque
+         `modelo` nulo significa "toda la marca" y un año nulo significa "todos
+         los años": eso en SQL son tres `or` anidados por campo, y en el
+         navegador son dos líneas legibles sobre una lista que nunca es grande. */
+      const eq = (a, b) => String(a || '').trim().toUpperCase() === String(b || '').trim().toUpperCase();
+      return (data || []).filter(m => {
+        if (modelo && m.modelo && !eq(m.modelo, modelo)) return false;
+        if (anio) {
+          if (m.anio_desde && Number(anio) < m.anio_desde) return false;
+          if (m.anio_hasta && Number(anio) > m.anio_hasta) return false;
+        }
+        return true;
+      });
+    } catch (e) { console.warn('getModulosVehiculo:', e.message); return []; }
+  },
+
+  /* Todos los declarados del negocio, para la pantalla de administración. */
+  async getTodosModulosVehiculo() {
+    try {
+      const { data, error } = await getSB().from('obd_modulos_vehiculo').select('*')
+        .eq('tenant_id', getTID()).order('marca').order('modelo').order('req');
+      if (error) { console.warn('getTodosModulosVehiculo:', error.message); return []; }
+      return data || [];
+    } catch (e) { console.warn('getTodosModulosVehiculo:', e.message); return []; }
+  },
+
+  async upsertModuloVehiculo(fields) {
+    const payload = { ...fields, tenant_id:getTID(), updated_at:new Date().toISOString() };
+    if (!payload.creado_por && typeof Auth !== 'undefined') payload.creado_por = Auth.user?.id || null;
+    if (payload.id) {
+      const { id, ...cambios } = payload;
+      /* Guardado PARCIAL = update. Un upsert de PostgREST es INSERT..ON CONFLICT
+         y con pocos campos revienta contra los NOT NULL (23502). */
+      const { data, error } = await getSB().from('obd_modulos_vehiculo').update(cambios)
+        .eq('tenant_id', getTID()).eq('id', id).select().single();
+      return { data, error };
+    }
+    delete payload.id;
+    const { data, error } = await getSB().from('obd_modulos_vehiculo').insert(payload).select().single();
+    return { data, error };
+  },
+
   /* Todos los mapas de acceso del negocio, para la pantalla de cobertura: qué
      vehículos sabemos escanear y hasta dónde. Devuelve [] si la columna
      todavía no existe (migración 097) en vez de romper la pantalla. */
