@@ -32,8 +32,8 @@
     "Va como release de GitHub, igual que el instalador de Windows."
   ],
   "android": {
-    "versionCode": 1,
-    "versionName": "1.0.0",
+    "versionCode": 2,
+    "versionName": "1.0.1",
     "fecha": "2026-09-16",
     "paquete": "com.cmtelecom.nexuspro.nativa",
     "minAndroid": "7.0",
@@ -47,10 +47,10 @@
     "enPlayStore": false,
     "playUrl": "https://play.google.com/store/apps/details?id=com.cmtelecom.nexuspro.nativa",
     "novedades": [
-      "App NATIVA en Flutter: se acabo el envoltorio del sitio web",
+      "Arreglado: el escaner fallaba con 'no esta conectado' JUSTO despues de conectar (carrera entre el puente y el driver)",
+      "Arreglado: en CAN los codigos de falla salian corridos un byte — mandaban a cambiar la pieza equivocada",
+      "Arreglado: el relleno 0000 se reportaba como un codigo P0000 que no existe",
       "Escaner OBD-II por Bluetooth clasico (SPP) y BLE, con sonda al dongle antes de decir 'conectado'",
-      "Bitacora tecnica copiable, tambien cuando falla ANTES de conectar",
-      "Login con correo y contrasena, con reto de 2FA",
       "Por ahora trae login y escaner: los demas modulos siguen en el sitio web desde una computadora"
     ]
   }

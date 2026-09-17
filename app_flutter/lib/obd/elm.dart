@@ -32,6 +32,18 @@ class ELM {
   bool _ocupado = false;
   bool conectado = false;
 
+  /// Numero de protocolo que reporta el adaptador con ATDPN (6 y 7 son CAN).
+  /// No es informativo: cambia como se parsea la respuesta del modo 03.
+  int protoNum = 0;
+
+  /// La pantalla marca la conexion en cuanto el puente confirma, en vez de
+  /// depender de que el oyente de abajo haya corrido primero. Son dos
+  /// suscripciones al MISMO stream de difusion y el orden entre ellas no esta
+  /// garantizado: sin esto, el primer comando podia salir con `conectado` aun
+  /// en false y morir con "el escaner no esta conectado" justo despues de
+  /// haberse conectado.
+  void marcarConectado(bool v) => conectado = v;
+
   /// Tope a propósito: un barrido son cientos de direcciones y volcarlas todas
   /// ahoga lo único que importa.
   static const _topeTraza = 400;
@@ -154,6 +166,13 @@ class ELM {
           'El escáner responde, pero el vehículo no contesta. Revisá el switch en '
           'contacto y que el dongle esté bien metido en el conector de diagnóstico.');
     }
+    /* ATDPN devuelve el protocolo como numero ('A6' = automatico, protocolo 6).
+       Hace falta ANTES de leer codigos: en CAN la respuesta del modo 03 trae un
+       byte con la CANTIDAD de codigos delante, y en ISO 9141 / KWP2000 no. */
+    final dpn = await cmd('ATDPN').catchError((_) => '');
+    final mn = RegExp(r'[0-9A-F]$', caseSensitive: false).firstMatch(dpn.trim());
+    protoNum = mn == null ? 0 : (int.tryParse(mn.group(0)!, radix: 16) ?? 0);
+
     final dp = await cmd('ATDP');
     return dp.replaceAll(RegExp(r'AUTO,?\s*', caseSensitive: false), '').trim();
   }
@@ -189,17 +208,32 @@ class ELM {
   }
 
   /// Códigos de falla. `modo` es '03' (confirmados) o '07' (pendientes).
+  ///
+  /// Se separa del transporte a proposito para poder probarlo sin vehiculo:
+  /// [interpretarDTCs] es funcion pura y tiene sus pruebas.
   Future<List<String>> leerDTCs(String modo) async {
     final resp = await cmd(modo, limite: const Duration(seconds: 10)).catchError((_) => '');
-    final hex = _hexLineas(resp).join();
+    return interpretarDTCs(_hexLineas(resp).join(), modo, protoNum);
+  }
+
+  /// Convierte la respuesta cruda en codigos. Pura: sin red, sin Bluetooth.
+  ///
+  /// El detalle que hay que respetar y que no se ve a simple vista: **en CAN la
+  /// respuesta antepone un byte con la CANTIDAD de codigos** y en ISO 9141 /
+  /// KWP2000 no. Saltarlo siempre, o no saltarlo nunca, no produce un error —
+  /// produce codigos EQUIVOCADOS, que es la peor manera de fallar que tiene un
+  /// escaner: manda a cambiar la pieza que no era. Los protocolos 6 en adelante
+  /// son CAN (ver ATDPN), igual que en el driver del sitio, que es el que esta
+  /// probado contra vehiculos reales.
+  static List<String> interpretarDTCs(String hex, String modo, int protoNum) {
     final marca = modo == '03' ? '43' : '47';
     final i = hex.indexOf(marca);
     if (i < 0) return [];
+    var cuerpo = hex.substring(i + 2);
+    if (protoNum >= 6 && cuerpo.length >= 2) cuerpo = cuerpo.substring(2);
     final codigos = <String>[];
-    for (var p = i + 2; p + 3 < hex.length; p += 4) {
-      final crudo = hex.substring(p, p + 4);
-      if (crudo == '0000') continue;
-      final c = _decodificarDTC(crudo);
+    for (var p = 0; p + 3 < cuerpo.length; p += 4) {
+      final c = _decodificarDTC(cuerpo.substring(p, p + 4));
       if (c != null && !codigos.contains(c)) codigos.add(c);
     }
     return codigos;
@@ -207,8 +241,12 @@ class ELM {
 
   /// Dos bytes → 'P0301'. Los 2 bits más altos dicen el sistema y los 2
   /// siguientes el primer dígito; es el formato de SAE J2012.
-  String? _decodificarDTC(String crudo) {
+  static String? _decodificarDTC(String crudo) {
     if (crudo.length != 4) return null;
+    /* '0000' es RELLENO, no un codigo: CAN completa la trama con ceros. Sin
+       este descarte la pantalla muestra "P0000", que no existe en ningun
+       catalogo, y el mecanico sale a buscar una falla inventada. */
+    if (crudo == '0000') return null;
     final n = int.tryParse(crudo, radix: 16);
     if (n == null) return null;
     const sistemas = ['P', 'C', 'B', 'U'];

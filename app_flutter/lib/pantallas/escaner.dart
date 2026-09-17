@@ -101,6 +101,11 @@ class _PantallaEscanerState extends State<PantallaEscaner> {
       await PuenteBT.conectar(d);
       final evt = await futuroEvento;
       if (evt.evento != 'conectado') { _p('✗ ${evt.detalle}'); return; }
+      /* Se marca aqui y no se espera al oyente del driver: son dos
+         suscripciones al mismo stream y el orden entre ellas no esta
+         garantizado. Sin esto, el ATI de abajo podia salir con el driver
+         creyendo que seguia desconectado. */
+      _elm.marcarConectado(true);
 
       _p('Socket abierto. Preguntándole al escáner quién es (ATI)…');
       final sonda = await _elm.sondear();
