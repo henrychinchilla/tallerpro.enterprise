@@ -33,7 +33,9 @@ class _PantallaLoginState extends State<PantallaLogin> {
 
   bool _ocupado = false;
   bool _verClave = false;
+  bool _recuperando = false;
   String? _error;
+  String? _aviso;
 
   @override
   void initState() {
@@ -49,8 +51,23 @@ class _PantallaLoginState extends State<PantallaLogin> {
     super.dispose();
   }
 
+  /* "AuthApiException" a secas no le dice nada a nadie y no se puede depurar en
+     remoto. Va el mensaje, el codigo y el estado HTTP: con eso se sabe si fue
+     la contrasena, el token o el servidor. */
   void _fallar(Object e) {
-    setState(() => _error = e is AuthException ? e.message : e.toString());
+    String txt;
+    if (e is AuthApiException) {
+      txt = [
+        e.message,
+        if (e.code != null) 'code=${e.code}',
+        if (e.statusCode != null) 'http=${e.statusCode}',
+      ].join('  ·  ');
+    } else if (e is AuthException) {
+      txt = e.message;
+    } else {
+      txt = e.toString();
+    }
+    setState(() => _error = txt);
   }
 
   Future<void> _entrar() async {
@@ -91,6 +108,38 @@ class _PantallaLoginState extends State<PantallaLogin> {
     }
   }
 
+  /* Recuperar contrasena va por la MISMA Edge Function que usa el sitio
+     ('recuperar-password', op 'solicitar'), no por resetPasswordForEmail de
+     Supabase: esa funcion es la que manda el correo con la plantilla y el
+     dominio correctos. Duplicar el mecanismo aqui habria dado dos correos
+     distintos segun desde donde lo pidieras. */
+  Future<void> _recuperar() async {
+    final correo = _correo.text.trim();
+    if (correo.isEmpty) {
+      setState(() => _error = 'Escribí tu correo arriba y volvé a tocar "¿Olvidaste tu contraseña?".');
+      return;
+    }
+    setState(() { _ocupado = true; _error = null; _aviso = null; });
+    try {
+      final r = await sb.functions.invoke('recuperar-password',
+          body: {'op': 'solicitar', 'email': correo});
+      final datos = r.data;
+      final err = datos is Map ? datos['error'] : null;
+      if (err != null) {
+        setState(() => _error = err.toString());
+      } else {
+        setState(() {
+          _recuperando = false;
+          _aviso = 'Te enviamos el enlace de recuperación a $correo. Revisá tu correo.';
+        });
+      }
+    } catch (e) {
+      _fallar(e);
+    } finally {
+      if (mounted) setState(() => _ocupado = false);
+    }
+  }
+
   Future<void> _salir() async {
     await sb.auth.signOut();
     Sesion.limpiar();
@@ -116,6 +165,7 @@ class _PantallaLoginState extends State<PantallaLogin> {
                       style: Theme.of(context).textTheme.headlineMedium),
                   const SizedBox(height: 24),
                   if (widget.retoMfa) ..._reto() else ..._credenciales(),
+                  if (_aviso != null) _cajaAviso(),
                   if (_error != null) _cajaError(),
                 ],
               ),
@@ -161,6 +211,10 @@ class _PantallaLoginState extends State<PantallaLogin> {
                   height: 18, width: 18, child: CircularProgressIndicator(strokeWidth: 2))
               : const Text('Entrar'),
         ),
+        TextButton(
+          onPressed: _ocupado ? null : _recuperar,
+          child: const Text('¿Olvidaste tu contraseña?'),
+        ),
       ];
 
   List<Widget> _reto() => [
@@ -190,6 +244,16 @@ class _PantallaLoginState extends State<PantallaLogin> {
         ),
         TextButton(onPressed: _salir, child: const Text('Cancelar y salir')),
       ];
+
+  Widget _cajaAviso() => Container(
+        margin: const EdgeInsets.only(top: 16),
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          border: Border.all(color: Colors.green.shade400),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Text(_aviso!, style: const TextStyle(fontSize: 13)),
+      );
 
   /* El error se queda en pantalla y se puede copiar: así llega entero por chat
      en vez de como "no me deja entrar". */
