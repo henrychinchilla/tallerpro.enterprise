@@ -600,6 +600,35 @@
       const a=this._oemAdaptador;
       const puede=typeof rolEnLista==='function' ? rolEnLista(['admin','gerente_tal']) : false;
       UI.modal('🧠 Diagnóstico OEM',`<div style="display:grid;gap:14px">
+        <div class="card" style="padding:14px;border-left:3px solid var(--cyan)">
+          <b style="font-size:12px">¿PARA QUÉ SIRVE ESTA PANTALLA?</b>
+          <div style="font-size:12.5px;line-height:1.6;margin-top:6px">
+            El escaneo normal lee lo que <b>cualquier</b> vehículo está obligado a contestar: códigos de
+            falla, sensores en vivo, VIN. Eso está normalizado y es igual en un Kia que en un Ford.
+            <div style="margin-top:7px">Pero cada fabricante además tiene <b>lo suyo</b>: datos que solo su
+            propio escáner sabe pedir y procedimientos que solo su software sabe ejecutar — reiniciar un
+            módulo, borrarle los aprendizajes a la caja, poner en cero el sensor de la dirección.
+            Eso <b>no está normalizado</b>: el mismo comando significa cosas distintas en cada marca, y uno
+            equivocado no da error, hace algo que no querías en el vehículo de un cliente.</div>
+            <div style="margin-top:7px"><b>Esta pantalla es donde vive eso, con una regla que no se rompe:
+            una definición que no está verificada NUNCA transmite.</b> Cada una lleva su fuente (la norma o
+            el manual de donde salió), su nivel de riesgo y sus precondiciones, y todo lo que se ejecuta
+            queda en bitácora con la trama exacta y la respuesta del módulo.</div>
+          </div>
+          <div style="font-size:12px;margin-top:9px;border-top:1px solid var(--border);padding-top:8px;line-height:1.65">
+            <b>En la práctica, hoy, acá se hace esto:</b>
+            <div style="margin-top:4px">· <b>Borrar los códigos de UN módulo</b> y <b>reiniciar un módulo</b>
+              (motor y transmisión, listo para usar: son servicios de norma en direcciones legisladas).</div>
+            <div>· <b>Leer parámetros OEM</b> que el escaneo normal no pide.</div>
+            <div>· <b>Explorar módulos</b> y ver el mapa de redes del vehículo enchufado.</div>
+            <div>· Cargar el <b>paquete de un vehículo</b> —el Kia Picanto está armado— y completar las
+              direcciones que falten desde el mapa del propio vehículo.</div>
+          </div>
+          <div style="font-size:11.5px;color:var(--text3);margin-top:8px;line-height:1.55">
+            No confundir con <b>🧩 Módulos</b>: ahí se declara <i>cómo se llama</i> cada módulo y en qué
+            dirección contesta, y eso <b>no transmite nada</b>. Acá está lo que sí le habla al vehículo.
+          </div>
+        </div>
         <div class="card" style="padding:14px"><b>Adaptador y redes</b><div style="margin-top:8px">${a?`<b>${UI.esc(a.modelo)}</b> · firmware ${UI.esc(a.firmware||'no identificado')} · ${UI.esc(a.volt)}`:'Conecta el adaptador durante un escaneo para interrogarlo.'}</div>
         <div style="display:flex;gap:7px;flex-wrap:wrap;margin-top:9px">${CANALES.map(c=>`<span class="badge badge-${c.estado==='operativo'?'green':'amber'}" title="${UI.esc(c.nota)}">${c.nombre} · ${c.estado}</span>`).join('')}</div>
         <button class="btn btn-sm btn-ghost" style="margin-top:10px" onclick="Modulos.diagnostico_obd.detectarAdaptadorOEM()">🔎 Detectar adaptador conectado</button>

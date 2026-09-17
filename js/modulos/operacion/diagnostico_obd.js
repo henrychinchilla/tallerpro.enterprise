@@ -1630,6 +1630,7 @@ Modulos.diagnostico_obd = {
 
   _desconectar() {
     this._stopLive();
+    this._pararLatido();
     try { this._dev?.gatt?.disconnect(); } catch (_) {}
     this._dev = this._char = null;
     this._serialReady = false;
@@ -2171,17 +2172,68 @@ Modulos.diagnostico_obd = {
      Solo se acepta texto legible y de largo razonable: varios modulos
      contestan el DID con basura binaria o con relleno, y un nombre inventado
      es peor que una direccion honesta. */
-  async _nombrePropio(m) {
-    for (const did of [0xF197, 0xF18A]) {
+  /* Texto legible dentro de la respuesta de un DID. Varios módulos contestan
+     con relleno binario o con ceros: un nombre inventado a partir de basura es
+     peor que una dirección honesta, así que se exige largo razonable y algo
+     que parezca de verdad texto. */
+  _textoDID(bytes) {
+    if (!bytes || !bytes.length) return null;
+    const txt = bytes.filter(x => x >= 32 && x < 127).map(x => String.fromCharCode(x)).join('').trim();
+    if (txt.length < 3 || txt.length > 40) return null;
+    if (!/[A-Za-z0-9]{3}/.test(txt)) return null;
+    return txt;
+  },
+
+  /* Lo que el módulo dice de SÍ MISMO. Son los identificadores normalizados de
+     ISO 14229-1, iguales en cualquier marca:
+
+       F197  nombre del sistema        — cómo se llama, cuando lo publica
+       F187  número de pieza de repuesto — LA REFERENCIA del módulo
+       F18A  fabricante del módulo
+
+     La referencia es el dato que de verdad resuelve "¿qué módulo es este?": con
+     ella se busca el repuesto, se compara contra otro vehículo igual y se le
+     pone nombre de una vez para todo el modelo. Antes solo se pedía el nombre,
+     y como la mayoría de los módulos NO lo publica, el reporte se quedaba en
+     "Módulo 0x7B3" teniendo la referencia a una consulta de distancia.
+
+     Tres consultas por módulo como máximo, y se corta apenas hay con qué
+     identificarlo: en un vehículo con once módulos, cada consulta de más son
+     segundos que el mecánico está parado esperando. */
+  async _identidadModulo(m) {
+    const out = {};
+    const pedir = async did => {
       const d = await this._udsPedir(m.req, m.resp, [0x22, did >> 8, did & 0xFF], 1500);
-      if (!d || d[0] !== 0x62) continue;
-      const cuerpo = d.slice(3);                       // 62 + los 2 bytes del DID
-      if (!cuerpo.length) continue;
-      const txt = cuerpo.filter(x => x >= 32 && x < 127)
-                        .map(x => String.fromCharCode(x)).join('').trim();
-      if (txt.length >= 3 && txt.length <= 40 && /[A-Za-z]{3}/.test(txt)) return txt;
+      if (!d || d[0] !== 0x62) return null;
+      return this._textoDID(d.slice(3));            // 62 + los 2 bytes del DID
+    };
+    try { out.nombre = await pedir(0xF197); } catch (_) {}
+    try { out.referencia = await pedir(0xF187); } catch (_) {}
+    if (!out.nombre && !out.referencia) {
+      try { out.proveedor = await pedir(0xF18A); } catch (_) {}
     }
-    return null;
+    for (const k of Object.keys(out)) if (!out[k]) delete out[k];
+    return Object.keys(out).length ? out : null;
+  },
+
+  /* Grupo del número de repuesto Hyundai/Kia. Los primeros dos dígitos de la
+     referencia son el grupo del catálogo de repuestos, y el grupo es el sistema.
+
+     ES UNA SUGERENCIA, NO UN NOMBRE. Se muestra al lado de la referencia, con
+     el "¿?" a la vista, para que el mecánico confirme y lo declare él. Nunca se
+     usa como nombre del módulo: la regla de esta herramienta es que un dato sin
+     confirmar no se presenta como hecho. */
+  _GRUPO_PIEZA: {
+    '39':'Control del motor', '45':'Transmisión automática', '43':'Transmisión manual',
+    '58':'Frenos (ABS / ESC)', '56':'Dirección (MDPS / EPS)', '97':'Climatización',
+    '94':'Instrumentos / tablero', '95':'Eléctrica y electrónica (airbag, carrocería, llave)',
+    '99':'Multimedia / asistencias', '91':'Arneses y cajas de fusibles',
+  },
+  _sugerenciaPorReferencia(ref) {
+    const t = String(ref || '').replace(/[^0-9A-Za-z]/g, '');
+    if (t.length < 5 || !/^\d{5}/.test(t)) return null;
+    const g = this._GRUPO_PIEZA[t.slice(0, 2)];
+    return g ? { grupo: t.slice(0, 2), sistema: g } : null;
   },
 
   _nombreUDS(req, codigos) {
@@ -2318,6 +2370,25 @@ Modulos.diagnostico_obd = {
     return { ok: true };
   },
 
+  /* Direcciones que NO son un módulo, aunque contesten.
+
+     Verificado en el Picanto 2019 el 2026-09-17: el barrido reportó "módulos"
+     en 0x7DF y 0x7E8, los dos con cero códigos. No son módulos:
+
+     · 0x7DF es la dirección de DIFUSIÓN legislada (ISO 15765-4). Preguntar ahí
+       no descubre a nadie: le pregunta a TODOS los de emisiones a la vez y
+       contesta el primero que alcanza. Siempre hay respuesta, y siempre es la
+       del motor, que ya está en la lista por su propia dirección.
+     · 0x7E8-0x7EF son las direcciones de RESPUESTA de esos mismos módulos.
+       Nadie escucha ahí. Lo que vuelve es el eco de una conversación anterior.
+
+     Contarlas infla la lista con fantasmas, y un fantasma en el mapa de acceso
+     es peor que un módulo de menos: el próximo escaneo del modelo lo busca, no
+     lo encuentra y lo reporta como AUSENTE — una avería que no existe. */
+  _DIR_NO_ES_MODULO(req) {
+    return req === 0x7DF || (req >= 0x7E8 && req <= 0x7EF);
+  },
+
   _hex3(req) { return req.toString(16).toUpperCase().padStart(3, '0'); },
 
   /* Toca la puerta de UNA dirección. Devuelve {req,resp} si hay alguien.
@@ -2384,6 +2455,7 @@ Modulos.diagnostico_obd = {
     this._sinTraza = true;          // 240 puertas ahogarian la bitacora
     try {
       for (let req = 0x700; req <= 0x7EF; req++) {
+        if (this._DIR_NO_ES_MODULO(req)) continue;
         const h = await this._tocarPuerta(req);
         if (h && !hallados.some(x => x.req === h.req && x.resp === h.resp)) hallados.push(h);
         if (log && (req & 0x3F) === 0x3F)
@@ -2827,6 +2899,10 @@ Modulos.diagnostico_obd = {
              destinos de un byte, no IDs CAN. Preguntar por 0x18 en CAN es
              preguntarle a nadie, y ademas ensuciaria la lista de faltantes. */
           if (typeof m.req !== 'number' || m.kline) continue;
+          /* Los mapas guardados antes de saber esto traen 0x7DF y 0x7E8 como
+             si fueran módulos. Filtrarlos al leerlos evita que un escaneo viejo
+             siga arrastrando fantasmas para siempre. */
+          if (!m.ext && this._DIR_NO_ES_MODULO(m.req)) continue;
           /* La clave es SOLO la dirección de ida. Un mapa hecho por ELM guarda
              `resp: null` —el dongle no revela desde dónde contesta—, así que
              con la respuesta en la clave el mismo módulo entraba dos veces:
@@ -3009,9 +3085,11 @@ Modulos.diagnostico_obd = {
          sesión extendida. Es el caso típico de tracción y carrocería: sin este
          reintento parecen sanos cuando no lo están. */
       const negó = d && d[0] === 0x7F;
+      let sesionAbierta = false;
       if ((negó || !cods.length)) {
         const s = await this._udsPedir(m.req, m.resp, [0x10, 0x03], 1500);
         if (s && s[0] === 0x50) {
+          sesionAbierta = true;
           const d2 = await this._udsPedir(m.req, m.resp, [0x19, 0x02, 0xFF], 2500);
           const c2 = this._dtcsUDS(d2);
           if (c2.length) { d = d2; cods = c2; servicio = '19 02 (sesión extendida)'; }
@@ -3043,12 +3121,28 @@ Modulos.diagnostico_obd = {
       /* El nombre propio del modulo gana sobre la deduccion por direccion,
          pero NO sobre las dos que la norma fija (motor y transmision): ahi la
          tabla es mas clara para el mecanico que la cadena interna del ECU. */
+      /* La identidad se pide SIEMPRE, no solo cuando falta el nombre: la
+         referencia del módulo sirve igual en el motor, que sí tiene nombre.
+         Y se guarda con el escaneo, no al abrir la ficha: si hay que abrir once
+         fichas para ver once referencias, en la práctica no se ven nunca. */
+      const ident = await this._identidadModulo(m).catch(() => null);
+
+      /* Devolver el módulo a la sesión por defecto. Una sesión extendida abierta
+         es lo que enciende el testigo de la dirección (el volante con "!") y el
+         de otros sistemas mientras dura: el módulo avisa, con razón, que está
+         en modo diagnóstico. Sin este 10 01 el testigo se quedaba prendido
+         hasta apagar el vehículo — verificado en el Picanto 2019 el 2026-09-17.
+         Va antes de nada más por si el resto falla. */
+      if (sesionAbierta) {
+        await this._udsPedir(m.req, m.resp, [0x10, 0x01], 1200).catch(() => {});
+      }
+
       let nombre = this._nombreUDS(m.req, cods);
-      if (!this._UDS_NOMBRES[m.req] && !this._nombreDeclarado(m.req)) {
-        const propio = await this._nombrePropio(m).catch(() => null);
-        if (propio) nombre = propio;
+      if (!this._UDS_NOMBRES[m.req] && !this._nombreDeclarado(m.req) && ident && ident.nombre) {
+        nombre = ident.nombre;
       }
       res.push({ ecu: m.req, resp: m.resp, ext: !!m.ext, nombre, codigos: cods, respondio: !!d, servicio,
+                 ident: ident || null, sesion_devuelta: sesionAbierta || undefined,
                  nuevo: !!conocidas.length && !conocidas.some(c => c.req === m.req) });
       if (log && cods.length) {
         const act = cods.filter(c => c.activo).length;
@@ -5244,6 +5338,7 @@ Modulos.diagnostico_obd = {
             ${anios.map(a=>`<option ${a===this._anio?'selected':''}>${a}</option>`).join('')}
           </select>
           <button class="btn btn-ghost" onclick="Modulos.diagnostico_obd.modalCampanas()">🔔 Campañas de fábrica</button>
+          <span id="obd-estado-conexion" style="display:inline-flex;align-items:center;gap:6px"></span>
           <button class="btn btn-ghost" onclick="Modulos.diagnostico_obd.modalMapaVehiculos()" title="Qué vehículos sabe escanear el taller y hasta dónde llega en cada uno">🗺 Mapa de vehículos</button>
           <button class="btn btn-ghost" onclick="Modulos.diagnostico_obd.modalModulosVehiculo()" title="Declarar qué módulos trae cada modelo: airbag, ABS, EPS, TCM, carrocería…">🧩 Módulos</button>
           <button class="btn btn-ghost" onclick="Modulos.diagnostico_obd.modalOEM()" title="Catálogo por fabricante, redes y procedimientos verificados">🧠 OEM</button>
@@ -5283,6 +5378,10 @@ Modulos.diagnostico_obd = {
         </div>
         ${this._data.length ? `<p style="color:var(--text3);font-size:12px;margin-top:8px">${this._data.length} escaneo(s) · ${conFallas} con fallas activas</p>` : ''}
       </div>`;
+    /* Va DESPUES de pintar: el chip vive dentro del HTML que se acaba de
+       reemplazar, asi que pintarlo antes seria pintarlo sobre un nodo muerto
+       (el mismo problema del render rezagado del 2026-09-02). */
+    this._pintarEstadoConexion();
   },
 
   /* ═══════════ NUEVO ESCANEO ═══════════ */
@@ -5345,7 +5444,12 @@ Modulos.diagnostico_obd = {
       </div>
       <div id="obd-result"></div>
       <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px">
-        <button class="btn btn-ghost" id="obd-btn-test" title="Verifica los canales y busca una respuesta OBD real cuando es posible" onclick="Modulos.diagnostico_obd.probarAdaptador()" style="margin-right:auto">🔧 Verificar adaptadores</button>
+        <button class="btn btn-ghost" id="obd-btn-test" title="Verifica los canales y busca una respuesta OBD real cuando es posible" onclick="Modulos.diagnostico_obd.probarAdaptador()">🔧 Verificar adaptadores</button>
+        <label style="margin-right:auto;display:flex;align-items:center;gap:6px;font-size:11.5px;color:var(--text2)"
+          title="Al cerrar, el escáner queda enlazado y se le manda un saludo cada pocos segundos para que no se duerma. No se transmite nada al vehículo.">
+          <input type="checkbox" id="obd-mantener" ${this._mantenerConexion ? 'checked' : ''}
+            onchange="Modulos.diagnostico_obd._mantenerConexion = this.checked">
+          Mantener la conexión al cerrar</label>
         <button class="btn btn-ghost" onclick="Modulos.diagnostico_obd._cerrarEscaneo()">Cancelar</button>
         <button class="btn btn-brand" id="obd-btn-scan" onclick="Modulos.diagnostico_obd.escanear()">🔌 Conectar y Escanear</button>
         <button class="btn btn-ghost" id="obd-btn-traza" style="display:none"
@@ -6223,6 +6327,93 @@ Modulos.diagnostico_obd = {
     this._renderResultado();
   },
 
+  /* Quién es cada módulo: dirección, lo que dijo de sí mismo y un botón para
+     ponerle nombre de una vez para todo el modelo.
+
+     Es la respuesta a "el escáner encontró once módulos y los llamó a todos
+     'Módulo 0x7Bx'". La mayoría de los módulos NO publica su nombre, pero casi
+     todos publican su NÚMERO DE PIEZA, y con ese número el mecánico sabe cuál
+     es —lo busca, lo compara, lo pide— y lo bautiza acá mismo. Desde ese
+     momento todos los escaneos de ese modelo lo llaman por su nombre. */
+  _identidadModulosHTML(ms, veh) {
+    if (!Array.isArray(ms) || !ms.length) return '';
+    const puedeNombrar = typeof puedeAccion !== 'function' || puedeAccion('diagnostico_obd', 'editar');
+    const conRef = ms.filter(m => m.ident && m.ident.referencia).length;
+    return `<div style="margin-top:12px;border-top:1px solid var(--border);padding-top:10px">
+      <b style="font-size:12px">QUIÉN ES CADA MÓDULO</b>
+      <div style="font-size:10.5px;color:var(--text3);margin-top:2px;line-height:1.5">
+        ${conRef
+          ? `${conRef} de ${ms.length} módulo(s) entregaron su <b>número de pieza</b>. Con ese número
+             se identifica el módulo sin desmontarlo — y una vez que le ponés nombre, todos los escaneos
+             de ${UI.esc([veh.marca, veh.modelo].filter(Boolean).join(' ') || 'este modelo')} lo llaman así.`
+          : `Ninguno publicó su número de pieza ni su nombre. Se los puede nombrar igual a mano:
+             la dirección ya está confirmada por este escaneo.`}
+      </div>
+      <div style="overflow:auto;margin-top:8px">
+      <table class="table" style="font-size:11.5px">
+        <thead><tr><th>Módulo</th><th>Dirección</th><th>Lo que dijo de sí mismo</th>${puedeNombrar ? '<th></th>' : ''}</tr></thead>
+        <tbody>${ms.map(m => {
+          const id = m.ident || {};
+          const sug = id.referencia ? this._sugerenciaPorReferencia(id.referencia) : null;
+          const declarado = !!this._nombreDeclarado(m.ecu);
+          return `<tr>
+            <td><b>${UI.esc(m.nombre)}</b>${declarado ? '<div style="font-size:10px;color:var(--green)">nombrado por el taller</div>' : ''}</td>
+            <td style="font-family:ui-monospace,Consolas,monospace;white-space:nowrap">0x${m.ecu.toString(16).toUpperCase()}</td>
+            <td>${id.referencia ? `<div>referencia <b style="font-family:ui-monospace,Consolas,monospace">${UI.esc(id.referencia)}</b></div>` : ''}
+              ${id.nombre ? `<div>se llama <b>${UI.esc(id.nombre)}</b></div>` : ''}
+              ${id.proveedor ? `<div style="color:var(--text3)">fabricante ${UI.esc(id.proveedor)}</div>` : ''}
+              ${sug ? `<div style="color:var(--amber)">¿grupo ${UI.esc(sug.grupo)} = ${UI.esc(sug.sistema)}? — <b>sin confirmar</b></div>` : ''}
+              ${!id.referencia && !id.nombre && !id.proveedor ? '<span style="color:var(--text3)">no publicó identificación</span>' : ''}</td>
+            ${puedeNombrar ? `<td style="text-align:right;white-space:nowrap">
+              <button class="btn btn-sm btn-ghost" title="Ponerle nombre para todos los escaneos de este modelo"
+                onclick="Modulos.diagnostico_obd.nombrarModuloDelEscaneo(${m.ecu})">🏷 Nombrar</button></td>` : ''}
+          </tr>`;
+        }).join('')}</tbody>
+      </table></div>
+      <div style="font-size:10.5px;color:var(--text3);margin-top:6px;line-height:1.5">
+        La <b>referencia</b> es el número de repuesto que el módulo declara (identificador F187 de ISO 14229-1).
+        La línea en ámbar es una <b>sugerencia por el grupo del número de pieza, sin confirmar</b>:
+        sirve de pista, no es el nombre. El nombre lo ponés vos, y queda para todo el modelo.
+      </div>
+    </div>`;
+  },
+
+  /* Abre el formulario de 🧩 Módulos ya lleno con lo que este escaneo confirmó:
+     dirección, y de nota la referencia que entregó el módulo. */
+  async nombrarModuloDelEscaneo(ecu) {
+    const s = this._scan;
+    const m = ((s && s.por_modulo) || []).find(x => x.ecu === ecu);
+    if (!m) return;
+    const veh = (s && s.vehiculos) || (this._vehiculos || []).find(v => v.id === (s && s.vehiculo_id)) || {};
+    if (!veh.marca) return UI.toast('El escaneo no tiene marca de vehículo: no se sabe a qué modelo nombrárselo', 'warn');
+    if (!this._vehiculos || !this._vehiculos.length) {
+      try { this._vehiculos = await DB.getVehiculos() || []; } catch (_) { this._vehiculos = []; }
+    }
+    this._modsDeclarados = await this._declaradosDelTaller();
+    const ya = (this._modsDeclarados || []).find(d => Number(d.req) === Number(ecu) &&
+      String(d.marca || '').toUpperCase() === String(veh.marca).toUpperCase());
+    this.editarModuloVehiculo(ya ? ya.id : undefined);
+    if (ya) return;
+
+    const pon = (id, val) => { const el = document.getElementById(id); if (el && val != null) el.value = val; };
+    const id = m.ident || {};
+    pon('mod-marca', veh.marca);
+    pon('mod-modelo', veh.modelo || '');
+    pon('mod-req', Number(ecu).toString(16).toUpperCase());
+    pon('mod-resp', m.resp == null ? '' : Number(m.resp).toString(16).toUpperCase());
+    /* El nombre NO se rellena con "Módulo 0x7B3": declarar eso como nombre deja
+       la pantalla igual que antes, que es justo lo que se está arreglando. */
+    if (id.nombre) pon('mod-nombre', id.nombre);
+    else if (!/^Módulo 0x/i.test(String(m.nombre || ''))) pon('mod-nombre', m.nombre);
+    const nota = [id.referencia ? `referencia ${id.referencia}` : null,
+                  id.proveedor ? `fabricante ${id.proveedor}` : null,
+                  m.codigos && m.codigos.length ? `reportó ${m.codigos.map(c => c.codigo).join(' ')}` : null]
+      .filter(Boolean).join(' · ');
+    if (nota) pon('mod-nota', nota.slice(0, 200));
+    const ext = document.getElementById('mod-ext'); if (ext) ext.checked = !!m.ext;
+    this._onMarcaModulo();
+  },
+
   _porModuloHTML(s) {
     const ms = s && s.por_modulo;
     if (!Array.isArray(ms) || !ms.length) return this._botonMasModulos();
@@ -6280,6 +6471,7 @@ Modulos.diagnostico_obd = {
       </div>`}
       ${ms.length > conFallas.length ? `<div style="font-size:10.5px;color:var(--text3);margin-top:6px">
         Sin códigos: ${ms.filter(m => !m.codigos.length).map(m => UI.esc(m.nombre)).join(' · ')}</div>` : ''}
+      ${this._identidadModulosHTML(ms, veh)}
       ${vivo ? `
         <div style="margin-top:12px;border-top:1px solid var(--border);padding-top:10px">
           <div style="font-size:11px;color:var(--text3);margin-bottom:6px">
@@ -6979,11 +7171,102 @@ Modulos.diagnostico_obd = {
      modulo y sobrevive al cierre: si se cancela con un comando a medias, lo
      que quedaba trabado seguia trabado y el siguiente escaneo no arrancaba —
      "al cancelar ya no vuelve a leer". Reportado el 2026-09-16. */
+  /* ═══════════ MANTENER LA CONEXIÓN VIVA ═══════════
+     Dos cosas distintas, las dos pedidas:
+
+     1. Que el enlace no se caiga solo. Un dongle ELM327 se DUERME cuando no le
+        hablan —los Vgate a los 3-5 minutos— y el Bluetooth del sistema apaga la
+        radio para ahorrar batería. Un comando inofensivo cada pocos segundos lo
+        mantiene despierto. Se usa ATI, que le habla AL DONGLE y no al vehículo:
+        no abre ninguna sesión de diagnóstico ni toca ningún módulo.
+
+     2. Que cerrar el reporte no corte la conexión. Antes, salir del escaneo
+        desconectaba: para leer parámetros OEM o ejecutar un reset había que
+        reconectar (y volver a elegir el escáner) cada vez.
+
+     Lo que NO cambia: el canal de comandos se suelta igual. Ese estado (_busy,
+     _resolve, el buffer) vive en el módulo y sobrevive al cierre — dejarlo a
+     medias es lo que congelaba el escaneo siguiente. */
+  _LATIDO_MS: 3000,
+  _latido: null, _latidoFallos: 0,
+
+  get _mantenerConexion() {
+    try { return localStorage.getItem('obd_mantener') !== '0'; } catch (_) { return true; }
+  },
+  set _mantenerConexion(v) {
+    try { localStorage.setItem('obd_mantener', v ? '1' : '0'); } catch (_) {}
+  },
+
+  _iniciarLatido() {
+    if (this._latido) return;
+    this._latidoFallos = 0;
+    this._latido = setInterval(async () => {
+      /* Si no hay nadie del otro lado ya no hay nada que mantener. */
+      if (!this._listo) { this._pararLatido(); this._pintarEstadoConexion(); return; }
+      /* No encimarse: el monitor en vivo ya está hablando todo el tiempo, y un
+         comando a medias no se interrumpe para meter un saludo. */
+      if (this._busy || this._liveTimer) return;
+      try {
+        const r = await this._cmd('ATI', 2500);
+        if (r && String(r).trim()) this._latidoFallos = 0; else this._latidoFallos++;
+      } catch (_) { this._latidoFallos++; }
+      /* Tres seguidos sin respuesta es que se cayó de verdad, no un hipo. Se
+         suelta en vez de quedar diciendo "conectado" sobre un enlace muerto,
+         que es peor que decir "desconectado". */
+      if (this._latidoFallos >= 3) {
+        this._pararLatido();
+        this._desconectar();
+        this._pintarEstadoConexion();
+        UI.toast('Se perdió la conexión con el escáner', 'warn');
+      }
+    }, this._LATIDO_MS);
+  },
+
+  _pararLatido() {
+    if (this._latido) { clearInterval(this._latido); this._latido = null; }
+    this._latidoFallos = 0;
+  },
+
+  /* El chip de la barra: "hay un escáner conectado ahora mismo" y cómo soltarlo.
+     Sin esto, una conexión que sobrevive al modal es una conexión invisible —
+     y una batería que se gasta sin que nadie sepa por qué. */
+  _pintarEstadoConexion() {
+    const el = document.getElementById('obd-estado-conexion');
+    if (!el) return;
+    if (!this._listo) { el.innerHTML = ''; return; }
+    const quien = (this._bt && this._bt.nombre) || this._dev?.name ||
+                  (this._oemAdaptador && this._oemAdaptador.modelo) ||
+                  this._NOMBRE_VIA[this._via] || 'escáner';
+    el.innerHTML = `<span class="badge badge-green" title="La conexión se mantiene abierta con un saludo al dongle cada ${this._LATIDO_MS / 1000} s. No se le manda nada al vehículo.">
+        🔗 ${UI.esc(quien)}</span>
+      <button class="btn btn-sm btn-ghost" onclick="Modulos.diagnostico_obd.desconectarAhora()">Desconectar</button>`;
+  },
+
+  desconectarAhora() {
+    this._pararLatido();
+    this._desconectar();
+    this._soltarCanal();
+    this._pintarEstadoConexion();
+    UI.toast('Escáner desconectado');
+  },
+
   _cerrarEscaneo() {
     this._stopLive();
+    /* El canal SIEMPRE se suelta, se mantenga o no la conexión: es el estado
+       del diálogo, no del enlace. */
+    if (this._mantenerConexion && this._listo) {
+      this._soltarCanal();
+      this._iniciarLatido();
+      UI.cerrarModal();
+      this._pintarEstadoConexion();
+      UI.toast('Conexión mantenida — el escáner sigue enlazado', 'info');
+      return;
+    }
+    this._pararLatido();
     this._desconectar();
     this._soltarCanal();
     UI.cerrarModal();
+    this._pintarEstadoConexion();
   },
 
   /* Deja el canal de comandos en su estado inicial. Un comando a medias se

@@ -42,8 +42,16 @@ M._via = 'ble'; M._protoNum = 6; M._conectado = true; M._busy = false;
   M._traza = [];
   let tocadas = 0;
   M._tocarPuerta = async req => { tocadas++; return req === 0x740 ? {req, resp:0x748, ext:false} : null; };
+  const tocadasLista = [];
+  M._tocarPuerta = async req => { tocadas++; tocadasLista.push(req); return req === 0x740 ? {req, resp:0x748, ext:false} : null; };
   const h = await M._barrerModulos(null);
-  ok('el barrido toco las 240 puertas', tocadas === 240);
+  /* 240 direcciones menos las 9 que NO son un modulo: 0x7DF es la difusion y
+     0x7E8-0x7EF son direcciones de RESPUESTA. Preguntar ahi devolvia fantasmas
+     (verificado en el Picanto 2019). */
+  ok('el barrido toca las 231 puertas que son modulos', tocadas === 231);
+  ok('y NO toca la direccion de difusion 0x7DF', !tocadasLista.includes(0x7DF));
+  ok('ni las direcciones de respuesta 0x7E8-0x7EF',
+     !tocadasLista.some(r => r >= 0x7E8 && r <= 0x7EF));
   ok('pero deja UNA sola entrada', M._traza.length === 1);
   ok('y esa entrada resume el hallazgo', /barrido 11 bits/.test(M._traza[0].nota) && /0x740/.test(M._traza[0].nota));
 
