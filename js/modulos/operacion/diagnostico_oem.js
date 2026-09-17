@@ -187,6 +187,12 @@
   Object.assign(M, {
     _oemDefs:[], _oemAdaptador:null, _inspeccionBLE:null, _oemTopologia:null,
     async inspeccionarBluetooth() {
+      /* Dentro de la app NO hay Web Bluetooth (la WebView no lo trae) y ademas
+         el puente alcanza Bluetooth CLASICO, que el navegador no ve nunca. Por
+         eso alli se inspecciona por el puente: sale la lista con NOMBRES y con
+         si estan emparejados, en vez de la lista de Chrome donde un aparato sin
+         nombre aparece como una MAC pelada. */
+      if (this._nativo) return this._inspeccionarBluetoothNativo();
       if (!navigator.bluetooth) return UI.toast('Este navegador no ofrece Web Bluetooth','error');
       const svcs=[...new Set([...(this._SVC_CANDIDATOS||[]),...(this._UUIDS||[]).map(x=>x.svc),'0000180a-0000-1000-8000-00805f9b34fb'])];
       const infoBLE={'00002a24-0000-1000-8000-00805f9b34fb':'modelo','00002a27-0000-1000-8000-00805f9b34fb':'hardware','00002a28-0000-1000-8000-00805f9b34fb':'firmware','00002a29-0000-1000-8000-00805f9b34fb':'fabricante'};
@@ -219,14 +225,94 @@
       } finally { try{server?.disconnect();}catch(_){} }
       this.modalInspeccionBLE();
     },
+    /* Inspeccion por el puente de la app. No enumera servicios GATT —el puente
+       es una tuberia de bytes, no un explorador— pero contesta lo que de verdad
+       se pregunta de un dongle: quien es, que firmware trae y por que protocolo
+       habla. Se lo pregunta AL APARATO con comandos AT inocuos; ninguno toca la
+       ECU del vehiculo. */
+    async _inspeccionarBluetoothNativo() {
+      let est={};
+      try { est=JSON.parse(window.NexusBT.estado()||'{}'); } catch(_) {}
+      if(!est.disponible) return UI.toast('Este teléfono no tiene Bluetooth','error');
+      if(!est.encendido)  return UI.toast('El Bluetooth del teléfono está apagado','error');
+
+      UI.toast('Buscando aparatos Bluetooth…','info');
+      let lista=[];
+      try { lista=await this._btPedir('lista',()=>window.NexusBT.listar(),20000); }
+      catch(e) { return UI.toast('No se pudo listar: '+e.message,'error'); }
+      if(!lista.length) return UI.toast('No se encontró ningún aparato Bluetooth','warn');
+
+      const elegido=await this._elegirEscaner(lista);
+      if(!elegido) return;
+
+      const via=this._via; this._via='android';
+      const at=[];
+      try {
+        await this._btPedir('conectar',()=>window.NexusBT.conectar(elegido.mac,elegido.tipo),30000);
+        this._buf='';
+        /* Inocuos: le hablan al DONGLE, no al vehiculo. */
+        for(const c of ['ATI','AT@1','AT@2','ATDPN','ATRV']) {
+          const r=await this._cmd(c,4000).catch(e=>'— '+e.message);
+          at.push({comando:c,respuesta:String(r).replace(/[\r\n>]+/g,' ').trim()});
+        }
+      } catch(e) {
+        at.push({comando:'conectar',respuesta:'ERROR: '+e.message});
+      } finally {
+        try { window.NexusBT.desconectar(); } catch(_) {}
+        this._bt=null; this._via=via;
+      }
+
+      const contesta=at.some(x=>/ELM|OBD|v[0-9]/i.test(x.respuesta));
+      this._inspeccionBLE={
+        fecha:new Date().toISOString(),
+        nombre:elegido.nombre||null, id:elegido.mac||null,
+        tipo:elegido.tipo==='ble'?'BLE (puente de la app)':'Bluetooth clásico SPP (puente de la app)',
+        emparejado:!!elegido.vinculado,
+        identidad:{}, servicios:[], at,
+        canal_obd_detectado:contesta,
+        estado_conexion:'cerrada al terminar la inspección',
+        limitacion:'El puente mueve bytes: no enumera servicios GATT. A cambio alcanza Bluetooth CLÁSICO, que el navegador no ve, y pregunta la identidad al propio adaptador con comandos AT.',
+        agente:navigator.userAgent||null,
+        aparatos_vistos:lista.map(d=>({nombre:d.nombre,mac:d.mac,tipo:d.tipo,emparejado:!!d.vinculado}))
+      };
+      await DB.registrarEjecucionOEM({operacion:'inspeccion_bt_puente',estado:contesta?'exitosa':'fallida',evidencia:this._inspeccionBLE}).catch(()=>{});
+      this.modalInspeccionBLE();
+    },
+
     modalInspeccionBLE() {
       const r=this._inspeccionBLE; if(!r)return;
       const total=(r.servicios||[]).reduce((n,s)=>n+(s.caracteristicas||[]).filter(c=>c.uuid).length,0);
       const ident=r.identidad||{};
       UI.modal('🔬 Inspector de interfaz Bluetooth',`<div class="card" style="padding:14px"><b>${UI.esc(r.nombre||'Dispositivo sin nombre')}</b><p>${r.error?`<span style="color:var(--red)">${UI.esc(r.error)}</span>`:`${r.servicios.length} servicio(s) accesible(s) · ${total} característica(s)`}</p>${Object.keys(ident).length?`<p><b>Identidad leída:</b> ${Object.entries(ident).map(([k,v])=>`${UI.esc(k)}: ${UI.esc(v)}`).join(' · ')}</p>`:''}<p><b>Estado:</b> ${UI.esc(r.estado_conexion||'no determinado')} · <b>Canal OBD:</b> <span style="color:var(--${r.canal_obd_detectado?'green':'amber'})">${r.canal_obd_detectado?'detectado':'no detectado'}</span></p><small>${UI.esc(r.limitacion||'')}</small></div>
       <div style="max-height:52vh;overflow:auto;margin-top:12px">${(r.servicios||[]).map(s=>`<div class="card" style="padding:11px;margin-bottom:8px"><b style="font-family:monospace">${UI.esc(s.uuid)}</b>${(s.caracteristicas||[]).map(c=>`<div style="font-family:monospace;font-size:11px;margin-top:6px">↳ ${UI.esc(c.uuid||c.error)} <span style="color:var(--text3)">${UI.esc((c.propiedades||[]).join(', '))}</span>${c.valor?`<br><b>${UI.esc(c.valor)}</b> <span style="opacity:.6">[${UI.esc(c.hex||'')}]</span>`:''}${c.error_lectura?`<br><span style="color:var(--amber)">${UI.esc(c.error_lectura)}</span>`:''}</div>`).join('')}</div>`).join('')||'<p>No se revelaron servicios autorizados. La capa Android nativa será necesaria para inspección completa o Bluetooth Classic.</p>'}</div>
+      ${(r.at||[]).length?`<div class="card" style="padding:11px;margin-top:8px"><b style="font-size:12px">LO QUE CONTESTÓ EL ADAPTADOR</b>${r.at.map(x=>`<div style="font-family:monospace;font-size:11.5px;margin-top:4px">&gt; ${UI.esc(x.comando)}<br>&lt; <b>${UI.esc(x.respuesta)}</b></div>`).join('')}</div>`:''}
+      ${(r.aparatos_vistos||[]).length?`<div class="card" style="padding:11px;margin-top:8px"><b style="font-size:12px">APARATOS VISTOS (${r.aparatos_vistos.length})</b>${r.aparatos_vistos.map(d=>`<div style="font-size:11.5px;margin-top:3px">${UI.esc(d.nombre||'(sin nombre)')} <span style="color:var(--text3)">· ${d.tipo==='ble'?'BLE':'clásico'} · ${d.emparejado?'emparejado':'no emparejado'} · ${UI.esc(d.mac)}</span></div>`).join('')}</div>`:''}
       <div class="modal-footer"><button class="btn btn-ghost" onclick="UI.cerrarModal()">Cerrar</button><button class="btn btn-cyan" onclick="Modulos.diagnostico_obd.copiarInspeccionBLE()">📋 Copiar reporte</button></div>`,'820px');
     },
+    _oemVehiculoId:null,
+
+    /* Los DID OEM aplican por marca y modelo, asi que hace falta saber que
+       vehiculo hay enchufado. Si no viene de un escaneo en curso, se pregunta:
+       es un dato, no una razon para bloquear el boton. */
+    _elegirVehiculoOEM() {
+      return new Promise(async res => {
+        if(!this._vehiculos||!this._vehiculos.length) {
+          try { this._vehiculos=await DB.getVehiculos()||[]; } catch(_) { this._vehiculos=[]; }
+        }
+        if(!this._vehiculos.length) { UI.toast('No hay vehículos registrados','warn'); return res(null); }
+        this._oemVehElegido=id=>{ UI.cerrarModal(); res(id||null); };
+        UI.modal('🚗 ¿Qué vehículo está enchufado?',
+          `<p style="font-size:13px;color:var(--text3)">Los parámetros OEM dependen de la marca y el modelo.</p>
+           <select class="form-select" id="oem-veh">
+             ${this._vehiculos.map(v=>`<option value="${v.id}">${UI.esc(v.placa||'s/placa')} · ${UI.esc(v.marca||'')} ${UI.esc(v.modelo||'')} ${v.anio||''}</option>`).join('')}
+           </select>
+           <div class="modal-footer" style="margin-top:12px">
+             <button class="btn btn-ghost" onclick="Modulos.diagnostico_obd._oemVehElegido(null)">Cancelar</button>
+             <button class="btn btn-brand" onclick="Modulos.diagnostico_obd._oemVehElegido(document.getElementById('oem-veh').value)">Continuar</button>
+           </div>`,'460px');
+      });
+    },
+
     async copiarInspeccionBLE() { if(!this._inspeccionBLE)return; await navigator.clipboard.writeText(JSON.stringify(this._inspeccionBLE,null,2)); UI.toast('Reporte Bluetooth copiado ✓'); },
     async detectarAdaptadorOEM() {
       /* Una sesión de escaneo activa es necesaria para leer el vehículo, no
@@ -359,18 +445,16 @@
       /* Detectar el adaptador carga la DLL, pero no abre un canal hacia el
          vehÃ­culo. Si el usuario entra directo aquÃ­, preparar una conexiÃ³n CAN
          de lectura automÃ¡ticamente; no obliga a repetir todo el escaneo OBD. */
-      if(!this._listo && this._via==='usb') {
-        UI.toast('Abriendo canal CAN para explorar modulos...','info');
-        try {
-          const via=await this._detectarVia(()=>{});
-          if(via!=='usb') {
-            await this._puenteOp({op:'desconectar'},5000).catch(()=>{});
-            return UI.toast('El adaptador no detecto un canal CAN OBD-II para este vehiculo','warn');
-          }
-          this._via='usb';
-        } catch(e) { return UI.toast('No hay comunicacion con el vehiculo: '+e.message,'warn'); }
+      /* Antes esto solo sabia autoconectarse por USB: por Bluetooth decia
+         "conecta primero" y no habia desde donde. Ahora usa el mismo camino
+         que el escaneo, sea el puente de la app (SPP/BLE), Web Bluetooth,
+         COM o USB. */
+      if(!this._listo) {
+        UI.toast('Conectando el adaptador para explorar los modulos…','info');
+        try { await this._asegurarConexion(()=>{}); }
+        catch(e) { return UI.toast('No se pudo conectar: '+e.message.replace(/<[^>]*>/g,''),'error'); }
       }
-      if(!this._listo) return UI.toast('Conecta y prepara primero un adaptador; también puedes usar Simular Ford/GM','warn');
+      if(!this._listo) return UI.toast('El adaptador no quedo listo; también puedes usar Simular Ford/GM','warn');
       UI.toast('Explorando HS-CAN sin ejecutar actuadores…','info');
       try {
         const mods=await this._escanearModulos(null,null);
@@ -384,8 +468,22 @@
       }
     },
     async leerParametrosOEM() {
-      if(!this._listo||!this._scan?.vehiculo_id) return UI.toast('Realiza primero un escaneo del vehículo y mantenlo conectado','warn');
-      const veh=(this._vehiculos||[]).find(v=>v.id===this._scan.vehiculo_id)||{};
+      /* Antes exigia un escaneo EN CURSO (`_scan.vehiculo_id`), y como el
+         escaneo se desconecta al cerrar su modal, este boton practicamente
+         nunca estaba disponible: decia "mantenlo conectado" sin que hubiera
+         forma de mantenerlo. Ahora conecta por su cuenta y, si no hay escaneo
+         en curso, pregunta de que vehiculo se trata — que es el unico dato
+         que de verdad necesitaba de el (los DID aplican por marca/modelo). */
+      if(!this._listo) {
+        UI.toast('Conectando el adaptador para leer parámetros…','info');
+        try { await this._asegurarConexion(()=>{}); }
+        catch(e) { return UI.toast('No se pudo conectar: '+e.message.replace(/<[^>]*>/g,''),'error'); }
+      }
+      let vehId=this._scan?.vehiculo_id||this._oemVehiculoId||null;
+      if(!vehId) vehId=await this._elegirVehiculoOEM();
+      if(!vehId) return;
+      this._oemVehiculoId=vehId;
+      const veh=(this._vehiculos||[]).find(v=>v.id===vehId)||{};
       const defs=this._oemDefs.filter(d=>d.tipo==='did'&&d.estado==='verificado'&&d.riesgo==='lectura'&&Motor.aplica(d,veh)).slice(0,20);
       if(!defs.length) return UI.toast(`No hay parámetros OEM verificados aplicables a ${veh.marca||'este vehículo'}`,'warn');
       const resultados=[];
@@ -396,7 +494,7 @@
           const bytes=await this._leerDID(req,resp,parseInt(d.identificador,16));
           if(!bytes){resultados.push({d,error:'Sin respuesta'});continue;}
           const valor=Motor.decodificar(bytes,cfg.decoder||{}); resultados.push({d,valor,unidad:cfg.decoder?.unidad||'',hex:hex(bytes)});
-          await DB.registrarEjecucionOEM({definicion_id:d.id,diagnostico_id:this._scan.id||null,vehiculo_id:veh.id,operacion:`parámetro UDS ${d.identificador}`,estado:'exitosa',respuesta_hex:hex(bytes),evidencia:{valor,unidad:cfg.decoder?.unidad||null}});
+          await DB.registrarEjecucionOEM({definicion_id:d.id,diagnostico_id:this._scan?.id||null,vehiculo_id:veh.id,operacion:`parámetro UDS ${d.identificador}`,estado:'exitosa',respuesta_hex:hex(bytes),evidencia:{valor,unidad:cfg.decoder?.unidad||null}});
         } catch(e){resultados.push({d,error:e.message});}
       }
       this._oemParametros={fecha:new Date().toISOString(),vehiculo:veh,resultados};

@@ -428,6 +428,34 @@ Modulos.diagnostico_obd = {
     else await this._char.writeValue(data);
   },
 
+  /* Deja el adaptador CONECTADO Y PUESTO A PUNTO, venga de donde venga.
+     Existe porque el modulo OEM no tenia forma propia de conectarse: se
+     colgaba de la sesion que abria el escaneo, y esa sesion se cierra al
+     cerrar el modal. Resultado: "Realiza primero un escaneo y mantenlo
+     conectado" era un callejon sin salida, y el mapa de redes solo sabia
+     autoconectarse por USB — por Bluetooth nunca.
+     Devuelve el nombre del adaptador y el protocolo negociado. */
+  async _asegurarConexion(log = () => {}) {
+    if (this._listo) return { nombre: this._scan?.adaptador || 'adaptador ya conectado',
+                              protocolo: this._scan?.protocolo || null, yaEstaba: true };
+
+    /* Sin via elegida se usa la mejor disponible: dentro de la app, su puente
+       (alcanza SPP y BLE); en un navegador, Web Bluetooth. */
+    if (!this._via) this._via = this._nativo ? 'android' : 'ble';
+
+    let nombre, protocolo;
+    if (this._via === 'usb' || this._via === 'auto') {
+      if (this._via === 'auto') this._via = await this._detectarVia(log);
+      ({ nombre, protocolo } = await this._usbInit(log));
+      return { nombre, protocolo };
+    }
+    if (this._via === 'serial')       ({ nombre } = await this._serialInit(log));
+    else if (this._via === 'android') ({ nombre } = await this._androidInit(log));
+    else                               nombre = await this._conectar();
+    protocolo = await this._init(log);
+    return { nombre, protocolo };
+  },
+
   async _init(log) {
     log('Reiniciando adaptador (ATZ)...');
     await this._cmd('ATZ', 8000);
@@ -1812,12 +1840,17 @@ Modulos.diagnostico_obd = {
      los botones y el estado del escaneo en curso. */
   _elegirEscaner(lista) {
     return new Promise(res => {
+      /* Si no hay panel de escaneo (por ejemplo, llamado desde el modulo OEM)
+         se pinta en un modal. Antes se devolvia `lista[0]` EN SILENCIO: eso es
+         conectarse al primer aparato que aparezca —unos audifonos, una
+         balanza— sin preguntar, que es exactamente lo que este selector
+         existe para no hacer. */
       const caja = document.getElementById('obd-result');
-      if (!caja) { res(lista[0] || null); return; }
+      const enModal = !caja;
 
       const terminar = elegido => {
         this._escanerElegido = null;
-        caja.innerHTML = '';
+        if (enModal) UI.cerrarModal(); else caja.innerHTML = '';
         res(elegido);
       };
       this._escanerElegido = i => terminar(i === null ? null : (lista[i] || null));
@@ -1853,7 +1886,7 @@ Modulos.diagnostico_obd = {
       const probables = orden.filter(d => rango(d) < 3);
       const anon = orden.filter(d => rango(d) === 3);
 
-      caja.innerHTML = `
+      const cuerpo = `
         <div style="background:var(--surface2);color:var(--text);border-radius:8px;padding:10px;margin-top:10px">
           <div style="font-weight:600;margin-bottom:2px">📡 Elegí el escáner</div>
           <div style="font-size:11.5px;color:var(--text3);margin-bottom:8px">
@@ -1881,6 +1914,9 @@ Modulos.diagnostico_obd = {
           <button class="btn btn-ghost" style="margin-top:6px"
             onclick="Modulos.diagnostico_obd._escanerElegido(null)">Cancelar</button>
         </div>`;
+
+      if (enModal) UI.modal('📡 Escáneres Bluetooth', cuerpo, '520px');
+      else caja.innerHTML = cuerpo;
     });
   },
 
