@@ -25,7 +25,7 @@ const RUTA = path.join(__dirname, '..', '..', 'js', 'modulos', 'operacion', 'dia
    encima sólo lo que le importa (ctx.DB.getX = ..., M._cmd = ..., etc.). */
 function cargar(extra = {}) {
   const ctx = {
-    Modulos: {}, console, setTimeout, Date, JSON, Math,
+    Modulos: {}, console, setTimeout, clearTimeout, Date, JSON, Math,
     UI: {
       esc: s => String(s == null ? '' : s),
       fecha: d => new Date(d).toISOString().slice(0, 10),

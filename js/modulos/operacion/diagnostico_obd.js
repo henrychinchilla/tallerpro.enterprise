@@ -345,12 +345,12 @@ Modulos.diagnostico_obd = {
 
   async _cmdRaw(c, timeout = 6000) {
     if (this._via === 'usb') {
-      while (this._busy) await new Promise(r => setTimeout(r, 50));
+      await this._esperarTurno(c);
       this._busy = true;
       try { return await this._usbElm(c, timeout); } finally { this._busy = false; }
     }
     if (this._via === 'serial') {
-      while (this._busy) await new Promise(r => setTimeout(r, 50));
+      await this._esperarTurno(c);
       this._busy = true;
       try {
         const r = await this._puenteOp({ op:'serial_cmd', cmd:c, timeout }, timeout + 1000);
@@ -358,16 +358,65 @@ Modulos.diagnostico_obd = {
       } finally { this._busy = false; }
     }
     if (!this._conectado) throw new Error('Adaptador desconectado');
-    while (this._busy) await new Promise(r => setTimeout(r, 50));
+    await this._esperarTurno(c);
     this._busy = true; this._buf = '';
+    let temporizador = null;
     try {
       const p = new Promise((res, rej) => {
-        this._resolve = res;
-        setTimeout(() => { if (this._resolve) { this._resolve = null; rej(new Error(`Sin respuesta a ${c}`)); } }, timeout);
+        /* El resolvedor se identifica A SI MISMO, y el temporizador SIEMPRE
+           rechaza su propia promesa.
+
+           Antes el temporizador miraba `this._resolve`, que es compartido entre
+           comandos, y con respuestas rapidas (~300 ms) y un tope de 1500 ms el
+           orden real era este:
+             1. el comando A contesta y se resuelve;
+             2. arranca B y pone su resolvedor en this._resolve;
+             3. dispara el temporizador VIEJO de A, ve que this._resolve existe
+                —es el de B— y lo pone en null;
+             4. llega la respuesta de B y ya no hay a quien resolver;
+             5. dispara el temporizador de B, ve this._resolve en null y NO
+                rechaza nada.
+           La promesa de B no se asentaba jamas, el `finally` no corria y
+           `_busy` quedaba en true PARA SIEMPRE. Como `_busy` es estado del
+           modulo, desde ahi todo comando futuro giraba en la espera sin salida:
+           el escaneo se congelaba y ni reconectando volvia: habia que recargar.
+           Se manifestaba en "datos en vivo", que es donde mas comandos rapidos
+           van seguidos. Verificado el 2026-09-16 contra el sintoma real. */
+        const mio = v => { if (this._resolve === mio) this._resolve = null; res(v); };
+        this._resolve = mio;
+        temporizador = setTimeout(() => {
+          if (this._resolve === mio) this._resolve = null;
+          rej(new Error(`Sin respuesta a ${c}`));
+        }, timeout);
       });
       await this._escribirBLE(c + '\r');
       return await p;
-    } finally { this._busy = false; }
+    } finally {
+      /* Sin esto quedan temporizadores viejos vivos; ya no pueden anular a
+         nadie, pero tampoco tienen nada que hacer. */
+      if (temporizador) clearTimeout(temporizador);
+      this._busy = false;
+    }
+  },
+
+  /* Espera a que el canal quede libre, PERO NO PARA SIEMPRE.
+     `while (this._busy)` sin tope convierte cualquier fuga de `_busy` en un
+     congelamiento mudo: la pantalla se queda quieta y no hay error que leer ni
+     nada que mandar a soporte. Con tope, un fallo asi se ve y se puede
+     reintentar. 45 s es mas de lo que tarda el comando mas lento (ATZ, 8 s) con
+     margen de sobra, asi que llegar aqui YA significa que algo se rompio. */
+  _TOPE_CANAL: 45000,
+
+  async _esperarTurno(c) {
+    const limite = Date.now() + this._TOPE_CANAL;
+    while (this._busy) {
+      if (Date.now() > limite) {
+        this._busy = false;          // se libera para que el reintento sirva
+        throw new Error(`El canal quedo ocupado y no se libero (esperando para mandar ${c}). ` +
+          `Se libero solo: reintenta el escaneo.`);
+      }
+      await new Promise(r => setTimeout(r, 50));
+    }
   },
 
   async _escribirBLE(txt) {
@@ -1021,7 +1070,10 @@ Modulos.diagnostico_obd = {
       /* 1500 ms y no 4000: un sensor que no contesta no puede costar 4 s cuando
          son 30. Los que sí contestan tardan ~300 ms. */
       try { const b = await this._pid(pid, 1500); if (b) d[def.k] = def.f(b); } catch (_) {}
-      if (log && ++n % 6 === 0) log(`&nbsp;&nbsp;… ${n} de ${lista.length}`);
+      /* Cada 3 y con el nombre del sensor: avisando solo cada 6, un sensor que
+         no contesta deja la pantalla quieta 9 segundos y parece congelada. Y
+         cuando de verdad se traba, el nombre dice EN CUAL se trabo. */
+      if (log && ++n % 3 === 0) log(`&nbsp;&nbsp;… ${n} de ${lista.length} (${def.n || def.k})`);
     }
     try { d.volt = (await this._cmd('ATRV')).match(/[\d.]+V?/)?.[0] || null; } catch (_) {}
     return d;
@@ -1911,7 +1963,7 @@ Modulos.diagnostico_obd = {
     if (this._via !== 'usb') {
       return this._hexLines(await this._cmd(cmd, timeout)).map(hex => ({ ecu: null, hex }));
     }
-    while (this._busy) await new Promise(r => setTimeout(r, 50));
+    await this._esperarTurno('barrido por ECU');
     this._busy = true;
     try {
       const tx = cmd.trim().toUpperCase().match(/../g).map(h => parseInt(h, 16));
@@ -3485,7 +3537,7 @@ Modulos.diagnostico_obd = {
      comandos — hay que cortarlo con _monFin antes de preguntar nada. */
   async _monInicio(onLinea, cmd = 'ATMA') {
     if (this._monLinea) return;
-    while (this._busy) await new Promise(r => setTimeout(r, 50));
+    await this._esperarTurno(cmd);
     this._buf = '';
     this._monLinea = onLinea;
     this._trazar(cmd, '(monitoreo continuo)');
@@ -6237,7 +6289,30 @@ Modulos.diagnostico_obd = {
     this.render();
   },
 
-  _cerrarEscaneo() { this._stopLive(); this._desconectar(); UI.cerrarModal(); },
+  /* Cancelar tiene que dejar el driver COMO NUEVO, no solo cerrar el modal.
+     El estado del canal (_busy, _resolve, _buf, el monitoreo) vive en el
+     modulo y sobrevive al cierre: si se cancela con un comando a medias, lo
+     que quedaba trabado seguia trabado y el siguiente escaneo no arrancaba —
+     "al cancelar ya no vuelve a leer". Reportado el 2026-09-16. */
+  _cerrarEscaneo() {
+    this._stopLive();
+    this._desconectar();
+    this._soltarCanal();
+    UI.cerrarModal();
+  },
+
+  /* Deja el canal de comandos en su estado inicial. Un comando a medias se
+     rechaza explicitamente en vez de quedarse esperando para siempre. */
+  _soltarCanal() {
+    const pendiente = this._resolve;
+    this._resolve = null;
+    this._monLinea = null;
+    this._buf = '';
+    this._busy = false;
+    /* Al pendiente se le contesta algo: dejarlo sin resolver es justo lo que
+       congelaba el modulo. */
+    if (pendiente) { try { pendiente(''); } catch (_) {} }
+  },
 
   /* ═══════════ VER / EDITAR / IMPRIMIR / ELIMINAR ═══════════ */
   ver(id) {
