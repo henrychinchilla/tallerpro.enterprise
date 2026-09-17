@@ -39,7 +39,8 @@ ok('precondición sin telemetría bloquea, no adivina',!O.evaluarPrecondiciones(
 ok('precondición desconocida se bloquea',O.evaluarPrecondiciones([{clave:'misterio',valor:1}],{}).fallos[0].includes('desconocida'));
 ok('catálogo incluye resets de ABS, TPMS y módulos',['abs_aprendizajes','tpms_reaprendizaje','ecu_reinicio'].every(x=>O.objetivosReset.some(y=>y.id===x)));
 ok('reset sin objetivo guiado se rechaza',O.validar({...base,tipo:'reset',riesgo:'alto'}).some(x=>x.includes('objetivo')));
-ok('reset verificado sigue sin transmitirse en esta etapa',!O.puedeEjecutar({...base,tipo:'reset',riesgo:'alto',definicion:{objetivo_reset:'ecu_reinicio'}}).ok);
+ok('el ejecutor de lecturas DID no transmite un reset: tiene su propia puerta',!O.puedeEjecutar({...base,tipo:'reset',riesgo:'alto',definicion:{objetivo_reset:'ecu_reinicio'}}).ok);
+ok('y esa puerta exige direccion de modulo, no solo estar verificado',!O.puedeEjecutarReset({...base,tipo:'reset',riesgo:'alto',definicion:{objetivo_reset:'ecu_reinicio'}},{contacto:true,velocidad:0}).ok);
 ok('reporte de parámetros ofrece guardar PDF',fuenteOEM.includes('Guardar PDF / imprimir')&&fuenteOEM.includes('imprimirParametrosOEM'));
 const fuenteOBD=fs.readFileSync(path.join(__dirname,'../../js/modulos/operacion/diagnostico_obd.js'),'utf8');
 ok('borrado general exige copia previa',/borrarDTCs[\s\S]*?_guardarAntesDeBorrar\(\)[\s\S]*?if \(!guardado\)/.test(fuenteOBD));

@@ -62,6 +62,141 @@
     {id:'solenoide',nombre:'Solenoide de emisiones',riesgo:'controlado',precondiciones:['motor']},
     {id:'actuador_otro',nombre:'Otro actuador con procedimiento OEM',riesgo:'alto',precondiciones:['contacto','velocidad_max']}
   ];
+  /* ═══════════ RECETAS DE RESET ═══════════
+     Lo que hace falta para que un reset SE EJECUTE, no solo se describa.
+
+     Dos —y solo dos— son normativas: estan en ISO 14229-1 con el MISMO codigo
+     en cualquier marca, asi que se pueden ejecutar sin manual del fabricante y
+     sin inventar nada. Todo lo demas (punto cero de la direccion, adaptativos
+     de la caja, aprendizajes del ABS, DPF, registro de bateria) es una rutina
+     propia de cada marca: se ejecuta UNICAMENTE si la definicion verificada
+     trae el identificador de rutina que salio de un manual. Nunca se adivina un
+     RID — un 31 01 con un identificador inventado no es un reset, es escribirle
+     cualquier cosa a un modulo del vehiculo de un cliente. */
+  const RECETAS_RESET = {
+    dtc_modulo: {
+      servicio:'ClearDiagnosticInformation',
+      fuente:'ISO 14229-1, ClearDiagnosticInformation (14 FF FF FF)',
+      efecto:'Borra la memoria de fallas de ESE módulo. No repara: si la falla sigue presente, el código vuelve.',
+      pasos:[{tx:[0x14,0xFF,0xFF,0xFF],positiva:0x54,nombre:'Borrar la memoria de fallas del módulo'}]
+    },
+    ecu_reinicio: {
+      servicio:'ECUReset hardReset',
+      fuente:'ISO 14229-1, ECUReset subfunción 01 hardReset (11 01)',
+      efecto:'El módulo arranca de nuevo y repite sus autodiagnósticos, como si se le cortara la alimentación un instante. NO borra códigos ni adaptaciones.',
+      pasos:[{tx:[0x11,0x01],positiva:0x51,nombre:'Reiniciar el módulo'}]
+    }
+  };
+  /* Precondiciones minimas cuando la definicion no trae las suyas. Son el piso,
+     no el techo: una definicion puede exigir mas, nunca menos. */
+  const PRECONDICIONES_RESET = {
+    dtc_modulo:['contacto'],
+    ecu_reinicio:['contacto',{clave:'velocidad_max',valor:0}]
+  };
+  const RESET_POR_RUTINA = {
+    servicio:'RoutineControl startRoutine',
+    fuente:'ISO 14229-1, RoutineControl startRoutine (31 01 + identificador de rutina del fabricante)'
+  };
+
+  /* ═══════════ PAQUETES POR VEHICULO ═══════════
+     Un paquete es "todo lo que hace falta para trabajar ESTE vehiculo", cargado
+     de una vez en vez de a mano definicion por definicion.
+
+     La linea que no se cruza: `estado:'verificado'` solo lo lleva lo que se
+     puede sostener con una norma publica. Para el Picanto eso son las dos
+     direcciones LEGISLADAS de ISO 15765-4 —motor 0x7E0/0x7E8 y segunda ECU
+     0x7E1/0x7E9, obligatorias en cualquier vehiculo OBD-II— con servicios de
+     ISO 14229-1. Lo demas (ABS, airbag, carroceria, inmovilizador) queda en
+     BORRADOR con la direccion vacia a proposito: se completa desde el mapa de
+     acceso del propio vehiculo, que es un dato medido, no uno recordado. */
+  const DIDS_IDENT_PACK = [
+    {did:'F190',nombre:'VIN'}, {did:'F187',nombre:'Número de pieza de la ECU'},
+    {did:'F189',nombre:'Versión de software de la ECU'}, {did:'F18C',nombre:'Número de serie de la ECU'}
+  ];
+  const NORMA_15765 = 'ISO 15765-4 (direcciones de diagnóstico legisladas 0x7E0-0x7E7 / 0x7E8-0x7EF)';
+  function packLiviano(marca, modelo, nota) {
+    const ecus = [
+      {ecu:'ECM / PCM (motor)', req:0x7E0, resp:0x7E8, etiqueta:'Motor'},
+      {ecu:'TCM (transmisión)', req:0x7E1, resp:0x7E9, etiqueta:'Transmisión'}
+    ];
+    const defs = [];
+    for (const e of ecus) {
+      const base = {marca, modelo, ecu:e.ecu, protocolo:'uds', activa:true, anio_desde:null, anio_hasta:null};
+      /* Identificacion: lectura pura, servicio normalizado, direccion legislada.
+         Se puede ejecutar el dia uno. */
+      for (const x of DIDS_IDENT_PACK) defs.push(Object.assign({}, base, {
+        nombre:`${x.nombre} · ${e.etiqueta}`, tipo:'did', identificador:x.did,
+        estado:'verificado', riesgo:'lectura',
+        fuente:`Norma ISO / SAE: ISO 14229-1 ReadDataByIdentifier ${x.did}; ${NORMA_15765}`,
+        definicion:{red:'hs', request_id:e.req, response_id:e.resp, decoder:{tipo:'ascii'}, nota},
+        precondiciones:['contacto']}));
+      defs.push(Object.assign({}, base, {
+        nombre:`Borrar códigos del módulo · ${e.etiqueta}`, tipo:'reset', identificador:'dtc_modulo',
+        estado:'verificado', riesgo:'controlado',
+        fuente:`Norma ISO / SAE: ${RECETAS_RESET.dtc_modulo.fuente}; ${NORMA_15765}`,
+        definicion:{red:'hs', request_id:e.req, response_id:e.resp, objetivo_reset:'dtc_modulo', nota},
+        precondiciones:['contacto']}));
+      defs.push(Object.assign({}, base, {
+        nombre:`Reiniciar el módulo · ${e.etiqueta}`, tipo:'reset', identificador:'ecu_reinicio',
+        estado:'verificado', riesgo:'alto',
+        fuente:`Norma ISO / SAE: ${RECETAS_RESET.ecu_reinicio.fuente}; ${NORMA_15765}`,
+        definicion:{red:'hs', request_id:e.req, response_id:e.resp, objetivo_reset:'ecu_reinicio', nota},
+        precondiciones:['contacto',{clave:'velocidad_max',valor:0}]}));
+    }
+    return defs;
+  }
+  /* Los modulos que NO tienen direccion legislada. Se dejan listos pero en
+     borrador y SIN direccion: la direccion sale del mapa de acceso del propio
+     vehiculo (boton "Completar direcciones"), que es la unica fuente honesta.
+     Un 0x7B3 "de memoria" es exactamente lo que esta prohibido aqui. */
+  function packPendientes(marca, modelo) {
+    const pend = [
+      {ecu:'ABS / EBCM (frenos)', etiqueta:'ABS'},
+      {ecu:'SRS / ACM (airbag)', etiqueta:'Airbag'},
+      {ecu:'BCM (carrocería)', etiqueta:'Carrocería'}
+    ];
+    const defs = pend.map(pp => ({marca, modelo, ecu:pp.ecu, protocolo:'uds', activa:true, anio_desde:null, anio_hasta:null,
+      nombre:`Borrar códigos del módulo · ${pp.etiqueta}`, tipo:'reset', identificador:'dtc_modulo',
+      estado:'borrador', riesgo:'controlado',
+      fuente:`Norma ISO / SAE: ${RECETAS_RESET.dtc_modulo.fuente} — falta confirmar la dirección de este módulo en el vehículo`,
+      definicion:{red:'hs', objetivo_reset:'dtc_modulo',
+        nota_validacion:'Sin dirección: este módulo no está en el rango legislado de ISO 15765-4. Escaneá el vehículo y usá "Completar direcciones desde el mapa": la dirección sale del mapa de acceso del propio vehículo, que ya contestó desde ahí.'},
+      precondiciones:['contacto']}));
+    defs.push({marca, modelo, ecu:'Inmovilizador', protocolo:'uds', activa:true, anio_desde:null, anio_hasta:null,
+      nombre:'Diagnóstico IMMO · identificación', tipo:'immo_diagnostico', identificador:'identificacion',
+      estado:'borrador', riesgo:'lectura',
+      fuente:'Referencia NexusPro: identificación del inmovilizador, sin extracción de secretos (pendiente validación física)',
+      definicion:{red:'hs', objetivo_immo:'identificacion',
+        nota_validacion:'Solo identificación y estado. No contiene llaves, PIN, clonación ni bypass.'},
+      precondiciones:['contacto']});
+    return defs;
+  }
+  /* Resets que el Picanto SI tiene pero que NO se pueden transmitir sin el
+     identificador de rutina del manual. Se cargan como procedimiento —texto,
+     cero transmision— para que el mecanico sepa que existen y que falta, en vez
+     de que el boton simplemente no este y nadie sepa por que. */
+  function packRutinasPendientes(marca, modelo) {
+    return [
+      {id:'sas_cero', ecu:'EPS / PSCM (dirección)', nombre:'Punto cero de la dirección (SAS)'},
+      {id:'transmision_adaptativos', ecu:'TCM (transmisión)', nombre:'Borrar adaptativos de la transmisión'},
+      {id:'acelerador_aprendizaje', ecu:'ECM / PCM (motor)', nombre:'Reaprendizaje de acelerador / ralentí'},
+      {id:'mantenimiento', ecu:'IPC (tablero)', nombre:'Restablecer el aviso de mantenimiento'}
+    ].map(x => ({marca, modelo, ecu:x.ecu, protocolo:'uds', activa:true, anio_desde:null, anio_hasta:null,
+      nombre:`${x.nombre} · falta la rutina del fabricante`, tipo:'procedimiento', identificador:x.id,
+      estado:'borrador', riesgo:'lectura',
+      fuente:'Referencia NexusPro: no hay servicio normalizado para este reset; requiere el identificador de rutina del manual del fabricante',
+      definicion:{red:'hs', objetivo_reset_previsto:x.id,
+        nota_validacion:'NexusPro no transmite nada con esta definición. Para habilitarla: conseguir del manual el identificador de rutina (RoutineControl), cargarlo en definicion.rutina.rid, citar la fuente y pasarla a verificado.'},
+      precondiciones:['contacto']}));
+  }
+  const PAQUETES_OEM = [
+    {id:'kia_picanto', marca:'Kia', modelo:'Picanto', nombre:'Kia Picanto',
+     nota:'Paquete Kia Picanto de NexusPro. Direcciones legisladas ISO 15765-4; requiere que el vehículo diagnostique en CAN de 11 bits (un Picanto pre-CAN no responde acá).',
+     construir() { return [].concat(packLiviano(this.marca, this.modelo, this.nota),
+                                    packPendientes(this.marca, this.modelo),
+                                    packRutinasPendientes(this.marca, this.modelo)); }}
+  ];
+
   const PLAN_VALIDACION = [
     {id:'mitsubishi',vehiculo:'Mitsubishi camioneta',familia:'liviano',protocolos:['uds','obd2'],interfaces:['elm','j2534','fabricante'],estado:'pendiente'},
     {id:'nissan_rogue',vehiculo:'Nissan Rogue',familia:'liviano',protocolos:['uds','obd2'],interfaces:['elm','j2534','fabricante'],estado:'pendiente'},
@@ -99,7 +234,8 @@
   const hex = b => (b || []).map(x => Number(x).toString(16).padStart(2,'0').toUpperCase()).join(' ');
   const propsBLE = p => ['broadcast','read','writeWithoutResponse','write','notify','indicate','authenticatedSignedWrites','reliableWrite','writableAuxiliaries'].filter(k=>!!p?.[k]);
   const Motor = {
-    canales: CANALES, familias:FAMILIAS, familiaPorId, interfazUsable, didsBase:DIDS_BASE, perfilesSimulados:PERFILES_SIMULADOS, planValidacion:PLAN_VALIDACION, referenciasVehiculos:REFERENCIAS_VEHICULOS, marcas:MARCAS_OEM, ecus:ECUS_OEM, protocolos:PROTOCOLOS_OEM, objetivosReset:OBJETIVOS_RESET, objetivosImmo:OBJETIVOS_IMMO, objetivosActivos:OBJETIVOS_ACTIVOS, propsBLE,
+    canales: CANALES, familias:FAMILIAS, familiaPorId, interfazUsable, didsBase:DIDS_BASE,
+    recetasReset:RECETAS_RESET, precondicionesReset:PRECONDICIONES_RESET, paquetes:PAQUETES_OEM, perfilesSimulados:PERFILES_SIMULADOS, planValidacion:PLAN_VALIDACION, referenciasVehiculos:REFERENCIAS_VEHICULOS, marcas:MARCAS_OEM, ecus:ECUS_OEM, protocolos:PROTOCOLOS_OEM, objetivosReset:OBJETIVOS_RESET, objetivosImmo:OBJETIVOS_IMMO, objetivosActivos:OBJETIVOS_ACTIVOS, propsBLE,
     construirTopologia(redes=[], meta={}) {
       const conocidas=new Set(CANALES.map(c=>c.id));
       const salida=CANALES.map(c=>({id:c.id,nombre:c.nombre,estado:'no_escaneada',modulos:[]}));
@@ -172,11 +308,58 @@
       if (tipo==='numero') return n*(Number(def.escala)||1)+(Number(def.offset)||0);
       return hex(bytes);
     },
+    /* Que comando exacto le corresponde a este reset. Devuelve los bytes, no
+       una descripcion: si no hay bytes que mandar, no hay reset que ejecutar y
+       se dice por que. */
+    recetaDeReset(d) {
+      const rut = d && d.definicion && d.definicion.rutina;
+      const rid = Number(rut && rut.rid);
+      if (Number.isInteger(rid) && rid >= 0 && rid <= 0xFFFF) {
+        const sub = Number.isInteger(Number(rut.sub)) ? Number(rut.sub) : 0x01;
+        const datos = Array.isArray(rut.datos)
+          ? rut.datos.map(Number).filter(x => Number.isInteger(x) && x >= 0 && x <= 0xFF) : [];
+        return {ok:true, origen:'rutina', servicio:RESET_POR_RUTINA.servicio,
+          efecto: rut.efecto || 'Rutina del fabricante declarada en esta definición verificada.',
+          pasos:[{tx:[0x31, sub, (rid >> 8) & 0xFF, rid & 0xFF].concat(datos), positiva:0x71,
+                  nombre:`Rutina 0x${rid.toString(16).toUpperCase().padStart(4,'0')} del fabricante`}]};
+      }
+      const obj = d && d.definicion && d.definicion.objetivo_reset;
+      const r = RECETAS_RESET[obj];
+      if (r) return {ok:true, origen:'norma', servicio:r.servicio, efecto:r.efecto, pasos:r.pasos};
+      const nombre = (OBJETIVOS_RESET.find(x => x.id === obj) || {}).nombre || 'Este reset';
+      return {ok:false, motivo:`${nombre} no tiene un comando normalizado: depende de una rutina propia de la marca. ` +
+        'Cargá el identificador de rutina del manual en definicion.rutina.rid con su fuente; sin eso NexusPro no transmite nada.'};
+    },
+    /* La puerta de un reset. Todo lo que puede terminar en una transmision pasa
+       por aca: verificado, riesgo acotado, direccion real, receta real y
+       precondiciones cumplidas CON DATOS MEDIDOS del vehiculo. */
+    puedeEjecutarReset(d, estado = {}) {
+      const errores = this.validar(d);
+      if (errores.length) return {ok:false, motivo:errores.join('. ')};
+      if (d.tipo !== 'reset') return {ok:false, motivo:'La definición no es un reset'};
+      if (d.estado !== 'verificado') return {ok:false, motivo:'La definición no está verificada: un reset sin verificar no transmite'};
+      if (d.riesgo === 'critico') return {ok:false, motivo:'Un reset de riesgo crítico no se ejecuta desde esta capa'};
+      const req = Number(d.definicion && d.definicion.request_id);
+      if (!Number.isInteger(req)) return {ok:false, motivo:'La definición no trae la dirección del módulo. Completala desde el mapa de acceso del vehículo.'};
+      /* Number(null) es 0, y 0 es un entero valido: sin distinguirlo, una
+         definicion hecha por ELM —que no sabe la direccion de respuesta— se
+         iba a ejecutar contra la direccion 0x000. */
+      const rawResp = d.definicion && d.definicion.response_id;
+      const resp = (rawResp === null || rawResp === undefined || rawResp === '') ? NaN : Number(rawResp);
+      const receta = this.recetaDeReset(d);
+      if (!receta.ok) return {ok:false, motivo:receta.motivo};
+      const exigidas = (d.precondiciones && d.precondiciones.length)
+        ? d.precondiciones
+        : (PRECONDICIONES_RESET[d.definicion.objetivo_reset] || ['contacto']);
+      const p = this.evaluarPrecondiciones(exigidas, estado);
+      if (!p.ok) return {ok:false, motivo:p.fallos.join('. '), fallos:p.fallos};
+      return {ok:true, receta, req, resp: Number.isInteger(resp) ? resp : null, precondiciones:exigidas};
+    },
     puedeEjecutar(d) {
       const errores=this.validar(d);
       if (errores.length) return {ok:false,motivo:errores.join('. ')};
       if (d.estado!=='verificado') return {ok:false,motivo:'La definición todavía no está verificada'};
-      if (d.tipo!=='did' || d.riesgo!=='lectura') return {ok:false,motivo:'Esta versión solo habilita lecturas DID verificadas; la operación queda bloqueada'};
+      if (d.tipo!=='did' || d.riesgo!=='lectura') return {ok:false,motivo:'Este botón ejecuta lecturas DID verificadas. Los resets se ejecutan con su propio botón, que exige además precondiciones medidas en el vehículo.'};
       return {ok:true};
     },
     puedePrepararActiva(d, estado={}) {
@@ -427,9 +610,15 @@
         <button class="btn btn-sm btn-ghost" style="margin-top:10px" onclick="Modulos.diagnostico_obd.simularRedOEM(document.getElementById('oem-simulador').value)">🧪 Ejecutar simulador</button>
         <div style="margin-top:10px;font-size:11px;color:var(--text3)">${FAMILIAS.map(f=>`<b>${f.nombre}</b>: ${f.nota}`).join(' · ')}</div></div>
         <div class="card" style="padding:14px"><div style="display:flex;justify-content:space-between"><b>Catálogo OEM (${this._oemDefs.length})</b>${puede?'<button class="btn btn-sm btn-brand" onclick="Modulos.diagnostico_obd.editarOEM()">＋ Nueva definición</button>':''}</div>
-        <div style="overflow:auto;margin-top:9px"><table class="table"><thead><tr><th>Marca/modelo</th><th>ECU</th><th>Función</th><th>Evidencia</th><th>Riesgo</th><th>Acciones</th></tr></thead><tbody>${this._oemDefs.length?this._oemDefs.map(d=>`<tr><td><b>${UI.esc(d.marca)}</b> ${UI.esc(d.modelo||'')}</td><td>${UI.esc(d.ecu)}</td><td>${UI.esc(d.nombre)}<br><small>${UI.esc(d.tipo)} ${UI.esc(d.identificador||'')}</small></td><td><span class="badge badge-${d.estado==='verificado'?'green':'amber'}">${UI.esc(d.estado)}</span><br><small>${UI.esc(d.fuente)}</small></td><td>${UI.esc(d.riesgo)}</td><td>${Modulos.btnAccion('ver',`Modulos.diagnostico_obd.verOEM('${d.id}')`)}${Modulos.btnAccion('editar',`Modulos.diagnostico_obd.editarOEM('${d.id}')`)}${Modulos.btnAccion('eliminar',`Modulos.diagnostico_obd.eliminarOEM('${d.id}','${UI.jsAttr(d.nombre)}')`)}</td></tr>`).join(''):'<tr><td colspan="6">Aún no hay definiciones. Agrega únicamente información con fuente comprobable.</td></tr>'}</tbody></table></div></div>
+        <div style="overflow:auto;margin-top:9px"><table class="table"><thead><tr><th>Marca/modelo</th><th>ECU</th><th>Función</th><th>Evidencia</th><th>Riesgo</th><th>Acciones</th></tr></thead><tbody>${this._oemDefs.length?this._oemDefs.map(d=>`<tr><td><b>${UI.esc(d.marca)}</b> ${UI.esc(d.modelo||'')}</td><td>${UI.esc(d.ecu)}</td><td>${UI.esc(d.nombre)}<br><small>${UI.esc(d.tipo)} ${UI.esc(d.identificador||'')}</small></td><td><span class="badge badge-${d.estado==='verificado'?'green':'amber'}">${UI.esc(d.estado)}</span><br><small>${UI.esc(d.fuente)}</small></td><td>${UI.esc(d.riesgo)}</td><td>${d.tipo==='reset'&&Motor.puedeEjecutarReset(d,{contacto:true,velocidad:0,motor:false}).ok?`<button class="btn btn-sm btn-amber" title="Ejecutar este reset" onclick="Modulos.diagnostico_obd.ejecutarResetOEM('${d.id}')">▶</button>`:''}${Modulos.btnAccion('ver',`Modulos.diagnostico_obd.verOEM('${d.id}')`)}${Modulos.btnAccion('editar',`Modulos.diagnostico_obd.editarOEM('${d.id}')`)}${Modulos.btnAccion('eliminar',`Modulos.diagnostico_obd.eliminarOEM('${d.id}','${UI.jsAttr(d.nombre)}')`)}</td></tr>`).join(''):'<tr><td colspan="6">Aún no hay definiciones. Agrega únicamente información con fuente comprobable.</td></tr>'}</tbody></table></div></div>
         ${this._oemTopologia?this._topologiaOEMHTML(this._oemTopologia):''}
         <div class="card" style="padding:14px"><b>Paquete base UDS de identificación</b><p>${DIDS_BASE.map(d=>`<code>${d.did}</code> ${UI.esc(d.nombre)}`).join(' · ')}</p><small>Son DIDs normalizados para descubrir identidad; una ECU puede no implementarlos. No se presentan como parámetros exclusivos de Ford o GM.</small></div>
+        <div class="card" style="padding:14px"><div style="display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap"><b>Paquetes por vehículo</b>
+        ${puede?`<div style="display:flex;gap:7px;flex-wrap:wrap">${PAQUETES_OEM.map(x=>`<button class="btn btn-sm btn-brand" onclick="Modulos.diagnostico_obd.cargarPaqueteOEM('${x.id}')">＋ ${UI.esc(x.nombre)}</button>`).join('')}<button class="btn btn-sm btn-ghost" onclick="Modulos.diagnostico_obd.completarDireccionesOEM()">📍 Completar direcciones desde el mapa</button></div>`:''}</div>
+        <p style="margin:8px 0;font-size:12.5px">Un paquete trae de una vez todo lo que hace falta para trabajar ese vehículo: identificación, borrado de códigos por módulo y reinicio de módulo.
+        <b>Queda ejecutable el día uno</b> en motor y transmisión, porque esas dos direcciones (0x7E0/0x7E8 y 0x7E1/0x7E9) están legisladas en ISO 15765-4 y los servicios están en ISO 14229-1: no hay nada que adivinar.</p>
+        <p style="margin:0 0 8px;font-size:12.5px">ABS, airbag, carrocería e inmovilizador llegan en <b>borrador y sin dirección a propósito</b>: no están en el rango legislado y esta capa no inventa direcciones. Escaneá el vehículo y usá <b>Completar direcciones desde el mapa</b>: la dirección sale del propio vehículo, que ya contestó desde ahí.</p>
+        <small>Los resets que dependen de una rutina propia de la marca —punto cero de la dirección, adaptativos de la caja, reaprendizaje de ralentí, aviso de mantenimiento— se cargan como procedimiento y <b>no transmiten nada</b> hasta que se les cargue el identificador de rutina del manual.</small></div>
         <div class="card" style="padding:14px"><div style="display:flex;justify-content:space-between;gap:10px;align-items:center"><b>Referencias predeterminadas de tu flota</b>${puede?`<button class="btn btn-sm btn-brand" onclick="Modulos.diagnostico_obd.agregarReferenciasOEM()">＋ Cargar ${REFERENCIAS_VEHICULOS.length} borradores</button>`:''}</div><p style="margin:8px 0">Incluye identificación, reset de mantenimiento y diagnóstico IMMO para los 7 vehículos listados. Todo queda en <b>borrador</b>, sin transmisión, porque dirección, ECU, protocolo y procedimiento todavía deben confirmarse.</p><small>IMMO sólo contiene identificación/estado/diagnóstico; no contiene llaves, PIN, secretos, clonación ni bypass.</small></div>
         <div class="card" style="padding:14px"><b>Plan de validación preparado</b><div style="overflow:auto;margin-top:8px"><table class="table"><thead><tr><th>Vehículo</th><th>Familia</th><th>Protocolos previstos</th><th>Interfaces</th><th>Estado</th></tr></thead><tbody>${PLAN_VALIDACION.map(x=>`<tr><td>${UI.esc(x.vehiculo)}</td><td>${UI.esc(x.familia)}</td><td><code>${x.protocolos.join(' · ')}</code></td><td>${x.interfaces.map(id=>{const f=familiaPorId(id);const ok=!!(f&&f.disponible);return `<span class="badge badge-${ok?'green':'amber'}" title="${UI.esc(f?f.nota:'Interfaz desconocida')}">${UI.esc(f?f.nombre:id)}${ok?'':' · no implementada'}</span>`;}).join(' ')}</td><td><span class="badge badge-amber">${x.estado}</span></td></tr>`).join('')}</tbody></table></div><small>“Previsto” no significa compatible confirmado: se actualizará con la respuesta real de cada interfaz.</small></div>
         <div class="card" style="padding:14px"><b>Paquetes iniciales</b><p>Ford y GM están preparados como objetivos. Las pruebas activas, calibraciones, DPF, purga ABS, codificación, Security Access y reflash permanecen bloqueadas hasta incorporar una definición verificada y sus precondiciones.</p></div>
@@ -525,7 +714,29 @@
       const v=r.vehiculo||{},w=window.open('','_blank');if(!w)return UI.toast('Permite ventanas emergentes para generar el PDF','warn');
       w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Parámetros OEM</title><style>body{font-family:Arial;padding:24px;color:#111}h2{border-bottom:2px solid #2563eb}table{width:100%;border-collapse:collapse}th,td{padding:7px;border-bottom:1px solid #ddd;text-align:left}th{background:#2563eb;color:white}@media print{button{display:none}}</style></head><body><h2>${UI.esc(Auth.tenant?.name||'NexusPro')} · Parámetros OEM</h2><p><b>Vehículo:</b> ${UI.esc(v.placa||'')} · ${UI.esc(v.marca||'')} ${UI.esc(v.modelo||'')} ${v.anio||''}<br><b>Fecha:</b> ${UI.fecha(r.fecha)}</p><table><thead><tr><th>ECU</th><th>Parámetro</th><th>Valor</th><th>DID</th></tr></thead><tbody>${r.resultados.map(x=>`<tr><td>${UI.esc(x.d.ecu)}</td><td>${UI.esc(x.d.nombre)}</td><td>${UI.esc(x.error||`${x.valor} ${x.unidad||''}`)}</td><td>${UI.esc(x.d.identificador)}</td></tr>`).join('')}</tbody></table><p><small>Resultado registrado por NexusPro. Una lectura fuera de rango debe interpretarse con el procedimiento OEM correspondiente.</small></p><button onclick="window.print()">Guardar como PDF / imprimir</button><script>setTimeout(()=>window.print(),300)<\/script></body></html>`);w.document.close();
     },
-    verOEM(id) { const d=this._oemDefs.find(x=>x.id===id); if(!d)return; const p=Motor.puedeEjecutar(d); UI.modal(d.nombre,`<div class="card" style="padding:12px"><b>${UI.esc(d.marca)} ${UI.esc(d.modelo||'')} · ${UI.esc(d.ecu)}</b><p>Fuente: ${UI.esc(d.fuente)} · estado: ${UI.esc(d.estado)} · riesgo: ${UI.esc(d.riesgo)}</p></div><pre style="white-space:pre-wrap">${UI.esc(JSON.stringify(d.definicion||{},null,2))}</pre><div class="modal-footer"><button class="btn btn-ghost" onclick="UI.cerrarModal()">Cerrar</button><button class="btn btn-${p.ok?'cyan':'ghost'}" ${p.ok?'':'disabled'} title="${UI.esc(p.motivo||'Lectura verificada')}" onclick="Modulos.diagnostico_obd.ejecutarOEM('${d.id}')">▶ Ejecutar lectura</button></div>`,'720px'); },
+    verOEM(id) {
+      const d=this._oemDefs.find(x=>x.id===id); if(!d)return;
+      const p=Motor.puedeEjecutar(d);
+      /* El permiso de reset se evalua SIN estado del vehiculo: acá solo se mira
+         si la definición está lista (verificada, con dirección y con receta).
+         Las precondiciones se miden recién al apretar, contra el vehículo. */
+      const esReset=d.tipo==='reset';
+      const pr=esReset?Motor.puedeEjecutarReset(d,{contacto:true,velocidad:0,motor:false}):null;
+      const receta=esReset?Motor.recetaDeReset(d):null;
+      UI.modal(d.nombre,`<div class="card" style="padding:12px"><b>${UI.esc(d.marca)} ${UI.esc(d.modelo||'')} · ${UI.esc(d.ecu)}</b>
+        <p>Fuente: ${UI.esc(d.fuente)} · estado: ${UI.esc(d.estado)} · riesgo: ${UI.esc(d.riesgo)}</p>
+        ${esReset?`<div style="font-size:12px;border-top:1px solid var(--border);padding-top:8px;margin-top:4px">
+          <b>Qué transmite:</b> ${receta.ok
+            ? `${UI.esc(receta.servicio)} · <code>${UI.esc(receta.pasos.map(x=>hex(x.tx)).join(' / '))}</code><br>${UI.esc(receta.efecto)}`
+            : `<span style="color:var(--amber)">nada todavía — ${UI.esc(receta.motivo)}</span>`}</div>`:''}
+        </div>
+        <pre style="white-space:pre-wrap">${UI.esc(JSON.stringify(d.definicion||{},null,2))}</pre>
+        <div class="modal-footer"><button class="btn btn-ghost" onclick="UI.cerrarModal()">Cerrar</button>
+        ${esReset
+          ? `<button class="btn btn-${pr.ok?'amber':'ghost'}" ${pr.ok?'':'disabled'} title="${UI.esc(pr.motivo||'Reset verificado')}" onclick="Modulos.diagnostico_obd.ejecutarResetOEM('${d.id}')">▶ Ejecutar reset</button>`
+          : `<button class="btn btn-${p.ok?'cyan':'ghost'}" ${p.ok?'':'disabled'} title="${UI.esc(p.motivo||'Lectura verificada')}" onclick="Modulos.diagnostico_obd.ejecutarOEM('${d.id}')">▶ Ejecutar lectura</button>`}
+        </div>`,'720px');
+    },
     async ejecutarOEM(id) {
       const d=this._oemDefs.find(x=>x.id===id); if(!d)return;
       const permiso=Motor.puedeEjecutar(d); if(!permiso.ok)return UI.toast(permiso.motivo,'error');
@@ -580,9 +791,221 @@
       if(par.length===2&&par.every(Number.isInteger)){definicion.request_id=par[0];definicion.response_id=par[1];}else{delete definicion.request_id;delete definicion.response_id;}
       const referencia=v('oem-fuente');
       const desde=Number(v('oem-anio-desde'))||null,hasta=Number(v('oem-anio-hasta'))||null;
-      const d={id:id||undefined,nombre:v('oem-nombre'),marca:v('oem-marca'),modelo:v('oem-modelo')||null,anio_desde:desde,anio_hasta:hasta,ecu:v('oem-ecu'),tipo:v('oem-tipo'),identificador:v('oem-idf')||null,estado:v('oem-estado'),riesgo:v('oem-riesgo'),fuente:referencia?`${v('oem-fuente-tipo')}: ${referencia}`:'',protocolo:v('oem-protocolo'),definicion,precondiciones:Array.isArray(this._oemEditandoPre)?this._oemEditandoPre:[],activa:true};
+      /* El indice unico de la tabla es (marca, modelo, ecu, tipo, identificador):
+         dos resets del MISMO modulo sin identificador chocan entre si y el
+         segundo no se puede guardar. El objetivo es lo que los distingue. */
+      const idf=v('oem-idf') || (v('oem-tipo')==='reset' ? v('oem-reset') : '')
+                             || (String(v('oem-tipo')).startsWith('immo_') ? v('oem-immo') : '') || null;
+      const d={id:id||undefined,nombre:v('oem-nombre'),marca:v('oem-marca'),modelo:v('oem-modelo')||null,anio_desde:desde,anio_hasta:hasta,ecu:v('oem-ecu'),tipo:v('oem-tipo'),identificador:idf,estado:v('oem-estado'),riesgo:v('oem-riesgo'),fuente:referencia?`${v('oem-fuente-tipo')}: ${referencia}`:'',protocolo:v('oem-protocolo'),definicion,precondiciones:Array.isArray(this._oemEditandoPre)?this._oemEditandoPre:[],activa:true};
       const e=Motor.validar(d); if(e.length)return UI.toast(e.join('. '),'error'); const r=await DB.upsertDefinicionOEM(d); if(r.error)return UI.toast(r.error.message,'error'); UI.cerrarModal(); this.modalOEM();
     },
+    /* ═══════════ EJECUTAR UN RESET ═══════════ */
+
+    /* El estado REAL del vehiculo, medido, no declarado por el usuario. Es lo
+       que alimenta las precondiciones: "el motor debe estar apagado" no vale
+       nada si se lo pregunta a quien quiere apretar el boton. */
+    async _estadoVehiculoOEM() {
+      const e = {contacto:false, motor:null, velocidad:null, voltaje:null, rpm:null, medido:[]};
+      try {
+        const b = await this._pid('0C');
+        if (b && b.length >= 2) { e.rpm = ((b[0] << 8) | b[1]) / 4; e.motor = e.rpm > 300; e.contacto = true; e.medido.push('rpm'); }
+      } catch (_) {}
+      try {
+        const b = await this._pid('0D');
+        if (b && b.length >= 1) { e.velocidad = b[0]; e.contacto = true; e.medido.push('velocidad'); }
+      } catch (_) {}
+      if (this._esELM()) {
+        try {
+          const v = String(await this._cmd('ATRV', 2500)).match(/[\d.]+/);
+          if (v) { const n = parseFloat(v[0]); if (n > 5) { e.voltaje = n; e.contacto = true; e.medido.push('voltaje'); } }
+        } catch (_) {}
+      }
+      return e;
+    },
+
+    async ejecutarResetOEM(id) {
+      const d = (this._oemDefs || []).find(x => x.id === id);
+      if (!d) return;
+      /* Mismo rol que publica definiciones. Un tecnico puede LEER el catalogo y
+         ejecutar lecturas; transmitir un reset es otra cosa. */
+      if (typeof rolEnLista === 'function' && !rolEnLista(['admin','gerente_tal']))
+        return UI.toast('Solo administración puede ejecutar un reset OEM', 'error');
+
+      if (!this._listo) {
+        UI.toast('Conectando el adaptador…', 'info');
+        try { await this._asegurarConexion(() => {}); }
+        catch (e) { return UI.toast('No se pudo conectar: ' + e.message.replace(/<[^>]*>/g, ''), 'error'); }
+      }
+      const via = this._puedePuntoAPunto();
+      if (!via.ok) return UI.toast(via.motivo, 'error');
+
+      let vehId = this._scan?.vehiculo_id || this._oemVehiculoId || null;
+      if (!vehId) vehId = await this._elegirVehiculoOEM();
+      if (!vehId) return;
+      this._oemVehiculoId = vehId;
+      const veh = (this._vehiculos || []).find(v => v.id === vehId) || {};
+      /* Un reset de Kia en un Hyundai es exactamente el error que esta capa
+         existe para no cometer. */
+      if (veh.marca && !Motor.aplica(d, veh))
+        return UI.toast(`Esta definición es de ${d.marca} ${d.modelo || ''} y el vehículo seleccionado es ${veh.marca} ${veh.modelo || ''}`, 'error');
+
+      UI.toast('Midiendo el estado del vehículo…', 'info');
+      const estado = await this._estadoVehiculoOEM();
+      const permiso = Motor.puedeEjecutarReset(d, estado);
+      if (!permiso.ok) {
+        await DB.registrarEjecucionOEM({definicion_id:d.id, vehiculo_id:vehId, operacion:`reset ${d.definicion?.objetivo_reset || ''}`.trim(),
+          estado:'rechazada', error:permiso.motivo, evidencia:{estado_vehiculo:estado}}).catch(() => {});
+        return UI.toast(permiso.motivo, 'error');
+      }
+
+      const receta = permiso.receta;
+      const medido = estado.medido.length
+        ? `Medido en el vehículo: ${[
+            estado.rpm != null ? `${Math.round(estado.rpm)} rpm` : null,
+            estado.velocidad != null ? `${estado.velocidad} km/h` : null,
+            estado.voltaje != null ? `${estado.voltaje.toFixed(1)} V` : null
+          ].filter(Boolean).join(' · ')}`
+        : '<b style="color:var(--amber)">No se pudo medir rpm, velocidad ni voltaje.</b> Confirmá a mano que el vehículo está detenido.';
+      const tramas = receta.pasos.map(x => hex(x.tx)).join(' / ');
+      const ok = await UI.confirmar(
+        `¿Ejecutar <b>${UI.esc(d.nombre)}</b>?<br><br>` +
+        `<small><b>Módulo:</b> ${UI.esc(d.ecu)} · dirección 0x${permiso.req.toString(16).toUpperCase()}<br>` +
+        `<b>Servicio:</b> ${UI.esc(receta.servicio)}<br>` +
+        `<b>Se va a transmitir:</b> <code>${UI.esc(tramas)}</code><br>` +
+        `<b>Fuente:</b> ${UI.esc(d.fuente)}<br><br>` +
+        `${UI.esc(receta.efecto)}<br><br>` +
+        `${medido}<br><br>` +
+        `El vehículo debe estar <b>detenido</b>. Todo queda en la bitácora con la trama exacta y la respuesta del módulo.</small>`,
+        'Ejecutar reset OEM');
+      if (!ok) {
+        await DB.registrarEjecucionOEM({definicion_id:d.id, vehiculo_id:vehId,
+          operacion:`reset ${d.definicion?.objetivo_reset || ''}`.trim(), estado:'cancelada',
+          evidencia:{estado_vehiculo:estado}}).catch(() => {});
+        return;
+      }
+
+      const base = {definicion_id:d.id, diagnostico_id:this._scan?.id || null, vehiculo_id:vehId,
+                    operacion:`reset ${d.definicion?.objetivo_reset || receta.origen} · ${receta.servicio}`,
+                    solicitud_hex:tramas};
+      await DB.registrarEjecucionOEM({...base, estado:'iniciada', evidencia:{estado_vehiculo:estado, precondiciones:permiso.precondiciones}}).catch(() => {});
+
+      const pasos = [];
+      try {
+        await this._elmPuntoAPunto(async () => {
+          for (const paso of receta.pasos) {
+            let r = await this._udsPedir(permiso.req, permiso.resp, paso.tx, 5000);
+            /* Muchos modulos no aceptan el servicio en sesion por defecto. Se
+               reintenta UNA vez en sesion extendida, que es lo que dice la
+               norma, no un segundo intento a ciegas. */
+            if (!r || r[0] === 0x7F) {
+              const ses = await this._udsPedir(permiso.req, permiso.resp, [0x10, 0x03], 2000);
+              if (ses && ses[0] === 0x50) r = await this._udsPedir(permiso.req, permiso.resp, paso.tx, 5000);
+            }
+            const okPaso = !!r && r[0] === paso.positiva;
+            pasos.push({paso:paso.nombre, solicitud:hex(paso.tx), respuesta:r ? hex(r) : null,
+                        ok:okPaso, nrc: r && r[0] === 0x7F ? r[2] ?? null : null});
+            if (!okPaso) break;
+          }
+        });
+      } catch (e) {
+        await DB.registrarEjecucionOEM({...base, estado:'fallida', error:e.message, evidencia:{pasos}}).catch(() => {});
+        return UI.toast('No se pudo ejecutar: ' + e.message, 'error');
+      }
+
+      const todoOk = pasos.length === receta.pasos.length && pasos.every(x => x.ok);
+      const ultimo = pasos[pasos.length - 1] || {};
+      await DB.registrarEjecucionOEM({...base, estado: todoOk ? 'exitosa' : 'rechazada',
+        respuesta_hex: ultimo.respuesta || null,
+        error: todoOk ? null : (ultimo.nrc != null ? `El módulo rechazó con NRC 0x${Number(ultimo.nrc).toString(16).toUpperCase()}` : 'Sin respuesta positiva del módulo'),
+        evidencia:{pasos, estado_vehiculo:estado}}).catch(() => {});
+
+      UI.modal(todoOk ? '✅ Reset ejecutado' : '⚠️ El módulo no lo aceptó',
+        `<div class="card" style="padding:14px"><b>${UI.esc(d.nombre)}</b>
+          <div style="font-size:12px;color:var(--text3);margin-top:3px">${UI.esc(d.ecu)} · 0x${permiso.req.toString(16).toUpperCase()} · ${UI.esc(receta.servicio)}</div>
+          ${pasos.map(x => `<div style="font-family:ui-monospace,Consolas,monospace;font-size:11.5px;margin-top:7px">
+            &gt; ${UI.esc(x.solicitud)}<br>&lt; <b style="color:var(--${x.ok ? 'green' : 'amber'})">${UI.esc(x.respuesta || 'sin respuesta')}</b>
+            ${x.nrc != null ? `<br><span style="color:var(--amber)">rechazo 0x${Number(x.nrc).toString(16).toUpperCase()}</span>` : ''}</div>`).join('')}
+          <div style="font-size:11.5px;margin-top:10px">${todoOk
+            ? UI.esc(receta.efecto) + ' Volvé a escanear para confirmar cómo quedó.'
+            : 'El módulo no aceptó la operación. Un rechazo es una respuesta válida: puede faltar una condición del fabricante (contacto, sesión de seguridad, motor apagado) que esta capa no supone.'}</div>
+          <div style="font-size:11px;color:var(--text3);margin-top:8px">Queda registrado en la bitácora, con la trama y la respuesta.</div>
+        </div>
+        <div class="modal-footer"><button class="btn btn-brand" onclick="Modulos.diagnostico_obd.modalOEM()">Volver al catálogo</button></div>`, '640px');
+    },
+
+    /* ═══════════ PAQUETES ═══════════ */
+    async cargarPaqueteOEM(idPaquete) {
+      if (typeof rolEnLista === 'function' && !rolEnLista(['admin','gerente_tal']))
+        return UI.toast('No tienes permiso para cargar paquetes OEM', 'error');
+      const paq = PAQUETES_OEM.find(x => x.id === idPaquete);
+      if (!paq) return UI.toast('Paquete no disponible', 'warn');
+      const clave = d => [d.marca, d.modelo, d.ecu, d.tipo, d.identificador || ''].join('|').toUpperCase();
+      const existentes = new Set((this._oemDefs || []).map(clave));
+      let agregadas = 0, omitidas = 0;
+      for (const d of paq.construir()) {
+        if (existentes.has(clave(d))) { omitidas++; continue; }
+        const r = await DB.upsertDefinicionOEM(d);
+        if (r?.error) return UI.toast(`No se pudo cargar ${d.nombre}: ${r.error.message}`, 'error');
+        existentes.add(clave(d)); agregadas++;
+      }
+      await DB.registrarEjecucionOEM({operacion:`paquete_oem_${paq.id}`, estado:'exitosa',
+        evidencia:{agregadas, omitidas}}).catch(() => {});
+      UI.toast(`${paq.nombre}: ${agregadas} definición(es) cargadas · ${omitidas} ya existían`, 'success');
+      this.modalOEM();
+    },
+
+    /* Completa las direcciones que el paquete dejo vacias a proposito, tomandolas
+       del mapa de acceso del PROPIO vehiculo. Es la unica fuente honesta para un
+       modulo que no esta en el rango legislado: el vehiculo ya contesto desde
+       ahi en un escaneo real. */
+    async completarDireccionesOEM() {
+      if (typeof rolEnLista === 'function' && !rolEnLista(['admin','gerente_tal']))
+        return UI.toast('No tienes permiso para editar definiciones OEM', 'error');
+      let vehId = this._scan?.vehiculo_id || this._oemVehiculoId || null;
+      if (!vehId) vehId = await this._elegirVehiculoOEM();
+      if (!vehId) return;
+      this._oemVehiculoId = vehId;
+      const veh = (this._vehiculos || []).find(v => v.id === vehId) || {};
+      const mapa = await this._mapaConocido(vehId);
+      if (!mapa || !mapa.modulos.length)
+        return UI.toast(`Todavía no hay mapa de acceso de ${veh.marca || ''} ${veh.modelo || ''}. Escaneá el vehículo primero.`, 'warn');
+
+      /* El nombre del modulo en el mapa viene del barrido; se casa con la ECU de
+         la definicion por palabra clave, y si no casa NO se toca nada. */
+      const PISTAS = {
+        'ABS / EBCM (frenos)':/abs|ebcm|esp|esc|freno/i,
+        'SRS / ACM (airbag)':/srs|airbag|acm|bolsa/i,
+        'BCM (carrocería)':/bcm|carroc|body|etacs/i,
+        'Inmovilizador':/immo|inmovil|smartra|smart\s*key/i,
+        'EPS / PSCM (dirección)':/eps|mdps|pscm|direcc|steering/i,
+        'IPC (tablero)':/ipc|tablero|cluster|instrument/i,
+        'TCM (transmisión)':/tcm|transmis|caja|at\b/i,
+        'ECM / PCM (motor)':/ecm|pcm|motor|engine/i
+      };
+      let tocadas = 0;
+      const sinMapear = [];
+      for (const d of (this._oemDefs || [])) {
+        if (!Motor.aplica(d, veh)) continue;
+        if (Number.isInteger(Number(d.definicion?.request_id))) continue;
+        const re = PISTAS[d.ecu];
+        const m = re ? mapa.modulos.find(x => re.test(String(x.nombre || ''))) : null;
+        if (!m) { sinMapear.push(d.ecu); continue; }
+        const definicion = {...(d.definicion || {}), request_id:m.req};
+        if (m.resp != null) definicion.response_id = m.resp;
+        definicion.origen_direccion = `Mapa de acceso de ${veh.marca || ''} ${veh.modelo || ''} (${mapa.n} escaneo(s) reales)`;
+        const r = await DB.upsertDefinicionOEM({id:d.id, definicion});
+        if (r?.error) return UI.toast(`No se pudo actualizar ${d.nombre}: ${r.error.message}`, 'error');
+        tocadas++;
+      }
+      await DB.registrarEjecucionOEM({vehiculo_id:vehId, operacion:'completar_direcciones_oem', estado:'exitosa',
+        evidencia:{tocadas, modulos_mapa:mapa.modulos.length}}).catch(() => {});
+      UI.toast(tocadas
+        ? `${tocadas} definición(es) tomaron su dirección del mapa del vehículo. Siguen en borrador: revisalas y verificalas antes de ejecutar.`
+        : `Ninguna definición pendiente casó con los ${mapa.modulos.length} módulos del mapa${sinMapear.length ? ` (sin coincidencia: ${[...new Set(sinMapear)].join(', ')})` : ''}`,
+        tocadas ? 'success' : 'warn');
+      if (tocadas) this.modalOEM();
+    },
+
     eliminarOEM(id,nombre) { Modulos.eliminarRegistro('obd_oem_definiciones',id,nombre,()=>this.modalOEM()); }
   });
 })();
