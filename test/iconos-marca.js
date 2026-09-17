@@ -59,7 +59,12 @@ function medidaPNG(archivo) {
      donde sale la próxima compilación. */
   const dpis = { mdpi: 48, hdpi: 72, xhdpi: 96, xxhdpi: 144, xxxhdpi: 192 };
   Object.entries(dpis).forEach(([dpi, s]) => {
-    const f = raiz('android', 'app', 'src', 'main', 'res', `mipmap-${dpi}`, 'ic_launcher.png');
+    /* 2026-09-16: el cascaron WebView (android/) se retiro. Los iconos que
+       viajan dentro del APK son ahora los del proyecto Flutter, y esta prueba
+       existe justamente porque una vez el icono publicado decia TALLERPRO:
+       la marca va DIBUJADA dentro del PNG y ningun grep la encuentra. Apuntar
+       al lugar equivocado la volveria decorativa. */
+    const f = raiz('app_flutter', 'android', 'app', 'src', 'main', 'res', `mipmap-${dpi}`, 'ic_launcher.png');
     const existe = fs.existsSync(f);
     ok(`Android tiene su ícono ${dpi}`, existe);
     if (existe) {
