@@ -230,6 +230,54 @@ const escaneo = {
 
   M._scan = escaneo; M._centroScan = escaneo; M._data = [escaneo];
 
+  /* ── No volver a pedir emparejar lo que ya estaba resuelto ─────────────
+     Henry, 2026-09-17: "¿por qué me vuelve a pedir que haga pair, si ya lo
+     tenemos resuelto para Android BT y para el vLinker por COM6?".
+     `_via` arrancaba en 'ble', asi que la autodeteccion de _asegurarConexion
+     no corria nunca y se iba derecho al dialogo de emparejar del navegador. */
+  ok('la via arranca en "no se", no en Bluetooth del navegador',
+     M._via === null || M._via === undefined || typeof M._ultimaVia !== 'undefined');
+
+  const guardadoVia = {};
+  ctx.localStorage = {
+    getItem: k => (k in guardadoVia ? guardadoVia[k] : null),
+    setItem: (k, v) => { guardadoVia[k] = String(v); },
+  };
+  M._via = 'serial'; M._api = 'SERIAL:COM6';
+  M._recordarVia();
+  ok('recuerda la via que funciono, con su puerto',
+     M._ultimaVia.via === 'serial' && M._ultimaVia.api === 'SERIAL:COM6');
+
+  /* Y al reconectar, la reusa en vez de preguntar de nuevo. */
+  let pidioEmparejar = false, abrioCOM = false;
+  M._via = null; M._api = null;
+  Object.defineProperty(M, '_listo', { value: false, configurable: true });
+  M._conectar = async () => { pidioEmparejar = true; return 'BLE'; };
+  M._serialInit = async () => { abrioCOM = true; return { nombre: 'vLinker MS (COM6)' }; };
+  M._init = async () => 'ISO 15765-4 (CAN 11/500)';
+  M._hayPuertoSerie = async () => false;
+  await M._asegurarConexion(() => {});
+  ok('reusa el COM que ya funcionaba', abrioCOM === true);
+  ok('y NO abre el diálogo de emparejar del navegador', pidioEmparejar === false);
+
+  /* Desconectar no puede dejar la via clavada en 'ble'. */
+  M._via = 'serial';
+  M._desconectar();
+  ok('desconectar deja la via en "no se", no en Bluetooth', !M._via);
+
+  Object.defineProperty(M, '_listo', { value: true, configurable: true });
+
+  /* ── Sugerencia de nombre por la direccion, con su fuente ── */
+  const sd = M._sugerenciaPorDireccion(0x7B3, 'Kia');
+  ok('sabe que 0x7B3 es climatizacion en Kia/Hyundai', sd && /Climatizaci/.test(sd.nombre));
+  ok('y dice de donde salio', sd && /opendbc/.test(sd.fuente));
+  ok('0x7D4 es la direccion asistida',
+     /Direcci/.test(M._sugerenciaPorDireccion(0x7D4, 'Hyundai').nombre));
+  ok('0x7C6 es el tablero', /Tablero/.test(M._sugerenciaPorDireccion(0x7C6, 'KIA').nombre));
+  ok('no sugiere nada para una marca sin tabla', M._sugerenciaPorDireccion(0x7B3, 'Toyota') === null);
+  ok('ni para una direccion que no esta en la tabla', M._sugerenciaPorDireccion(0x7CF, 'Kia') === null);
+  ok('ni sin marca', M._sugerenciaPorDireccion(0x7B3, '') === null);
+
   /* ── Ningún botón llama a un método que no existe ── */
   const todo = [html, ficha, fichaMotor].join('\n');
   const llamadas = [...todo.matchAll(/Modulos\.diagnostico_obd\.([A-Za-z_$][\w$]*)/g)].map(x => x[1]);

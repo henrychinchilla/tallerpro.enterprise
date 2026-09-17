@@ -448,9 +448,36 @@ Modulos.diagnostico_obd = {
      conectado" era un callejon sin salida, y el mapa de redes solo sabia
      autoconectarse por USB — por Bluetooth nunca.
      Devuelve el nombre del adaptador y el protocolo negociado. */
+  /* La última vía que de verdad funcionó, con su puerto. Sobrevive a recargar
+     la app: una vez que el taller conectó por COM6 o por el puente, ninguna
+     pantalla tiene que volver a preguntarlo. */
+  get _ultimaVia() {
+    try { return JSON.parse(localStorage.getItem('obd_ultima_via') || 'null'); } catch (_) { return null; }
+  },
+  set _ultimaVia(v) {
+    try { localStorage.setItem('obd_ultima_via', JSON.stringify(v || null)); } catch (_) {}
+  },
+
+  _recordarVia() {
+    if (!this._via || this._via === 'auto') return;
+    this._ultimaVia = { via: this._via, api: this._api || null, fecha: Date.now() };
+  },
+
   async _asegurarConexion(log = () => {}) {
     if (this._listo) return { nombre: this._scan?.adaptador || 'adaptador ya conectado',
                               protocolo: this._scan?.protocolo || null, yaEstaba: true };
+
+    /* Lo que ya funcionó manda sobre cualquier detección: si la última vez se
+       entró por COM6, se entra por COM6. Detectar de nuevo no está mal, pero
+       preguntarle otra vez al usuario algo que ya contestó, sí. */
+    if (!this._via) {
+      const ult = this._ultimaVia;
+      if (ult && ult.via && (ult.via !== 'android' || this._nativo)) {
+        this._via = ult.via;
+        if (ult.api && !this._api) this._api = ult.api;
+        log(`Reusando la última conexión que funcionó: ${UI.esc(this._NOMBRE_VIA[ult.via] || ult.via)}${ult.api ? ' · ' + UI.esc(String(ult.api).replace(/^SERIAL:/i, '')) : ''}`);
+      }
+    }
 
     /* Sin via elegida se elige la MEJOR DISPONIBLE, no una por defecto a ciegas:
        · dentro de la app, su puente (alcanza SPP clasico y BLE);
@@ -463,6 +490,7 @@ Modulos.diagnostico_obd = {
     if (this._via === 'usb' || this._via === 'auto') {
       if (this._via === 'auto') this._via = await this._detectarVia(log);
       ({ nombre, protocolo } = await this._usbInit(log));
+      this._recordarVia();
       return { nombre, protocolo };
     }
     /* Por COM hace falta saber CUAL. Con el puente al dia viene marcado cual
@@ -476,6 +504,7 @@ Modulos.diagnostico_obd = {
     else if (this._via === 'android') ({ nombre } = await this._androidInit(log));
     else                               nombre = await this._conectar();
     protocolo = await this._init(log);
+    this._recordarVia();
     return { nombre, protocolo };
   },
 
@@ -1669,14 +1698,23 @@ Modulos.diagnostico_obd = {
     this._dev = this._char = null;
     this._serialReady = false;
     try { if (this._ws?.readyState === 1) { this._ws.send(JSON.stringify({ op:'desconectar' })); this._ws.close(); } } catch (_) {}
-    this._ws = null; this._j39 = null; this._canRx = null; this._puenteCanalActivo = false; this._via = 'ble';
+    /* Y desconectar tampoco puede dejarla en 'ble': la siguiente pantalla que
+       se conecte sola volvería a pedir emparejar. Se deja en null para que se
+       vuelva a elegir la mejor disponible. */
+    this._ws = null; this._j39 = null; this._canRx = null; this._puenteCanalActivo = false; this._via = null;
   },
 
   /* ═══════════ PUENTE USB (RP1210 — NEXIQ USB-Link y compatibles) ═══════════
      Un programa local pequeño (carpeta puente-obd del repo) expone el adaptador
      USB por WebSocket en localhost:17210. El puente es una tubería tonta: toda
      la lógica de protocolo vive aquí (se actualiza con deploy, sin recompilar). */
-  _ws: null, _wsPend: {}, _via: 'ble', _j39: null, _canExt: false, _canRx: null, _puenteCanalActivo: false,
+  /* `_via` arranca en null = "todavía no se sabe". Arrancaba en 'ble', y eso
+     hacía que la autodetección de `_asegurarConexion` —la que elige el puente
+     de la app, o el COM del dongle ya emparejado— NO CORRIERA NUNCA: como ya
+     había vía, se iba derecho a Web Bluetooth y abría el diálogo de emparejar
+     del navegador. Reportado el 2026-09-17: "¿por qué me vuelve a pedir que
+     haga pair, si ya lo tenemos resuelto para Android y para COM6?". */
+  _ws: null, _wsPend: {}, _via: null, _j39: null, _canExt: false, _canRx: null, _puenteCanalActivo: false,
 
   /* Telefono o tablet: ahi no hay puente ni Web Serial, solo Web Bluetooth. */
   _esMovil() { return /Android|iPhone|iPad|iPod/i.test(navigator.userAgent || ''); },
@@ -2257,6 +2295,54 @@ Modulos.diagnostico_obd = {
      el "¿?" a la vista, para que el mecánico confirme y lo declare él. Nunca se
      usa como nombre del módulo: la regla de esta herramienta es que un dato sin
      confirmar no se presenta como hecho. */
+  /* ═══════════ DIRECCIONES CONOCIDAS POR MARCA ═══════════
+     El vehículo no dice cómo se llama cada módulo, y el escaneo solo puede
+     deducir dos: el motor y la transmisión, porque sus direcciones están en la
+     norma (ISO 15765-4). El resto salía como "Módulo 0x7B3".
+
+     Esto es lo que falta: direcciones que alguien verificó contra vehículos
+     REALES. No son norma, así que se muestran como SUGERENCIA con la fuente a
+     la vista y nunca se guardan solas como nombre — las confirma una persona.
+
+     Hyundai/Kia/Genesis salen de opendbc (comma.ai), que es código de
+     producción: consulta estas direcciones en vehículos reales para leer la
+     versión de firmware de cada módulo.
+       · opendbc/car/hyundai/values.py       → extra_ecus
+       · opendbc/car/hyundai/fingerprints.py → tuplas (Ecu.X, 0x…, None)
+     Consultado el 2026-09-17.
+
+     Para agregar otra marca: misma forma, y SIEMPRE con su fuente. Sin fuente
+     no entra — es la misma regla del catálogo OEM. */
+  _DIRECCIONES_MARCA: [
+    {
+      marcas: /^(HYUNDAI|KIA|GENESIS)/i,
+      fuente: 'opendbc (comma.ai), consultado 2026-09-17',
+      dirs: {
+        0x730: 'ADAS de conducción',
+        0x7B1: 'ADAS de estacionamiento',
+        0x7B3: 'Climatización (HVAC)',
+        0x7B7: 'Radar de esquina',
+        0x7C4: 'Cámara frontal',
+        0x7C6: 'Tablero (IPC)',
+        0x7D0: 'Radar frontal',
+        0x7D1: 'Frenos / ABS',
+        0x7D4: 'Dirección asistida (MDPS / EPS)',
+      },
+    },
+  ],
+
+  /* Sugerencia de nombre por la dirección, para la marca del vehículo. */
+  _sugerenciaPorDireccion(req, marca) {
+    const m = String(marca || '').trim();
+    if (!m) return null;
+    for (const tabla of this._DIRECCIONES_MARCA) {
+      if (!tabla.marcas.test(m)) continue;
+      const nombre = tabla.dirs[Number(req)];
+      if (nombre) return { nombre, fuente: tabla.fuente };
+    }
+    return null;
+  },
+
   _GRUPO_PIEZA: {
     '39':'Control del motor', '45':'Transmisión automática', '43':'Transmisión manual',
     '58':'Frenos (ABS / ESC)', '56':'Dirección (MDPS / EPS)', '97':'Climatización',
@@ -6059,6 +6145,10 @@ Modulos.diagnostico_obd = {
         protocolo = await this._init(log);
       }
       log(`Protocolo: <b>${protocolo || 'detectado'}</b> ✓`);
+      /* El escaneo es donde el usuario ELIGE la vía; si funcionó, es la buena.
+         A partir de acá el banco de pruebas, el OEM y el centro de módulos se
+         conectan solos por ahí, sin volver a preguntar nada. */
+      this._recordarVia();
 
       log('Leyendo VIN...');
       const vin = await this._leerVIN();
@@ -6522,6 +6612,7 @@ Modulos.diagnostico_obd = {
         <tbody>${ms.map(m => {
           const id = m.ident || {};
           const sug = id.referencia ? this._sugerenciaPorReferencia(id.referencia) : null;
+          const sugDir = this._sugerenciaPorDireccion(m.ecu, veh.marca);
           const declarado = !!this._nombreDeclarado(m.ecu);
           return `<tr>
             <td><b>${UI.esc(m.nombre)}</b>${declarado ? '<div style="font-size:10px;color:var(--green)">nombrado por el taller</div>' : ''}</td>
@@ -6529,6 +6620,7 @@ Modulos.diagnostico_obd = {
             <td>${id.referencia ? `<div>referencia <b style="font-family:ui-monospace,Consolas,monospace">${UI.esc(id.referencia)}</b></div>` : ''}
               ${id.nombre ? `<div>se llama <b>${UI.esc(id.nombre)}</b></div>` : ''}
               ${id.proveedor ? `<div style="color:var(--text3)">fabricante ${UI.esc(id.proveedor)}</div>` : ''}
+              ${sugDir ? `<div style="color:var(--amber)">¿<b>${UI.esc(sugDir.nombre)}</b>? — por la dirección, según ${UI.esc(sugDir.fuente)} · <b>confirmalo</b></div>` : ''}
               ${sug ? `<div style="color:var(--amber)">¿grupo ${UI.esc(sug.grupo)} = ${UI.esc(sug.sistema)}? — <b>sin confirmar</b></div>` : ''}
               ${!id.referencia && !id.nombre && !id.proveedor ? '<span style="color:var(--text3)">no publicó identificación</span>' : ''}</td>
             ${puedeNombrar ? `<td style="text-align:right;white-space:nowrap">
@@ -6569,10 +6661,16 @@ Modulos.diagnostico_obd = {
     pon('mod-req', Number(ecu).toString(16).toUpperCase());
     pon('mod-resp', m.resp == null ? '' : Number(m.resp).toString(16).toUpperCase());
     /* El nombre NO se rellena con "Módulo 0x7B3": declarar eso como nombre deja
-       la pantalla igual que antes, que es justo lo que se está arreglando. */
+       la pantalla igual que antes, que es justo lo que se está arreglando.
+       Sí se rellena con la sugerencia por dirección cuando la hay: el mecánico
+       la ve, la confirma y guarda. Se ahorra el trabajo sin que la herramienta
+       dé por cierto algo que no verificó — el que firma es él. */
+    const sugDir = this._sugerenciaPorDireccion(ecu, veh.marca);
     if (id.nombre) pon('mod-nombre', id.nombre);
-    else if (!/^Módulo 0x/i.test(String(m.nombre || ''))) pon('mod-nombre', m.nombre);
+    else if (!this._nombreInutil(m.nombre)) pon('mod-nombre', m.nombre);
+    else if (sugDir) pon('mod-nombre', sugDir.nombre);
     const nota = [id.referencia ? `referencia ${id.referencia}` : null,
+                  sugDir ? `nombre sugerido por ${sugDir.fuente} — confirmar` : null,
                   id.proveedor ? `fabricante ${id.proveedor}` : null,
                   m.codigos && m.codigos.length ? `reportó ${m.codigos.map(c => c.codigo).join(' ')}` : null]
       .filter(Boolean).join(' · ');
