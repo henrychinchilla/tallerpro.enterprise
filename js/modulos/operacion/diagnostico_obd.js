@@ -3392,6 +3392,9 @@ Modulos.diagnostico_obd = {
         <div style="display:flex;gap:7px;flex-wrap:wrap">
           <button class="btn btn-sm btn-ghost" onclick="Modulos.diagnostico_obd.modalTomarDelEscaneo()"
             title="Declarar los módulos que encontró el último escaneo">📡 Tomar del escaneo</button>
+          ${puedeEditar && filas.some(m => (!m.ext && this._DIR_NO_ES_MODULO(Number(m.req))) || this._nombreInutil(m.nombre))
+            ? `<button class="btn btn-sm btn-ghost" onclick="Modulos.diagnostico_obd.limpiarModulosSinIdentificar()"
+                 title="Quitar los que no son módulos y los que se llaman como su dirección">🧹 Limpiar sin identificar</button>` : ''}
           ${puedeEditar ? `<button class="btn btn-sm btn-brand" onclick="Modulos.diagnostico_obd.editarModuloVehiculo()">＋ Agregar módulo</button>` : ''}
         </div>
       </div>`;
@@ -3654,23 +3657,75 @@ Modulos.diagnostico_obd = {
     this._onMarcaModulo();
   },
 
+  /* Un nombre que es la dirección otra vez NO es un nombre. Declarar
+     "Módulo 0x7B3" deja la lista exactamente igual que antes —trece renglones
+     que no dicen nada— y encima con la sensación de que ya está resuelto. */
+  _nombreInutil(n) {
+    return !String(n || '').trim() || /^(módulo|modulo)\s+0x[0-9A-F]+$/i.test(String(n).trim());
+  },
+
   async declararTodosDelEscaneo() {
     const d = this._modsDelEscaneo;
     if (!d || !d.nuevos.length) return;
+    /* Los fantasmas no se declaran ni en lote ni a mano: 0x7DF es la difusión
+       y 0x7E8-0x7EF son direcciones de respuesta. */
+    const candidatos = d.nuevos.filter(m => !(!m.ext && this._DIR_NO_ES_MODULO(m.ecu)));
+    const conNombre = candidatos.filter(m => !this._nombreInutil(m.nombre) ||
+                                             (m.ident && (m.ident.nombre || m.ident.referencia)));
+    const sinNombre = candidatos.filter(m => !conNombre.includes(m));
+    if (!conNombre.length) {
+      return UI.toast(`Ninguno de los ${candidatos.length} módulos se pudo identificar solo. ` +
+        'Nombralos de a uno con "Revisar y declarar": una lista de direcciones declaradas no ayuda más que la de antes.', 'warn');
+    }
     let bien = 0, mal = 0;
-    for (const m of d.nuevos) {
+    for (const m of conNombre) {
+      const id = m.ident || {};
+      const nota = [id.referencia ? `referencia ${id.referencia}` : null,
+                    id.proveedor ? `fabricante ${id.proveedor}` : null].filter(Boolean).join(' · ');
+      /* Si lo unico que se sabe de el es su numero de pieza, ESE es el nombre.
+         "Pieza 58920-G6300" se puede buscar, comparar y pedir; "Modulo 0x7B3"
+         no es mas que la direccion escrita otra vez. */
+      const nombre = id.nombre
+        || (this._nombreInutil(m.nombre) ? (id.referencia ? `Pieza ${id.referencia}` : m.nombre) : m.nombre);
       const r = await DB.upsertModuloVehiculo({
         marca: d.veh.marca, modelo: d.veh.modelo || null,
-        nombre: String(m.nombre || `Módulo ${this._hexDir(m.ecu)}`).slice(0, 60),
+        nombre: String(nombre).slice(0, 60),
         sistema: 'otro', req: Number(m.ecu),
         resp: m.resp == null ? null : Number(m.resp), ext: !!m.ext,
         red: 'hs', protocolo: 'uds', origen: 'escaneo', activo: true,
+        nota: nota || null,
       });
       if (r.error) mal++; else bien++;
     }
-    UI.toast(mal ? `${bien} declarado(s), ${mal} no se pudieron` : `${bien} módulo(s) declarados ✓`,
-             mal ? 'warn' : 'success');
+    const pendientes = sinNombre.length
+      ? ` · ${sinNombre.length} sin identificar: nombralos de a uno o escaneá de nuevo para leer su referencia`
+      : '';
+    UI.toast((mal ? `${bien} declarado(s), ${mal} no se pudieron` : `${bien} módulo(s) declarados ✓`) + pendientes,
+             mal || sinNombre.length ? 'warn' : 'success');
     this._modsDeclarados = null;
+    this.modalModulosVehiculo();
+  },
+
+  /* Limpieza de lo que ya quedó mal declarado: los fantasmas y los que se
+     guardaron llamándose como su propia dirección. */
+  async limpiarModulosSinIdentificar() {
+    const filas = this._modsDeclarados || [];
+    const basura = filas.filter(m =>
+      (!m.ext && this._DIR_NO_ES_MODULO(Number(m.req))) || this._nombreInutil(m.nombre));
+    if (!basura.length) return UI.toast('No hay nada que limpiar: todos los declarados tienen nombre', 'info');
+    const fantasmas = basura.filter(m => !m.ext && this._DIR_NO_ES_MODULO(Number(m.req)));
+    const ok = await UI.confirmar(
+      `¿Quitar ${basura.length} declaración(es) que no aportan?<br><br>` +
+      (fantasmas.length ? `<b>${fantasmas.length} no son módulos</b> (${fantasmas.map(m => UI.esc(this._hexDir(m.req))).join(', ')}):
+         0x7DF es la dirección de difusión y 0x7E8-0x7EF son direcciones de respuesta.<br><br>` : '') +
+      `<b>${basura.length - fantasmas.length} se llaman como su propia dirección</b>, así que no dicen nada
+       que la dirección no dijera ya.<br><br>
+       <small>No se pierde nada del vehículo: las direcciones siguen en el mapa de los escaneos.</small>`,
+      'Limpiar declaraciones');
+    if (!ok) return;
+    let n = 0;
+    for (const m of basura) if (await DB.deleteRegistro('obd_modulos_vehiculo', m.id)) n++;
+    UI.toast(`${n} declaración(es) quitadas`, 'success');
     this.modalModulosVehiculo();
   },
 
@@ -5341,6 +5396,7 @@ Modulos.diagnostico_obd = {
           <span id="obd-estado-conexion" style="display:inline-flex;align-items:center;gap:6px"></span>
           <button class="btn btn-ghost" onclick="Modulos.diagnostico_obd.modalMapaVehiculos()" title="Qué vehículos sabe escanear el taller y hasta dónde llega en cada uno">🗺 Mapa de vehículos</button>
           <button class="btn btn-ghost" onclick="Modulos.diagnostico_obd.modalModulosVehiculo()" title="Declarar qué módulos trae cada modelo: airbag, ABS, EPS, TCM, carrocería…">🧩 Módulos</button>
+          <button class="btn btn-ghost" onclick="Modulos.diagnostico_obd.modalBancoPruebas()" title="Mandarle un servicio a un módulo y ver la respuesta cruda — cualquier vehículo">🧪 Banco de pruebas</button>
           <button class="btn btn-ghost" onclick="Modulos.diagnostico_obd.modalOEM()" title="Catálogo por fabricante, redes y procedimientos verificados">🧠 OEM</button>
           <button class="btn btn-ghost" onclick="Modulos.diagnostico_obd.render()">↻ Actualizar</button>
           ${puedeEditar ? `<button class="btn btn-brand" onclick="Modulos.diagnostico_obd.modalEscanear()">📡 Nuevo Escaneo</button>` : ''}
@@ -6471,6 +6527,12 @@ Modulos.diagnostico_obd = {
       </div>`}
       ${ms.length > conFallas.length ? `<div style="font-size:10.5px;color:var(--text3);margin-top:6px">
         Sin códigos: ${ms.filter(m => !m.codigos.length).map(m => UI.esc(m.nombre)).join(' · ')}</div>` : ''}
+      <div style="margin-top:12px;border-top:1px solid var(--border);padding-top:10px">
+        <button class="btn btn-brand" onclick="Modulos.diagnostico_obd.modalCentroModulos()">
+          🧠 Centro de módulos</button>
+        <span style="font-size:11.5px;color:var(--text3);margin-left:8px">
+          Todo el vehículo ordenado por gravedad, y de ahí a la ficha de cada módulo.</span>
+      </div>
       ${this._identidadModulosHTML(ms, veh)}
       ${vivo ? `
         <div style="margin-top:12px;border-top:1px solid var(--border);padding-top:10px">
