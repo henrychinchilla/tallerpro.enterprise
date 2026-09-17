@@ -25,7 +25,14 @@ Modulos.descarga = {
       ? await App._ultimaVersionAndroid().catch(() => null) : null;
     const appVer   = app?.versionName || '';
     const appPeso  = app?.apkKB ? `${app.apkKB} KB` : '';
-    const appUrl   = app?.apkUrl || '/nexuspro.apk';
+    /* El respaldo apunta a la NATIVA. La hibrida (cascaron WebView) se retiro
+       el 2026-09-16 y su APK ya no existe: dejar aqui la ruta vieja seria
+       ofrecer un 404 justo cuando app-version.json no carga, que es cuando el
+       respaldo tiene que servir. */
+    const appUrl   = app?.apkUrl || '/nexuspro-nativa.apk';
+    const app32Url = app?.apk32Url || '';
+    const app32Peso = app?.apk32KB ? `${app.apk32KB} KB` : '';
+    const appUniUrl = app?.apkUniversalUrl || '';
     const enPlay   = app?.enPlayStore === true && !!app?.playUrl;
     /* Que trae instalado ESTE telefono (la app nativa lo reporta al abrir) */
     const instalada = (typeof App !== 'undefined' && App._appAndroid) || null;
@@ -100,7 +107,7 @@ Modulos.descarga = {
             <p style="font-size:12px;color:var(--text3);margin-bottom:14px">
               ${enPlay
                 ? 'Instálala desde Google Play: las actualizaciones te llegan solas, sin permisos de "origen desconocido".'
-                : 'Descarga e instala el APK directamente. La ficha de Google Play ya está autorizada y en preparación — en cuanto esté publicada, este botón llevará a Play y las actualizaciones serán automáticas.'}
+                : 'App <b>nativa</b>: no es el sitio web envuelto. Descarga e instala el APK directamente.'}
             </p>
 
             ${enPlay ? `
@@ -117,8 +124,22 @@ Modulos.descarga = {
               ${instalada && !alDia ? '⬆️ Actualizar app' : '⬇️ Descargar APK (Android)'}${appPeso ? ` · ${appPeso}` : ''}
             </a>`}
 
+            ${app32Url || appUniUrl ? `
+            <details style="margin-top:8px;font-size:11.5px;color:var(--text3)">
+              <summary style="cursor:pointer">¿El de arriba no te instala?</summary>
+              <div style="padding:8px 0 0">
+                El botón de arriba trae la versión para <b>64 bits</b>, que es la de casi
+                cualquier teléfono desde 2015.
+                ${app32Url ? `<br><a href="${UI.esc(app32Url)}" download style="color:var(--cyan)">⬇️ Versión de 32 bits</a>${app32Peso ? ` · ${app32Peso}` : ''} — para teléfonos viejos.` : ''}
+                ${appUniUrl ? `<br><a href="${UI.esc(appUniUrl)}" target="_blank" rel="noopener" style="color:var(--cyan)">⬇️ Versión universal</a> (~50 MB) — trae las tres arquitecturas
+                  en un solo archivo; sirve si no sabés cuál usa tu teléfono. Va en GitHub porque
+                  no cabe en el sitio (tope de 25 MiB por archivo).` : ''}
+              </div>
+            </details>` : ''}
+
             <div style="margin-top:10px;font-size:11px;color:var(--text3);background:var(--surface2);border-radius:8px;padding:8px 10px">
-              ${enPlay ? '' : '<b>⚠️ Antes de instalar:</b> tu teléfono pedirá permiso para <i>instalar apps de esta fuente</i> — acéptalo. La actualización se instala encima de la app que ya tienes: no pierdes sesión ni datos.<br>'}
+              ${enPlay ? '' : '<b>⚠️ Antes de instalar:</b> tu teléfono pedirá permiso para <i>instalar apps de esta fuente</i> — acéptalo.<br>'}
+              ${app?.nativa ? '<b>Por ahora trae login y escáner OBD.</b> POS, inventario, órdenes, facturación y contabilidad siguen en el sitio web desde una computadora, mientras se portan.<br>' : ''}
               ${appVer ? `Versión <b>${UI.esc(appVer)}</b>${appPeso ? ` · ${appPeso}` : ''} · Android ${UI.esc(app?.minAndroid || '8.0')} o superior` : ''}
             </div>
           </div>

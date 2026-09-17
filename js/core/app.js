@@ -276,7 +276,10 @@ const App = {
       }
 
       const porPlay  = ultima.enPlayStore === true && !!ultima.playUrl;
-      const destino  = porPlay ? ultima.playUrl : (ultima.apkUrl || '/nexuspro.apk');
+      /* Respaldo a la app NATIVA: la hibrida se retiro el 2026-09-16 y su APK
+         ya no existe, asi que la ruta vieja seria un 404 justo cuando el
+         respaldo tiene que servir. */
+      const destino  = porPlay ? ultima.playUrl : (ultima.apkUrl || '/nexuspro-nativa.apk');
       const peso     = ultima.apkKB ? ` · ${ultima.apkKB} KB` : '';
       const novedades = Array.isArray(ultima.novedades) ? ultima.novedades.slice(0, 4) : [];
       const actualizar = modo === 'actualizar';

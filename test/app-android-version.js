@@ -4,10 +4,11 @@
    verdad. Hay dos formas silenciosas de que mienta, y las dos dejan al usuario
    peor que sin aviso:
 
-     · Los tres números se desincronizan. La versión vive en build.gradle, en
-       el APK que se copia a /nexuspro.apk y en app-version.json. Si el JSON
-       anuncia la 4 pero el APK publicado sigue siendo la 3, el usuario instala,
-       vuelve a entrar, y le sale OTRA VEZ "actualiza" — para siempre.
+     · Los tres números se desincronizan. La versión vive en
+       app_flutter/pubspec.yaml, en el APK que se copia a /nexuspro-nativa.apk
+       y en app-version.json. Si el JSON anuncia la 4 pero el APK publicado
+       sigue siendo la 3, el usuario instala, vuelve a entrar, y le sale OTRA
+       VEZ "actualiza" — para siempre.
      · La regla de decisión se equivoca de caso. El más delicado: los APK
        anteriores al versionCode 4 no saben reportar su versión. Estar dentro
        de la app sin poder decir cuál eres es justamente la prueba de que eres
@@ -25,8 +26,11 @@ const zlib = require('zlib');
 const RAIZ = path.join(__dirname, '..');
 const APP_JS = path.join(RAIZ, 'js', 'core', 'app.js');
 const VERSION_JSON = path.join(RAIZ, 'app-version.json');
-const GRADLE = path.join(RAIZ, 'android', 'app', 'build.gradle');
-const APK = path.join(RAIZ, 'nexuspro.apk');
+/* 2026-09-16: la app hibrida (cascaron WebView) se retiro y su proyecto se
+   borro del repo. La version de la app movil ahora sale de pubspec.yaml del
+   proyecto Flutter, y el APK publicado es el nativo de arm64. */
+const PUBSPEC = path.join(RAIZ, 'app_flutter', 'pubspec.yaml');
+const APK = path.join(RAIZ, 'nexuspro-nativa.apk');
 
 let pasadas = 0, fallidas = 0;
 function ok(nombre, cond) {
@@ -132,36 +136,47 @@ const publicada = JSON.parse(fs.readFileSync(VERSION_JSON, 'utf8')).android;
 
   /* ══ 1. Los tres números dicen lo mismo ═══════════════════════════════════ */
   {
-    const gradle = fs.readFileSync(GRADLE, 'utf8');
-    const gvc = /appVersionCode\s*=\s*(\d+)/.exec(gradle);
-    const gvn = /appVersionName\s*=\s*"([^"]+)"/.exec(gradle);
-    ok('build.gradle declara la versión en un solo lugar', !!gvc && !!gvn);
-    ok('build.gradle y app-version.json coinciden en versionCode',
-       !!gvc && Number(gvc[1]) === publicada.versionCode);
-    ok('build.gradle y app-version.json coinciden en versionName',
-       !!gvn && gvn[1] === publicada.versionName);
+    /* En Flutter la version vive en pubspec.yaml como `version: X.Y.Z+N`:
+       antes del `+` el versionName, despues el versionCode. Un solo lugar. */
+    const pubspec = fs.readFileSync(PUBSPEC, 'utf8');
+    const pv = /^version:\s*([0-9][0-9.]*)\+(\d+)\s*$/m.exec(pubspec);
+    ok('pubspec.yaml declara la versión en un solo lugar', !!pv);
+    ok('pubspec.yaml y app-version.json coinciden en versionName',
+       !!pv && pv[1] === publicada.versionName);
+    ok('pubspec.yaml y app-version.json coinciden en versionCode',
+       !!pv && Number(pv[2]) === publicada.versionCode);
 
-    /* Y sobre todo: el APK que de verdad se sirve. Se lee del binario, que es
-       lo único que el teléfono va a instalar. La URL de arranque lleva dentro
-       el versionCode, así que sirve de huella. */
-    /* La URL de arranque cambio de lugar en la 4.96.0: la TWA la declaraba como
-       meta-data en el manifiesto, y el cascaron nativo la arma en MainActivity.
-       Sigue siendo UNA cadena dentro del binario —el compilador pega las
-       constantes de BuildConfig—, solo que ahora vive en classes.dex. Se miran
-       los dos lados a proposito: la prueba tiene que seguir sirviendo si algun
-       dia se vuelve a mover, y lo que importa no es en que archivo esta sino
-       que el APK que se instala anuncie la version que el sitio promete. */
+    /* Y sobre todo: el APK que de verdad se sirve, leido del binario — que es
+       lo unico que el telefono va a instalar.
+
+       La huella vieja ya no sirve y no se puede resucitar: la TWA y el cascaron
+       WebView abrian el sitio con `?app=android&appvc=N`, asi que el numero
+       viajaba dentro del binario. La app NATIVA no abre el sitio, asi que esa
+       cadena no existe. Lo que si esta en el manifiesto —y es lo que importa—
+       es el paquete y el versionName. */
     const manifest = leerDelZip(APK, 'AndroidManifest.xml');
     ok('el APK publicado se puede leer', !!manifest && manifest.length > 0);
-    const dex = leerDelZip(APK, 'classes.dex');
-    const texto = (manifest ? manifest.toString('utf16le') : '')
-      + ' ' + (dex ? dex.toString('utf8') : '');
-    const m = /appvc=(\d+)&appvn=([0-9][0-9.]*)/.exec(texto);
-    ok('el APK publicado se identifica al abrir el sitio (?app=android&appvc=…)', !!m);
+    /* El manifiesto binario guarda sus cadenas en UTF-16. */
+    const texto = manifest ? manifest.toString('utf16le') : '';
+    ok('el APK publicado es el de la app NATIVA, no el del cascaron',
+       texto.includes('com.cmtelecom.nexuspro.nativa'));
     ok('el APK publicado ES la versión que anuncia app-version.json',
-       !!m && Number(m[1]) === publicada.versionCode && m[2] === publicada.versionName);
+       texto.includes(publicada.versionName));
     ok('el peso anunciado corresponde al APK real (±2 KB)',
        Math.abs(Math.round(fs.statSync(APK).size / 1024) - publicada.apkKB) <= 2);
+    /* El de 32 bits es el respaldo que ofrece la pantalla de Descargas: si se
+       anuncia y no existe, el enlace da 404 justo a quien ya no pudo instalar
+       el de 64. */
+    if (publicada.apk32Url) {
+      const apk32 = path.join(RAIZ, publicada.apk32Url.replace(/^\//, ''));
+      ok('el APK de 32 bits que se anuncia existe', fs.existsSync(apk32));
+      ok('...y su peso anunciado tambien corresponde (±2 KB)',
+         fs.existsSync(apk32) &&
+         Math.abs(Math.round(fs.statSync(apk32).size / 1024) - publicada.apk32KB) <= 2);
+    }
+    /* Y la hibrida no puede volver por la puerta de atras. */
+    ok('el APK del cascaron WebView ya no se publica',
+       !fs.existsSync(path.join(RAIZ, 'nexuspro.apk')));
   }
 
   /* ══ 1.b La llave de firma rotada (2026-08-25) ════════════════════════════
@@ -401,7 +416,7 @@ const publicada = JSON.parse(fs.readFileSync(VERSION_JSON, 'utf8')).android;
        botón de descargas en 404. Nada de patrones genéricos con negación — los
        builds viejos se excluyen por nombre. */
     ok('.assetsignore NO tapa el APK que se ofrece descargar',
-       !lineas.some(l => /^!?\*\.apk$/.test(l)) && !lineas.includes('nexuspro.apk'));
+       !lineas.some(l => /^!?\*\.apk$/.test(l)) && !lineas.includes('nexuspro-nativa.apk'));
     ok('.assetsignore excluye los builds viejos sueltos por nombre',
        lineas.includes('NexusPro-build-henry.apk'));
 
@@ -414,9 +429,10 @@ const publicada = JSON.parse(fs.readFileSync(VERSION_JSON, 'utf8')).android;
     const tapado = p => (reRuta && reRuta.test(p)) || (reFile && reFile.test(p));
     ok('worker.js tapa el keystore', tapado('/android/tallerpro.keystore'));
     ok('worker.js tapa la contraseña del keystore', tapado('/android/keystore.properties'));
-    ok('worker.js tapa todo el proyecto Android', tapado('/android/app/build.gradle'));
+    ok('worker.js tapa todo el proyecto de la app', tapado('/app_flutter/android/app/build.gradle.kts'));
     ok('worker.js tapa el bundle de Play', tapado('/NexusPro-4.77.0-play.aab'));
-    ok('…pero NO tapa el APK que la gente descarga', !tapado('/nexuspro.apk'));
+    ok('…pero NO tapa el APK que la gente descarga', !tapado('/nexuspro-nativa.apk'));
+    ok('…ni el de 32 bits', !tapado('/nexuspro-nativa-32bits.apk'));
     ok('…ni el archivo de versión que dispara el aviso', !tapado('/app-version.json'));
   }
 

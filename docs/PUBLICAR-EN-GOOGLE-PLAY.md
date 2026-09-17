@@ -1,3 +1,11 @@
+> ⚠️ **OBSOLETO desde el 2026-09-16.** Esta guía describe la publicación del
+> **cascarón WebView**, que se retiró: su proyecto (`android/`) y sus bundles
+> (`android/play/*.aab`) ya no existen en el repo. La app ahora es **Flutter
+> nativo** (`app_flutter/`, paquete `com.cmtelecom.nexuspro.nativa`) y su AAB se
+> genera con `flutter build appbundle`. Lo que sigue valiendo de este documento
+> es el trámite de Play (verificadores, ficha, capturas); lo que NO vale son las
+> rutas de archivos ni el paquete.
+
 # Publicar NexusPro en Google Play — guía de trabajo
 
 > Estado al 2026-08-26. Cuenta de desarrollador: **PERSONAL** (`CMTELECOMM`, región GT) — no

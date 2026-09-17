@@ -1,8 +1,21 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
 }
+
+/* Credenciales de firma: viven en android/keystore.properties, FUERA de git.
+   Son las mismas que usa la app anterior (nexuspro-2026.keystore, RSA 4096).
+   Usarlas aqui es seguro aunque el applicationId sea distinto: la firma no
+   colisiona, identifica. */
+val propsFirma = Properties()
+val archivoFirma = rootProject.file("keystore.properties")
+if (archivoFirma.exists()) {
+    archivoFirma.inputStream().use { propsFirma.load(it) }
+}
+val hayFirma = propsFirma.getProperty("storeFile") != null
 
 android {
     namespace = "com.cmtelecom.nexuspro"
@@ -32,11 +45,26 @@ android {
         versionName = flutter.versionName
     }
 
+    signingConfigs {
+        if (hayFirma) {
+            create("release") {
+                storeFile = rootProject.file(propsFirma.getProperty("storeFile"))
+                storePassword = propsFirma.getProperty("storePassword")
+                keyAlias = propsFirma.getProperty("keyAlias")
+                keyPassword = propsFirma.getProperty("keyPassword")
+            }
+        }
+    }
+
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("debug")
+            /* Firmar con la llave de DEPURACION no es "temporal sin costo": un
+               APK firmado asi no se puede actualizar despues con uno firmado de
+               verdad — Android rechaza el cambio de firma y solo dice
+               "aplicacion no instalada". Quien lo instale hoy tendria que
+               desinstalar manana. Por eso se firma bien desde la primera. */
+            signingConfig = if (hayFirma) signingConfigs.getByName("release")
+                            else signingConfigs.getByName("debug")
         }
     }
 }

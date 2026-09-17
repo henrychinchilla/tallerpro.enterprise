@@ -105,9 +105,9 @@ const login = leer('js', 'core', 'login.js');
      respaldo que usa el código si el JSON no carga, y lo que el JSON declara. */
   ok('la descarga de Android sigue ofreciéndose', /download="NexusPro\.apk"/.test(desc));
   ok('...y si el archivo de versión no carga, cae al APK publicado',
-     /apkUrl \|\| '\/nexuspro\.apk'/.test(desc));
+     /apkUrl \|\| '\/nexuspro-nativa\.apk'/.test(desc));
   ok('...y el archivo de versión apunta a ese mismo APK',
-     JSON.parse(leer('app-version.json')).android.apkUrl === '/nexuspro.apk');
+     JSON.parse(leer('app-version.json')).android.apkUrl === '/nexuspro-nativa.apk');
 }
 
 console.log(`\n${pasadas} pasadas, ${fallidas} fallidas`);

@@ -79,7 +79,7 @@ if (!credenciales()) {
         App._posponerAvisoApp(9999, 'actualizar');   // pospuesto para la versión 9999
         const caja = document.getElementById('modal-overlay');
         const cerrado = !caja?.classList.contains('open');
-        App._verAndroid = { versionCode: 9999, versionName: '99.9', apkUrl: '/nexuspro.apk' };
+        App._verAndroid = { versionCode: 9999, versionName: '99.9', apkUrl: '/nexuspro-nativa.apk' };
         await App.avisoAppAndroid();
         return { cerrado, vuelve: !!caja?.classList.contains('open') };
       });

@@ -12,3 +12,13 @@ GeneratedPluginRegistrant.java
 key.properties
 **/*.keystore
 **/*.jks
+
+# 🔐 FIRMA — NUNCA al repositorio.
+# `**/*.keystore` ya cubria la llave, pero NO keystore.properties, que lleva la
+# CONTRASENA en texto plano y aparecia como archivo sin seguimiento: un
+# `git add -A` se lo llevaba. En este proyecto la llave anterior ya estuvo
+# publica dos meses por un descuido del mismo tipo (por el CDN, no por git).
+# Van por PATRON, no por nombre, para que cubra cualquier llave futura.
+keystore.properties
+*.jks
+*.p12
