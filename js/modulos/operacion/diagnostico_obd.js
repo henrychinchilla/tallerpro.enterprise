@@ -3597,11 +3597,68 @@ Modulos.diagnostico_obd = {
   /* Convertir en nombres lo que el escaneo ya encontró. Es el camino corto: el
      vehículo ya contestó desde esas direcciones, así que no hay nada que
      adivinar — solo falta decir cómo se llama cada una. */
+  /* ═══════════ SOBRE QUÉ ESCANEO SE TRABAJA ═══════════
+     `_scan` es SOLO el escaneo EN CURSO. Al recargar la app —o al abrir uno
+     guardado desde la lista— queda en null, y todo lo que dependía de él decía
+     "no hay escaneos" con la pantalla llena de escaneos. Reportado el
+     2026-09-17: "me dice que no hay escaneos y por eso no puedo subir los
+     módulos.. pero claro que hay escaneos, hice uno ahora".
+
+     El escaneo de trabajo es, en orden: el que está en curso, el que se abrió,
+     o el más reciente que tenga barrido por módulo. Los del mes ya están
+     cargados en `_data` (se traen con `select *`), así que casi nunca hace
+     falta ir a la base; si el mes está vacío, se busca sin límite de fecha. */
+  _escaneosConModulos() {
+    const tiene = d => d && Array.isArray(d.por_modulo) && d.por_modulo.length;
+    const out = [];
+    const meter = d => {
+      if (!tiene(d)) return;
+      if (out.some(x => x === d || (x.id && d.id && x.id === d.id))) return;
+      out.push(d);
+    };
+    meter(this._scan);
+    meter(this._centroScan);
+    for (const d of (this._data || [])) meter(d);
+    return out;
+  },
+
+  async _escaneoDeTrabajo() {
+    let lista = this._escaneosConModulos();
+    if (!lista.length) {
+      /* El mes que se está mirando puede no ser el del escaneo. Antes de decir
+         que no hay, se busca de verdad. */
+      try {
+        const historico = await DB.getDiagnosticosOBD('1980-01-01', '2200-01-01', 60);
+        for (const d of (historico || []))
+          if (Array.isArray(d.por_modulo) && d.por_modulo.length) lista.push(d);
+      } catch (_) {}
+    }
+    if (!lista.length) return null;
+    if (lista.length === 1) return lista[0];
+    return new Promise(res => {
+      this._escaneoElegido = i => { UI.cerrarModal(); res(i == null ? null : lista[i]); };
+      UI.modal('¿Sobre qué escaneo?', `
+        <p style="font-size:13px;color:var(--text3)">Hay varios escaneos con barrido por módulo.</p>
+        <div style="max-height:46vh;overflow:auto">
+        ${lista.slice(0, 20).map((d, i) => {
+          const v = d.vehiculos || (this._vehiculos || []).find(x => x.id === d.vehiculo_id) || {};
+          return `<button class="btn btn-ghost" style="width:100%;text-align:left;margin-bottom:6px"
+            onclick="Modulos.diagnostico_obd._escaneoElegido(${i})">
+            <b>${UI.esc([v.marca, v.modelo, v.anio].filter(Boolean).join(' ') || 'Vehículo')}</b>
+            <span style="font-size:11px;color:var(--text3)"> — ${UI.fecha(d.created_at)} ·
+            ${d.por_modulo.length} módulo(s)${d === this._scan ? ' · <b>el de ahora</b>' : ''}</span></button>`;
+        }).join('')}</div>
+        <div class="modal-footer"><button class="btn btn-ghost"
+          onclick="Modulos.diagnostico_obd._escaneoElegido(null)">Cancelar</button></div>`, '560px');
+    });
+  },
+
   async modalTomarDelEscaneo() {
-    const s = this._scan;
-    const ms = (s && s.por_modulo) || [];
-    if (!ms.length)
-      return UI.toast('No hay un escaneo con módulos a la vista. Abrí un escaneo que haya barrido módulos y volvé.', 'warn');
+    const s = await this._escaneoDeTrabajo();
+    if (!s) return UI.toast('Ningún escaneo tiene barrido por módulo todavía. ' +
+      'El barrido corre cuando el dongle acepta ATSH y el vehículo está en CAN de 11 bits.', 'warn');
+    this._centroScan = s;
+    const ms = s.por_modulo;
     const veh = (s.vehiculos) || (this._vehiculos || []).find(v => v.id === s.vehiculo_id) || {};
     if (!veh.marca)
       return UI.toast('El escaneo no tiene marca de vehículo: no se sabe a qué modelo declarárselos', 'warn');
@@ -5396,6 +5453,7 @@ Modulos.diagnostico_obd = {
           <span id="obd-estado-conexion" style="display:inline-flex;align-items:center;gap:6px"></span>
           <button class="btn btn-ghost" onclick="Modulos.diagnostico_obd.modalMapaVehiculos()" title="Qué vehículos sabe escanear el taller y hasta dónde llega en cada uno">🗺 Mapa de vehículos</button>
           <button class="btn btn-ghost" onclick="Modulos.diagnostico_obd.modalModulosVehiculo()" title="Declarar qué módulos trae cada modelo: airbag, ABS, EPS, TCM, carrocería…">🧩 Módulos</button>
+          <button class="btn btn-ghost" onclick="Modulos.diagnostico_obd.modalCentroModulos()" title="Todo el vehículo ordenado por gravedad, y la ficha de cada módulo">🧠 Centro de módulos</button>
           <button class="btn btn-ghost" onclick="Modulos.diagnostico_obd.modalBancoPruebas()" title="Mandarle un servicio a un módulo y ver la respuesta cruda — cualquier vehículo">🧪 Banco de pruebas</button>
           <button class="btn btn-ghost" onclick="Modulos.diagnostico_obd.modalOEM()" title="Catálogo por fabricante, redes y procedimientos verificados">🧠 OEM</button>
           <button class="btn btn-ghost" onclick="Modulos.diagnostico_obd.render()">↻ Actualizar</button>
@@ -6437,7 +6495,7 @@ Modulos.diagnostico_obd = {
   /* Abre el formulario de 🧩 Módulos ya lleno con lo que este escaneo confirmó:
      dirección, y de nota la referencia que entregó el módulo. */
   async nombrarModuloDelEscaneo(ecu) {
-    const s = this._scan;
+    const s = this._centroScan || this._scan;
     const m = ((s && s.por_modulo) || []).find(x => x.ecu === ecu);
     if (!m) return;
     const veh = (s && s.vehiculos) || (this._vehiculos || []).find(v => v.id === (s && s.vehiculo_id)) || {};
@@ -7348,6 +7406,9 @@ Modulos.diagnostico_obd = {
   ver(id) {
     const d = this._data.find(x => x.id === id);
     if (!d) return;
+    /* Abrir un escaneo guardado lo vuelve el escaneo de trabajo: desde acá se
+       entra al Centro de módulos y a "Tomar del escaneo" sin volver a escanear. */
+    this._centroScan = d;
     const v = d.vehiculos;
     UI.modal('🩺 Reporte de Diagnóstico', `
       <div style="font-size:13px">

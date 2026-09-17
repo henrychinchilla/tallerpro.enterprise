@@ -80,9 +80,14 @@
 
     /* ═══════════ NIVEL 1 · RESUMEN DEL VEHÍCULO ═══════════ */
     async modalCentroModulos(scan) {
-      const s = scan || this._centroScan || this._scan;
+      /* Sin argumento se resuelve solo: el que está en curso, el que se abrió,
+         o el más reciente con barrido por módulo. Entrar acá desde la barra —
+         con la app recién recargada, o sea sin escaneo en curso— no puede
+         contestar "no hay escaneos" teniendo la lista llena. */
+      const s = scan || await this._escaneoDeTrabajo();
       if (!s || !Array.isArray(s.por_modulo) || !s.por_modulo.length)
-        return UI.toast('Este escaneo no tiene barrido por módulo. Escaneá con un adaptador que acepte ATSH y en CAN de 11 bits.', 'warn');
+        return UI.toast('Ningún escaneo tiene barrido por módulo todavía. ' +
+          'El barrido corre cuando el dongle acepta ATSH y el vehículo está en CAN de 11 bits.', 'warn');
       this._centroScan = s;
       /* Las definiciones OEM se necesitan para saber qué se le puede hacer a
          cada módulo; se cargan una vez y quedan. */

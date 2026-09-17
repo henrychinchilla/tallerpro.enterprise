@@ -189,6 +189,46 @@ const escaneo = {
   await M.ejecutarPrueba();
   ok('una dirección inválida no manda nada', enviados.length === 0);
 
+  /* ── "No hay escaneos" con la lista llena de escaneos ──────────────────
+     Reportado el 2026-09-17: "me dice que no hay escaneos y por eso no puedo
+     subir los módulos.. pero claro que hay escaneos, hice uno ahora".
+     `_scan` es SOLO el escaneo en curso: al recargar la app queda en null. */
+  M._scan = null; M._centroScan = null;
+  M._data = [escaneo];                     // lo que la pantalla ya tiene cargado
+  ctx.toasts.length = 0;
+  const trabajo = await M._escaneoDeTrabajo();
+  ok('encuentra el escaneo aunque no haya ninguno EN CURSO', trabajo === escaneo);
+
+  ctx.pintado = null;
+  await M.modalCentroModulos();
+  ok('el Centro abre sin escaneo en curso', !!ctx.pintado && /Centro de m/.test(ctx.pintado.titulo));
+  ok('y no dice "no hay escaneos"', !/no hay escaneos/i.test(ctx.toasts.join(' ')));
+
+  M._scan = null; M._centroScan = null;
+  ctx.toasts.length = 0; ctx.pintado = null;
+  await M.modalTomarDelEscaneo();
+  ok('"Tomar del escaneo" también lo encuentra', !!ctx.pintado && /Tomar m/.test(ctx.pintado.titulo));
+
+  /* Solo cuenta un escaneo si de verdad barrió módulos: uno de emisiones
+     nada más no tiene nada que declarar. */
+  M._scan = null; M._centroScan = null;
+  M._data = [{ id:'x', created_at:'2026-09-01', por_modulo:[] }];
+  ctx.DB.getDiagnosticosOBD = async () => [];
+  ok('un escaneo sin barrido por módulo no cuenta', await M._escaneoDeTrabajo() === null);
+  ctx.toasts.length = 0;
+  await M.modalTomarDelEscaneo();
+  ok('y ahí sí se dice, explicando cuándo corre el barrido',
+     /barrido por módulo/i.test(ctx.toasts.join(' ')) && /ATSH/.test(ctx.toasts.join(' ')));
+
+  /* Si el mes que se está mirando no tiene el escaneo, se busca sin límite de
+     fecha antes de decir que no hay. */
+  M._data = [];
+  ctx.DB.getDiagnosticosOBD = async () => [escaneo];
+  ok('busca fuera del mes activo antes de rendirse',
+     (await M._escaneoDeTrabajo()) === escaneo);
+
+  M._scan = escaneo; M._centroScan = escaneo; M._data = [escaneo];
+
   /* ── Ningún botón llama a un método que no existe ── */
   const todo = [html, ficha, fichaMotor].join('\n');
   const llamadas = [...todo.matchAll(/Modulos\.diagnostico_obd\.([A-Za-z_$][\w$]*)/g)].map(x => x[1]);
