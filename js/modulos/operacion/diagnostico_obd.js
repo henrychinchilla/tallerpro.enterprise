@@ -141,6 +141,19 @@ Modulos.diagnostico_obd = {
     return !!this._puenteCanalActivo;
   },
 
+  /* ¿Del otro lado hay un ELM327 al que se le habla en TEXTO?
+     Son tres transportes distintos —BLE del navegador, puente de la app,
+     Bluetooth clásico por COM— con EL MISMO dongle y el mismo diálogo AT.
+     Preguntar `_via === 'ble'` era preguntar por el transporte cuando lo que
+     importaba era el dongle: por eso el escaneo por módulo, el mapa de acceso
+     y todo el UDS punto a punto existían sólo por BLE, y un escaneo por
+     Bluetooth clásico —el del vLinker en modo MFi, que es el caso real de
+     taller— caía al camino de CAN crudo, que necesita el puente RP1210 y por
+     Bluetooth no existe: no fallaba, contestaba nada. */
+  _esELM() {
+    return this._via === 'ble' || this._via === 'android' || this._via === 'serial';
+  },
+
   /* La identidad Device Information es lectura pasiva. Muchos VCI no
      publican un canal OBD por GATT, pero sí dejan ver modelo/firmware en 180A.
      Guardarla permite distinguir "Bluetooth conectado" de "protocolo de datos
@@ -2207,7 +2220,7 @@ Modulos.diagnostico_obd = {
   },
 
   async _udsPedirCAN(reqId, respId, tx, timeout = 2500) {
-    if (this._via === 'ble') {
+    if (this._esELM()) {
       /* El camino ELM ya pasa por _cmd, que traza solo: se silencia para no
          duplicar cada consulta en la bitacora. */
       const antes = this._sinTraza;
@@ -2258,11 +2271,11 @@ Modulos.diagnostico_obd = {
      códigos le hablan a los frenos. Por eso sólo se habilita en CAN de 11 bits,
      donde la difusión es 7DF y la restauración es inequívoca. */
   _elmPuedeModulos() {
-    return this._via === 'ble' && (this._protoNum === 6 || this._protoNum === 8);
+    return this._esELM() && (this._protoNum === 6 || this._protoNum === 8);
   },
 
   async _elmModoModulo(encender) {
-    if (this._via !== 'ble') return true;
+    if (!this._esELM()) return true;
     if (encender) {
       /* ATST fija cuánto espera el ELM antes de contestar NO DATA. Por defecto
          son ~200 ms: con 240 direcciones, casi un minuto de pura espera. */
@@ -2275,13 +2288,41 @@ Modulos.diagnostico_obd = {
     return true;
   },
 
+  /* Hablarle a UN módulo suelto fuera del escaneo (ver su ficha, borrarle los
+     códigos, reiniciarlo). Por USB no hay nada que preparar: cada trama lleva
+     su propia dirección. Por ELM la dirección es ESTADO del dongle —la fija
+     ATSH y ahí se queda—, así que sin devolverla a la difusión al terminar, el
+     monitor en vivo y el borrado general le siguen hablando al módulo de
+     frenos. Va en finally justamente por eso: si la operación falla, la
+     cabecera tiene que volver igual. */
+  async _elmPuntoAPunto(fn) {
+    if (!this._esELM()) return fn();
+    const ok = await this._elmModoModulo(true);
+    if (!ok) throw new Error('Este adaptador no acepta ATSH: no puede dirigirse a un módulo puntual.');
+    try { return await fn(); }
+    finally { await this._elmModoModulo(false); }
+  },
+
+  /* Un módulo suelto sólo se puede tocar con el vehículo enchufado Y con un
+     transporte capaz de dirigirse a él. Devuelve el motivo, no un booleano:
+     "requiere USB" era mentira desde que el ELM también sabe hacerlo, y un
+     mensaje equivocado manda a buscar un cable que no hacía falta. */
+  _puedePuntoAPunto() {
+    if (!this._listo) return { ok: false, motivo: 'El vehículo y el adaptador deben seguir conectados' };
+    if (this._via === 'usb') return { ok: true };
+    if (!this._esELM()) return { ok: false, motivo: 'Esta vía no puede dirigirse a un módulo puntual' };
+    if (!this._elmPuedeModulos()) return { ok: false, motivo:
+      `Por Bluetooth esto necesita CAN de 11 bits (protocolo actual: ${this._protoNum ?? '?'})` };
+    return { ok: true };
+  },
+
   _hex3(req) { return req.toString(16).toUpperCase().padStart(3, '0'); },
 
   /* Toca la puerta de UNA dirección. Devuelve {req,resp} si hay alguien.
      Por BLE el ELM oculta la dirección de respuesta, así que resp va en null y
      la interfaz lo dice en vez de inventarla. */
   async _tocarPuerta(req) {
-    if (this._via === 'ble') {
+    if (this._esELM()) {
       await this._cmd('ATSH ' + this._hex3(req), 2500).catch(() => {});
       let r = null;
       try { r = await this._cmd('3E00', 1500); } catch (_) { return null; }
@@ -2440,7 +2481,7 @@ Modulos.diagnostico_obd = {
   },
 
   _klinePuedeModulos() {
-    return this._via === 'ble' && (this._protoNum === 4 || this._protoNum === 5);
+    return this._esELM() && (this._protoNum === 4 || this._protoNum === 5);
   },
 
   /* Al terminar hay que dejar el adaptador hablando OBD-II otra vez. En CAN
@@ -2784,9 +2825,19 @@ Modulos.diagnostico_obd = {
              destinos de un byte, no IDs CAN. Preguntar por 0x18 en CAN es
              preguntarle a nadie, y ademas ensuciaria la lista de faltantes. */
           if (typeof m.req !== 'number' || m.kline) continue;
-          const k = m.req + ':' + m.resp;
+          /* La clave es SOLO la dirección de ida. Un mapa hecho por ELM guarda
+             `resp: null` —el dongle no revela desde dónde contesta—, así que
+             con la respuesta en la clave el mismo módulo entraba dos veces:
+             una por el escaneo de USB y otra por el de Bluetooth, y el mapa
+             del modelo decía tener el doble de módulos de los que hay. */
+          const k = m.req;
           const y = porDir.get(k);
-          if (y) { y.visto++; continue; }
+          if (y) {
+            y.visto++;
+            if (y.resp == null && m.resp != null) y.resp = m.resp;   // la de USB manda
+            if (!y.nombre && m.nombre) y.nombre = m.nombre;
+            continue;
+          }
           porDir.set(k, { req:m.req, resp:m.resp, ext:!!m.ext, nombre:m.nombre, servicio:m.servicio, visto:1 });
         }
       }
@@ -2803,6 +2854,10 @@ Modulos.diagnostico_obd = {
     const extPrev = this._canExt;
     try {
       for (const c of conocidas) {
+        /* Por ELM la cabecera se fija con ATSH de TRES dígitos: una dirección
+           de 29 bits no entra ahí. Preguntarla igual no es preguntar de más,
+           es dejar la cabecera mal puesta para la siguiente. */
+        if (c.ext && this._esELM()) continue;
         /* El mapa guarda si a ese modulo se le habla en 11 o en 29 bits: la
            trama se arma distinta, asi que preguntar con el direccionamiento
            equivocado es no preguntar. */
@@ -2842,7 +2897,7 @@ Modulos.diagnostico_obd = {
        que responden igual por ser los de emisiones: eso no es "encontre los
        modulos", es "encontre los de siempre". Solo entonces vale la pena
        gastar los ~18 s del segundo barrido. */
-    if (mods.length <= 2 && this._via !== 'ble') {
+    if (mods.length <= 2 && !this._esELM()) {
       if (log) log('&nbsp;&nbsp;Pocos modulos en 11 bits — probando direccionamiento de 29 bits...');
       const b29 = await this._barrerModulos29(log);
       for (const b of b29)
@@ -3013,10 +3068,14 @@ Modulos.diagnostico_obd = {
       const v = f.vehiculos || {};
       const clave = [v.marca || '?', v.modelo || '?', v.anio || ''].join(' ').trim();
       const g = porModelo.get(clave) || { clave, escaneos:0, vehiculos:new Set(), dirs:new Map(),
-                                          bits:null, baud:null, ultimo:f.created_at };
+                                          bits:null, baud:null, vias:new Set(), ultimo:f.created_at };
       g.escaneos++;
       if (f.vehiculo_id) g.vehiculos.add(f.vehiculo_id);
       const m = f.mapa_acceso || {};
+      /* Por dónde se entró. Sin esto no se podía contestar si un modelo se
+         mapeó con el cable o con el dongle Bluetooth, que es justamente lo que
+         decide qué herramienta llevarse al vehículo siguiente. */
+      if (m.via) g.vias.add(this._NOMBRE_VIA[m.via] || m.via);
       if (g.bits == null) { g.bits = m.bits; g.baud = m.baud; }
       for (const x of (m.modulos || [])) if (typeof x.req === 'number' && !g.dirs.has(x.req))
         g.dirs.set(x.req, x.nombre || ('0x' + x.req.toString(16).toUpperCase()));
@@ -3025,8 +3084,9 @@ Modulos.diagnostico_obd = {
     const grupos = [...porModelo.values()].sort((a, b) => b.dirs.size - a.dirs.size);
     const cuerpo = !grupos.length
       ? `<p style="font-size:13px;color:var(--text3)">Todavía no hay ningún mapa. El mapa se arma solo:
-         cada escaneo por USB de un vehículo liviano guarda por dónde se le entró, y desde el segundo
-         del mismo modelo el escaneo empieza a usarlo.</p>`
+         cada escaneo de un vehículo liviano guarda por dónde se le entró —por USB, y también por
+         Bluetooth cuando el dongle acepta ATSH y el vehículo está en CAN de 11 bits— y desde el
+         segundo del mismo modelo el escaneo empieza a usarlo.</p>`
       : `<table class="table" style="font-size:12px">
           <thead><tr><th>Modelo</th><th>Módulos que sabemos alcanzar</th><th style="text-align:center">Unidades</th><th style="text-align:center">Bus</th></tr></thead>
           <tbody>${grupos.map(g => `<tr>
@@ -3034,7 +3094,8 @@ Modulos.diagnostico_obd = {
             <td><span class="badge badge-cyan">${g.dirs.size}</span>
               <div style="font-size:10.5px;color:var(--text3);margin-top:3px;line-height:1.5">${[...g.dirs.values()].map(n => UI.esc(n)).join(' · ')}</div></td>
             <td style="text-align:center">${g.vehiculos.size}</td>
-            <td style="text-align:center;font-size:11px;white-space:nowrap">${g.bits ? `${g.bits} bits<br>${g.baud}k` : '—'}</td>
+            <td style="text-align:center;font-size:11px;white-space:nowrap">${g.bits ? `${g.bits} bits<br>${g.baud}k` : '—'}
+              ${g.vias.size ? `<div style="color:var(--text3);font-size:10px;margin-top:2px">${[...g.vias].map(v => UI.esc(v)).join(' · ')}</div>` : ''}</td>
           </tr>`).join('')}</tbody>
         </table>
         <div style="font-size:10.5px;color:var(--text3);margin-top:10px;line-height:1.5">
@@ -3044,6 +3105,8 @@ Modulos.diagnostico_obd = {
         </div>`;
     if (el) el.innerHTML = cuerpo;
   },
+
+  _NOMBRE_VIA: { ble:'Bluetooth BLE', android:'Bluetooth de la app', serial:'Bluetooth clásico', usb:'USB' },
 
   /* El mapa que deja este escaneo, para que lo aproveche el próximo del mismo
      modelo. Sólo módulos que de verdad contestaron. */
@@ -5293,7 +5356,7 @@ Modulos.diagnostico_obd = {
            quien lo quiera, en vez de cobrarselo a todos los escaneos. */
         this._ofreceKline = true;
         log('Escaneo OBD-II completo. <span style="color:var(--text3)">Si querés buscar además otros módulos, hay un botón al final del reporte.</span>');
-      } else if (this._via === 'ble') {
+      } else if (this._esELM()) {
         log('Escaneo por módulo no disponible en este protocolo por Bluetooth ' +
             `(protocolo ${this._protoNum}: requiere CAN de 11 bits, o ISO 14230/KWP2000 para el barrido en K-line).`);
       }
@@ -5693,8 +5756,10 @@ Modulos.diagnostico_obd = {
     const veh = (s && s.vehiculos) ||
                 (this._vehiculos || []).find(v => v.id === (s && s.vehiculo_id)) || {};
     /* Borrar y reiniciar solo tienen sentido con el vehículo enchufado: al
-       abrir un escaneo guardado no hay a quién mandarle el comando. */
-    const vivo = s === this._scan && this._via === 'usb' && this._listo;
+       abrir un escaneo guardado no hay a quién mandarle el comando. Y no es
+       exclusivo del USB: el mismo ELM que barrió los módulos sabe dirigirse a
+       uno solo. */
+    const vivo = s === this._scan && this._puedePuntoAPunto().ok;
     const conFallas = ms.filter(m => m.codigos && m.codigos.length);
     const total = conFallas.reduce((n, m) => n + m.codigos.length, 0);
     const activos = conFallas.reduce((n, m) => n + m.codigos.filter(c => c.activo).length, 0);
@@ -6221,20 +6286,26 @@ Modulos.diagnostico_obd = {
     const ms = (this._scan && this._scan.por_modulo) || [];
     const m = ms.find(x => x.ecu === ecu);
     if (!m) return;
-    if (this._via !== 'usb' || !this._listo) { UI.toast('Requiere el vehículo conectado por USB', 'error'); return; }
+    const permiso = this._puedePuntoAPunto();
+    if (!permiso.ok) { UI.toast(permiso.motivo, 'error'); return; }
 
     UI.modal(`📊 ${m.nombre}`, `<div id="mod-cuerpo" style="font-size:12.5px">
       <p style="color:var(--text3)">Consultando el módulo…</p></div>`, '760px');
     const pon = h => { const el = document.getElementById('mod-cuerpo'); if (el) el.innerHTML = h; };
 
     try {
-      const ident = await this._identificarModulo(m.ecu, m.resp);
-      const datos = await this._explorarDatos(m.ecu, m.resp);
+      const { ident, datos } = await this._elmPuntoAPunto(async () => ({
+        ident: await this._identificarModulo(m.ecu, m.resp),
+        datos: await this._explorarDatos(m.ecu, m.resp),
+      }));
       m.ident = ident; m.datos_uds = datos;
 
       pon(`
         <div style="font-size:11px;color:var(--text3);margin-bottom:10px">
-          Dirección 0x${m.ecu.toString(16).toUpperCase()} · responde en 0x${m.resp.toString(16).toUpperCase()}
+          Dirección 0x${m.ecu.toString(16).toUpperCase()} ·
+          ${m.resp == null
+            ? 'el ELM no revela desde qué dirección contesta'
+            : `responde en 0x${m.resp.toString(16).toUpperCase()}`}
         </div>
         ${ident ? `<div class="card" style="padding:12px;margin-bottom:10px">
           <b style="font-size:12px">IDENTIFICACIÓN DEL MÓDULO</b>
@@ -6326,7 +6397,8 @@ Modulos.diagnostico_obd = {
     const ms = (this._scan && this._scan.por_modulo) || [];
     const conFallas = ms.filter(m => m.codigos && m.codigos.length);
     if (!conFallas.length) { UI.toast('No hay códigos por módulo para borrar', 'info'); return; }
-    if (this._via !== 'usb') { UI.toast('El borrado por módulo requiere la conexión USB', 'error'); return; }
+    const permiso = this._puedePuntoAPunto();
+    if (!permiso.ok) { UI.toast(permiso.motivo, 'error'); return; }
 
     const total = conFallas.reduce((n, m) => n + m.codigos.length, 0);
     const ok = await UI.confirmar(
@@ -6347,11 +6419,15 @@ Modulos.diagnostico_obd = {
     this._log('💾 Escaneo guardado antes de borrar ✓');
 
     let bien = 0, mal = 0;
-    for (const m of conFallas) {
-      const r = await this._borrarModulo(m.ecu, m.resp);
-      if (r.ok) { bien++; this._log(`🧹 ${m.nombre}: borrado ✓`); m.codigos = []; }
-      else { mal++; this._log(`<span style="color:var(--amber)">⚠️ ${UI.esc(m.nombre)}: no se pudo borrar (${UI.esc(r.motivo)})</span>`); }
-    }
+    try {
+      await this._elmPuntoAPunto(async () => {
+        for (const m of conFallas) {
+          const r = await this._borrarModulo(m.ecu, m.resp);
+          if (r.ok) { bien++; this._log(`🧹 ${m.nombre}: borrado ✓`); m.codigos = []; }
+          else { mal++; this._log(`<span style="color:var(--amber)">⚠️ ${UI.esc(m.nombre)}: no se pudo borrar (${UI.esc(r.motivo)})</span>`); }
+        }
+      });
+    } catch (e) { this._log(`<span style="color:var(--red)">✗ ${UI.esc(e.message)}</span>`); UI.toast(e.message, 'error'); }
     if (this._scan) this._scan.dtcs_borrados = true;
     this._renderResultado();
     UI.toast(mal ? `${bien} borrado(s), ${mal} rechazado(s)` : `${bien} módulo(s) borrados ✓`, mal ? 'warn' : 'success');
@@ -6365,7 +6441,8 @@ Modulos.diagnostico_obd = {
     const ms = (this._scan && this._scan.por_modulo) || [];
     const m = ms.find(x => x.ecu === ecu);
     if (!m) return;
-    if (this._via !== 'usb') { UI.toast('El reinicio requiere la conexión USB', 'error'); return; }
+    const permiso = this._puedePuntoAPunto();
+    if (!permiso.ok) { UI.toast(permiso.motivo, 'error'); return; }
 
     const ok = await UI.confirmar(
       `¿Reiniciar <b>${UI.esc(m.nombre)}</b>?<br><br>` +
@@ -6376,7 +6453,7 @@ Modulos.diagnostico_obd = {
     if (!ok) return;
 
     try {
-      const r = await this._udsPedir(m.ecu, m.resp, [0x11, 0x01], 4000);
+      const r = await this._elmPuntoAPunto(() => this._udsPedir(m.ecu, m.resp, [0x11, 0x01], 4000));
       if (r && r[0] === 0x51) {
         this._log(`🔄 ${m.nombre}: reiniciado ✓ — esperá unos segundos y volvé a escanear`);
         UI.toast('Módulo reiniciado ✓');

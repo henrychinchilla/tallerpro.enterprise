@@ -109,9 +109,16 @@
         destino.estado=r.estado||'escaneada';
         const unicos=new Map();
         for(const m of r.modulos||[]) {
-          const req=Number(m.req), resp=Number(m.resp);
-          if(!Number.isInteger(req)||!Number.isInteger(resp)) continue;
-          unicos.set(`${req}:${resp}`,{req,resp,nombre:String(m.nombre||'ECU desconocida'),protocolo:m.protocolo||'UDS/ISO-TP',simulado:!!m.simulado});
+          const req=Number(m.req);
+          /* La direccion de respuesta puede no saberse: un ELM327 contesta por
+             el modulo pero NO dice desde que ID lo hace. Exigirla dejaba fuera
+             a todos los modulos hallados por Bluetooth — el mapa salia vacio
+             aunque el barrido hubiera encontrado ocho. Se guarda en null y la
+             interfaz lo dice, en vez de inventar una direccion. */
+          const resp=(m.resp===null||m.resp===undefined||m.resp==='')?null:Number(m.resp);
+          if(!Number.isInteger(req)) continue;
+          if(resp!==null&&!Number.isInteger(resp)) continue;
+          unicos.set(`${req}:${resp===null?'?':resp}`,{req,resp,nombre:String(m.nombre||'ECU desconocida'),protocolo:m.protocolo||'UDS/ISO-TP',simulado:!!m.simulado});
         }
         destino.modulos=[...unicos.values()];
       }
@@ -328,7 +335,7 @@
          para saber si Windows ve un adaptador. Antes este botón exigía
          `_listo`, por eso siempre decía "conecta primero" cuando el USB-Link
          estaba enchufado pero aún no se había iniciado un escaneo. */
-      if (this._via==='ble' && this._listo) {
+      if (this._esELM() && this._listo) {
         const consultar=async c=>{ try{return String(await this._cmd(c,1800)).replace(/\s+/g,' ').trim();}catch(e){return 'sin respuesta';} };
         const [ati,desc,serie,volt,sti]=await Promise.all([consultar('ATI'),consultar('AT@1'),consultar('AT@2'),consultar('ATRV'),consultar('STI')]);
         const esMS=/vlinker\s*ms|mic3425/i.test([ati,desc,sti].join(' '));
@@ -430,7 +437,7 @@
     },
     _topologiaOEMHTML(t) {
       return `<div class="card" style="padding:14px"><div style="display:flex;justify-content:space-between;gap:10px"><b>Mapa de redes · ${UI.esc(t.modo)}</b><span class="badge badge-${t.modo==='simulador'?'amber':'green'}">${t.total_modulos} módulo(s)</span></div>
-      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:8px;margin-top:10px">${t.redes.map(r=>`<div style="border:1px solid var(--border);border-radius:8px;padding:9px"><b>${UI.esc(r.nombre)}</b><br><small>${UI.esc(r.estado)}</small>${r.modulos.map(m=>`<div style="margin-top:6px;font-size:12px"><b>${UI.esc(m.nombre)}</b><br><code>${m.req.toString(16).toUpperCase()} → ${m.resp.toString(16).toUpperCase()}</code></div>`).join('')||'<div style="margin-top:6px;color:var(--text3);font-size:12px">Sin resultados</div>'}</div>`).join('')}</div></div>`;
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:8px;margin-top:10px">${t.redes.map(r=>`<div style="border:1px solid var(--border);border-radius:8px;padding:9px"><b>${UI.esc(r.nombre)}</b><br><small>${UI.esc(r.estado)}</small>${r.modulos.map(m=>`<div style="margin-top:6px;font-size:12px"><b>${UI.esc(m.nombre)}</b><br><code>${m.req.toString(16).toUpperCase()} → ${m.resp==null?'?':m.resp.toString(16).toUpperCase()}</code></div>`).join('')||'<div style="margin-top:6px;color:var(--text3);font-size:12px">Sin resultados</div>'}</div>`).join('')}</div></div>`;
     },
     async agregarReferenciasOEM() {
       if(typeof rolEnLista==='function'&&!rolEnLista(['admin','gerente_tal'])) return UI.toast('No tienes permiso para cargar referencias OEM','error');
@@ -466,8 +473,11 @@
       if(!this._listo) return UI.toast('El adaptador no quedo listo; también puedes usar Simular Ford/GM','warn');
       UI.toast('Explorando HS-CAN sin ejecutar actuadores…','info');
       try {
-        const mods=await this._escanearModulos(null,null);
-        const hs=(mods||[]).map(m=>({req:Number(m.req??m.ecu),resp:Number(m.resp),nombre:m.nombre||'ECU desconocida',protocolo:m.servicio||m.protocolo}));
+        /* Por ELM la direccion es estado del dongle: hay que fijarla antes y
+           devolverla despues, o el monitor en vivo queda hablandole al ultimo
+           modulo consultado. */
+        const mods=await this._elmPuntoAPunto(()=>this._escanearModulos(null,null));
+        const hs=(mods||[]).map(m=>({req:Number(m.req??m.ecu),resp:(m.resp===null||m.resp===undefined)?null:Number(m.resp),nombre:m.nombre||'ECU desconocida',protocolo:m.servicio||m.protocolo}));
         this._oemTopologia=Motor.construirTopologia([{id:'hs',estado:'escaneada',modulos:hs}],{modo:'real',adaptador:this._oemAdaptador?.modelo||this._via});
         await DB.registrarEjecucionOEM({operacion:'mapa_redes_lectura',estado:'exitosa',diagnostico_id:this._scan?.id||null,vehiculo_id:this._scan?.vehiculo_id||null,evidencia:this._oemTopologia});
         this.modalOEM();
