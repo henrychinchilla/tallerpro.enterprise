@@ -439,9 +439,12 @@ Modulos.diagnostico_obd = {
     if (this._listo) return { nombre: this._scan?.adaptador || 'adaptador ya conectado',
                               protocolo: this._scan?.protocolo || null, yaEstaba: true };
 
-    /* Sin via elegida se usa la mejor disponible: dentro de la app, su puente
-       (alcanza SPP y BLE); en un navegador, Web Bluetooth. */
-    if (!this._via) this._via = this._nativo ? 'android' : 'ble';
+    /* Sin via elegida se elige la MEJOR DISPONIBLE, no una por defecto a ciegas:
+       · dentro de la app, su puente (alcanza SPP clasico y BLE);
+       · en una PC, si el puente local ve un puerto Bluetooth emparejado, ESE,
+         porque un navegador solo alcanza BLE y casi ningun dongle lo publica;
+       · si no hay puente, Web Bluetooth. */
+    if (!this._via) this._via = this._nativo ? 'android' : (await this._hayPuertoSerie() ? 'serial' : 'ble');
 
     let nombre, protocolo;
     if (this._via === 'usb' || this._via === 'auto') {
@@ -449,11 +452,67 @@ Modulos.diagnostico_obd = {
       ({ nombre, protocolo } = await this._usbInit(log));
       return { nombre, protocolo };
     }
+    /* Por COM hace falta saber CUAL. Con el puente al dia viene marcado cual
+       parece escaner (`obd`) y cuales son puertos locales entrantes, que nunca
+       sirven; si no se puede decidir solo, se pregunta en vez de adivinar. */
+    if (this._via === 'serial' && !/^SERIAL:/i.test(this._api || '')) {
+      this._api = await this._elegirPuertoSerie();
+      if (!this._api) throw new Error('No se eligió ningún puerto COM.');
+    }
     if (this._via === 'serial')       ({ nombre } = await this._serialInit(log));
     else if (this._via === 'android') ({ nombre } = await this._androidInit(log));
     else                               nombre = await this._conectar();
     protocolo = await this._init(log);
     return { nombre, protocolo };
+  },
+
+  /* Puertos serie que ve el puente local. Devuelve [] si no hay puente: en un
+     telefono no falta, no existe. */
+  async _puertosSerie() {
+    try {
+      await this._puenteConectar();
+      const r = await this._puenteOp({ op:'apis' }, 5000);
+      return ((r && r.apis) || []).filter(a => /^SERIAL:/i.test(String(a.api || '')) && a.instalado);
+    } catch (_) { return []; }
+  },
+
+  async _hayPuertoSerie() {
+    const p = await this._puertosSerie();
+    /* Un puerto LOCAL entrante no es un escaner: contarlo haria elegir la via
+       COM en una PC que no tiene ningun dongle emparejado. */
+    return p.some(a => a.local !== true);
+  },
+
+  /* Elige el puerto del escaner. Si el puente lo marca como OBD, no se
+     pregunta nada; si hay varios candidatos, decide el usuario. */
+  async _elegirPuertoSerie() {
+    const puertos = (await this._puertosSerie()).filter(a => a.local !== true);
+    if (!puertos.length) throw new Error(
+      'El puente no ve ningún puerto Bluetooth emparejado. Emparejá el escáner en ' +
+      'Configuración › Bluetooth de Windows y reintentá.');
+
+    const obd = puertos.filter(a => a.obd);
+    if (obd.length === 1) return obd[0].api;
+    if (puertos.length === 1) return puertos[0].api;
+
+    const lista = obd.length ? obd : puertos;
+    return new Promise(res => {
+      this._puertoElegido = api => { UI.cerrarModal(); res(api || null); };
+      UI.modal('🔌 ¿Por cuál puerto está el escáner?', `
+        <p style="font-size:12.5px;color:var(--text3)">
+          Windows crea un COM por cada perfil Bluetooth emparejado. Los
+          <i>puertos locales entrantes</i> ya se descartaron: nunca hay un escáner ahí.
+        </p>
+        ${lista.map(a => `
+          <button class="btn btn-ghost" style="width:100%;text-align:left;margin-bottom:6px"
+            onclick="Modulos.diagnostico_obd._puertoElegido('${UI.jsAttr(a.api)}')">
+            <b>${UI.esc(a.equipo || a.nombre || a.api)}</b>
+            ${a.obd ? ' <span style="color:var(--green);font-size:11px">🔌 parece un escáner OBD</span>' : ''}
+            <span style="display:block;font-size:11px;color:var(--text3)">${UI.esc(a.api)}</span>
+          </button>`).join('')}
+        <button class="btn btn-ghost" style="margin-top:6px"
+          onclick="Modulos.diagnostico_obd._puertoElegido(null)">Cancelar</button>`, '460px');
+    });
   },
 
   async _init(log) {
@@ -4731,7 +4790,7 @@ Modulos.diagnostico_obd = {
         <select class="form-select" id="obd-api" onchange="Modulos.diagnostico_obd._api=this.value||null">
           <option value="">Buscando adaptadores…</option>
         </select>
-        <div style="font-size:11px;color:var(--text3);margin-top:4px">
+        <div id="obd-api-nota" style="font-size:11px;color:var(--text3);margin-top:4px">
           Un taller con software de fábrica (Cummins, Navistar, Allison…) tiene varios adaptadores RP1210 registrados. Si el de siempre no responde, probá con otro.
         </div>
       </div>
@@ -5018,6 +5077,32 @@ Modulos.diagnostico_obd = {
   },
 
   /* Oculta el selector y la prueba en Bluetooth, donde no aplican */
+  /* Explica POR QUE no se ven los nombres de los equipos Bluetooth, que es lo
+     unico util cuando no se ven. Son dos causas distintas y el arreglo de cada
+     una es distinto: puente desactualizado, o dongle sin emparejar en Windows. */
+  _avisoPuente(viejo, seriales) {
+    const nota = document.getElementById('obd-api-nota');
+    if (!nota) return;
+    if (viejo) {
+      nota.innerHTML = '<b style="color:var(--amber)">⚠️ El puente de esta PC está desactualizado.</b> ' +
+        'Por eso los puertos salen como <code>SERIAL:COMx</code> y no con el nombre del equipo ' +
+        '(el nombre lo resuelve el puente leyendo el registro de Windows; el navegador no puede). ' +
+        'Descargá de nuevo <a href="/puente-obd/instalar-puente.bat" download style="color:var(--cyan)">instalar-puente.bat</a>, ' +
+        'cerrá la ventana del puente que esté abierta y volvé a ejecutarlo.';
+      return;
+    }
+    /* Puente al dia: si aun asi no hay nombre, el equipo no esta emparejado. */
+    const sinNombre = (seriales || []).filter(a => !a.equipo && !a.local);
+    if (sinNombre.length && !(seriales || []).some(a => a.equipo)) {
+      nota.innerHTML = 'Ningún puerto tiene nombre de equipo: eso pasa cuando el escáner ' +
+        '<b>no está emparejado en Windows</b>. Emparejalo en Configuración › Bluetooth y reintentá. ' +
+        'Los que dicen <i>puerto local entrante</i> nunca sirven.';
+      return;
+    }
+    nota.innerHTML = 'Un taller con software de fábrica (Cummins, Navistar, Allison…) tiene varios ' +
+      'adaptadores RP1210 registrados. Si el de siempre no responde, probá con otro.';
+  },
+
   _verApis() {
     const via = document.getElementById('obd-via')?.value;
     const clasico = via === 'classic';
@@ -5056,6 +5141,18 @@ Modulos.diagnostico_obd = {
       /* Sin .INI no hay drivers de ese adaptador: mostrarlo solo confundiría */
       const apis = ((r && r.apis) || []).filter(a => a.instalado);
       if (!apis.length) { poner('<option value="">No hay ningún adaptador RP1210 instalado</option>'); return; }
+      /* El nombre del equipo emparejado lo resuelve EL PUENTE leyendo BTHENUM
+         del registro de Windows; el navegador no tiene forma de saberlo. Un
+         puente anterior a ese cambio (2026-09-02) devuelve los puertos sin los
+         campos `equipo` y `local`, y entonces el desplegable muestra
+         "SERIAL:COM6" en vez de "vLinker MS 09327 (COM6)".
+         Eso no se puede arreglar desde aqui — hay que actualizar el puente — y
+         lo unico peor que no mostrar el nombre es no explicar por que. */
+      const seriales = apis.filter(a => /^SERIAL:/i.test(String(a.api || '')));
+      const puenteViejo = seriales.length > 0 &&
+        !seriales.some(a => Object.prototype.hasOwnProperty.call(a, 'local'));
+      this._avisoPuente(puenteViejo, seriales);
+
       poner(apis.map(a => {
         /* Un COM de Bluetooth no declara protocolos: la lista que manda el
            puente es un valor por defecto, no algo que el dongle haya dicho.
