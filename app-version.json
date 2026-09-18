@@ -34,24 +34,24 @@
   "android": {
     "versionCode": 4,
     "versionName": "1.1.0",
-    "fecha": "2026-09-16",
+    "fecha": "2026-09-17",
     "paquete": "com.cmtelecom.nexuspro.nativa",
     "minAndroid": "7.0",
     "nativa": true,
     "apkUrl": "/nexuspro-nativa.apk",
-    "apkKB": 18009,
+    "apkKB": 18005,
     "apk32Url": "/nexuspro-nativa-32bits.apk",
-    "apk32KB": 15434,
+    "apk32KB": 15430,
     "apkUniversalUrl": "https://github.com/henrychinchilla/tallerpro.enterprise/releases/tag/nativa-v1.0.0",
     "reinstalarSiMenorQue": 1,
     "enPlayStore": false,
     "playUrl": "https://play.google.com/store/apps/details?id=com.cmtelecom.nexuspro.nativa",
     "novedades": [
-      "Entrar con Google: ahora SI se puede. En el cascaron WebView era imposible (Google rechaza OAuth ahi); la app nativa abre el navegador de verdad y recibe el control de vuelta",
-      "Recuperar contrasena, por la misma Edge Function que usa el sitio",
-      "ARREGLADO: la app autenticaba y se caia sola con AuthApiException",
-      "El error de ingreso muestra mensaje, codigo y estado HTTP",
-      "Escaner OBD-II por Bluetooth clasico (SPP) y BLE"
+      "Diagnóstico OBD-II Profesional: decodificación Modo 06 (Misfire por cilindro, Catalizador, EVAP, O2)",
+      "Información del Vehículo Modo 09: VIN, ID de Calibración (CALID) y Hash CVN anti-reprogramación",
+      "PIDs Extendidos Hyundai / Kia UDS: Temp Transmisión (ATF), Sensor Knock KSDS, Velocidad Ruedas ABS",
+      "Soporte Estándar Pesado SAE J1939: PGN 65262, 65263, 65271, 65265 y códigos de falla DM1/DM2",
+      "Escáner OBD-II Nativo por Bluetooth Clásico (SPP) y BLE con interfaz de relojes/gráficas en vivo"
     ]
   }
 }
