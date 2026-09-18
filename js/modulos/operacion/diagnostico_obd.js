@@ -6917,10 +6917,163 @@ Modulos.diagnostico_obd = {
   },
 
   _vivoHTML(d, excluir = []) {
-    return this._datosLista(d, excluir)
-      .map(i => `<div style="background:var(--surface2);border-radius:6px;padding:6px 8px">
-        <div style="font-size:10px;color:var(--text3)">${i[0]}</div><b>${i[1]}${i[2]}</b></div>`).join('')
-      || '<span style="color:var(--text3)">Sin datos (¿motor apagado?)</span>';
+    return this._vivoCategorizadoHTML(d, excluir);
+  },
+
+  _findPIDDefByKey(k) {
+    if (k === 'volt') {
+      return { k:'volt', l:'Voltaje Batería/ECU', u:' V', r:[13.2,14.8], rc:'motor encendido', a:true, cat:'elec' };
+    }
+    return Object.values(this._PIDS).find(p => p.k === k) || null;
+  },
+
+  _evaluarSensorKey(k, val) {
+    const def = this._findPIDDefByKey(k);
+    const lb = this._labels()[k] || [k, ''];
+    if (!def || typeof val !== 'number') {
+      return {
+        label: lb[0],
+        unidad: lb[1],
+        status: 'normal',
+        badge: '',
+        ref: '',
+        cat: 'chassis'
+      };
+    }
+
+    let status = 'normal';
+    let badge = '<span style="font-size:9.5px;padding:2px 6px;border-radius:4px;background:rgba(34,197,94,0.15);color:var(--green);font-weight:700">✓ NORMAL</span>';
+    let ref = def.r ? `Ref: ${def.r[0]} – ${def.r[1]}${def.u}${def.rc ? ` (${def.rc})` : ''}` : '';
+
+    if (def.r && (val < def.r[0] || val > def.r[1])) {
+      if (def.a) {
+        status = 'critico';
+        badge = '<span style="font-size:9.5px;padding:2px 6px;border-radius:4px;background:rgba(239,68,68,0.15);color:var(--red);font-weight:700">🚨 CRÍTICO</span>';
+      } else {
+        status = 'advertencia';
+        badge = '<span style="font-size:9.5px;padding:2px 6px;border-radius:4px;background:rgba(245,158,11,0.15);color:var(--amber);font-weight:700">⚠️ ADVERTENCIA</span>';
+      }
+    }
+
+    return {
+      label: def.l || lb[0],
+      unidad: def.u !== undefined ? def.u : lb[1],
+      status,
+      badge,
+      ref,
+      cat: def.cat || 'chassis'
+    };
+  },
+
+  _vivoCategorizadoHTML(d, excluir = []) {
+    const entries = Object.entries(d || {}).filter(([k, v]) => v !== null && v !== undefined && !excluir.includes(k));
+    if (!entries.length) {
+      return '<span style="color:var(--text3)">Sin datos (¿motor apagado?)</span>';
+    }
+
+    const catNombres = {
+      motor: '🚀 Motor & Transmisión',
+      mezcla: '⛽ Mezcla & Combustible',
+      temp: '🌡️ Temperaturas',
+      elec: '⚡ Sistema Eléctrico',
+      chassis: '🚗 Chasis & Vehículo'
+    };
+
+    const grupos = { motor: [], mezcla: [], temp: [], elec: [], chassis: [] };
+
+    for (const [k, v] of entries) {
+      const evalData = this._evaluarSensorKey(k, v);
+      const cat = evalData.cat && grupos[evalData.cat] ? evalData.cat : 'chassis';
+      grupos[cat].push({ k, v, ...evalData });
+    }
+
+    let html = '';
+    for (const [catKey, items] of Object.entries(grupos)) {
+      if (!items.length) continue;
+      html += `
+        <div style="margin-top:10px">
+          <div style="font-size:11px;font-weight:700;color:var(--brand);margin-bottom:6px;text-transform:uppercase;letter-spacing:0.5px">${catNombres[catKey]}</div>
+          <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:8px">
+            ${items.map(i => {
+              const colorBorder = i.status === 'critico' ? 'var(--red)' : i.status === 'advertencia' ? 'var(--amber)' : 'var(--border)';
+              return `
+                <div style="background:var(--surface2);border-radius:8px;padding:8px 10px;border:1px solid ${colorBorder}">
+                  <div style="display:flex;justify-content:space-between;align-items:center;gap:4px">
+                    <span style="font-size:11px;color:var(--text3);font-weight:600">${UI.esc(i.label)}</span>
+                    ${i.badge}
+                  </div>
+                  <div style="font-size:18px;font-weight:800;color:var(--text);margin:2px 0">
+                    ${i.v}<span style="font-size:12px;font-weight:600;color:var(--text3);margin-left:2px">${UI.esc(i.unidad)}</span>
+                  </div>
+                  ${i.ref ? `<div style="font-size:10px;color:var(--text3)">${UI.esc(i.ref)}</div>` : ''}
+                </div>
+              `;
+            }).join('')}
+          </div>
+        </div>
+      `;
+    }
+    return html;
+  },
+
+  _vivoCategorizadoPDF(d, excluir = []) {
+    const entries = Object.entries(d || {}).filter(([k, v]) => v !== null && v !== undefined && !excluir.includes(k));
+    if (!entries.length) return '';
+
+    const catNombres = {
+      motor: '🚀 MOTOR & TRANSMISIÓN',
+      mezcla: '⛽ MEZCLA & COMBUSTIBLE',
+      temp: '🌡️ TEMPERATURAS',
+      elec: '⚡ SISTEMA ELÉCTRICO',
+      chassis: '🚗 CHASIS & VEHÍCULO'
+    };
+
+    const grupos = { motor: [], mezcla: [], temp: [], elec: [], chassis: [] };
+
+    for (const [k, v] of entries) {
+      const evalData = this._evaluarSensorKey(k, v);
+      const cat = evalData.cat && grupos[evalData.cat] ? evalData.cat : 'chassis';
+      grupos[cat].push({ k, v, ...evalData });
+    }
+
+    let html = '<div class="section"><b>DATOS AL MOMENTO DEL ESCANEO:</b>';
+    for (const [catKey, items] of Object.entries(grupos)) {
+      if (!items.length) continue;
+      html += `
+        <div style="margin-top:8px">
+          <b style="font-size:11px;color:#2563EB">${catNombres[catKey]}</b>
+          <table style="margin-top:4px">
+            <thead>
+              <tr>
+                <th style="font-size:11px">Sensor</th>
+                <th style="font-size:11px">Valor Medido</th>
+                <th style="font-size:11px">Rango de Referencia</th>
+                <th style="font-size:11px">Estado</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${items.map(i => {
+                const tagStatus = i.status === 'critico'
+                  ? '<span style="color:#DC2626;font-weight:bold">🚨 CRÍTICO</span>'
+                  : i.status === 'advertencia'
+                  ? '<span style="color:#D97706;font-weight:bold">⚠️ ADVERTENCIA</span>'
+                  : '<span style="color:#16A34A;font-weight:bold">✓ NORMAL</span>';
+                return `
+                  <tr>
+                    <td><b>${UI.esc(i.label)}</b></td>
+                    <td><b>${i.v}${UI.esc(i.unidad)}</b></td>
+                    <td style="font-size:11px;color:#555">${UI.esc(i.ref || '—')}</td>
+                    <td>${tagStatus}</td>
+                  </tr>
+                `;
+              }).join('')}
+            </tbody>
+          </table>
+        </div>
+      `;
+    }
+    html += '</div>';
+    return html;
   },
 
   /* ═══════════ MONITOR EN VIVO (sensores seleccionables + gráficas + grabación) ═══════════ */
@@ -7033,8 +7186,8 @@ Modulos.diagnostico_obd = {
       const est = this._estadoSensor(def, v);
       const color = est === 'mal' ? 'red' : est === 'ok' ? 'green' : 'cyan';
       const redondo = x => Math.round(x * 100) / 100;
-      const mm = vals.length > 1
-        ? `mín ${redondo(Math.min(...vals))} · máx ${redondo(Math.max(...vals))}` : '';
+      const mm = vals.length > 0
+        ? `Mín: ${redondo(Math.min(...vals))}${def.u||''} | Máx: ${redondo(Math.max(...vals))}${def.u||''}` : '';
       const ref = def.r
         ? `ref ${def.r[0]}–${def.r[1]}${def.u}${def.rc ? ` (${def.rc})` : ''}`
         : 'sin referencia';
@@ -7056,7 +7209,7 @@ Modulos.diagnostico_obd = {
             <span style="font-size:10px;color:var(--${color})">${est === 'mal' ? '⚠ ALERTA' : est === 'ok' ? '✓ NORMAL' : 'EN VIVO'}</span>
           </div>
           ${this._gaugeSVG(v, minVal, maxVal, def.l, def.u, color)}
-          <div style="font-size:10px;color:var(--text3);margin-top:4px">${mm ? mm + ' · ' : ''}${ref}</div>
+          <div style="font-size:10px;color:var(--text3);margin-top:4px">${mm ? `<b style="color:var(--text2)">${mm}</b> · ` : ''}${ref}</div>
         </div>`;
       }
 
@@ -7069,7 +7222,7 @@ Modulos.diagnostico_obd = {
           </div>
           <div style="height:${z ? '220px' : '110px'};margin:8px 0">${this._spark(vals, def.r, color)}</div>
           <div style="font-size:10px;color:var(--text3);display:flex;justify-content:space-between">
-            <span>${mm}</span><span>${ref}</span>
+            <span>${mm ? `<b style="color:var(--text2)">${mm}</b>` : ''}</span><span>${ref}</span>
           </div>
         </div>`;
       }
@@ -7084,7 +7237,7 @@ Modulos.diagnostico_obd = {
         </div>
         <div style="font-size:${z ? '56px' : '26px'};font-weight:800;line-height:1.15;margin:4px 0${est === 'mal' ? ';color:var(--red)' : ''}">${v === null ? '—' : v}<span style="font-size:${z ? '22px' : '13px'};font-weight:600;color:var(--text3);margin-left:2px">${def.u}</span></div>
         <div style="height:${z ? '160px' : '48px'};margin:4px 0">${this._spark(vals, def.r, color)}</div>
-        <div style="font-size:${z ? '12.5px' : '10.5px'};color:var(--text3);line-height:1.4">${mm ? mm + ' · ' : ''}${ref}</div>
+        <div style="font-size:${z ? '12.5px' : '10.5px'};color:var(--text3);line-height:1.4">${mm ? `<b style="color:var(--text2)">${mm}</b> · ` : ''}${ref}</div>
       </div>`;
     }).join('');
   },
@@ -7686,7 +7839,7 @@ Modulos.diagnostico_obd = {
       ${this._monitoresHTML(d.monitores)}
         <div class="card" style="padding:14px;margin-top:12px">
           <b style="font-size:12px">DATOS AL MOMENTO DEL ESCANEO</b>
-          <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px;margin-top:10px">${this._vivoHTML(d.datos||{})}</div>
+          ${this._vivoCategorizadoHTML(d.datos||{})}
         </div>
         ${this._grabHTML(d.grabacion)}
         ${this._grabComparacionHTML(d)}
@@ -7797,9 +7950,7 @@ Modulos.diagnostico_obd = {
       ${fz.length ? `<div class="section"><b>FREEZE FRAME (al momento de la falla ${d.freeze_frame.dtc}):</b>
         <table style="margin-top:8px"><tbody>${fz.map(i=>`<tr><td>${i[0]}</td><td><b>${i[1]}${i[2]}</b></td></tr>`).join('')}</tbody></table>
       </div>` : ''}
-      ${vivo.length ? `<div class="section"><b>DATOS AL MOMENTO DEL ESCANEO:</b>
-        <table style="margin-top:8px"><tbody>${vivo.map(i=>`<tr><td>${i[0]}</td><td><b>${i[1]}${i[2]}</b></td></tr>`).join('')}</tbody></table>
-      </div>` : ''}
+      ${this._vivoCategorizadoPDF(d.datos||{})}
       ${(() => { const st = this._grabStats(d.grabacion); return st.length ? `<div class="section">
         <b>GRABACIÓN DE SESIÓN (${d.grabacion.muestras.length} muestras · ${d.grabacion.seg||'?'} s):</b>
         <table style="margin-top:8px"><thead><tr><th>Sensor</th><th>Mín</th><th>Promedio</th><th>Máx</th><th>Gráfica</th></tr></thead>
