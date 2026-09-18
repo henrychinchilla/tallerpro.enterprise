@@ -2228,12 +2228,19 @@ Modulos.diagnostico_obd = {
      saber QUÉ es cada módulo son los códigos que reporta (C=chasis, B=carrocería,
      P=motor/transmisión, U=red), porque las direcciones cambian entre marcas. */
   _UDS_NOMBRES: {
-    0x7E0:'Motor (ECM)', 0x7E1:'Transmisión (TCM)', 0x7E2:'Módulo 0x7E2', 0x7E3:'Módulo 0x7E3',
+    /* Hyundai / Kia, Asiáticos y Genericos UDS 11-bit IDs */
+    0x7E0:'Motor (ECM)', 0x7E1:'Transmisión (TCM)', 0x7E2:'Híbrido / Batería EV', 0x7E3:'Módulo 0x7E3',
+    0x7D0:'Frenos / ABS / Tracción', 0x7D1:'Frenos / ABS / ESC', 0x7D2:'Presión de Neumáticos (TPMS)',
+    0x7D4:'Dirección Asistida (MDPS / EPS)', 0x7A0:'Airbag / SRS (ACU)', 0x7A1:'Carrocería (BCM / SJB)',
+    0x7A5:'Llave Inteligente / Inmovilizador (SMK)', 0x7B3:'Climatización (FATC / HVAC)',
+    0x7C0:'Control Punto Ciego / Radar (BSD)', 0x7C4:'Control Crucero / Colisión (SCC/FCA)',
+    0x7C6:'Tablero de Instrumentos (CLU / IPC)', 0x710:'Dirección Electrónica (MDPS)',
+    0x720:'Módulo de Puertas / Confort', 0x733:'Climatización (FATC)',
     0x740:'Frenos / ABS', 0x742:'Dirección asistida', 0x743:'Tablero de instrumentos',
     0x744:'Airbag / SRS', 0x745:'Carrocería (BCM)', 0x746:'Climatización',
     0x748:'Control de tracción', 0x74D:'Puerta de enlace / gateway',
     0x752:'Carrocería auxiliar', 0x758:'Presión de neumáticos (TPMS)',
-    0x760:'Frenos / ABS', 0x765:'Carrocería (BCM)',
+    0x760:'Frenos / ABS', 0x765:'Carrocería (BCM)', 0x770:'Airbag / SRS', 0x771:'Carrocería / BCM',
   },
   /* El nombre que el modulo se da a si mismo (DID F197 "nombre del sistema",
      y si no F18A "proveedor"). La tabla de direcciones sirve para las que la
@@ -2519,6 +2526,10 @@ Modulos.diagnostico_obd = {
       await this._cmd('ATSH ' + this._hex3(req), 2500).catch(() => {});
       let r = null;
       try { r = await this._cmd('3E00', 1500); } catch (_) { return null; }
+      if (!r || /NO DATA|ERROR|UNABLE|STOPPED|BUFFER|BUS/i.test(r)) {
+        /* Reintento con Session Control (10 01) si Tester Present (3E00) no obtuvo respuesta */
+        try { r = await this._cmd('1001', 1500); } catch (_) { return null; }
+      }
       if (!r || /NO DATA|ERROR|UNABLE|STOPPED|BUFFER|BUS/i.test(r)) return null;
       return this._hexLines(r).length ? { req, resp: null, ext: false } : null;
     }
@@ -2527,6 +2538,10 @@ Modulos.diagnostico_obd = {
     try {
       await this._canTx(req, [0x02, 0x3E, 0x00]).catch(() => {});
       await new Promise(r => setTimeout(r, 70));
+      if (!capt.length) {
+        await this._canTx(req, [0x02, 0x10, 0x01]).catch(() => {});
+        await new Promise(r => setTimeout(r, 70));
+      }
     } finally { this._canRx = null; }
     const c = capt.find(x => x.id !== req);
     return c ? { req, resp: c.id, ext: false } : null;
@@ -5603,25 +5618,35 @@ Modulos.diagnostico_obd = {
         ${!this._hayBluetooth ? `<div class="card" style="border-left:3px solid var(--amber);padding:12px;margin-bottom:12px">
           ⚠️ Este navegador no soporta Bluetooth. Para escanear por Bluetooth usa <b>Chrome o Edge en Android</b> (o la app NexusPro) o una PC con Bluetooth. El escaneo por <b>USB (puente RP1210)</b> sí está disponible desde esta PC.
         </div>` : ''}
-        <div class="card" style="padding:0;overflow:auto">
-          <table class="table">
-            <thead><tr><th>Fecha</th><th>Vehículo</th><th>VIN</th><th>Check Engine</th><th>Fallas</th><th>Voltaje</th><th style="text-align:right">Acciones</th></tr></thead>
+        <div class="table-wrap">
+          <table class="data-table" style="width:100%">
+            <thead><tr>
+              <th style="width:110px">Fecha</th>
+              <th style="width:230px">Vehículo</th>
+              <th style="width:170px">VIN</th>
+              <th style="width:125px">Check Engine</th>
+              <th style="width:95px">Fallas</th>
+              <th style="width:85px">Voltaje</th>
+              <th style="width:210px;text-align:right">Acciones</th>
+            </tr></thead>
             <tbody>
               ${this._data.length ? this._data.map(d => {
                 const v = d.vehiculos;
                 const n = (d.dtcs||[]).length, np = (d.dtcs_pendientes||[]).length;
                 return `<tr style="cursor:pointer" onclick="Modulos.diagnostico_obd.ver('${d.id}')">
                   <td>${UI.fecha(d.created_at)}</td>
-                  <td>${v ? `<b>${v.placa||''}</b> ${UI.esc(v.marca||'')} ${UI.esc(v.modelo||'')}` : '—'}</td>
-                  <td style="font-family:monospace;font-size:11px">${d.vin||'—'}</td>
+                  <td>${v ? `<b>${UI.esc(v.placa||'')}</b> ${UI.esc(v.marca||'')} ${UI.esc(v.modelo||'')}` : '—'}</td>
+                  <td style="font-family:monospace;font-size:11px">${UI.esc(d.vin||'—')}</td>
                   <td>${d.mil ? '<span class="badge badge-red">🔴 Encendido</span>' : '<span class="badge badge-green">Apagado</span>'}</td>
                   <td>${n ? `<span class="badge badge-red">${n}</span>` : '<span class="badge badge-green">0</span>'}${np?` <span class="badge badge-amber" title="pendientes">${np}p</span>`:''}${d.dtcs_borrados?' 🧹':''}</td>
-                  <td>${d.voltaje||'—'}</td>
-                  <td style="text-align:right;white-space:nowrap">
-                    ${Modulos.btnAccion('ver', `Modulos.diagnostico_obd.ver('${d.id}')`)}
-                    ${Modulos.btnAccion('editar', `Modulos.diagnostico_obd.modalEditar('${d.id}')`)}
-                    ${Modulos.btnAccion('imprimir', `Modulos.diagnostico_obd.imprimir('${d.id}')`)}
-                    ${Modulos.btnAccion('eliminar', `Modulos.diagnostico_obd.eliminar('${d.id}')`)}
+                  <td>${UI.esc(d.voltaje||'—')}</td>
+                  <td style="text-align:right;white-space:nowrap" onclick="event.stopPropagation()">
+                    <div style="display:inline-flex;gap:4px;justify-content:flex-end">
+                      ${Modulos.btnAccion('ver', `Modulos.diagnostico_obd.ver('${d.id}')`)}
+                      ${Modulos.btnAccion('editar', `Modulos.diagnostico_obd.modalEditar('${d.id}')`)}
+                      ${Modulos.btnAccion('imprimir', `Modulos.diagnostico_obd.imprimir('${d.id}')`)}
+                      ${Modulos.btnAccion('eliminar', `Modulos.diagnostico_obd.eliminar('${d.id}')`)}
+                    </div>
                   </td></tr>`;
               }).join('') : `<tr><td colspan="7" style="text-align:center;padding:30px;color:var(--text3)">
                 Sin escaneos en ${meses[this._mes-1]} ${this._anio}. ${puedeEditar&&this._hayBluetooth?'Conecta un adaptador OBD-II BLE y presiona 📡 Nuevo Escaneo.':''}
@@ -6903,6 +6928,16 @@ Modulos.diagnostico_obd = {
 
   /* Clic en un recuadro: lo agranda a todo el ancho. El tick del monitor
      vuelve a dibujar solo, así que el valor ampliado sigue vivo. */
+  _vistaMon: 'tarjetas',
+
+  _setVistaMon(modo) {
+    this._vistaMon = modo;
+    const el = document.getElementById('obd-vivo');
+    if (el) el.innerHTML = this._tilesMonitor();
+    const sel = document.getElementById('obd-mon-sel');
+    if (sel) sel.innerHTML = this._chipsMonitor();
+  },
+
   _toggleZoom(pid) {
     this._zoom = this._zoom === pid ? null : pid;
     const el = document.getElementById('obd-vivo');
@@ -6916,9 +6951,37 @@ Modulos.diagnostico_obd = {
     return Charts.sparkline({ valores: ds, colorVar, ref }).replace('<svg ', '<svg style="width:100%;height:100%" ');
   },
 
-  /* Cómo está el sensor contra su referencia. Sólo marca falla cuando el rango
-     vale pase lo que pase (def.a); si depende de la condición, la banda de la
-     gráfica ya lo muestra sin gritar "¡falla!" cada vez que se acelera. */
+  /* Reloj analógico / Gauge SVG dinámico para datos en vivo */
+  _gaugeSVG(val, minVal = 0, maxVal = 100, label = '', unit = '', colorVar = 'cyan') {
+    const nVal = typeof val === 'number' && isFinite(val) ? val : null;
+    const min = typeof minVal === 'number' ? minVal : 0;
+    const max = typeof maxVal === 'number' && maxVal > min ? maxVal : 100;
+    const pct = nVal !== null ? Math.min(1, Math.max(0, (nVal - min) / (max - min))) : 0;
+
+    const angle = -225 + (pct * 270);
+    const rad = Math.PI / 180;
+    const cx = 60, cy = 60, r = 44;
+
+    const x1 = cx + r * Math.cos(-225 * rad);
+    const y1 = cy + r * Math.sin(-225 * rad);
+    const x2 = cx + r * Math.cos(angle * rad);
+    const y2 = cy + r * Math.sin(angle * rad);
+    const xEnd = cx + r * Math.cos(45 * rad);
+    const yEnd = cy + r * Math.sin(45 * rad);
+
+    const largeArcVal = (angle - (-225)) > 180 ? 1 : 0;
+    const colorMap = { cyan: '#06b6d4', green: '#22c55e', amber: '#f59e0b', red: '#ef4444' };
+    const strokeColor = colorMap[colorVar] || '#06b6d4';
+
+    return `<svg viewBox="0 0 120 100" style="width:100%;height:100%;max-height:110px;display:block;margin:0 auto">
+      <path d="M ${x1} ${y1} A ${r} ${r} 0 1 1 ${xEnd} ${yEnd}" fill="none" stroke="var(--border)" stroke-width="8" stroke-linecap="round"/>
+      ${nVal !== null && pct > 0 ? `<path d="M ${x1} ${y1} A ${r} ${r} 0 ${largeArcVal} 1 ${x2} ${y2}" fill="none" stroke="${strokeColor}" stroke-width="9" stroke-linecap="round"/>` : ''}
+      <text x="${cx}" y="${cy + 4}" text-anchor="middle" font-size="18" font-weight="800" fill="var(--text)">${nVal !== null ? (Math.round(nVal * 10) / 10) : '—'}</text>
+      <text x="${cx}" y="${cy + 18}" text-anchor="middle" font-size="9" font-weight="600" fill="var(--text3)">${UI.esc(unit)}</text>
+    </svg>`;
+  },
+
+  /* Cómo está el sensor contra su referencia */
   _estadoSensor(def, v) {
     if (!def || !def.r || typeof v !== 'number') return null;
     if (v >= def.r[0] && v <= def.r[1]) return 'ok';
@@ -6928,15 +6991,21 @@ Modulos.diagnostico_obd = {
   _chipsMonitor() {
     const disp = this._sensoresMonitor().filter(p => this._defSensor(p));
     const n = (this._selMon || []).length;
-    /* Los sensores se leen uno por uno (~0.3 s cada uno), así que elegir muchos
-       espacia el refresco. Se dice el número real en vez de dejar que parezca
-       que la app se trabó. */
     const seg = Math.max(0.2, n * 0.32).toFixed(1);
-    return `<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px">
-        <b style="font-size:11.5px">Sensores a monitorear — ${n} de ${disp.length}</b>
-        <button class="btn btn-sm btn-ghost" onclick="Modulos.diagnostico_obd._selTodos(true)">Todos</button>
-        <button class="btn btn-sm btn-ghost" onclick="Modulos.diagnostico_obd._selTodos(false)">Ninguno</button>
-        <span style="font-size:10.5px;color:var(--text3)">refresco ≈ ${seg} s</span>
+    const modo = this._vistaMon || 'tarjetas';
+
+    return `<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-bottom:8px">
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+          <b style="font-size:11.5px">Sensores a monitorear — ${n} de ${disp.length}</b>
+          <button class="btn btn-sm btn-ghost" onclick="Modulos.diagnostico_obd._selTodos(true)">Todos</button>
+          <button class="btn btn-sm btn-ghost" onclick="Modulos.diagnostico_obd._selTodos(false)">Ninguno</button>
+          <span style="font-size:10.5px;color:var(--text3)">refresco ≈ ${seg} s</span>
+        </div>
+        <div style="display:inline-flex;gap:3px;background:var(--surface);padding:3px;border:1px solid var(--border);border-radius:9px">
+          <button class="btn btn-sm ${modo === 'tarjetas' ? 'btn-brand' : 'btn-ghost'}" style="padding:3px 10px;font-size:11px" onclick="Modulos.diagnostico_obd._setVistaMon('tarjetas')">📊 Tarjetas</button>
+          <button class="btn btn-sm ${modo === 'gauges' ? 'btn-brand' : 'btn-ghost'}" style="padding:3px 10px;font-size:11px" onclick="Modulos.diagnostico_obd._setVistaMon('gauges')">⏲️ Relojes (Gauges)</button>
+          <button class="btn btn-sm ${modo === 'graficas' ? 'btn-brand' : 'btn-ghost'}" style="padding:3px 10px;font-size:11px" onclick="Modulos.diagnostico_obd._setVistaMon('graficas')">📈 Gráficas</button>
+        </div>
       </div>
       <div>${disp.map(p => {
         const def = this._defSensor(p), on = (this._selMon || []).includes(p);
@@ -6953,6 +7022,9 @@ Modulos.diagnostico_obd = {
   },
 
   _tilesMonitor() {
+    const modo = this._vistaMon || 'tarjetas';
+    if (!this._selMon || !this._selMon.length) return '<span style="color:var(--text3)">Selecciona al menos un sensor arriba</span>';
+
     return this._selMon.map(p => {
       const def = this._defSensor(p);
       if (!def) return '';
@@ -6962,23 +7034,59 @@ Modulos.diagnostico_obd = {
       const color = est === 'mal' ? 'red' : est === 'ok' ? 'green' : 'cyan';
       const redondo = x => Math.round(x * 100) / 100;
       const mm = vals.length > 1
-        ? `mín ${redondo(Math.min(...vals))} · máx ${redondo(Math.max(...vals))} · ` : '';
+        ? `mín ${redondo(Math.min(...vals))} · máx ${redondo(Math.max(...vals))}` : '';
       const ref = def.r
         ? `ref ${def.r[0]}–${def.r[1]}${def.u}${def.rc ? ` (${def.rc})` : ''}`
-        : 'sin referencia estándar';
-      const z = this._zoom === p;                       // ampliado a todo el ancho
+        : 'sin referencia';
+      const z = this._zoom === p;
+
+      if (modo === 'gauges') {
+        const minVal = (def.r && typeof def.r[0] === 'number') ? Math.min(0, def.r[0]) : 0;
+        let maxVal = (def.r && typeof def.r[1] === 'number') ? def.r[1] * 1.2 : 100;
+        if (def.k === 'rpm') maxVal = 7000;
+        else if (def.k === 'vel') maxVal = 220;
+        else if (def.k === 'temp') maxVal = 130;
+        else if (def.k === 'volt' || def.k === 'volt_ecu') maxVal = 18;
+        else if (def.k === 'carga' || def.k === 'acel' || def.k === 'comb') maxVal = 100;
+
+        return `<div onclick="Modulos.diagnostico_obd._toggleZoom('${p}')" title="Clic para ampliar/reducir"
+          style="background:var(--surface2);border-radius:10px;padding:12px;border:1px solid var(--border);border-top:3px solid var(--${color});text-align:center;cursor:pointer${z ? ';grid-column:1/-1' : ''}">
+          <div style="font-size:11px;font-weight:600;color:var(--text2);margin-bottom:4px;display:flex;justify-content:space-between">
+            <span>${def.l}</span>
+            <span style="font-size:10px;color:var(--${color})">${est === 'mal' ? '⚠ ALERTA' : est === 'ok' ? '✓ NORMAL' : 'EN VIVO'}</span>
+          </div>
+          ${this._gaugeSVG(v, minVal, maxVal, def.l, def.u, color)}
+          <div style="font-size:10px;color:var(--text3);margin-top:4px">${mm ? mm + ' · ' : ''}${ref}</div>
+        </div>`;
+      }
+
+      if (modo === 'graficas') {
+        return `<div onclick="Modulos.diagnostico_obd._toggleZoom('${p}')" title="Clic para ampliar/reducir"
+          style="background:var(--surface2);border-radius:10px;padding:12px;border:1px solid var(--border);border-left:4px solid var(--${color});cursor:pointer${z ? ';grid-column:1/-1' : ';grid-column:span 2'}">
+          <div style="font-size:12px;font-weight:700;color:var(--text);display:flex;justify-content:space-between;align-items:center">
+            <span>${def.l}</span>
+            <div style="font-size:18px;font-weight:800;color:var(--text)">${v === null ? '—' : v} <span style="font-size:12px;font-weight:500;color:var(--text3)">${def.u}</span></div>
+          </div>
+          <div style="height:${z ? '220px' : '110px'};margin:8px 0">${this._spark(vals, def.r, color)}</div>
+          <div style="font-size:10px;color:var(--text3);display:flex;justify-content:space-between">
+            <span>${mm}</span><span>${ref}</span>
+          </div>
+        </div>`;
+      }
+
+      // Modo por defecto: 'tarjetas'
       return `<div onclick="Modulos.diagnostico_obd._toggleZoom('${p}')" title="Clic para ${z ? 'reducir' : 'ampliar'}"
-        style="background:var(--surface2);border-radius:8px;padding:${z ? '16px 18px' : '10px 12px'};border-left:3px solid var(--${color});cursor:pointer${z ? ';grid-column:1/-1' : ''}">
+        style="background:var(--surface2);border-radius:10px;padding:${z ? '16px 18px' : '11px 13px'};border-left:4px solid var(--${color});cursor:pointer;box-shadow:0 1px 3px rgba(0,0,0,.04)${z ? ';grid-column:1/-1' : ''}">
         <div style="font-size:${z ? '14px' : '11px'};color:var(--text3);display:flex;justify-content:space-between;gap:6px;align-items:baseline">
-          <span>${def.l}</span>${est === 'mal'
-            ? '<span style="color:var(--red);font-weight:700">⚠ fuera</span>'
+          <span style="font-weight:600">${def.l}</span>${est === 'mal'
+            ? '<span style="color:var(--red);font-weight:700">⚠ FUERA</span>'
             : `<span style="opacity:.45">${z ? '⤡' : '⤢'}</span>`}
         </div>
-        <div style="font-size:${z ? '56px' : '24px'};font-weight:700;line-height:1.15${est === 'mal' ? ';color:var(--red)' : ''}">${v === null ? '—' : v}<span style="font-size:${z ? '22px' : '13px'};font-weight:500;color:var(--text3)">${def.u}</span></div>
-        <div style="height:${z ? '160px' : '46px'};margin:4px 0">${this._spark(vals, def.r, color)}</div>
-        <div style="font-size:${z ? '12.5px' : '10px'};color:var(--text3);line-height:1.4">${mm}${ref}</div>
+        <div style="font-size:${z ? '56px' : '26px'};font-weight:800;line-height:1.15;margin:4px 0${est === 'mal' ? ';color:var(--red)' : ''}">${v === null ? '—' : v}<span style="font-size:${z ? '22px' : '13px'};font-weight:600;color:var(--text3);margin-left:2px">${def.u}</span></div>
+        <div style="height:${z ? '160px' : '48px'};margin:4px 0">${this._spark(vals, def.r, color)}</div>
+        <div style="font-size:${z ? '12.5px' : '10.5px'};color:var(--text3);line-height:1.4">${mm ? mm + ' · ' : ''}${ref}</div>
       </div>`;
-    }).join('') || '<span style="color:var(--text3)">Marca al menos un sensor arriba</span>';
+    }).join('');
   },
 
   async toggleLive() {
