@@ -5617,7 +5617,43 @@ Modulos.diagnostico_obd = {
     const meses = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
     const anios = [this._anio - 1, this._anio, this._anio + 1];
     const conFallas = this._data.filter(d => (d.dtcs||[]).length).length;
-    const puedeEditar = typeof puedeAccion !== 'function' || puedeAccion('diagnostico_obd','editar');
+    if (this._scan) {
+      const v = this._scan.vehiculos || (this._vehiculos || []).find(x => x.id === this._scan.vehiculo_id);
+      el.innerHTML = `
+        <div class="page-header">
+          <div>
+            <h1 class="page-title">🩺 Diagnóstico OBD-II</h1>
+            <p class="page-subtitle">// Escaneo activo de vehículo · ${v ? `${UI.esc(v.placa||'')} ${UI.esc(v.marca||'')} ${UI.esc(v.modelo||'')}` : (UI.esc(this._scan.vin||'En proceso'))}</p>
+          </div>
+          <div class="page-actions">
+            <button class="btn btn-ghost" onclick="Modulos.diagnostico_obd.cerrarScanActivo()">📋 Ver Historial del Mes</button>
+            <button class="btn btn-ghost" onclick="Modulos.diagnostico_obd.modalCampanas()">🔔 Campañas de fábrica</button>
+            <span id="obd-estado-conexion" style="display:inline-flex;align-items:center;gap:6px"></span>
+            <button class="btn btn-ghost" onclick="Modulos.diagnostico_obd.modalCentroModulos()">🧠 Centro de módulos</button>
+            <button class="btn btn-ghost" onclick="Modulos.diagnostico_obd.modalOEM()">🧠 OEM</button>
+            ${puedeEditar ? `<button class="btn btn-brand" onclick="Modulos.diagnostico_obd.modalEscanear()">📡 Nuevo Escaneo</button>` : ''}
+          </div>
+        </div>
+        <div class="page-body">
+          <div style="background:var(--surface2);border-left:4px solid var(--brand);padding:10px 14px;border-radius:8px;margin-bottom:12px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+            <div>
+              <span style="font-size:11px;font-weight:700;color:var(--brand);text-transform:uppercase;letter-spacing:0.5px">⚡ Sesión de Escaneo Activa</span>
+              <div style="font-size:13px;font-weight:700;margin-top:2px">
+                ${v ? `${UI.esc(v.placa||'')} · ${UI.esc(v.marca||'')} ${UI.esc(v.modelo||'')} ${UI.esc(v.anio||'')}` : (UI.esc(this._scan.vin||'Escaneo en memoria'))}
+              </div>
+            </div>
+            <div style="display:flex;gap:6px">
+              <button class="btn btn-sm btn-ghost" onclick="Modulos.diagnostico_obd.cerrarScanActivo()">📋 Ver Historial del Mes</button>
+              ${puedeEditar ? `<button class="btn btn-sm btn-brand" onclick="Modulos.diagnostico_obd.modalEscanear()">📡 Nuevo Escaneo</button>` : ''}
+            </div>
+          </div>
+          <div id="obd-result"></div>
+        </div>
+      `;
+      this._renderResultado();
+      this._pintarEstadoConexion();
+      return;
+    }
 
     el.innerHTML = `
       <div class="page-header">
@@ -5689,6 +5725,12 @@ Modulos.diagnostico_obd = {
        reemplazar, asi que pintarlo antes seria pintarlo sobre un nodo muerto
        (el mismo problema del render rezagado del 2026-09-02). */
     this._pintarEstadoConexion();
+  },
+
+  cerrarScanActivo() {
+    this._scan = null;
+    this._centroScan = null;
+    this.render();
   },
 
   /* ═══════════ NUEVO ESCANEO ═══════════ */
