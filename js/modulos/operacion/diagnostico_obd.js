@@ -26,6 +26,10 @@ Modulos.diagnostico_obd = {
     'e7810a71-73ae-499d-8c15-faa9aef0c3f2',   // LELink
     '6e400001-b5a3-f393-e0a9-e50e24dcca9e',   // Nordic UART, usado por varios puentes serie BLE
     '0000180a-0000-1000-8000-00805f9b34fb',   // Device Information (identidad del VCI)
+    '00001101-0000-1000-8000-00805f9b34fb',   // SPP Serial Port UUID
+    '000018f0-0000-1000-8000-00805f9b34fb',   // OBDLink / STN BLE
+    '0000abf0-0000-1000-8000-00805f9b34fb',   // Viecar / Veepeak BLE
+    '49535343-fe7d-4ae5-8fa9-9fafd205e455',   // Microchip Transparent UART
   ],
 
   _UUIDS: [
