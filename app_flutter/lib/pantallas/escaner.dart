@@ -87,7 +87,7 @@ class _PantallaEscanerState extends State<PantallaEscaner> {
       _p('Conectando a ${d.nombre} (${d.esBle ? 'BLE' : 'Bluetooth clásico'})...');
 
       final futuroEvento = PuenteBT.eventos.first
-          .timeout(const Duration(seconds: 15), onTimeout: () =>
+          .timeout(const Duration(seconds: 25), onTimeout: () =>
               const EventoBT('error', 'El puente Bluetooth no contestó a tiempo.'));
       await PuenteBT.conectar(d);
       var evt = await futuroEvento;
@@ -95,6 +95,7 @@ class _PantallaEscanerState extends State<PantallaEscaner> {
       // Si falló el transporte inicial, reintentar automáticamente con el alternativo (SPP <-> BLE)
       if (evt.evento != 'conectado') {
         _p('⚠️ Falló transporte inicial (${d.tipo.toUpperCase()}): ${evt.detalle}');
+        await PuenteBT.desconectar();
         final altTipo = d.esBle ? 'spp' : 'ble';
         _p('🔄 Reintentando automáticamente con transporte alternativo (${altTipo.toUpperCase()})...');
         final escAlt = Escaner(
@@ -106,7 +107,7 @@ class _PantallaEscanerState extends State<PantallaEscaner> {
           sinNombre: d.sinNombre,
         );
         final futuroAlt = PuenteBT.eventos.first
-            .timeout(const Duration(seconds: 15), onTimeout: () =>
+            .timeout(const Duration(seconds: 25), onTimeout: () =>
                 const EventoBT('error', 'Reintento con transporte alternativo no contestó a tiempo.'));
         await PuenteBT.conectar(escAlt);
         evt = await futuroAlt;

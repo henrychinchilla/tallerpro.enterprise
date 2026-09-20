@@ -87,6 +87,8 @@ public class PuenteBluetooth {
 
   /* ── SPP ── */
   private BluetoothSocket socket;
+  private volatile BluetoothSocket socketEnConexion;
+  private volatile Thread hiloConexion;
   private OutputStream salida;
   private Thread lector;
 
@@ -379,13 +381,14 @@ public class PuenteBluetooth {
   /* ═══════════ SPP / RFCOMM ═══════════ */
 
   private void abrirSpp(final BluetoothDevice d) {
-    new Thread(() -> {
+    hiloConexion = new Thread(() -> {
       try {
         /* Descubrir y conectar a la vez arruina las dos cosas: el radio no da
            abasto y el connect() falla con un "read failed" que no dice nada. */
         try { adaptador.cancelDiscovery(); } catch (Exception ignorada) { }
         BluetoothSocket s = abrirSocket(d);
         socket = s;
+        socketEnConexion = null;
         salida = s.getOutputStream();
         arrancarLector(s.getInputStream());
         evento("conectado", etiqueta(d));
@@ -394,7 +397,8 @@ public class PuenteBluetooth {
         evento("error", "No se pudo abrir " + etiqueta(d) + ": " + e.getMessage()
             + ". Revisá que esté emparejado y enchufado al vehículo.");
       }
-    }, "nexus-spp-connect").start();
+    }, "nexus-spp-connect");
+    hiloConexion.start();
   }
 
   /* Tres intentos, y no por superstición. El camino "correcto" —pedir el canal
@@ -415,9 +419,12 @@ public class PuenteBluetooth {
         else s = (BluetoothSocket) d.getClass()
             .getMethod("createRfcommSocket", int.class).invoke(d, 1);
         if (s == null) continue;
+        socketEnConexion = s;
         s.connect();
+        socketEnConexion = null;
         return s;
       } catch (Exception e) {
+        socketEnConexion = null;
         if (primera == null) primera = e;
         if (s != null) { try { s.close(); } catch (Exception ignorada) { } }
       }
@@ -606,6 +613,12 @@ public class PuenteBluetooth {
   /* ═══════════ cierre ═══════════ */
 
   public void cerrar() {
+    BluetoothSocket pendingS = socketEnConexion;
+    socketEnConexion = null;
+    if (pendingS != null) { try { pendingS.close(); } catch (Exception ignorada) { } }
+
+    if (hiloConexion != null) { hiloConexion.interrupt(); hiloConexion = null; }
+
     BluetoothSocket s = socket;
     socket = null;                 // primero, para que el lector sepa que fue a propósito
     salida = null;
@@ -618,6 +631,7 @@ public class PuenteBluetooth {
     notificacion = null;
     colaBle.clear();
     bleOcupado = false;
+    bleConectando = false;
     if (g != null) { try { g.disconnect(); g.close(); } catch (Exception ignorada) { } }
   }
 }
