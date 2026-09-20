@@ -216,8 +216,8 @@ const App = {
        de red dejaba la tarjeta de descarga vacía el resto de la sesión, porque
        la caché corta el reintento en la primera línea. Ahora sólo se cachea el
        resultado bueno; un fallo se vuelve a intentar en el siguiente render. */
-  async _ultimaVersionAndroid() {
-    if (App._verAndroid !== undefined) return App._verAndroid;
+  async _ultimaVersionAndroid(forzar = false) {
+    if (!forzar && App._verAndroid !== undefined && App._verAndroid !== null) return App._verAndroid;
     try {
       /* typeof, no `AbortSignal.timeout ?`: nombrar un global que no existe
          lanza ReferenceError, y aquí lo tragaba el catch dejando la versión en
@@ -225,14 +225,14 @@ const App = {
          archivo en un contexto vm mínimo sin AbortSignal. */
       const corta = (typeof AbortSignal !== 'undefined' && AbortSignal.timeout)
         ? AbortSignal.timeout(6000) : undefined;
-      const r = await fetch('/app-version.json', { cache: 'no-cache', signal: corta });
+      const r = await fetch('/app-version.json?_t=' + Date.now(), { cache: 'no-store', signal: corta });
       const j = r.ok ? await r.json() : null;
       if (j && j.android && Number.isFinite(j.android.versionCode)) {
         App._verAndroid = j.android;
         return App._verAndroid;
       }
     } catch (_) { /* sin red, o tardó demasiado */ }
-    return null;
+    return App._verAndroid || null;
   },
 
   async avisoAppAndroid() {

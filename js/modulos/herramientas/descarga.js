@@ -22,16 +22,16 @@ Modulos.descarga = {
        tarjeta decia "424 KB - version 4.76.0" mientras el APK publicado ya era
        otro. Un solo lugar donde subir la version, y esta pantalla lo sigue. */
     const app = (typeof App !== 'undefined' && App._ultimaVersionAndroid)
-      ? await App._ultimaVersionAndroid().catch(() => null) : null;
-    const appVer   = app?.versionName || '';
-    const appPeso  = app?.apkKB ? `${app.apkKB} KB` : '';
+      ? await App._ultimaVersionAndroid(true).catch(() => null) : null;
+    const appVer   = app?.versionName || '1.2.0';
+    const appPeso  = app?.apkKB ? `${app.apkKB} KB (~17.6 MB)` : '18005 KB (~17.6 MB)';
     /* El respaldo apunta a la NATIVA. La hibrida (cascaron WebView) se retiro
        el 2026-09-16 y su APK ya no existe: dejar aqui la ruta vieja seria
        ofrecer un 404 justo cuando app-version.json no carga, que es cuando el
        respaldo tiene que servir. */
     const appUrl   = app?.apkUrl || '/nexuspro-nativa.apk';
-    const app32Url = app?.apk32Url || '';
-    const app32Peso = app?.apk32KB ? `${app.apk32KB} KB` : '';
+    const app32Url = app?.apk32Url || '/nexuspro-nativa-32bits.apk';
+    const app32Peso = app?.apk32KB ? `${app.apk32KB} KB (~15.1 MB)` : '15430 KB (~15.1 MB)';
     const appUniUrl = app?.apkUniversalUrl || '';
     const enPlay   = app?.enPlayStore === true && !!app?.playUrl;
     /* Que trae instalado ESTE telefono (la app nativa lo reporta al abrir) */
