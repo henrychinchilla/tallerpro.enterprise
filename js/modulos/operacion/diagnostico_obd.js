@@ -7661,8 +7661,8 @@ Modulos.diagnostico_obd = {
     0xF19E:'Nombre del archivo ODX',
   },
 
-  async _leerDID(req, resp, did) {
-    const d = await this._udsPedir(req, resp, [0x22, (did >> 8) & 0xFF, did & 0xFF], 1800);
+  async _leerDID(req, resp, did, timeout = 700) {
+    const d = await this._udsPedir(req, resp, [0x22, (did >> 8) & 0xFF, did & 0xFF], timeout);
     if (!d || d[0] !== 0x62) return null;
     /* Respuesta: [62][did hi][did lo][datos...] */
     if (((d[1] << 8) | d[2]) !== did) return null;
@@ -7691,7 +7691,7 @@ Modulos.diagnostico_obd = {
   async _identificarModulo(req, resp) {
     const out = {};
     for (const did of [0xF187, 0xF188, 0xF18C, 0xF191, 0xF193, 0xF18A]) {
-      const b = await this._leerDID(req, resp, did);
+      const b = await this._leerDID(req, resp, did, 700).catch(() => null);
       if (!b) continue;
       const i = this._interpretarDID(b);
       out[did] = { nombre: this._DID_ID[did], texto: i.txt || i.hex, hex: i.hex };
@@ -7699,22 +7699,22 @@ Modulos.diagnostico_obd = {
     return Object.keys(out).length ? out : null;
   },
 
-  /* Descubre qué datos expone un módulo. Se barren los rangos donde los
-     fabricantes suelen poner sus datos en vivo; los que contestan se muestran
-     con su valor crudo para poder observarlos cambiar. */
-  _RANGOS_DID: [[0x0100, 0x0140], [0x1000, 0x1040], [0xC100, 0xC140], [0xD100, 0xD140]],
+  /* DIDs de alta probabilidad para consulta rápida sin congelar la pantalla */
+  _DIDS_ALTA_PROBABILIDAD: [
+    0x0100, 0x0101, 0x0102, 0x0104, 0x0106, 0x0108, 0x010A,
+    0x1001, 0x1002, 0x1004, 0x1006, 0x2210, 0xC001, 0xC002, 0xC100, 0xD100,
+    0xF187, 0xF188, 0xF18A, 0xF190, 0xF197
+  ],
 
-  async _explorarDatos(req, resp, log, tope = 24) {
+  async _explorarDatos(req, resp, log, tope = 16) {
     const hallados = [];
-    for (const [ini, fin] of this._RANGOS_DID) {
-      for (let did = ini; did <= fin && hallados.length < tope; did++) {
-        const b = await this._leerDID(req, resp, did);
-        if (!b || !b.length) continue;
-        const i = this._interpretarDID(b);
-        hallados.push({ did, hex: i.hex, txt: i.txt, lecturas: i.lecturas, bytes: b });
-        if (log) log(`&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:var(--text3)">DID 0x${did.toString(16).toUpperCase()} → ${i.hex}</span>`);
-      }
+    for (const did of this._DIDS_ALTA_PROBABILIDAD) {
       if (hallados.length >= tope) break;
+      const b = await this._leerDID(req, resp, did, 700).catch(() => null);
+      if (!b || !b.length) continue;
+      const i = this._interpretarDID(b);
+      hallados.push({ did, hex: i.hex, txt: i.txt, lecturas: i.lecturas, bytes: b });
+      if (log) log(`&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:var(--text3)">DID 0x${did.toString(16).toUpperCase()} → ${i.hex}</span>`);
     }
     return hallados;
   },
@@ -7722,13 +7722,65 @@ Modulos.diagnostico_obd = {
   /* Abre la ficha de un módulo: identificación + datos que expone. */
   async verModulo(ecu) {
     const ms = (this._scan && this._scan.por_modulo) || [];
-    const m = ms.find(x => x.ecu === ecu);
+    const m = ms.find(x => Number(x.ecu) === Number(ecu));
     if (!m) return;
     const permiso = this._puedePuntoAPunto();
+
+    /* Renderizado de parámetros OEM conocidos (TCM, TPMS, MDPS, etc.) */
+    const renderParamsOEM = pOem => {
+      const entries = Object.entries(pOem || {}).filter(([k, v]) => v !== null && v !== undefined);
+      if (!entries.length) return '';
+      return `
+        <div class="card" style="padding:12px;margin-bottom:10px;border:1px solid var(--brand)">
+          <b style="font-size:12px;color:var(--brand)">📊 PARÁMETROS EN VIVO DEL MÓDULO (UDS 22)</b>
+          <div style="font-size:10.5px;color:var(--text3);margin-bottom:8px">Valores en tiempo real decodificados para este módulo.</div>
+          <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:8px">
+            ${entries.map(([k, v]) => {
+              const evalData = this._evaluarSensorKey(k, v);
+              const colorBorder = evalData.status === 'critico' ? 'var(--red)' : evalData.status === 'advertencia' ? 'var(--amber)' : 'var(--border)';
+              return `
+                <div style="background:var(--surface2);border-radius:8px;padding:8px;border:1px solid ${colorBorder}">
+                  <div style="display:flex;justify-content:space-between;align-items:center;gap:4px">
+                    <span style="font-size:11px;color:var(--text3);font-weight:600">${UI.esc(evalData.label)}</span>
+                    ${evalData.badge}
+                  </div>
+                  <div style="font-size:16px;font-weight:800;color:var(--text);margin:2px 0">
+                    ${v}<span style="font-size:11px;font-weight:600;color:var(--text3);margin-left:2px">${UI.esc(evalData.unidad)}</span>
+                  </div>
+                  <div style="font-size:9.5px;color:var(--text3)">${UI.esc(evalData.ref)}</div>
+                </div>
+              `;
+            }).join('')}
+          </div>
+        </div>
+      `;
+    };
+
+    /* Si no hay comunicación directa o el vehículo está desconectado, mostrar los datos ya capturados */
+    if (!permiso.ok && (m.ident || m.params_oem)) {
+      UI.modal(`📊 ${m.nombre}`, `<div id="mod-cuerpo" style="font-size:12.5px">
+        <div style="font-size:11px;color:var(--text3);margin-bottom:10px">
+          Dirección 0x${m.ecu.toString(16).toUpperCase()} · Modo solo lectura (Histórico)
+        </div>
+        ${renderParamsOEM(m.params_oem)}
+        ${m.ident ? `<div class="card" style="padding:12px;margin-bottom:10px">
+          <b style="font-size:12px">IDENTIFICACIÓN DEL MÓDULO</b>
+          <table class="table" style="margin-top:6px;font-size:12px"><tbody>
+            ${Object.values(m.ident).map(v => `<tr><td style="color:var(--text3)">${UI.esc(v.nombre)}</td>
+              <td style="font-family:ui-monospace,Consolas,monospace">${UI.esc(v.texto)}</td></tr>`).join('')}
+          </tbody></table>
+        </div>` : ''}
+      </div>`, '760px');
+      return;
+    }
+
     if (!permiso.ok) { UI.toast(permiso.motivo, 'error'); return; }
 
     UI.modal(`📊 ${m.nombre}`, `<div id="mod-cuerpo" style="font-size:12.5px">
-      <p style="color:var(--text3)">Consultando el módulo…</p></div>`, '760px');
+      ${renderParamsOEM(m.params_oem)}
+      <div id="mod-progreso" style="color:var(--brand);font-weight:600;margin-bottom:8px">⚡ Consultando datos en vivo del módulo…</div>
+    </div>`, '760px');
+
     const pon = h => { const el = document.getElementById('mod-cuerpo'); if (el) el.innerHTML = h; };
 
     try {
@@ -7736,7 +7788,7 @@ Modulos.diagnostico_obd = {
         ident: await this._identificarModulo(m.ecu, m.resp),
         datos: await this._explorarDatos(m.ecu, m.resp),
       }));
-      m.ident = ident; m.datos_uds = datos;
+      m.ident = ident || m.ident; m.datos_uds = datos;
 
       pon(`
         <div style="font-size:11px;color:var(--text3);margin-bottom:10px">
@@ -7745,23 +7797,22 @@ Modulos.diagnostico_obd = {
             ? 'el ELM no revela desde qué dirección contesta'
             : `responde en 0x${m.resp.toString(16).toUpperCase()}`}
         </div>
-        ${ident ? `<div class="card" style="padding:12px;margin-bottom:10px">
+        ${renderParamsOEM(m.params_oem)}
+        ${m.ident ? `<div class="card" style="padding:12px;margin-bottom:10px">
           <b style="font-size:12px">IDENTIFICACIÓN DEL MÓDULO</b>
           <table class="table" style="margin-top:6px;font-size:12px"><tbody>
-            ${Object.values(ident).map(v => `<tr><td style="color:var(--text3)">${UI.esc(v.nombre)}</td>
+            ${Object.values(m.ident).map(v => `<tr><td style="color:var(--text3)">${UI.esc(v.nombre)}</td>
               <td style="font-family:ui-monospace,Consolas,monospace">${UI.esc(v.texto)}</td></tr>`).join('')}
           </tbody></table>
           <div style="font-size:10.5px;color:var(--text3);margin-top:4px">
             Sirve para pedir el repuesto exacto sin desmontarlo, y para comparar contra otro vehículo igual.
           </div>
-        </div>` : '<p style="color:var(--text3)">El módulo no expuso datos de identificación.</p>'}
+        </div>` : '<p style="color:var(--text3)">El módulo no expuso datos de identificación adicionales.</p>'}
 
-        ${datos.length ? `<div class="card" style="padding:12px">
-          <b style="font-size:12px">DATOS QUE EXPONE (${datos.length})</b>
+        ${datos && datos.length ? `<div class="card" style="padding:12px">
+          <b style="font-size:12px">DATOS CRUDOS DEL BUS DID (${datos.length})</b>
           <div style="font-size:10.5px;color:var(--text3);margin:2px 0 8px">
-            Los identificadores de datos son <b>propios de cada marca</b>: no se les pone etiqueta
-            inventada. Mirá cuál cambia al mover el volante, girar una rueda o abrir una puerta —
-            así se identifica cada dato sin la tabla del fabricante.
+            Identificadores de datos leídos del bus UDS del módulo.
           </div>
           <table class="table" style="font-size:12px"><thead><tr>
             <th>Identificador</th><th>Valor crudo</th><th>Lecturas posibles</th></tr></thead><tbody>
@@ -7771,13 +7822,13 @@ Modulos.diagnostico_obd = {
               <td style="font-size:11.5px;color:var(--text2)">${UI.esc((d.lecturas || []).join('  ·  '))}</td>
             </tr>`).join('')}
           </tbody></table>
-        </div>` : '<p style="color:var(--text3)">No respondió a los identificadores de datos consultados.</p>'}
+        </div>` : '<p style="color:var(--text3)">No se detectaron identificadores crudos adicionales.</p>'}
 
         <div style="margin-top:10px;font-size:11px;color:var(--text3)">
           Solo lectura: nada de esto modifica el vehículo.
         </div>`);
     } catch (e) {
-      pon(`<p style="color:var(--red)">No se pudo consultar el módulo: ${UI.esc(e.message)}</p>`);
+      pon(`${renderParamsOEM(m.params_oem)}<p style="color:var(--red)">Consulta en línea finalizada: ${UI.esc(e.message)}</p>`);
     }
   },
 
