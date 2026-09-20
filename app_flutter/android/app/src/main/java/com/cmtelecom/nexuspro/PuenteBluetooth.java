@@ -297,8 +297,26 @@ public class PuenteBluetooth {
      emparejar no tiene nombre en getName() hasta que Android lo cachea; el
      único que hay está en el anuncio. */
   private String nombre(BluetoothDevice d) {
-    try { String n = d.getName(); return (n != null && !n.trim().isEmpty()) ? n.trim() : null; }
-    catch (Exception e) { return null; }
+    try {
+      String n = d.getName();
+      if (n != null && !n.trim().isEmpty()) return n.trim();
+      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+        String a = d.getAlias();
+        if (a != null && !a.trim().isEmpty()) return a.trim();
+      }
+    } catch (Exception e) { }
+
+    // Fallback: Si el nombre da nulo, identificar OUI conocidas de vLinker / Vgate
+    try {
+      String addr = d.getAddress();
+      if (addr != null) {
+        String u = addr.toUpperCase();
+        if (u.startsWith("00:1D:A5")) return "vLinker MS / OBDLink (" + addr + ")";
+        if (u.startsWith("DC:0D:30")) return "Vgate iCar / vLinker (" + addr + ")";
+        if (u.startsWith("00:13:EF") || u.startsWith("00:1D:43") || u.startsWith("11:22:33")) return "Escáner OBDII (" + addr + ")";
+      }
+    } catch (Exception e) { }
+    return null;
   }
 
   /* Para mensajes: lo que se le muestra a una persona. Acá sí, a falta de

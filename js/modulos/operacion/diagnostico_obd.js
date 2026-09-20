@@ -2000,30 +2000,46 @@ Modulos.diagnostico_obd = {
       };
       this._escanerElegido = i => terminar(i === null ? null : (lista[i] || null));
 
-      /* Un barrido BLE en la calle levanta TODO lo que este anunciando cerca
-         —llaveros, sensores de presion, audifonos, el celular del cliente— y la
-         mayoria no publica nombre: el puente cae a la MAC y llegan como un
-         numero pelado. Mezclados y en crudo, el mecanico elige entre veinte
-         filas identicas. Aca se ordenan por probabilidad, cada una dice QUE es,
-         y las anonimas se pliegan: no estorban por feas, estorban porque casi
-         nunca son el escaner. */
-      const esOBD = n => /vlinker|vgate|obd|elm|obdlink|think|veepeak|konnwei|icar|viecar|panlong|scan/i.test(n || '');
+      /* Un barrido BLE en la calle levanta TODO lo que esté anunciando cerca
+         —llaveros, sensores de presión, audífonos, el celular del cliente— y la
+         mayoría no publica nombre: el puente cae a la MAC y llegan como un
+         número pelado. Mezclados y en crudo, el mecánico elige entre veinte
+         filas idénticas. Acá se ordenan por probabilidad, cada una dice QUÉ es,
+         y los emparejados (vinculados en el teléfono) NUNCA se ocultan. */
+      const esOBD = n => /vlinker|linker|ms|vgate|obd|elm|obdlink|think|veepeak|konnwei|icar|viecar|panlong|scan|stn|bafx|autophix|nexa|vlink/i.test(n || '');
+      const macOBD = mac => /^00:1D:A5|^DC:0D:30|^00:13:EF|^00:1D:43|^11:22:33/i.test(mac || '');
       const soloHex = t => String(t || '').replace(/[^0-9A-F]/gi, '').toUpperCase();
-      /* "Anonimo" no es "sin nombre" a secas: el puente ya sustituyo el nombre
-         faltante por la MAC, asi que hay que reconocer esa sustitucion. */
-      const anonimo = d => !String(d.nombre || '').trim() || soloHex(d.nombre) === soloHex(d.mac);
-      const rango = d => esOBD(d.nombre) ? 0 : anonimo(d) ? 3 : d.vinculado ? 1 : 2;
+      /* Un dispositivo vinculado en Android NUNCA es anónimo, aunque no reporte nombre de texto */
+      const anonimo = d => (!String(d.nombre || '').trim() || soloHex(d.nombre) === soloHex(d.mac)) && !d.vinculado;
+      const rango = d => (esOBD(d.nombre) || macOBD(d.mac)) ? 0 : d.vinculado ? 1 : anonimo(d) ? 3 : 2;
       const orden = [...lista].sort((a, b) => rango(a) - rango(b));
 
       const fila = d => {
         const r = rango(d);
-        const etiqueta = r === 0 ? ' <span style="color:var(--green);font-size:11px">🔌 parece un escáner OBD</span>' : '';
-        return `<button class="btn btn-ghost" style="width:100%;text-align:left;margin-bottom:6px"
+        const esObdCheck = esOBD(d.nombre) || macOBD(d.mac);
+        const etiqueta = esObdCheck
+          ? ' <span style="color:var(--green);font-size:11px;font-weight:700">🔌 Escáner OBD (vLinker/Vgate)</span>'
+          : d.vinculado ? ' <span style="color:var(--cyan);font-size:11px;font-weight:700">📱 Emparejado en Android</span>' : '';
+
+        let nombreMostrar = d.nombre;
+        if (macOBD(d.mac) && (!nombreMostrar || soloHex(nombreMostrar) === soloHex(d.mac))) {
+          nombreMostrar = `vLinker MS / Vgate (${d.mac})`;
+        } else if (anonimo(d)) {
+          nombreMostrar = `<span style="color:var(--text3)">(sin nombre) ${d.mac}</span>`;
+        } else {
+          nombreMostrar = UI.esc(nombreMostrar);
+        }
+
+        return `<button class="btn btn-ghost" style="width:100%;text-align:left;margin-bottom:6px;border:1px solid ${d.vinculado ? 'var(--cyan)' : 'var(--border)'}"
             onclick="Modulos.diagnostico_obd._escanerElegido(${lista.indexOf(d)})">
-            <b>${anonimo(d) ? '<span style="color:var(--text3)">(sin nombre)</span>' : UI.esc(d.nombre)}</b>${etiqueta}
-            <span style="display:block;font-size:11px;color:var(--text3)">
-              ${d.tipo === 'ble' ? 'BLE' : 'Bluetooth clásico (SPP)'} ·
-              ${d.vinculado ? 'emparejado con el teléfono' : 'no emparejado'} · ${UI.esc(d.mac)}
+            <div style="display:flex;justify-content:space-between;align-items:center">
+              <b>${nombreMostrar}</b>
+              ${etiqueta}
+            </div>
+            <span style="display:block;font-size:11px;color:var(--text3);margin-top:2px">
+              ${d.tipo === 'ble' ? '⚡ BLE' : '🔌 Bluetooth clásico (SPP - COM)'} ·
+              <b>MAC: ${UI.esc(d.mac)}</b> ·
+              ${d.vinculado ? '✅ Emparejado en teléfono' : 'No emparejado'}
             </span>
           </button>`;
       };
@@ -2032,35 +2048,48 @@ Modulos.diagnostico_obd = {
       const anon = orden.filter(d => rango(d) === 3);
 
       const cuerpo = `
-        <div style="background:var(--surface2);color:var(--text);border-radius:8px;padding:10px;margin-top:10px">
-          <div style="font-weight:600;margin-bottom:2px">📡 Elegí el escáner</div>
-          <div style="font-size:11.5px;color:var(--text3);margin-bottom:8px">
-            ${lista.length} aparato(s) alrededor. Ninguno está conectado todavía: al elegir uno se le
-            manda <b>ATI</b> y solo se sigue si contesta.
+        <div style="background:var(--surface2);color:var(--text);border-radius:8px;padding:12px;margin-top:10px">
+          <div style="font-weight:700;margin-bottom:2px;font-size:14px">📡 Seleccionar Escáner Bluetooth</div>
+          <div style="font-size:11.5px;color:var(--text3);margin-bottom:10px">
+            Se encontraron ${lista.length} dispositivo(s). Al elegir uno, se probará comunicación mandando <b>ATI</b>.
           </div>
           ${probables.length ? probables.map(fila).join('')
-            : '<div style="font-size:12px;color:var(--amber);margin-bottom:6px">Ninguno se anuncia con nombre de escáner. Si el tuyo es de Bluetooth clásico, emparejalo primero en los ajustes del teléfono.</div>'}
+            : '<div style="font-size:12px;color:var(--amber);margin-bottom:8px;padding:8px;background:rgba(245,158,11,0.1);border-radius:6px">Ninguno se anuncia con nombre reconocido de escáner. Si el vLinker / Vgate es de Bluetooth clásico, verfica que esté emparejado en los Ajustes de Bluetooth de Android.</div>'}
           ${anon.length ? `
-            <button class="btn btn-ghost" style="width:100%;font-size:12px"
+            <button class="btn btn-ghost" style="width:100%;font-size:12px;margin-top:6px"
               onclick="this.style.display='none';this.nextElementSibling.style.display=''">
-              ▾ Ver ${anon.length} aparato(s) sin nombre
+              ▾ Ver ${anon.length} otro(s) dispositivo(s) sin nombre
             </button>
-            <div style="display:none">
+            <div style="display:none;margin-top:6px">
               <div style="font-size:11.5px;color:var(--text3);margin:4px 0">
-                No publican nombre, así que solo se ve su MAC. Casi siempre son llaveros, sensores de
-                presión o audífonos — rara vez el escáner.
+                Dispositivos no emparejados que no publican nombre (llaveros, sensores, etc.):
               </div>
               ${anon.map(fila).join('')}
             </div>` : ''}
-          <div style="font-size:11.5px;color:var(--text3);margin-top:6px">
-            ¿No aparece el tuyo? Los de <b>Bluetooth clásico</b> tienen que estar emparejados en los ajustes
-            del teléfono; los <b>BLE</b>, enchufados al vehículo y encendidos.
+
+          <div style="margin-top:10px;border-top:1px solid var(--border);padding-top:8px">
+            <details>
+              <summary style="font-size:11.5px;color:var(--cyan);cursor:pointer;font-weight:600">
+                ⚙️ ¿No ves tu vLinker/Vgate? Ingresar dirección MAC manualmente
+              </summary>
+              <div style="display:flex;gap:6px;margin-top:8px">
+                <input type="text" id="obd-mac-manual" class="form-input" style="font-size:12px;font-family:monospace" placeholder="Ej: 00:1D:A5:12:34:56">
+                <button class="btn btn-sm btn-brand" onclick="
+                  const m = (document.getElementById('obd-mac-manual').value || '').trim().toUpperCase();
+                  if(m) Modulos.diagnostico_obd._escanerElegido({ mac: m, nombre: 'Escáner MAC ' + m, tipo: 'spp', vinculado: true });
+                ">Conectar MAC</button>
+              </div>
+            </details>
           </div>
-          <button class="btn btn-ghost" style="margin-top:6px"
+
+          <div style="font-size:11px;color:var(--text3);margin-top:10px">
+            💡 <b>Vgate / vLinker MAC OUI:</b> Las direcciones MAC de vLinker / Vgate suelen iniciar con <code>00:1D:A5</code> o <code>DC:0D:30</code>.
+          </div>
+          <button class="btn btn-ghost" style="margin-top:8px;width:100%"
             onclick="Modulos.diagnostico_obd._escanerElegido(null)">Cancelar</button>
         </div>`;
 
-      if (enModal) UI.modal('📡 Escáneres Bluetooth', cuerpo, '520px');
+      if (enModal) UI.modal('📡 Escáneres Bluetooth', cuerpo, '540px');
       else caja.innerHTML = cuerpo;
     });
   },

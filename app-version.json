@@ -32,8 +32,8 @@
     "Va como release de GitHub, igual que el instalador de Windows."
   ],
   "android": {
-    "versionCode": 5,
-    "versionName": "1.2.0",
+    "versionCode": 6,
+    "versionName": "1.2.1",
     "fecha": "2026-09-20",
     "paquete": "com.cmtelecom.nexuspro.nativa",
     "minAndroid": "7.0",
@@ -47,11 +47,10 @@
     "enPlayStore": false,
     "playUrl": "https://play.google.com/store/apps/details?id=com.cmtelecom.nexuspro.nativa",
     "novedades": [
-      "Diagnóstico OBD-II: Evaluación de salud en vivo con insignias (✓ Normal, ⚠️ Advertencia, 🚨 Crítico)",
-      "Rangos de referencia técnica automotriz y categorización en 5 áreas (Motor, Mezcla, Temperaturas, Eléctrico y Chasis)",
-      "Seguimiento de Mínimos y Máximos (Mín: X | Máx: Y) en tarjetas, relojes (gauges) y gráficas en vivo",
-      "Soporte ampliado para adaptadores Bluetooth clásico (SPP) y BLE (ELM327, Vgate iCar Pro, vLinker)",
-      "Decodificación Modo 06/09, PIDs Hyundai/Kia UDS y camiones pesados J1939"
+      "Mejora Bluetooth: Reconocimiento inteligente de vLinker MS, Vgate iCar Pro y adaptadores por MAC (00:1D:A5, DC:0D:30)",
+      "Los dispositivos emparejados en Android ya no se ocultan y aparecen destacados en verde arriba de la lista",
+      "Soporte de lectura de Alias en Android 12+ e ingreso directo de MAC manual para conexión directa",
+      "Evaluación de salud en vivo con insignias (✓ Normal, ⚠️ Advertencia, 🚨 Crítico) y rangos de referencia"
     ]
   }
 }
