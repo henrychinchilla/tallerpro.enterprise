@@ -8,7 +8,7 @@
    Para forzar actualización: subir CACHE_VERSION.
 ═══════════════════════════════════════════════════════ */
 
-const CACHE_VERSION = 'v5.15.2-20260920';
+const CACHE_VERSION = 'v5.15.3-20260920';
 const CACHE_NAME = `nexuspro-${CACHE_VERSION}`;
 
 /* App shell — se precachea en install para que funcione offline */

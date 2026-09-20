@@ -84,31 +84,67 @@ class _PantallaEscanerState extends State<PantallaEscaner> {
     if (_ocupado) return;
     setState(() { _ocupado = true; _elegido = d; });
     try {
-      _p('Conectando a ${d.nombre} (${d.esBle ? 'BLE' : 'Bluetooth clásico'})…');
+      _p('Conectando a ${d.nombre} (${d.esBle ? 'BLE' : 'Bluetooth clásico'})...');
 
-      /* El puente contesta por evento, no por retorno. El orden importa y es
-         fácil de invertir: hay que quedarse ESCUCHANDO primero y recién después
-         pedir la conexión. Al revés —esperar el evento y luego llamar a
-         conectar— nadie dispara nada y la espera muere en el timeout.
-         `eventos` es un stream de difusión, así que `.first` ya se suscribe al
-         crear el futuro, aunque todavía no se lo espere.
-         El timeout propio es el cinturón: el puente emite en TODA ruta de
-         fallo, pero si algún día dejara de hacerlo, esto avisa en vez de dejar
-         la pantalla colgada — que fue exactamente el bug de la app anterior. */
       final futuroEvento = PuenteBT.eventos.first
-          .timeout(const Duration(seconds: 30), onTimeout: () =>
+          .timeout(const Duration(seconds: 15), onTimeout: () =>
               const EventoBT('error', 'El puente Bluetooth no contestó a tiempo.'));
       await PuenteBT.conectar(d);
-      final evt = await futuroEvento;
-      if (evt.evento != 'conectado') { _p('✗ ${evt.detalle}'); return; }
-      /* Se marca aqui y no se espera al oyente del driver: son dos
-         suscripciones al mismo stream y el orden entre ellas no esta
-         garantizado. Sin esto, el ATI de abajo podia salir con el driver
-         creyendo que seguia desconectado. */
+      var evt = await futuroEvento;
+
+      // Si falló el transporte inicial, reintentar automáticamente con el alternativo (SPP <-> BLE)
+      if (evt.evento != 'conectado') {
+        _p('⚠️ Falló transporte inicial (${d.tipo.toUpperCase()}): ${evt.detalle}');
+        final altTipo = d.esBle ? 'spp' : 'ble';
+        _p('🔄 Reintentando automáticamente con transporte alternativo (${altTipo.toUpperCase()})...');
+        final escAlt = Escaner(
+          nombre: d.nombre,
+          mac: d.mac,
+          tipo: altTipo,
+          vinculado: d.vinculado,
+          rssi: d.rssi,
+          sinNombre: d.sinNombre,
+        );
+        final futuroAlt = PuenteBT.eventos.first
+            .timeout(const Duration(seconds: 15), onTimeout: () =>
+                const EventoBT('error', 'Reintento con transporte alternativo no contestó a tiempo.'));
+        await PuenteBT.conectar(escAlt);
+        evt = await futuroAlt;
+        if (evt.evento != 'conectado') {
+          _p('✗ ${evt.detalle}');
+          return;
+        }
+      }
+
       _elm.marcarConectado(true);
 
-      _p('Socket abierto. Preguntándole al escáner quién es (ATI)…');
-      final sonda = await _elm.sondear();
+      _p('Socket abierto. Preguntándole al escáner quién es (ATI)...');
+      var sonda = await _elm.sondear();
+
+      // Si el socket abrió pero no contesta ATI, probar conmuta de transporte (BLE/SPP)
+      if (sonda.isEmpty) {
+        _p('⚠️ Conectó por ${d.tipo.toUpperCase()} pero no respondió ATI. Probando transporte alternativo...');
+        await PuenteBT.desconectar();
+        final altTipo = d.esBle ? 'spp' : 'ble';
+        final escAlt = Escaner(
+          nombre: d.nombre,
+          mac: d.mac,
+          tipo: altTipo,
+          vinculado: d.vinculado,
+          rssi: d.rssi,
+          sinNombre: d.sinNombre,
+        );
+        final futuroAlt = PuenteBT.eventos.first
+            .timeout(const Duration(seconds: 15), onTimeout: () =>
+                const EventoBT('error', 'Reintento alternativo no contestó.'));
+        await PuenteBT.conectar(escAlt);
+        final evtAlt = await futuroAlt;
+        if (evtAlt.evento == 'conectado') {
+          _elm.marcarConectado(true);
+          sonda = await _elm.sondear();
+        }
+      }
+
       if (sonda.isEmpty) {
         _p('✗ Se abrió el Bluetooth con ${d.nombre}, pero no contestó ni a ATI ni a ATZ: '
             'NO hay enlace con un escáner OBD. Lo más común es haber elegido el aparato '
@@ -119,7 +155,7 @@ class _PantallaEscanerState extends State<PantallaEscaner> {
       }
       _p('✓ El escáner contesta: $sonda');
 
-      _p('Poniendo a punto y buscando el protocolo del vehículo…');
+      _p('Poniendo a punto y buscando el protocolo del vehículo...');
       final proto = await _elm.iniciar(_p);
       setState(() => _protocolo = proto);
       _p('✓ Protocolo: $proto');
