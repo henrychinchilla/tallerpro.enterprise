@@ -34,7 +34,6 @@ class _PantallaLoginState extends State<PantallaLogin> {
 
   bool _ocupado = false;
   bool _verClave = false;
-  bool _recuperando = false;
   String? _error;
   String? _aviso;
 
@@ -130,7 +129,6 @@ class _PantallaLoginState extends State<PantallaLogin> {
         setState(() => _error = err.toString());
       } else {
         setState(() {
-          _recuperando = false;
           _aviso = 'Te enviamos el enlace de recuperación a $correo. Revisá tu correo.';
         });
       }

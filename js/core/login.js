@@ -129,15 +129,15 @@ function renderLogin(vista='login') {
             <div style="font-size:11px;font-weight:600;color:var(--cyan);background:rgba(0,212,255,0.08);padding:4px 12px;border-radius:12px;border:1px solid rgba(0,212,255,0.2);display:inline-flex;align-items:center;gap:6px">
               <span class="app-version">v5.15.7-20260920</span>
               <span>·</span>
-              <span>App Android v1.2.1 (Build 6)</span>
+              <span>App Android v5.15.7 (Build 7)</span>
             </div>
             ${_enApp ? `
               <span style="font-size:11px;color:var(--green);background:rgba(16,185,129,0.1);padding:3px 10px;border-radius:12px;border:1px solid rgba(16,185,129,0.3)">
-                📱 Estás ejecutando la App Android nativa
+                📱 Estás ejecutando la App Android nativa v5.15.7
               </span>
             ` : `
               <a href="/nexuspro-nativa.apk" download style="font-size:11px;color:var(--amber);text-decoration:none;background:rgba(255,170,0,0.08);padding:3px 10px;border-radius:12px;border:1px solid rgba(255,170,0,0.2);display:inline-flex;align-items:center;gap:4px" title="Descargar APK oficial para Android">
-                📲 Descargar APK Android (v1.2.1 · 18 MB)
+                📲 Descargar APK Android (v5.15.7 · 18 MB)
               </a>
             `}
           </div>

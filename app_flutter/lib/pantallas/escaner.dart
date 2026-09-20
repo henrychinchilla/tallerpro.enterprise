@@ -192,7 +192,7 @@ class _PantallaEscanerState extends State<PantallaEscaner> {
 
     final mac = await showDialog<String>(
       context: context,
-      builder: (ctx) => StatefulWidgetBuilder(
+      builder: (ctx) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
           title: const Text('Conectar por MAC Manual'),
           content: Column(

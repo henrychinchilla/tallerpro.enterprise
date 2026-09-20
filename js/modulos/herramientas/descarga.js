@@ -139,8 +139,8 @@ Modulos.descarga = {
 
             <div style="margin-top:10px;font-size:11px;color:var(--text3);background:var(--surface2);border-radius:8px;padding:8px 10px">
               ${enPlay ? '' : '<b>⚠️ Antes de instalar:</b> tu teléfono pedirá permiso para <i>instalar apps de esta fuente</i> — acéptalo.<br>'}
-              ${app?.nativa ? '<b>Por ahora trae login y escáner OBD.</b> POS, inventario, órdenes, facturación y contabilidad siguen en el sitio web desde una computadora, mientras se portan.<br>' : ''}
-              ${appVer ? `Versión <b>${UI.esc(appVer)}</b>${appPeso ? ` · ${appPeso}` : ''} · Android ${UI.esc(app?.minAndroid || '8.0')} o superior` : ''}
+              ${app?.nativa ? '<b>Plataforma Enterprise Nativa:</b> incluye Diagnóstico OBD-II por Bluetooth y el 100% de los 34 módulos del sistema sin excepción.<br>' : ''}
+              ${appVer ? `Versión <b>${UI.esc(appVer)}</b>${appPeso ? ` · ${appPeso}` : ''} · Android ${UI.esc(app?.minAndroid || '7.0')} o superior` : ''}
             </div>
           </div>
 

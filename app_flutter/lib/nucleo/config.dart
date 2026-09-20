@@ -14,3 +14,11 @@ const String supabaseAnonKey =
 
 /// Nombre visible del producto.
 const String nombreApp = 'NexusPro';
+
+/// URL base de producción de NexusPro Enterprise.
+const String urlSitioWeb = 'https://nexuspro.cmtelecommgt.com';
+
+/// Versión oficial sincronizada con la plataforma Web.
+const String versionApp = '5.15.7';
+const int buildApp = 7;
+
