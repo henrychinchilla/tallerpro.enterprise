@@ -5774,46 +5774,67 @@ Modulos.diagnostico_obd = {
   /* ═══════════ VISTA PRINCIPAL (lista por mes) ═══════════ */
   async render() {
     const el = document.getElementById('page-content');
+    if (!el) return;
     UI.loading(el);
+    const puedeEditar = typeof puedeAccion === 'function' ? puedeAccion('diagnosticos_obd', 'editar') || puedeAccion('diagnosticos_obd', 'crear') : true;
     const now = new Date();
     if (!this._mes)  this._mes  = now.getMonth() + 1;
     if (!this._anio) this._anio = now.getFullYear();
     const ini = `${this._anio}-${String(this._mes).padStart(2,'0')}-01`;
     const fin = new Date(this._anio, this._mes, 0).toISOString().slice(0,10);
 
-    [this._data, this._vehiculos] = await Promise.all([
-      DB.getDiagnosticosOBD(ini, fin), DB.getVehiculos()
-    ]);
+    try {
+      [this._data, this._vehiculos] = await Promise.all([
+        DB.getDiagnosticosOBD(ini, fin), DB.getVehiculos()
+      ]);
+    } catch (e) {
+      console.error('Error al cargar diagnósticos OBD:', e);
+      this._data = this._data || [];
+      this._vehiculos = this._vehiculos || [];
+    }
 
     const meses = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
     const anios = [this._anio - 1, this._anio, this._anio + 1];
-    const conFallas = this._data.filter(d => (d.dtcs||[]).length).length;
+    const conFallas = (this._data || []).filter(d => (d.dtcs||[]).length).length;
     if (this._scan) {
       const v = this._scan.vehiculos || (this._vehiculos || []).find(x => x.id === this._scan.vehiculo_id);
       el.innerHTML = `
-        <div class="page-header">
-          <div>
-            <h1 class="page-title">🩺 Diagnóstico OBD-II</h1>
-            <p class="page-subtitle">// Escaneo activo de vehículo · ${v ? `${UI.esc(v.placa||'')} ${UI.esc(v.marca||'')} ${UI.esc(v.modelo||'')}` : (UI.esc(this._scan.vin||'En proceso'))}</p>
-          </div>
-          <div class="page-actions">
-            <button class="btn btn-ghost" onclick="Modulos.diagnostico_obd.cerrarScanActivo()">📋 Ver Historial del Mes</button>
-            <button class="btn btn-ghost" onclick="Modulos.diagnostico_obd.modalCampanas()">🔔 Campañas de fábrica</button>
-            <span id="obd-estado-conexion" style="display:inline-flex;align-items:center;gap:6px"></span>
-            <button class="btn btn-ghost" onclick="Modulos.diagnostico_obd.modalCentroModulos()">🧠 Centro de módulos</button>
-            <button class="btn btn-ghost" onclick="Modulos.diagnostico_obd.modalOEM()">🧠 OEM</button>
-            ${puedeEditar ? `<button class="btn btn-brand" onclick="Modulos.diagnostico_obd.modalEscanear()">📡 Nuevo Escaneo</button>` : ''}
+        <div class="page-header" style="background:linear-gradient(135deg, #0f172a 0%, #1e293b 100%);padding:16px 20px;border-radius:12px;margin-bottom:16px;box-shadow:0 4px 20px rgba(0,0,0,0.15)">
+          <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px">
+            <div>
+              <div style="display:flex;align-items:center;gap:8px">
+                <span style="background:var(--brand);color:#fff;font-size:10px;font-weight:900;padding:2px 8px;border-radius:4px;letter-spacing:1px">NEXUS PRO TABLET</span>
+                <span style="color:#06b6d4;font-size:11px;font-weight:700">CAN BUS TOPOLOGY 3.0</span>
+              </div>
+              <h1 class="page-title" style="color:#fff;margin:4px 0 0;font-size:22px;display:flex;align-items:center;gap:8px">
+                🩺 Diagnóstico OBD-II & UDS OEM
+              </h1>
+              <p class="page-subtitle" style="color:#94a3b8;margin-top:2px;font-size:12px">
+                ${v ? `🚘 <b>${UI.esc(v.placa||'s/placa')}</b> · ${UI.esc(v.marca||'')} ${UI.esc(v.modelo||'')} ${UI.esc(v.anio||'')}` : (UI.esc(this._scan.vin||'Escaneo en memoria'))}
+              </p>
+            </div>
+            <div class="page-actions" style="display:flex;gap:8px;flex-wrap:wrap">
+              <button class="btn btn-ghost" style="color:#f8fafc;border-color:rgba(255,255,255,0.15)" onclick="Modulos.diagnostico_obd.cerrarScanActivo()">📋 Historial</button>
+              <button class="btn btn-ghost" style="color:#f8fafc;border-color:rgba(255,255,255,0.15)" onclick="Modulos.diagnostico_obd.modalCampanas()">🔔 Campañas</button>
+              <span id="obd-estado-conexion" style="display:inline-flex;align-items:center;gap:6px"></span>
+              <button class="btn btn-cyan" onclick="Modulos.diagnostico_obd.modalCentroModulos()">🧠 Centro de Módulos</button>
+              <button class="btn btn-ghost" style="color:#f8fafc;border-color:rgba(255,255,255,0.15)" onclick="Modulos.diagnostico_obd.modalOEM()">🧠 Catálogo OEM</button>
+              ${puedeEditar ? `<button class="btn btn-brand" onclick="Modulos.diagnostico_obd.modalEscanear()">📡 Escanear Otro Vehículo</button>` : ''}
+            </div>
           </div>
         </div>
         <div class="page-body">
-          <div style="background:var(--surface2);border-left:4px solid var(--brand);padding:10px 14px;border-radius:8px;margin-bottom:12px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+          <div style="background:linear-gradient(90deg, rgba(6,182,212,0.12) 0%, rgba(16,185,129,0.08) 100%);border:1px solid rgba(6,182,212,0.3);padding:12px 16px;border-radius:10px;margin-bottom:14px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">
             <div>
-              <span style="font-size:11px;font-weight:700;color:var(--brand);text-transform:uppercase;letter-spacing:0.5px">⚡ Sesión de Escaneo Activa</span>
-              <div style="font-size:13px;font-weight:700;margin-top:2px">
-                ${v ? `${UI.esc(v.placa||'')} · ${UI.esc(v.marca||'')} ${UI.esc(v.modelo||'')} ${UI.esc(v.anio||'')}` : (UI.esc(this._scan.vin||'Escaneo en memoria'))}
+              <span style="font-size:11px;font-weight:800;color:var(--cyan);text-transform:uppercase;letter-spacing:0.8px;display:inline-flex;align-items:center;gap:5px">
+                <span style="width:8px;height:8px;border-radius:50%;background:#06b6d4;display:inline-block;box-shadow:0 0 8px #06b6d4"></span>
+                ⚡ SESIÓN VIVA ACTIVA DE DIAGNÓSTICO
+              </span>
+              <div style="font-size:13px;font-weight:700;margin-top:2px;color:var(--text)">
+                ${v ? `${UI.esc(v.placa||'')} · ${UI.esc(v.marca||'')} ${UI.esc(v.modelo||'')} ${UI.esc(v.anio||'')}` : (UI.esc(this._scan.vin||'Escaneo activo'))}
               </div>
             </div>
-            <div style="display:flex;gap:6px">
+            <div style="display:flex;gap:8px">
               <button class="btn btn-sm btn-ghost" onclick="Modulos.diagnostico_obd.cerrarScanActivo()">📋 Ver Historial del Mes</button>
               ${puedeEditar ? `<button class="btn btn-sm btn-brand" onclick="Modulos.diagnostico_obd.modalEscanear()">📡 Nuevo Escaneo</button>` : ''}
             </div>
@@ -5827,31 +5848,36 @@ Modulos.diagnostico_obd = {
     }
 
     el.innerHTML = `
-      <div class="page-header">
-        <div>
-          <h1 class="page-title">🩺 Diagnóstico OBD-II</h1>
-          <p class="page-subtitle">// Escáner ELM327/Vgate por Bluetooth · camiones J1939 y livianos por USB (RP1210)</p>
-        </div>
-        <div class="page-actions">
-          <select class="form-select" style="width:140px" onchange="Modulos.diagnostico_obd._mes=+this.value;Modulos.diagnostico_obd.render()">
-            ${meses.map((m,i)=>`<option value="${i+1}" ${i+1===this._mes?'selected':''}>${m}</option>`).join('')}
-          </select>
-          <select class="form-select" style="width:90px" onchange="Modulos.diagnostico_obd._anio=+this.value;Modulos.diagnostico_obd.render()">
-            ${anios.map(a=>`<option ${a===this._anio?'selected':''}>${a}</option>`).join('')}
-          </select>
-          <button class="btn btn-ghost" onclick="Modulos.diagnostico_obd.modalCampanas()">🔔 Campañas de fábrica</button>
-          <span id="obd-estado-conexion" style="display:inline-flex;align-items:center;gap:6px"></span>
-          <button class="btn btn-ghost" onclick="Modulos.diagnostico_obd.modalMapaVehiculos()" title="Qué vehículos sabe escanear el taller y hasta dónde llega en cada uno">🗺 Mapa de vehículos</button>
-          <button class="btn btn-ghost" onclick="Modulos.diagnostico_obd.modalModulosVehiculo()" title="Declarar qué módulos trae cada modelo: airbag, ABS, EPS, TCM, carrocería…">🧩 Módulos</button>
-          <button class="btn btn-ghost" onclick="Modulos.diagnostico_obd.modalCentroModulos()" title="Todo el vehículo ordenado por gravedad, y la ficha de cada módulo">🧠 Centro de módulos</button>
-          <button class="btn btn-ghost" onclick="Modulos.diagnostico_obd.modalBancoPruebas()" title="Mandarle un servicio a un módulo y ver la respuesta cruda — cualquier vehículo">🧪 Banco de pruebas</button>
-          <button class="btn btn-ghost" onclick="Modulos.diagnostico_obd.modalOEM()" title="Catálogo por fabricante, redes y procedimientos verificados">🧠 OEM</button>
-          <button class="btn btn-ghost" onclick="Modulos.diagnostico_obd.render()">↻ Actualizar</button>
-          ${puedeEditar ? `<button class="btn btn-brand" onclick="Modulos.diagnostico_obd.modalEscanear()">📡 Nuevo Escaneo</button>` : ''}
+      <div class="page-header" style="background:linear-gradient(135deg, #0f172a 0%, #1e293b 100%);padding:16px 20px;border-radius:12px;margin-bottom:16px;box-shadow:0 4px 20px rgba(0,0,0,0.15)">
+        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px">
+          <div>
+            <div style="display:flex;align-items:center;gap:8px">
+              <span style="background:var(--brand);color:#fff;font-size:10px;font-weight:900;padding:2px 8px;border-radius:4px;letter-spacing:1px">NEXUS PRO DIAGNOSTICS</span>
+              <span style="color:#06b6d4;font-size:11px;font-weight:700">BENCHMARK LAUNCH & AUTEL</span>
+            </div>
+            <h1 class="page-title" style="color:#fff;margin:4px 0 0;font-size:22px">🩺 Diagnóstico OBD-II & UDS Multimarca</h1>
+            <p class="page-subtitle" style="color:#94a3b8;margin-top:2px;font-size:12px">// Bluetooth BLE/SPP (Vgate/ELM327) · USB RP1210 (J1939/CAN Heavy Duty)</p>
+          </div>
+          <div class="page-actions" style="display:flex;gap:8px;flex-wrap:wrap">
+            <select class="form-select" style="width:130px;background:#1e293b;color:#f8fafc;border-color:rgba(255,255,255,0.2)" onchange="Modulos.diagnostico_obd._mes=+this.value;Modulos.diagnostico_obd.render()">
+              ${meses.map((m,i)=>`<option value="${i+1}" ${i+1===this._mes?'selected':''}>${m}</option>`).join('')}
+            </select>
+            <select class="form-select" style="width:90px;background:#1e293b;color:#f8fafc;border-color:rgba(255,255,255,0.2)" onchange="Modulos.diagnostico_obd._anio=+this.value;Modulos.diagnostico_obd.render()">
+              ${anios.map(a=>`<option ${a===this._anio?'selected':''}>${a}</option>`).join('')}
+            </select>
+            <button class="btn btn-ghost" style="color:#f8fafc;border-color:rgba(255,255,255,0.15)" onclick="Modulos.diagnostico_obd.modalCampanas()">🔔 Campañas</button>
+            <span id="obd-estado-conexion" style="display:inline-flex;align-items:center;gap:6px"></span>
+            <button class="btn btn-ghost" style="color:#f8fafc;border-color:rgba(255,255,255,0.15)" onclick="Modulos.diagnostico_obd.modalMapaVehiculos()" title="Mapa de Cobertura">🗺 Cobertura</button>
+            <button class="btn btn-ghost" style="color:#f8fafc;border-color:rgba(255,255,255,0.15)" onclick="Modulos.diagnostico_obd.modalModulosVehiculo()">🧩 Módulos</button>
+            <button class="btn btn-cyan" onclick="Modulos.diagnostico_obd.modalCentroModulos()">🧠 Centro Módulos</button>
+            <button class="btn btn-ghost" style="color:#f8fafc;border-color:rgba(255,255,255,0.15)" onclick="Modulos.diagnostico_obd.modalOEM()">🧠 Catálogo OEM</button>
+            <button class="btn btn-ghost" style="color:#f8fafc;border-color:rgba(255,255,255,0.15)" onclick="Modulos.diagnostico_obd.render()">↻ Actualizar</button>
+            ${puedeEditar ? `<button class="btn btn-brand" onclick="Modulos.diagnostico_obd.modalEscanear()">📡 Nuevo Escaneo</button>` : ''}
+          </div>
         </div>
       </div>
       <div class="page-body">
-        ${!this._hayBluetooth ? `<div class="card" style="border-left:3px solid var(--amber);padding:12px;margin-bottom:12px">
+        ${!this._hayBluetooth ? `<div class="card" style="border-left:4px solid var(--amber);padding:12px;margin-bottom:12px;background:rgba(245,158,11,0.08)">
           ⚠️ Este navegador no soporta Bluetooth. Para escanear por Bluetooth usa <b>Chrome o Edge en Android</b> (o la app NexusPro) o una PC con Bluetooth. El escaneo por <b>USB (puente RP1210)</b> sí está disponible desde esta PC.
         </div>` : ''}
         <div class="table-wrap">
@@ -7060,9 +7086,15 @@ Modulos.diagnostico_obd = {
                   ? '<span style="color:var(--text3)" title="El modulo contesto en KWP2000: el numero del codigo es fiable, el byte de estado no esta verificado"> · estado no reportado</span>'
                   : c.activo ? '<b style="color:var(--red)"> · presente ahora</b>' : '<span style="color:var(--text3)"> · guardada</span>'}
               </span>
-              <a href="${this._buscarDTC(c.codigo, veh)}" target="_blank" rel="noopener"
-                 style="flex-shrink:0;font-size:11px;color:var(--cyan);text-decoration:none"
-                 title="Buscar este código para ${UI.esc([veh.marca, veh.modelo].filter(Boolean).join(' ') || 'este vehículo')}">🔎 buscar</a>
+              <div style="display:flex;gap:6px;align-items:center;flex-shrink:0">
+                <button class="btn btn-xs btn-brand" style="font-size:10px;padding:2px 6px"
+                        onclick="Modulos.diagnostico_obd.asistenteDTC('${c.codigo}', '${UI.esc(m.nombre)}', '${UI.esc(veh.marca||'')}', '${UI.esc(veh.modelo||'')}', '${veh.anio||''}')">
+                  💡 Asistente
+                </button>
+                <a href="${this._buscarDTC(c.codigo, veh)}" target="_blank" rel="noopener"
+                   style="font-size:11px;color:var(--cyan);text-decoration:none"
+                   title="Buscar este código para ${UI.esc([veh.marca, veh.modelo].filter(Boolean).join(' ') || 'este vehículo')}">🔎 buscar</a>
+              </div>
             </div>`).join('')}
         </div>`).join('')}
       </div>
@@ -7711,7 +7743,143 @@ Modulos.diagnostico_obd = {
       if (this._scan) this._scan.dtcs_borrados = true;
       this._log(this._via === 'j1939' ? '🧹 Códigos borrados (DM11 + DM3) ✓' : '🧹 Códigos borrados (modo 04) ✓');
       UI.toast('Códigos borrados ✓');
-    } catch (e) { UI.toast('No se pudo borrar: ' + e.message, 'error'); }
+  asistenteDTC(codigo, modulo, marca, modelo, anio) {
+    const cod = String(codigo || '').split('-')[0].toUpperCase();
+    const vehTxt = [marca, modelo, anio].filter(Boolean).join(' ') || 'el vehículo';
+
+    /* Catálogo de guías de diagnóstico por familia de código DTC */
+    let guia = {
+      titulo: 'Diagnóstico Genérico SAE J2012',
+      sintomas: ['Testigo de falla (MIL) encendido en tablero', 'Posible comportamiento errático o falta de rendimiento'],
+      causas: [
+        { prob: '40%', desc: 'Sensor o actuador fuera de rango o con señal intermitente' },
+        { prob: '35%', desc: 'Falso contacto, arnés sulfatado o conector flojo' },
+        { prob: '15%', desc: 'Tierra física de chasis o alimentación de 12V/5V inestable' },
+        { prob: '10%', desc: 'Falla interna de la computadora del módulo' }
+      ],
+      pruebas: [
+        '<b>Paso 1 (Inspección Visual):</b> Revisá el conector del componente asociado y los cables buscando pellizcos o sulfato.',
+        '<b>Paso 2 (Medición de Alimentación):</b> Con multímetro en VDC, verificá que el sensor reciba 5.0V de referencia (o 12V B+) con switch en ON.',
+        '<b>Paso 3 (Medición de Tierra):</b> Medí continuidad ( < 1.0 Ω) entre el pin de tierra del sensor y el chasis.',
+        '<b>Paso 4 (Monitoreo de Señal):</b> En la pestaña "Monitor en Vivo", observá la señal del sensor al mover el arnés.'
+      ]
+    };
+
+    if (cod.startsWith('P030') || cod === 'P0300') {
+      guia = {
+        titulo: 'Fallo de Encendido / Misfire detectado en Cilindro(s)',
+        sintomas: ['Motor tiembla o vibra en ralentí', 'Jaloneo al acelerar', 'Pérdida severa de potencia y mayor consumo', 'Testigo MIL parpadea (daño potencial a catalizador)'],
+        causas: [
+          { prob: '45%', desc: 'Bujía desgastada, con carbón o calibración incorrecta' },
+          { prob: '30%', desc: 'Bobina de encendido (COP) dañada o con fuga de chispa' },
+          { prob: '15%', desc: 'Inyector de combustible obstruido o con pulso defectuoso' },
+          { prob: '10%', desc: 'Pérdida de compresión por válvula, junta de culata o anillo' }
+        ],
+        pruebas: [
+          '<b>Paso 1 (Chispa & Bujía):</b> Retirá la bujía del cilindro indicado y revisá el desgaste del electrodo (calibración nominal 0.8 - 1.1 mm).',
+          '<b>Paso 2 (Intercambio de Bobina):</b> Intercambiá la bobina a otro cilindro (ej: del 1 al 2). Si la falla se mueve de cilindro, la bobina está mala.',
+          '<b>Paso 3 (Pulso de Inyector):</b> Con foco Noid o osciloscopio, comprobá el pulso a tierra entregado por la ECU al inyector.',
+          '<b>Paso 4 (Compresión de Cilindro):</b> Medí compresión en seco/húmedo (debe estar entre 140 - 180 PSI y parejo entre cilindros).'
+        ]
+      };
+    } else if (cod.startsWith('P0171') || cod.startsWith('P0174')) {
+      guia = {
+        titulo: 'Sistema de Combustible Demasiado Pobre (Lean Bank 1/2)',
+        sintomas: ['Ralentí inestable o aceleración repentina', 'Tirones en marcha', 'Dificultad de arranque en frío'],
+        causas: [
+          { prob: '40%', desc: 'Fuga de vacío en mangueras de admisión o empaque de múltiple' },
+          { prob: '25%', desc: 'Sensor de flujo de aire (MAF) o presión (MAP) sucio o descalibrado' },
+          { prob: '20%', desc: 'Presión de combustible baja (bomba fatigada o filtro tapado)' },
+          { prob: '15%', desc: 'Inyectores de combustible tapados o sonda lambda B1S1 agotada' }
+        ],
+        pruebas: [
+          '<b>Paso 1 (Prueba de Humo / Vacío):</b> Introducí humo a la admisión para ubicar grietas en mangueras de vacío o empacaduras.',
+          '<b>Paso 2 (Medición MAF):</b> En ralentí, el flujo MAF debe medir entre 2.0 y 4.0 g/s (para motor 1.5-2.0L). Si mide < 1.5 g/s, limpiá el hilo caliente con limpiador de MAF.',
+          '<b>Paso 3 (Presión de Riel):</b> Conectá manómetro de combustible en el riel (debe marcar 40 - 60 PSI / 280-400 kPa según especificación).',
+          '<b>Paso 4 (Monitoreo LTFT):</b> Si el ajuste de combustible (LTFT) baja a 0% al subir RPM a 2500, la falla es 100% fuga de vacío.'
+        ]
+      };
+    } else if (cod.startsWith('C0035') || cod.startsWith('C0040') || cod.startsWith('C0045') || cod.startsWith('C0050') || cod.startsWith('C120')) {
+      guia = {
+        titulo: 'Sensor de Velocidad de Rueda (ABS / ESC)',
+        sintomas: ['Testigo de ABS, Control de Tracción o Freno encendido', 'Pedal de freno vibra en frenado suave', 'Desactivación de control crucero'],
+        causas: [
+          { prob: '50%', desc: 'Sensor de rueda (WSS) con acumulación de viruta metálica o lodo' },
+          { prob: '25%', desc: 'Cableado del arnés flexionado o partido cerca de la rueda' },
+          { prob: '15%', desc: 'Aro dentado fónico / banda magnética de balero dañada' },
+          { prob: '10%', desc: 'Falla interna en módulo electrónico del ABS' }
+        ],
+        pruebas: [
+          '<b>Paso 1 (Limpieza de Sensor):</b> Retirá el sensor de la manzana de rueda y limpiá el entrehierro de polvo de balata o virutas.',
+          '<b>Paso 2 (Resistencia del Sensor):</b> En sensores pasivos (VR), medí resistencia en pines (debe estar entre 800 y 1600 Ω).',
+          '<b>Paso 3 (Continuidad de Arnés):</b> Flexioná la manguera del arnés mientras medís continuidad hacia el conector del ABS.',
+          '<b>Paso 4 (Señal en VIVO):</b> En el monitor, girá la rueda a mano y comprobá que la velocidad km/h suba pareja respecto a las otras ruedas.'
+        ]
+      };
+    } else if (cod.startsWith('U0100') || cod.startsWith('U0101') || cod.startsWith('U0121') || cod.startsWith('U0140')) {
+      guia = {
+        titulo: 'Pérdida de Comunicación en Bus CAN (Multiplexado)',
+        sintomas: ['Múltiples alertas en tablero', 'Tacómetro o velocímetro caídos a cero', 'Motor no arranca o caja en modo emergencia'],
+        causas: [
+          { prob: '40%', desc: 'Batería baja o fusible de alimentación del módulo fundido' },
+          { prob: '30%', desc: 'Líneas CAN_H o CAN_L cortadas, peladas o cruzadas a tierra' },
+          { prob: '20%', desc: 'Conector de gateway o arnés sulfatado' },
+          { prob: '10%', desc: 'Falta de resistencia terminadora de bus (120 Ω nominal)' }
+        ],
+        pruebas: [
+          '<b>Paso 1 (Voltaje & Fusibles):</b> Revisá el fusible del módulo ausente y medí el voltaje de batería (>12.4V en reposo).',
+          '<b>Paso 2 (Resistencia de Bus CAN):</b> Con switch en OFF y batería desconectada, medí resistencia entre CAN_H (pin 6 OBD) y CAN_L (pin 14 OBD). Debe medir **60 Ω** exactos (dos resistencias de 120 Ω en paralelo). Si mide 120 Ω, hay un tramo de bus abierto.',
+          '<b>Paso 3 (Voltaje en Línea CAN):</b> Con switch en ON, medí voltaje a tierra: CAN_H debe estar en ~2.6V y CAN_L en ~2.4V.',
+          '<b>Paso 4 (Revisión de Nodos):</b> Usá el Árbol de Topología CAN para aislar cuál módulo es el último en responder antes del corte.'
+        ]
+      };
+    }
+
+    const html = `
+      <div style="font-size:12.5px">
+        <div style="background:var(--surface2);border-left:4px solid var(--brand);padding:10px 12px;border-radius:6px;margin-bottom:12px">
+          <div style="font-size:13px;font-weight:700;color:var(--brand)">💡 ${UI.esc(cod)} — ${UI.esc(guia.titulo)}</div>
+          <div style="font-size:11px;color:var(--text3);margin-top:2px">Módulo emisor: <b>${UI.esc(modulo)}</b> · Vehículo: <b>${UI.esc(vehTxt)}</b></div>
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
+          <div class="card" style="padding:10px">
+            <b style="font-size:11.5px;color:var(--amber)">⚠️ SÍNTOMAS TÍPICOS DE LA FALLA</b>
+            <ul style="margin:6px 0 0 16px;padding:0;font-size:11px;line-height:1.45;color:var(--text2)">
+              ${guia.sintomas.map(s => `<li>${UI.esc(s)}</li>`).join('')}
+            </ul>
+          </div>
+
+          <div class="card" style="padding:10px">
+            <b style="font-size:11.5px;color:var(--red)">🎯 CAUSAS PROBABLES (Ponderadas)</b>
+            <div style="margin-top:6px">
+              ${guia.causas.map(c => `
+                <div style="display:flex;justify-content:space-between;align-items:center;font-size:11px;margin-bottom:4px">
+                  <span style="color:var(--text2)">${UI.esc(c.desc)}</span>
+                  <span style="font-weight:700;color:var(--brand);background:rgba(37,99,235,0.1);padding:1px 6px;border-radius:4px;font-size:10px">${c.prob}</span>
+                </div>
+              `).join('')}
+            </div>
+          </div>
+        </div>
+
+        <div class="card" style="padding:12px;margin-bottom:12px">
+          <b style="font-size:12px;color:var(--green)">⚡ PROCEDIMIENTO DE PRUEBA Y DIAGNÓSTICO EN TALLER</b>
+          <div style="margin-top:8px;font-size:11.5px;line-height:1.55;color:var(--text)">
+            ${guia.pruebas.map(p => `<div style="margin-bottom:6px;background:var(--surface2);padding:7px 10px;border-radius:6px;border-left:3px solid var(--green)">${p}</div>`).join('')}
+          </div>
+        </div>
+
+        <div style="display:flex;justify-content:space-between;align-items:center;border-top:1px solid var(--border);padding-top:10px">
+          <span style="font-size:10.5px;color:var(--text3)">Guía de diagnóstico basada en estándar SAE & procedimientos OEM</span>
+          <a class="btn btn-sm btn-brand" href="${this._buscarDTC(cod, { marca, modelo, anio })}" target="_blank" rel="noopener">
+            🔎 Buscar boletines OEM para ${UI.esc(cod)}
+          </a>
+        </div>
+      </div>
+    `;
+
+    UI.modal(`💡 Asistente de Reparación — ${cod}`, html, '780px');
   },
 
   /* ═══════════ DATOS EN VIVO POR MÓDULO (UDS 22) ═══════════
