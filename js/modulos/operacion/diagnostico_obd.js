@@ -5776,7 +5776,7 @@ Modulos.diagnostico_obd = {
     const el = document.getElementById('page-content');
     if (!el) return;
     UI.loading(el);
-    const puedeEditar = typeof puedeAccion === 'function' ? puedeAccion('diagnosticos_obd', 'editar') || puedeAccion('diagnosticos_obd', 'crear') : true;
+    const puedeEditar = typeof puedeAccion === 'function' ? (puedeAccion('diagnostico_obd', 'editar') || puedeAccion('diagnostico_obd', 'crear') || puedeAccion('diagnostico_obd', 'ver')) : true;
     const now = new Date();
     if (!this._mes)  this._mes  = now.getMonth() + 1;
     if (!this._anio) this._anio = now.getFullYear();
@@ -5803,7 +5803,7 @@ Modulos.diagnostico_obd = {
           <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px">
             <div>
               <div style="display:flex;align-items:center;gap:8px">
-                <span style="background:var(--brand);color:#fff;font-size:10px;font-weight:900;padding:2px 8px;border-radius:4px;letter-spacing:1px">NEXUS PRO TABLET</span>
+                <span style="background:#2563eb;color:#fff;font-size:10px;font-weight:900;padding:2px 8px;border-radius:4px;letter-spacing:1px">NEXUS PRO TABLET</span>
                 <span style="color:#06b6d4;font-size:11px;font-weight:700">CAN BUS TOPOLOGY 3.0</span>
               </div>
               <h1 class="page-title" style="color:#fff;margin:4px 0 0;font-size:22px;display:flex;align-items:center;gap:8px">
@@ -5813,13 +5813,13 @@ Modulos.diagnostico_obd = {
                 ${v ? `🚘 <b>${UI.esc(v.placa||'s/placa')}</b> · ${UI.esc(v.marca||'')} ${UI.esc(v.modelo||'')} ${UI.esc(v.anio||'')}` : (UI.esc(this._scan.vin||'Escaneo en memoria'))}
               </p>
             </div>
-            <div class="page-actions" style="display:flex;gap:8px;flex-wrap:wrap">
-              <button class="btn btn-ghost" style="color:#f8fafc;border-color:rgba(255,255,255,0.15)" onclick="Modulos.diagnostico_obd.cerrarScanActivo()">📋 Historial</button>
-              <button class="btn btn-ghost" style="color:#f8fafc;border-color:rgba(255,255,255,0.15)" onclick="Modulos.diagnostico_obd.modalCampanas()">🔔 Campañas</button>
+            <div class="page-actions" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+              <button class="btn" style="background:#1e293b;color:#f8fafc;border:1px solid #334155" onclick="Modulos.diagnostico_obd.cerrarScanActivo()">📋 Historial</button>
+              <button class="btn" style="background:#1e293b;color:#f8fafc;border:1px solid #334155" onclick="Modulos.diagnostico_obd.modalCampanas()">🔔 Campañas</button>
               <span id="obd-estado-conexion" style="display:inline-flex;align-items:center;gap:6px"></span>
-              <button class="btn btn-cyan" onclick="Modulos.diagnostico_obd.modalCentroModulos()">🧠 Centro de Módulos</button>
-              <button class="btn btn-ghost" style="color:#f8fafc;border-color:rgba(255,255,255,0.15)" onclick="Modulos.diagnostico_obd.modalOEM()">🧠 Catálogo OEM</button>
-              ${puedeEditar ? `<button class="btn btn-brand" onclick="Modulos.diagnostico_obd.modalEscanear()">📡 Escanear Otro Vehículo</button>` : ''}
+              <button class="btn" style="background:#0891b2;color:#ffffff;border:none;font-weight:700" onclick="Modulos.diagnostico_obd.modalCentroModulos()">🧠 Centro de Módulos</button>
+              <button class="btn" style="background:#1e293b;color:#f8fafc;border:1px solid #334155" onclick="Modulos.diagnostico_obd.modalOEM()">🧠 Catálogo OEM</button>
+              <button class="btn" style="background:linear-gradient(135deg, #0284c7 0%, #2563eb 100%);color:#ffffff;font-weight:800;border:none;box-shadow:0 0 14px rgba(37,99,235,0.6);padding:8px 16px" onclick="Modulos.diagnostico_obd.modalEscanear()">📡 Escanear Otro Vehículo</button>
             </div>
           </div>
         </div>
@@ -5835,8 +5835,8 @@ Modulos.diagnostico_obd = {
               </div>
             </div>
             <div style="display:flex;gap:8px">
-              <button class="btn btn-sm btn-ghost" onclick="Modulos.diagnostico_obd.cerrarScanActivo()">📋 Ver Historial del Mes</button>
-              ${puedeEditar ? `<button class="btn btn-sm btn-brand" onclick="Modulos.diagnostico_obd.modalEscanear()">📡 Nuevo Escaneo</button>` : ''}
+              <button class="btn btn-sm" style="background:#1e293b;color:#f8fafc;border:1px solid #334155" onclick="Modulos.diagnostico_obd.cerrarScanActivo()">📋 Ver Historial del Mes</button>
+              <button class="btn btn-sm" style="background:linear-gradient(135deg, #0284c7 0%, #2563eb 100%);color:#ffffff;font-weight:800;border:none" onclick="Modulos.diagnostico_obd.modalEscanear()">📡 Nuevo Escaneo</button>
             </div>
           </div>
           <div id="obd-result"></div>
@@ -5852,27 +5852,27 @@ Modulos.diagnostico_obd = {
         <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px">
           <div>
             <div style="display:flex;align-items:center;gap:8px">
-              <span style="background:var(--brand);color:#fff;font-size:10px;font-weight:900;padding:2px 8px;border-radius:4px;letter-spacing:1px">NEXUS PRO DIAGNOSTICS</span>
+              <span style="background:#2563eb;color:#fff;font-size:10px;font-weight:900;padding:2px 8px;border-radius:4px;letter-spacing:1px">NEXUS PRO DIAGNOSTICS</span>
               <span style="color:#06b6d4;font-size:11px;font-weight:700">BENCHMARK LAUNCH & AUTEL</span>
             </div>
             <h1 class="page-title" style="color:#fff;margin:4px 0 0;font-size:22px">🩺 Diagnóstico OBD-II & UDS Multimarca</h1>
             <p class="page-subtitle" style="color:#94a3b8;margin-top:2px;font-size:12px">// Bluetooth BLE/SPP (Vgate/ELM327) · USB RP1210 (J1939/CAN Heavy Duty)</p>
           </div>
-          <div class="page-actions" style="display:flex;gap:8px;flex-wrap:wrap">
-            <select class="form-select" style="width:130px;background:#1e293b;color:#f8fafc;border-color:rgba(255,255,255,0.2)" onchange="Modulos.diagnostico_obd._mes=+this.value;Modulos.diagnostico_obd.render()">
+          <div class="page-actions" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+            <select class="form-select" style="width:130px;background:#1e293b;color:#f8fafc;border:1px solid #334155" onchange="Modulos.diagnostico_obd._mes=+this.value;Modulos.diagnostico_obd.render()">
               ${meses.map((m,i)=>`<option value="${i+1}" ${i+1===this._mes?'selected':''}>${m}</option>`).join('')}
             </select>
-            <select class="form-select" style="width:90px;background:#1e293b;color:#f8fafc;border-color:rgba(255,255,255,0.2)" onchange="Modulos.diagnostico_obd._anio=+this.value;Modulos.diagnostico_obd.render()">
+            <select class="form-select" style="width:90px;background:#1e293b;color:#f8fafc;border:1px solid #334155" onchange="Modulos.diagnostico_obd._anio=+this.value;Modulos.diagnostico_obd.render()">
               ${anios.map(a=>`<option ${a===this._anio?'selected':''}>${a}</option>`).join('')}
             </select>
-            <button class="btn btn-ghost" style="color:#f8fafc;border-color:rgba(255,255,255,0.15)" onclick="Modulos.diagnostico_obd.modalCampanas()">🔔 Campañas</button>
+            <button class="btn" style="background:#1e293b;color:#f8fafc;border:1px solid #334155" onclick="Modulos.diagnostico_obd.modalCampanas()">🔔 Campañas</button>
             <span id="obd-estado-conexion" style="display:inline-flex;align-items:center;gap:6px"></span>
-            <button class="btn btn-ghost" style="color:#f8fafc;border-color:rgba(255,255,255,0.15)" onclick="Modulos.diagnostico_obd.modalMapaVehiculos()" title="Mapa de Cobertura">🗺 Cobertura</button>
-            <button class="btn btn-ghost" style="color:#f8fafc;border-color:rgba(255,255,255,0.15)" onclick="Modulos.diagnostico_obd.modalModulosVehiculo()">🧩 Módulos</button>
-            <button class="btn btn-cyan" onclick="Modulos.diagnostico_obd.modalCentroModulos()">🧠 Centro Módulos</button>
-            <button class="btn btn-ghost" style="color:#f8fafc;border-color:rgba(255,255,255,0.15)" onclick="Modulos.diagnostico_obd.modalOEM()">🧠 Catálogo OEM</button>
-            <button class="btn btn-ghost" style="color:#f8fafc;border-color:rgba(255,255,255,0.15)" onclick="Modulos.diagnostico_obd.render()">↻ Actualizar</button>
-            ${puedeEditar ? `<button class="btn btn-brand" onclick="Modulos.diagnostico_obd.modalEscanear()">📡 Nuevo Escaneo</button>` : ''}
+            <button class="btn" style="background:#1e293b;color:#f8fafc;border:1px solid #334155" onclick="Modulos.diagnostico_obd.modalMapaVehiculos()" title="Mapa de Cobertura">🗺 Cobertura</button>
+            <button class="btn" style="background:#1e293b;color:#f8fafc;border:1px solid #334155" onclick="Modulos.diagnostico_obd.modalModulosVehiculo()">🧩 Módulos</button>
+            <button class="btn" style="background:#0891b2;color:#ffffff;border:none;font-weight:700" onclick="Modulos.diagnostico_obd.modalCentroModulos()">🧠 Centro Módulos</button>
+            <button class="btn" style="background:#1e293b;color:#f8fafc;border:1px solid #334155" onclick="Modulos.diagnostico_obd.modalOEM()">🧠 Catálogo OEM</button>
+            <button class="btn" style="background:#1e293b;color:#f8fafc;border:1px solid #334155" onclick="Modulos.diagnostico_obd.render()">↻ Actualizar</button>
+            <button class="btn" style="background:linear-gradient(135deg, #0284c7 0%, #2563eb 100%);color:#ffffff;font-weight:800;border:none;box-shadow:0 0 14px rgba(37,99,235,0.6);padding:8px 16px" onclick="Modulos.diagnostico_obd.modalEscanear()">📡 Nuevo Escaneo</button>
           </div>
         </div>
       </div>
