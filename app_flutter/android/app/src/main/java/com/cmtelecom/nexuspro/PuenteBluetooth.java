@@ -63,6 +63,8 @@ public class PuenteBluetooth {
   private static final String[][] PARES_OBD = {
     { "0000fff0-0000-1000-8000-00805f9b34fb", "0000fff2-0000-1000-8000-00805f9b34fb", "0000fff1-0000-1000-8000-00805f9b34fb" },
     { "0000ffe0-0000-1000-8000-00805f9b34fb", "0000ffe1-0000-1000-8000-00805f9b34fb", "0000ffe1-0000-1000-8000-00805f9b34fb" },
+    { "0000fee0-0000-1000-8000-00805f9b34fb", "0000fee1-0000-1000-8000-00805f9b34fb", "0000fee1-0000-1000-8000-00805f9b34fb" },
+    { "0000fe00-0000-1000-8000-00805f9b34fb", "0000fe01-0000-1000-8000-00805f9b34fb", "0000fe01-0000-1000-8000-00805f9b34fb" },
     { "e7810a71-73ae-499d-8c15-faa9aef0c3f2", "bef8d6c9-9c21-4c9e-b632-bd58c1009f9f", "bef8d6c9-9c21-4c9e-b632-bd58c1009f9f" },
     { "6e400001-b5a3-f393-e0a9-e50e24dcca9e", "6e400002-b5a3-f393-e0a9-e50e24dcca9e", "6e400003-b5a3-f393-e0a9-e50e24dcca9e" },
     { "0000fff0-0000-1000-8000-00805f9b34fb", "0000fff1-0000-1000-8000-00805f9b34fb", "0000fff1-0000-1000-8000-00805f9b34fb" },
@@ -305,20 +307,27 @@ public class PuenteBluetooth {
   private String nombre(BluetoothDevice d) {
     try {
       String n = d.getName();
-      if (n != null && !n.trim().isEmpty()) return n.trim();
+      if (n != null && !n.trim().isEmpty()) {
+        String trimN = n.trim();
+        if (trimN.toLowerCase().contains("think") || trimN.contains("979869044587") || trimN.startsWith("9798")) {
+          return "Thinkcar Dongle (" + trimN + ")";
+        }
+        return trimN;
+      }
       if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
         String a = d.getAlias();
         if (a != null && !a.trim().isEmpty()) return a.trim();
       }
     } catch (Exception e) { }
 
-    // Fallback: Si el nombre da nulo, identificar OUI conocidas de vLinker / Vgate
+    // Fallback: Si el nombre da nulo, identificar OUI conocidas de vLinker / Vgate / Thinkcar
     try {
       String addr = d.getAddress();
       if (addr != null) {
         String u = addr.toUpperCase();
         if (u.startsWith("04:25:E8") || u.startsWith("00:1D:A5") || u.startsWith("04:25:")) return "vLinker MS / OBDLink (" + addr + ")";
         if (u.startsWith("DC:0D:30")) return "Vgate iCar / vLinker (" + addr + ")";
+        if (u.contains("9798") || u.startsWith("70:66:55") || u.startsWith("00:04:3E")) return "Thinkcar Dongle 9798 (" + addr + ")";
         if (u.startsWith("00:13:EF") || u.startsWith("00:1D:43") || u.startsWith("11:22:33")) return "Escáner OBDII (" + addr + ")";
       }
     } catch (Exception e) { }

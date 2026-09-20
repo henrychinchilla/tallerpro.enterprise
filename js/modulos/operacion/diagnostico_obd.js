@@ -2040,8 +2040,8 @@ Modulos.diagnostico_obd = {
          número pelado. Mezclados y en crudo, el mecánico elige entre veinte
          filas idénticas. Acá se ordenan por probabilidad, cada una dice QUÉ es,
          y los emparejados (vinculados en el teléfono) NUNCA se ocultan. */
-      const esOBD = n => /vlinker|linker|ms|vgate|obd|elm|obdlink|think|veepeak|konnwei|icar|viecar|panlong|scan|stn|bafx|autophix|nexa|vlink/i.test(n || '');
-      const macOBD = mac => /^00:1D:A5|^DC:0D:30|^00:13:EF|^00:1D:43|^11:22:33/i.test(mac || '');
+      const esOBD = n => /vlinker|linker|ms|vgate|obd|elm|obdlink|think|thinkcar|thinkdiag|thinktool|mucar|9798|veepeak|konnwei|icar|viecar|panlong|scan|stn|bafx|autophix|nexa|vlink/i.test(n || '');
+      const macOBD = mac => /^00:1D:A5|^DC:0D:30|^00:13:EF|^00:1D:43|^11:22:33|^70:66:55|^00:04:3E/i.test(mac || '');
       const soloHex = t => String(t || '').replace(/[^0-9A-F]/gi, '').toUpperCase();
       /* Un dispositivo vinculado en Android NUNCA es anónimo, aunque no reporte nombre de texto */
       const anonimo = d => (!String(d.nombre || '').trim() || soloHex(d.nombre) === soloHex(d.mac)) && !d.vinculado;
@@ -2051,9 +2051,12 @@ Modulos.diagnostico_obd = {
       const fila = d => {
         const r = rango(d);
         const esObdCheck = esOBD(d.nombre) || macOBD(d.mac);
-        const etiqueta = esObdCheck
-          ? ' <span style="color:var(--green);font-size:11px;font-weight:700">🔌 Escáner OBD (vLinker/Vgate)</span>'
-          : d.vinculado ? ' <span style="color:var(--cyan);font-size:11px;font-weight:700">📱 Emparejado en Android</span>' : '';
+        const esThinkcar = /think|9798/i.test(d.nombre || '') || /9798/i.test(d.mac || '');
+        const etiqueta = esThinkcar
+          ? ' <span style="color:var(--cyan);font-size:11px;font-weight:700">🔌 Escáner Thinkcar (ID 979869044587)</span>'
+          : (esObdCheck
+            ? ' <span style="color:var(--green);font-size:11px;font-weight:700">🔌 Escáner OBD (vLinker/Vgate/Thinkcar)</span>'
+            : (d.vinculado ? ' <span style="color:var(--cyan);font-size:11px;font-weight:700">📱 Emparejado en Android</span>' : ''));
 
         let nombreMostrar = d.nombre;
         if (macOBD(d.mac) && (!nombreMostrar || soloHex(nombreMostrar) === soloHex(d.mac))) {

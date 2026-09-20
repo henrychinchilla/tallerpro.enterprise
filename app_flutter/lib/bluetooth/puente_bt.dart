@@ -70,7 +70,7 @@ class Escaner {
   String get titulo => anonimo ? '(sin nombre)' : nombre.trim();
 
   static final _reOBD = RegExp(
-      r'vlinker|vgate|obd|elm|obdlink|think|veepeak|konnwei|icar|viecar|panlong|scan|04:25:|00:1D:A5|DC:0D:30',
+      r'vlinker|vgate|obd|elm|obdlink|think|thinkcar|thinkdiag|thinktool|mucar|9798|veepeak|konnwei|icar|viecar|panlong|scan|04:25:|00:1D:A5|DC:0D:30',
       caseSensitive: false);
 
   bool get pareceOBD => _reOBD.hasMatch(nombre) || _reOBD.hasMatch(mac);

@@ -276,15 +276,27 @@ class _PantallaEscanerState extends State<PantallaEscaner> {
               TextField(
                 controller: txtCtrl,
                 decoration: const InputDecoration(
-                  labelText: 'Dirección MAC (ej: 04:25:E8:5B:35:B6)',
-                  hintText: 'AA:BB:CC:DD:EE:FF',
+                  labelText: 'Dirección MAC o ID Dongle (ej: 979869044587)',
+                  hintText: 'AA:BB:CC:DD:EE:FF ó ID 979869044587',
                 ),
                 textCapitalization: TextCapitalization.characters,
+              ),
+              const SizedBox(height: 8),
+              OutlinedButton.icon(
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: Colors.cyanAccent,
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                ),
+                icon: const Icon(Icons.flash_on, size: 14),
+                label: const Text('Usar Thinkcar Dongle (979869044587)', style: TextStyle(fontSize: 11)),
+                onPressed: () {
+                  txtCtrl.text = '979869044587';
+                },
               ),
               const SizedBox(height: 12),
               Row(
                 children: [
-                  const Text('Modo de conexión:'),
+                  const Text('Modo:'),
                   const SizedBox(width: 8),
                   ChoiceChip(
                     label: const Text('SPP Clásico'),
@@ -634,7 +646,18 @@ class _PantallaEscanerState extends State<PantallaEscaner> {
                 style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
               ),
             ),
-            if (d.pareceOBD)
+            if (d.nombre.contains('979869044587') || d.nombre.toLowerCase().contains('thinkcar') || d.mac.contains('9798'))
+              Container(
+                margin: const EdgeInsets.only(left: 4),
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: Colors.cyan.withValues(alpha: 0.25),
+                  borderRadius: BorderRadius.circular(4),
+                  border: Border.all(color: Colors.cyanAccent),
+                ),
+                child: const Text('Thinkcar 9798', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.cyanAccent)),
+              )
+            else if (d.pareceOBD)
               Container(
                 margin: const EdgeInsets.only(left: 4),
                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
