@@ -8618,6 +8618,8 @@ Modulos.diagnostico_obd = {
       <div style="text-align:center"><button onclick="window.print()">🖨 Imprimir</button></div>
       </body></html>`);
     win.document.close();
+  },
+
   /* ═══════════ PRUEBAS DE ACTUADORES BI-DIRECCIONALES (UDS 2F / OBD2 08 / KWP 30) ═══════════ */
   modalPruebasActuadores(ecu, nombreModulo) {
     const ecuNum = Number(ecu);
