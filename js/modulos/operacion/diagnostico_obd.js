@@ -7740,9 +7740,14 @@ Modulos.diagnostico_obd = {
         await this._j39Solicitar(65228);   // DM3: borra códigos previos
         if (this._j39) { this._j39.dm1 = {}; this._j39.dm2 = {}; }
       } else await this._cmd('04', 8000);
-      if (this._scan) this._scan.dtcs_borrados = true;
       this._log(this._via === 'j1939' ? '🧹 Códigos borrados (DM11 + DM3) ✓' : '🧹 Códigos borrados (modo 04) ✓');
       UI.toast('Códigos borrados ✓');
+    } catch (e) {
+      UI.toast(e.message, 'error');
+    }
+    this._renderResultado();
+  },
+
   asistenteDTC(codigo, modulo, marca, modelo, anio) {
     const cod = String(codigo || '').split('-')[0].toUpperCase();
     const vehTxt = [marca, modelo, anio].filter(Boolean).join(' ') || 'el vehículo';
