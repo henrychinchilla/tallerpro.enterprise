@@ -7010,7 +7010,7 @@ Modulos.diagnostico_obd = {
       if (!sub.modulos.length) continue;
       html += `
         <div style="background:var(--surface2);border-radius:8px;padding:9px;border:1px dashed var(--border)">
-          <div style="font-size:10.5px;font-weight:700;color:var(--text2);margin-bottom:6px;text-transform:uppercase;letter-spacing:0.4px">${sub.titulo}</div>
+          <div style="font-size:10.5px;font-weight:700;color:var(--text2);margin-bottom:6px;text-transform:uppercase;letter-spacing:0.4px">${UI.esc(sub.titulo)}</div>
           <div style="display:flex;flex-wrap:wrap;gap:6px">
             ${sub.modulos.map(m => {
               const numFallas = (m.codigos || []).length;
