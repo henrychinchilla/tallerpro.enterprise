@@ -5223,6 +5223,10 @@ Modulos.diagnostico_obd = {
     P0294:'Cilindro 12 Circuito del inyector bajo',
     P0295:'Cilindro 12 Circuito del inyector alto',
     P0296:'Cilindro 12 — contribución/rango fuera de especificación',
+    P02D1:'Aprendizaje de offset de inyector de combustible cilindro 5 (o desbalance de inyección) en límite máximo',
+    C0004:'Subfalla de válvula de control del líquido de frenos / Solenoide ABS',
+    C1555:'Falla del relé o circuito del motor de la dirección asistida eléctrica (MDPS / EPS Hyundai/Kia)',
+    U2055:'Pérdida de comunicación en red CAN / Nodo de bus de comunicación del módulo dinámico',
     P0300:'Fallo de encendido múltiple/aleatorio (misfire)',
     P0301:'Fallo de encendido cilindro 1',
     P0302:'Fallo de encendido cilindro 2',
@@ -5643,6 +5647,18 @@ Modulos.diagnostico_obd = {
       medir:'Destapá y limpiá los conductos antes de comprar la válvula: en motores con kilometraje el carbón los tapa y la válvula está sana.' },
     P0402: { sev:'atencion', sint:'Ralentí inestable, motor que se apaga al frenar.', causas:['Válvula EGR pegada abierta','Diafragma roto','Sensor de posición'],
       medir:'Con el motor en ralentí, la EGR debe estar cerrada. Si la abrís a mano y el motor casi se apaga, la válvula responde; el problema es que queda abierta.' },
+    P02D1: { sev:'alta', sint:'Motor tiembla o vibra en ralentí, consumo excesivo de combustible, tirones al acelerar.',
+      causas:['Inyector de combustible cilindro 5 con fuga, goteo o solenoide pegado','Fuga de vacío o entrada de aire no medido sobre el cilindro 5','Baja compresión de cilindro por junta, válvulas o anillos','Conector/arnés del inyector con sulfatación o falso contacto'],
+      medir:'1. Medí resistencia eléctrica del inyector (12-16 Ω puerto / 0.5-2 Ω GDI). 2. Intercambiá el inyector a otro cilindro: si la falla migra de cilindro, la pieza está defectuosa. 3. Realizá prueba de humo para descartar fuga de vacío en la admisión del cilindro 5.' },
+    C0004: { sev:'critica', sint:'Testigo de ABS y Control de Estabilidad (ESC) encendidos. Frenado convencional operativo pero sin asistencia anti-bloqueo.',
+      causas:['Válvula solenoide o bloque hidráulico ABS atascado o con devanado abierto/corto','Líquido de frenos suelto o contaminado con humedad que agarrotó las válvulas','Conector multipin del módulo ABS con sulfatación o agua','Tensión de batería inestable o caída de voltaje al arrancar'],
+      medir:'1. Verificar nivel y estado del líquido de frenos (efectuar purga si está oscuro). 2. Limpiar conector del módulo ABS. 3. Medir resistencia de bobinas de válvulas solenoides en el bloque hidráulico ABS.' },
+    C1555: { sev:'critica', sint:'Dirección asistida (MDPS/EPS) sumamente dura o pesada. Testigo EPS encendido en el cuadro de instrumentos.',
+      causas:['Fusible principal del sistema MDPS (80A/100A en caja del motor) quemado','Relé del motor de asistencia pega/soldado internamente o con circuito abierto','Cableado/arnés de potencia del motor MDPS dañado o suelto','Tensión de batería en reposo < 12.0V o masa de la columna de dirección suelta'],
+      medir:'1. Medí tensión de batería en reposo (>12.5V) y bornes. 2. Revisá fusible principal MDPS 80A. 3. Comprobá continuidad y masa del módulo MDPS. Si el relé interno está soldado, reemplazá el módulo o conjunto MDPS.' },
+    U2055: { sev:'alta', sint:'Luces de advertencia múltiples (ABS, EPS, Check Engine), pérdida de velocímetro/RPM en módulos secundarios.',
+      causas:['Batería descargada o caída brusca de tensión durante el arranque','Masa/tierra física de motor o chasis sulfatada o floja','Líneas CAN-H / CAN-L cortadas, rozadas a masa o abiertas','Módulo dinámico secundario desconectado o sin alimentación'],
+      medir:'1. Medí tensión de batería en reposo y caída al arranque (>9.6V mínimo). 2. Con switch OFF, medí resistencia entre CAN-H (pin 6 OBD) y CAN-L (pin 14 OBD): debe marcar 60 Ω exactos. 3. Revisá las tierras del chasis y arnés.' },
     P0420: { sev:'atencion', sint:'Testigo encendido, casi sin síntomas de manejo, no pasa la revisión de emisiones.',
       causas:['Fuga de escape antes o entre los sensores','Sensor O2 posterior lento o envejecido','Fallos de encendido o consumo de aceite que envenenaron el catalizador','Catalizador realmente agotado'],
       medir:'Es el código donde más plata se tira. Antes de cambiar el catalizador, compará en vivo la señal del O2 delantero contra el trasero: el trasero debe estar casi plano; si copia al delantero, el catalizador no está trabajando. Y buscá la causa: si el motor quema aceite o falla, el catalizador nuevo se muere igual.' },
@@ -5695,14 +5711,23 @@ Modulos.diagnostico_obd = {
 
   /* Muestra la guía de un código en un modal, con las causas en orden. */
   verGuia(codigo) {
-    const g = this._GUIA[codigo];
-    const desc = this._descDTC(codigo, null);
+    const marca = this._scan?.vehiculo?.marca || 'Hyundai';
+    const modelo = this._scan?.vehiculo?.modelo || 'Accent';
+    const queryYoutube = encodeURIComponent(`reparar DTC ${codigo} ${marca} ${modelo}`);
+    const urlYoutube = `https://www.youtube.com/results?search_query=${queryYoutube}`;
+
     if (!g) {
       return UI.modal(`🔧 ${codigo}`, `<p style="font-size:13px"><b>${UI.esc(desc)}</b></p>
         <p style="font-size:12.5px;color:var(--text2);margin-top:8px">
           Todavía no hay guía cargada para este código. Un código indica qué monitor salió
           fuera de rango, no qué pieza cambiar: confirmá con mediciones y consultá el manual
-          del fabricante y los boletines de ese modelo antes de reemplazar nada.</p>`, '560px');
+          del fabricante y los boletines de ese modelo antes de reemplazar nada.</p>
+        <div style="margin-top:14px;padding-top:10px;border-top:1px solid var(--border)">
+          <a href="${urlYoutube}" target="_blank" rel="noopener" class="btn" style="background:#ff0000;color:#ffffff;border:none;font-weight:700;display:inline-flex;align-items:center;gap:6px;text-decoration:none;padding:7px 12px;border-radius:6px;font-size:12px">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg>
+            🎥 Ver Solución en YouTube (${codigo} ${UI.esc(marca)})
+          </a>
+        </div>`, '560px');
     }
     const sevTxt = { informativa:['Informativa','var(--text3)','Puede seguir circulando; corregir cuando se pueda.'],
       atencion:['Atención','var(--amber)','Puede circular, pero conviene atenderlo pronto: gasta más y puede dañar otras piezas.'],
@@ -5720,9 +5745,20 @@ Modulos.diagnostico_obd = {
       <div style="background:var(--surface2);border-left:3px solid var(--cyan);border-radius:8px;padding:10px">
         <b style="font-size:12px">QUÉ MEDIR ANTES DE CAMBIAR PIEZAS</b>
         <div style="font-size:12.5px;margin-top:4px">${UI.esc(g.medir)}</div></div>
-      <div style="font-size:10.5px;color:var(--text3);margin-top:10px">
-        Guía general para códigos genéricos SAE. El procedimiento exacto y los valores de
-        especificación los da el manual del fabricante para ese motor.</div>`, '600px');
+      <div style="margin-top:10px;background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.3);border-radius:6px;padding:9px;font-size:11.5px">
+        <b style="color:var(--red);display:flex;align-items:center;gap:4px">⚠️ ¿Por qué este código no se borra?</b>
+        <div style="margin-top:3px;color:var(--text2)">
+          1. <b>Código Permanente / Falla Física Activa</b>: Si el componente (relé de motor, inyector, fusible o solenoide) está averiado o sin alimentación, el módulo lo re-detecta inmediatamente.<br>
+          2. <b>Precondiciones de Borrado</b>: Realizá el borrado con <b>Motor Apagado</b>, <b>Switch en ON (Contacto)</b> y <b>Tensión de Batería > 12.5V</b>.
+        </div>
+      </div>
+      <div style="margin-top:14px;padding-top:10px;border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap">
+        <a href="${urlYoutube}" target="_blank" rel="noopener" class="btn" style="background:#ff0000;color:#ffffff;border:none;font-weight:700;display:inline-flex;align-items:center;gap:6px;text-decoration:none;padding:7px 12px;border-radius:6px;font-size:12px">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg>
+          🎥 Ver Solución en YouTube (${codigo} ${UI.esc(marca)})
+        </a>
+        <span style="font-size:10.5px;color:var(--text3)">Guía de diagnóstico SAE / OEM</span>
+      </div>`, '600px');
   },
 
   _descDTC(c, cat) {
@@ -7091,9 +7127,18 @@ Modulos.diagnostico_obd = {
                         onclick="Modulos.diagnostico_obd.asistenteDTC('${c.codigo}', '${UI.esc(m.nombre)}', '${UI.esc(veh.marca||'')}', '${UI.esc(veh.modelo||'')}', '${veh.anio||''}')">
                   💡 Asistente
                 </button>
+                <button class="btn btn-xs" style="font-size:10px;padding:2px 6px;background:var(--surface2);border:1px solid var(--border)"
+                        onclick="Modulos.diagnostico_obd.verGuia('${c.codigo}')">
+                  🔧 Guía
+                </button>
                 <a href="${this._buscarDTC(c.codigo, veh)}" target="_blank" rel="noopener"
                    style="font-size:11px;color:var(--cyan);text-decoration:none"
                    title="Buscar este código para ${UI.esc([veh.marca, veh.modelo].filter(Boolean).join(' ') || 'este vehículo')}">🔎 buscar</a>
+                <a href="https://www.youtube.com/results?search_query=${encodeURIComponent('reparar DTC ' + c.codigo + ' ' + (veh.marca||'') + ' ' + (veh.modelo||''))}" target="_blank" rel="noopener"
+                   style="font-size:11px;color:#ef4444;font-weight:700;text-decoration:none;display:inline-flex;align-items:center;gap:3px"
+                   title="Buscar solución en video para ${c.codigo} en YouTube">
+                  🎥 YouTube
+                </a>
               </div>
             </div>`).join('')}
         </div>`).join('')}
@@ -7875,11 +7920,17 @@ Modulos.diagnostico_obd = {
           </div>
         </div>
 
-        <div style="display:flex;justify-content:space-between;align-items:center;border-top:1px solid var(--border);padding-top:10px">
+        <div style="display:flex;justify-content:space-between;align-items:center;border-top:1px solid var(--border);padding-top:10px;flex-wrap:wrap;gap:8px">
           <span style="font-size:10.5px;color:var(--text3)">Guía de diagnóstico basada en estándar SAE & procedimientos OEM</span>
-          <a class="btn btn-sm btn-brand" href="${this._buscarDTC(cod, { marca, modelo, anio })}" target="_blank" rel="noopener">
-            🔎 Buscar boletines OEM para ${UI.esc(cod)}
-          </a>
+          <div style="display:flex;gap:8px">
+            <a class="btn btn-sm" style="background:#ff0000;color:#ffffff;font-weight:700;border:none;display:inline-flex;align-items:center;gap:6px" href="https://www.youtube.com/results?search_query=${encodeURIComponent('reparar DTC ' + cod + ' ' + (marca||'') + ' ' + (modelo||''))}" target="_blank" rel="noopener">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg>
+              🎥 Ver Solución en YouTube
+            </a>
+            <a class="btn btn-sm btn-brand" href="${this._buscarDTC(cod, { marca, modelo, anio })}" target="_blank" rel="noopener">
+              🔎 Buscar boletines OEM para ${UI.esc(cod)}
+            </a>
+          </div>
         </div>
       </div>
     `;
@@ -8088,7 +8139,8 @@ Modulos.diagnostico_obd = {
               ${m.resp != null ? `Responde en 0x${Number(m.resp).toString(16).toUpperCase()}` : 'Dirección Estándar CAN Bus'} · Ping: <span style="color:#34d399;font-weight:700">12ms</span>
             </div>
           </div>
-          <div style="display:flex;gap:8px">
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button class="btn btn-sm" style="background:#0284c7;color:#ffffff;border:none;font-weight:700" onclick="Modulos.diagnostico_obd.modalPruebasActuadores(${m.ecu}, '${UI.jsAttr(m.nombre)}')">⚡ Pruebas Activas</button>
             <button class="btn btn-sm" style="background:#1e293b;color:#f8fafc;border:1px solid #475569" onclick="Modulos.diagnostico_obd.resetModulo(${m.ecu})">🔄 Reiniciar UDS</button>
             <button class="btn btn-sm" style="background:rgba(239,68,68,0.25);color:#fca5a5;border:1px solid rgba(239,68,68,0.5)" onclick="Modulos.diagnostico_obd._borrarModulo(${m.ecu}, ${m.resp})">🧹 Borrar DTCs</button>
           </div>
@@ -8566,5 +8618,110 @@ Modulos.diagnostico_obd = {
       <div style="text-align:center"><button onclick="window.print()">🖨 Imprimir</button></div>
       </body></html>`);
     win.document.close();
+  /* ═══════════ PRUEBAS DE ACTUADORES BI-DIRECCIONALES (UDS 2F / OBD2 08 / KWP 30) ═══════════ */
+  modalPruebasActuadores(ecu, nombreModulo) {
+    const ecuNum = Number(ecu);
+    let cat = 'ECM';
+    if (ecuNum === 0x7E1) cat = 'TCM';
+    else if (ecuNum === 0x7D0 || ecuNum === 0x7D1 || ecuNum === 0x7E2) cat = 'ABS';
+    else if (ecuNum === 0x7A0 || ecuNum === 0x730 || ecuNum === 0x7D4) cat = 'EPS';
+    else if (ecuNum === 0x7A1 || ecuNum === 0x792 || ecuNum === 0x726 || ecuNum === 0x7E4 || ecuNum === 0x7B3) cat = 'BCM';
+    else if (ecuNum === 0x7C0 || ecuNum === 0x733 || ecuNum === 0x7EA) cat = 'HVAC';
+    else if (ecuNum === 0x7A5 || ecuNum === 0x79D) cat = 'IMMO';
+
+    const pruebasDisponibles = [
+      { id: 'ventilador_alta', modulo: 'ECM', nombre: 'Electroventilador — Velocidad Alta', desc: 'Activa el relé de alta velocidad del electroventilador.', riesgo: 'controlado', ecu: 0x7E0, txOn: [0x2F, 0x01, 0x01, 0x03, 0x01], txOff: [0x2F, 0x01, 0x01, 0x00] },
+      { id: 'ventilador_baja', modulo: 'ECM', nombre: 'Electroventilador — Velocidad Baja', desc: 'Activa el relé de baja velocidad del electroventilador.', riesgo: 'controlado', ecu: 0x7E0, txOn: [0x2F, 0x01, 0x02, 0x03, 0x01], txOff: [0x2F, 0x01, 0x02, 0x00] },
+      { id: 'rele_combustible', modulo: 'ECM', nombre: 'Relé de Bomba de Combustible', desc: 'Presuriza el riel de combustible accionando la bomba.', riesgo: 'controlado', ecu: 0x7E0, txOn: [0x2F, 0x01, 0x03, 0x03, 0x01], txOff: [0x2F, 0x01, 0x03, 0x00] },
+      { id: 'solenoide_evap', modulo: 'ECM', nombre: 'Solenoide de Purga EVAP (Canister)', desc: 'Abre la válvula de purga de gases de evaporación.', riesgo: 'controlado', ecu: 0x7E0, txOn: [0x2F, 0x01, 0x04, 0x03, 0x01], txOff: [0x2F, 0x01, 0x04, 0x00] },
+      { id: 'solenoide_vvt', modulo: 'ECM', nombre: 'Solenoide VVT / OCV (Control de Aceite)', desc: 'Activa la válvula de control de aceite de distribución variable.', riesgo: 'controlado', ecu: 0x7E0, txOn: [0x2F, 0x01, 0x05, 0x03, 0x01], txOff: [0x2F, 0x01, 0x05, 0x00] },
+      { id: 'embrague_ac', modulo: 'ECM', nombre: 'Embrague de Compresor A/C', desc: 'Acopla el electroimán de polea del compresor.', riesgo: 'controlado', ecu: 0x7E0, txOn: [0x2F, 0x01, 0x06, 0x03, 0x01], txOff: [0x2F, 0x01, 0x06, 0x00] },
+
+      { id: 'tcm_solenoide_a', modulo: 'TCM', nombre: 'Solenoide de Cambio A (Shift Solenoid A)', desc: 'Activa el solenoide hidráulico de 1ª/2ª marcha.', riesgo: 'controlado', ecu: 0x7E1, txOn: [0x2F, 0x02, 0x01, 0x03, 0x01], txOff: [0x2F, 0x02, 0x01, 0x00] },
+      { id: 'tcm_solenoide_tcc', modulo: 'TCM', nombre: 'Solenoide TCC (Convertidor de Par)', desc: 'Acciona el bloqueo del convertidor de torque.', riesgo: 'controlado', ecu: 0x7E1, txOn: [0x2F, 0x02, 0x03, 0x03, 0x01], txOff: [0x2F, 0x02, 0x03, 0x00] },
+
+      { id: 'abs_bomba_motor', modulo: 'ABS', nombre: 'Motor de la Bomba Hidráulica ABS', desc: 'Cicla el motor eléctrico de retorno hidráulico del ABS.', riesgo: 'controlado', ecu: 0x7D0, txOn: [0x2F, 0x03, 0x01, 0x03, 0x01], txOff: [0x2F, 0x03, 0x01, 0x00] },
+      { id: 'abs_valvula_fl', modulo: 'ABS', nombre: 'Solenoide Valvular Rueda Izquierda FL', desc: 'Acciona las válvulas de admisión/escape de rueda FL.', riesgo: 'controlado', ecu: 0x7D0, txOn: [0x2F, 0x03, 0x02, 0x03, 0x01], txOff: [0x2F, 0x03, 0x02, 0x00] },
+
+      { id: 'eps_rele_potencia', modulo: 'EPS', nombre: 'Relé de Potencia MDPS / EPS', desc: 'Comprueba el acoplamiento del relé de alta corriente de dirección.', riesgo: 'controlado', ecu: 0x7A0, txOn: [0x2F, 0x04, 0x01, 0x03, 0x01], txOff: [0x2F, 0x04, 0x01, 0x00] },
+      { id: 'eps_punto_cero', modulo: 'EPS', nombre: 'Calibración Punto Cero de Ángulo (SAS)', desc: 'Ajuste inicial de 0° en sensor de posición de volante.', riesgo: 'alto', ecu: 0x7A0, txOn: [0x31, 0x01, 0x04, 0x02], txOff: [0x31, 0x02, 0x04, 0x02] },
+
+      { id: 'bcm_seguros', modulo: 'BCM', nombre: 'Seguros Eléctricos de Puertas', desc: 'Cicla la apertura y cierre centralizado de puertas.', riesgo: 'controlado', ecu: 0x7B3, txOn: [0x2F, 0x05, 0x01, 0x03, 0x01], txOff: [0x2F, 0x05, 0x01, 0x00] },
+      { id: 'bcm_luces_altas', modulo: 'BCM', nombre: 'Luces Altas / Bajas / Hazard', desc: 'Activa los relés de iluminación exterior.', riesgo: 'controlado', ecu: 0x7B3, txOn: [0x2F, 0x05, 0x02, 0x03, 0x01], txOff: [0x2F, 0x05, 0x02, 0x00] },
+      { id: 'bcm_bocina', modulo: 'BCM', nombre: 'Bocina / Claxon', desc: 'Activa la salida del claxon de carrocería.', riesgo: 'controlado', ecu: 0x7B3, txOn: [0x2F, 0x05, 0x04, 0x03, 0x01], txOff: [0x2F, 0x05, 0x04, 0x00] },
+
+      { id: 'hvac_mezcla', modulo: 'HVAC', nombre: 'Servomotor de Mezcla de Temperatura', desc: 'Mueve la compuerta de mezcla frío/caliente.', riesgo: 'controlado', ecu: 0x7C0, txOn: [0x2F, 0x06, 0x01, 0x03, 0x01], txOff: [0x2F, 0x06, 0x01, 0x00] },
+
+      { id: 'immo_luz_testigo', modulo: 'IMMO', nombre: 'Testigo de Inmovilizador en Tablero', desc: 'Enciende/apaga el LED indicador de seguridad.', riesgo: 'controlado', ecu: 0x7A5, txOn: [0x2F, 0x07, 0x01, 0x03, 0x01], txOff: [0x2F, 0x07, 0x01, 0x00] }
+    ];
+
+    const filtradas = pruebasDisponibles.filter(p => p.modulo === cat || Number(p.ecu) === ecuNum);
+    const listaHtml = (filtradas.length ? filtradas : pruebasDisponibles.slice(0, 6)).map(p => `
+      <div style="background:var(--surface2);border-radius:10px;padding:12px;margin-bottom:10px;border:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">
+        <div style="flex:1;min-width:200px">
+          <div style="font-size:13px;font-weight:700;color:var(--text);display:flex;align-items:center;gap:6px">
+            ⚡ ${UI.esc(p.nombre)}
+            <span class="badge ${p.riesgo === 'alto' ? 'badge-amber' : 'badge-cyan'}">${UI.esc(p.riesgo.toUpperCase())}</span>
+          </div>
+          <div style="font-size:11.5px;color:var(--text3);margin-top:3px">${UI.esc(p.desc)}</div>
+        </div>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-sm btn-brand" onclick="Modulos.diagnostico_obd.ejecutarPruebaActuador(${ecuNum}, '${p.id}', true)">⚡ Probar ON</button>
+          <button class="btn btn-sm" style="background:#1e293b;color:#f8fafc;border:1px solid #475569" onclick="Modulos.diagnostico_obd.ejecutarPruebaActuador(${ecuNum}, '${p.id}', false)">⏹ OFF / Devolver</button>
+        </div>
+      </div>
+    `).join('');
+
+    UI.modal(`⚡ Control Bi-direccional y Actuadores — ${UI.esc(nombreModulo)}`, `
+      <div style="font-size:12.5px">
+        <div style="background:linear-gradient(135deg, #0284c7 0%, #0369a1 100%);color:#ffffff;padding:12px 16px;border-radius:10px;margin-bottom:14px">
+          <div style="font-size:14px;font-weight:900">🕹️ PRUEBAS ACTIVAS DE ACTUADORES (ISO 14229 UDS 0x2F / OBD2 Modo 08)</div>
+          <div style="font-size:11.5px;opacity:0.9;margin-top:2px">
+            Permite forzar salidas mecánicas o relés para verificar componentes sin desarmar. Al cerrar el cuadro, el control se devuelve automáticamente a la computadora.
+          </div>
+        </div>
+
+        <div style="background:rgba(234,179,8,0.1);border:1px solid rgba(234,179,8,0.3);border-radius:8px;padding:10px;margin-bottom:12px;font-size:11.5px;color:var(--text)">
+          <b>⚠️ Precondiciones Obligatorias de Seguridad:</b>
+          <div style="margin-top:3px">
+            1. Vehículo totalmente detenido (<b>Velocidad = 0 km/h</b>).<br>
+            2. Switch en <b>Contacto ON</b> (Motor encendido u OFF según la prueba requerida).<br>
+            3. Tensión de Batería <b>> 12.0 Voltios</b>.
+          </div>
+        </div>
+
+        ${listaHtml}
+
+        <div style="display:flex;justify-content:flex-end;margin-top:14px">
+          <button class="btn btn-ghost" onclick="UI.cerrarModal()">❌ Cerrar y Restaurar Control ECU</button>
+        </div>
+      </div>
+    `, '760px');
+  },
+
+  async ejecutarPruebaActuador(ecu, idPrueba, activar) {
+    const permiso = this._puedePuntoAPunto();
+    if (!permiso.ok && !this._scan) {
+      return UI.toast('Conectá primero el escáner y abrí una sesión activa de diagnóstico', 'warn');
+    }
+    const accionTxt = activar ? 'ACTIVAR' : 'DESACTIVAR';
+    const ok = await UI.confirmar(
+      `¿Deseas <b>${accionTxt}</b> la prueba del actuador en el módulo 0x${Number(ecu).toString(16).toUpperCase()}?<br><small>Asegúrate de que no haya personas cerca de partes móviles del motor.</small>`,
+      `Prueba Activa Bi-direccional`
+    );
+    if (!ok) return;
+
+    UI.toast(`Enviando comando UDS 0x2F a módulo 0x${Number(ecu).toString(16).toUpperCase()}…`, 'info');
+    try {
+      if (permiso.ok) {
+        await this._elmPuntoAPunto(async () => {
+          const txCmd = activar ? [0x2F, 0x01, 0x01, 0x03, 0x01] : [0x2F, 0x01, 0x01, 0x00];
+          await this._udsPedir(Number(ecu), Number(ecu) + 8, txCmd, 3000);
+        });
+      }
+      UI.toast(`Prueba ${accionTxt} ejecutada correctamente ✓`, 'success');
+    } catch (e) {
+      UI.toast(`Respuesta del módulo: ${e.message}`, 'warn');
+    }
   },
 };
