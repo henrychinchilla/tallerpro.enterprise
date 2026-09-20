@@ -32,9 +32,9 @@
     "Va como release de GitHub, igual que el instalador de Windows."
   ],
   "android": {
-    "versionCode": 4,
-    "versionName": "1.1.0",
-    "fecha": "2026-09-17",
+    "versionCode": 5,
+    "versionName": "1.2.0",
+    "fecha": "2026-09-20",
     "paquete": "com.cmtelecom.nexuspro.nativa",
     "minAndroid": "7.0",
     "nativa": true,
@@ -47,11 +47,11 @@
     "enPlayStore": false,
     "playUrl": "https://play.google.com/store/apps/details?id=com.cmtelecom.nexuspro.nativa",
     "novedades": [
-      "Diagnóstico OBD-II Profesional: decodificación Modo 06 (Misfire por cilindro, Catalizador, EVAP, O2)",
-      "Información del Vehículo Modo 09: VIN, ID de Calibración (CALID) y Hash CVN anti-reprogramación",
-      "PIDs Extendidos Hyundai / Kia UDS: Temp Transmisión (ATF), Sensor Knock KSDS, Velocidad Ruedas ABS",
-      "Soporte Estándar Pesado SAE J1939: PGN 65262, 65263, 65271, 65265 y códigos de falla DM1/DM2",
-      "Escáner OBD-II Nativo por Bluetooth Clásico (SPP) y BLE con interfaz de relojes/gráficas en vivo"
+      "Diagnóstico OBD-II: Evaluación de salud en vivo con insignias (✓ Normal, ⚠️ Advertencia, 🚨 Crítico)",
+      "Rangos de referencia técnica automotriz y categorización en 5 áreas (Motor, Mezcla, Temperaturas, Eléctrico y Chasis)",
+      "Seguimiento de Mínimos y Máximos (Mín: X | Máx: Y) en tarjetas, relojes (gauges) y gráficas en vivo",
+      "Soporte ampliado para adaptadores Bluetooth clásico (SPP) y BLE (ELM327, Vgate iCar Pro, vLinker)",
+      "Decodificación Modo 06/09, PIDs Hyundai/Kia UDS y camiones pesados J1939"
     ]
   }
 }
