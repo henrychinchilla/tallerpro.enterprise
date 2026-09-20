@@ -70,10 +70,10 @@ class Escaner {
   String get titulo => anonimo ? '(sin nombre)' : nombre.trim();
 
   static final _reOBD = RegExp(
-      r'vlinker|vgate|obd|elm|obdlink|think|veepeak|konnwei|icar|viecar|panlong|scan',
+      r'vlinker|vgate|obd|elm|obdlink|think|veepeak|konnwei|icar|viecar|panlong|scan|04:25:|00:1D:A5|DC:0D:30',
       caseSensitive: false);
 
-  bool get pareceOBD => _reOBD.hasMatch(nombre);
+  bool get pareceOBD => _reOBD.hasMatch(nombre) || _reOBD.hasMatch(mac);
 
   /// Orden de probabilidad de ser EL escáner: primero los que se anuncian como
   /// tal, luego los emparejados, luego el resto, y al final los anónimos.

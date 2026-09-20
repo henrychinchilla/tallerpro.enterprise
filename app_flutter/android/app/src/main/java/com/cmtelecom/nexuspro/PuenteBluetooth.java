@@ -317,7 +317,7 @@ public class PuenteBluetooth {
       String addr = d.getAddress();
       if (addr != null) {
         String u = addr.toUpperCase();
-        if (u.startsWith("00:1D:A5")) return "vLinker MS / OBDLink (" + addr + ")";
+        if (u.startsWith("04:25:E8") || u.startsWith("00:1D:A5") || u.startsWith("04:25:")) return "vLinker MS / OBDLink (" + addr + ")";
         if (u.startsWith("DC:0D:30")) return "Vgate iCar / vLinker (" + addr + ")";
         if (u.startsWith("00:13:EF") || u.startsWith("00:1D:43") || u.startsWith("11:22:33")) return "Escáner OBDII (" + addr + ")";
       }
