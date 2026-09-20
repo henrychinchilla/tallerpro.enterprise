@@ -1194,6 +1194,36 @@ Modulos.diagnostico_obd = {
     '30': { k:'warmups',   l:'Calentamientos desde borrado', u:'', f:b=>b[0], cat:'chassis' },
     '31': { k:'dist_borr', l:'Km desde borrado',       u:' km',   f:b=>b[0]*256+b[1], cat:'chassis' },
   },
+  _OEM_PIDS: {
+    /* Transmisión Automática (TCM) */
+    'temp_atf':        { k:'temp_atf',        l:'Temp. Aceite Transmisión (ATF)', u:' °C',   r:[70, 95],   rc:'temp ideal 75-90°C (máx 105°C)', a:true, cat:'motor' },
+    'rpm_turbina':     { k:'rpm_turbina',     l:'Velocidad Eje Entrada / Turbina', u:' RPM', r:[600, 3000],rc:'coincide con RPM en D', cat:'motor' },
+    'rpm_salida':      { k:'rpm_salida',      l:'Velocidad Eje Salida (TCM)',     u:' RPM', r:[0, 3000],  rc:'proporcional a velocidad km/h', cat:'motor' },
+    'marcha_tcm':      { k:'marcha_tcm',      l:'Marcha Seleccionada (TCM)',      u:'',     r:[0, 8],     rc:'0=P, 1=R, 2=N, 3=D (1-8ª)', cat:'motor' },
+    'tcc_lockup':      { k:'tcc_lockup',      l:'Convertidor de Par (TCC Lockup)',u:' %',   r:[0, 100],   rc:'0% libre / 100% acoplado', cat:'motor' },
+    'presion_linea':   { k:'presion_linea',   l:'Presión de Línea (TCM)',         u:' bar', r:[3.5, 12.0],rc:'presión hidráulica TCM', cat:'motor' },
+
+    /* Presión y Temp de Neumáticos (TPMS) */
+    'presion_tpms_fl': { k:'presion_tpms_fl', l:'Presión Neumático Del. Izquierdo (FL)', u:' PSI', r:[30.0, 35.0], rc:'frío (32-35 PSI)', a:true, cat:'chassis' },
+    'presion_tpms_fr': { k:'presion_tpms_fr', l:'Presión Neumático Del. Derecho (FR)',   u:' PSI', r:[30.0, 35.0], rc:'frío (32-35 PSI)', a:true, cat:'chassis' },
+    'presion_tpms_rl': { k:'presion_tpms_rl', l:'Presión Neumático Tras. Izquierdo (RL)', u:' PSI', r:[30.0, 35.0], rc:'frío (32-35 PSI)', a:true, cat:'chassis' },
+    'presion_tpms_rr': { k:'presion_tpms_rr', l:'Presión Neumático Tras. Derecho (RR)',   u:' PSI', r:[30.0, 35.0], rc:'frío (32-35 PSI)', a:true, cat:'chassis' },
+    'temp_tpms_fl':    { k:'temp_tpms_fl',    l:'Temp. Neumático Del. Izquierdo (FL)', u:' °C',  r:[15, 60],     rc:'rodaje normal (<65°C)', cat:'temp' },
+    'temp_tpms_fr':    { k:'temp_tpms_fr',    l:'Temp. Neumático Del. Derecho (FR)',   u:' °C',  r:[15, 60],     rc:'rodaje normal (<65°C)', cat:'temp' },
+    'temp_tpms_rl':    { k:'temp_tpms_rl',    l:'Temp. Neumático Tras. Izquierdo (RL)',u:' °C',  r:[15, 60],     rc:'rodaje normal (<65°C)', cat:'temp' },
+    'temp_tpms_rr':    { k:'temp_tpms_rr',    l:'Temp. Neumático Tras. Derecho (RR)',  u:' °C',  r:[15, 60],     rc:'rodaje normal (<65°C)', cat:'temp' },
+    'bat_tpms':        { k:'bat_tpms',        l:'Estado Batería Sensores TPMS',        u:'',     r:null,         rc:'OK / Normal', cat:'chassis' },
+
+    /* Dirección Electrónica (MDPS / EPS) */
+    'angulo_direccion':{ k:'angulo_direccion',l:'Ángulo de Dirección (MDPS/EPS)',u:' °',   r:[-30, 30],  rc:'en línea recta', cat:'chassis' },
+    'torque_conductor':{ k:'torque_conductor',l:'Torque del Conductor al Volante',u:' Nm',  r:[-2.0, 2.0],rc:'sin fuerza manual', cat:'chassis' },
+    'corriente_eps':   { k:'corriente_eps',   l:'Corriente Motor Dirección EPS',  u:' A',   r:[0.0, 15.0],rc:'ralentí en recta (<3A)', cat:'elec' },
+
+    /* Climatización & Carrocería (FATC / BCM / ACU) */
+    'temp_evaporador': { k:'temp_evaporador', l:'Temp. Evaporador A/C (FATC)',    u:' °C',  r:[2.0, 8.0], rc:'A/C encendido', cat:'temp' },
+    'presion_ac':      { k:'presion_ac',      l:'Presión Gas Refrigerante A/C',  u:' PSI', r:[120, 220], rc:'A/C en marcha', cat:'temp' },
+    'volt_srs':        { k:'volt_srs',        l:'Voltaje Módulo Airbag (SRS/ACU)',u:' V',   r:[12.0, 15.0],rc:'alimentación SRS', cat:'elec' },
+  },
   _BASICOS: ['0C','0D','05','04','11','0F','2F'],
   _sop: null,   // PIDs soportados por el vehículo actual
 
@@ -3130,6 +3160,59 @@ Modulos.diagnostico_obd = {
     return d ? d.nombre : null;
   },
 
+  async _leerParametrosUDSModulo(m) {
+    const out = {};
+    if (!m || !m.req) return out;
+    const req = Number(m.req);
+    if (req === 0x7E1) { // TCM (Transmisión Automática Hyundai/Kia & Universal)
+      try {
+        const d1 = await this._udsPedir(m.req, m.resp, [0x22, 0x10, 0x02], 1200);
+        if (d1 && d1[0] === 0x62 && d1.length >= 4) { out.temp_atf = d1[3] - 40; }
+      } catch (_) {}
+      try {
+        const d2 = await this._udsPedir(m.req, m.resp, [0x22, 0x10, 0x04], 1200);
+        if (d2 && d2[0] === 0x62 && d2.length >= 5) { out.rpm_turbina = d2[3] * 256 + d2[4]; }
+      } catch (_) {}
+      try {
+        const d3 = await this._udsPedir(m.req, m.resp, [0x22, 0x10, 0x06], 1200);
+        if (d3 && d3[0] === 0x62 && d3.length >= 5) { out.rpm_salida = d3[3] * 256 + d3[4]; }
+      } catch (_) {}
+      try {
+        const d4 = await this._udsPedir(m.req, m.resp, [0x22, 0x10, 0x08], 1200);
+        if (d4 && d4[0] === 0x62 && d4.length >= 4) { out.marcha_tcm = d4[3]; }
+      } catch (_) {}
+      try {
+        const d5 = await this._udsPedir(m.req, m.resp, [0x22, 0x10, 0x0A], 1200);
+        if (d5 && d5[0] === 0x62 && d5.length >= 4) { out.tcc_lockup = Math.round(d5[3] * 100 / 255); }
+      } catch (_) {}
+    } else if (req === 0x7D2 || req === 0x758) { // TPMS (Presión de Neumáticos)
+      try {
+        const d1 = await this._udsPedir(m.req, m.resp, [0x22, 0xC0, 0x01], 1500);
+        if (d1 && d1[0] === 0x62 && d1.length >= 7) {
+          out.presion_tpms_fl = Math.round(d1[3] * 0.2 * 10) / 10;
+          out.presion_tpms_fr = Math.round(d1[4] * 0.2 * 10) / 10;
+          out.presion_tpms_rl = Math.round(d1[5] * 0.2 * 10) / 10;
+          out.presion_tpms_rr = Math.round(d1[6] * 0.2 * 10) / 10;
+          if (d1.length >= 11) {
+            out.temp_tpms_fl = d1[7] - 40;
+            out.temp_tpms_fr = d1[8] - 40;
+            out.temp_tpms_rl = d1[9] - 40;
+            out.temp_tpms_rr = d1[10] - 40;
+          }
+          out.bat_tpms = 'OK';
+        }
+      } catch (_) {}
+    } else if (req === 0x7D4 || req === 0x710) { // MDPS / EPS (Dirección Electrónica)
+      try {
+        const d1 = await this._udsPedir(m.req, m.resp, [0x22, 0x01, 0x01], 1200);
+        if (d1 && d1[0] === 0x62 && d1.length >= 5) {
+          out.angulo_direccion = Math.round(((d1[3] * 256 + d1[4]) / 10 - 3276.8) * 10) / 10;
+        }
+      } catch (_) {}
+    }
+    return out;
+  },
+
   /* Pregunta sólo a las direcciones que ya se sabe que contestan en este
      modelo. Mismo Tester Present del barrido: es de solo lectura. */
   async _probarConocidas(conocidas) {
@@ -3291,6 +3374,12 @@ Modulos.diagnostico_obd = {
          fichas para ver once referencias, en la práctica no se ven nunca. */
       const ident = await this._identidadModulo(m).catch(() => null);
 
+      /* Extracción profunda de parámetros UDS en vivo (TCM, TPMS, MDPS) */
+      const paramsEsp = await this._leerParametrosUDSModulo(m).catch(() => ({}));
+      if (Object.keys(paramsEsp).length && this._scan) {
+        this._scan.datos = { ...(this._scan.datos || {}), ...paramsEsp };
+      }
+
       /* Devolver el módulo a la sesión por defecto. Una sesión extendida abierta
          es lo que enciende el testigo de la dirección (el volante con "!") y el
          de otros sistemas mientras dura: el módulo avisa, con razón, que está
@@ -3306,7 +3395,7 @@ Modulos.diagnostico_obd = {
         nombre = ident.nombre;
       }
       res.push({ ecu: m.req, resp: m.resp, ext: !!m.ext, nombre, codigos: cods, respondio: !!d, servicio,
-                 ident: ident || null, sesion_devuelta: sesionAbierta || undefined,
+                 ident: ident || null, params_oem: paramsEsp, sesion_devuelta: sesionAbierta || undefined,
                  nuevo: !!conocidas.length && !conocidas.some(c => c.req === m.req) });
       if (log && cods.length) {
         const act = cods.filter(c => c.activo).length;
@@ -6775,6 +6864,78 @@ Modulos.diagnostico_obd = {
     this._onMarcaModulo();
   },
 
+  _topologiaHTML(s) {
+    const ms = (s && s.por_modulo) || [];
+    if (!ms.length) return '';
+
+    const subredes = {
+      motriz: { titulo: '⚡ Tren Motriz (Powertrain CAN)', modulos: [] },
+      chasis: { titulo: '🚗 Chasis & Seguridad (Chassis CAN)', modulos: [] },
+      confort: { titulo: '🎛️ Carrocería & Confort (Body CAN)', modulos: [] },
+    };
+
+    for (const m of ms) {
+      const ecu = Number(m.ecu);
+      let cat = 'confort';
+      if (ecu >= 0x7E0 && ecu <= 0x7E7) cat = 'motriz';
+      else if ((ecu >= 0x7D0 && ecu <= 0x7D9) || ecu === 0x7A0 || ecu === 0x710 || ecu === 0x758 || (ecu >= 0x7C0 && ecu <= 0x7C5)) cat = 'chasis';
+      else cat = 'confort';
+      subredes[cat].modulos.push(m);
+    }
+
+    let html = `
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:14px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+          <div>
+            <b style="font-size:12px;color:var(--brand)">🌐 MAPA DE TOPOLOGÍA CAN DE LA RED (Estilo Launch / Autel)</b>
+            <div style="font-size:11px;color:var(--text3)">Esquema visual de comunicación de módulos en tiempo real. Tocá cualquier módulo para ver su ficha.</div>
+          </div>
+          <div style="display:flex;gap:8px;font-size:10.5px">
+            <span style="display:flex;align-items:center;gap:4px"><span style="width:10px;height:10px;border-radius:50%;background:rgba(34,197,94,0.85);display:inline-block"></span> Sano (0 fallas)</span>
+            <span style="display:flex;align-items:center;gap:4px"><span style="width:10px;height:10px;border-radius:50%;background:rgba(239,68,68,0.85);display:inline-block"></span> Con fallas</span>
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(260px, 1fr));gap:10px;margin-top:10px">
+    `;
+
+    for (const [key, sub] of Object.entries(subredes)) {
+      if (!sub.modulos.length) continue;
+      html += `
+        <div style="background:var(--surface2);border-radius:8px;padding:9px;border:1px dashed var(--border)">
+          <div style="font-size:10.5px;font-weight:700;color:var(--text2);margin-bottom:6px;text-transform:uppercase;letter-spacing:0.4px">${sub.titulo}</div>
+          <div style="display:flex;flex-wrap:wrap;gap:6px">
+            ${sub.modulos.map(m => {
+              const numFallas = (m.codigos || []).length;
+              const tieneFalla = numFallas > 0;
+              const bgNode = tieneFalla ? 'rgba(239,68,68,0.18)' : 'rgba(34,197,94,0.15)';
+              const borderNode = tieneFalla ? 'rgba(239,68,68,0.6)' : 'rgba(34,197,94,0.4)';
+              const colorText = tieneFalla ? 'var(--red)' : 'var(--green)';
+              const badgeTxt = tieneFalla ? `🚨 ${numFallas} DTC` : '✓ OK';
+
+              return `
+                <div onclick="Modulos.diagnostico_obd.verModulo(${m.ecu})"
+                     title="Abrir diagnóstico de ${UI.esc(m.nombre)} (0x${m.ecu.toString(16).toUpperCase()})"
+                     style="cursor:pointer;background:${bgNode};border:1px solid ${borderNode};border-radius:6px;padding:6px 8px;flex:1;min-width:120px;transition:all 0.15s ease">
+                  <div style="display:flex;justify-content:space-between;align-items:center;gap:4px">
+                    <span style="font-size:10px;font-family:monospace;color:var(--text3);font-weight:700">0x${m.ecu.toString(16).toUpperCase()}</span>
+                    <span style="font-size:9.5px;font-weight:800;color:${colorText}">${badgeTxt}</span>
+                  </div>
+                  <div style="font-size:11px;font-weight:700;color:var(--text);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${UI.esc(m.nombre)}</div>
+                </div>
+              `;
+            }).join('')}
+          </div>
+        </div>
+      `;
+    }
+
+    html += `
+        </div>
+      </div>
+    `;
+    return html;
+  },
+
   _porModuloHTML(s) {
     const ms = s && s.por_modulo;
     if (!Array.isArray(ms) || !ms.length) return this._botonMasModulos();
@@ -6792,6 +6953,7 @@ Modulos.diagnostico_obd = {
     const activos = conFallas.reduce((n, m) => n + m.codigos.filter(c => c.activo).length, 0);
 
     return `<div class="card" style="padding:14px;margin-top:12px${activos ? ';border:1px solid rgba(239,68,68,.45)' : ''}">
+      ${this._topologiaHTML(s)}
       <b style="font-size:12px">ESCANEO POR MÓDULO (todo el vehículo)</b>
       <div style="font-size:11px;color:var(--text3);margin-top:2px">
         ${ms.length} módulo(s) consultados uno por uno. Acá aparecen las fallas que el escaneo de emisiones no puede ver: frenos, presión de neumáticos, tracción, carrocería.
@@ -6938,13 +7100,16 @@ Modulos.diagnostico_obd = {
   _labels() {
     const labels = { volt: ['Batería',''], ...this._LBLX };
     Object.values(this._PIDS).forEach(p => labels[p.k] = [p.l, p.u]);
+    if (this._OEM_PIDS) {
+      Object.values(this._OEM_PIDS).forEach(p => labels[p.k] = [p.l, p.u]);
+    }
     return labels;
   },
 
   /* Definición de un sensor del monitor: PID OBD-II, o clave J1939/J1587 */
   _defSensor(p) {
     if (this._via === 'j1939' || this._via === 'j1708') { const lb = this._labels()[p]; return lb ? { k: p, l: lb[0], u: lb[1] } : null; }
-    return this._PIDS[p];
+    return this._PIDS[p] || (this._OEM_PIDS && this._OEM_PIDS[p]);
   },
 
   _sensoresMonitor() {
@@ -6993,7 +7158,10 @@ Modulos.diagnostico_obd = {
 
   _findPIDDefByKey(k) {
     if (k === 'volt') {
-      return { k:'volt', l:'Voltaje Batería/ECU', u:' V', r:[13.2,14.8], rc:'motor encendido', a:true, cat:'elec' };
+      return { k:'volt', l:'Voltaje Batería/ECU', u:' V', r:[13.2,14.8], rc:'motor encendido (alternador)', a:true, cat:'elec' };
+    }
+    if (this._OEM_PIDS && this._OEM_PIDS[k]) {
+      return this._OEM_PIDS[k];
     }
     return Object.values(this._PIDS).find(p => p.k === k) || null;
   },
@@ -7001,38 +7169,38 @@ Modulos.diagnostico_obd = {
   _evaluarSensorKey(k, val) {
     const def = this._findPIDDefByKey(k);
     const lb = this._labels()[k] || [k, ''];
-    if (!def || typeof val !== 'number') {
-      return {
-        label: lb[0],
-        unidad: lb[1],
-        status: 'normal',
-        badge: '',
-        ref: '',
-        cat: 'chassis'
-      };
-    }
 
     let status = 'normal';
     let badge = '<span style="font-size:9.5px;padding:2px 6px;border-radius:4px;background:rgba(34,197,94,0.15);color:var(--green);font-weight:700">✓ NORMAL</span>';
-    let ref = def.r ? `Ref: ${def.r[0]} – ${def.r[1]}${def.u}${def.rc ? ` (${def.rc})` : ''}` : '';
+    let ref = def && def.r
+      ? `Ref: ${def.r[0]} – ${def.r[1]}${def.u}${def.rc ? ` (${def.rc})` : ''}`
+      : `Ref: ${(def && def.rc) ? def.rc : 'Nominal / Estado normal'}`;
 
-    if (def.r && (val < def.r[0] || val > def.r[1])) {
-      if (def.a) {
+    if (def && typeof val === 'number' && def.r) {
+      if (val < def.r[0] || val > def.r[1]) {
+        if (def.a) {
+          status = 'critico';
+          badge = '<span style="font-size:9.5px;padding:2px 6px;border-radius:4px;background:rgba(239,68,68,0.15);color:var(--red);font-weight:700">🚨 CRÍTICO</span>';
+        } else {
+          status = 'advertencia';
+          badge = '<span style="font-size:9.5px;padding:2px 6px;border-radius:4px;background:rgba(245,158,11,0.15);color:var(--amber);font-weight:700">⚠️ ADVERTENCIA</span>';
+        }
+      }
+    } else if (typeof val === 'string') {
+      const vUpper = val.toUpperCase();
+      if (vUpper.includes('BAJ') || vUpper.includes('FAIL') || vUpper.includes('ERR') || vUpper.includes('CRIT')) {
         status = 'critico';
         badge = '<span style="font-size:9.5px;padding:2px 6px;border-radius:4px;background:rgba(239,68,68,0.15);color:var(--red);font-weight:700">🚨 CRÍTICO</span>';
-      } else {
-        status = 'advertencia';
-        badge = '<span style="font-size:9.5px;padding:2px 6px;border-radius:4px;background:rgba(245,158,11,0.15);color:var(--amber);font-weight:700">⚠️ ADVERTENCIA</span>';
       }
     }
 
     return {
-      label: def.l || lb[0],
-      unidad: def.u !== undefined ? def.u : lb[1],
+      label: (def && def.l) || lb[0],
+      unidad: (def && def.u !== undefined) ? def.u : lb[1],
       status,
       badge,
       ref,
-      cat: def.cat || 'chassis'
+      cat: (def && def.cat) || 'chassis'
     };
   },
 
