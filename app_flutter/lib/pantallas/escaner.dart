@@ -149,6 +149,70 @@ class _PantallaEscanerState extends State<PantallaEscaner> {
         const SnackBar(content: Text('Bitácora copiada — pegala en el chat de soporte')));
   }
 
+  Future<void> _conectarMacManual() async {
+    final txtCtrl = TextEditingController();
+    bool esBle = false;
+
+    final mac = await showDialog<String>(
+      context: context,
+      builder: (ctx) => StatefulWidgetBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('Conectar por MAC Manual'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: txtCtrl,
+                decoration: const InputDecoration(
+                  labelText: 'Dirección MAC (ej: 00:1D:A5:68:9B:4C)',
+                  hintText: 'AA:BB:CC:DD:EE:FF',
+                ),
+                textCapitalization: TextCapitalization.characters,
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  const Text('Tipo: '),
+                  ChoiceChip(
+                    label: const Text('SPP (Clásico)'),
+                    selected: !esBle,
+                    onSelected: (v) => setDialogState(() => esBle = !v),
+                  ),
+                  const SizedBox(width: 8),
+                  ChoiceChip(
+                    label: const Text('BLE'),
+                    selected: esBle,
+                    onSelected: (v) => setDialogState(() => esBle = v),
+                  ),
+                ],
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Cancelar'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, txtCtrl.text.trim()),
+              child: const Text('Conectar'),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (mac != null && mac.isNotEmpty) {
+      final esc = Escaner(
+        nombre: 'Manual ($mac)',
+        mac: mac,
+        tipo: esBle ? 'ble' : 'spp',
+        vinculado: true,
+      );
+      await _conectarYProbar(esc);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final probables = _lista.where((d) => d.rango < 3).toList();
@@ -172,10 +236,22 @@ class _PantallaEscanerState extends State<PantallaEscaner> {
         children: [
           Padding(
             padding: const EdgeInsets.all(12),
-            child: FilledButton.icon(
-              onPressed: _ocupado ? null : _buscar,
-              icon: const Icon(Icons.search),
-              label: Text(_ocupado ? 'Trabajando…' : 'Buscar escáneres'),
+            child: Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              alignment: WrapAlignment.center,
+              children: [
+                FilledButton.icon(
+                  onPressed: _ocupado ? null : _buscar,
+                  icon: const Icon(Icons.search),
+                  label: Text(_ocupado ? 'Trabajando…' : 'Buscar escáneres'),
+                ),
+                OutlinedButton.icon(
+                  onPressed: _ocupado ? null : _conectarMacManual,
+                  icon: const Icon(Icons.edit),
+                  label: const Text('Ingresar MAC manual'),
+                ),
+              ],
             ),
           ),
           if (probables.isNotEmpty)

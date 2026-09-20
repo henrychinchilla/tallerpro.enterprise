@@ -118,9 +118,13 @@ public class PuenteBluetooth {
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
       return new String[] {
           android.Manifest.permission.BLUETOOTH_CONNECT,
-          android.Manifest.permission.BLUETOOTH_SCAN };
+          android.Manifest.permission.BLUETOOTH_SCAN,
+          android.Manifest.permission.ACCESS_FINE_LOCATION,
+          android.Manifest.permission.ACCESS_COARSE_LOCATION };
     }
-    return new String[] { android.Manifest.permission.ACCESS_FINE_LOCATION };
+    return new String[] {
+        android.Manifest.permission.ACCESS_FINE_LOCATION,
+        android.Manifest.permission.ACCESS_COARSE_LOCATION };
   }
 
   /* Se piden en el momento en que el mecanico toca "Buscar", con el aparato
