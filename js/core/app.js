@@ -296,9 +296,7 @@ const App = {
           <div>
             <div style="font-weight:800;font-size:14px">NexusPro para Android</div>
             <div style="font-size:12px;color:var(--text3)">
-              ${actualizar
-                ? `Tienes la versión <b>${UI.esc((info && info.vn) || 'anterior')}</b> · nueva: <b>${UI.esc(ultima.versionName || '')}</b>${peso}`
-                : `Versión <b>${UI.esc(ultima.versionName || '')}</b>${peso} · Android ${UI.esc(ultima.minAndroid || '8.0')} o superior`}
+              Última versión disponible: <b>${UI.esc(ultima.versionName || '')}</b>${peso}${actualizar ? '' : ` · Android ${UI.esc(ultima.minAndroid || '8.0')} o superior`}
             </div>
           </div>
         </div>

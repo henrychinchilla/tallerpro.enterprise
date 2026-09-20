@@ -306,8 +306,8 @@ const publicada = JSON.parse(fs.readFileSync(VERSION_JSON, 'utf8')).android;
     await App.avisoAppAndroid();
     ok('versión anterior, abierta desde el navegador → avisa que actualice',
        modales.length === 1 && /versión nueva/i.test(modales[0].titulo));
-    ok('…y le dice qué versión tiene y cuál es la nueva',
-       modales.length === 1 && modales[0].cuerpo.includes('4.76.0') && modales[0].cuerpo.includes(publicada.versionName));
+    ok('…y le dice cuál es la última versión disponible',
+       modales.length === 1 && modales[0].cuerpo.includes(publicada.versionName));
   }
 
   {

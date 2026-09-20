@@ -99,9 +99,7 @@ Modulos.descarga = {
 
             ${instalada ? `
             <div style="font-size:12px;background:var(--surface2);color:var(--text1);border-left:3px solid var(--${alDia ? 'green' : 'amber'});border-radius:0 8px 8px 0;padding:8px 10px;margin-bottom:12px">
-              ${alDia
-                ? `✅ Tienes instalada la versión <b>${UI.esc(instalada.vn || appVer)}</b> — está al día.`
-                : `⚠️ Tienes la versión <b>${UI.esc(instalada.vn || 'anterior')}</b>. Hay una más reciente: <b>${UI.esc(appVer)}</b>.`}
+              Última versión disponible: <b>${UI.esc(appVer)}</b> ${alDia ? ' — está al día ✅' : ' ⚡'}
             </div>` : ''}
 
             <p style="font-size:12px;color:var(--text3);margin-bottom:14px">
