@@ -1,0 +1,10 @@
+com.cmtelecom.tallerpro.app-androidbrowserhelper-2.5.0-0 C:\Users\henry\.gradle\caches\8.9\transforms\38bdbf8b8b72c7c04e57e13f39563266\transformed\androidbrowserhelper-2.5.0\res
+com.cmtelecom.tallerpro.app-browser-1.4.0-1 C:\Users\henry\.gradle\caches\8.9\transforms\4ef52c9f2fa6e978596af3e9ad0c582c\transformed\browser-1.4.0\res
+com.cmtelecom.tallerpro.app-core-1.1.0-2 C:\Users\henry\.gradle\caches\8.9\transforms\6f61606391ba590d6ca80cbdda7a3ded\transformed\core-1.1.0\res
+com.cmtelecom.tallerpro.app-pngs-3 D:\tallerpro-enterprise\android\app\build\generated\res\pngs\release
+com.cmtelecom.tallerpro.app-resValues-4 D:\tallerpro-enterprise\android\app\build\generated\res\resValues\release
+com.cmtelecom.tallerpro.app-packageReleaseResources-5 D:\tallerpro-enterprise\android\app\build\intermediates\incremental\release\packageReleaseResources\merged.dir
+com.cmtelecom.tallerpro.app-packageReleaseResources-6 D:\tallerpro-enterprise\android\app\build\intermediates\incremental\release\packageReleaseResources\stripped.dir
+com.cmtelecom.tallerpro.app-release-7 D:\tallerpro-enterprise\android\app\build\intermediates\merged_res\release\mergeReleaseResources
+com.cmtelecom.tallerpro.app-main-8 D:\tallerpro-enterprise\android\app\src\main\res
+com.cmtelecom.tallerpro.app-release-9 D:\tallerpro-enterprise\android\app\src\release\res

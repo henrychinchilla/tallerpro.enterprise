@@ -1,0 +1,112 @@
+1<?xml version="1.0" encoding="utf-8"?>
+2<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+3    package="com.cmtelecom.tallerpro"
+4    android:versionCode="1"
+5    android:versionName="1.0.0" >
+6
+7    <uses-sdk
+8        android:minSdkVersion="24"
+9        android:targetSdkVersion="35" />
+10
+11    <queries>
+11-->[com.google.androidbrowserhelper:androidbrowserhelper:2.5.0] C:\Users\henry\.gradle\caches\8.9\transforms\38bdbf8b8b72c7c04e57e13f39563266\transformed\androidbrowserhelper-2.5.0\AndroidManifest.xml:26:5-34:15
+12        <intent>
+12-->[com.google.androidbrowserhelper:androidbrowserhelper:2.5.0] C:\Users\henry\.gradle\caches\8.9\transforms\38bdbf8b8b72c7c04e57e13f39563266\transformed\androidbrowserhelper-2.5.0\AndroidManifest.xml:27:9-33:18
+13            <action android:name="android.intent.action.VIEW" />
+13-->D:\tallerpro-enterprise\android\app\src\main\AndroidManifest.xml:36:17-69
+13-->D:\tallerpro-enterprise\android\app\src\main\AndroidManifest.xml:36:25-66
+14
+15            <category android:name="android.intent.category.BROWSABLE" />
+15-->D:\tallerpro-enterprise\android\app\src\main\AndroidManifest.xml:38:17-78
+15-->D:\tallerpro-enterprise\android\app\src\main\AndroidManifest.xml:38:27-75
+16
+17            <data android:scheme="https" />
+17-->D:\tallerpro-enterprise\android\app\src\main\AndroidManifest.xml:39:17-84
+17-->D:\tallerpro-enterprise\android\app\src\main\AndroidManifest.xml:39:23-45
+18        </intent>
+19    </queries>
+20
+21    <application
+21-->D:\tallerpro-enterprise\android\app\src\main\AndroidManifest.xml:4:5-42:19
+22        android:appComponentFactory="androidx.core.app.CoreComponentFactory"
+22-->[androidx.core:core:1.1.0] C:\Users\henry\.gradle\caches\8.9\transforms\6f61606391ba590d6ca80cbdda7a3ded\transformed\core-1.1.0\AndroidManifest.xml:24:18-86
+23        android:extractNativeLibs="false"
+24        android:icon="@mipmap/ic_launcher"
+24-->D:\tallerpro-enterprise\android\app\src\main\AndroidManifest.xml:6:9-43
+25        android:label="@string/app_name"
+25-->D:\tallerpro-enterprise\android\app\src\main\AndroidManifest.xml:5:9-41
+26        android:supportsRtl="true"
+26-->D:\tallerpro-enterprise\android\app\src\main\AndroidManifest.xml:7:9-35
+27        android:theme="@android:style/Theme.Translucent.NoTitleBar" >
+27-->D:\tallerpro-enterprise\android\app\src\main\AndroidManifest.xml:8:9-68
+28
+29        <!-- Vincula la app con el dominio (junto a /.well-known/assetlinks.json) -->
+30        <meta-data
+30-->D:\tallerpro-enterprise\android\app\src\main\AndroidManifest.xml:11:9-13:59
+31            android:name="asset_statements"
+31-->D:\tallerpro-enterprise\android\app\src\main\AndroidManifest.xml:12:13-44
+32            android:resource="@string/asset_statements" />
+32-->D:\tallerpro-enterprise\android\app\src\main\AndroidManifest.xml:13:13-56
+33
+34        <activity
+34-->D:\tallerpro-enterprise\android\app\src\main\AndroidManifest.xml:15:9-41:20
+35            android:name="com.google.androidbrowserhelper.trusted.LauncherActivity"
+35-->D:\tallerpro-enterprise\android\app\src\main\AndroidManifest.xml:16:13-84
+36            android:exported="true"
+36-->D:\tallerpro-enterprise\android\app\src\main\AndroidManifest.xml:17:13-36
+37            android:label="@string/app_name" >
+37-->D:\tallerpro-enterprise\android\app\src\main\AndroidManifest.xml:18:13-45
+38            <meta-data
+38-->D:\tallerpro-enterprise\android\app\src\main\AndroidManifest.xml:20:13-22:64
+39                android:name="android.support.customtabs.trusted.DEFAULT_URL"
+39-->D:\tallerpro-enterprise\android\app\src\main\AndroidManifest.xml:21:17-78
+40                android:value="https://app.cmtelecommgt.com" />
+40-->D:\tallerpro-enterprise\android\app\src\main\AndroidManifest.xml:22:17-61
+41            <meta-data
+41-->D:\tallerpro-enterprise\android\app\src\main\AndroidManifest.xml:23:13-25:58
+42                android:name="android.support.customtabs.trusted.STATUS_BAR_COLOR"
+42-->D:\tallerpro-enterprise\android\app\src\main\AndroidManifest.xml:24:17-83
+43                android:resource="@color/colorPrimary" />
+43-->D:\tallerpro-enterprise\android\app\src\main\AndroidManifest.xml:25:17-55
+44            <meta-data
+44-->D:\tallerpro-enterprise\android\app\src\main\AndroidManifest.xml:26:13-28:54
+45                android:name="android.support.customtabs.trusted.NAVIGATION_BAR_COLOR"
+45-->D:\tallerpro-enterprise\android\app\src\main\AndroidManifest.xml:27:17-87
+46                android:resource="@color/colorNav" />
+46-->D:\tallerpro-enterprise\android\app\src\main\AndroidManifest.xml:28:17-51
+47
+48            <intent-filter>
+48-->D:\tallerpro-enterprise\android\app\src\main\AndroidManifest.xml:30:13-33:29
+49                <action android:name="android.intent.action.MAIN" />
+49-->D:\tallerpro-enterprise\android\app\src\main\AndroidManifest.xml:31:17-69
+49-->D:\tallerpro-enterprise\android\app\src\main\AndroidManifest.xml:31:25-66
+50
+51                <category android:name="android.intent.category.LAUNCHER" />
+51-->D:\tallerpro-enterprise\android\app\src\main\AndroidManifest.xml:32:17-77
+51-->D:\tallerpro-enterprise\android\app\src\main\AndroidManifest.xml:32:27-74
+52            </intent-filter>
+53            <intent-filter android:autoVerify="true" >
+53-->D:\tallerpro-enterprise\android\app\src\main\AndroidManifest.xml:35:13-40:29
+53-->D:\tallerpro-enterprise\android\app\src\main\AndroidManifest.xml:35:28-53
+54                <action android:name="android.intent.action.VIEW" />
+54-->D:\tallerpro-enterprise\android\app\src\main\AndroidManifest.xml:36:17-69
+54-->D:\tallerpro-enterprise\android\app\src\main\AndroidManifest.xml:36:25-66
+55
+56                <category android:name="android.intent.category.DEFAULT" />
+56-->D:\tallerpro-enterprise\android\app\src\main\AndroidManifest.xml:37:17-76
+56-->D:\tallerpro-enterprise\android\app\src\main\AndroidManifest.xml:37:27-73
+57                <category android:name="android.intent.category.BROWSABLE" />
+57-->D:\tallerpro-enterprise\android\app\src\main\AndroidManifest.xml:38:17-78
+57-->D:\tallerpro-enterprise\android\app\src\main\AndroidManifest.xml:38:27-75
+58
+59                <data
+59-->D:\tallerpro-enterprise\android\app\src\main\AndroidManifest.xml:39:17-84
+60                    android:host="app.cmtelecommgt.com"
+60-->D:\tallerpro-enterprise\android\app\src\main\AndroidManifest.xml:39:46-81
+61                    android:scheme="https" />
+61-->D:\tallerpro-enterprise\android\app\src\main\AndroidManifest.xml:39:23-45
+62            </intent-filter>
+63        </activity>
+64    </application>
+65
+66</manifest>

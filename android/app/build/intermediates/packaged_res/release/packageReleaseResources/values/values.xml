@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="colorNav">#0A0E1A</color>
+    <color name="colorPrimary">#F59E0B</color>
+    <string name="app_name">TallerPro</string>
+    <string name="asset_statements">
+        [{
+            \"relation\": [\"delegate_permission/common.handle_all_urls\"],
+            \"target\": {
+                \"namespace\": \"web\",
+                \"site\": \"https://app.cmtelecommgt.com\"
+            }
+        }]
+    </string>
+</resources>

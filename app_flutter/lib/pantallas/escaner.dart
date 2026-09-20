@@ -6,6 +6,7 @@ import '../bluetooth/puente_bt.dart';
 import '../obd/elm.dart';
 import '../obd/dtc_diccionario.dart';
 import '../obd/actuadores.dart';
+import '../obd/pids_envivo.dart';
 import 'modulo_web.dart';
 
 /* Escáner OBD-II Nativo NexusPro Enterprise.
@@ -425,6 +426,17 @@ class _PantallaEscanerState extends State<PantallaEscaner> {
                     spacing: 6,
                     runSpacing: 6,
                     children: [
+                      ElevatedButton.icon(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.teal.shade800,
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        ),
+                        icon: const Icon(Icons.speed, size: 16),
+                        label: const Text('PIDs y Datos en Vivo', style: TextStyle(fontSize: 11)),
+                        onPressed: () => Navigator.of(context).push(
+                          MaterialPageRoute(builder: (_) => PantallaPIDsEnVivo(elm: _elm)),
+                        ),
+                      ),
                       ElevatedButton.icon(
                         style: ElevatedButton.styleFrom(
                           backgroundColor: Colors.red.shade900,

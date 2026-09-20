@@ -1,0 +1,36 @@
+{
+    "logs": [
+        {
+            "outputFile": "com.cmtelecom.tallerpro.app-mergeReleaseResources-5:/values-te/values-te.xml",
+            "map": [
+                {
+                    "source": "C:\\Users\\henry\\.gradle\\caches\\8.9\\transforms\\4ef52c9f2fa6e978596af3e9ad0c582c\\transformed\\browser-1.4.0\\res\\values-te\\values-te.xml",
+                    "from": {
+                        "startLines": "2,3,4,5",
+                        "startColumns": "4,4,4,4",
+                        "startOffsets": "55,166,272,383",
+                        "endColumns": "110,105,110,106",
+                        "endOffsets": "161,267,378,485"
+                    }
+                },
+                {
+                    "source": "C:\\Users\\henry\\.gradle\\caches\\8.9\\transforms\\6f61606391ba590d6ca80cbdda7a3ded\\transformed\\core-1.1.0\\res\\values-te\\values-te.xml",
+                    "from": {
+                        "startLines": "2",
+                        "startColumns": "4",
+                        "startOffsets": "55",
+                        "endColumns": "100",
+                        "endOffsets": "151"
+                    },
+                    "to": {
+                        "startLines": "6",
+                        "startColumns": "4",
+                        "startOffsets": "490",
+                        "endColumns": "100",
+                        "endOffsets": "586"
+                    }
+                }
+            ]
+        }
+    ]
+}

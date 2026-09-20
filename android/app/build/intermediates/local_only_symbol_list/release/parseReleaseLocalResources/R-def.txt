@@ -1,0 +1,7 @@
+R_DEF: Internal format may change without notice
+local
+color colorNav
+color colorPrimary
+mipmap ic_launcher
+string app_name
+string asset_statements
