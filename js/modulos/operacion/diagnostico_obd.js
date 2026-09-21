@@ -170,6 +170,23 @@ Modulos.diagnostico_obd = {
     return this._via === 'ble' || this._via === 'android' || this._via === 'serial';
   },
 
+  /* Dongles que ABREN el Bluetooth pero NO hablan ELM327. El Thinkdiag /
+     Thinkcar —y en general los de Launch: X431, DBSCar, golo— usan el protocolo
+     propietario de su marca, atado a su propia app y a su servidor. El enlace
+     abre igual (el dongle hasta cambia de color) y después no contesta ni ATI ni
+     ATZ, porque no entiende el idioma, no porque esté mal conectado.
+
+     Verificado el 2026-09-20 con un Thinkdiag TKD01: el puente conectó, el
+     dongle cambió de color y la sonda se quedó muda.
+
+     Esto NO bloquea nada —se puede elegir igual, por si una versión de firmware
+     lo permite—: lo que hace es decirlo ANTES. El mensaje genérico mandaba a
+     buscar un error que no existe ("habrás elegido los audífonos"), y eso es
+     peor que no ofrecerlo. */
+  _esDongleCerrado(nombre) {
+    return /think(diag|car|tool)|launch|x-?431|dbscar|golo/i.test(String(nombre || ''));
+  },
+
   /* La identidad Device Information es lectura pasiva. Muchos VCI no
      publican un canal OBD por GATT, pero sí dejan ver modelo/firmware en 180A.
      Guardarla permite distinguir "Bluetooth conectado" de "protocolo de datos
@@ -2041,6 +2058,16 @@ Modulos.diagnostico_obd = {
     if (!sonda.trim()) {
       try { window.NexusBT.desconectar(); } catch (_) {}
       this._bt = null;
+      /* Con un Thinkdiag/Launch el motivo NO es un error de elección: el enlace
+         está bien y el dongle simplemente no habla este idioma. Mandarlo a
+         "revisá que no sean los audífonos" lo hace perder la tarde buscando algo
+         que está bien. */
+      if (this._esDongleCerrado(nombre) || this._esDongleCerrado(elegido.nombre))
+        throw new Error(`El Bluetooth con <b>${UI.esc(nombre)}</b> abrió bien —por eso el dongle cambió de color— ` +
+          `pero no contestó ni a ATI ni a ATZ: <b>este escáner no habla ELM327</b>. Los Thinkdiag/Thinkcar (y los ` +
+          `Launch X431) usan el protocolo propietario de su marca, atado a su propia app y a su servidor, así que ` +
+          `ninguna aplicación de terceros los puede usar. Para escanear desde NexusPro necesitás un dongle ELM327: ` +
+          `el <b>vLinker MS</b> que ya tenés sirve.`);
       throw new Error(`Se abrió el Bluetooth con <b>${UI.esc(nombre)}</b>, pero no contestó ni a ATI ni a ATZ: ` +
         `NO hay enlace con un escáner OBD. Lo más común es haber elegido el aparato equivocado de la lista ` +
         `(manos libres, audífonos, balanza, el celular de alguien). Si es el correcto, desenchufalo del ` +
@@ -2087,11 +2114,11 @@ Modulos.diagnostico_obd = {
       const fila = d => {
         const r = rango(d);
         const esObdCheck = esOBD(d.nombre) || macOBD(d.mac);
-        const esThinkcar = /think|9798/i.test(d.nombre || '') || /9798/i.test(d.mac || '');
-        const etiqueta = esThinkcar
-          ? ' <span style="color:var(--cyan);font-size:11px;font-weight:700">🔌 Escáner Thinkcar (ID 979869044587)</span>'
+        const cerrado = this._esDongleCerrado(d.nombre);
+        const etiqueta = cerrado
+          ? ' <span style="color:var(--amber);font-size:11px;font-weight:700">⚠️ No habla ELM327 — sólo su propia app</span>'
           : (esObdCheck
-            ? ' <span style="color:var(--green);font-size:11px;font-weight:700">🔌 Escáner OBD (vLinker/Vgate/Thinkcar)</span>'
+            ? ' <span style="color:var(--green);font-size:11px;font-weight:700">🔌 Escáner OBD (vLinker/Vgate/ELM327)</span>'
             : (d.vinculado ? ' <span style="color:var(--cyan);font-size:11px;font-weight:700">📱 Emparejado en Android</span>' : ''));
 
         let nombreMostrar = d.nombre;

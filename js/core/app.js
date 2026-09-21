@@ -127,6 +127,18 @@ const App = {
         .sort((a,b) => (a.fecha_vencimiento||'').localeCompare(b.fecha_vencimiento||''));
       if (!proximas.length) return;
 
+      /* "Después" tiene que posponer DE VERDAD. Antes sólo cerraba el modal, así
+         que el aviso volvía en CADA refresh: una obligación vencida de Q0.00
+         —que no hay cómo "pagar"— quedaba avisando para siempre y desde la
+         pantalla no había manera de callarla. Se pospone el CONJUNTO, no el
+         aviso: si entra una obligación nueva la firma cambia y vuelve a avisar
+         aunque la posposición siga vigente, así que posponer no es enmudecer. */
+      const firma = proximas.map(o => `${o.id || o.tipo}·${o.periodo}`).join('|');
+      try {
+        const prev = JSON.parse(localStorage.getItem(App._SAT_LS_AVISO) || 'null');
+        if (prev && prev.firma === firma && prev.hasta > hoyStr) return;
+      } catch (_) { /* dato corrupto: mostrar el aviso */ }
+
       UI.modal('⚠️ Obligaciones SAT por vencer', `
         <div style="display:flex;flex-direction:column;gap:8px">
           ${proximas.map(o => {
@@ -143,11 +155,26 @@ const App = {
             </div>`;
           }).join('')}
         </div>
+        <div style="font-size:11px;color:var(--text3);margin-top:10px">
+          Para que deje de avisar del todo, marcá la obligación como <b>pagada</b> (o declarada en cero)
+          en <b>Contabilidad → Obligaciones SAT</b>. “Después” la calla por 7 días, pero vuelve antes si aparece una nueva.
+        </div>
         <div class="modal-footer">
-          <button class="btn btn-ghost" onclick="UI.cerrarModal()">Después</button>
+          <button class="btn btn-ghost" onclick="App._posponerAvisoSAT('${UI.jsAttr(firma)}')">Después (7 días)</button>
           <button class="btn btn-amber" onclick="UI.cerrarModal();App.navegarA('contabilidad')">🧮 Ir a Contabilidad</button>
         </div>`, '480px');
     } catch (_) { /* el aviso nunca debe bloquear el ingreso */ }
+  },
+
+  _SAT_LS_AVISO: 'np_sat_aviso',      // aviso SAT pospuesto: { firma, hasta }
+
+  _posponerAvisoSAT(firma, dias = 7) {
+    try {
+      localStorage.setItem(App._SAT_LS_AVISO, JSON.stringify({
+        firma, hasta: new Date(Date.now() + dias * 86400000).toISOString().slice(0, 10)
+      }));
+    } catch (_) { /* sin localStorage el aviso vuelve al siguiente ingreso */ }
+    UI.cerrarModal();
   },
 
   /* ═══ APP DE ANDROID: ¿el teléfono trae la versión nueva? ═══════
