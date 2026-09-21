@@ -374,6 +374,27 @@ Modulos.diagnostico_obd = {
         return String(r?.respuesta || '');
       } finally { this._busy = false; }
     }
+    if (this._via === 'webserial') {
+      await this._esperarTurno(c);
+      this._busy = true;
+      try {
+        await this._webSerialWriter.write(new TextEncoder().encode(c + '\r'));
+        let response = '';
+        const deadline = Date.now() + timeout;
+        while (Date.now() < deadline) {
+          const { value, done } = await Promise.race([
+            this._webSerialReader.read(),
+            new Promise(r => setTimeout(() => r({ value: null, done: false }), 400))
+          ]);
+          if (value) {
+            response += new TextDecoder().decode(value);
+            if (response.includes('>')) break;
+          }
+          if (done) break;
+        }
+        return response;
+      } finally { this._busy = false; }
+    }
     if (!this._conectado) throw new Error('Adaptador desconectado');
     await this._esperarTurno(c);
     this._busy = true; this._buf = '';
@@ -2132,26 +2153,48 @@ Modulos.diagnostico_obd = {
   },
 
   async _serialInit(log) {
-    await this._puenteConectar();
+    if (typeof navigator !== 'undefined' && navigator.serial && !this._nativo) {
+      try {
+        log('Abriendo selector de puerto COM / Bluetooth de Windows...');
+        const port = await navigator.serial.requestPort();
+        await port.open({ baudRate: 115200 });
+        this._webSerialPort = port;
+        this._webSerialWriter = port.writable.getWriter();
+        this._webSerialReader = port.readable.getReader();
+        this._via = 'webserial';
+        this._buf = '';
+
+        log('Puerto Bluetooth COM abierto en Windows ✓ Sondeando ATI...');
+        const sonda = await this._cmd('ATI', 4000).catch(() => '');
+        log(`El escáner contesta: <b>${UI.esc((sonda || 'OK').replace(/[\r\n>]+/g, ' ').trim())}</b> ✓`);
+        return { nombre: 'Bluetooth COM (Web Serial PC)', protocolo: 'Bluetooth clásico SPP 115200' };
+      } catch (e) {
+        if (e && e.name === 'NotFoundError') {
+          throw new Error('No se eligió ningún puerto COM. Asegúrate de emparejar el vLinker o Thinkcar en el Bluetooth de Windows.');
+        }
+        // Si Web Serial falla, continuar con puente si existe
+      }
+    }
+
+    try {
+      await this._puenteConectar();
+    } catch (e) {
+      throw new Error('No se pudo conectar al puente Bluetooth local. En Chrome/Edge de PC, asegúrate de emparejar el escáner en los Ajustes de Bluetooth de Windows.');
+    }
     const api = this._api || '';
     if (!/^SERIAL:/i.test(api)) throw new Error('Selecciona el puerto COM del escaner en "Adaptador / puerto local".');
-    const port = api.substring(7);
+    const portName = api.substring(7);
     const equipo = (document.getElementById('obd-api')?.selectedOptions?.[0]?.textContent || '').trim();
     const c = await this._puenteOp({ op:'conectar', api, protocolo:'SPP', baud:115200 }, 6000);
-    if (!c.ok) throw new Error(c.error || `No se pudo abrir Bluetooth clasico en ${port}.`);
+    if (!c.ok) throw new Error(c.error || `No se pudo abrir Bluetooth clasico en ${portName}.`);
     this._serialReady = true;
-    log(`Bluetooth clasico: <b>${equipo || port}</b> @115200`);
-    /* ATI es una sonda inocua: si el VCI no es ELM abierto, se informa aqui y
-       no se presenta un escaneo vacio como si el vehiculo estuviera sano. */
+    log(`Bluetooth clasico: <b>${equipo || portName}</b> @115200`);
     const identidad = await this._cmd('ATI', 3000).catch(() => '');
     const sonda = identidad.trim() ? identidad : await this._cmd('ATZ', 3000).catch(() => '');
-    /* Windows crea un COM por cada perfil SPP y varios son puertos locales
-       entrantes: el silencio casi siempre es "elegiste el COM equivocado",
-       no "este escaner no sirve". El mensaje dice primero lo probable. */
-    if (!sonda.trim()) throw new Error(`${port} no contesto a ATI/ATZ. Revisa que en "Adaptador / puerto local" este elegido el COM de tu escaner ` +
+    if (!sonda.trim()) throw new Error(`${portName} no contesto a ATI/ATZ. Revisa que en "Adaptador / puerto local" este elegido el COM de tu escaner ` +
       `(el desplegable ya muestra el nombre del equipo emparejado; los que dicen "puerto local entrante" nunca sirven), ` +
       `que el escaner este enchufado al vehiculo y con el switch en contacto.`);
-    return { nombre: equipo || `Bluetooth ${port}`, protocolo:'Bluetooth clasico SPP' };
+    return { nombre: equipo || `Bluetooth ${portName}`, protocolo:'Bluetooth clasico SPP' };
   },
 
   async _usbInit(log) {
