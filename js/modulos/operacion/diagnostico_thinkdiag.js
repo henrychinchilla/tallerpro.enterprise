@@ -36,7 +36,7 @@ window.DiagnosticoThinkdiag = {
   seleccionar(id) {
     const m = this.marcasDisponibles.find(x => x.id === id);
     if (m) {
-      UI.exito(`Base de datos OEM ${m.nombre} (${m.version}) cargada correctamente.`);
+      UI.toast(`Base de datos OEM ${m.nombre} (${m.version}) cargada correctamente.`);
     }
   }
 };
