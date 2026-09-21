@@ -7,6 +7,7 @@ import '../obd/elm.dart';
 import '../obd/dtc_diccionario.dart';
 import '../obd/actuadores.dart';
 import '../obd/pids_envivo.dart';
+import '../obd/lector_thinkdiag.dart';
 import 'modulo_web.dart';
 
 /* Escáner OBD-II Nativo NexusPro Enterprise.
@@ -457,6 +458,17 @@ class _PantallaEscanerState extends State<PantallaEscaner> {
                         icon: const Icon(Icons.delete_forever, size: 16),
                         label: const Text('Borrar Códigos (Modo 04)', style: TextStyle(fontSize: 11)),
                         onPressed: _escaneandoVehiculo ? null : _borrarCodigosDTC,
+                      ),
+                      ElevatedButton.icon(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.amber.shade900,
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        ),
+                        icon: const Icon(Icons.folder_special, size: 16),
+                        label: const Text('Base OEM Thinkdiag (894 MB)', style: TextStyle(fontSize: 11)),
+                        onPressed: () => Navigator.of(context).push(
+                          MaterialPageRoute(builder: (_) => PantallaThinkdiagOEM(elm: _elm)),
+                        ),
                       ),
                       ElevatedButton.icon(
                         style: ElevatedButton.styleFrom(
