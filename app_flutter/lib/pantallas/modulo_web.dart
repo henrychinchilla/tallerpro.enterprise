@@ -76,6 +76,13 @@ class _PantallaModuloWebState extends State<PantallaModuloWeb> {
               await _metodos.invokeMethod('escribir', {'texto': txt});
             } else if (accion == 'desconectar') {
               await _metodos.invokeMethod('desconectar');
+            } else if (accion == 'imprimir') {
+              final html = payload['html'] as String? ?? '';
+              try {
+                await _metodos.invokeMethod('imprimir', {'html': html});
+              } catch (e) {
+                debugPrint('Error imprimiendo desde Android: $e');
+              }
             }
           } catch (_) {}
         },
@@ -130,6 +137,9 @@ class _PantallaModuloWebState extends State<PantallaModuloWeb> {
         },
         desconectar: function() {
           window.NexusBTPuente.postMessage(JSON.stringify({accion: "desconectar"}));
+        },
+        imprimir: function(html) {
+          window.NexusBTPuente.postMessage(JSON.stringify({accion: "imprimir", html: html}));
         }
       };
     ''';

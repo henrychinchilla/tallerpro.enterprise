@@ -2447,8 +2447,8 @@ Modulos.diagnostico_obd = {
   _UDS_NOMBRES: {
     /* Hyundai / Kia, Asiáticos y Genericos UDS 11-bit IDs */
     0x7E0:'Motor (ECM)', 0x7E1:'Transmisión (TCM)', 0x7E2:'Híbrido / Batería EV', 0x7E3:'Módulo 0x7E3',
-    0x7D0:'Frenos / ABS / Tracción', 0x7D1:'Frenos / ABS / ESC', 0x7D2:'Presión de Neumáticos (TPMS)',
-    0x7D4:'Dirección Asistida (MDPS / EPS)', 0x7A0:'Airbag / SRS (ACU)', 0x7A1:'Carrocería (BCM / SJB)',
+    0x7D0:'Frenos / ABS / Tracción', 0x7D1:'Frenos / ABS / ESC', 0x7D2:'Presión de Neumáticos (TPMS)', 0x7D6:'Presión de Neumáticos (TPMS)',
+    0x7D4:'Dirección Asistida (MDPS / EPS)', 0x7A0:'Airbag / SRS (ACU)', 0x7A1:'Carrocería (BCM / SJB)', 0x71A:'Carrocería Secundario / Parachoques', 0x71D:'Módulo AWD / Caja de Transferencia',
     0x7A5:'Llave Inteligente / Inmovilizador (SMK)', 0x7B3:'Climatización (FATC / HVAC)',
     0x7C0:'Control Punto Ciego / Radar (BSD)', 0x7C4:'Control Crucero / Colisión (SCC/FCA)',
     0x7C6:'Tablero de Instrumentos (CLU / IPC)', 0x710:'Dirección Electrónica (MDPS)',
@@ -2550,11 +2550,14 @@ Modulos.diagnostico_obd = {
         0x7B3: 'Climatización automática (FATC / HVAC)',
         0x7B7: 'Radar de esquina / Ángulo muerto',
         0x7C4: 'Cámara frontal / Frenado asistido (SCC/FCA)',
-        0x7C6: 'Tablero de instrumentos (CLU / IPC)',
+        0x7C6: 'Tablero de instrumentos (CLU / IPC / IPM)',
         0x7D0: 'Frenos / ABS / Tracción',
         0x7D1: 'Frenos / ABS / ESC',
-        0x7D2: 'Presión de neumáticos (TPMS)',
-        0x7D4: 'Dirección asistida (MDPS / EPS)',
+        0x7D2: 'Dirección asistida (EPS) / Presión de neumáticos (TPMS)',
+        0x7D6: 'Presión de neumáticos (TPMS)',
+        0x7D4: 'Control de crucero adaptativo / Radar (SCC/FCA) o Dirección asistida (MDPS/EPS)',
+        0x71A: 'Módulo de Carrocería Secundario / Parachoques',
+        0x71D: 'Módulo de Tracción Integral / Caja de Transferencia (AWD)',
         0x7A0: 'Airbag / SRS (ACU)',
         0x7A1: 'Carrocería (BCM / SJB)',
         0x7A5: 'Llave inteligente / Inmovilizador (SMK)',
@@ -6047,7 +6050,6 @@ Modulos.diagnostico_obd = {
           <div>
             <div style="display:flex;align-items:center;gap:8px">
               <span style="background:#2563eb;color:#fff;font-size:10px;font-weight:900;padding:2px 8px;border-radius:4px;letter-spacing:1px">NEXUS PRO DIAGNOSTICS</span>
-              <span style="color:#06b6d4;font-size:11px;font-weight:700">BENCHMARK LAUNCH & AUTEL</span>
             </div>
             <h1 class="page-title" style="color:#fff;margin:4px 0 0;font-size:22px">🩺 Diagnóstico OBD-II & UDS Multimarca</h1>
             <p class="page-subtitle" style="color:#94a3b8;margin-top:2px;font-size:12px">// Bluetooth BLE/SPP (Vgate/ELM327) · USB RP1210 (J1939/CAN Heavy Duty)</p>
@@ -6827,6 +6829,11 @@ Modulos.diagnostico_obd = {
       this._renderResultado();
       document.getElementById('obd-btn-save').style.display = '';
       btn.textContent = '↻ Re-escanear';
+
+      // Asistencia Total IA automática al finalizar el escaneo
+      if (typeof moduloEnPlan !== 'function' || moduloEnPlan('ia')) {
+        this.analizarIA().catch(e => console.warn('Auto IA asistencia:', e));
+      }
     } catch (e) {
       log(`<span style="color:var(--red)">✗ ${e.message}</span>`);
       UI.toast(e.message, 'error');
@@ -6920,21 +6927,23 @@ Modulos.diagnostico_obd = {
   _promptIA(s, veh) {
     const dat = Object.entries(s.datos||{}).map(([k,v])=>`${k}:${v}`).join(', ');
     const c = s.comparacion;
-    return `Analiza este escaneo OBD-II y explica en español sencillo para un mecánico: ` +
-      `causa probable de cada código, cómo confirmar el diagnóstico y la reparación recomendada con su urgencia.\n` +
-      `Vehículo: ${veh ? `${veh.marca||''} ${veh.modelo||''} ${veh.anio||''} placa ${veh.placa||''}` : 'no especificado'}\n` +
-      `VIN: ${s.vin||'—'}\nCheck Engine: ${s.mil?'ENCENDIDO':'apagado'}\n` +
-      `Códigos confirmados: ${(s.dtcs||[]).map(d=>`${d.codigo} (${d.desc})`).join('; ')||'ninguno'}\n` +
-      `Códigos pendientes: ${(s.dtcs_pendientes||[]).map(d=>d.codigo).join('; ')||'ninguno'}\n` +
-      /* El histórico cambia el diagnóstico: un código que vuelve por segunda vez
-         no se atiende igual que uno que aparece por primera. */
+    const mods = (s.por_modulo||[]).map(m => `[0x${m.ecu.toString(16).toUpperCase()}] ${m.nombre}: ${(m.codigos||[]).map(x => `${x.codigo} (${x.desc||'sin desc'})`).join(', ')||'OK'}`).join('\n');
+
+    return `Actúa como Master Diagnostic Technician Automotriz. Analiza este escaneo OBD-II / UDS multimarca y genera una Asistencia Total Técnica completa:\n` +
+      `1. Identifica cualquier dirección de módulo o ECU desconocida por su marca/modelo.\n` +
+      `2. Explica causas probables para cada DTC (confirmado o por módulo), fallas físicas conocidas o boletines técnicos (TSB) asociados a este modelo.\n` +
+      `3. Proporciona el procedimiento paso a paso de verificación (qué medir en pines, arneses, voltajes) y la solución recomendada.\n\n` +
+      `Vehículo: ${veh ? `${veh.marca||''} ${veh.modelo||''} ${veh.anio||''} (Placa: ${veh.placa||'s/placa'})` : 'No especificado'}\n` +
+      `VIN: ${s.vin||'—'}\nCheck Engine (MIL): ${s.mil?'ENCENDIDO 🔴':'Apagado ✅'}\n` +
+      `Protocolo: ${s.protocolo||'—'} | Adaptador: ${s.adaptador||'—'}\n` +
+      `Módulos consultados (UDS/CAN):\n${mods || 'Sin barrido por módulo'}\n` +
+      `Códigos OBD confirmados: ${(s.dtcs||[]).map(d=>`${d.codigo} (${d.desc})`).join('; ')||'ninguno'}\n` +
+      `Códigos OBD pendientes: ${(s.dtcs_pendientes||[]).map(d=>d.codigo).join('; ')||'ninguno'}\n` +
       (c && !c.primera
-        ? `Visita anterior hace ${c.dias} día(s) — códigos que VOLVIERON: ${(c.reincidentes||[]).map(x=>x.codigo).join(', ')||'ninguno'}; ` +
-          `nuevos desde entonces: ${(c.nuevos||[]).map(x=>x.codigo).join(', ')||'ninguno'}; ` +
-          `ya no aparecen: ${(c.resueltos||[]).map(x=>x.codigo).join(', ')||'ninguno'}` +
-          `${c.borrados_antes ? ' (en esa visita se borraron los códigos)' : ''}\n`
+        ? `Histórico visita previa (${c.dias} días atrás) — REINCIDENTES: ${(c.reincidentes||[]).map(x=>x.codigo).join(', ')||'ninguno'}; Nuevos: ${(c.nuevos||[]).map(x=>x.codigo).join(', ')||'ninguno'}; Resueltos: ${(c.resueltos||[]).map(x=>x.codigo).join(', ')||'ninguno'}\n`
         : '') +
-      `Freeze frame: ${s.freeze_frame?JSON.stringify(s.freeze_frame):'—'}\nDatos en vivo: ${dat||'—'}`;
+      `Freeze Frame: ${s.freeze_frame?JSON.stringify(s.freeze_frame):'—'}\n` +
+      `Datos en vivo sensores: ${dat||'—'}`;
   },
 
   async analizarIA(idGuardado) {
@@ -7199,7 +7208,7 @@ Modulos.diagnostico_obd = {
       <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:14px">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
           <div>
-            <b style="font-size:12px;color:var(--brand)">🌐 MAPA DE TOPOLOGÍA CAN DE LA RED (Estilo Launch / Autel)</b>
+            <b style="font-size:12px;color:var(--brand)">🌐 MAPA DE TOPOLOGÍA CAN DE LA RED</b>
             <div style="font-size:11px;color:var(--text3)">Esquema visual de comunicación de módulos en tiempo real. Tocá cualquier módulo para ver su ficha.</div>
           </div>
           <div style="display:flex;gap:8px;font-size:10.5px">
@@ -8724,8 +8733,7 @@ Modulos.diagnostico_obd = {
     ];
     const vivo = this._datosLista(d.datos);
     const fz = d.freeze_frame ? this._datosLista(d.freeze_frame, ['dtc','desc']) : [];
-    const win = window.open('', '_blank');
-    win.document.write(`<!DOCTYPE html><html><head><title>Diagnóstico OBD-II</title><meta charset="UTF-8">
+    const html = `<!DOCTYPE html><html><head><title>Diagnóstico OBD-II</title><meta charset="UTF-8">
       <style>
         body{font-family:Arial,sans-serif;padding:20px;max-width:700px;margin:0 auto;color:#111}
         h2{text-align:center;border-bottom:2px solid #3B82F6;padding-bottom:8px}
@@ -8782,10 +8790,44 @@ Modulos.diagnostico_obd = {
       ${this._grabMuestrasPDF(d.grabacion)}
       ${d.ia_analisis ? `<div class="section"><b>ANÁLISIS DE NEXUS (IA):</b><p style="white-space:pre-wrap">${d.ia_analisis}</p></div>` : ''}
       ${d.notas ? `<div class="section"><b>NOTAS DEL TÉCNICO:</b><p>${d.notas}</p></div>` : ''}
-      <p style="text-align:center;color:#888;font-size:11px">Generado por NexusPro · ${new Date().toLocaleString('es-GT')}</p>
+      <p style="text-align:center;color:#666;font-size:11px;border-top:1px solid #ddd;padding-top:10px;margin-top:20px">
+        Generado por <b>NexusPro Enterprise v5.15.7</b> · 
+        <b>Interfaz / Adaptador:</b> ${UI.esc(d.adaptador || 'vLinker / Thinkcar OBD')} · 
+        <b>Fecha:</b> ${new Date().toLocaleString('es-GT')}
+      </p>
       <div style="text-align:center"><button onclick="window.print()">🖨 Imprimir</button></div>
-      </body></html>`);
-    win.document.close();
+      </body></html>`;
+
+    if (window.NexusBT && typeof window.NexusBT.imprimir === 'function') {
+      window.NexusBT.imprimir(html);
+      return;
+    }
+
+    try {
+      const win = window.open('', '_blank');
+      if (win) {
+        win.document.write(html);
+        win.document.close();
+        return;
+      }
+    } catch (_) {}
+
+    // Fallback si popup está bloqueado o en WebView móvil sin puente
+    const iframe = document.createElement('iframe');
+    iframe.style.position = 'fixed';
+    iframe.style.right = '0';
+    iframe.style.bottom = '0';
+    iframe.style.width = '0';
+    iframe.style.height = '0';
+    iframe.style.border = '0';
+    document.body.appendChild(iframe);
+    iframe.contentWindow.document.write(html);
+    iframe.contentWindow.document.close();
+    setTimeout(() => {
+      iframe.contentWindow.focus();
+      iframe.contentWindow.print();
+      setTimeout(() => document.body.removeChild(iframe), 1000);
+    }, 300);
   },
 
   /* ═══════════ PRUEBAS DE ACTUADORES BI-DIRECCIONALES (UDS 2F / OBD2 08 / KWP 30) ═══════════ */

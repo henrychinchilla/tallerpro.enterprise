@@ -37,5 +37,8 @@ Al terminar cambios OK: commit + push a `main` y `npm run deploy`, automáticame
 - Importaciones idempotentes (upsert con `onConflict`), nunca crear duplicados.
 - Excluir del CDN archivos sensibles vía `.cfignore` (*.pdf, *.xls, *.xlsx).
 
+## 7. App Móvil Única (Solo 64 bits)
+Solo existe **UNA** aplicación nativa de Android: de 64 bits (`arm64-v8a`). No generar ni ofrecer versión de 32 bits.
+
 ---
 Memoria extendida del proyecto: `C:\Users\henry\.Codex\projects\D--tallerpro-enterprise\memory\MEMORY.md`

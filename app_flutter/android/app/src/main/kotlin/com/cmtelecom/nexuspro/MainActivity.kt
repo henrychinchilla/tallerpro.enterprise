@@ -83,7 +83,32 @@ class MainActivity : FlutterActivity() {
                     resultado.success(null)
                 }
 
+                "imprimir" -> {
+                    val html = llamada.argument<String>("html") ?: ""
+                    imprimirHtml(html)
+                    resultado.success(null)
+                }
+
                 else -> resultado.notImplemented()
+            }
+        }
+    }
+
+    private fun imprimirHtml(html: String) {
+        runOnUiThread {
+            try {
+                val webView = android.webkit.WebView(this)
+                webView.webViewClient = object : android.webkit.WebViewClient() {
+                    override fun onPageFinished(view: android.webkit.WebView, url: String) {
+                        val printManager = getSystemService(android.content.Context.PRINT_SERVICE) as android.print.PrintManager
+                        val printAdapter = view.createPrintDocumentAdapter("Reporte_Diagnostico_OBD")
+                        val jobName = "NexusPro - Reporte OBD"
+                        printManager.print(jobName, printAdapter, android.print.PrintAttributes.Builder().build())
+                    }
+                }
+                webView.loadDataWithBaseURL(null, html, "text/html", "UTF-8", null)
+            } catch (e: Exception) {
+                e.printStackTrace()
             }
         }
     }
