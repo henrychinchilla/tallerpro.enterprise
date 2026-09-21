@@ -9,6 +9,10 @@ Modulos.diagnostico_obd = {
 
   /* ═══════════ DRIVER BLE / ELM327 ═══════════ */
   _dev: null, _char: null, _buf: '', _resolve: null, _serialReady: false,
+  /* Puerto COM abierto directo por Web Serial (Chrome/Edge de PC, sin puente).
+     Es el MISMO dongle y el MISMO diálogo AT que por el puente: acá sólo cambia
+     por dónde entran y salen los bytes. */
+  _webSerialPort: null, _webSerialReader: null, _webSerialWriter: null,
   _bleIdentity: null,
   _protoNum: 0, _liveTimer: null, _busy: false,
   /* Callback activo mientras el adaptador esta en monitoreo continuo (ATMA).
@@ -132,14 +136,21 @@ Modulos.diagnostico_obd = {
 
   get _conectado() {
     if (this._via === 'android') return !!this._bt;
-    if (this._via === 'webserial') return !!(this._webSerialPort && this._webSerialWriter);
+    /* Por COM hay DOS tuberías posibles hacia el mismo dongle: el puerto que
+       Web Serial abre directo en Chrome/Edge de PC, o el puente local. Exigir
+       `_ws` para las dos daba SIEMPRE "desconectado" cuando se entraba por Web
+       Serial —que no usa puente— aunque el escáner estuviera contestando: el
+       escaneo terminaba bien y de ahí en adelante todo decía que no había nada
+       conectado (sensores en vivo, módulo puntual, el chip de la barra), y la
+       reconexión automática se iba a Web Bluetooth, que a este dongle no lo ve. */
+    if (this._via === 'serial')
+      return this._serialReady && (!!this._webSerialPort || this._ws?.readyState === 1);
     return !!(this._dev?.gatt?.connected && this._char);
   },
-  /* "listo para leer" según la vía activa (BLE o puente USB) */
+  /* "listo para leer" según la vía activa (BLE, puente de la app, COM o USB) */
   get _listo() {
-    if (this._via === 'ble' || this._via === 'android' || this._via === 'webserial') return this._conectado;
+    if (this._via === 'ble' || this._via === 'android' || this._via === 'serial') return this._conectado;
     if (!this._ws || this._ws.readyState !== 1) return false;
-    if (this._via === 'serial') return this._serialReady;
     /* Tener el puente WebSocket abierto solo significa que Windows está
        disponible; para leer el vehículo también debe existir un canal RP1210
        CAN/J1939/J1708 abierto. */
@@ -156,7 +167,7 @@ Modulos.diagnostico_obd = {
      taller— caía al camino de CAN crudo, que necesita el puente RP1210 y por
      Bluetooth no existe: no fallaba, contestaba nada. */
   _esELM() {
-    return this._via === 'ble' || this._via === 'android' || this._via === 'serial' || this._via === 'webserial';
+    return this._via === 'ble' || this._via === 'android' || this._via === 'serial';
   },
 
   /* La identidad Device Information es lectura pasiva. Muchos VCI no
@@ -367,33 +378,15 @@ Modulos.diagnostico_obd = {
       this._busy = true;
       try { return await this._usbElm(c, timeout); } finally { this._busy = false; }
     }
-    if (this._via === 'serial') {
+    /* COM por el puente: el puente arma el diálogo completo y devuelve la
+       respuesta ya entera. Por Web Serial NO se toma este atajo: ese puerto cae
+       al camino de abajo, el mismo del ELM por BLE y por la app. */
+    if (this._via === 'serial' && !this._webSerialPort) {
       await this._esperarTurno(c);
       this._busy = true;
       try {
         const r = await this._puenteOp({ op:'serial_cmd', cmd:c, timeout }, timeout + 1000);
         return String(r?.respuesta || '');
-      } finally { this._busy = false; }
-    }
-    if (this._via === 'webserial') {
-      await this._esperarTurno(c);
-      this._busy = true;
-      try {
-        await this._webSerialWriter.write(new TextEncoder().encode(c + '\r'));
-        let response = '';
-        const deadline = Date.now() + timeout;
-        while (Date.now() < deadline) {
-          const { value, done } = await Promise.race([
-            this._webSerialReader.read(),
-            new Promise(r => setTimeout(() => r({ value: null, done: false }), 400))
-          ]);
-          if (value) {
-            response += new TextDecoder().decode(value);
-            if (response.includes('>')) break;
-          }
-          if (done) break;
-        }
-        return response;
       } finally { this._busy = false; }
     }
     if (!this._conectado) throw new Error('Adaptador desconectado');
@@ -462,6 +455,8 @@ Modulos.diagnostico_obd = {
     /* Por el puente nativo el texto va tal cual: del otro lado hay un socket
        SPP o un GATT, y quien decide como partirlo en tramas es el puente. */
     if (this._via === 'android') { window.NexusBT.escribir(txt); return; }
+    /* Por Web Serial el COM ya es un flujo de bytes: se escribe y listo. */
+    if (this._webSerialPort) { await this._webSerialWriter.write(new TextEncoder().encode(txt)); return; }
     const data = new TextEncoder().encode(txt);
     if (this._char.properties.writeWithoutResponse) await this._char.writeValueWithoutResponse(data);
     else await this._char.writeValue(data);
@@ -478,7 +473,16 @@ Modulos.diagnostico_obd = {
      la app: una vez que el taller conectó por COM6 o por el puente, ninguna
      pantalla tiene que volver a preguntarlo. */
   get _ultimaVia() {
-    try { return JSON.parse(localStorage.getItem('obd_ultima_via') || 'null'); } catch (_) { return null; }
+    try {
+      const v = JSON.parse(localStorage.getItem('obd_ultima_via') || 'null');
+      /* 'webserial' llegó a guardarse como si fuera una vía aparte. No lo es —es
+         la vía COM con otra tubería— y ninguna de las preguntas por `_via` la
+         contemplaba, así que reusarla mandaba a Web Bluetooth, que a este dongle
+         no lo ve. Queda guardado en el navegador de quien ya conectó una vez con
+         esa versión, así que hay que traducirlo al leerlo. */
+      if (v && v.via === 'webserial') v.via = 'serial';
+      return v;
+    } catch (_) { return null; }
   },
   set _ultimaVia(v) {
     try { localStorage.setItem('obd_ultima_via', JSON.stringify(v || null)); } catch (_) {}
@@ -510,7 +514,13 @@ Modulos.diagnostico_obd = {
        · en una PC, si el puente local ve un puerto Bluetooth emparejado, ESE,
          porque un navegador solo alcanza BLE y casi ningun dongle lo publica;
        · si no hay puente, Web Bluetooth. */
-    if (!this._via) this._via = this._nativo ? 'android' : (await this._hayPuertoSerie() ? 'serial' : 'ble');
+    /* En una PC con Chrome/Edge la vía COM existe SIN puente: la abre Web
+       Serial. Antes sólo se contaba el puente, así que una PC sin el .bat
+       corriendo caía a Web Bluetooth —la única vía que a un dongle en modo
+       MFi/SPP no lo alcanza nunca— y ninguna pantalla que se conecta sola
+       (OEM, centro de módulos, banco de pruebas) podía llegar al escáner. */
+    if (!this._via) this._via = this._nativo ? 'android'
+      : ((await this._hayPuertoSerie()) || this._puedeWebSerial() ? 'serial' : 'ble');
 
     let nombre, protocolo;
     if (this._via === 'usb' || this._via === 'auto') {
@@ -522,7 +532,10 @@ Modulos.diagnostico_obd = {
     /* Por COM hace falta saber CUAL. Con el puente al dia viene marcado cual
        parece escaner (`obd`) y cuales son puertos locales entrantes, que nunca
        sirven; si no se puede decidir solo, se pregunta en vez de adivinar. */
-    if (this._via === 'serial' && !/^SERIAL:/i.test(this._api || '')) {
+    /* Con Web Serial el puerto lo elige el propio navegador (y si ya se
+       autorizó, ni pregunta): pedirlo TAMBIÉN por el puente era hacer elegir el
+       COM dos veces seguidas, y la primera de las dos no se usaba para nada. */
+    if (this._via === 'serial' && !this._puedeWebSerial() && !/^SERIAL:/i.test(this._api || '')) {
       this._api = await this._elegirPuertoSerie();
       if (!this._api) throw new Error('No se eligió ningún puerto COM.');
     }
@@ -1753,12 +1766,7 @@ Modulos.diagnostico_obd = {
     try { this._dev?.gatt?.disconnect(); } catch (_) {}
     this._dev = this._char = null;
     this._serialReady = false;
-    if (this._webSerialPort) {
-      try { this._webSerialReader?.releaseLock(); } catch (_) {}
-      try { this._webSerialWriter?.releaseLock(); } catch (_) {}
-      try { this._webSerialPort.close(); } catch (_) {}
-      this._webSerialPort = this._webSerialReader = this._webSerialWriter = null;
-    }
+    this._cerrarWebSerial();
     try { if (this._ws?.readyState === 1) { this._ws.send(JSON.stringify({ op:'desconectar' })); this._ws.close(); } } catch (_) {}
     /* Y desconectar tampoco puede dejarla en 'ble': la siguiente pantalla que
        se conecte sola volvería a pedir emparejar. Se deja en null para que se
@@ -2159,27 +2167,93 @@ Modulos.diagnostico_obd = {
     });
   },
 
+  /* Chrome/Edge de PC abren el COM del dongle sin ningún programa aparte.
+     Adentro de la app no: ahí la vía es el puente nativo. */
+  _puedeWebSerial() {
+    return typeof navigator !== 'undefined' && !!navigator.serial && !this._nativo;
+  },
+
+  /* Un solo lector, vivo mientras dure el puerto, que entrega TODO a `_recibir`
+     —igual que la notificación BLE y el puente de la app—. Leer "una vez por
+     comando" con un temporizador de 400 ms deja la lectura anterior colgada, y
+     el pedazo que llega tarde se lo lleva el comando SIGUIENTE: eso no falla,
+     contesta MAL, que es peor. Mismo motivo por el que `_recibir` es un solo
+     lugar y no una copia por transporte. */
+  async _bombearWebSerial(port) {
+    try {
+      while (this._webSerialPort === port && port.readable) {
+        const lector = port.readable.getReader();
+        this._webSerialReader = lector;
+        try {
+          for (;;) {
+            const { value, done } = await lector.read();
+            if (done) break;
+            if (value) this._recibir(new TextDecoder().decode(value));
+          }
+        } finally { try { lector.releaseLock(); } catch (_) {} }
+      }
+    } catch (_) { /* puerto cerrado, o el dongle se fue: lo ve el latido */ }
+    if (this._webSerialPort === port) this._serialReady = false;
+  },
+
+  /* Cerrar el COM DE VERDAD. Un puerto Web Serial que queda abierto NO se puede
+     volver a abrir: el segundo intento revienta con "The port is already open"
+     y el síntoma es "conecta una vez y después ya no me deja, hasta recargar la
+     página". Además Windows sostiene el enlace SPP con el dongle mientras el
+     COM siga abierto, así que tampoco lo suelta para otro programa. */
+  _cerrarWebSerial() {
+    const p = this._webSerialPort, r = this._webSerialReader, w = this._webSerialWriter;
+    this._webSerialPort = this._webSerialReader = this._webSerialWriter = null;
+    this._serialReady = false;
+    if (!p) return;
+    (async () => {
+      try { await r?.cancel(); } catch (_) {}
+      try { await w?.abort(); } catch (_) {}
+      try { w?.releaseLock(); } catch (_) {}
+      /* `close()` rechaza mientras algún lock siga tomado, y soltarlos es
+         asíncrono: se reintenta en vez de dar el puerto por cerrado sin estarlo.
+         ponytail: 5 intentos de 100 ms; si hiciera falta más, hay algo peor. */
+      for (let i = 0; i < 5; i++) {
+        try { await p.close(); return; } catch (_) { await new Promise(r2 => setTimeout(r2, 100)); }
+      }
+    })();
+  },
+
   async _serialInit(log) {
-    if (typeof navigator !== 'undefined' && navigator.serial && !this._nativo) {
+    if (this._puedeWebSerial()) {
+      /* Si este COM ya se autorizó antes, se reusa sin volver a preguntar: el
+         permiso de Web Serial es por sitio y sobrevive a recargar. Preguntar de
+         nuevo algo que el taller ya contestó es la queja de siempre. */
+      let port = null;
       try {
-        log('Abriendo selector de puerto COM / Bluetooth de Windows...');
-        const port = await navigator.serial.requestPort();
+        const ya = await navigator.serial.getPorts();
+        if (ya.length === 1) { port = ya[0]; log('Reusando el puerto COM ya autorizado en este navegador.'); }
+      } catch (_) {}
+      try {
+        if (!port) {
+          log('Abriendo selector de puerto COM / Bluetooth de Windows...');
+          port = await navigator.serial.requestPort();
+        }
         await port.open({ baudRate: 115200 });
         this._webSerialPort = port;
         this._webSerialWriter = port.writable.getWriter();
-        this._webSerialReader = port.readable.getReader();
-        this._via = 'webserial';
+        this._serialReady = true;
         this._buf = '';
+        this._bombearWebSerial(port);          // lector permanente → _recibir
 
         log('Puerto Bluetooth COM abierto en Windows ✓ Sondeando ATI...');
         const sonda = await this._cmd('ATI', 4000).catch(() => '');
         log(`El escáner contesta: <b>${UI.esc((sonda || 'OK').replace(/[\r\n>]+/g, ' ').trim())}</b> ✓`);
         return { nombre: 'Bluetooth COM (Web Serial PC)', protocolo: 'Bluetooth clásico SPP 115200' };
       } catch (e) {
-        if (e && (e.name === 'NotFoundError' || e.message?.includes('User cancelled') || e.message?.includes('No port selected'))) {
-          throw new Error('No se eligió ningún puerto COM.');
-        }
-        throw new Error(`Error en puerto serie Web Serial: ${e.message || e}`);
+        /* Que no quede el puerto medio abierto: si no se limpia acá, el próximo
+           intento choca con "already open" y el error cambia de motivo. */
+        this._cerrarWebSerial();
+        if (e && (e.name === 'NotFoundError' || /User cancelled|No port selected/i.test(e.message || '')))
+          throw new Error('No se eligió ningún puerto COM. El vLinker tiene que estar emparejado en el Bluetooth de Windows; ' +
+            'elegí el COM <b>saliente</b> del escáner (los que Windows llama "entrante" nunca sirven).');
+        throw new Error(`No se pudo abrir el puerto COM del escáner: ${e.message || e}. ` +
+          'Revisá que no lo tenga abierto otro programa y que el dongle esté enchufado al vehículo con el switch en contacto.');
       }
     }
 
@@ -6038,7 +6112,13 @@ Modulos.diagnostico_obd = {
        no existe. Dejarlo como primera opcion hacia que el arranque por defecto
        en un celular fuera la unica via imposible, y el mecanico veia "no hay
        conexion" sin haber elegido nada mal. */
-    const viaPorDefecto = this._nativo ? 'android' : (this._esMovil() ? 'ble' : 'auto');
+    /* Y en una PC con Chrome/Edge la opción que arrancaba marcada era "USB —
+       detectar solo", que lo primero que hace es exigir el puente: sin el .bat
+       corriendo, apretar Escanear sin tocar nada devolvía "No se encontró el
+       puente USB en esta PC". El caso real de taller es el dongle Bluetooth ya
+       emparejado, y ése hoy entra por COM sin ningún programa aparte. */
+    const viaPorDefecto = this._nativo ? 'android'
+      : (this._esMovil() ? 'ble' : (this._puedeWebSerial() ? 'classic' : 'auto'));
     UI.modal('📡 Nuevo Escaneo OBD-II', `
       <div class="form-group">
         <label class="form-label">Vehículo *</label>
@@ -6052,9 +6132,9 @@ Modulos.diagnostico_obd = {
         <label class="form-label">Conexión</label>
         <select class="form-select" id="obd-via" onchange="Modulos.diagnostico_obd._verApis()">
           ${this._nativo ? `<option value="android" selected>📲 Bluetooth de la app — BLE y clásico (SPP) · recomendado</option>` : ''}
-          <option value="auto"${viaPorDefecto === 'auto' ? ' selected' : ''}>🔎 USB — detectar solo (recomendado: liviano o camión)</option>
+          <option value="auto"${viaPorDefecto === 'auto' ? ' selected' : ''}>🔎 USB — detectar solo (liviano o camión, requiere el puente)${viaPorDefecto === 'auto' ? ' · recomendado' : ''}</option>
           <option value="ble"${viaPorDefecto === 'ble' ? ' selected' : ''}>📶 Bluetooth — ELM327 / Vgate / OBDLink (BLE)</option>
-          <option value="classic">📶 Bluetooth clásico (SPP) — vLinker/Thinkcar/ELM por COM · solo PC Windows</option>
+          <option value="classic"${viaPorDefecto === 'classic' ? ' selected' : ''}>📶 Bluetooth clásico (SPP) — vLinker/Thinkcar/ELM por COM · solo PC${viaPorDefecto === 'classic' ? ' · recomendado' : ''}</option>
           <option value="j1939ble">🚚 Bluetooth — camión J1939 (dongle con protocolo A)</option>
           <option value="j1939">🚚 USB — forzar camión J1939 (puente RP1210)</option>
           <option value="j1708">🚛 USB — forzar camión antiguo J1708/J1587 (MID/PID/FMI)</option>
@@ -6387,11 +6467,15 @@ Modulos.diagnostico_obd = {
   _verApis() {
     const via = document.getElementById('obd-via')?.value;
     const clasico = via === 'classic';
+    /* Con Web Serial el puerto lo pide el propio navegador. Este selector lo
+       llena el puente, así que sin puente se queda en "Buscando adaptadores…"
+       para siempre y parece que falta algo cuando en realidad ya no hace falta. */
+    const comPorNavegador = clasico && this._puedeWebSerial();
     /* La vía nativa elige el escáner en su propio listado (emparejados + BLE
        cercanos): el selector de puerto local no le aplica. */
     const usb = via !== 'ble' && via !== 'j1939ble' && via !== 'android' && !clasico;
     const wrap = document.getElementById('obd-api-wrap');
-    if (wrap) wrap.style.display = (usb || clasico) ? '' : 'none';
+    if (wrap) wrap.style.display = ((usb || clasico) && !comPorNavegador) ? '' : 'none';
     const test = document.getElementById('obd-btn-test');
     /* Por Bluetooth tambien hay algo que verificar, y es LA pregunta del taller:
        "¿esto esta conectado de verdad?". Antes el boton se escondia justo en la
@@ -6400,7 +6484,7 @@ Modulos.diagnostico_obd = {
       test.style.display = (usb || via === 'android') ? '' : 'none';
       test.textContent = via === 'android' ? '🔧 Probar Bluetooth' : '🔧 Verificar adaptadores';
     }
-    if (clasico) {
+    if (clasico && !comPorNavegador) {
       /* Windows crea un COM por cada perfil SPP emparejado, y varios son
          puertos LOCALES entrantes sin nada del otro lado. Tomar "el primero
          que diga SERIAL" caía en uno de esos y el escaneo moría con un error
