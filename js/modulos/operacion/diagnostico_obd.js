@@ -132,11 +132,12 @@ Modulos.diagnostico_obd = {
 
   get _conectado() {
     if (this._via === 'android') return !!this._bt;
+    if (this._via === 'webserial') return !!(this._webSerialPort && this._webSerialWriter);
     return !!(this._dev?.gatt?.connected && this._char);
   },
   /* "listo para leer" según la vía activa (BLE o puente USB) */
   get _listo() {
-    if (this._via === 'ble' || this._via === 'android') return this._conectado;
+    if (this._via === 'ble' || this._via === 'android' || this._via === 'webserial') return this._conectado;
     if (!this._ws || this._ws.readyState !== 1) return false;
     if (this._via === 'serial') return this._serialReady;
     /* Tener el puente WebSocket abierto solo significa que Windows está
@@ -155,7 +156,7 @@ Modulos.diagnostico_obd = {
      taller— caía al camino de CAN crudo, que necesita el puente RP1210 y por
      Bluetooth no existe: no fallaba, contestaba nada. */
   _esELM() {
-    return this._via === 'ble' || this._via === 'android' || this._via === 'serial';
+    return this._via === 'ble' || this._via === 'android' || this._via === 'serial' || this._via === 'webserial';
   },
 
   /* La identidad Device Information es lectura pasiva. Muchos VCI no
@@ -1752,6 +1753,12 @@ Modulos.diagnostico_obd = {
     try { this._dev?.gatt?.disconnect(); } catch (_) {}
     this._dev = this._char = null;
     this._serialReady = false;
+    if (this._webSerialPort) {
+      try { this._webSerialReader?.releaseLock(); } catch (_) {}
+      try { this._webSerialWriter?.releaseLock(); } catch (_) {}
+      try { this._webSerialPort.close(); } catch (_) {}
+      this._webSerialPort = this._webSerialReader = this._webSerialWriter = null;
+    }
     try { if (this._ws?.readyState === 1) { this._ws.send(JSON.stringify({ op:'desconectar' })); this._ws.close(); } } catch (_) {}
     /* Y desconectar tampoco puede dejarla en 'ble': la siguiente pantalla que
        se conecte sola volvería a pedir emparejar. Se deja en null para que se
@@ -2169,10 +2176,10 @@ Modulos.diagnostico_obd = {
         log(`El escáner contesta: <b>${UI.esc((sonda || 'OK').replace(/[\r\n>]+/g, ' ').trim())}</b> ✓`);
         return { nombre: 'Bluetooth COM (Web Serial PC)', protocolo: 'Bluetooth clásico SPP 115200' };
       } catch (e) {
-        if (e && e.name === 'NotFoundError') {
-          throw new Error('No se eligió ningún puerto COM. Asegúrate de emparejar el vLinker o Thinkcar en el Bluetooth de Windows.');
+        if (e && (e.name === 'NotFoundError' || e.message?.includes('User cancelled') || e.message?.includes('No port selected'))) {
+          throw new Error('No se eligió ningún puerto COM.');
         }
-        // Si Web Serial falla, continuar con puente si existe
+        throw new Error(`Error en puerto serie Web Serial: ${e.message || e}`);
       }
     }
 
