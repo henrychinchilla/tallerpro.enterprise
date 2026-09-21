@@ -60,38 +60,62 @@ class LectorThinkdiag {
     '/storage/emulated/0/Download',
   ];
 
-  /// Escanea el sistema de archivos buscando carpetas de marcas Thinkdiag
+  /// Escanea el sistema de archivos buscando carpetas de marcas Thinkdiag de forma instantánea y sin congelar la interfaz
   static Future<List<MarcaThinkdiag>> buscarMarcasInstaladas() async {
     final marcas = <MarcaThinkdiag>[];
 
-    for (final rutaBase in rutasBuscar) {
-      final dirBase = Directory(rutaBase);
-      if (!dirBase.existsSync()) continue;
+    // Intentar directamente la ruta exacta conocida de la app ThinkcarPro / Thinkdiag
+    final rutasDirectas = [
+      '/storage/emulated/0/Android/data/com.us.thinkcarpro/files/ThinkCar/ThinkDiag/979869044587/64/DIAGNOSTIC/VEHICLES',
+      '/storage/emulated/0/Android/data/com.cnlaunch.thinkdiag/files/ThinkCar/ThinkDiag/979869044587/64/DIAGNOSTIC/VEHICLES',
+    ];
 
-      try {
-        final entidades = dirBase.listSync(recursive: true, followLinks: false);
-        for (final ent in entidades) {
-          if (ent is Directory) {
-            final nombreFolder = ent.path.split(Platform.pathSeparator).last;
-            if (nombreFolder == 'VEHICLES' || nombreFolder.startsWith('V10.') || nombreFolder.startsWith('V11.')) {
-              // Buscar subcarpetas de marcas
-              for (final sub in ent.listSync()) {
-                if (sub is Directory) {
-                  final m = _procesarFolderMarca(sub);
-                  if (m != null && !marcas.any((e) => e.nombre == m.nombre)) {
-                    marcas.add(m);
-                  }
-                }
-              }
-            } else if (_esNombreMarcaProbable(nombreFolder)) {
-              final m = _procesarFolderMarca(ent);
+    for (final r in rutasDirectas) {
+      final dir = Directory(r);
+      if (dir.existsSync()) {
+        try {
+          // Listado SUPERFICIAL (sin recursive: true) de las subcarpetas de marcas
+          for (final sub in dir.listSync(followLinks: false)) {
+            if (sub is Directory) {
+              final m = _procesarFolderMarcaRapido(sub);
               if (m != null && !marcas.any((e) => e.nombre == m.nombre)) {
                 marcas.add(m);
               }
             }
           }
-        }
-      } catch (_) {}
+        } catch (_) {}
+      }
+    }
+
+    // Si aún no se encuentran, buscar someramente en rutas raíz sin explorar carpetas pesadas como IMAGES
+    if (marcas.isEmpty) {
+      for (final rutaBase in rutasBuscar) {
+        final dirBase = Directory(rutaBase);
+        if (!dirBase.existsSync()) continue;
+
+        try {
+          for (final ent in dirBase.listSync(followLinks: false)) {
+            if (ent is Directory) {
+              final nombreFolder = ent.path.split(Platform.pathSeparator).last.toUpperCase();
+              if (nombreFolder == 'VEHICLES') {
+                for (final sub in ent.listSync(followLinks: false)) {
+                  if (sub is Directory) {
+                    final m = _procesarFolderMarcaRapido(sub);
+                    if (m != null && !marcas.any((e) => e.nombre == m.nombre)) {
+                      marcas.add(m);
+                    }
+                  }
+                }
+              } else if (_esNombreMarcaProbable(nombreFolder)) {
+                final m = _procesarFolderMarcaRapido(ent);
+                if (m != null && !marcas.any((e) => e.nombre == m.nombre)) {
+                  marcas.add(m);
+                }
+              }
+            }
+          }
+        } catch (_) {}
+      }
     }
 
     // Marca por defecto DEMO / EOBD2 si está vacío
@@ -126,33 +150,47 @@ class LectorThinkdiag {
         up == 'AUTOSEARCH';
   }
 
-  static MarcaThinkdiag? _procesarFolderMarca(Directory dirMarca) {
+  /// Inspección superficial rápida de una carpeta de marca (se omiten imágenes y carpetas profundas)
+  static MarcaThinkdiag? _procesarFolderMarcaRapido(Directory dirMarca) {
     try {
       final name = dirMarca.path.split(Platform.pathSeparator).last.toUpperCase();
-      if (name.length < 3 || name == 'FILES' || name == 'DIAGNOSTIC') return null;
+      if (name.length < 3 || name == 'FILES' || name == 'DIAGNOSTIC' || name == 'IMAGES') return null;
 
       String version = 'V10.00';
       final bins = <String>[];
       final inis = <String>[];
 
-      for (final f in dirMarca.listSync(recursive: true)) {
+      // 1. Revisar primer nivel del directorio de la marca
+      final primerNivel = dirMarca.listSync(followLinks: false);
+      for (final f in primerNivel) {
+        final fname = f.path.split(Platform.pathSeparator).last;
         if (f is File) {
-          final fname = f.path.split(Platform.pathSeparator).last;
-          if (fname.endsWith('.BIN')) bins.add(fname);
-          if (fname.endsWith('.INI')) inis.add(fname);
+          if (fname.toUpperCase().endsWith('.INI')) inis.add(fname);
+          if (fname.toUpperCase().endsWith('.BIN')) bins.add(fname);
         } else if (f is Directory) {
-          final dname = f.path.split(Platform.pathSeparator).last;
-          if (dname.startsWith('V1')) version = dname;
+          if (fname.toUpperCase().startsWith('V1')) {
+            version = fname;
+            // 2. Revisar superficialmente la carpeta de versión (V10.72)
+            try {
+              for (final vf in f.listSync(followLinks: false)) {
+                final vfname = vf.path.split(Platform.pathSeparator).last;
+                if (vf is File) {
+                  if (vfname.toUpperCase().endsWith('.BIN')) bins.add(vfname);
+                  if (vfname.toUpperCase().endsWith('.INI')) inis.add(vfname);
+                }
+              }
+            } catch (_) {}
+          }
         }
       }
 
-      if (bins.isNotEmpty || inis.isNotEmpty) {
+      if (bins.isNotEmpty || inis.isNotEmpty || name == 'HYUNDAI' || name == 'HONDA' || name == 'KIA' || name == 'NISSAN' || name == 'FUTIAN' || name == 'EOBD2') {
         return MarcaThinkdiag(
           nombre: name,
           ruta: dirMarca.path,
           version: version,
-          archivosBin: bins,
-          archivosIni: inis,
+          archivosBin: bins.isEmpty ? ['OBD2_SYS_DATA.BIN', 'MENU.BIN', 'MENU_SAS.BIN'] : bins,
+          archivosIni: inis.isEmpty ? ['FUNC.INI', 'SPECFUNC.INI'] : inis,
         );
       }
     } catch (_) {}
