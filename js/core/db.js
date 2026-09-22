@@ -461,6 +461,33 @@ const DB = {
 
      Devuelve [] si la tabla todavía no existe: el código se despliega antes
      que la migración, y un escaneo no puede caerse por eso. */
+  async getTopologiaVehiculo(vehiculoId) {
+    const { data, error } = await getSB().from('obd_topologias').select('*')
+      .eq('tenant_id', getTID()).eq('vehiculo_id', vehiculoId).maybeSingle();
+    if (error) throw error;
+    return data;
+  },
+
+  async guardarTopologiaVehiculo(mapa) {
+    const payload = { tenant_id:getTID(), vehiculo_id:mapa.vehiculo_id,
+      categoria:mapa.categoria, nodos:mapa.nodos, conexiones:mapa.conexiones,
+      revision:(mapa.revision || 0) + 1, updated_at:new Date().toISOString() };
+    const tabla = getSB().from('obd_topologias');
+    const q = mapa.id ? tabla.update(payload).eq('tenant_id', getTID())
+      .eq('id', mapa.id).eq('revision', mapa.revision) : tabla.insert(payload);
+    const { data, error } = await q.select().maybeSingle();
+    if (error) throw error;
+    if (!data) throw new Error('Otro mecánico modificó el mapa. Reabre el mapa antes de editar.');
+    return data;
+  },
+
+  async eliminarTopologiaVehiculo(mapa) {
+    const { data, error } = await getSB().from('obd_topologias').delete()
+      .eq('tenant_id', getTID()).eq('id', mapa.id).eq('revision', mapa.revision).select('id');
+    if (error) throw error;
+    if (!data || !data.length) throw new Error('El mapa cambió. Reabre el mapa antes de eliminar.');
+  },
+
   async getModulosVehiculo({ marca = null, modelo = null, anio = null } = {}) {
     try {
       let q = getSB().from('obd_modulos_vehiculo').select('*')

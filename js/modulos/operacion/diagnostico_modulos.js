@@ -177,6 +177,7 @@
         }).join('')}
       </div>
 
+      ${veh.id ? `<button class="btn" onclick="Modulos.diagnostico_obd.modalMapaTransporte('${UI.esc(veh.id)}')">🗺 Mapa y ruta de esta unidad</button>` : ''}
       ${this._libretaHTML(veh)}
 
       <div style="display:flex;gap:7px;flex-wrap:wrap;margin-top:10px">

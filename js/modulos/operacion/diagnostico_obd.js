@@ -6114,8 +6114,11 @@ Modulos.diagnostico_obd = {
 
   /* Muestra la guía de un código en un modal, con las causas en orden. */
   verGuia(codigo) {
-    const marca = this._scan?.vehiculo?.marca || 'Hyundai';
-    const modelo = this._scan?.vehiculo?.modelo || 'Accent';
+    const g = this._GUIA[codigo];
+    const desc = this._descDTC(codigo, this._catalogo);
+    const veh = this._vehiculoDe(this._centroScan || this._scan || {});
+    const marca = veh.marca || '';
+    const modelo = veh.modelo || '';
     const queryYoutube = encodeURIComponent(`reparar DTC ${codigo} ${marca} ${modelo}`);
     const urlYoutube = `https://www.youtube.com/results?search_query=${queryYoutube}`;
 
@@ -6260,7 +6263,9 @@ Modulos.diagnostico_obd = {
               <button class="btn" style="background:#1e293b;color:#f8fafc;border:1px solid #334155" onclick="Modulos.diagnostico_obd.cerrarScanActivo()">📋 Historial</button>
               <button class="btn" style="background:#1e293b;color:#f8fafc;border:1px solid #334155" onclick="Modulos.diagnostico_obd.modalCampanas()">🔔 Campañas</button>
               <span id="obd-estado-conexion" style="display:inline-flex;align-items:center;gap:6px"></span>
-              <button class="btn" style="background:#0891b2;color:#ffffff;border:none;font-weight:700" onclick="Modulos.diagnostico_obd.modalCentroModulos()">🧠 Centro de Módulos</button>
+              <button class="btn" onclick="Modulos.diagnostico_obd.modalMotocicletas()">🏍 Motocicletas</button>
+            <button class="btn" onclick="Modulos.diagnostico_obd.modalMapaTransporte()">🗺 Mapa y ruta de diagnóstico</button>
+            <button class="btn" style="background:#0891b2;color:#ffffff;border:none;font-weight:700" onclick="Modulos.diagnostico_obd.modalCentroModulos()">🧠 Centro de Módulos</button>
               <button class="btn" style="background:linear-gradient(135deg, #0284c7 0%, #2563eb 100%);color:#ffffff;font-weight:800;border:none;box-shadow:0 0 14px rgba(37,99,235,0.6);padding:8px 16px" onclick="Modulos.diagnostico_obd.modalEscanear()">📡 Escanear Otro Vehículo</button>
             </div>
           </div>
@@ -6315,6 +6320,8 @@ Modulos.diagnostico_obd = {
             <button class="btn" style="background:#1e293b;color:#f8fafc;border:1px solid #334155" onclick="Modulos.diagnostico_obd.modalCampanas()">🔔 Campañas</button>
             <span id="obd-estado-conexion" style="display:inline-flex;align-items:center;gap:6px"></span>
             <button class="btn" style="background:#1e293b;color:#f8fafc;border:1px solid #334155" onclick="Modulos.diagnostico_obd.modalMapaVehiculos()" title="Mapa de Cobertura">🗺 Cobertura</button>
+            <button class="btn" onclick="Modulos.diagnostico_obd.modalMotocicletas()">🏍 Motocicletas</button>
+            <button class="btn" onclick="Modulos.diagnostico_obd.modalMapaTransporte()">🗺 Mapa y ruta de diagnóstico</button>
             <button class="btn" style="background:#0891b2;color:#ffffff;border:none;font-weight:700" onclick="Modulos.diagnostico_obd.modalCentroModulos()">🧠 Centro de Módulos</button>
             <button class="btn" style="background:#1e293b;color:#f8fafc;border:1px solid #334155" onclick="Modulos.diagnostico_obd.render()">↻ Actualizar</button>
             <button class="btn" style="background:linear-gradient(135deg, #0284c7 0%, #2563eb 100%);color:#ffffff;font-weight:800;border:none;box-shadow:0 0 14px rgba(37,99,235,0.6);padding:8px 16px" onclick="Modulos.diagnostico_obd.modalEscanear()">📡 Nuevo Escaneo</button>
@@ -6387,7 +6394,7 @@ Modulos.diagnostico_obd = {
   /* ═══════════ NUEVO ESCANEO ═══════════ */
   /* `vehId` llega cuando se entra desde la ficha del vehículo: evita tener que
      buscarlo de nuevo en una lista que en un taller con flota es larga. */
-  async modalEscanear(vehId) {
+  async modalEscanear(vehId, categoria) {
     /* Arrancar otro escaneo tira el de ahora. Antes lo hacía en silencio. */
     if (this._scan && !this._scan.id) {
       const ok = await UI.confirmar(
@@ -6414,12 +6421,15 @@ Modulos.diagnostico_obd = {
        emparejado, y ése hoy entra por COM sin ningún programa aparte. */
     const viaPorDefecto = this._nativo ? 'android'
       : (this._esMovil() ? 'ble' : (this._puedeWebSerial() ? 'classic' : 'auto'));
-    UI.modal('📡 Nuevo Escaneo OBD-II', `
+    const esMoto = categoria === 'moto';
+    const seleccionables = esMoto ? this._vehiculos.filter(v => this._categoriaTransporte(v) === 'moto') : this._vehiculos;
+    UI.modal(esMoto ? '🏍 Escaneo de motocicleta · OBD compatible' : '📡 Nuevo Escaneo OBD-II', `
+      ${esMoto ? '<p>Usa el cable y protocolo documentados para esta motocicleta. La lectura OBD de emisiones no garantiza acceso a ABS, IMU o inmovilizador.</p>' : ''}
       <div class="form-group">
         <label class="form-label">Vehículo *</label>
         <select class="form-select" id="obd-veh" onchange="Modulos.diagnostico_obd._avisoAcceso(this.value)">
           <option value="">— Seleccionar vehículo —</option>
-          ${this._vehiculos.map(v=>`<option value="${v.id}"${vehId===v.id?' selected':''}>${v.placa||'s/placa'} · ${UI.esc(v.marca||'')} ${UI.esc(v.modelo||'')} ${v.anio||''} ${v.clientes?`(${UI.esc(v.clientes.nombre)})`:''}</option>`).join('')}
+          ${seleccionables.map(v=>`<option value="${v.id}"${vehId===v.id?' selected':''}>${v.placa||'s/placa'} · ${UI.esc(v.marca||'')} ${UI.esc(v.modelo||'')} ${v.anio||''} ${v.clientes?`(${UI.esc(v.clientes.nombre)})`:''}</option>`).join('')}
         </select>
       </div>
       <div id="obd-aviso"></div>
@@ -6430,9 +6440,9 @@ Modulos.diagnostico_obd = {
           <option value="auto"${viaPorDefecto === 'auto' ? ' selected' : ''}>🔎 USB — detectar solo (liviano o camión, requiere el puente)${viaPorDefecto === 'auto' ? ' · recomendado' : ''}</option>
           <option value="ble"${viaPorDefecto === 'ble' ? ' selected' : ''}>📶 Bluetooth — ELM327 / Vgate / OBDLink (BLE)</option>
           <option value="classic"${viaPorDefecto === 'classic' ? ' selected' : ''}>📶 Bluetooth clásico (SPP) — vLinker/Thinkcar/ELM por COM · solo PC${viaPorDefecto === 'classic' ? ' · recomendado' : ''}</option>
-          <option value="j1939ble">🚚 Bluetooth — camión J1939 (dongle con protocolo A)</option>
+          ${!esMoto ? `<option value="j1939ble">🚚 Bluetooth — camión J1939 (dongle con protocolo A)</option>
           <option value="j1939">🚚 USB — forzar camión J1939 (puente RP1210)</option>
-          <option value="j1708">🚛 USB — forzar camión antiguo J1708/J1587 (MID/PID/FMI)</option>
+          <option value="j1708">🚛 USB — forzar camión antiguo J1708/J1587 (MID/PID/FMI)</option>` : ''}
           <option value="usb">🔌 USB — forzar vehículo liviano (puente RP1210)</option>
         </select>
       </div>
@@ -8736,7 +8746,7 @@ Procedimiento numerado (1.1, 1.2, 2.1) con comprobaciones eléctricas (multímet
       await this._elmPuntoAPunto(async () => {
         for (const m of conFallas) {
           const r = await this._borrarModulo(m.ecu, m.resp);
-          if (r.ok) { bien++; this._log(`🧹 ${m.nombre}: borrado ✓`); m.codigos = []; }
+          if (r.ok) { bien++; this._log(`🧹 ${UI.esc(m.nombre)}: borrado ✓`); m.codigos = []; }
           else { mal++; this._log(`<span style="color:var(--amber)">⚠️ ${UI.esc(m.nombre)}: no se pudo borrar (${UI.esc(r.motivo)})</span>`); }
         }
       });
@@ -8755,6 +8765,7 @@ Procedimiento numerado (1.1, 1.2, 2.1) con comprobaciones eléctricas (multímet
     const ms = (s && s.por_modulo) || [];
     const m = ms.find(x => x.ecu === ecu);
     if (!m) return;
+    const nombreModuloTexto = String(m.nombre || 'Módulo');
     const permiso = this._puedePuntoAPunto();
     if (!permiso.ok) { UI.toast(permiso.motivo, 'error'); return; }
 
@@ -8766,18 +8777,18 @@ Procedimiento numerado (1.1, 1.2, 2.1) con comprobaciones eléctricas (multímet
       'Reiniciar módulo');
     if (!ok) return;
 
-    UI.toast(`Enviando comando de reinicio a ${m.nombre}…`, 'info', 4000);
+    UI.toast(`Enviando comando de reinicio a ${nombreModuloTexto}…`, 'info', 4000);
     try {
       const r = await this._elmPuntoAPunto(() => this._udsPedir(m.ecu, m.resp, [0x11, 0x01], 4000));
       if (r && r[0] === 0x51) {
-        this._log(`🔄 ${m.nombre}: reiniciado ✓ — esperá unos segundos y volvé a escanear`);
-        UI.toast(`✅ ${m.nombre}: Módulo reiniciado correctamente`, 'success');
+        this._log(`🔄 ${UI.esc(m.nombre)}: reiniciado ✓ — esperá unos segundos y volvé a escanear`);
+        UI.toast(`✅ ${nombreModuloTexto}: Módulo reiniciado correctamente`, 'success');
       } else if (r && r[0] === 0x7F) {
         this._log(`<span style="color:var(--amber)">${UI.esc(m.nombre)}: rechazó el reinicio (0x${(r[2] || 0).toString(16)})</span>`);
-        UI.toast(`⚠️ ${m.nombre} rechazó el reinicio (Código: 0x${(r[2] || 0).toString(16)})`, 'warn');
+        UI.toast(`⚠️ ${nombreModuloTexto} rechazó el reinicio (Código: 0x${(r[2] || 0).toString(16)})`, 'warn');
       } else {
         this._log(`<span style="color:var(--amber)">${UI.esc(m.nombre)}: sin respuesta al reinicio</span>`);
-        UI.toast(`❌ ${m.nombre}: Sin respuesta del módulo`, 'error');
+        UI.toast(`❌ ${nombreModuloTexto}: Sin respuesta del módulo`, 'error');
       }
     } catch (e) { UI.toast('No se pudo reiniciar: ' + e.message, 'error'); }
   },
@@ -8787,6 +8798,7 @@ Procedimiento numerado (1.1, 1.2, 2.1) con comprobaciones eléctricas (multímet
     const ms = (s && s.por_modulo) || [];
     const m = ms.find(x => x.ecu === ecu);
     if (!m) return;
+    const nombreModuloTexto = String(m.nombre || 'Módulo');
     const permiso = this._puedePuntoAPunto();
     if (!permiso.ok) { UI.toast(permiso.motivo, 'error'); return; }
 
@@ -8798,11 +8810,11 @@ Procedimiento numerado (1.1, 1.2, 2.1) con comprobaciones eléctricas (multímet
       'Borrar DTCs del Módulo');
     if (!ok) return;
 
-    UI.toast(`Borrando DTCs en ${m.nombre}…`, 'info', 4000);
+    UI.toast(`Borrando DTCs en ${nombreModuloTexto}…`, 'info', 4000);
     try {
       const r = await this._elmPuntoAPunto(() => this._borrarModulo(m.ecu, m.resp));
       if (r && r.ok) {
-        UI.toast(`Verificando códigos remanentes en ${m.nombre}…`, 'info', 2000);
+        UI.toast(`Verificando códigos remanentes en ${nombreModuloTexto}…`, 'info', 2000);
         const codsRevisados = await this._elmPuntoAPunto(async () => {
           let d = await this._udsPedir(m.ecu, m.resp, [0x19, 0x02, 0xFF], 2000);
           return this._dtcsUDS(d);
@@ -8814,19 +8826,19 @@ Procedimiento numerado (1.1, 1.2, 2.1) con comprobaciones eléctricas (multímet
             activo: true,
             desc: this._descDTC ? this._descDTC(c.codigo, []) : 'Falla física persistente'
           }));
-          this._log(`<span style="color:var(--amber)">⚠️ ${m.nombre}: Se borraron códigos pero ${codsRevisados.length} falla(s) persisten (falla física en caliente).</span>`);
-          UI.toast(`⚠️ ${m.nombre}: Se borró memoria pero ${codsRevisados.length} falla(s) persisten en caliente`, 'warn', 4500);
+          this._log(`<span style="color:var(--amber)">⚠️ ${UI.esc(m.nombre)}: Se borraron códigos pero ${codsRevisados.length} falla(s) persisten (falla física en caliente).</span>`);
+          UI.toast(`⚠️ ${nombreModuloTexto}: Se borró memoria pero ${codsRevisados.length} falla(s) persisten en caliente`, 'warn', 4500);
         } else {
           m.codigos = [];
-          this._log(`🧹 ${m.nombre}: Códigos de falla borrados y verificado 0 fallas ✓`);
-          UI.toast(`✅ DTCs borrados correctamente en ${m.nombre} (Verificado 0 fallas)`, 'success');
+          this._log(`🧹 ${UI.esc(m.nombre)}: Códigos de falla borrados y verificado 0 fallas ✓`);
+          UI.toast(`✅ DTCs borrados correctamente en ${nombreModuloTexto} (Verificado 0 fallas)`, 'success');
         }
         if (this._scan) this._scan.dtcs_borrados = true;
         this.verModulo(ecu);
       } else {
         const motivo = (r && r.motivo) || 'desconocido';
         this._log(`<span style="color:var(--amber)">⚠️ ${UI.esc(m.nombre)}: no se pudo borrar (${UI.esc(motivo)})</span>`);
-        UI.toast(`❌ ${m.nombre} no aceptó el borrado: ${motivo}`, 'error');
+        UI.toast(`❌ ${nombreModuloTexto} no aceptó el borrado: ${motivo}`, 'error');
       }
     } catch (e) { UI.toast('Error al borrar DTCs: ' + e.message, 'error'); }
   },
