@@ -2087,7 +2087,7 @@ Modulos.diagnostico_obd = {
          conectarse al primer aparato que aparezca —unos audifonos, una
          balanza— sin preguntar, que es exactamente lo que este selector
          existe para no hacer. */
-      const caja = document.getElementById('obd-result');
+      const caja = document.getElementById('obd-panel');
       const enModal = !caja;
 
       const terminar = elegido => {
@@ -2823,17 +2823,50 @@ Modulos.diagnostico_obd = {
   /* Toca la puerta de UNA dirección. Devuelve {req,resp} si hay alguien.
      Por BLE el ELM oculta la dirección de respuesta, así que resp va en null y
      la interfaz lo dice en vez de inventarla. */
+  /* ¿Lo que llegó es la respuesta A ESTO que se preguntó?
+
+     Sin esta verificación, el barrido contaba como módulo CUALQUIER línea
+     hexadecimal que apareciera. Y aparecen de más: el barrido manda 240
+     preguntas seguidas, y una respuesta que llega tarde se la lleva el comando
+     SIGUIENTE — el mismo efecto que ya se había visto por Web Serial el
+     2026-09-20. Resultado: el módulo real 0x7B3 contesta tarde, su respuesta
+     cae en la pregunta de 0x7B4, y 0x7B4 queda anotado como módulo.
+
+     Cuántos fantasmas salgan depende del TIEMPO, no del vehículo. Por eso el
+     Picanto reportaba 10 módulos, después 20, después 22 y después 27
+     (reportado por Henry el 2026-09-22): como el mapa del modelo es la UNIÓN de
+     todo lo que se vio alguna vez, cada fantasma quedaba para siempre y volvía
+     a tener oportunidad de "contestar" en el escaneo siguiente. Una unión que
+     nunca resta sólo puede crecer.
+
+     ISO 14229-1: a un servicio N se contesta N+0x40 si se acepta, o 7F N xx si
+     se rechaza. Las DOS prueban que hay un módulo escuchando ahí —un rechazo
+     lo manda alguien—, así que las dos cuentan. Lo que no cuenta es un chorro
+     de bytes que no responde a ninguna de las dos formas. */
+  _contestaA(r, servicio) {
+    const hex = this._hexLines(r || '').join('');
+    if (hex.length < 2) return false;
+    const pos = ((servicio + 0x40) & 0xFF).toString(16).padStart(2, '0').toUpperCase();
+    const svc = servicio.toString(16).padStart(2, '0').toUpperCase();
+    for (let p = 0; p + 1 < hex.length; p += 2) {
+      const b = hex.substr(p, 2);
+      if (b === pos) return true;
+      if (b === '7F' && hex.substr(p + 2, 2) === svc) return true;
+    }
+    return false;
+  },
+
   async _tocarPuerta(req) {
     if (this._esELM()) {
       await this._cmd('ATSH ' + this._hex3(req), 2500).catch(() => {});
       let r = null;
       try { r = await this._cmd('3E00', 1500); } catch (_) { return null; }
-      if (!r || /NO DATA|ERROR|UNABLE|STOPPED|BUFFER|BUS/i.test(r)) {
-        /* Reintento con Session Control (10 01) si Tester Present (3E00) no obtuvo respuesta */
-        try { r = await this._cmd('1001', 1500); } catch (_) { return null; }
-      }
-      if (!r || /NO DATA|ERROR|UNABLE|STOPPED|BUFFER|BUS/i.test(r)) return null;
-      return this._hexLines(r).length ? { req, resp: null, ext: false } : null;
+      if (this._contestaA(r, 0x3E)) return { req, resp: null, ext: false };
+      /* Hay módulos que ignoran Tester Present y sí abren sesión. Se prueba
+         con 10 01 —la sesión POR DEFECTO, la que apaga los testigos, no la
+         extendida— y se exige igual que la respuesta sea a ESE servicio. */
+      try { r = await this._cmd('1001', 1500); } catch (_) { return null; }
+      return this._contestaA(r, 0x10) ? { req, resp: null, ext: false } : null;
     }
     let capt = [];
     this._canRx = (id, b) => { capt.push({ id, b }); };
@@ -3952,7 +3985,8 @@ Modulos.diagnostico_obd = {
         <tr><td style="color:var(--text3)">Se le pregunta en</td><td style="font-family:ui-monospace,Consolas,monospace">${this._hexDir(m.req)}${m.ext ? ' (29 bits)' : ''}</td></tr>
         <tr><td style="color:var(--text3)">Contesta desde</td><td style="font-family:ui-monospace,Consolas,monospace">${m.resp == null ? 'no se sabe — por Bluetooth el ELM327 no lo revela' : this._hexDir(m.resp)}</td></tr>
         <tr><td style="color:var(--text3)">Red / protocolo</td><td>${UI.esc((this._REDES_MODULO.find(r => r.id === m.red) || {}).nombre || m.red)} · ${UI.esc(m.protocolo)}</td></tr>
-        <tr><td style="color:var(--text3)">Origen</td><td>${m.origen === 'escaneo' ? 'Tomado de un escaneo real' : m.origen === 'paquete' ? 'Vino en un paquete' : 'Escrito a mano'}</td></tr>
+        <tr><td style="color:var(--text3)">Origen</td><td>${({ escaneo:'Tomado de un escaneo real', paquete:'Vino en un paquete',
+          ia:'🤖 Identificado por la IA — la fuente está en la nota' })[m.origen] || 'Escrito a mano'}</td></tr>
         ${m.nota ? `<tr><td style="color:var(--text3)">Nota</td><td>${UI.esc(m.nota)}</td></tr>` : ''}
       </tbody></table>
       <div style="font-size:11px;color:var(--text3);margin-top:8px">
@@ -4239,6 +4273,181 @@ Modulos.diagnostico_obd = {
     if (!this._nombreInutil(m.nombre)) return String(m.nombre).slice(0, 60);
     if (id.referencia) return `Pieza ${id.referencia}`.slice(0, 60);
     return `Sin identificar ${this._hexDir(m.ecu)}`;
+  },
+
+  /* ═══════════ LA IA BAUTIZA LOS MÓDULOS ═══════════
+     Pedido por Henry el 2026-09-22: «si hay módulos nuevos o que no tienen
+     nombre, la IA debe investigar y colocar el nombre — yo no voy a investigar
+     eso». Tiene razón: buscar un número de pieza en un catálogo de repuestos es
+     exactamente el trabajo que no debería hacer el mecánico con el vehículo
+     enchufado enfrente.
+
+     Lo que NO cambia es la regla de la casa: un nombre que la IA no pueda
+     sostener vuelve en null y el módulo se queda como está. Un nombre
+     equivocado manda a desmontar el módulo que no era — eso es peor que la
+     lista de direcciones que esto vino a arreglar.
+
+     Y no toca nunca el nombre que escribió el taller: quien lo escribió tenía
+     el vehículo enfrente, y eso gana sobre cualquier búsqueda. */
+
+  _SISTEMAS_VALIDOS: ['ecm','tcm','abs','srs','eps','bcm','ipc','hvac','awd','immo',
+                      'gateway','adas','tpms','suspension','carga','otro'],
+
+  /* Un nombre que lleva su propia dirección adentro no es un nombre: es el
+     número otra vez, con adorno. Cubre "Módulo 0x7B3", "Chasis / frenos
+     (0x7B3)", "Carroceria 0x10 (29 bits)" y "Pieza 58920-G6300" de una sola
+     vez, en lugar de una lista de formas que hay que ir ampliando. */
+  _nombreGenerico(nombre, ecu) {
+    const t = String(nombre || '').trim();
+    if (!t) return true;
+    if (this._nombreInutil(t)) return true;
+    if (/^pieza\s+\S+$/i.test(t)) return true;
+    const hex = Number(ecu).toString(16).toUpperCase();
+    const dst = ((Number(ecu) >> 8) & 0xFF).toString(16).toUpperCase();
+    return new RegExp(`0x(${hex}|${dst})\\b`, 'i').test(t);
+  },
+
+  /* Todo lo que el vehículo dijo de un módulo, junto. Es lo que se le manda a
+     la IA: cuanta más evidencia, menos margen para adivinar. */
+  _evidenciaModulo(m, marca) {
+    const id = m.ident || {};
+    const sugDir = this._sugerenciaPorDireccion(m.ecu, marca);
+    const sugRef = id.referencia ? this._sugerenciaPorReferencia(id.referencia) : null;
+    return {
+      ecu: this._hexDir(m.ecu),
+      responde_en: m.resp == null ? null : this._hexDir(m.resp),
+      direccionamiento: m.ext ? '29 bits' : '11 bits',
+      numero_de_pieza_F187: id.referencia || null,
+      se_llama_a_si_mismo_F197: id.nombre || null,
+      fabricante_F18A: id.proveedor || null,
+      codigos_que_reporta: (m.codigos || []).map(c => c.codigo),
+      nombre_actual: m.nombre || null,
+      pista_por_direccion: sugDir ? `${sugDir.nombre} (según ${sugDir.fuente})` : null,
+      pista_por_grupo_de_pieza: sugRef ? `grupo ${sugRef.grupo} = ${sugRef.sistema}` : null,
+    };
+  },
+
+  /* Los módulos de un escaneo que todavía no tienen nombre de verdad. Los
+     fantasmas quedan fuera: 0x7DF es difusión y 0x7E8-0x7EF son direcciones de
+     respuesta — hacerlos identificar es gastar una búsqueda en algo que no es
+     un módulo (y pedirle a la IA que le invente nombre a la nada). */
+  _modulosSinNombre(scan, soloEcu) {
+    return ((scan && scan.por_modulo) || []).filter(m =>
+      (soloEcu == null || Number(m.ecu) === Number(soloEcu)) &&
+      !(!m.ext && this._DIR_NO_ES_MODULO(m.ecu)) &&
+      !this._nombreDeclarado(m.ecu) &&
+      this._nombreGenerico(m.nombre, m.ecu));
+  },
+
+  /* El mismo trabajo, pedido a mano desde el Centro de módulos. Existe para el
+     caso en que el escaneo corrió sin internet o la IA no alcanzó: es volver a
+     PEDIRLE a la IA, no mandar al mecánico a investigar. */
+  async identificarConIA(ecu) {
+    const s = this._centroScan || this._scan;
+    if (!s) return;
+    if (!this._modulosSinNombre(s, ecu).length)
+      return UI.toast('Todos los módulos ya tienen nombre', 'info');
+    UI.toast('🤖 La IA está investigando los módulos — puede tardar medio minuto', 'info', 35000);
+    let n = 0;
+    try { n = await this.bautizarModulosConIA(s, () => {}, ecu); }
+    catch (e) { return UI.toast('No se pudo consultar a la IA: ' + e.message, 'error'); }
+    UI.toast(n ? `${n} módulo(s) identificados ✓`
+               : 'La IA no pudo sostener un nombre con la evidencia de este escaneo', n ? 'success' : 'warn');
+    if (s === this._scan) this._renderResultado();
+    if (ecu != null) this.fichaModulo(ecu); else this.modalCentroModulos(s);
+  },
+
+  /* Le pregunta a la IA quién es cada módulo sin nombre y escribe el resultado
+     en el escaneo Y en la libreta del modelo, para que el próximo escaneo del
+     mismo vehículo ya los llame por su nombre sin gastar otra consulta.
+     Devuelve cuántos quedaron bautizados. */
+  async bautizarModulosConIA(scan, log, soloEcu) {
+    const s = scan || this._scan;
+    const avisar = log || (() => {});
+    const pendientes = this._modulosSinNombre(s, soloEcu);
+    if (!pendientes.length) return 0;
+
+    const veh = this._vehiculoDe ? this._vehiculoDe(s)
+      : ((s && s.vehiculos) || (this._vehiculos || []).find(v => v.id === (s && s.vehiculo_id)) || {});
+
+    avisar(`🤖 Identificando ${pendientes.length} módulo(s) sin nombre — la IA los investiga...`);
+    let r;
+    try {
+      r = await IA.identificarModulos({
+        vehiculo: { marca: veh.marca || null, modelo: veh.modelo || null, anio: veh.anio || null,
+                    vin: (s && s.vin) || null },
+        modulos: pendientes.map(m => this._evidenciaModulo(m, veh.marca)),
+      });
+    } catch (e) { r = { ok: false, error: e.message }; }
+
+    if (!r.ok) { avisar(`<span style="color:var(--amber)">No se pudo consultar a la IA: ${UI.esc(r.error || '')}</span>`); return 0; }
+    const lista = Array.isArray(r.modulos) ? r.modulos : [];
+    if (!lista.length) { avisar('<span style="color:var(--text3)">La IA no devolvió identificaciones</span>'); return 0; }
+
+    /* Una sola lectura de la libreta para todo el lote: pedirla por módulo son
+       trece consultas a la base para escribir trece nombres. */
+    let declarados = null;
+    if (veh.marca) { try { declarados = await this._declaradosDelTaller(); } catch (_) { declarados = []; } }
+
+    let puestos = 0, sinSostener = 0;
+    for (const item of lista) {
+      /* parseInt y no _leerHex: si la IA contesta "0x7B3 (ABS)" igual se
+         entiende la dirección, que es lo único que hace falta para casarla. */
+      const ecu = parseInt(String((item && item.ecu) || '').trim().replace(/^0x/i, ''), 16);
+      const m = pendientes.find(x => Number(x.ecu) === Number(ecu));
+      if (!m) continue;
+      const nombre = String((item && item.nombre) || '').trim().slice(0, 60);
+      /* El filtro se aplica también a lo que devuelve la IA: si contestó
+         "Módulo 0x7B3" eso no es un nombre venga de donde venga. */
+      if (!nombre || this._nombreGenerico(nombre, m.ecu)) { sinSostener++; continue; }
+
+      const confianza = ['alta','media','baja'].includes(item.confianza) ? item.confianza : 'baja';
+      const sistema = this._SISTEMAS_VALIDOS.includes(item.sistema) ? item.sistema : 'otro';
+      m.nombre = nombre;
+      m.ident = Object.assign({}, m.ident || {}, {
+        ia: { nombre, sistema, confianza, fuente: String(item.fuente || '').slice(0, 300) || null,
+              nota: String(item.nota || '').slice(0, 300) || null },
+      });
+      puestos++;
+
+      /* Queda para todo el modelo. Solo lo sostenido: un "baja" se muestra en
+         este escaneo pero no se le enseña al taller como si fuera un hecho. */
+      if (veh.marca && confianza !== 'baja') {
+        await this._guardarNombreModulo(m, veh, { sistema, confianza, fuente: item.fuente, declarados });
+      }
+    }
+
+    avisar(puestos
+      ? `<span style="color:var(--green)">🤖 ${puestos} módulo(s) identificados por la IA</span>` +
+        (sinSostener ? ` <span style="color:var(--text3)">· ${sinSostener} sin evidencia suficiente (quedan sin nombre a propósito)</span>` : '')
+      : `<span style="color:var(--text3)">La IA no pudo sostener ningún nombre con la evidencia de este escaneo</span>`);
+    return puestos;
+  },
+
+  /* Escribe el nombre en la libreta del modelo (obd_modulos_vehiculo). Si la
+     dirección ya estaba declarada se ACTUALIZA: insertarla de nuevo choca
+     contra el índice único (marca, modelo, req, ext) y devuelve 23505. */
+  async _guardarNombreModulo(m, veh, { sistema, confianza, fuente, declarados }) {
+    try {
+      const ya = (declarados || []).find(d =>
+        Number(d.req) === Number(m.ecu) && !!d.ext === !!m.ext &&
+        String(d.marca || '').toUpperCase() === String(veh.marca).toUpperCase() &&
+        String(d.modelo || '').toUpperCase() === String(veh.modelo || '').toUpperCase());
+      const id = m.ident || {};
+      const nota = ['identificado por IA', fuente ? String(fuente).slice(0, 140) : null,
+                    `confianza ${confianza}`, id.referencia ? `referencia ${id.referencia}` : null]
+        .filter(Boolean).join(' · ').slice(0, 200);
+      /* Un nombre puesto a mano por el taller NO se pisa: eso ya se filtró al
+         armar la lista de pendientes, pero acá está el otro camino de entrada
+         (una fila declarada con nombre genérico desde un escaneo anterior). */
+      if (ya && !this._nombreGenerico(ya.nombre, ya.req)) return;
+      await DB.upsertModuloVehiculo(ya
+        ? { id: ya.id, nombre: m.nombre, sistema, nota, origen: 'ia' }
+        : { marca: veh.marca, modelo: veh.modelo || null, nombre: m.nombre, sistema,
+            req: Number(m.ecu), resp: m.resp == null ? null : Number(m.resp), ext: !!m.ext,
+            red: 'hs', protocolo: 'uds', origen: 'ia', activo: true, nota });
+      this._modsDeclarados = null;
+    } catch (e) { console.warn('guardarNombreModulo:', e.message); }
   },
 
   async declararTodosDelEscaneo() {
@@ -6011,6 +6220,10 @@ Modulos.diagnostico_obd = {
               </p>
             </div>
             <div class="page-actions" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+              ${!this._scan.id ? `<button class="btn" style="background:#0ea5e9;color:#fff;border:none;font-weight:800" onclick="Modulos.diagnostico_obd.guardarEscaneo()">💾 Guardar escaneo</button>` : ''}
+              ${(this._scan.traza || []).length ? `<button class="btn" style="background:#1e293b;color:#f8fafc;border:1px solid #334155"
+                title="Copia el diálogo crudo con el vehículo para mandarlo a soporte cuando algo no cuadre"
+                onclick="Modulos.diagnostico_obd.copiarTraza()">🧾 Bitácora técnica</button>` : ''}
               <button class="btn" style="background:#1e293b;color:#f8fafc;border:1px solid #334155" onclick="Modulos.diagnostico_obd.cerrarScanActivo()">📋 Historial</button>
               <button class="btn" style="background:#1e293b;color:#f8fafc;border:1px solid #334155" onclick="Modulos.diagnostico_obd.modalCampanas()">🔔 Campañas</button>
               <span id="obd-estado-conexion" style="display:inline-flex;align-items:center;gap:6px"></span>
@@ -6030,8 +6243,14 @@ Modulos.diagnostico_obd = {
               <div style="font-size:13px;font-weight:700;margin-top:2px;color:var(--text)">
                 ${v ? `${UI.esc(v.placa||'')} · ${UI.esc(v.marca||'')} ${UI.esc(v.modelo||'')} ${UI.esc(v.anio||'')}` : (UI.esc(this._scan.vin||'Escaneo activo'))}
               </div>
+              <div style="font-size:11.5px;margin-top:3px;color:${this._scan.id ? 'var(--green)' : 'var(--amber)'}">
+                ${this._scan.id
+                  ? '✔ guardado en el historial'
+                  : '● sin guardar — se queda acá mientras trabajás; nada lo cierra salvo Guardar o Historial'}
+              </div>
             </div>
             <div style="display:flex;gap:8px">
+              ${!this._scan.id ? `<button class="btn btn-sm" style="background:#0ea5e9;color:#fff;border:none;font-weight:800" onclick="Modulos.diagnostico_obd.guardarEscaneo()">💾 Guardar</button>` : ''}
               <button class="btn btn-sm" style="background:#1e293b;color:#f8fafc;border:1px solid #334155" onclick="Modulos.diagnostico_obd.cerrarScanActivo()">📋 Ver Historial del Mes</button>
               <button class="btn btn-sm" style="background:linear-gradient(135deg, #0284c7 0%, #2563eb 100%);color:#ffffff;font-weight:800;border:none" onclick="Modulos.diagnostico_obd.modalEscanear()">📡 Nuevo Escaneo</button>
             </div>
@@ -6120,7 +6339,16 @@ Modulos.diagnostico_obd = {
     this._pintarEstadoConexion();
   },
 
-  cerrarScanActivo() {
+  /* Salir del escaneo es una decisión, no un efecto secundario: si todavía no
+     se guardó, se pierde el trabajo del vehículo enchufado. Se pregunta. */
+  async cerrarScanActivo() {
+    if (this._scan && !this._scan.id) {
+      const ok = await UI.confirmar(
+        '¿Salir del escaneo <b>sin guardarlo</b>?<br><br>' +
+        '<small>Se pierden los códigos, el barrido por módulo y la bitácora técnica de este vehículo. ' +
+        'Para conservarlo, cancelá y presioná <b>💾 Guardar escaneo</b>.</small>', 'Salir sin guardar');
+      if (!ok) return;
+    }
     this._scan = null;
     this._centroScan = null;
     this.render();
@@ -6130,6 +6358,14 @@ Modulos.diagnostico_obd = {
   /* `vehId` llega cuando se entra desde la ficha del vehículo: evita tener que
      buscarlo de nuevo en una lista que en un taller con flota es larga. */
   async modalEscanear(vehId) {
+    /* Arrancar otro escaneo tira el de ahora. Antes lo hacía en silencio. */
+    if (this._scan && !this._scan.id) {
+      const ok = await UI.confirmar(
+        'El escaneo que está en pantalla <b>todavía no se guardó</b>. Empezar otro lo descarta.<br><br>' +
+        '<small>Cancelá y presioná <b>💾 Guardar escaneo</b> si querés conservarlo.</small>',
+        'Descartar y escanear otro');
+      if (!ok) return;
+    }
     this._scan = null;
     /* Al entrar desde la ficha del vehículo este módulo puede no haberse
        renderizado todavía, así que su lista estaría vacía y el selector
@@ -6190,7 +6426,7 @@ Modulos.diagnostico_obd = {
         · USB: solo enchufa el USB-Link a esta PC — el puente arranca solo con Windows.<br>
         &nbsp;&nbsp;¿Primera vez en esta PC? <a href="/puente-obd/instalar-puente.bat" download style="color:var(--cyan)">⬇️ Instalar el puente USB</a> (doble clic al archivo descargado, una sola vez).
       </div>
-      <div id="obd-result"></div>
+      <div id="obd-panel"></div>
       <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px">
         <button class="btn btn-ghost" id="obd-btn-test" title="Verifica los canales y busca una respuesta OBD real cuando es posible" onclick="Modulos.diagnostico_obd.probarAdaptador()">🔧 Verificar adaptadores</button>
         <label style="margin-right:auto;display:flex;align-items:center;gap:6px;font-size:11.5px;color:var(--text2)"
@@ -6703,6 +6939,12 @@ Modulos.diagnostico_obd = {
         /* Por dónde se le entró a este mismo modelo en escaneos anteriores. */
         const mapaPrev = await this._mapaConocido(vehId);
         porModulo = await this._escanearModulos(log, mapaPrev).catch(e => { log(`No se pudo barrer módulos: ${e.message}`); return null; });
+        /* Antes de armar el mapa: si el mapa se guarda con "Módulo 0x7B3", el
+           próximo escaneo de este modelo vuelve a arrancar sin nombres. */
+        if (porModulo && porModulo.length && (typeof moduloEnPlan !== 'function' || moduloEnPlan('ia'))) {
+          await this.bautizarModulosConIA({ vehiculo_id: vehId, por_modulo: porModulo }, log)
+            .catch(e => log(`<span style="color:var(--text3)">La identificación por IA no corrió: ${UI.esc(e.message)}</span>`));
+        }
         mapaAcceso = this._mapaDeEscaneo(porModulo);
         if (mapaAcceso) {
           const nuevos = porModulo.filter(m => m.nuevo).length;
@@ -6826,9 +7068,17 @@ Modulos.diagnostico_obd = {
                         conseguirla — que es justo lo que vino a evitar. */
                      traza: this._traza || [] };
       log('<b>Escaneo completo ✓</b>');
-      this._renderResultado();
-      document.getElementById('obd-btn-save').style.display = '';
       btn.textContent = '↻ Re-escanear';
+
+      /* El resultado va a la PÁGINA, no al modal. La app tiene un solo modal:
+         mientras el reporte viviera dentro de él, abrir el Centro de módulos
+         —o cualquier confirmación— lo reemplazaba, y al cerrar esa ventana el
+         escaneo desaparecía de la vista y había que volver a escanear.
+         Reportado por Henry el 2026-09-22. Ahora el escaneo es la pantalla, y
+         todo lo demás se abre ENCIMA: cerrar cualquier ventana vuelve a él. */
+      UI.cerrarModal();
+      if (this._mantenerConexion && this._listo) this._iniciarLatido();
+      await this.render();
 
       // Asistencia Total IA automática al finalizar el escaneo
       if (typeof moduloEnPlan !== 'function' || moduloEnPlan('ia')) {
@@ -6953,10 +7203,15 @@ Modulos.diagnostico_obd = {
     el.innerHTML = `<div class="card" style="padding:14px;margin-top:12px">⏳ Nexus está analizando el escaneo...</div>`;
     const veh = idGuardado ? s.vehiculos : this._vehiculos.find(v => v.id === s.vehiculo_id);
     const r = await IA.tecnico(this._promptIA(s, veh));
-    if (!r.ok) { el.innerHTML = `<div class="card" style="padding:14px;margin-top:12px;color:var(--red)">⚠️ ${r.error}</div>`; return; }
-    s.ia_analisis = r.respuesta;
-    if (idGuardado) await DB.upsertDiagnosticoOBD({ id: idGuardado, ia_analisis: r.respuesta });  // cachear: 1 sola consulta por escaneo
-    el.innerHTML = this._iaHTML(r.respuesta);
+    if (!r.ok) { el.innerHTML = `<div class="card" style="padding:14px;margin-top:12px;color:var(--red)">⚠️ ${UI.esc(r.error)}</div>`; return; }
+    /* La Edge Function contesta `texto`, no `respuesta`: leer el campo
+       equivocado devolvía undefined, _iaHTML lo traducía a cadena vacía y el
+       análisis de Nexus no aparecía NUNCA — sin un solo error en consola. */
+    const texto = r.texto || '';
+    if (!texto) { el.innerHTML = `<div class="card" style="padding:14px;margin-top:12px;color:var(--amber)">La IA no devolvió texto.</div>`; return; }
+    s.ia_analisis = texto;
+    if (idGuardado) await DB.upsertDiagnosticoOBD({ id: idGuardado, ia_analisis: texto });  // cachear: 1 sola consulta por escaneo
+    el.innerHTML = this._iaHTML(texto);
   },
 
   _iaHTML(texto) {
@@ -7075,9 +7330,24 @@ Modulos.diagnostico_obd = {
   },
   _scanActual() { return this._scan; },
 
+  /* Una operación larga lanzada DESDE la página necesita su propio renglón de
+     avance: el `obd-log` del modal existe pero está oculto, así que escribir
+     ahí es escribir en el vacío — un minuto de pantalla muerta. Se crea uno en
+     la página con el mismo id, y como #page-content va antes que el modal en el
+     documento, `_log` lo encuentra a él. Lo borra el siguiente render. */
+  _logEnPagina(titulo) {
+    const el = document.getElementById('obd-result');
+    if (!el) return;
+    el.insertAdjacentHTML('afterbegin', `<div class="card" style="padding:12px;margin-bottom:10px">
+      <b style="font-size:12px">${UI.esc(titulo)}</b>
+      <div id="obd-log" style="background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:9px 11px;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;line-height:1.7;max-height:200px;overflow:auto;margin-top:7px"></div>
+    </div>`);
+  },
+
   async buscarMasModulos() {
     if (!this._scan) return;
     if (!this._klinePuedeModulos()) { UI.toast('Solo aplica con el vehículo conectado por Bluetooth', 'error'); return; }
+    this._logEnPagina('🔍 Buscando otros módulos…');
     const log = m => this._log(m);
     this._mapaFaltantes = [];
     const porModulo = await this._escanearModulosKline(log)
@@ -7100,90 +7370,55 @@ Modulos.diagnostico_obd = {
      momento todos los escaneos de ese modelo lo llaman por su nombre. */
   _identidadModulosHTML(ms, veh) {
     if (!Array.isArray(ms) || !ms.length) return '';
-    const puedeNombrar = typeof puedeAccion !== 'function' || puedeAccion('diagnostico_obd', 'editar');
     const conRef = ms.filter(m => m.ident && m.ident.referencia).length;
+    const porIA = ms.filter(m => m.ident && m.ident.ia).length;
+    const faltan = ms.filter(m => !(!m.ext && this._DIR_NO_ES_MODULO(m.ecu)) &&
+                                  this._nombreGenerico(m.nombre, m.ecu)).length;
     return `<div style="margin-top:12px;border-top:1px solid var(--border);padding-top:10px">
       <b style="font-size:12px">QUIÉN ES CADA MÓDULO</b>
       <div style="font-size:10.5px;color:var(--text3);margin-top:2px;line-height:1.5">
-        ${conRef
-          ? `${conRef} de ${ms.length} módulo(s) entregaron su <b>número de pieza</b>. Con ese número
-             se identifica el módulo sin desmontarlo — y una vez que le ponés nombre, todos los escaneos
-             de ${UI.esc([veh.marca, veh.modelo].filter(Boolean).join(' ') || 'este modelo')} lo llaman así.`
-          : `Ninguno publicó su número de pieza ni su nombre. Se los puede nombrar igual a mano:
-             la dirección ya está confirmada por este escaneo.`}
+        ${conRef ? `${conRef} de ${ms.length} módulo(s) entregaron su <b>número de pieza</b>. ` : ''}
+        ${porIA ? `La IA identificó <b style="color:var(--green)">${porIA}</b> a partir de esa evidencia y queda guardado
+             para todos los escaneos de ${UI.esc([veh.marca, veh.modelo].filter(Boolean).join(' ') || 'este modelo')}.` : ''}
+        ${faltan ? `<b style="color:var(--amber)">${faltan}</b> siguen sin identificar: la evidencia no alcanzó para sostener un nombre.` : ''}
       </div>
       <div style="overflow:auto;margin-top:8px">
       <table class="table" style="font-size:11.5px">
-        <thead><tr><th>Módulo</th><th>Dirección</th><th>Lo que dijo de sí mismo</th>${puedeNombrar ? '<th></th>' : ''}</tr></thead>
+        <thead><tr><th>Módulo</th><th>Dirección</th><th>Lo que dijo de sí mismo</th></tr></thead>
         <tbody>${ms.map(m => {
           const id = m.ident || {};
           const sug = id.referencia ? this._sugerenciaPorReferencia(id.referencia) : null;
           const sugDir = this._sugerenciaPorDireccion(m.ecu, veh.marca);
           const declarado = !!this._nombreDeclarado(m.ecu);
           return `<tr>
-            <td><b>${UI.esc(m.nombre)}</b>${declarado ? '<div style="font-size:10px;color:var(--green)">nombrado por el taller</div>' : ''}</td>
+            <td><b>${UI.esc(m.nombre)}</b>
+              ${declarado ? '<div style="font-size:10px;color:var(--green)">nombrado por el taller</div>'
+                : id.ia ? `<div style="font-size:10px;color:var(--cyan)">🤖 identificado por IA · confianza ${UI.esc(id.ia.confianza)}</div>` : ''}</td>
             <td style="font-family:ui-monospace,Consolas,monospace;white-space:nowrap">0x${m.ecu.toString(16).toUpperCase()}</td>
             <td>${id.referencia ? `<div>referencia <b style="font-family:ui-monospace,Consolas,monospace">${UI.esc(id.referencia)}</b></div>` : ''}
               ${id.nombre ? `<div>se llama <b>${UI.esc(id.nombre)}</b></div>` : ''}
               ${id.proveedor ? `<div style="color:var(--text3)">fabricante ${UI.esc(id.proveedor)}</div>` : ''}
-              ${sugDir ? `<div style="color:var(--amber)">¿<b>${UI.esc(sugDir.nombre)}</b>? — por la dirección, según ${UI.esc(sugDir.fuente)} · <b>confirmalo</b></div>` : ''}
-              ${sug ? `<div style="color:var(--amber)">¿grupo ${UI.esc(sug.grupo)} = ${UI.esc(sug.sistema)}? — <b>sin confirmar</b></div>` : ''}
+              ${id.ia && id.ia.fuente ? `<div style="color:var(--cyan)">🤖 ${UI.esc(id.ia.fuente)}</div>` : ''}
+              ${sugDir ? `<div style="color:var(--amber)">por la dirección: <b>${UI.esc(sugDir.nombre)}</b> (${UI.esc(sugDir.fuente)})</div>` : ''}
+              ${sug ? `<div style="color:var(--text3)">grupo de pieza ${UI.esc(sug.grupo)} = ${UI.esc(sug.sistema)}</div>` : ''}
               ${!id.referencia && !id.nombre && !id.proveedor ? '<span style="color:var(--text3)">no publicó identificación</span>' : ''}</td>
-            ${puedeNombrar ? `<td style="text-align:right;white-space:nowrap">
-              <button class="btn btn-sm btn-ghost" title="Ponerle nombre para todos los escaneos de este modelo"
-                onclick="Modulos.diagnostico_obd.nombrarModuloDelEscaneo(${m.ecu})">🏷 Nombrar</button></td>` : ''}
           </tr>`;
         }).join('')}</tbody>
       </table></div>
+      ${faltan ? `<button class="btn btn-sm btn-cyan" style="margin-top:8px"
+          onclick="Modulos.diagnostico_obd.identificarConIA()">🤖 Que la IA lo intente de nuevo</button>` : ''}
       <div style="font-size:10.5px;color:var(--text3);margin-top:6px;line-height:1.5">
-        La <b>referencia</b> es el número de repuesto que el módulo declara (identificador F187 de ISO 14229-1).
-        La línea en ámbar es una <b>sugerencia por el grupo del número de pieza, sin confirmar</b>:
-        sirve de pista, no es el nombre. El nombre lo ponés vos, y queda para todo el modelo.
+        La <b>referencia</b> es el número de repuesto que el módulo declara (identificador F187 de ISO 14229-1);
+        es con lo que la IA identifica el módulo. Un módulo se queda <b>sin nombre a propósito</b> cuando la
+        evidencia no alcanza: un nombre equivocado manda a desmontar el módulo que no era.
       </div>
     </div>`;
   },
 
-  /* Abre el formulario de 🧩 Módulos ya lleno con lo que este escaneo confirmó:
-     dirección, y de nota la referencia que entregó el módulo. */
-  async nombrarModuloDelEscaneo(ecu) {
-    const s = this._centroScan || this._scan;
-    const m = ((s && s.por_modulo) || []).find(x => x.ecu === ecu);
-    if (!m) return;
-    const veh = (s && s.vehiculos) || (this._vehiculos || []).find(v => v.id === (s && s.vehiculo_id)) || {};
-    if (!veh.marca) return UI.toast('El escaneo no tiene marca de vehículo: no se sabe a qué modelo nombrárselo', 'warn');
-    if (!this._vehiculos || !this._vehiculos.length) {
-      try { this._vehiculos = await DB.getVehiculos() || []; } catch (_) { this._vehiculos = []; }
-    }
-    this._modsDeclarados = await this._declaradosDelTaller();
-    const ya = (this._modsDeclarados || []).find(d => Number(d.req) === Number(ecu) &&
-      String(d.marca || '').toUpperCase() === String(veh.marca).toUpperCase());
-    this.editarModuloVehiculo(ya ? ya.id : undefined);
-    if (ya) return;
-
-    const pon = (id, val) => { const el = document.getElementById(id); if (el && val != null) el.value = val; };
-    const id = m.ident || {};
-    pon('mod-marca', veh.marca);
-    pon('mod-modelo', veh.modelo || '');
-    pon('mod-req', Number(ecu).toString(16).toUpperCase());
-    pon('mod-resp', m.resp == null ? '' : Number(m.resp).toString(16).toUpperCase());
-    /* El nombre NO se rellena con "Módulo 0x7B3": declarar eso como nombre deja
-       la pantalla igual que antes, que es justo lo que se está arreglando.
-       Sí se rellena con la sugerencia por dirección cuando la hay: el mecánico
-       la ve, la confirma y guarda. Se ahorra el trabajo sin que la herramienta
-       dé por cierto algo que no verificó — el que firma es él. */
-    const sugDir = this._sugerenciaPorDireccion(ecu, veh.marca);
-    if (id.nombre) pon('mod-nombre', id.nombre);
-    else if (!this._nombreInutil(m.nombre)) pon('mod-nombre', m.nombre);
-    else if (sugDir) pon('mod-nombre', sugDir.nombre);
-    const nota = [id.referencia ? `referencia ${id.referencia}` : null,
-                  sugDir ? `nombre sugerido por ${sugDir.fuente} — confirmar` : null,
-                  id.proveedor ? `fabricante ${id.proveedor}` : null,
-                  m.codigos && m.codigos.length ? `reportó ${m.codigos.map(c => c.codigo).join(' ')}` : null]
-      .filter(Boolean).join(' · ');
-    if (nota) pon('mod-nota', nota.slice(0, 200));
-    const ext = document.getElementById('mod-ext'); if (ext) ext.checked = !!m.ext;
-    this._onMarcaModulo();
-  },
+  /* El botón de "Nombrar" salió de acá el 2026-09-22: investigar quién es un
+     módulo es trabajo de la IA, no del mecánico con el vehículo enchufado.
+     Lo hace bautizarModulosConIA(). El alta y la edición a mano siguen
+     existiendo en 🧩 Módulos del modelo, que es donde vive ese CRUD. */
 
   _topologiaHTML(s) {
     const ms = (s && s.por_modulo) || [];
@@ -8506,7 +8741,7 @@ Modulos.diagnostico_obd = {
     if (!this._scan) return;
     this._stopLive();
     const { nhtsa, ...fila } = this._scan;   // nhtsa no se persiste (se aplica a la ficha del vehículo)
-    let { error } = await DB.upsertDiagnosticoOBD(fila);
+    let { data, error } = await DB.upsertDiagnosticoOBD(fila);
 
     /* PGRST204 = la tabla no tiene esa columna. Se reintenta sin los campos
        nuevos: es preferible guardar el escaneo sin el análisis de equipamiento
@@ -8517,16 +8752,21 @@ Modulos.diagnostico_obd = {
       const r2 = await DB.upsertDiagnosticoOBD(base);
       if (!r2.error) {
         UI.toast('Escaneo guardado, sin el análisis de equipamiento (falta aplicar la migración 095)', 'warn');
-        this._cerrarEscaneo();
-        this.render();
+        if (r2.data && r2.data.id) this._scan.id = r2.data.id;
+        UI.cerrarModal();
+        await this.render();
         return;
       }
       error = r2.error;
     }
     if (error) { UI.toast('Error al guardar: ' + error.message, 'error'); return; }
+    /* Sin esto el escaneo quedaba guardado en la base pero la pantalla seguía
+       diciendo "sin guardar" y volvía a ofrecer el botón: dos filas del mismo
+       escaneo a la segunda vez. */
+    if (data && data.id) this._scan.id = data.id;
     UI.toast('Escaneo guardado ✓');
-    this._cerrarEscaneo();
-    this.render();
+    UI.cerrarModal();
+    await this.render();
   },
 
   /* Cancelar tiene que dejar el driver COMO NUEVO, no solo cerrar el modal.

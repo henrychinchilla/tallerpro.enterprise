@@ -10,6 +10,7 @@
 //   redaccion   → redacta descripciones de OT, cotizaciones, mensajes
 //   chat        → preguntas mixtas: datos del taller (snapshot) + conocimiento mecánico
 //   insights    → resumen ejecutivo del negocio
+//   modulo_obd  → quién es cada dirección de módulo de un escaneo (JSON, con búsqueda web)
 // ═══════════════════════════════════════════════════════
 
 import { createClient } from "jsr:@supabase/supabase-js@2";
@@ -162,6 +163,53 @@ Estructura la respuesta y sé práctico. Aclara cuando algo varía según marca/
 y recomienda confirmar con el manual del fabricante. Si no estás seguro de un dato exacto,
 dilo en lugar de inventarlo.
 ${SUGERENCIA_RECURSOS}`,
+
+  /* Identificación de módulos del escaneo OBD. Existe para que el mecánico NO
+     tenga que investigar quién es cada dirección: el escáner encuentra trece
+     direcciones y hasta ahora la app le pedía a él que las bautizara una por
+     una. Eso es trabajo de investigación, y es lo que la IA puede hacer.
+
+     La regla dura es la misma que en toda la capa de diagnóstico: un nombre
+     que no se puede sostener con evidencia NO se inventa. Por eso el campo
+     `nombre` puede venir en null, y cada acierto viaja con su confianza y su
+     fuente. Un nombre equivocado manda al mecánico a desmontar el módulo que
+     no era; "no sé" no le cuesta nada. */
+  modulo_obd: `Eres un especialista en redes de diagnóstico automotriz (CAN / UDS ISO 14229, ISO 15765-4).
+Recibes los módulos que un escaneo real encontró en un vehículo concreto y tu única tarea es
+decir QUIÉN ES cada uno: el nombre del sistema al que corresponde esa dirección en ESE vehículo.
+
+Para cada módulo tienes hasta cuatro pistas, en este orden de peso:
+1. El NÚMERO DE PIEZA que el módulo declaró (identificador F187). Es la pista más fuerte:
+   ese número se busca en catálogos de repuestos y dice exactamente qué pieza es.
+2. Cómo se llama a sí mismo (F197) y su fabricante (F18A: Continental, Bosch, Mobis, Denso…).
+3. La dirección de solicitud. 0x7E0 y 0x7E1 están LEGISLADAS (motor y transmisión); el resto
+   depende del fabricante, y muchos mapas de direcciones por marca están documentados.
+4. Los códigos de falla que reportó: un módulo con códigos C1xxx es de chasis/frenos,
+   B1xxx de carrocería, U1xxx de red.
+
+Usa la búsqueda web cuando la necesites: buscá el número de pieza junto con la marca y el
+modelo, o el mapa de direcciones UDS de esa marca. Es preferible buscar a adivinar.
+
+REGLA INNEGOCIABLE: si después de buscar no podés sostener el nombre con evidencia,
+devolvé "nombre": null. Un nombre inventado manda al mecánico a desmontar el módulo
+equivocado; decir "no sé" no le cuesta nada. NO uses la dirección como nombre
+("Módulo 0x7B3" no es un nombre, es el número otra vez).
+
+Respondé ÚNICAMENTE con un arreglo JSON válido, sin markdown, sin \`\`\`json, sin explicaciones,
+un objeto por cada módulo que recibiste y en el mismo orden:
+[
+  {
+    "ecu": "0x7B3",
+    "nombre": "Dirección asistida eléctrica (MDPS)",   // null si no se puede sostener
+    "sistema": "eps",        // uno de: ecm tcm abs srs eps bcm ipc hvac awd immo gateway adas tpms suspension carga otro
+    "confianza": "alta",     // alta | media | baja
+    "fuente": "número de pieza 56300-G6000 listado como MDPS en catálogo Kia",
+    "nota": "texto corto y útil para el mecánico, o null"
+  }
+]
+El campo "nombre" va en español de Guatemala, corto (máximo 60 caracteres) y con la sigla
+en inglés entre paréntesis cuando sea la que usa el taller (ABS, TCM, BCM, SRS, MDPS).`,
+
   redaccion: `${BASE_GT}
 Redacta el texto solicitado de forma profesional y breve. Si es un mensaje para un cliente,
 usa un tono amable y cercano. No inventes datos que no se te den.`,
@@ -638,14 +686,21 @@ Deno.serve(async (req) => {
      ponytail: tool_type básico (web_search_20250305), compatible con Haiku
      (el modelo por defecto) — subir a la variante con filtrado dinámico si
      algún tenant usa un modelo Opus/Sonnet y se justifica el costo extra. */
-  const necesitaBusquedaWeb = (modo === "chat" || modo === "insights") &&
-    (modsDelRol.includes("armeria") || modsDelRol.includes("agroservicio") || modsDelRol.includes("venta_granos"));
+  /* `modulo_obd` la lleva SIEMPRE, sin mirar el rol: identificar una dirección
+     de módulo es exactamente el trabajo de buscar un número de pieza en
+     internet, y sin búsqueda el modo no sirve para lo que se creó — devolvería
+     null en casi todos. Se le dan más usos que al chat porque un escaneo trae
+     una docena de módulos, no una pregunta. */
+  const necesitaBusquedaWeb = modo === "modulo_obd" ||
+    ((modo === "chat" || modo === "insights") &&
+     (modsDelRol.includes("armeria") || modsDelRol.includes("agroservicio") || modsDelRol.includes("venta_granos")));
+  const usosWeb = modo === "modulo_obd" ? 8 : 3;
 
   const modelToUse = MODOS_IMAGEN[modo] ? (Deno.env.get("AI_MODEL_VISION") ?? "claude-3-5-sonnet-20241022") : MODELO;
   const soportaThinking = modelToUse.includes("claude-3-7") || modelToUse.includes("claude-3-8") || modelToUse.includes("fable");
 
   try {
-    const r = await fetch("https://api.anthropic.com/v1/messages", {
+    const pedir = (msgs: unknown[]) => fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: {
         "x-api-key": apiKey,
@@ -662,12 +717,14 @@ Deno.serve(async (req) => {
           output_config: { effort: EFFORT },
         } : {}),
         system: sistemaPrompt,
-        messages: messagesPayload,
-        ...(necesitaBusquedaWeb ? { tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 3 }] } : {}),
+        messages: msgs,
+        ...(necesitaBusquedaWeb ? { tools: [{ type: "web_search_20250305", name: "web_search", max_uses: usosWeb }] } : {}),
       }),
     });
 
-    const data = await r.json();
+    let msgs = messagesPayload as unknown[];
+    let r = await pedir(msgs);
+    let data = await r.json();
     if (!r.ok) {
       const m = data?.error?.message ?? `HTTP ${r.status}`;
       const friendly = r.status === 429 ? `${NOMBRE} está ocupado, intenta en unos segundos`
@@ -676,7 +733,22 @@ Deno.serve(async (req) => {
       return json({ error: friendly }, r.status);
     }
 
-    const texto = (data.content ?? [])
+    /* Con búsqueda web el modelo puede devolver `pause_turn`: hizo búsquedas y
+       todavía no terminó de responder. Cortar ahí devuelve la mitad de la
+       respuesta — en el modo de módulos, un JSON partido que no parsea. Se
+       continúa la misma conversación hasta dos veces; más que eso ya es una
+       consulta que no vale lo que cuesta. */
+    const bloques: unknown[] = [...(data.content ?? [])];
+    for (let i = 0; i < 2 && data.stop_reason === "pause_turn"; i++) {
+      msgs = [...msgs, { role: "assistant", content: data.content }];
+      r = await pedir(msgs);
+      const sig = await r.json();
+      if (!r.ok) break;
+      data = sig;
+      bloques.push(...(data.content ?? []));
+    }
+
+    const texto = bloques
       .filter((b: any) => b.type === "text")
       .map((b: any) => b.text)
       .join("\n")

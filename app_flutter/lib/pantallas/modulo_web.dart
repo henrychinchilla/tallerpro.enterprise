@@ -42,7 +42,7 @@ class _PantallaModuloWebState extends State<PantallaModuloWeb> {
 
     _controller = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
-      ..setUserAgent('NexusProNativeApp/5.15.7 (Android)')
+      ..setUserAgent('NexusProNativeApp/$versionApp (Android)')
       ..addJavaScriptChannel(
         'NexusBTPuente',
         onMessageReceived: (JavaScriptMessage msg) async {
@@ -124,7 +124,7 @@ class _PantallaModuloWebState extends State<PantallaModuloWeb> {
     const jsBridge = '''
       window.NexusBT = {
         estado: function() {
-          return JSON.stringify({disponible: true, encendido: true, version: "5.15.7"});
+          return JSON.stringify({disponible: true, encendido: true, version: "$versionApp"});
         },
         listar: function() {
           window.NexusBTPuente.postMessage(JSON.stringify({accion: "listar"}));

@@ -133,7 +133,8 @@
       const todos = ms.flatMap(m => m.codigos || []);
       const activos = todos.filter(c => c.activo).length;
       const vivo = s === this._scan && this._puedePuntoAPunto().ok;
-      const sinNombre = ms.filter(m => this._nombreInutil(m.nombre)).length;
+      const sinNombre = ms.filter(m => !(!m.ext && this._DIR_NO_ES_MODULO(m.ecu)) &&
+                                       this._nombreGenerico(m.nombre, m.ecu)).length;
 
       return `
       <div class="card" style="padding:14px;${activos ? 'border-left:3px solid var(--red)' : ''}">
@@ -146,8 +147,10 @@
             : '<b style="color:var(--green)">Sin códigos en ningún módulo</b>'}</div>
         </div>
         ${sinNombre ? `<div style="font-size:11.5px;color:var(--text3);margin-top:8px;line-height:1.5">
-          ${sinNombre} módulo(s) todavía sin nombre. Entrá a cada uno: ahí está su <b>número de pieza</b>,
-          que es con lo que se identifica, y el botón para bautizarlo para todo el modelo.</div>` : ''}
+          ${sinNombre} módulo(s) siguen sin nombre: la IA los investigó y la evidencia no alcanzó para
+          sostener uno. Se quedan así a propósito — un nombre equivocado manda a desmontar el módulo que no era.
+          <button class="btn btn-sm btn-cyan" style="margin-left:6px"
+            onclick="Modulos.diagnostico_obd.identificarConIA()">🤖 Que lo intente de nuevo</button></div>` : ''}
       </div>
 
       <div style="max-height:52vh;overflow:auto;margin-top:12px">
@@ -216,11 +219,15 @@
           ${id.referencia ? `<div>Número de pieza: <b style="font-family:ui-monospace,Consolas,monospace">${UI.esc(id.referencia)}</b></div>` : ''}
           ${id.nombre ? `<div>Se llama a sí mismo: <b>${UI.esc(id.nombre)}</b></div>` : ''}
           ${id.proveedor ? `<div style="color:var(--text3)">Fabricante: ${UI.esc(id.proveedor)}</div>` : ''}
-          ${sug ? `<div style="color:var(--amber)">¿grupo ${UI.esc(sug.grupo)} = ${UI.esc(sug.sistema)}? — <b>sin confirmar</b></div>` : ''}
+          ${sug ? `<div style="color:var(--text3)">grupo de pieza ${UI.esc(sug.grupo)} = ${UI.esc(sug.sistema)}</div>` : ''}
+          ${id.ia ? `<div style="color:var(--cyan);margin-top:3px">🤖 Nombre puesto por la IA · confianza ${UI.esc(id.ia.confianza)}${
+              id.ia.fuente ? `<div style="color:var(--text3)">${UI.esc(id.ia.fuente)}</div>` : ''}${
+              id.ia.nota ? `<div style="color:var(--text3)">${UI.esc(id.ia.nota)}</div>` : ''}</div>` : ''}
           ${!id.referencia && !id.nombre ? `<div style="color:var(--text3)">Este módulo no entregó identificación durante el escaneo.
-            Probá <b>Identificar a fondo</b>: pregunta más identificadores, de a uno.</div>` : ''}
+            Probá <b>Identificar a fondo</b>: pregunta más identificadores, de a uno — y con eso la IA tiene más con qué trabajar.</div>` : ''}
           <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:9px">
-            <button class="btn btn-sm btn-brand" onclick="Modulos.diagnostico_obd.nombrarModuloDelEscaneo(${ecu})">🏷 Nombrar este módulo</button>
+            ${this._nombreGenerico(m.nombre, ecu)
+              ? `<button class="btn btn-sm btn-cyan" onclick="Modulos.diagnostico_obd.identificarConIA(${ecu})">🤖 Que la IA lo identifique</button>` : ''}
             ${vivo ? `<button class="btn btn-sm btn-ghost" onclick="Modulos.diagnostico_obd.identificarAFondo(${ecu})">🔬 Identificar a fondo</button>
             <button class="btn btn-sm btn-ghost" onclick="Modulos.diagnostico_obd.verModulo(${ecu})">📊 Datos que expone</button>` : ''}
           </div>`)}
@@ -352,12 +359,12 @@
                 <td style="font-family:ui-monospace,Consolas,monospace">${UI.esc(m.ident.referencia)}</td></tr>` : ''}
             </tbody></table>
             <div style="font-size:11px;color:var(--text3);margin-top:7px">
-              Con el número de pieza se identifica el módulo sin desmontarlo. Buscalo con la marca y el modelo,
-              y cuando sepas qué es, bautizalo: queda para todos los escaneos de este modelo.</div>
+              Con el número de pieza se identifica el módulo sin desmontarlo. Ahora que hay más identificadores,
+              la IA puede volver a intentarlo con mejor evidencia.</div>
           </div>
           <div class="modal-footer">
             <button class="btn btn-ghost" onclick="Modulos.diagnostico_obd.fichaModulo(${ecu})">‹ Volver</button>
-            <button class="btn btn-brand" onclick="Modulos.diagnostico_obd.nombrarModuloDelEscaneo(${ecu})">🏷 Nombrar</button>
+            <button class="btn btn-cyan" onclick="Modulos.diagnostico_obd.identificarConIA(${ecu})">🤖 Que la IA lo identifique</button>
           </div>`, '620px');
       } catch (e) { UI.toast('No se pudo identificar: ' + e.message, 'error'); }
     },

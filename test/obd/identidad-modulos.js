@@ -135,8 +135,11 @@ const { M, ctx } = cargar();
   catch (e) { reventó = e; }
   ok('la tabla de identidad se pinta sin reventar', !reventó, reventó && reventó.message);
   ok('muestra la referencia que entregó el módulo', /58920-G6300/.test(html));
-  ok('muestra la sugerencia marcada como SIN CONFIRMAR', /sin confirmar/i.test(html));
-  ok('y ofrece nombrarlo', /nombrarModuloDelEscaneo\(1971\)/.test(html));
+  ok('muestra la pista por dirección con su fuente', /por la dirección/i.test(html));
+  /* El botón de "Nombrar" salió de la tabla el 2026-09-22: investigar quién es
+     un módulo es trabajo de la IA. Queda el de volver a pedírselo. */
+  ok('ofrece que la IA lo intente de nuevo', /identificarConIA\(\)/.test(html));
+  ok('y ya no le pide al mecánico que lo bautice', !/nombrarModuloDelEscaneo/.test(html));
   ok('el que no publicó nada lo dice, no lo inventa', /no publicó identificación/.test(html));
 
   const llamadas = [...html.matchAll(/Modulos\.diagnostico_obd\.([A-Za-z_$][\w$]*)/g)].map(x => x[1]);
@@ -148,9 +151,12 @@ const { M, ctx } = cargar();
   ok('hay latido para que el dongle no se duerma', typeof M._iniciarLatido === 'function');
   ok('y una forma de soltarlo a mano', typeof M.desconectarAhora === 'function');
   ok('el saludo del latido le habla al DONGLE, no al vehículo',
+     /* La DEFINICIÓN del método, no la primera llamada que aparezca: con
+        `_iniciarLatido()` a secas el match empezaba en un lugar donde se lo
+        invoca y capturaba el bloque equivocado. */
      /_cmd\('ATI'/.test(require('fs').readFileSync(
        require('path').join(__dirname, '../../js/modulos/operacion/diagnostico_obd.js'), 'utf8')
-       .match(/_iniciarLatido\(\)[\s\S]*?\n  \},/)[0]));
+       .match(/_iniciarLatido\(\) \{[\s\S]*?\n  \},/)[0]));
 
   /* ── El eco del adaptador dejaba el escaneo sin protocolo ──────────────
      Picanto por COM, 2026-09-17 22:47: el escaneo se guardó con el protocolo

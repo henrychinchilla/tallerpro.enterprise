@@ -152,7 +152,11 @@ const escaneo = {
      ficha.indexOf('3 · ACCIONES') < ficha.indexOf('4 · FUNCIONES AUXILIARES') &&
      ficha.indexOf('4 · FUNCIONES AUXILIARES') < ficha.indexOf('5 · BANCO DE PRUEBAS'));
   ok('lista los dos códigos activos', /C0106-74/.test(ficha) && /P0741-07/.test(ficha));
-  ok('ofrece bautizarlo', /nombrarModuloDelEscaneo\(2004\)/.test(ficha));
+  /* Ya no se le pide al mecánico que investigue: el botón manda a la IA a
+     hacerlo. Henry, 2026-09-22: "yo no voy a investigar eso, para eso está
+     la IA — no quiero volver a ver eso de renombrar". */
+  ok('ofrece que la IA lo identifique', /identificarConIA\(2004\)/.test(ficha));
+  ok('y NO le pide al mecánico que lo bautice', !/nombrarModuloDelEscaneo/.test(ficha));
   ok('dice por qué las funciones auxiliares están bloqueadas',
      /no se transmite/.test(ficha) && /verificada/.test(ficha));
 
