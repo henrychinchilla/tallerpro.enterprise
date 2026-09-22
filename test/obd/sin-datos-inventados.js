@@ -36,6 +36,30 @@ const { M } = cargar();
   ok('en Kia 0x7D2 no se nombra por dirección (no está verificado)', M._sugerenciaPorDireccion(0x7D2, 'Kia') === null);
   ok('en Kia 0x7D4 es UNA cosa, no "esto o aquello"', !/\so\s/.test(M._sugerenciaPorDireccion(0x7D4, 'Kia').nombre));
 
+  /* ── Tablas por marca: auditadas contra opendbc el 2026-09-22 ── */
+  for (const t of M._DIRECCIONES_MARCA) {
+    const dirs = Object.keys(t.dirs).map(Number);
+    ok(`${t.marcas}: cita una fuente con fecha`, /opendbc.*20\d\d-\d\d-\d\d/.test(t.fuente));
+    ok(`${t.marcas}: ninguna dirección de RESPUESTA (0x7E8-0x7EF) como módulo`,
+       !dirs.some(d => d >= 0x7E8 && d <= 0x7EF));
+    ok(`${t.marcas}: nada de BCM/tablero/airbag en el rango de emisiones 0x7E3-0x7E7`,
+       !dirs.some(d => d >= 0x7E3 && d <= 0x7E7));
+  }
+  const n = (dir, marca) => (M._sugerenciaPorDireccion(dir, marca) || {}).nombre || null;
+  ok('Toyota 0x7C4 es climatización, no airbag', /Climatizaci/.test(n(0x7C4, 'Toyota')));
+  ok('Toyota: la dirección está en 0x7A1 y el airbag en 0x780',
+     /Direcci/.test(n(0x7A1, 'Toyota')) && /Airbag/.test(n(0x780, 'Lexus')) && n(0x7E4, 'Toyota') === null);
+  ok('Nissan: ABS 0x740, dirección 0x742, tablero 0x743; nada en 0x79x',
+     /ABS/.test(n(0x740, 'Nissan')) && /Direcci/.test(n(0x742, 'Nissan')) && /Tablero/.test(n(0x743, 'Nissan')) &&
+     [0x790, 0x792, 0x793, 0x795, 0x797, 0x798, 0x79D].every(d => n(d, 'Nissan') === null));
+  ok('Ford y Mazda comparten dirección 0x730 y ABS 0x760',
+     /Direcci/.test(n(0x730, 'Mazda')) && /ABS/.test(n(0x760, 'Ford')));
+  ok('GM no tiene tabla: nada inventado en 0x7E4-0x7EA',
+     [0x7E2, 0x7E4, 0x7E5, 0x7E6, 0x7E7, 0x7EA].every(d => n(d, 'Chevrolet') === null));
+  ok('VW ya no es copia de Hyundai: dirección 0x712, airbag 0x715, nada en 0x7D4/0x7B3/0x758',
+     /Direcci/.test(n(0x712, 'Volkswagen')) && /Airbag/.test(n(0x715, 'Audi')) &&
+     [0x7D4, 0x7B3, 0x758, 0x7C6].every(d => n(d, 'VW') === null));
+
   /* ── Un marcador guardado no tapa la identificación real ── */
   M._modulosDeclarados = [
     { req: 0x7B3, nombre: 'Sin identificar 0x7B3' },

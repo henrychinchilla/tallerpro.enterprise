@@ -2552,79 +2552,69 @@ Modulos.diagnostico_obd = {
         0x7D4: 'Dirección asistida (MDPS / EPS)',
       },
     },
+    /* Toyota, Nissan, Ford/Mazda, GM y VW: auditadas el 2026-09-22 contra el
+       código de opendbc (car/<marca>/values.py y fingerprints.py, rama master),
+       tupla por tupla (Ecu.x, dirección). Las tablas que había (commit
+       a2e79bc) citaban opendbc pero casi nada coincidía:
+         · Toyota: 0x7C4 decía AIRBAG y es CLIMATIZACIÓN; la dirección estaba
+           en 0x7E4 (es 0x7A1); BCM/tablero/TPMS en 0x7C0/7C3/7C7 sin fuente.
+         · Nissan: las 7 direcciones del rango 0x79x no aparecen; ABS, dirección
+           y tablero están en 0x740/0x742/0x743.
+         · GM: ponía carrocería, airbag, tablero y dirección en 0x7E4-0x7E7 (rango
+           de EMISIONES, ISO 15765-4) y climatización en 0x7EA, que es una
+           dirección de RESPUESTA. opendbc no documenta ninguna UDS de GM.
+         · VW: era una copia de la tabla de Hyundai (7D0, 7D4, 7A0, 7B3, 7C6,
+           758). En VW la dirección es 0x712 y el airbag 0x715.
+       Solo entra lo que está en la fuente. Lo que no, se queda sin nombre por
+       dirección: lo nombran el propio módulo, su número de pieza o la IA. */
     {
       marcas: /^(TOYOTA|LEXUS|SCION)/i,
-      fuente: 'opendbc (comma.ai) & Toyota Techstream',
+      fuente: 'opendbc (comma.ai), consultado 2026-09-22',
       dirs: {
-        0x7E0: 'Motor y Transmisión (ECM / PCM)',
-        0x7E1: 'Transmisión / Unidad Híbrida (HV ECU)',
-        0x7E2: 'Gestión Batería Híbrida (HV Battery)',
-        0x7E4: 'Dirección Electrónica (EPS)',
-        0x7B0: 'Frenos y Control de Estabilidad (ABS / VSC)',
-        0x7C0: 'Carrocería Central (BCM / Main Body)',
-        0x7C1: 'Climatizador (A/C ECU)',
-        0x7C3: 'Cuadro de Instrumentos (Meter / IPC)',
-        0x7C4: 'Sistema de Airbag (SRS Airbag)',
-        0x7C7: 'Presión de Neumáticos (TPMS)',
+        0x700: 'Motor (ECM)',
+        0x701: 'Transmisión (TCM)',
+        0x780: 'Airbag (SRS)',
+        0x791: 'Unidad de asistencia a la conducción (DSU)',
+        0x7A1: 'Dirección asistida (EPS)',
+        0x7B0: 'Frenos / ABS',
+        0x7C4: 'Climatización (HVAC)',
+        0x7D1: 'Frenos / ABS',
+        0x7D2: 'Sistema híbrido',
+        0x7E2: 'Sistema híbrido',
       },
     },
     {
       marcas: /^(NISSAN|INFINITI)/i,
-      fuente: 'opendbc (comma.ai) & Nissan Consult III',
+      fuente: 'opendbc (comma.ai), consultado 2026-09-22',
       dirs: {
-        0x7E0: 'Computadora de Motor (ECM)',
-        0x7E1: 'Transmisión Automática / CVT (TCM)',
-        0x790: 'Frenos y Control de Dinámica (ABS / VDC)',
-        0x792: 'Carrocería (BCM)',
-        0x793: 'Tablero / Instrumentos (IPC)',
-        0x795: 'Presión de Neumáticos (TPMS)',
-        0x797: 'Módulo de Airbag (SRS / ACU)',
-        0x798: 'Dirección Electrónica (EPS)',
-        0x79D: 'Inmovilizador / Llave NATS',
+        0x707: 'Cámara frontal',
+        0x740: 'Frenos / ABS',
+        0x742: 'Dirección asistida (EPS)',
+        0x743: 'Tablero de instrumentos',
       },
     },
     {
+      /* Mazda comparte con Ford las mismas cuatro direcciones en opendbc. */
       marcas: /^(FORD|LINCOLN|MAZDA)/i,
-      fuente: 'opendbc (comma.ai) & FORScan',
+      fuente: 'opendbc (comma.ai), consultado 2026-09-22',
       dirs: {
-        0x7E0: 'Controlador de Tren Motriz (PCM)',
-        0x7E1: 'Control de Transmisión (TCM)',
-        0x720: 'Módulo de Instrumentos (IPC)',
-        0x726: 'Módulo de Carrocería (BCM)',
-        0x730: 'Dirección Asistida Electrónica (PSCM)',
-        0x733: 'Control de Climatización (HVAC)',
-        0x737: 'Módulo Restricciones Airbag (RCM / SRS)',
-        0x760: 'Frenos Anti-bloqueo (ABS)',
-        0x781: 'Presión de Neumáticos (TPMS)',
+        0x706: 'Cámara frontal',
+        0x730: 'Dirección asistida (EPS / PSCM)',
+        0x732: 'Selector de cambios electrónico',
+        0x760: 'Frenos / ABS',
+        0x764: 'Radar frontal',
       },
     },
+    /* GM: sin tabla. opendbc no documenta direcciones UDS de GM (solo la cámara
+       en 0x24B, que no es diagnóstico) y lo que había era inventado. */
     {
-      marcas: /^(CHEVROLET|CHEVY|GMC|CADILLAC|BUICK|HOLDEN|OPEL)/i,
-      fuente: 'opendbc (comma.ai) & GM GDS2',
+      marcas: /^(VOLKSWAGEN|VW|AUDI|SEAT|SKODA|CUPRA)/i,
+      fuente: 'opendbc (comma.ai), consultado 2026-09-22',
       dirs: {
-        0x7E0: 'Computadora de Motor (ECM)',
-        0x7E1: 'Transmisión Automática (TCM)',
-        0x7E2: 'Control de Frenado Electrónico (EBCM / ABS)',
-        0x7E4: 'Módulo de Carrocería (BCM)',
-        0x7E5: 'Diagnóstico de Airbag (SDM / SRS)',
-        0x7E6: 'Cuadro de Instrumentos (IPC)',
-        0x7E7: 'Dirección Electrónica Asistida (EPS)',
-        0x7EA: 'Climatizador Automático (HVAC)',
-      },
-    },
-    {
-      marcas: /^(VOLKSWAGEN|VW|AUDI|SEAT|SKODA)/i,
-      fuente: 'VAG VCDS / ODIS CAN Bus Addressing',
-      dirs: {
-        0x7E0: 'Motor (ECM / Engine 01)',
-        0x7E1: 'Transmisión DSG (TCM / Auto Trans 02)',
-        0x7D0: 'Frenos (ABS / ESP 03)',
-        0x7D4: 'Dirección Electromecánica (EPS 44)',
-        0x7A0: 'Airbag / Restricciones (SRS 15)',
-        0x7A1: 'Electrónica Central (BCM 09)',
-        0x7B3: 'Climatizador Climatronic (HVAC 08)',
-        0x7C6: 'Cuadro de Instrumentos (IPC 17)',
-        0x758: 'Presión de Neumáticos (RDKS / TPMS 65)',
+        0x712: 'Dirección asistida (EPS)',
+        0x715: 'Airbag (SRS)',
+        0x74F: 'Cámara frontal',
+        0x757: 'Radar frontal',
       },
     },
   ],
