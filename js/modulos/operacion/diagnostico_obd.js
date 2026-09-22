@@ -3784,7 +3784,8 @@ Modulos.diagnostico_obd = {
          cada escaneo de un vehículo liviano guarda por dónde se le entró —por USB, y también por
          Bluetooth cuando el dongle acepta ATSH y el vehículo está en CAN de 11 bits— y desde el
          segundo del mismo modelo el escaneo empieza a usarlo.
-         También se puede escribir a mano en <b>🧩 Módulos</b>, para el módulo que sabés que está
+         También se puede escribir a mano en la <b>libreta del modelo</b>, dentro del 🧠 Centro de Módulos,
+         para el módulo que sabés que está
          aunque todavía no haya contestado.</p>`
       : `<table class="table" style="font-size:12px">
           <thead><tr><th>Modelo</th><th>Módulos que sabemos alcanzar</th><th style="text-align:center">Unidades</th><th style="text-align:center">Bus</th></tr></thead>
@@ -3887,6 +3888,7 @@ Modulos.diagnostico_obd = {
   },
 
   async modalModulosVehiculo() {
+    this._libretaEnCentro = false;
     UI.modal('🧩 Módulos por vehículo', `<div id="obd-mods-cuerpo" style="font-size:13px">
       Cargando módulos declarados…</div>`, '980px');
     if (!this._vehiculos || !this._vehiculos.length) {
@@ -4125,11 +4127,42 @@ Modulos.diagnostico_obd = {
       return UI.toast(msg, 'error');
     }
     UI.toast(id ? 'Módulo actualizado ✓' : 'Módulo agregado ✓');
-    this.modalModulosVehiculo();
+    this._volverDeLibreta();
   },
 
   eliminarModuloVehiculo(id, nombre) {
-    Modulos.eliminarRegistro('obd_modulos_vehiculo', id, nombre, () => this.modalModulosVehiculo());
+    Modulos.eliminarRegistro('obd_modulos_vehiculo', id, nombre, () => this._volverDeLibreta());
+  },
+
+  /* ═══════════ LA LIBRETA VIVE DENTRO DEL CENTRO ═══════════
+     Henry, 2026-09-22: «el mismo módulo que se llama Centro de Módulos y
+     Módulos, ¿para qué son? no los entiendo». Tenía razón: eran dos pantallas
+     para un solo trabajo. La libreta del modelo —qué módulos trae y en qué
+     dirección contestan— quedó adentro del Centro, que es donde se la mira.
+     El alta, la edición y el borrado son los mismos de siempre; lo único que
+     cambia es a dónde se vuelve al terminar. */
+  _volverDeLibreta() {
+    this._modulosDeclarados = null;   // acaba de cambiar: que se relea
+    this._modsDeclarados = null;
+    if (this._libretaEnCentro) return this.modalCentroModulos(this._centroScan);
+    return this.modalModulosVehiculo();
+  },
+
+  /* Abre el formulario de la libreta desde el Centro. Sin `id` es un alta, y
+     entonces viene con la marca y el modelo del vehículo ya puestos: es la
+     libreta DE ESTE MODELO, no un formulario en blanco. */
+  async editarDeLaLibreta(id) {
+    this._libretaEnCentro = true;
+    if (!this._modsDeclarados) {
+      try { this._modsDeclarados = await this._declaradosDelTaller(); } catch (_) { this._modsDeclarados = []; }
+    }
+    this.editarModuloVehiculo(id || undefined);
+    if (id) return;
+    const veh = this._vehiculoDe(this._centroScan || this._scan || {});
+    const pon = (k, v) => { const el = document.getElementById(k); if (el && v != null) el.value = v; };
+    pon('mod-marca', veh.marca || '');
+    pon('mod-modelo', veh.modelo || '');
+    this._onMarcaModulo();
   },
 
   /* Convertir en nombres lo que el escaneo ya encontró. Es el camino corto: el
@@ -6228,7 +6261,6 @@ Modulos.diagnostico_obd = {
               <button class="btn" style="background:#1e293b;color:#f8fafc;border:1px solid #334155" onclick="Modulos.diagnostico_obd.modalCampanas()">🔔 Campañas</button>
               <span id="obd-estado-conexion" style="display:inline-flex;align-items:center;gap:6px"></span>
               <button class="btn" style="background:#0891b2;color:#ffffff;border:none;font-weight:700" onclick="Modulos.diagnostico_obd.modalCentroModulos()">🧠 Centro de Módulos</button>
-              <button class="btn" style="background:#1e293b;color:#f8fafc;border:1px solid #334155" onclick="Modulos.diagnostico_obd.modalOEM()">🧠 Catálogo OEM</button>
               <button class="btn" style="background:linear-gradient(135deg, #0284c7 0%, #2563eb 100%);color:#ffffff;font-weight:800;border:none;box-shadow:0 0 14px rgba(37,99,235,0.6);padding:8px 16px" onclick="Modulos.diagnostico_obd.modalEscanear()">📡 Escanear Otro Vehículo</button>
             </div>
           </div>
@@ -6283,9 +6315,7 @@ Modulos.diagnostico_obd = {
             <button class="btn" style="background:#1e293b;color:#f8fafc;border:1px solid #334155" onclick="Modulos.diagnostico_obd.modalCampanas()">🔔 Campañas</button>
             <span id="obd-estado-conexion" style="display:inline-flex;align-items:center;gap:6px"></span>
             <button class="btn" style="background:#1e293b;color:#f8fafc;border:1px solid #334155" onclick="Modulos.diagnostico_obd.modalMapaVehiculos()" title="Mapa de Cobertura">🗺 Cobertura</button>
-            <button class="btn" style="background:#1e293b;color:#f8fafc;border:1px solid #334155" onclick="Modulos.diagnostico_obd.modalModulosVehiculo()">🧩 Módulos</button>
-            <button class="btn" style="background:#0891b2;color:#ffffff;border:none;font-weight:700" onclick="Modulos.diagnostico_obd.modalCentroModulos()">🧠 Centro Módulos</button>
-            <button class="btn" style="background:#1e293b;color:#f8fafc;border:1px solid #334155" onclick="Modulos.diagnostico_obd.modalOEM()">🧠 Catálogo OEM</button>
+            <button class="btn" style="background:#0891b2;color:#ffffff;border:none;font-weight:700" onclick="Modulos.diagnostico_obd.modalCentroModulos()">🧠 Centro de Módulos</button>
             <button class="btn" style="background:#1e293b;color:#f8fafc;border:1px solid #334155" onclick="Modulos.diagnostico_obd.render()">↻ Actualizar</button>
             <button class="btn" style="background:linear-gradient(135deg, #0284c7 0%, #2563eb 100%);color:#ffffff;font-weight:800;border:none;box-shadow:0 0 14px rgba(37,99,235,0.6);padding:8px 16px" onclick="Modulos.diagnostico_obd.modalEscanear()">📡 Nuevo Escaneo</button>
           </div>

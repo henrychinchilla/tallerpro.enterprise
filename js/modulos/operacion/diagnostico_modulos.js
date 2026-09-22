@@ -89,6 +89,9 @@
         return UI.toast('Ningún escaneo tiene barrido por módulo todavía. ' +
           'El barrido corre cuando el dongle acepta ATSH y el vehículo está en CAN de 11 bits.', 'warn');
       this._centroScan = s;
+      /* La libreta ahora vive acá adentro: guardar o borrar tiene que volver
+         a esta pantalla, no a la de administración que ya no está en la barra. */
+      this._libretaEnCentro = true;
       /* Las definiciones OEM se necesitan para saber qué se le puede hacer a
          cada módulo; se cargan una vez y quedan. */
       if (!this._oemDefs || !this._oemDefs.length) {
@@ -174,12 +177,59 @@
         }).join('')}
       </div>
 
+      ${this._libretaHTML(veh)}
+
       <div style="display:flex;gap:7px;flex-wrap:wrap;margin-top:10px">
         <button class="btn btn-sm btn-ghost" onclick="Modulos.diagnostico_obd.modalBancoPruebas()">🧪 Banco de pruebas</button>
-        <button class="btn btn-sm btn-ghost" onclick="Modulos.diagnostico_obd.modalModulosVehiculo()">🧩 Módulos del modelo</button>
         ${vivo && todos.length ? `<button class="btn btn-sm btn-danger" onclick="Modulos.diagnostico_obd.borrarPorModulo()">🧹 Borrar todos los códigos</button>` : ''}
       </div>
-      <div class="modal-footer"><button class="btn btn-ghost" onclick="UI.cerrarModal()">Cerrar</button></div>`;
+      <div class="modal-footer">
+        <a href="javascript:void(0)" onclick="Modulos.diagnostico_obd.modalOEM()"
+           style="margin-right:auto;font-size:11px;color:var(--text3);text-decoration:none"
+           title="Definiciones OEM verificadas: lo que la herramienta tiene permitido TRANSMITIR al vehículo">⚙️ Catálogo OEM (avanzado)</a>
+        <button class="btn btn-ghost" onclick="UI.cerrarModal()">Cerrar</button>
+      </div>`;
+    },
+
+    /* LA LIBRETA DE ESTE MODELO, adentro del Centro.
+       Era una pantalla aparte ("🧩 Módulos") y Henry no entendía para qué —con
+       razón: es la misma pregunta que el Centro contesta, "qué módulos trae
+       este carro". Acá es la segunda mitad de la respuesta: los del escaneo de
+       hoy arriba, y los que el taller ya sabe que este modelo trae, abajo.
+       Es lo que hace que el PRÓXIMO escaneo del mismo modelo arranque sabiendo
+       dónde preguntar. */
+    _libretaHTML(veh) {
+      const filas = this._modulosDeclarados || [];
+      const puedeEditar = typeof puedeAccion !== 'function' || puedeAccion('diagnostico_obd', 'editar');
+      const modelo = UI.esc([veh.marca, veh.modelo].filter(Boolean).join(' ') || 'este modelo');
+      return `<div class="card" style="padding:12px;margin-top:12px">
+        <b style="font-size:11.5px;letter-spacing:.3px;color:var(--text2)">📓 LIBRETA DE ${modelo.toUpperCase()}</b>
+        <div style="font-size:11px;color:var(--text3);margin-top:3px;line-height:1.5">
+          Qué módulos trae este modelo y en qué dirección contestan. Con esto el próximo escaneo
+          arranca preguntando donde ya sabe, en vez de tocar 240 puertas a ciegas.
+          Declarar un módulo <b>no transmite nada</b>: sólo se le pregunta “¿hay alguien?”.
+        </div>
+        ${filas.length ? `<div style="overflow:auto;margin-top:8px">
+          <table class="table" style="font-size:11.5px"><tbody>
+            ${filas.map(m => `<tr>
+              <td><b>${UI.esc(m.nombre)}</b>
+                <div style="font-size:10px;color:var(--text3)">${
+                  m.origen === 'ia' ? '🤖 lo identificó la IA'
+                  : m.origen === 'escaneo' ? 'tomado de un escaneo'
+                  : m.origen === 'paquete' ? 'vino cargado' : 'lo escribió el taller'}</div></td>
+              <td style="font-family:ui-monospace,Consolas,monospace;white-space:nowrap">${this._hexDir(m.req)}${m.ext ? ' (29b)' : ''}</td>
+              ${puedeEditar ? `<td style="text-align:right;white-space:nowrap">
+                <div style="display:inline-flex;gap:4px">
+                  ${Modulos.btnAccion('ver', `Modulos.diagnostico_obd.verModuloVehiculo('${m.id}')`)}
+                  ${Modulos.btnAccion('editar', `Modulos.diagnostico_obd.editarDeLaLibreta('${m.id}')`)}
+                  ${Modulos.btnAccion('eliminar', `Modulos.diagnostico_obd.eliminarModuloVehiculo('${m.id}', '${UI.jsAttr(m.nombre)}')`)}
+                </div></td>` : '<td></td>'}
+            </tr>`).join('')}
+          </tbody></table></div>`
+        : '<div style="font-size:11.5px;color:var(--text3);margin-top:7px">Todavía no hay nada anotado para este modelo. Los módulos que la IA identifique se anotan solos.</div>'}
+        ${puedeEditar ? `<button class="btn btn-sm btn-ghost" style="margin-top:8px"
+          onclick="Modulos.diagnostico_obd.editarDeLaLibreta()">＋ Agregar módulo a la libreta</button>` : ''}
+      </div>`;
     },
 
     /* ═══════════ NIVEL 2 · FICHA DE UN MÓDULO ═══════════ */
@@ -270,8 +320,7 @@
             haya una definición verificada</b> para este módulo, con su fuente y sus precondiciones.
             No es una limitación de la conexión: es la regla de esta herramienta —
             lo que no se puede sostener con una norma o un manual, no se transmite.
-          </div>
-          <button class="btn btn-sm btn-ghost" style="margin-top:8px" onclick="Modulos.diagnostico_obd.modalOEM()">🧠 Ir al catálogo OEM</button>`)}
+          </div>`)}
 
         ${seccion('5 · BANCO DE PRUEBAS', `
           <div style="font-size:12px;color:var(--text2)">Mandarle un servicio puntual a este módulo y ver la respuesta cruda.

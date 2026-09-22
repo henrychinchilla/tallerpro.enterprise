@@ -135,6 +135,36 @@ const escaneo = {
   ok('muestra el número de pieza cuando lo hay', /58920-G6300/.test(html));
   ok('y avisa cuántos módulos siguen sin nombre', /sin nombre/.test(html));
 
+  /* ── La libreta del modelo quedó ADENTRO del Centro ─────────────────────
+     Henry, 2026-09-22: «el mismo módulo que se llama Centro de Módulos y
+     Módulos, ¿para qué son? no los entiendo». Eran dos pantallas para una sola
+     pregunta. Al fusionarlas, lo que NO puede perderse es el CRUD completo
+     (regla 1 del proyecto): crear, ver, editar y eliminar. */
+  ok('la libreta del modelo se ve dentro del Centro', /LIBRETA DE/.test(html));
+  ok('y ofrece agregar a la libreta', /editarDeLaLibreta\(\)/.test(html));
+
+  M._modulosDeclarados = [{ id: 'lib1', req: 0x7B3, ext: false, nombre: 'Airbag / SRS', origen: 'ia' }];
+  M._centroScan = null;
+  await M.modalCentroModulos(escaneo);
+  const conLibreta = ctx.pintado.html;
+  ok('la libreta lista lo declarado para este modelo', /Airbag \/ SRS/.test(conLibreta));
+  ok('dice que ese nombre lo puso la IA', /lo identificó la IA/.test(conLibreta));
+  ok('CRUD completo en la libreta: ver, editar y eliminar',
+     /verModuloVehiculo\('lib1'\)/.test(conLibreta) &&
+     /editarDeLaLibreta\('lib1'\)/.test(conLibreta) &&
+     /eliminarModuloVehiculo\('lib1'/.test(conLibreta));
+  ok('el catálogo OEM sigue alcanzable, pero como enlace y no como botón de la barra',
+     /modalOEM\(\)/.test(conLibreta));
+  M._modulosDeclarados = [];
+
+  /* Los dos botones que Henry pidió fuera de la barra. */
+  const fuenteObd = leer('js/modulos/operacion/diagnostico_obd.js');
+  ok('la barra ya no tiene el botón "🧩 Módulos"',
+     !/modalModulosVehiculo\(\)">🧩/.test(fuenteObd));
+  ok('la barra ya no tiene el botón "🧠 Catálogo OEM"',
+     !/modalOEM\(\)">🧠 Catálogo OEM</.test(fuenteObd));
+  ok('pero el Centro de Módulos sigue en la barra', /modalCentroModulos\(\)">🧠 Centro/.test(fuenteObd));
+
   /* ── Ficha de un módulo ── */
   ctx._oem = [{ id:'d1', marca:'Kia', modelo:'Picanto', ecu:'ECM / PCM (motor)', tipo:'reset',
                 identificador:'dtc_modulo', estado:'verificado', riesgo:'controlado', activa:true,
