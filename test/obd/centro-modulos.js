@@ -133,7 +133,11 @@ const escaneo = {
   ok('y lo sano al final', orden[orden.length - 1] >= 0x7E0);
   ok('el encabezado dice cuántas fallas presentes hay', /2 falla\(s\) presentes/.test(html));
   ok('muestra el número de pieza cuando lo hay', /58920-G6300/.test(html));
-  ok('y avisa cuántos módulos siguen sin nombre', /sin nombre/.test(html));
+  /* Henry, 2026-09-22: «si el nombre está identificado, se debe usar el
+     nombre correcto». En este Picanto todos tienen con qué nombrarse. */
+  ok('0x7B3 se llama Climatización (tabla verificada de Kia), no "Módulo 0x7B3"',
+     /Climatizaci/.test(html) && !/<b>Módulo 0x7B3<\/b>/.test(html));
+  ok('y como todos tienen nombre, no avisa "sin nombre"', !/siguen sin nombre/.test(html));
 
   /* ── La libreta del modelo quedó ADENTRO del Centro ─────────────────────
      Henry, 2026-09-22: «el mismo módulo que se llama Centro de Módulos y
@@ -185,7 +189,14 @@ const escaneo = {
   /* Ya no se le pide al mecánico que investigue: el botón manda a la IA a
      hacerlo. Henry, 2026-09-22: "yo no voy a investigar eso, para eso está
      la IA — no quiero volver a ver eso de renombrar". */
-  ok('ofrece que la IA lo identifique', /identificarConIA\(2004\)/.test(ficha));
+  ok('el título es el nombre resuelto, no la dirección', /🔧 Dirección asistida/.test(ctx.pintado.titulo));
+  ok('y dice de dónde sale ese nombre', /por su dirección 0x7D4 en Kia/.test(ficha));
+  /* Uno que no está en ninguna tabla y no dijo nada: ahí sí se le pide a la IA. */
+  escaneo.por_modulo.push({ ecu:0x7A5, resp:null, nombre:'Módulo 0x7A5', codigos:[], ident:null });
+  M.fichaModulo(0x7A5);
+  ok('ofrece que la IA lo identifique cuando no hay con qué nombrarlo',
+     /identificarConIA\(1957\)/.test(ctx.pintado.html) && /Sin identificar 0x7A5/.test(ctx.pintado.html));
+  escaneo.por_modulo.pop();
   ok('y NO le pide al mecánico que lo bautice', !/nombrarModuloDelEscaneo/.test(ficha));
   ok('dice por qué las funciones auxiliares están bloqueadas',
      /no se transmite/.test(ficha) && /verificada/.test(ficha));

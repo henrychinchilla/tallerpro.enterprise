@@ -29,7 +29,10 @@ M._canTx=async(id,d)=>{
   // nombres honestos en 29 bits
   ok('nombra por destino', M._nombreUDS(0x18DA10F1,[])==='Modulo 0x10 (29 bits)');
   ok('nombra familia por letra', M._nombreUDS(0x18DA28F1,[{codigo:'C1234'}])==='Chasis / frenos 0x28 (29 bits)');
-  ok('11 bits sigue usando la tabla', M._nombreUDS(0x758,[])==='Presión de neumáticos (TPMS)');
+  ok('11 bits sigue usando la tabla (solo lo legislado)', M._nombreUDS(0x7E1,[])==='Transmisión (TCM)');
+  /* 0x758 = "TPMS" valía para todas las marcas: así salían llantas en un
+     Picanto sin TPMS. Sin marca, una dirección no legislada no tiene nombre. */
+  ok('una dirección no legislada ya no se bautiza por tabla genérica', M._nombreUDS(0x758,[])==='Módulo 0x758');
 
   // _escanearModulos cae a 29 bits cuando 11 bits trae <=2
   M._barrerModulos=async()=>[{req:0x7E0,resp:0x7E8,ext:false},{req:0x7E1,resp:0x7E9,ext:false}];
