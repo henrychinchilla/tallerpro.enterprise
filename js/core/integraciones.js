@@ -329,12 +329,64 @@ const IA = {
     return burbuja;
   },
 
-  /* Convierte enlaces Markdown [texto](url) a <a> clicables; escapa el
-     resto del texto para evitar inyección de HTML */
+  /* Convierte Markdown a HTML formateado y profesional:
+     titulares, tablas HTML, listas, negritas y enlaces. */
   _formatear(texto) {
-    const esc = s => s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-    return esc(texto).replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g,
-      (_, label, url) => `<a href="${url}" target="_blank" rel="noopener" style="color:var(--amber)">${label}</a>`);
+    if (!texto) return '';
+    /* Las comillas también: sin eso, un enlace con `"` en la URL cerraba el
+       href y metía atributos (el texto de la IA puede traer lo que encontró
+       en una búsqueda web). */
+    const esc = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    let t = esc(texto);
+
+    // Enlaces Markdown
+    t = t.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g,
+      (_, label, url) => `<a href="${url}" target="_blank" rel="noopener" style="color:var(--cyan);text-decoration:underline">${label}</a>`);
+
+    // Separadores horizontales
+    t = t.replace(/(?:^|\n)\s*---\s*(?:\n|$)/g, '<hr style="border:none;border-top:1px solid var(--border);margin:14px 0">');
+
+    // Encabezados Markdown (#, ##, ###, ####)
+    t = t.replace(/^####\s+(.+)$/gm, '<h5 style="font-size:12.5px;font-weight:700;color:var(--text);margin:10px 0 4px">$1</h5>');
+    t = t.replace(/^###\s+(.+)$/gm, '<h4 style="font-size:13.5px;font-weight:800;color:#0284c7;margin:14px 0 6px;display:flex;align-items:center;gap:6px">$1</h4>');
+    t = t.replace(/^##\s+(.+)$/gm, '<h3 style="font-size:15px;font-weight:900;color:var(--text);margin:16px 0 8px;border-bottom:1px solid var(--border);padding-bottom:4px">$1</h3>');
+    t = t.replace(/^#\s+(.+)$/gm, '<h2 style="font-size:16px;font-weight:900;color:var(--brand);margin:16px 0 8px">$1</h2>');
+
+    // Negrita e itálica
+    t = t.replace(/\*\*([^*]+)\*\*/g, '<strong style="font-weight:700;color:var(--text)">$1</strong>');
+    t = t.replace(/\*([^*]+)\*/g, '<em style="color:var(--text2)">$1</em>');
+
+    // Tablas Markdown
+    t = t.replace(/((?:^|[ \t]*\n)\|[^\n]+\|[ \t]*\n\|[ \t]*[-:| ]+[ \t]*\n(?:\|[^\n]+\|[ \t]*(?:\n|$))+)/g, match => {
+      const lines = match.trim().split('\n').map(l => l.trim()).filter(Boolean);
+      if (lines.length < 2) return match;
+      const parseRow = row => row.split('|').slice(1, -1).map(c => c.trim());
+      const headers = parseRow(lines[0]);
+      const bodyRows = lines.slice(2).map(parseRow);
+      return `<div style="overflow-x:auto;margin:10px 0"><table class="table" style="width:100%;font-size:12px;border-collapse:collapse;border:1px solid var(--border);border-radius:6px;background:var(--surface)">
+        <thead><tr style="background:var(--surface2);border-bottom:2px solid var(--border)">
+          ${headers.map(h => `<th style="padding:6px 10px;text-align:left;font-weight:800;color:var(--text)">${h}</th>`).join('')}
+        </tr></thead>
+        <tbody>
+          ${bodyRows.map(r => `<tr style="border-bottom:1px solid var(--border)">
+            ${r.map(c => `<td style="padding:6px 10px;color:var(--text2)">${c}</td>`).join('')}
+          </tr>`).join('')}
+        </tbody>
+      </table></div>`.replace(/\n\s*/g, '');   // sin saltos: se volverían <br> sueltos fuera de la tabla
+    });
+
+    // Listas desordenadas con viñetas
+    t = t.replace(/(?:^|\n)\s*[-•]\s+([^\n]+)/g, '<li style="margin-left:18px;margin-bottom:3px;color:var(--text2)">$1</li>');
+    t = t.replace(/((?:<li[^>]*>.*?<\/li>\s*)+)/g, '<ul style="margin:6px 0 8px;padding-left:4px">$1</ul>');
+
+    // Un bloque (título, tabla, lista) ya separa solo: el salto que lo sigue sobra
+    t = t.replace(/(<\/(?:h[2-5]|div|ul)>)[ \t]*\n+/g, '$1');
+
+    // Saltos de línea dobles y simples
+    t = t.replace(/\n\n+/g, '<div style="margin-bottom:8px"></div>');
+    t = t.replace(/\n/g, '<br>');
+
+    return t;
   },
 
   /* Actualiza el texto de una burbuja ya creada (ej. al recibir la respuesta) */

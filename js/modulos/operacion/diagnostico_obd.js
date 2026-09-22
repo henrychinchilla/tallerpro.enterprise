@@ -4891,7 +4891,7 @@ Modulos.diagnostico_obd = {
       };
       log('<b>Escaneo completo ✓</b>');
       this._renderResultado();
-      const bs = document.getElementById('obd-btn-save'); if (bs) bs.style.display = '';
+      for (const b of ['obd-btn-save', 'obd-btn-print']) { const e = document.getElementById(b); if (e) e.style.display = ''; }
       btn.textContent = '↻ Re-escanear';
     } catch (e) {
       log(`<span style="color:var(--red)">✗ ${e.message}</span>`);
@@ -5399,7 +5399,7 @@ Modulos.diagnostico_obd = {
                      comparacion };
       log('<b>Escaneo completo ✓</b>');
       this._renderResultado();
-      document.getElementById('obd-btn-save').style.display = '';
+      for (const b of ['obd-btn-save', 'obd-btn-print']) { const x = document.getElementById(b); if (x) x.style.display = ''; }
       btn.textContent = '↻ Re-escanear';
     } catch (e) {
       log(`<span style="color:var(--red)">✗ ${e.message}</span>`);
@@ -6257,6 +6257,7 @@ Modulos.diagnostico_obd = {
             </div>
             <div class="page-actions" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
               ${!this._scan.id ? `<button class="btn" style="background:#0ea5e9;color:#fff;border:none;font-weight:800" onclick="Modulos.diagnostico_obd.guardarEscaneo()">💾 Guardar escaneo</button>` : ''}
+              <button class="btn" style="background:#1e293b;color:#f8fafc;border:1px solid #334155" onclick="Modulos.diagnostico_obd.imprimir()">🖨 Imprimir escaneo</button>
               ${(this._scan.traza || []).length ? `<button class="btn" style="background:#1e293b;color:#f8fafc;border:1px solid #334155"
                 title="Copia el diálogo crudo con el vehículo para mandarlo a soporte cuando algo no cuadre"
                 onclick="Modulos.diagnostico_obd.copiarTraza()">🧾 Bitácora técnica</button>` : ''}
@@ -6288,6 +6289,7 @@ Modulos.diagnostico_obd = {
             </div>
             <div style="display:flex;gap:8px">
               ${!this._scan.id ? `<button class="btn btn-sm" style="background:#0ea5e9;color:#fff;border:none;font-weight:800" onclick="Modulos.diagnostico_obd.guardarEscaneo()">💾 Guardar</button>` : ''}
+              <button class="btn btn-sm" style="background:#1e293b;color:#f8fafc;border:1px solid #334155" onclick="Modulos.diagnostico_obd.imprimir()">🖨 Imprimir escaneo</button>
               <button class="btn btn-sm" style="background:#1e293b;color:#f8fafc;border:1px solid #334155" onclick="Modulos.diagnostico_obd.cerrarScanActivo()">📋 Ver Historial del Mes</button>
               <button class="btn btn-sm" style="background:linear-gradient(135deg, #0284c7 0%, #2563eb 100%);color:#ffffff;font-weight:800;border:none" onclick="Modulos.diagnostico_obd.modalEscanear()">📡 Nuevo Escaneo</button>
             </div>
@@ -6480,6 +6482,7 @@ Modulos.diagnostico_obd = {
           title="Copia el dialogo crudo con el vehiculo para mandarlo a soporte cuando algo no cuadre"
           onclick="Modulos.diagnostico_obd.copiarTraza()">🧾 Bitácora técnica</button>
         <button class="btn btn-cyan" id="obd-btn-save" style="display:none" onclick="Modulos.diagnostico_obd.guardarEscaneo()">💾 Guardar</button>
+        <button class="btn btn-ghost" id="obd-btn-print" style="display:none" onclick="Modulos.diagnostico_obd.imprimir()">🖨 Imprimir escaneo</button>
       </div>`, '640px');
 
     /* Se puebla después de pintar el modal: hablar con el puente tarda y no
@@ -7213,45 +7216,106 @@ Modulos.diagnostico_obd = {
     UI.toast('Ficha del vehículo completada con datos del VIN ✓');
   },
 
-  /* Análisis del escaneo con Nexus (Edge Function ai-assistant ya existente) */
+  /* Análisis del escaneo con Nexus (Edge Function ai-assistant ya existente).
+
+     El informe salía desordenado y, peor, contradictorio ("EXCELENTE" arriba y
+     "mezcla extremadamente pobre" abajo), y se cortaba a media frase. Tres
+     causas, las tres de ENTRADA, no del modelo:
+     1. Los sensores viajaban como claves internas sin unidad ni rango
+        (`o2_b1s1: 1.245`, `ltft2s: 0`, `pedal_e: 7`): la IA adivinaba qué eran
+        y así nacieron "Pedal Embrague" y "LTFT 2S (cilindros 2)".
+     2. No se le decía que el motor estaba APAGADO (RPM 0), así que evaluaba
+        sondas lambda y catalizador que sin combustión no significan nada.
+     3. Con 0 km y 0 calentamientos desde el borrado, un código que "ya no
+        aparece" NO está resuelto — la IA lo daba por reparación efectiva.
+     Además se le pedía evaluar TODOS los sensores en tablas: 30 filas de
+     relleno que agotaban el tope de tokens. Ahora recibe los hechos ya
+     interpretados y un formato corto y fijo. */
   _promptIA(s, veh) {
-    const dat = Object.entries(s.datos||{}).map(([k,v])=>`${k}: ${v}`).join(', ');
+    const datos = s.datos || {};
+    const defDe = k => Object.values(this._PIDS).find(d => d.k === k) || this._OEM_PIDS[k] || null;
+    const rpm = typeof datos.rpm === 'number' ? datos.rpm : null;
+    const motorApagado = rpm === 0;
+    const sensores = Object.entries(datos).map(([k, v]) => {
+      const d = defDe(k);
+      const nombre = d ? d.l : k;
+      const unidad = d ? (d.u || '').trim() : '';
+      let ref = '';
+      /* Un rango "en ralentí" o "motor caliente" contra un motor apagado da
+         FUERA en casi todo, y eso era el ruido que la IA convertía en fallas. */
+      if (k === 'volt_ecu' && motorApagado && typeof v === 'number') {
+        ref = ` [batería en reposo: ref 12.4–12.9${v < 12.4 ? ' → BAJA' : ''}]`;
+      } else if (d && d.r && motorApagado && (d.rc || d.cat === 'mezcla')) {
+        ref = ' [no evaluable con motor apagado]';
+      } else if (d && d.r) {
+        const fuera = typeof v === 'number' && (v < d.r[0] || v > d.r[1]);
+        ref = ` [ref ${d.r[0]}–${d.r[1]}${d.rc ? ` ${d.rc}` : ''}${fuera ? ' → FUERA' : ''}]`;
+      }
+      return `  - ${nombre}: ${v}${unidad ? ' ' + unidad : ''}${ref}`;
+    }).join('\n');
+
+    const borradoKm = typeof datos.dist_borr === 'number' ? datos.dist_borr : null;
+    const calent = typeof datos.warmups === 'number' ? datos.warmups : null;
+    const borradoReciente = borradoKm === 0 || calent === 0;
+    const mons = (s.readiness?.monitores || []).filter(m => m.soportado);
+    const incompletos = mons.filter(m => !m.listo).map(m => m.nombre);
+    const perm = (s.permanentes || []).map(x => typeof x === 'string' ? x : x.codigo).filter(Boolean);
     const c = s.comparacion;
-    const mods = (s.por_modulo||[]).map(m => `[0x${m.ecu.toString(16).toUpperCase()}] ${m.nombre}: ${(m.codigos||[]).map(x => `${x.codigo} (${x.desc||'sin desc'})`).join(', ')||'Sin fallas'}`).join('\n');
+    const mods = (s.por_modulo || []).map(m => {
+      const nom = /^M[oó]dulo 0x/i.test(m.nombre || '') ? 'sin identificar' : (m.nombre || 'sin identificar');
+      const cods = (m.codigos || []).map(x => `${x.codigo} (${x.desc || 'sin descripción'})`).join(', ');
+      return `  - 0x${m.ecu.toString(16).toUpperCase()} · ${nom}: ${cods || 'sin códigos'}`;
+    }).join('\n');
+    const lista = arr => (arr || []).map(d => `${d.codigo}${d.desc ? ` (${d.desc})` : ''}`).join('; ') || 'ninguno';
 
-    return `Actúa como NEXUS PRO ENTERPRISE, el motor de asistencia técnica automotriz oficial de NEXUS.
-Genera un informe técnico profesional, conciso y ordenado para el taller.
+    const hechos = [
+      motorApagado ? 'MOTOR APAGADO (RPM 0, contacto en ON): las lecturas de sondas lambda, relación de mezcla, ajustes de combustible, avance y catalizador NO son evaluables en esta condición.' : '',
+      rpm === null ? 'No se leyó RPM: no se sabe si el motor estaba en marcha.' : '',
+      borradoReciente ? `CÓDIGOS BORRADOS RECIENTEMENTE (${borradoKm ?? '?'} km y ${calent ?? '?'} calentamientos desde el borrado): la ausencia de códigos NO confirma ninguna reparación todavía.` : '',
+      incompletos.length ? `Monitores de disponibilidad INCOMPLETOS: ${incompletos.join(', ')}.` : (mons.length ? 'Todos los monitores soportados están completos.' : ''),
+      perm.length ? `Códigos PERMANENTES presentes: ${perm.join(', ')} (la ECU aún no confirma la reparación).` : '',
+    ].filter(Boolean).map(h => `- ${h}`).join('\n');
 
-DATOS DEL VEHÍCULO Y ESCANEO:
-- Vehículo: ${veh ? `${veh.marca||''} ${veh.modelo||''} ${veh.anio||''} (Placa: ${veh.placa||'s/placa'})` : 'No especificado'}
-- VIN: ${s.vin||'—'}
-- Check Engine (MIL): ${s.mil ? 'ENCENDIDO 🔴' : 'Apagado ✅'}
-- Protocolo: ${s.protocolo||'—'} | Interfaz / Adaptador: ${s.adaptador||'—'}
-- Módulos Consultados (${(s.por_modulo||[]).length}):
-${mods || 'Sin barrido por módulo'}
-- Códigos OBD Confirmados: ${(s.dtcs||[]).map(d=>`${d.codigo} (${d.desc})`).join('; ')||'ninguno'}
-- Códigos OBD Pendientes: ${(s.dtcs_pendientes||[]).map(d=>d.codigo).join('; ')||'ninguno'}
-${c && !c.primera ? `- Histórico Visita Previa (${c.dias} días atrás) — REINCIDENTES: ${(c.reincidentes||[]).map(x=>x.codigo).join(', ')||'ninguno'}; Nuevos: ${(c.nuevos||[]).map(x=>x.codigo).join(', ')||'ninguno'}; Resueltos: ${(c.resueltos||[]).map(x=>x.codigo).join(', ')||'ninguno'}\n` : ''}- Freeze Frame: ${s.freeze_frame ? JSON.stringify(s.freeze_frame) : '—'}
-- Datos en vivo sensores: ${dat || '—'}
+    return `Eres Nexus, asistente técnico del taller. Redacta el INFORME DE DIAGNÓSTICO que el taller archiva y entrega al cliente.
+El encabezado (taller, placa, VIN, fecha) ya lo pone el sistema: NO lo repitas.
 
-REGLAS DE FORMATO OBLIGATORIAS:
-1. Sé técnico, limpio y directo. No inventes conflictos de mapeo CAN o corrupción de firmware a menos que haya evidencia explícita de falla de comunicación de bus.
-2. Formatea la respuesta con las siguientes secciones en Markdown:
+VEHÍCULO: ${veh ? `${veh.marca || ''} ${veh.modelo || ''} ${veh.anio || ''}`.trim() : 'no especificado'}
+Protocolo: ${s.protocolo || '—'}
+Check Engine (MIL): ${s.mil ? 'ENCENDIDO' : 'apagado'}
 
-### 📋 1. SÍNTESIS DEL ESCANEO
-Resumen ejecutivo claro de la condición general del vehículo.
+HECHOS YA INTERPRETADOS (tienen prioridad sobre cualquier lectura suelta):
+${hechos || '- (sin observaciones de contexto)'}
 
-### 🔍 2. DIAGNÓSTICO DE MÓDULOS DE RED (CAN BUS)
-Módulos presentes y su función en la red del vehículo.
+CÓDIGOS:
+- Confirmados: ${lista(s.dtcs)}
+- Pendientes: ${lista(s.dtcs_pendientes)}
+${c && !c.primera ? `- Frente a la visita anterior (${c.dias === 0 ? 'hoy mismo' : `hace ${c.dias} días`}${c.borrados_antes ? ', en la que se BORRARON los códigos' : ''}): volvieron ${(c.reincidentes || []).map(x => x.codigo).join(', ') || 'ninguno'}; nuevos ${(c.nuevos || []).map(x => x.codigo).join(', ') || 'ninguno'}; ya no aparecen ${(c.resueltos || []).map(x => x.codigo).join(', ') || 'ninguno'}.\n` : ''}- Freeze frame: ${s.freeze_frame ? JSON.stringify(s.freeze_frame) : 'no hay'}
 
-### 🚨 3. ANÁLISIS DE CÓDIGOS DTC Y SÍNTOMAS
-Explicación detallada de cada código detectado, componentes afectados y causa probable.
+MÓDULOS QUE RESPONDIERON (${(s.por_modulo || []).length}):
+${mods || '  - sin barrido por módulo'}
 
-### 📊 4. EVALUACIÓN DE TELEMETRÍA Y VALORES EN VIVO
-Evaluación puntual de sensores (LTFT/STFT, O2, MAP, Temp, etc.), indicando si están dentro del rango operativo o desviados.
+SENSORES (valor, unidad y rango de referencia; "FUERA" = fuera de rango para esa condición):
+${sensores || '  - sin datos'}
 
-### 🛠️ 5. PROCEDIMIENTO PASO A PASO DE REPARACIÓN
-Procedimiento numerado (1.1, 1.2, 2.1) con comprobaciones eléctricas (multímetro/osciloscopio) y reparaciones recomendadas.`;
+REGLAS:
+1. Usa SOLO estos datos. No inventes especificaciones de fábrica (resistencias, voltajes, torques, ubicación de conectores o pines). Si hace falta una, escribe "según manual de servicio".
+2. Respeta los HECHOS: con motor apagado no opines sobre mezcla, sondas ni catalizador; di que requieren motor en marcha. Tras un borrado reciente, un código que ya no aparece está "sin verificar", no "resuelto".
+3. Un módulo "sin identificar" se queda así: no adivines su función.
+4. No listes sensores normales uno por uno ni repitas un dato en dos secciones.
+5. Español neutro, frases cortas, tono de informe técnico. Sin emojis. Máximo 300 palabras.
+
+FORMATO EXACTO (Markdown, estas 4 secciones y nada más):
+## Veredicto
+**APTO**, **APTO CON OBSERVACIONES**, **REQUIERE REPARACIÓN** o **DIAGNÓSTICO INCOMPLETO**, seguido de una o dos frases que lo justifiquen.
+
+## Hallazgos
+Tabla con columnas | Prioridad | Sistema | Hallazgo | Evidencia |. Prioridad = Alta, Media o Baja. Máximo 6 filas, solo lo que requiere atención o verificación. Si no hay nada, escribe "Sin hallazgos que requieran atención."
+
+## Acciones recomendadas
+Lista numerada, máximo 5 pasos concretos y en orden de ejecución.
+
+## Alcance del escaneo
+Una a tres viñetas con lo que este escaneo NO pudo confirmar.`;
   },
 
   async analizarIA(idGuardado) {
@@ -8495,59 +8559,6 @@ Procedimiento numerado (1.1, 1.2, 2.1) con comprobaciones eléctricas (multímet
     return hallados;
   },
 
-  _sintetizarParametrosOEM(m) {
-    if (!m) return {};
-    const req = Number(m.ecu || m.req || 0);
-    const nom = String(m.nombre || '').toUpperCase();
-    const isTPMS = nom.includes('TPMS') || nom.includes('PRESIÓN') || nom.includes('NEUMÁTICO') || [0x7A0, 0x7D2, 0x758, 0x770, 0x7C4, 0x726, 0x737, 0x754].includes(req);
-    const isTCM = nom.includes('TCM') || nom.includes('TRANSMISI') || nom.includes('CAJA') || [0x7E1, 0x790].includes(req);
-    const isMDPS = nom.includes('MDPS') || nom.includes('EPS') || nom.includes('DIRECCI') || [0x7D4, 0x710].includes(req);
-    const isABS = nom.includes('ABS') || nom.includes('FRENO') || nom.includes('ESP') || [0x7D0, 0x7B0].includes(req);
-    const isFATC = nom.includes('HVAC') || nom.includes('CLIMA') || nom.includes('FATC') || nom.includes('A/C') || [0x7B3, 0x7C0].includes(req);
-    const isSRS = nom.includes('SRS') || nom.includes('AIRBAG') || nom.includes('BOLSA') || [0x7C0, 0x7A0].includes(req);
-
-    const out = {};
-    if (isTPMS) {
-      out.presion_tpms_fl = 32.5;
-      out.presion_tpms_fr = 32.5;
-      out.presion_tpms_rl = 32.0;
-      out.presion_tpms_rr = 32.0;
-      out.temp_tpms_fl = 28;
-      out.temp_tpms_fr = 28;
-      out.temp_tpms_rl = 27;
-      out.temp_tpms_rr = 27;
-      out.bat_tpms = 'OK (Baterías Sanas)';
-    } else if (isTCM) {
-      out.temp_atf = 82;
-      out.marcha_tcm = 'P / N (Estacionado)';
-      out.rpm_turbina = 0;
-      out.rpm_salida = 0;
-      out.tcc_lockup = 0;
-    } else if (isMDPS) {
-      out.angulo_direccion = 0.0;
-      out.corriente_eps = 0.8;
-      out.par_direccion = 0.1;
-    } else if (isABS) {
-      out.vel_rueda_fl = 0.0;
-      out.vel_rueda_fr = 0.0;
-      out.vel_rueda_rl = 0.0;
-      out.vel_rueda_rr = 0.0;
-      out.presion_bomba_abs = 0.0;
-    } else if (isFATC) {
-      out.temp_evaporador = 4.5;
-      out.temp_ambiente = 26.0;
-      out.presion_refrigerante_ac = 14.2;
-    } else if (isSRS) {
-      out.resistencia_airbag_conductor = 2.4;
-      out.resistencia_airbag_pasajero = 2.5;
-      out.sensor_impacto_frontal = 'Normal';
-    } else {
-      out.voltaje_alimentacion = 12.6;
-      out.estado_comunicacion = 'CAN Bus OK';
-    }
-    return out;
-  },
-
   /* Abre la ficha de un módulo: identificación + datos que expone. */
   async verModulo(ecu) {
     const ms = (this._scan && this._scan.por_modulo) || [];
@@ -8556,11 +8567,11 @@ Procedimiento numerado (1.1, 1.2, 2.1) con comprobaciones eléctricas (multímet
       m = { ecu: Number(ecu), nombre: `Módulo 0x${Number(ecu).toString(16).toUpperCase()}`, codigos: [], resp: null };
     }
 
-    /* Garantizar que m.params_oem nunca esté vacío */
-    if (!m.params_oem || !Object.keys(m.params_oem).length) {
-      m.params_oem = this._sintetizarParametrosOEM(m);
-      if (this._scan) this._scan.datos = { ...(this._scan.datos || {}), ...m.params_oem };
-    }
+    /* Si el módulo no entregó parámetros, la ficha va sin esa tarjeta. Antes
+       se rellenaba con valores FIJOS (llantas a 32.5 PSI, ATF a 82 °C) que se
+       mostraban como lectura "UDS 22" y se mezclaban en los datos del escaneo:
+       Nexus los analizaba y el informe impreso los daba por medidos. Un dato
+       inventado en un diagnóstico es peor que un hueco. */
 
     const permiso = this._puedePuntoAPunto();
 
@@ -8606,7 +8617,7 @@ Procedimiento numerado (1.1, 1.2, 2.1) con comprobaciones eléctricas (multímet
               <span style="background:rgba(56,189,248,0.2);color:#38bdf8;font-size:11px;font-family:monospace;padding:2px 8px;border-radius:4px">CAN ID 0x${Number(m.ecu).toString(16).toUpperCase()}</span>
             </div>
             <div style="font-size:11.5px;color:#94a3b8;margin-top:3px">
-              ${m.resp != null ? `Responde en 0x${Number(m.resp).toString(16).toUpperCase()}` : 'Dirección Estándar CAN Bus'} · Ping: <span style="color:#34d399;font-weight:700">12ms</span>
+              ${m.resp != null ? `Responde en 0x${Number(m.resp).toString(16).toUpperCase()}` : 'Dirección Estándar CAN Bus'}
             </div>
           </div>
           <div style="display:flex;gap:8px;flex-wrap:wrap">
@@ -9074,9 +9085,16 @@ Procedimiento numerado (1.1, 1.2, 2.1) con comprobaciones eléctricas (multímet
       `el diagnóstico de ${d?.vehiculos?.placa || 'este vehículo'}`, () => this.render());
   },
 
+  /* Sin id imprime el escaneo ACTIVO, aunque todavía no se haya guardado:
+     el mecánico lo necesita en papel mientras tiene el carro enfrente, no
+     después de ir al historial. */
   imprimir(id) {
-    const d = this._data.find(x => x.id === id);
-    if (!d) return;
+    const s = this._scan;
+    const d = id ? this._data.find(x => x.id === id)
+      : s ? { ...s, created_at: s.created_at || new Date().toISOString(),
+              vehiculos: s.vehiculos || (this._vehiculos || []).find(v => v.id === s.vehiculo_id) || null }
+      : null;
+    if (!d) { UI.toast('No hay un escaneo para imprimir', 'error'); return; }
     const v = d.vehiculos;
     const filas = [
       ...(d.dtcs||[]).map(x => ({ ...x, tipo:'Confirmado' })),
@@ -9086,7 +9104,9 @@ Procedimiento numerado (1.1, 1.2, 2.1) con comprobaciones eléctricas (multímet
     const fz = d.freeze_frame ? this._datosLista(d.freeze_frame, ['dtc','desc']) : [];
     const html = `<!DOCTYPE html><html><head><title>Diagnóstico OBD-II</title><meta charset="UTF-8">
       <style>
+        :root{--text:#111;--text2:#333;--text3:#666;--border:#ddd;--surface:#fff;--surface2:#f3f4f6;--brand:#1d4ed8;--cyan:#0284c7}
         body{font-family:Arial,sans-serif;padding:20px;max-width:700px;margin:0 auto;color:#111}
+        .ia th{background:#e5e7eb;color:#111}.ia h2{text-align:left;border:none;padding:0}
         h2{text-align:center;border-bottom:2px solid #3B82F6;padding-bottom:8px}
         .section{border:1px solid #ddd;border-radius:6px;padding:12px;margin-bottom:12px}
         table{width:100%;border-collapse:collapse;font-size:13px}
@@ -9139,7 +9159,7 @@ Procedimiento numerado (1.1, 1.2, 2.1) con comprobaciones eléctricas (multímet
       </div>` : ''; })()}
       ${this._grabComparacionPDF(d)}
       ${this._grabMuestrasPDF(d.grabacion)}
-      ${d.ia_analisis ? `<div class="section"><b>ANÁLISIS DE NEXUS (IA):</b><p style="white-space:pre-wrap">${d.ia_analisis}</p></div>` : ''}
+      ${d.ia_analisis ? `<div class="section ia"><b>ANÁLISIS DE NEXUS (IA):</b><div style="margin-top:6px">${typeof IA !== 'undefined' && IA._formatear ? IA._formatear(d.ia_analisis) : `<p style="white-space:pre-wrap">${UI.esc(d.ia_analisis)}</p>`}</div></div>` : ''}
       ${d.notas ? `<div class="section"><b>NOTAS DEL TÉCNICO:</b><p>${d.notas}</p></div>` : ''}
       <p style="text-align:center;color:#666;font-size:11px;border-top:1px solid #ddd;padding-top:10px;margin-top:20px">
         Generado por <b>NexusPro Enterprise v5.15.7</b> · 
