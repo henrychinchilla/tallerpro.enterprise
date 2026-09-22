@@ -131,6 +131,7 @@
 
     _centroHTML(s) {
       const veh = this._vehiculoDe(s);
+      this._resolverNombres(s, veh);
       const ms = [...s.por_modulo].sort((a, b) =>
         this._gravedad(a) - this._gravedad(b) || a.ecu - b.ecu);
       const todos = ms.flatMap(m => m.codigos || []);
@@ -241,7 +242,9 @@
       const veh = this._vehiculoDe(s);
       const vivo = s === this._scan && this._puedePuntoAPunto().ok;
       const id = m.ident || {};
-      const sug = id.referencia ? this._sugerenciaPorReferencia(id.referencia) : null;
+      /* El título y la línea de abajo salen de la MISMA regla: antes el título
+         decía "Pieza 94003G6920" y la línea siguiente "Instrumentos / tablero". */
+      const quien = this._nombreResuelto(m, veh.marca);
       const cods = m.codigos || [];
 
       /* Lo que la capa OEM tiene cargado PARA ESTE MÓDULO. Así el mecánico ve
@@ -258,7 +261,7 @@
         <div style="margin-top:7px">${cuerpo}</div></div>`;
 
       /* El nombre lo escribe el taller: va escapado aunque sea el titulo. */
-      UI.modal(`🔧 ${UI.esc(m.nombre)}`, `
+      UI.modal(`🔧 ${UI.esc(quien.nombre)}`, `
         <div style="font-size:11.5px;color:var(--text3);margin-bottom:9px">
           ${UI.esc([veh.marca, veh.modelo].filter(Boolean).join(' '))} ·
           dirección <b style="font-family:ui-monospace,Consolas,monospace">${this._hexDir(ecu)}</b>
@@ -267,17 +270,18 @@
         </div>
 
         ${seccion('1 · QUIÉN ES', `
+          <div style="margin-bottom:4px"><b>${UI.esc(quien.nombre)}</b>
+            <span style="color:var(--text3)"> · ${UI.esc(quien.origen)}</span></div>
           ${id.referencia ? `<div>Número de pieza: <b style="font-family:ui-monospace,Consolas,monospace">${UI.esc(id.referencia)}</b></div>` : ''}
           ${id.nombre ? `<div>Se llama a sí mismo: <b>${UI.esc(id.nombre)}</b></div>` : ''}
           ${id.proveedor ? `<div style="color:var(--text3)">Fabricante: ${UI.esc(id.proveedor)}</div>` : ''}
-          ${sug ? `<div style="color:var(--text3)">grupo de pieza ${UI.esc(sug.grupo)} = ${UI.esc(sug.sistema)}</div>` : ''}
           ${id.ia ? `<div style="color:var(--cyan);margin-top:3px">🤖 Nombre puesto por la IA · confianza ${UI.esc(id.ia.confianza)}${
               id.ia.fuente ? `<div style="color:var(--text3)">${UI.esc(id.ia.fuente)}</div>` : ''}${
               id.ia.nota ? `<div style="color:var(--text3)">${UI.esc(id.ia.nota)}</div>` : ''}</div>` : ''}
           ${!id.referencia && !id.nombre ? `<div style="color:var(--text3)">Este módulo no entregó identificación durante el escaneo.
             Probá <b>Identificar a fondo</b>: pregunta más identificadores, de a uno — y con eso la IA tiene más con qué trabajar.</div>` : ''}
           <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:9px">
-            ${this._nombreGenerico(m.nombre, ecu)
+            ${this._nombreGenerico(quien.nombre, ecu)
               ? `<button class="btn btn-sm btn-cyan" onclick="Modulos.diagnostico_obd.identificarConIA(${ecu})">🤖 Que la IA lo identifique</button>` : ''}
             ${vivo ? `<button class="btn btn-sm btn-ghost" onclick="Modulos.diagnostico_obd.identificarAFondo(${ecu})">🔬 Identificar a fondo</button>
             <button class="btn btn-sm btn-ghost" onclick="Modulos.diagnostico_obd.verModulo(${ecu})">📊 Datos que expone</button>` : ''}

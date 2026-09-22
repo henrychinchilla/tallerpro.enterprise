@@ -2444,20 +2444,12 @@ Modulos.diagnostico_obd = {
   /* Direcciones frecuentes. Sirven para poner un nombre; lo que manda para
      saber QUÉ es cada módulo son los códigos que reporta (C=chasis, B=carrocería,
      P=motor/transmisión, U=red), porque las direcciones cambian entre marcas. */
+  /* SOLO lo que fija la norma. Esta tabla tenía ~40 direcciones de Hyundai
+     aplicadas a CUALQUIER marca ("0x7D2 = TPMS" para todos): en el Picanto
+     0x7D2 es la carrocería, y así salían llantas en un vehículo sin TPMS. Lo
+     que depende de la marca vive en _DIRECCIONES_MARCA, con su fuente. */
   _UDS_NOMBRES: {
-    /* Hyundai / Kia, Asiáticos y Genericos UDS 11-bit IDs */
-    0x7E0:'Motor (ECM)', 0x7E1:'Transmisión (TCM)', 0x7E2:'Híbrido / Batería EV', 0x7E3:'Módulo 0x7E3',
-    0x7D0:'Frenos / ABS / Tracción', 0x7D1:'Frenos / ABS / ESC', 0x7D2:'Presión de Neumáticos (TPMS)', 0x7D6:'Presión de Neumáticos (TPMS)',
-    0x7D4:'Dirección Asistida (MDPS / EPS)', 0x7A0:'Airbag / SRS (ACU)', 0x7A1:'Carrocería (BCM / SJB)', 0x71A:'Carrocería Secundario / Parachoques', 0x71D:'Módulo AWD / Caja de Transferencia',
-    0x7A5:'Llave Inteligente / Inmovilizador (SMK)', 0x7B3:'Climatización (FATC / HVAC)',
-    0x7C0:'Control Punto Ciego / Radar (BSD)', 0x7C4:'Control Crucero / Colisión (SCC/FCA)',
-    0x7C6:'Tablero de Instrumentos (CLU / IPC)', 0x710:'Dirección Electrónica (MDPS)',
-    0x720:'Módulo de Puertas / Confort', 0x733:'Climatización (FATC)',
-    0x740:'Frenos / ABS', 0x742:'Dirección asistida', 0x743:'Tablero de instrumentos',
-    0x744:'Airbag / SRS', 0x745:'Carrocería (BCM)', 0x746:'Climatización',
-    0x748:'Control de tracción', 0x74D:'Puerta de enlace / gateway',
-    0x752:'Carrocería auxiliar', 0x758:'Presión de neumáticos (TPMS)',
-    0x760:'Frenos / ABS', 0x765:'Carrocería (BCM)', 0x770:'Airbag / SRS', 0x771:'Carrocería / BCM',
+    0x7E0:'Motor (ECM)', 0x7E1:'Transmisión (TCM)',
   },
   /* El nombre que el modulo se da a si mismo (DID F197 "nombre del sistema",
      y si no F18A "proveedor"). La tabla de direcciones sirve para las que la
@@ -2539,28 +2531,25 @@ Modulos.diagnostico_obd = {
      no entra — es la misma regla del catálogo OEM. */
   _DIRECCIONES_MARCA: [
     {
+      /* Restaurada a lo VERIFICADO el 2026-09-17. El commit a2e79bc la había
+         "ampliado" sin fuente real: 0x7D2 pasó a ser "EPS / TPMS" (en el
+         Picanto es la carrocería), 0x7D0 cambió de radar a ABS, 0x7D4 quedó
+         como "crucero O dirección", y se sumaron 0x7A0/7A1/7A5/71A/71D/7D6
+         citando un "GDS" que nadie consultó. Una dirección que no está acá
+         queda sin nombre por dirección — la identifican el propio módulo, su
+         número de pieza o la IA con evidencia. */
       marcas: /^(HYUNDAI|KIA|GENESIS)/i,
-      fuente: 'opendbc (comma.ai) & GDS Hyundai/Kia',
+      fuente: 'opendbc (comma.ai), consultado 2026-09-17',
       dirs: {
-        0x7E0: 'Motor (ECM)',
-        0x7E1: 'Transmisión (TCM)',
-        0x7E2: 'Batería Híbrida / EV (BMS)',
         0x730: 'ADAS de conducción',
-        0x7B1: 'Asistencia de estacionamiento (PAS/SPAS)',
-        0x7B3: 'Climatización automática (FATC / HVAC)',
-        0x7B7: 'Radar de esquina / Ángulo muerto',
-        0x7C4: 'Cámara frontal / Frenado asistido (SCC/FCA)',
-        0x7C6: 'Tablero de instrumentos (CLU / IPC / IPM)',
-        0x7D0: 'Frenos / ABS / Tracción',
-        0x7D1: 'Frenos / ABS / ESC',
-        0x7D2: 'Dirección asistida (EPS) / Presión de neumáticos (TPMS)',
-        0x7D6: 'Presión de neumáticos (TPMS)',
-        0x7D4: 'Control de crucero adaptativo / Radar (SCC/FCA) o Dirección asistida (MDPS/EPS)',
-        0x71A: 'Módulo de Carrocería Secundario / Parachoques',
-        0x71D: 'Módulo de Tracción Integral / Caja de Transferencia (AWD)',
-        0x7A0: 'Airbag / SRS (ACU)',
-        0x7A1: 'Carrocería (BCM / SJB)',
-        0x7A5: 'Llave inteligente / Inmovilizador (SMK)',
+        0x7B1: 'ADAS de estacionamiento',
+        0x7B3: 'Climatización (HVAC)',
+        0x7B7: 'Radar de esquina',
+        0x7C4: 'Cámara frontal',
+        0x7C6: 'Tablero de instrumentos (IPC)',
+        0x7D0: 'Radar frontal',
+        0x7D1: 'Frenos / ABS',
+        0x7D4: 'Dirección asistida (MDPS / EPS)',
       },
     },
     {
@@ -3433,60 +3422,51 @@ Modulos.diagnostico_obd = {
      el vehículo enfrente. */
   _nombreDeclarado(req) {
     const d = (this._modulosDeclarados || []).find(x => Number(x.req) === Number(req));
-    return d ? d.nombre : null;
+    /* "Sin identificar 0x7B3" o "Pieza 94003G6920" quedaron guardados como si
+       fueran el nombre del taller, y como el taller gana sobre todo, tapaban la
+       identificación real: la pantalla decía "Sin identificar" y una línea más
+       abajo "Climatización". Un marcador no es un nombre. */
+    return d && !this._nombreGenerico(d.nombre, req) ? d.nombre : null;
   },
 
+  /* EL nombre de un módulo, y de dónde sale. Un solo orden para todas las
+     pantallas, para que el título nunca contradiga a la línea de abajo:
+       taller (nombre real) → el propio módulo (F197) → la IA → la tabla de
+       direcciones DE ESA MARCA → el grupo del número de pieza → sus códigos. */
+  _nombreResuelto(m, marca) {
+    const ecu = Number(m.ecu), id = m.ident || {};
+    const hex = this._hexDir(ecu);
+    const taller = this._nombreDeclarado(ecu);
+    if (taller) return { nombre: taller, origen: 'nombrado por el taller' };
+    if (this._UDS_NOMBRES[ecu]) return { nombre: this._UDS_NOMBRES[ecu], origen: 'dirección fijada por la norma ISO 15765-4' };
+    if (id.nombre && !this._nombreGenerico(id.nombre, ecu)) return { nombre: String(id.nombre), origen: 'el módulo declara su nombre (F197)' };
+    if (id.ia && id.ia.nombre && !this._nombreGenerico(id.ia.nombre, ecu))
+      return { nombre: id.ia.nombre, origen: `identificado por IA · confianza ${id.ia.confianza || '—'}` };
+    const dir = this._sugerenciaPorDireccion(ecu, marca);
+    if (dir) return { nombre: dir.nombre, origen: `por su dirección ${hex} en ${marca} (${dir.fuente})` };
+    const ref = id.referencia ? this._sugerenciaPorReferencia(id.referencia) : null;
+    if (ref) return { nombre: ref.sistema, origen: `por su número de pieza ${id.referencia} (grupo ${ref.grupo})` };
+    const l = (m.codigos || []).map(c => String(c.codigo || '')[0]);
+    const fam = l.length && l.every(x => x === l[0]) ? ({ C:'Chasis / frenos', B:'Carrocería', U:'Red de comunicación' })[l[0]] : null;
+    if (fam) return { nombre: fam, origen: 'por el tipo de códigos que reporta' };
+    return { nombre: `Sin identificar ${hex}`, origen: 'no publicó identificación y su dirección no está documentada para esta marca' };
+  },
+
+  /* Parámetros en vivo de un módulo por UDS 22. APAGADO a propósito.
+
+     Le preguntaba a cada DIRECCIÓN identificadores que nadie verificó para esa
+     marca, y decodificaba lo que volviera con fórmulas supuestas: 0x7D2 se
+     trataba como TPMS, pero en el Picanto 0x7D2 es la CARROCERÍA — los bytes
+     del BCM salían en pantalla como "presión de llantas" en un vehículo que no
+     tiene TPMS. Con 0x7D4 igual: se leía como dirección eléctrica y en ese
+     Picanto reportó P0741, que es de transmisión.
+
+     La dirección no dice qué módulo es, y un DID no dice qué significa: las
+     dos cosas tienen que venir de una definición VERIFICADA (capa OEM, migs
+     138/139: "una definición no verificada nunca transmite"). Hasta que ese
+     camino alimente esta ficha, no se lee nada y la ficha no muestra números. */
   async _leerParametrosUDSModulo(m) {
-    const out = {};
-    if (!m || !m.req) return out;
-    const req = Number(m.req);
-    if (req === 0x7E1) { // TCM (Transmisión Automática Hyundai/Kia & Universal)
-      try {
-        const d1 = await this._udsPedir(m.req, m.resp, [0x22, 0x10, 0x02], 1200);
-        if (d1 && d1[0] === 0x62 && d1.length >= 4) { out.temp_atf = d1[3] - 40; }
-      } catch (_) {}
-      try {
-        const d2 = await this._udsPedir(m.req, m.resp, [0x22, 0x10, 0x04], 1200);
-        if (d2 && d2[0] === 0x62 && d2.length >= 5) { out.rpm_turbina = d2[3] * 256 + d2[4]; }
-      } catch (_) {}
-      try {
-        const d3 = await this._udsPedir(m.req, m.resp, [0x22, 0x10, 0x06], 1200);
-        if (d3 && d3[0] === 0x62 && d3.length >= 5) { out.rpm_salida = d3[3] * 256 + d3[4]; }
-      } catch (_) {}
-      try {
-        const d4 = await this._udsPedir(m.req, m.resp, [0x22, 0x10, 0x08], 1200);
-        if (d4 && d4[0] === 0x62 && d4.length >= 4) { out.marcha_tcm = d4[3]; }
-      } catch (_) {}
-      try {
-        const d5 = await this._udsPedir(m.req, m.resp, [0x22, 0x10, 0x0A], 1200);
-        if (d5 && d5[0] === 0x62 && d5.length >= 4) { out.tcc_lockup = Math.round(d5[3] * 100 / 255); }
-      } catch (_) {}
-    } else if (req === 0x7D2 || req === 0x758) { // TPMS (Presión de Neumáticos)
-      try {
-        const d1 = await this._udsPedir(m.req, m.resp, [0x22, 0xC0, 0x01], 1500);
-        if (d1 && d1[0] === 0x62 && d1.length >= 7) {
-          out.presion_tpms_fl = Math.round(d1[3] * 0.2 * 10) / 10;
-          out.presion_tpms_fr = Math.round(d1[4] * 0.2 * 10) / 10;
-          out.presion_tpms_rl = Math.round(d1[5] * 0.2 * 10) / 10;
-          out.presion_tpms_rr = Math.round(d1[6] * 0.2 * 10) / 10;
-          if (d1.length >= 11) {
-            out.temp_tpms_fl = d1[7] - 40;
-            out.temp_tpms_fr = d1[8] - 40;
-            out.temp_tpms_rl = d1[9] - 40;
-            out.temp_tpms_rr = d1[10] - 40;
-          }
-          out.bat_tpms = 'OK';
-        }
-      } catch (_) {}
-    } else if (req === 0x7D4 || req === 0x710) { // MDPS / EPS (Dirección Electrónica)
-      try {
-        const d1 = await this._udsPedir(m.req, m.resp, [0x22, 0x01, 0x01], 1200);
-        if (d1 && d1[0] === 0x62 && d1.length >= 5) {
-          out.angulo_direccion = Math.round(((d1[3] * 256 + d1[4]) / 10 - 3276.8) * 10) / 10;
-        }
-      } catch (_) {}
-    }
-    return out;
+    return {};
   },
 
   /* Pregunta sólo a las direcciones que ya se sabe que contestan en este
@@ -3666,10 +3646,7 @@ Modulos.diagnostico_obd = {
         await this._udsPedir(m.req, m.resp, [0x10, 0x01], 1200).catch(() => {});
       }
 
-      let nombre = this._nombreUDS(m.req, cods);
-      if (!this._UDS_NOMBRES[m.req] && !this._nombreDeclarado(m.req) && ident && ident.nombre) {
-        nombre = ident.nombre;
-      }
+      const nombre = this._nombreResuelto({ ecu: m.req, ident, codigos: cods }, this._marcaBarrido).nombre;
       res.push({ ecu: m.req, resp: m.resp, ext: !!m.ext, nombre, codigos: cods, respondio: !!d, servicio,
                  ident: ident || null, params_oem: paramsEsp, sesion_devuelta: sesionAbierta || undefined,
                  nuevo: !!conocidas.length && !conocidas.some(c => c.req === m.req) });
@@ -6981,6 +6958,7 @@ Modulos.diagnostico_obd = {
         this._mapaFaltantes = [];
         /* Por dónde se le entró a este mismo modelo en escaneos anteriores. */
         const mapaPrev = await this._mapaConocido(vehId);
+        this._marcaBarrido = ((this._vehiculos || []).find(x => x.id === vehId) || {}).marca || null;
         porModulo = await this._escanearModulos(log, mapaPrev).catch(e => { log(`No se pudo barrer módulos: ${e.message}`); return null; });
         /* Antes de armar el mapa: si el mapa se guarda con "Módulo 0x7B3", el
            próximo escaneo de este modelo vuelve a arrancar sin nombres. */
@@ -7139,9 +7117,24 @@ Modulos.diagnostico_obd = {
     }
   },
 
+  /* Recalcula el nombre de cada módulo CAN con la regla única. Así un escaneo
+     guardado con el cálculo viejo ("Presión de Neumáticos (TPMS)" en la
+     carrocería de un Picanto, "Pieza 94003G6920" en el tablero) se muestra
+     bien sin tocar la base, y las tarjetas, el informe de Nexus y el impreso
+     dicen lo mismo. */
+  _resolverNombres(s, veh) {
+    if (!s || !Array.isArray(s.por_modulo) || /J1587|J1939/.test(s.protocolo || '')) return;
+    const marca = s.nhtsa?.marca || veh?.marca || null;
+    for (const m of s.por_modulo) {
+      if (typeof m.ecu !== 'number' || m.ecu < 0x700 || m.ecu > 0x7FF || m.ext || m.kline) continue;
+      m.nombre = this._nombreResuelto(m, marca).nombre;
+    }
+  },
+
   _renderResultado() {
     const s = this._scan, el = document.getElementById('obd-result');
     if (!s || !el) return;
+    this._resolverNombres(s, (this._vehiculos || []).find(x => x.id === s.vehiculo_id));
     el.innerHTML = `
       ${s.nhtsa ? `<div class="card" style="padding:14px;margin-top:12px;border-left:3px solid var(--cyan)">
         <b style="font-size:12px">🌐 IDENTIFICADO POR VIN (NHTSA)</b>
@@ -7262,7 +7255,7 @@ Modulos.diagnostico_obd = {
     const perm = (s.permanentes || []).map(x => typeof x === 'string' ? x : x.codigo).filter(Boolean);
     const c = s.comparacion;
     const mods = (s.por_modulo || []).map(m => {
-      const nom = /^M[oó]dulo 0x/i.test(m.nombre || '') ? 'sin identificar' : (m.nombre || 'sin identificar');
+      const nom = this._nombreGenerico(m.nombre, m.ecu) ? 'sin identificar' : m.nombre;
       const cods = (m.codigos || []).map(x => `${x.codigo} (${x.desc || 'sin descripción'})`).join(', ');
       return `  - 0x${m.ecu.toString(16).toUpperCase()} · ${nom}: ${cods || 'sin códigos'}`;
     }).join('\n');
@@ -7324,6 +7317,7 @@ Una a tres viñetas con lo que este escaneo NO pudo confirmar.`;
     if (!s || !el) return;
     el.innerHTML = `<div class="card" style="padding:14px;margin-top:12px">⏳ Nexus está analizando el escaneo...</div>`;
     const veh = idGuardado ? s.vehiculos : this._vehiculos.find(v => v.id === s.vehiculo_id);
+    this._resolverNombres(s, veh);
     const r = await IA.tecnico(this._promptIA(s, veh));
     if (!r.ok) { el.innerHTML = `<div class="card" style="padding:14px;margin-top:12px;color:var(--red)">⚠️ ${UI.esc(r.error)}</div>`; return; }
     /* La Edge Function contesta `texto`, no `respuesta`: leer el campo
@@ -7495,7 +7489,7 @@ Una a tres viñetas con lo que este escaneo NO pudo confirmar.`;
     const conRef = ms.filter(m => m.ident && m.ident.referencia).length;
     const porIA = ms.filter(m => m.ident && m.ident.ia).length;
     const faltan = ms.filter(m => !(!m.ext && this._DIR_NO_ES_MODULO(m.ecu)) &&
-                                  this._nombreGenerico(m.nombre, m.ecu)).length;
+                                  this._nombreGenerico(this._nombreResuelto(m, veh.marca).nombre, m.ecu)).length;
     return `<div style="margin-top:12px;border-top:1px solid var(--border);padding-top:10px">
       <b style="font-size:12px">QUIÉN ES CADA MÓDULO</b>
       <div style="font-size:10.5px;color:var(--text3);margin-top:2px;line-height:1.5">
@@ -7509,20 +7503,15 @@ Una a tres viñetas con lo que este escaneo NO pudo confirmar.`;
         <thead><tr><th>Módulo</th><th>Dirección</th><th>Lo que dijo de sí mismo</th></tr></thead>
         <tbody>${ms.map(m => {
           const id = m.ident || {};
-          const sug = id.referencia ? this._sugerenciaPorReferencia(id.referencia) : null;
-          const sugDir = this._sugerenciaPorDireccion(m.ecu, veh.marca);
-          const declarado = !!this._nombreDeclarado(m.ecu);
+          const r = this._nombreResuelto(m, veh.marca);
           return `<tr>
-            <td><b>${UI.esc(m.nombre)}</b>
-              ${declarado ? '<div style="font-size:10px;color:var(--green)">nombrado por el taller</div>'
-                : id.ia ? `<div style="font-size:10px;color:var(--cyan)">🤖 identificado por IA · confianza ${UI.esc(id.ia.confianza)}</div>` : ''}</td>
+            <td><b>${UI.esc(r.nombre)}</b>
+              <div style="font-size:10px;color:var(--text3)">${UI.esc(r.origen)}</div></td>
             <td style="font-family:ui-monospace,Consolas,monospace;white-space:nowrap">0x${m.ecu.toString(16).toUpperCase()}</td>
             <td>${id.referencia ? `<div>referencia <b style="font-family:ui-monospace,Consolas,monospace">${UI.esc(id.referencia)}</b></div>` : ''}
               ${id.nombre ? `<div>se llama <b>${UI.esc(id.nombre)}</b></div>` : ''}
               ${id.proveedor ? `<div style="color:var(--text3)">fabricante ${UI.esc(id.proveedor)}</div>` : ''}
               ${id.ia && id.ia.fuente ? `<div style="color:var(--cyan)">🤖 ${UI.esc(id.ia.fuente)}</div>` : ''}
-              ${sugDir ? `<div style="color:var(--amber)">por la dirección: <b>${UI.esc(sugDir.nombre)}</b> (${UI.esc(sugDir.fuente)})</div>` : ''}
-              ${sug ? `<div style="color:var(--text3)">grupo de pieza ${UI.esc(sug.grupo)} = ${UI.esc(sug.sistema)}</div>` : ''}
               ${!id.referencia && !id.nombre && !id.proveedor ? '<span style="color:var(--text3)">no publicó identificación</span>' : ''}</td>
           </tr>`;
         }).join('')}</tbody>
@@ -8578,7 +8567,9 @@ Una a tres viñetas con lo que este escaneo NO pudo confirmar.`;
     /* Renderizado de parámetros OEM conocidos (TCM, TPMS, MDPS, etc.) */
     const renderParamsOEM = pOem => {
       const entries = Object.entries(pOem || {}).filter(([k, v]) => v !== null && v !== undefined);
-      if (!entries.length) return '';
+      if (!entries.length) return `<div class="card" style="padding:12px;margin-bottom:12px;font-size:12px;color:var(--text3)">
+          <b style="color:var(--text2)">Sin parámetros en vivo para este módulo.</b> Leerlos exige los identificadores
+          exactos del fabricante para ESTE módulo; sin una definición verificada no se muestra ningún número.</div>`;
       return `
         <div class="card" style="padding:14px;margin-bottom:12px;border:1px solid #0284c7;background:rgba(2,132,199,0.04)">
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
@@ -9095,6 +9086,7 @@ Una a tres viñetas con lo que este escaneo NO pudo confirmar.`;
               vehiculos: s.vehiculos || (this._vehiculos || []).find(v => v.id === s.vehiculo_id) || null }
       : null;
     if (!d) { UI.toast('No hay un escaneo para imprimir', 'error'); return; }
+    this._resolverNombres(d, d.vehiculos);
     const v = d.vehiculos;
     const filas = [
       ...(d.dtcs||[]).map(x => ({ ...x, tipo:'Confirmado' })),
@@ -9202,109 +9194,32 @@ Una a tres viñetas con lo que este escaneo NO pudo confirmar.`;
   },
 
   /* ═══════════ PRUEBAS DE ACTUADORES BI-DIRECCIONALES (UDS 2F / OBD2 08 / KWP 30) ═══════════ */
+  /* Pruebas activas (UDS 2F): APAGADAS hasta tener definiciones verificadas.
+
+     Ofrecía forzar electroventilador, bomba de combustible, solenoides del ABS
+     o calibrar el ángulo de dirección con identificadores INVENTADOS (2F 01 01,
+     2F 03 02…), y al ejecutar ignoraba la prueba elegida: mandaba siempre
+     2F 01 01 03 01 al módulo que fuera — ABS o dirección incluidos. Sin
+     escáner conectado igual decía "ejecutada correctamente ✓" sin transmitir
+     nada. Forzar un actuador con un identificador equivocado puede mover lo
+     que no es; la regla de la capa OEM es "una definición no verificada nunca
+     transmite", y esto la saltaba entera. */
   modalPruebasActuadores(ecu, nombreModulo) {
-    const ecuNum = Number(ecu);
-    let cat = 'ECM';
-    if (ecuNum === 0x7E1) cat = 'TCM';
-    else if (ecuNum === 0x7D0 || ecuNum === 0x7D1 || ecuNum === 0x7E2) cat = 'ABS';
-    else if (ecuNum === 0x7A0 || ecuNum === 0x730 || ecuNum === 0x7D4) cat = 'EPS';
-    else if (ecuNum === 0x7A1 || ecuNum === 0x792 || ecuNum === 0x726 || ecuNum === 0x7E4 || ecuNum === 0x7B3) cat = 'BCM';
-    else if (ecuNum === 0x7C0 || ecuNum === 0x733 || ecuNum === 0x7EA) cat = 'HVAC';
-    else if (ecuNum === 0x7A5 || ecuNum === 0x79D) cat = 'IMMO';
-
-    const pruebasDisponibles = [
-      { id: 'ventilador_alta', modulo: 'ECM', nombre: 'Electroventilador — Velocidad Alta', desc: 'Activa el relé de alta velocidad del electroventilador.', riesgo: 'controlado', ecu: 0x7E0, txOn: [0x2F, 0x01, 0x01, 0x03, 0x01], txOff: [0x2F, 0x01, 0x01, 0x00] },
-      { id: 'ventilador_baja', modulo: 'ECM', nombre: 'Electroventilador — Velocidad Baja', desc: 'Activa el relé de baja velocidad del electroventilador.', riesgo: 'controlado', ecu: 0x7E0, txOn: [0x2F, 0x01, 0x02, 0x03, 0x01], txOff: [0x2F, 0x01, 0x02, 0x00] },
-      { id: 'rele_combustible', modulo: 'ECM', nombre: 'Relé de Bomba de Combustible', desc: 'Presuriza el riel de combustible accionando la bomba.', riesgo: 'controlado', ecu: 0x7E0, txOn: [0x2F, 0x01, 0x03, 0x03, 0x01], txOff: [0x2F, 0x01, 0x03, 0x00] },
-      { id: 'solenoide_evap', modulo: 'ECM', nombre: 'Solenoide de Purga EVAP (Canister)', desc: 'Abre la válvula de purga de gases de evaporación.', riesgo: 'controlado', ecu: 0x7E0, txOn: [0x2F, 0x01, 0x04, 0x03, 0x01], txOff: [0x2F, 0x01, 0x04, 0x00] },
-      { id: 'solenoide_vvt', modulo: 'ECM', nombre: 'Solenoide VVT / OCV (Control de Aceite)', desc: 'Activa la válvula de control de aceite de distribución variable.', riesgo: 'controlado', ecu: 0x7E0, txOn: [0x2F, 0x01, 0x05, 0x03, 0x01], txOff: [0x2F, 0x01, 0x05, 0x00] },
-      { id: 'embrague_ac', modulo: 'ECM', nombre: 'Embrague de Compresor A/C', desc: 'Acopla el electroimán de polea del compresor.', riesgo: 'controlado', ecu: 0x7E0, txOn: [0x2F, 0x01, 0x06, 0x03, 0x01], txOff: [0x2F, 0x01, 0x06, 0x00] },
-
-      { id: 'tcm_solenoide_a', modulo: 'TCM', nombre: 'Solenoide de Cambio A (Shift Solenoid A)', desc: 'Activa el solenoide hidráulico de 1ª/2ª marcha.', riesgo: 'controlado', ecu: 0x7E1, txOn: [0x2F, 0x02, 0x01, 0x03, 0x01], txOff: [0x2F, 0x02, 0x01, 0x00] },
-      { id: 'tcm_solenoide_tcc', modulo: 'TCM', nombre: 'Solenoide TCC (Convertidor de Par)', desc: 'Acciona el bloqueo del convertidor de torque.', riesgo: 'controlado', ecu: 0x7E1, txOn: [0x2F, 0x02, 0x03, 0x03, 0x01], txOff: [0x2F, 0x02, 0x03, 0x00] },
-
-      { id: 'abs_bomba_motor', modulo: 'ABS', nombre: 'Motor de la Bomba Hidráulica ABS', desc: 'Cicla el motor eléctrico de retorno hidráulico del ABS.', riesgo: 'controlado', ecu: 0x7D0, txOn: [0x2F, 0x03, 0x01, 0x03, 0x01], txOff: [0x2F, 0x03, 0x01, 0x00] },
-      { id: 'abs_valvula_fl', modulo: 'ABS', nombre: 'Solenoide Valvular Rueda Izquierda FL', desc: 'Acciona las válvulas de admisión/escape de rueda FL.', riesgo: 'controlado', ecu: 0x7D0, txOn: [0x2F, 0x03, 0x02, 0x03, 0x01], txOff: [0x2F, 0x03, 0x02, 0x00] },
-
-      { id: 'eps_rele_potencia', modulo: 'EPS', nombre: 'Relé de Potencia MDPS / EPS', desc: 'Comprueba el acoplamiento del relé de alta corriente de dirección.', riesgo: 'controlado', ecu: 0x7A0, txOn: [0x2F, 0x04, 0x01, 0x03, 0x01], txOff: [0x2F, 0x04, 0x01, 0x00] },
-      { id: 'eps_punto_cero', modulo: 'EPS', nombre: 'Calibración Punto Cero de Ángulo (SAS)', desc: 'Ajuste inicial de 0° en sensor de posición de volante.', riesgo: 'alto', ecu: 0x7A0, txOn: [0x31, 0x01, 0x04, 0x02], txOff: [0x31, 0x02, 0x04, 0x02] },
-
-      { id: 'bcm_seguros', modulo: 'BCM', nombre: 'Seguros Eléctricos de Puertas', desc: 'Cicla la apertura y cierre centralizado de puertas.', riesgo: 'controlado', ecu: 0x7B3, txOn: [0x2F, 0x05, 0x01, 0x03, 0x01], txOff: [0x2F, 0x05, 0x01, 0x00] },
-      { id: 'bcm_luces_altas', modulo: 'BCM', nombre: 'Luces Altas / Bajas / Hazard', desc: 'Activa los relés de iluminación exterior.', riesgo: 'controlado', ecu: 0x7B3, txOn: [0x2F, 0x05, 0x02, 0x03, 0x01], txOff: [0x2F, 0x05, 0x02, 0x00] },
-      { id: 'bcm_bocina', modulo: 'BCM', nombre: 'Bocina / Claxon', desc: 'Activa la salida del claxon de carrocería.', riesgo: 'controlado', ecu: 0x7B3, txOn: [0x2F, 0x05, 0x04, 0x03, 0x01], txOff: [0x2F, 0x05, 0x04, 0x00] },
-
-      { id: 'hvac_mezcla', modulo: 'HVAC', nombre: 'Servomotor de Mezcla de Temperatura', desc: 'Mueve la compuerta de mezcla frío/caliente.', riesgo: 'controlado', ecu: 0x7C0, txOn: [0x2F, 0x06, 0x01, 0x03, 0x01], txOff: [0x2F, 0x06, 0x01, 0x00] },
-
-      { id: 'immo_luz_testigo', modulo: 'IMMO', nombre: 'Testigo de Inmovilizador en Tablero', desc: 'Enciende/apaga el LED indicador de seguridad.', riesgo: 'controlado', ecu: 0x7A5, txOn: [0x2F, 0x07, 0x01, 0x03, 0x01], txOff: [0x2F, 0x07, 0x01, 0x00] }
-    ];
-
-    const filtradas = pruebasDisponibles.filter(p => p.modulo === cat || Number(p.ecu) === ecuNum);
-    const listaHtml = (filtradas.length ? filtradas : pruebasDisponibles.slice(0, 6)).map(p => `
-      <div style="background:var(--surface2);border-radius:10px;padding:12px;margin-bottom:10px;border:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">
-        <div style="flex:1;min-width:200px">
-          <div style="font-size:13px;font-weight:700;color:var(--text);display:flex;align-items:center;gap:6px">
-            ⚡ ${UI.esc(p.nombre)}
-            <span class="badge ${p.riesgo === 'alto' ? 'badge-amber' : 'badge-cyan'}">${UI.esc(p.riesgo.toUpperCase())}</span>
-          </div>
-          <div style="font-size:11.5px;color:var(--text3);margin-top:3px">${UI.esc(p.desc)}</div>
+    UI.modal(`⚡ Pruebas activas — ${UI.esc(nombreModulo)}`, `
+      <div style="font-size:12.5px;line-height:1.6">
+        <p><b>No hay pruebas activas verificadas para este módulo.</b></p>
+        <p style="color:var(--text3)">Forzar un actuador exige el identificador exacto del fabricante para ESE
+          módulo. Sin una definición verificada con su fuente, NexusPro no transmite: un identificador
+          equivocado puede accionar algo distinto de lo que se pidió.</p>
+        <p style="color:var(--text3)">Las funciones que sí están verificadas aparecen en
+          <b>🧠 Centro de Módulos → ficha del módulo → Funciones auxiliares</b>.</p>
+        <div style="display:flex;justify-content:flex-end;margin-top:12px">
+          <button class="btn btn-ghost" onclick="UI.cerrarModal()">Cerrar</button>
         </div>
-        <div style="display:flex;gap:8px">
-          <button class="btn btn-sm btn-brand" onclick="Modulos.diagnostico_obd.ejecutarPruebaActuador(${ecuNum}, '${p.id}', true)">⚡ Probar ON</button>
-          <button class="btn btn-sm" style="background:#1e293b;color:#f8fafc;border:1px solid #475569" onclick="Modulos.diagnostico_obd.ejecutarPruebaActuador(${ecuNum}, '${p.id}', false)">⏹ OFF / Devolver</button>
-        </div>
-      </div>
-    `).join('');
-
-    UI.modal(`⚡ Control Bi-direccional y Actuadores — ${UI.esc(nombreModulo)}`, `
-      <div style="font-size:12.5px">
-        <div style="background:linear-gradient(135deg, #0284c7 0%, #0369a1 100%);color:#ffffff;padding:12px 16px;border-radius:10px;margin-bottom:14px">
-          <div style="font-size:14px;font-weight:900">🕹️ PRUEBAS ACTIVAS DE ACTUADORES (ISO 14229 UDS 0x2F / OBD2 Modo 08)</div>
-          <div style="font-size:11.5px;opacity:0.9;margin-top:2px">
-            Permite forzar salidas mecánicas o relés para verificar componentes sin desarmar. Al cerrar el cuadro, el control se devuelve automáticamente a la computadora.
-          </div>
-        </div>
-
-        <div style="background:rgba(234,179,8,0.1);border:1px solid rgba(234,179,8,0.3);border-radius:8px;padding:10px;margin-bottom:12px;font-size:11.5px;color:var(--text)">
-          <b>⚠️ Precondiciones Obligatorias de Seguridad:</b>
-          <div style="margin-top:3px">
-            1. Vehículo totalmente detenido (<b>Velocidad = 0 km/h</b>).<br>
-            2. Switch en <b>Contacto ON</b> (Motor encendido u OFF según la prueba requerida).<br>
-            3. Tensión de Batería <b>> 12.0 Voltios</b>.
-          </div>
-        </div>
-
-        ${listaHtml}
-
-        <div style="display:flex;justify-content:flex-end;margin-top:14px">
-          <button class="btn btn-ghost" onclick="UI.cerrarModal()">❌ Cerrar y Restaurar Control ECU</button>
-        </div>
-      </div>
-    `, '760px');
+      </div>`, '560px');
   },
 
-  async ejecutarPruebaActuador(ecu, idPrueba, activar) {
-    const permiso = this._puedePuntoAPunto();
-    if (!permiso.ok && !this._scan) {
-      return UI.toast('Conectá primero el escáner y abrí una sesión activa de diagnóstico', 'warn');
-    }
-    const accionTxt = activar ? 'ACTIVAR' : 'DESACTIVAR';
-    const ok = await UI.confirmar(
-      `¿Deseas <b>${accionTxt}</b> la prueba del actuador en el módulo 0x${Number(ecu).toString(16).toUpperCase()}?<br><small>Asegúrate de que no haya personas cerca de partes móviles del motor.</small>`,
-      `Prueba Activa Bi-direccional`
-    );
-    if (!ok) return;
-
-    UI.toast(`Enviando comando UDS 0x2F a módulo 0x${Number(ecu).toString(16).toUpperCase()}…`, 'info');
-    try {
-      if (permiso.ok) {
-        await this._elmPuntoAPunto(async () => {
-          const txCmd = activar ? [0x2F, 0x01, 0x01, 0x03, 0x01] : [0x2F, 0x01, 0x01, 0x00];
-          await this._udsPedir(Number(ecu), Number(ecu) + 8, txCmd, 3000);
-        });
-      }
-      UI.toast(`Prueba ${accionTxt} ejecutada correctamente ✓`, 'success');
-    } catch (e) {
-      UI.toast(`Respuesta del módulo: ${e.message}`, 'warn');
-    }
+  async ejecutarPruebaActuador() {
+    UI.toast('Prueba activa no disponible: no hay definición verificada para este módulo', 'warn');
   },
 };

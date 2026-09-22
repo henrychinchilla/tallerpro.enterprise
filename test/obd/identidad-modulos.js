@@ -135,7 +135,11 @@ const { M, ctx } = cargar();
   catch (e) { reventó = e; }
   ok('la tabla de identidad se pinta sin reventar', !reventó, reventó && reventó.message);
   ok('muestra la referencia que entregó el módulo', /58920-G6300/.test(html));
-  ok('muestra la pista por dirección con su fuente', /por la dirección/i.test(html));
+  ok('el que tiene dirección documentada se LLAMA así (no queda como pista abajo)',
+     /<b>Climatización \(HVAC\)<\/b>/.test(html) && /por su dirección 0x7B3 en Kia \(opendbc/.test(html));
+  ok('ya no hay dos nombres que se contradicen', !/por la dirección:/.test(html));
+  html = M._identidadModulosHTML([...filas, { ecu:0x7A5, resp:null, ext:false, nombre:'Módulo 0x7A5', codigos:[], ident:null }],
+                                 { marca:'Kia', modelo:'Picanto' });
   /* El botón de "Nombrar" salió de la tabla el 2026-09-22: investigar quién es
      un módulo es trabajo de la IA. Queda el de volver a pedírselo. */
   ok('ofrece que la IA lo intente de nuevo', /identificarConIA\(\)/.test(html));
