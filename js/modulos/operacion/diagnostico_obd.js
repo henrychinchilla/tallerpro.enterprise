@@ -8802,9 +8802,26 @@ Procedimiento numerado (1.1, 1.2, 2.1) con comprobaciones eléctricas (multímet
     try {
       const r = await this._elmPuntoAPunto(() => this._borrarModulo(m.ecu, m.resp));
       if (r && r.ok) {
-        m.codigos = [];
-        this._log(`🧹 ${m.nombre}: Códigos de falla borrados ✓`);
-        UI.toast(`✅ DTCs borrados correctamente en ${m.nombre}`, 'success');
+        UI.toast(`Verificando códigos remanentes en ${m.nombre}…`, 'info', 2000);
+        const codsRevisados = await this._elmPuntoAPunto(async () => {
+          let d = await this._udsPedir(m.ecu, m.resp, [0x19, 0x02, 0xFF], 2000);
+          return this._dtcsUDS(d);
+        }).catch(() => []);
+
+        if (codsRevisados.length) {
+          m.codigos = codsRevisados.map(c => ({
+            codigo: c.codigo,
+            activo: true,
+            desc: this._descDTC ? this._descDTC(c.codigo, []) : 'Falla física persistente'
+          }));
+          this._log(`<span style="color:var(--amber)">⚠️ ${m.nombre}: Se borraron códigos pero ${codsRevisados.length} falla(s) persisten (falla física en caliente).</span>`);
+          UI.toast(`⚠️ ${m.nombre}: Se borró memoria pero ${codsRevisados.length} falla(s) persisten en caliente`, 'warn', 4500);
+        } else {
+          m.codigos = [];
+          this._log(`🧹 ${m.nombre}: Códigos de falla borrados y verificado 0 fallas ✓`);
+          UI.toast(`✅ DTCs borrados correctamente en ${m.nombre} (Verificado 0 fallas)`, 'success');
+        }
+        if (this._scan) this._scan.dtcs_borrados = true;
         this.verModulo(ecu);
       } else {
         const motivo = (r && r.motivo) || 'desconocido';
