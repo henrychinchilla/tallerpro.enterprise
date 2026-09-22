@@ -6925,25 +6925,43 @@ Modulos.diagnostico_obd = {
 
   /* Análisis del escaneo con Nexus (Edge Function ai-assistant ya existente) */
   _promptIA(s, veh) {
-    const dat = Object.entries(s.datos||{}).map(([k,v])=>`${k}:${v}`).join(', ');
+    const dat = Object.entries(s.datos||{}).map(([k,v])=>`${k}: ${v}`).join(', ');
     const c = s.comparacion;
-    const mods = (s.por_modulo||[]).map(m => `[0x${m.ecu.toString(16).toUpperCase()}] ${m.nombre}: ${(m.codigos||[]).map(x => `${x.codigo} (${x.desc||'sin desc'})`).join(', ')||'OK'}`).join('\n');
+    const mods = (s.por_modulo||[]).map(m => `[0x${m.ecu.toString(16).toUpperCase()}] ${m.nombre}: ${(m.codigos||[]).map(x => `${x.codigo} (${x.desc||'sin desc'})`).join(', ')||'Sin fallas'}`).join('\n');
 
-    return `Actúa como Master Diagnostic Technician Automotriz. Analiza este escaneo OBD-II / UDS multimarca y genera una Asistencia Total Técnica completa:\n` +
-      `1. Identifica cualquier dirección de módulo o ECU desconocida por su marca/modelo.\n` +
-      `2. Explica causas probables para cada DTC (confirmado o por módulo), fallas físicas conocidas o boletines técnicos (TSB) asociados a este modelo.\n` +
-      `3. Proporciona el procedimiento paso a paso de verificación (qué medir en pines, arneses, voltajes) y la solución recomendada.\n\n` +
-      `Vehículo: ${veh ? `${veh.marca||''} ${veh.modelo||''} ${veh.anio||''} (Placa: ${veh.placa||'s/placa'})` : 'No especificado'}\n` +
-      `VIN: ${s.vin||'—'}\nCheck Engine (MIL): ${s.mil?'ENCENDIDO 🔴':'Apagado ✅'}\n` +
-      `Protocolo: ${s.protocolo||'—'} | Adaptador: ${s.adaptador||'—'}\n` +
-      `Módulos consultados (UDS/CAN):\n${mods || 'Sin barrido por módulo'}\n` +
-      `Códigos OBD confirmados: ${(s.dtcs||[]).map(d=>`${d.codigo} (${d.desc})`).join('; ')||'ninguno'}\n` +
-      `Códigos OBD pendientes: ${(s.dtcs_pendientes||[]).map(d=>d.codigo).join('; ')||'ninguno'}\n` +
-      (c && !c.primera
-        ? `Histórico visita previa (${c.dias} días atrás) — REINCIDENTES: ${(c.reincidentes||[]).map(x=>x.codigo).join(', ')||'ninguno'}; Nuevos: ${(c.nuevos||[]).map(x=>x.codigo).join(', ')||'ninguno'}; Resueltos: ${(c.resueltos||[]).map(x=>x.codigo).join(', ')||'ninguno'}\n`
-        : '') +
-      `Freeze Frame: ${s.freeze_frame?JSON.stringify(s.freeze_frame):'—'}\n` +
-      `Datos en vivo sensores: ${dat||'—'}`;
+    return `Actúa como NEXUS PRO ENTERPRISE, el motor de asistencia técnica automotriz oficial de NEXUS.
+Genera un informe técnico profesional, conciso y ordenado para el taller.
+
+DATOS DEL VEHÍCULO Y ESCANEO:
+- Vehículo: ${veh ? `${veh.marca||''} ${veh.modelo||''} ${veh.anio||''} (Placa: ${veh.placa||'s/placa'})` : 'No especificado'}
+- VIN: ${s.vin||'—'}
+- Check Engine (MIL): ${s.mil ? 'ENCENDIDO 🔴' : 'Apagado ✅'}
+- Protocolo: ${s.protocolo||'—'} | Interfaz / Adaptador: ${s.adaptador||'—'}
+- Módulos Consultados (${(s.por_modulo||[]).length}):
+${mods || 'Sin barrido por módulo'}
+- Códigos OBD Confirmados: ${(s.dtcs||[]).map(d=>`${d.codigo} (${d.desc})`).join('; ')||'ninguno'}
+- Códigos OBD Pendientes: ${(s.dtcs_pendientes||[]).map(d=>d.codigo).join('; ')||'ninguno'}
+${c && !c.primera ? `- Histórico Visita Previa (${c.dias} días atrás) — REINCIDENTES: ${(c.reincidentes||[]).map(x=>x.codigo).join(', ')||'ninguno'}; Nuevos: ${(c.nuevos||[]).map(x=>x.codigo).join(', ')||'ninguno'}; Resueltos: ${(c.resueltos||[]).map(x=>x.codigo).join(', ')||'ninguno'}\n` : ''}- Freeze Frame: ${s.freeze_frame ? JSON.stringify(s.freeze_frame) : '—'}
+- Datos en vivo sensores: ${dat || '—'}
+
+REGLAS DE FORMATO OBLIGATORIAS:
+1. Sé técnico, limpio y directo. No inventes conflictos de mapeo CAN o corrupción de firmware a menos que haya evidencia explícita de falla de comunicación de bus.
+2. Formatea la respuesta con las siguientes secciones en Markdown:
+
+### 📋 1. SÍNTESIS DEL ESCANEO
+Resumen ejecutivo claro de la condición general del vehículo.
+
+### 🔍 2. DIAGNÓSTICO DE MÓDULOS DE RED (CAN BUS)
+Módulos presentes y su función en la red del vehículo.
+
+### 🚨 3. ANÁLISIS DE CÓDIGOS DTC Y SÍNTOMAS
+Explicación detallada de cada código detectado, componentes afectados y causa probable.
+
+### 📊 4. EVALUACIÓN DE TELEMETRÍA Y VALORES EN VIVO
+Evaluación puntual de sensores (LTFT/STFT, O2, MAP, Temp, etc.), indicando si están dentro del rango operativo o desviados.
+
+### 🛠️ 5. PROCEDIMIENTO PASO A PASO DE REPARACIÓN
+Procedimiento numerado (1.1, 1.2, 2.1) con comprobaciones eléctricas (multímetro/osciloscopio) y reparaciones recomendadas.`;
   },
 
   async analizarIA(idGuardado) {
@@ -8319,7 +8337,7 @@ Modulos.diagnostico_obd = {
           <div style="display:flex;gap:8px;flex-wrap:wrap">
             <button class="btn btn-sm" style="background:#0284c7;color:#ffffff;border:none;font-weight:700" onclick="Modulos.diagnostico_obd.modalPruebasActuadores(${m.ecu}, '${UI.jsAttr(m.nombre)}')">⚡ Pruebas Activas</button>
             <button class="btn btn-sm" style="background:#1e293b;color:#f8fafc;border:1px solid #475569" onclick="Modulos.diagnostico_obd.resetModulo(${m.ecu})">🔄 Reiniciar UDS</button>
-            <button class="btn btn-sm" style="background:rgba(239,68,68,0.25);color:#fca5a5;border:1px solid rgba(239,68,68,0.5)" onclick="Modulos.diagnostico_obd._borrarModulo(${m.ecu}, ${m.resp})">🧹 Borrar DTCs</button>
+            <button class="btn btn-sm" style="background:rgba(239,68,68,0.25);color:#fca5a5;border:1px solid rgba(239,68,68,0.5)" onclick="Modulos.diagnostico_obd.borrarCodigosModuloDirecto(${m.ecu})">🧹 Borrar DTCs</button>
           </div>
         </div>
 
@@ -8468,7 +8486,8 @@ Modulos.diagnostico_obd = {
      alimentación: vuelve a arrancar y reejecuta sus autodiagnósticos.
      NO borra códigos ni adaptaciones — para eso está el borrado. */
   async resetModulo(ecu) {
-    const ms = (this._scan && this._scan.por_modulo) || [];
+    const s = this._centroScan || this._scan;
+    const ms = (s && s.por_modulo) || [];
     const m = ms.find(x => x.ecu === ecu);
     if (!m) return;
     const permiso = this._puedePuntoAPunto();
@@ -8482,19 +8501,52 @@ Modulos.diagnostico_obd = {
       'Reiniciar módulo');
     if (!ok) return;
 
+    UI.toast(`Enviando comando de reinicio a ${m.nombre}…`, 'info', 4000);
     try {
       const r = await this._elmPuntoAPunto(() => this._udsPedir(m.ecu, m.resp, [0x11, 0x01], 4000));
       if (r && r[0] === 0x51) {
         this._log(`🔄 ${m.nombre}: reiniciado ✓ — esperá unos segundos y volvé a escanear`);
-        UI.toast('Módulo reiniciado ✓');
+        UI.toast(`✅ ${m.nombre}: Módulo reiniciado correctamente`, 'success');
       } else if (r && r[0] === 0x7F) {
         this._log(`<span style="color:var(--amber)">${UI.esc(m.nombre)}: rechazó el reinicio (0x${(r[2] || 0).toString(16)})</span>`);
-        UI.toast('El módulo rechazó el reinicio', 'warn');
+        UI.toast(`⚠️ ${m.nombre} rechazó el reinicio (Código: 0x${(r[2] || 0).toString(16)})`, 'warn');
       } else {
         this._log(`<span style="color:var(--amber)">${UI.esc(m.nombre)}: sin respuesta al reinicio</span>`);
-        UI.toast('Sin respuesta del módulo', 'warn');
+        UI.toast(`❌ ${m.nombre}: Sin respuesta del módulo`, 'error');
       }
     } catch (e) { UI.toast('No se pudo reiniciar: ' + e.message, 'error'); }
+  },
+
+  async borrarCodigosModuloDirecto(ecu) {
+    const s = this._centroScan || this._scan;
+    const ms = (s && s.por_modulo) || [];
+    const m = ms.find(x => x.ecu === ecu);
+    if (!m) return;
+    const permiso = this._puedePuntoAPunto();
+    if (!permiso.ok) { UI.toast(permiso.motivo, 'error'); return; }
+
+    const ok = await UI.confirmar(
+      `¿Borrar códigos de falla en <b>${UI.esc(m.nombre)}</b>?<br><br>` +
+      '<small>· El módulo borrará sus registros de falla almacenados.<br>' +
+      '· Si el fallo físico persiste, el código volverá a encenderse.<br>' +
+      '· El vehículo debe estar <b>detenido y en contacto</b>.</small>',
+      'Borrar DTCs del Módulo');
+    if (!ok) return;
+
+    UI.toast(`Borrando DTCs en ${m.nombre}…`, 'info', 4000);
+    try {
+      const r = await this._elmPuntoAPunto(() => this._borrarModulo(m.ecu, m.resp));
+      if (r && r.ok) {
+        m.codigos = [];
+        this._log(`🧹 ${m.nombre}: Códigos de falla borrados ✓`);
+        UI.toast(`✅ DTCs borrados correctamente en ${m.nombre}`, 'success');
+        this.verModulo(ecu);
+      } else {
+        const motivo = (r && r.motivo) || 'desconocido';
+        this._log(`<span style="color:var(--amber)">⚠️ ${UI.esc(m.nombre)}: no se pudo borrar (${UI.esc(motivo)})</span>`);
+        UI.toast(`❌ ${m.nombre} no aceptó el borrado: ${motivo}`, 'error');
+      }
+    } catch (e) { UI.toast('Error al borrar DTCs: ' + e.message, 'error'); }
   },
 
   /* Campos que dependen de una migración posterior a la tabla original. El
