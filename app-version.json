@@ -32,9 +32,9 @@
     "Va como release de GitHub, igual que el instalador de Windows."
   ],
   "android": {
-    "versionCode": 7,
-    "versionName": "5.15.7",
-    "fecha": "2026-09-20",
+    "versionCode": 8,
+    "versionName": "5.16.0",
+    "fecha": "2026-09-22",
     "paquete": "com.cmtelecom.nexuspro.nativa",
     "minAndroid": "7.0",
     "nativa": true,
@@ -47,10 +47,10 @@
     "enPlayStore": false,
     "playUrl": "https://play.google.com/store/apps/details?id=com.cmtelecom.nexuspro.nativa",
     "novedades": [
-      "Mejora Bluetooth: Reconocimiento inteligente de vLinker MS, Vgate iCar Pro y adaptadores por MAC (00:1D:A5, DC:0D:30)",
-      "Los dispositivos emparejados en Android ya no se ocultan y aparecen destacados en verde arriba de la lista",
-      "Soporte de lectura de Alias en Android 12+ e ingreso directo de MAC manual para conexión directa",
-      "Evaluación de salud en vivo con insignias (✓ Normal, ⚠️ Advertencia, 🚨 Crítico) y rangos de referencia"
+      "El escaneo ya NO se pierde: entrar al Centro de módulos, a una ficha o a cualquier ventana deja el reporte donde estaba. Solo se sale al Guardar o al pedir el Historial, y si hay algo sin guardar avisa antes",
+      "La IA identifica sola los módulos sin nombre: busca el número de pieza que declara cada uno y le pone el nombre, que queda guardado para todos los escaneos de ese modelo. Ya no hay que renombrarlos a mano",
+      "Un módulo que la IA no puede sostener con evidencia se queda sin nombre a propósito, con su fuente a la vista cuando sí lo identificó",
+      "El análisis de Nexus al terminar el escaneo vuelve a verse (leía el campo equivocado de la respuesta y salía siempre en blanco)"
     ]
   }
 }

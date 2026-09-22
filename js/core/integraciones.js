@@ -120,6 +120,30 @@ const IA = {
 
   preguntar(mensaje)            { return IA._pedir('chat', mensaje); },
   tecnico(mensaje)              { return IA._pedir('tecnico', mensaje); },
+
+  /* Quién es cada dirección de módulo de un escaneo OBD. La Edge Function le
+     prende la búsqueda web y le exige responder en JSON: el mecánico no tiene
+     por qué investigar números de pieza, para eso está la IA.
+     Devuelve { ok, modulos:[...] } — `modulos` puede venir vacío, y un módulo
+     puede venir con `nombre: null`: eso significa "no se pudo sostener", que es
+     una respuesta legítima y mejor que un nombre inventado. */
+  async identificarModulos({ vehiculo, modulos }) {
+    const r = await IA._pedir('modulo_obd',
+      'Identificá cada uno de estos módulos. Respondé solo el arreglo JSON.',
+      { vehiculo, modulos });
+    if (!r.ok) return r;
+    return { ok: true, modulos: IA._json(r.texto) || [], texto: r.texto };
+  },
+
+  /* Un modelo con búsqueda web suele envolver el JSON en prosa o en un bloque
+     de markdown. Se recorta al primer arreglo completo en vez de exigir que la
+     respuesta sea JSON puro, que es pedirle al modelo que nunca se distraiga. */
+  _json(txt) {
+    const s = String(txt || '');
+    const ini = s.indexOf('['), fin = s.lastIndexOf(']');
+    if (ini < 0 || fin <= ini) return null;
+    try { return JSON.parse(s.slice(ini, fin + 1)); } catch (_) { return null; }
+  },
   insights()                    { return IA._pedir('insights', ''); },
   redactar(que, contexto = {})  { return IA._pedir('redaccion', que, contexto); },
   diagnostico(vehiculo, sintomas) {
