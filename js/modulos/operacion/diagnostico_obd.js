@@ -2797,7 +2797,7 @@ Modulos.diagnostico_obd = {
          duplicar cada consulta en la bitacora. */
       const antes = this._sinTraza;
       this._sinTraza = true;
-      try { return await this._udsPedirELM(reqId, tx, timeout); }
+      try { return await this._udsPedirELM(reqId, respId, tx, timeout); }
       finally { this._sinTraza = antes; }
     }
     let datos = null, len = 0, ok = false;
@@ -2856,6 +2856,8 @@ Modulos.diagnostico_obd = {
       return /OK/i.test(r || '');            // dongle sin ATSH: no se sigue
     }
     await this._cmd('ATSH 7DF', 3000).catch(() => {});   // volver a la difusión
+    await this._cmd('ATAR', 3000).catch(() => {});       // sin filtro: el monitor en vivo escucha a todos
+    await this._cmd('ATH0', 3000).catch(() => {});
     await this._cmd('ATST 32', 3000).catch(() => {});
     return true;
   },
@@ -2976,11 +2978,81 @@ Modulos.diagnostico_obd = {
      La respuesta multilínea del ELM antepone el largo total y prefijos '0:',
      '1:' — por eso no se asume que el primer byte sea el del servicio: se busca
      la respuesta positiva (servicio+0x40) o la negativa (7F). */
-  async _udsPedirELM(req, tx, timeout = 3000) {
+  /* ── Quién contestó ─────────────────────────────────────────────────────
+     Sin filtro de recepción el ELM entrega la respuesta de CUALQUIER módulo
+     que hable en ese momento. En el Picanto (2026-09-23 00:27) la dirección
+     asistida 0x7D4 salió con P0115, P0106, P0782, B0001 y U39FF — motor,
+     transmisión y airbag — y en el escaneo siguiente con ninguno: era una
+     respuesta ajena atribuida al módulo equivocado. Con eso cualquier catálogo
+     de códigos por módulo se llena de basura.
+
+     Ahora se filtra por la dirección de RESPUESTA del módulo (ATCRA): la
+     conocida, la aprendida, o la de la convención ISO 15765 (pedido + 8). Si
+     con el filtro no contesta nadie — hay módulos que responden en otra
+     dirección, se vieron saltos de +0x20 — se pregunta UNA vez con cabeceras
+     visibles (ATH1), se aprende quién contesta de verdad y solo se aceptan
+     SUS tramas. */
+  _respAprendida: {},
+
+  /* Con ATH1 cada trama viene con su ID adelante ("7DC1014590200FF…"): se
+     rearma el ISO-TP por ID para no mezclar dos módulos. */
+  _framesPorId(raw) {
+    const porId = new Map();
+    for (const linea of String(raw || '').split(/[\r\n]+/)) {
+      const h = linea.replace(/[^0-9A-Fa-f]/g, '').toUpperCase();
+      if (h.length < 5) continue;
+      const id = parseInt(h.slice(0, 3), 16);
+      const b = (h.slice(3).match(/../g) || []).map(x => parseInt(x, 16));
+      if (!b.length) continue;
+      const e = porId.get(id) || { datos: [], len: 0 };
+      const pci = b[0] >> 4;
+      if (pci === 0) { e.len = b[0] & 0x0F; e.datos = b.slice(1, 1 + e.len); }
+      else if (pci === 1) { e.len = ((b[0] & 0x0F) << 8) | b[1]; e.datos = b.slice(2); }
+      else if (pci === 2) e.datos = e.datos.concat(b.slice(1));
+      porId.set(id, e);
+    }
+    const out = new Map();
+    for (const [id, e] of porId) if (e.datos.length) out.set(id, e.len ? e.datos.slice(0, e.len) : e.datos);
+    return out;
+  },
+
+  async _udsPedirELM(req, resp, tx, timeout = 3000) {
     await this._cmd('ATSH ' + this._hex3(req), 2500).catch(() => {});
     const cmd = tx.map(b => b.toString(16).padStart(2, '0')).join('').toUpperCase();
+    const esPositiva = d => d && (d[0] === ((tx[0] + 0x40) & 0xFF) || (d[0] === 0x7F && d[1] === tx[0]));
+    if (req <= 0x7F7) {
+      const esperado = resp != null ? Number(resp) : (this._respAprendida[req] != null ? this._respAprendida[req] : req + 8);
+      await this._cmd('ATCRA ' + this._hex3(esperado), 2500).catch(() => {});
+      let r1 = null;
+      try { r1 = await this._cmd(cmd, timeout); } catch (_) {}
+      const d1 = this._parsearRespELM(r1, tx);
+      if (d1) return d1;
+      /* Nadie contestó desde la dirección esperada: ¿contesta desde otra? */
+      await this._cmd('ATAR', 2500).catch(() => {});
+      await this._cmd('ATH1', 2500).catch(() => {});
+      let raw = null;
+      try { raw = await this._cmd(cmd, timeout); } catch (_) {}
+      await this._cmd('ATH0', 2500).catch(() => {});
+      const ajenas = new Set(Object.entries(this._respAprendida)
+        .filter(([r]) => Number(r) !== req).map(([, id]) => id));
+      for (const [id, datos] of this._framesPorId(raw)) {
+        /* La respuesta de OTRO módulo ya conocido no se toma por la de éste, y
+           0x7E8-0x7EF solo valen para 0x7E0-0x7E7 (motor/transmisión). */
+        if (ajenas.has(id) || (id >= 0x7E8 && id <= 0x7EF && !(req >= 0x7E0 && req <= 0x7E7))) continue;
+        if (esPositiva(datos)) {
+          this._respAprendida[req] = id;
+          this._trazaNota(`0x${this._hex3(req)} contesta desde 0x${this._hex3(id)} (aprendido)`);
+          return datos;
+        }
+      }
+      return null;
+    }
     let r = null;
     try { r = await this._cmd(cmd, timeout); } catch (_) { return null; }
+    return this._parsearRespELM(r, tx);
+  },
+
+  _parsearRespELM(r, tx) {
     if (!r || /NO DATA|ERROR|UNABLE|STOPPED|BUFFER/i.test(r)) return null;
     /* Acá NO sirve _hexLines. En una respuesta larga el ELM antepone una línea
        con el largo total ("014") y numera las siguientes ("0:", "1:"). Esa
@@ -3311,6 +3383,38 @@ Modulos.diagnostico_obd = {
   /* Respuesta a UDS 19 02: [59][02][máscara][DTC 3 bytes + estado]…
      El estado trae los bits que distinguen una falla presente AHORA de una
      guardada de antes — la diferencia entre mandar a revisar y no. */
+  /* TODOS los códigos que el módulo dice soportar (19 0A), sin filtrar por
+     estado: acá no se buscan fallas sino el catálogo posible del módulo. */
+  _dtcsSoportados(d) {
+    if (!d || d[0] !== 0x59 || d[1] !== 0x0A) return [];
+    const out = [];
+    for (let i = 3; i + 3 < d.length; i += 4) {
+      const a = d[i], b = d[i + 1], sub = d[i + 2];
+      if ((a === 0 && b === 0 && sub === 0) || (a === 0xFF && b === 0xFF)) continue;
+      const codigo = ['P','C','B','U'][a >> 6] + ((a >> 4) & 3) +
+                     (a & 0x0F).toString(16).toUpperCase() + b.toString(16).padStart(2, '0').toUpperCase();
+      const ftb = sub ? sub.toString(16).padStart(2, '0').toUpperCase() : '';
+      if (!out.some(x => x.codigo === codigo && x.ftb === ftb)) out.push({ codigo, ftb });
+    }
+    return out;
+  },
+
+  /* Guarda el catálogo de cada módulo del escaneo para el modelo. No bloquea
+     el escaneo ni lo tumba: si la base no está, el escaneo sigue igual. */
+  async _guardarCatalogoDTC(porModulo, veh) {
+    if (!veh || !veh.marca || typeof DB === 'undefined' || typeof DB.upsertDTCsModulo !== 'function') return 0;
+    const filas = [];
+    for (const m of porModulo || []) {
+      if (m.ext || !(m.soportados || []).length) continue;
+      for (const c of m.soportados)
+        filas.push({ marca: veh.marca, modelo: veh.modelo || '', req: Number(m.ecu), codigo: c.codigo, ftb: c.ftb || '', fuente: '19 0A' });
+    }
+    if (!filas.length) return 0;
+    const { error } = await DB.upsertDTCsModulo(filas).catch(e => ({ error: e }));
+    if (error) { console.warn('catalogo DTC:', error.message || error); return 0; }
+    return filas.length;
+  },
+
   _dtcsUDS(d) {
     if (!d || d[0] !== 0x59) return [];
     const out = [];
@@ -3752,8 +3856,19 @@ Modulos.diagnostico_obd = {
         await this._udsPedir(m.req, m.resp, [0x10, 0x01], 1200).catch(() => {});
       }
 
+      /* El catálogo del módulo: TODO lo que declara poder reportar (19 0A). Se
+         pide siempre — antes solo como último recurso para buscar fallas, y la
+         lista se tiraba. Es lectura pura. */
+      let soportados = [];
+      if (d && servicio.indexOf('KWP') < 0) {   // KWP2000 no entiende 19 0A
+        const dS = servicio === '19 0A' ? d : await this._udsPedir(m.req, m.resp, [0x19, 0x0A], 3000).catch(() => null);
+        soportados = this._dtcsSoportados(dS);
+      }
+
       const nombre = this._nombreResuelto({ ecu: m.req, ident, codigos: cods }, this._marcaBarrido).nombre;
-      res.push({ ecu: m.req, resp: m.resp, ext: !!m.ext, nombre, codigos: cods, respondio: !!d, servicio,
+      const respReal = m.resp != null ? m.resp : (this._respAprendida[m.req] != null ? this._respAprendida[m.req] : null);
+      res.push({ ecu: m.req, resp: respReal, ext: !!m.ext, nombre, codigos: cods, respondio: !!d, servicio,
+                 soportados: soportados.length ? soportados : undefined,
                  ident: ident || null, params_oem: paramsEsp, sesion_devuelta: sesionAbierta || undefined,
                  nuevo: !!conocidas.length && !conocidas.some(c => c.req === m.req) });
       if (log && cods.length) {
@@ -6985,6 +7100,7 @@ Modulos.diagnostico_obd = {
     const btn = document.getElementById('obd-btn-scan');
     btn.disabled = true;
     this._traza = [];   // bitacora tecnica: se reinicia con cada escaneo
+    this._respAprendida = {};   // quién contesta desde dónde vale para ESTE vehículo, no para el anterior
     const log = m => this._log(m);
     if (this._via === 'auto') {
       try { this._via = await this._detectarVia(log); }
@@ -7089,6 +7205,14 @@ Modulos.diagnostico_obd = {
         this._marcaBarrido = ((this._vehiculos || []).find(x => x.id === vehId) || {}).marca || null;
         porModulo = await this._escanearModulos(log, mapaPrev).catch(e => { log(`No se pudo barrer módulos: ${e.message}`); return null; });
         this._marcaBarrido = null;   // vale solo durante el barrido; después manda la marca del escaneo abierto
+        {
+          const vCat = (this._vehiculos || []).find(x => x.id === vehId);
+          const nCat = (porModulo || []).reduce((n, m) => n + ((m.soportados || []).length), 0);
+          if (nCat) {
+            log(`📚 Catálogo: los módulos declararon <b>${nCat}</b> código(s) que pueden reportar — se guardan para ${UI.esc([vCat && vCat.marca, vCat && vCat.modelo].filter(Boolean).join(' ') || 'este modelo')}`);
+            this._guardarCatalogoDTC(porModulo, vCat).catch(() => {});
+          }
+        }
         /* Antes de armar el mapa: si el mapa se guarda con "Módulo 0x7B3", el
            próximo escaneo de este modelo vuelve a arrancar sin nombres. */
         if (porModulo && porModulo.length && (typeof moduloEnPlan !== 'function' || moduloEnPlan('ia'))) {
