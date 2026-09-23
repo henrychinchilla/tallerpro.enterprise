@@ -91,7 +91,7 @@ function puertoFalso() {
   const r = await pInit;
 
   ok('la vía sigue siendo COM, no una vía nueva sin registrar', M._via === 'serial');
-  ok('reporta el escáner', /Web Serial/i.test(r.nombre || ''));
+  ok('reporta el escáner con lo que él mismo contestó', /ELM327 v2\.3/.test(r.nombre || '') && /Bluetooth COM/.test(r.nombre || ''));
   ok('el módulo se da por conectado', M._conectado === true);
   ok('...y listo para leer', M._listo === true);
   /* Lo que decide si se puede escanear módulo por módulo, ver el mapa de acceso

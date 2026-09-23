@@ -674,19 +674,28 @@ Modulos.diagnostico_obd = {
       .filter(l => l.length >= 2);
   },
 
+  /* El VIN es la base del escaneo. El Picanto lo dio a las 00:51 y NO a las
+     00:27 (2026-09-23): se pedía UNA vez y, si el módulo tardaba o contestaba
+     "SEARCHING…", quedaba vacío sin decir nada. Ahora se reintenta, y solo se
+     acepta un VIN completo de 17: uno a medias se veía como VIN y no lo era. */
   async _leerVIN() {
-    try {
-      const hex = this._hexLines(await this._cmd('0902', 8000)).join('');
-      const i = hex.indexOf('4902');
-      if (i < 0) return null;
-      let ascii = '';
-      for (let p = i + 6; p + 1 < hex.length; p += 2) {   // +6: salta 4902 + nº de secuencia
-        const ch = String.fromCharCode(parseInt(hex.substr(p, 2), 16));
-        if (/[A-HJ-NPR-Z0-9]/.test(ch)) ascii += ch;      // charset VIN válido
-      }
-      const m = ascii.match(/[A-HJ-NPR-Z0-9]{17}/);
-      return m ? m[0] : (ascii.length >= 11 ? ascii : null);
-    } catch (_) { return null; }
+    for (let intento = 0; intento < 3; intento++) {
+      try {
+        const hex = this._hexLines(await this._cmd('0902', 8000)).join('');
+        const i = hex.indexOf('4902');
+        if (i >= 0) {
+          let ascii = '';
+          for (let p = i + 6; p + 1 < hex.length; p += 2) {   // +6: salta 4902 + nº de secuencia
+            const ch = String.fromCharCode(parseInt(hex.substr(p, 2), 16));
+            if (/[A-HJ-NPR-Z0-9]/.test(ch)) ascii += ch;      // charset VIN válido
+          }
+          const m = ascii.match(/[A-HJ-NPR-Z0-9]{17}/);
+          if (m) return m[0];
+        }
+      } catch (_) {}
+      await new Promise(r => setTimeout(r, 400 * (intento + 1)));
+    }
+    return null;
   },
 
   /* Módulos que contestan OBD-II, preguntando a la dirección de difusión: cada
@@ -2246,32 +2255,77 @@ Modulos.diagnostico_obd = {
     })();
   },
 
-  async _serialInit(log) {
+  /* ── El escáner Bluetooth REGISTRADO en esta PC ─────────────────────────
+     Henry, 2026-09-22: «si doy escaneo por Bluetooth es porque usaré ESE
+     Bluetooth» — el vLinker MS emparejado en Windows. Antes solo se reusaba el
+     puerto si el navegador tenía exactamente UNO autorizado; Windows crea un
+     COM entrante y uno saliente por equipo, así que casi siempre eran dos y
+     se abría el selector cada vez. Web Serial no da el nombre del equipo, así
+     que se reconoce por lo que CONTESTA: el puerto que responde ATI como un
+     ELM327 es el escáner. Se prueba primero el que funcionó la última vez. */
+  get _puertoConocido() {
+    try { return JSON.parse(localStorage.getItem('obd_puerto_bt') || 'null'); } catch (_) { return null; }
+  },
+  set _puertoConocido(v) {
+    try { localStorage.setItem('obd_puerto_bt', JSON.stringify(v || null)); } catch (_) {}
+  },
+
+  /* Abre el puerto y le pregunta ATI. Devuelve lo que contestó si es un
+     escáner; si no, lo cierra y devuelve null. El open tiene tope: un COM
+     saliente hacia un equipo apagado puede tardar mucho en fallar. */
+  async _probarPuertoSerial(port) {
+    const abrir = port.open({ baudRate: 115200 });
+    try {
+      await Promise.race([abrir, new Promise((_, no) => setTimeout(() => no(new Error('tiempo')), 7000))]);
+    } catch (_) {
+      abrir.then(() => port.close().catch(() => {}), () => {});
+      return null;
+    }
+    this._webSerialPort = port;
+    this._webSerialWriter = port.writable.getWriter();
+    this._serialReady = true;
+    this._buf = '';
+    this._bombearWebSerial(port);          // lector permanente → _recibir
+    const ati = await this._cmd('ATI', 2500).catch(() => '');
+    if (/ELM|STN|OBD|vLinker|Vgate/i.test(ati || '')) return ati.replace(/[\r\n>]+/g, ' ').replace(/^\s*ATI\s*/i, '').trim();
+    this._cerrarWebSerial();
+    return null;
+  },
+
+  async _serialInit(log, modo = this._modoPuerto) {
     if (this._puedeWebSerial()) {
-      /* Si este COM ya se autorizó antes, se reusa sin volver a preguntar: el
-         permiso de Web Serial es por sitio y sobrevive a recargar. Preguntar de
-         nuevo algo que el taller ya contestó es la queja de siempre. */
-      let port = null;
+      let port = null, ati = null;
       try {
-        const ya = await navigator.serial.getPorts();
-        if (ya.length === 1) { port = ya[0]; log('Reusando el puerto COM ya autorizado en este navegador.'); }
-      } catch (_) {}
-      try {
+        if (modo !== 'elegir') {
+          let ya = [];
+          try { ya = await navigator.serial.getPorts(); } catch (_) {}
+          const con = this._puertoConocido;
+          const orden = ya.map((pt, i) => ({ pt, i }))
+            .sort((a, b) => (b.i === (con && con.indice)) - (a.i === (con && con.indice)));
+          if (orden.length) log(`Buscando el escáner Bluetooth registrado${con && con.ati ? ` (<b>${UI.esc(con.ati)}</b>)` : ''} entre ${orden.length} puerto(s) de esta PC...`);
+          for (const { pt, i } of orden) {
+            ati = await this._probarPuertoSerial(pt);
+            if (ati) { port = pt; this._puertoConocido = { indice: i, ati, fecha: Date.now() }; break; }
+          }
+          if (!port && modo === 'conocido')
+            throw new Error('El escáner Bluetooth registrado no contestó. Revisá que esté enchufado al vehículo con el ' +
+              'switch en contacto y emparejado en el Bluetooth de Windows. Si es otro escáner, usá <b>🔁 Elegir otro escáner</b>.');
+          if (!port && orden.length) log('<span style="color:var(--amber)">El escáner registrado no contestó: elegí cuál usar.</span>');
+        }
         if (!port) {
           log('Abriendo selector de puerto COM / Bluetooth de Windows...');
-          port = await navigator.serial.requestPort();
+          const elegido = await navigator.serial.requestPort();
+          ati = await this._probarPuertoSerial(elegido);
+          if (!ati) throw new Error('Ese puerto no contestó como escáner (ATI). Elegí el COM <b>saliente</b> del escáner: ' +
+            'los que Windows llama "entrante" nunca sirven.');
+          port = elegido;
+          try {
+            const lista = await navigator.serial.getPorts();
+            this._puertoConocido = { indice: lista.indexOf(elegido), ati, fecha: Date.now() };
+          } catch (_) {}
         }
-        await port.open({ baudRate: 115200 });
-        this._webSerialPort = port;
-        this._webSerialWriter = port.writable.getWriter();
-        this._serialReady = true;
-        this._buf = '';
-        this._bombearWebSerial(port);          // lector permanente → _recibir
-
-        log('Puerto Bluetooth COM abierto en Windows ✓ Sondeando ATI...');
-        const sonda = await this._cmd('ATI', 4000).catch(() => '');
-        log(`El escáner contesta: <b>${UI.esc((sonda || 'OK').replace(/[\r\n>]+/g, ' ').trim())}</b> ✓`);
-        return { nombre: 'Bluetooth COM (Web Serial PC)', protocolo: 'Bluetooth clásico SPP 115200' };
+        log(`Escáner Bluetooth conectado ✓ contesta: <b>${UI.esc(ati)}</b>`);
+        return { nombre: `${ati} · Bluetooth COM`, protocolo: 'Bluetooth clásico SPP 115200' };
       } catch (e) {
         /* Que no quede el puerto medio abierto: si no se limpia acá, el próximo
            intento choca con "already open" y el error cambia de motivo. */
@@ -6477,8 +6531,8 @@ Modulos.diagnostico_obd = {
         <select class="form-select" id="obd-via" onchange="Modulos.diagnostico_obd._verApis()">
           ${this._nativo ? `<option value="android" selected>📲 Bluetooth de la app — BLE y clásico (SPP) · recomendado</option>` : ''}
           <option value="auto"${viaPorDefecto === 'auto' ? ' selected' : ''}>🔎 USB — detectar solo (liviano o camión, requiere el puente)${viaPorDefecto === 'auto' ? ' · recomendado' : ''}</option>
-          <option value="ble"${viaPorDefecto === 'ble' ? ' selected' : ''}>📶 Bluetooth — ELM327 / Vgate / OBDLink (BLE)</option>
-          <option value="classic"${viaPorDefecto === 'classic' ? ' selected' : ''}>📶 Bluetooth clásico (SPP) — vLinker/Thinkcar/ELM por COM · solo PC${viaPorDefecto === 'classic' ? ' · recomendado' : ''}</option>
+          <option value="ble"${viaPorDefecto === 'ble' ? ' selected' : ''}>📶 Bluetooth LE — otros dongles BLE (ELM327 / OBDLink)</option>
+          <option value="classic"${viaPorDefecto === 'classic' ? ' selected' : ''}>📶 Bluetooth — escáner registrado en esta PC (vLinker MS por COM)${viaPorDefecto === 'classic' ? ' · recomendado' : ''}</option>
           ${!esMoto ? `<option value="j1939ble">🚚 Bluetooth — camión J1939 (dongle con protocolo A)</option>
           <option value="j1939">🚚 USB — forzar camión J1939 (puente RP1210)</option>
           <option value="j1708">🚛 USB — forzar camión antiguo J1708/J1587 (MID/PID/FMI)</option>` : ''}
@@ -6514,6 +6568,10 @@ Modulos.diagnostico_obd = {
             onchange="Modulos.diagnostico_obd._mantenerConexion = this.checked">
           Mantener la conexión al cerrar</label>
         <button class="btn btn-ghost" onclick="Modulos.diagnostico_obd._cerrarEscaneo()">Cancelar</button>
+        ${this._puedeWebSerial() ? `<button class="btn btn-ghost" title="Usa solo el escáner Bluetooth ya registrado en esta PC, sin abrir el selector"
+          onclick="Modulos.diagnostico_obd.escanearPorBluetooth('conocido')">📶 Forzar Bluetooth registrado</button>
+        <button class="btn btn-ghost" title="Abre la lista de Windows para elegir otro escáner emparejado"
+          onclick="Modulos.diagnostico_obd.escanearPorBluetooth('elegir')">🔁 Elegir otro escáner</button>` : ''}
         <button class="btn btn-brand" id="obd-btn-scan" onclick="Modulos.diagnostico_obd.escanear()">🔌 Conectar y Escanear</button>
         <button class="btn btn-ghost" id="obd-btn-traza" style="display:none"
           title="Copia el dialogo crudo con el vehiculo para mandarlo a soporte cuando algo no cuadre"
@@ -6838,7 +6896,8 @@ Modulos.diagnostico_obd = {
          visible para poder corregirlo a mano. */
       const s = document.getElementById('obd-api');
       const seriales = s ? Array.from(s.options).filter(o => /^SERIAL:/i.test(o.value)) : [];
-      const opt = seriales.find(o => o.dataset.obd === '1') || seriales[0];
+      const opt = seriales.find(o => /vlinker|vgate/i.test(o.textContent)) ||
+                  seriales.find(o => o.dataset.obd === '1') || seriales[0];
       if (s && opt && !/^SERIAL:/i.test(s.value)) { s.value = opt.value; this._api = opt.value; }
     }
   },
@@ -6900,6 +6959,15 @@ Modulos.diagnostico_obd = {
     /* la flecha en color de acento hace la lista escaneable de un vistazo */
     el.innerHTML += `<div><span style="color:var(--cyan)">›</span> ${msg}</div>`;
     el.scrollTop = el.scrollHeight;
+  },
+
+  /* Los dos botones de Bluetooth del modal: fuerzan la vía clásica (COM) y
+     dicen cómo elegir el puerto — solo el registrado, o la lista de Windows. */
+  async escanearPorBluetooth(modo) {
+    const via = document.getElementById('obd-via');
+    if (via) { via.value = 'classic'; this._verApis(); }
+    this._modoPuerto = modo;
+    try { await this.escanear(); } finally { this._modoPuerto = null; }
   },
 
   async escanear() {
@@ -7196,7 +7264,16 @@ Modulos.diagnostico_obd = {
     const s = this._scan, el = document.getElementById('obd-result');
     if (!s || !el) return;
     this._resolverNombres(s, (this._vehiculos || []).find(x => x.id === s.vehiculo_id));
+    const vFicha = (this._vehiculos || []).find(x => x.id === s.vehiculo_id);
     el.innerHTML = `
+      <div class="card" style="padding:12px 14px;margin-top:12px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+        <b style="font-size:12px">VIN</b>
+        ${s.vin
+          ? `<span style="font-family:ui-monospace,Consolas,monospace;font-size:15px;font-weight:700;letter-spacing:.5px">${UI.esc(s.vin)}</span>`
+          : `<span style="color:var(--amber);font-size:12.5px">El vehículo no entregó el VIN en este escaneo${vFicha && vFicha.vin
+              ? ` · en la ficha: <span style="font-family:ui-monospace,Consolas,monospace">${UI.esc(vFicha.vin)}</span>` : ''}</span>
+             ${this._listo ? `<button class="btn btn-sm btn-ghost" onclick="Modulos.diagnostico_obd.releerVIN()">↻ Leer VIN</button>` : ''}`}
+      </div>
       ${s.nhtsa ? `<div class="card" style="padding:14px;margin-top:12px;border-left:3px solid var(--cyan)">
         <b style="font-size:12px">🌐 IDENTIFICADO POR VIN (NHTSA)</b>
         <div style="font-size:13px;margin-top:4px">${UI.esc(s.nhtsa.marca)} ${UI.esc(s.nhtsa.modelo||'')} ${s.nhtsa.anio||''}
@@ -7212,7 +7289,6 @@ Modulos.diagnostico_obd = {
       ${this._freezeHTML(s.freeze_frame)}
       ${this._porModuloHTML(s)}
       ${this._mapaHTML(s)}
-      ${this._costoHTML(s)}
       ${this._equipamientoHTML(s)}
       ${this._monitoresHTML(s.monitores)}
       <div class="card" style="padding:14px;margin-top:12px">
@@ -7239,6 +7315,17 @@ Modulos.diagnostico_obd = {
     const marca = s.nhtsa?.marca || v?.marca, modelo = s.nhtsa?.modelo || v?.modelo, anio = s.nhtsa?.anio || v?.anio;
     if (marca && modelo && anio) this.pintarCampanas('obd-campanas', marca, modelo, anio);
     this.pintarBitacora(s);   // la memoria del taller no depende de internet
+  },
+
+  async releerVIN() {
+    if (!this._scan || !this._listo) return;
+    UI.toast('Pidiendo el VIN al vehículo…', 'info');
+    const vin = await this._leerVIN();
+    if (!vin) return UI.toast('El vehículo no entregó el VIN', 'warn');
+    this._scan.vin = vin;
+    if (this._scan.id) await DB.upsertDiagnosticoOBD({ id: this._scan.id, vin }).catch(() => {});
+    UI.toast(`VIN ${vin} ✓`, 'success');
+    this._renderResultado();
   },
 
   _freezeHTML(fz) {
@@ -7772,18 +7859,6 @@ Una a tres viñetas con lo que este escaneo NO pudo confirmar.`;
   /* Cobro del escaneo, visible en el reporte para que no se pase por alto al
      armar la OT. La tarifa es del taller, así que se muestra como sugerencia:
      el monto final lo decide quien factura. */
-  _costoHTML(s) {
-    const c = s && s.costo;
-    if (!c || !c.monto) return '';
-    return `<div class="card" style="padding:14px;margin-top:12px;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap">
-      <div>
-        <b style="font-size:12px">COBRO DEL ESCANEO</b>
-        <div style="font-size:11px;color:var(--text3)">Tarifa de ${UI.esc(c.categoria)}${c.tipo ? ` · ${UI.esc(c.tipo)}` : ''} — sugerida, ajustable al facturar</div>
-      </div>
-      <div style="font-size:20px;font-weight:700;font-family:ui-monospace,Consolas,monospace">Q${c.monto.toLocaleString('es-GT')}</div>
-    </div>`;
-  },
-
   /* Tarjeta de equipamiento: lo que el vehículo declara y lo que falta.
      Va arriba porque un DPF eliminado no genera ningún código y se pasaría por
      alto mirando solo la lista de fallas. */
@@ -9079,7 +9154,6 @@ Una a tres viñetas con lo que este escaneo NO pudo confirmar.`;
         ${this._freezeHTML(d.freeze_frame)}
         ${this._porModuloHTML(d)}
       ${this._mapaHTML(d)}
-      ${this._costoHTML(d)}
       ${this._equipamientoHTML(d)}
       ${this._monitoresHTML(d.monitores)}
         <div class="card" style="padding:14px;margin-top:12px">
