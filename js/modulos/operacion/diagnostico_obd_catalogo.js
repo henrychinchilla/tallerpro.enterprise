@@ -29,6 +29,12 @@
     P0088:'Presión de riel de combustible muy alta',
     P0100:'Circuito del sensor MAF (flujo de aire)',
     P0101:'Rango/desempeño del sensor MAF',
+    /* SAE J2012 genéricos: Post Catalyst Fuel Trim. Faltaban y el Juke 2017
+       (2026-09-23) mostró P2096 permanente como "consultar manual". */
+    P2096:'Ajuste de combustible post-catalizador demasiado POBRE (Banco 1)',
+    P2097:'Ajuste de combustible post-catalizador demasiado RICO (Banco 1)',
+    P2098:'Ajuste de combustible post-catalizador demasiado POBRE (Banco 2)',
+    P2099:'Ajuste de combustible post-catalizador demasiado RICO (Banco 2)',
     P0102:'Señal baja del sensor MAF',
     P0103:'Señal alta del sensor MAF',
     P0104:'Sensor de flujo de aire (MAF) — señal intermitente',

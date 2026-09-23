@@ -116,7 +116,7 @@
       const cods = m.codigos || [];
       if (cods.some(c => c.activo)) return 0;
       if (cods.length) return 1;
-      if (m.respondio === false) return 3;
+      if (m.respondio === false || m.lectura === 'rechazada') return 3;
       return 2;
     },
 
@@ -126,6 +126,7 @@
       if (act) return `<span class="badge badge-red">🔴 ${act} activo(s)</span>`;
       if (cods.length) return `<span class="badge badge-amber">🟡 ${cods.length} guardado(s)</span>`;
       if (m.respondio === false) return '<span class="badge badge-amber">no contestó</span>';
+      if (m.lectura === 'rechazada') return '<span class="badge badge-amber" title="Contestó servicio no soportado: sus códigos NO se leyeron">⚠️ no deja leer códigos</span>';
       return '<span class="badge badge-green">✅ sin códigos</span>';
     },
 

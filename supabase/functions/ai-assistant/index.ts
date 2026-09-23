@@ -194,6 +194,19 @@ Para cada módulo tienes hasta cinco pistas, en este orden de peso:
 Usa la búsqueda web cuando la necesites: buscá el número de pieza junto con la marca y el
 modelo, o el mapa de direcciones UDS de esa marca. Es preferible buscar a adivinar.
 
+CUANDO NO HAY NÚMERO DE PIEZA NI NOMBRE PROPIO (muchas marcas —Nissan, Toyota, Honda— no
+contestan F187/F197): el trabajo es el mismo que haría un mecánico en Google, y NO se abandona
+por falta de F187. Buscá con varias formulaciones antes de rendirte, por ejemplo:
+  - "<marca> <modelo> <año> CAN ID 0x745", "<marca> 0x745 0x765", "<marca> ATSH745"
+  - el par solicitud/respuesta que trae el módulo (resp): en Nissan la respuesta es solicitud+0x20
+  - repositorios y foros técnicos: GitHub (opendbc, proyectos "<marca>-can"), OVMS, CanZE,
+    perfiles de Car Scanner / Torque, foros de la marca, manuales de servicio (sección LAN/CAN)
+  - la misma plataforma o generación (Nissan Juke F15 ↔ Qashqai J10/J11 comparten arquitectura)
+Aceptá una fuente de la MISMA marca y plataforma o generación. NUNCA copies el mapa de otro
+modelo con otra arquitectura (p. ej. un Leaf eléctrico para un Juke a gasolina): si la única
+fuente es de otro tipo de vehículo, eso NO sostiene el nombre. Si dos fuentes se contradicen
+para una dirección, poné confianza "baja" y decilo en "nota" citando ambas.
+
 CUANDO HAY SIGLA O NÚMERO DE PIEZA: buscalo (número de pieza + marca, p. ej. "94003G6920 Kia")
 y si un catálogo o tienda de repuestos lo nombra, DEVOLVÉ ESE NOMBRE con confianza "media" o
 "alta" y el sitio como fuente. Un número de pieza que aparece en la primera búsqueda NO puede
@@ -703,10 +716,19 @@ Deno.serve(async (req) => {
   const necesitaBusquedaWeb = modo === "modulo_obd" ||
     ((modo === "chat" || modo === "insights") &&
      (modsDelRol.includes("armeria") || modsDelRol.includes("agroservicio") || modsDelRol.includes("venta_granos")));
-  const usosWeb = modo === "modulo_obd" ? 8 : 3;
+  const usosWeb = modo === "modulo_obd" ? 12 : 3;
 
-  const modelToUse = MODOS_IMAGEN[modo] ? (Deno.env.get("AI_MODEL_VISION") ?? "claude-3-5-sonnet-20241022") : MODELO;
-  const soportaThinking = modelToUse.includes("claude-3-7") || modelToUse.includes("claude-3-8") || modelToUse.includes("fable");
+  /* Identificar módulos es investigación: con Haiku el Juke 2017 (2026-09-23)
+     volvió en null tras 3 búsquedas, y en otra corrida copió el mapa de un
+     Leaf eléctrico. Henry lo encontró en Google en un minuto. Este modo va con
+     el modelo fuerte; el resto sigue con el de siempre. */
+  const esInvestigacion = modo === "modulo_obd";
+  const modelToUse = MODOS_IMAGEN[modo] ? (Deno.env.get("AI_MODEL_VISION") ?? "claude-3-5-sonnet-20241022")
+    : esInvestigacion ? (Deno.env.get("AI_MODEL_INVESTIGACION") ?? "claude-opus-5") : MODELO;
+  const soportaThinking = ["claude-3-7", "claude-3-8", "fable", "opus-5", "sonnet-5", "opus-4-6", "opus-4-7", "opus-4-8", "sonnet-4-6"]
+    .some(m => modelToUse.includes(m));
+  /* La variante con filtrado dinámico solo existe en los modelos nuevos. */
+  const tipoBusqueda = soportaThinking && !modelToUse.includes("claude-3") ? "web_search_20260209" : "web_search_20250305";
 
   try {
     const pedir = (msgs: unknown[]) => fetch("https://api.anthropic.com/v1/messages", {
@@ -715,10 +737,13 @@ Deno.serve(async (req) => {
         "x-api-key": apiKey,
         "anthropic-version": "2023-06-01",
         "content-type": "application/json",
+        ...(modelToUse.includes("opus-5") ? { "anthropic-beta": "server-side-fallback-2026-07-01" } : {}),
       },
       body: JSON.stringify({
         model: modelToUse,
-        max_tokens: 4096,
+        /* Si el modelo declina, la API reintenta en otro dentro de la misma llamada. */
+        ...(modelToUse.includes("opus-5") ? { fallbacks: "default" } : {}),
+        max_tokens: esInvestigacion ? 16000 : 4096,
         /* thinking adaptativo + effort solo existen en modelos compatibles;
            Haiku y Sonnet 3.5 los rechazan, así que se omiten si no se soporta */
         ...(soportaThinking ? {
@@ -727,7 +752,7 @@ Deno.serve(async (req) => {
         } : {}),
         system: sistemaPrompt,
         messages: msgs,
-        ...(necesitaBusquedaWeb ? { tools: [{ type: "web_search_20250305", name: "web_search", max_uses: usosWeb }] } : {}),
+        ...(necesitaBusquedaWeb ? { tools: [{ type: tipoBusqueda, name: "web_search", max_uses: usosWeb }] } : {}),
       }),
     });
 
