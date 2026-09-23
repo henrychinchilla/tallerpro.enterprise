@@ -1212,8 +1212,12 @@ Modulos.diagnostico_obd = {
             if (ati) { port = pt; this._puertoConocido = { indice: i, ati, fecha: Date.now() }; break; }
           }
           if (!port && modo === 'conocido')
-            throw new Error('El escáner Bluetooth registrado no contestó. Revisá que esté enchufado al vehículo con el ' +
-              'switch en contacto y emparejado en el Bluetooth de Windows. Si es otro escáner, usá <b>🔁 Elegir otro escáner</b>.');
+            /* 2026-09-23: Windows daba "network location cannot be reached" al
+               abrir el COM: el vLinker atiende UN equipo a la vez por Bluetooth
+               clásico, y el celular lo tenía tomado. */
+            throw Object.assign(new Error('El escáner Bluetooth registrado no contestó. Si el <b>celular</b> está conectado a él, ' +
+              'desconectalo (o cerrá la app): el escáner atiende a un solo equipo a la vez. Si no, revisá que esté enchufado ' +
+              'al vehículo con el switch en contacto. Si es otro escáner, usá <b>🔁 Elegir otro escáner</b>.'), { propio: true });
           if (!port && orden.length) log('<span style="color:var(--amber)">El escáner registrado no contestó: elegí cuál usar.</span>');
         }
         if (!port) {
@@ -1239,6 +1243,7 @@ Modulos.diagnostico_obd = {
         if (e && (e.name === 'NotFoundError' || /User cancelled|No port selected/i.test(e.message || '')))
           throw new Error('No se eligió ningún puerto COM. El vLinker tiene que estar emparejado en el Bluetooth de Windows; ' +
             'elegí el COM <b>saliente</b> del escáner (los que Windows llama "entrante" nunca sirven).');
+        if (e && e.propio) throw e;
         throw new Error(`No se pudo abrir el puerto COM del escáner: ${e.message || e}. ` +
           'Revisá que no lo tenga abierto otro programa y que el dongle esté enchufado al vehículo con el switch en contacto.');
       }
