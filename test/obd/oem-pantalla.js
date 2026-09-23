@@ -47,7 +47,7 @@ const ctx = {
 };
 ctx.globalThis = ctx;
 vm.createContext(ctx);
-vm.runInContext(leer('js/modulos/operacion/diagnostico_obd.js'), ctx);
+vm.runInContext(require('./harness').fuenteOBD(), ctx);
 /* `Modulos.btnAccion` vive en js/core/app.js; acá alcanza con un doble que
    produzca el mismo tipo de llamada, que es lo que se está verificando. */
 ctx.Modulos.btnAccion = (accion, onclick) =>

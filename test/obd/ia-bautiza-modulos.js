@@ -58,7 +58,7 @@ const ctx = {
 };
 ctx.globalThis = ctx;
 vm.createContext(ctx);
-vm.runInContext(leer('js/modulos/operacion/diagnostico_obd.js'), ctx);
+vm.runInContext(require('./harness').fuenteOBD(), ctx);
 ctx.Modulos.btnAccion = (a, onclick) => `<button onclick="${onclick}">${a}</button>`;
 ctx.Modulos.eliminarRegistro = () => {};
 vm.runInContext(leer('js/modulos/operacion/diagnostico_modulos.js'), ctx);
@@ -187,7 +187,7 @@ const nuevoEscaneo = () => ({
      s.por_modulo.find(m => m.ecu === 0x7B3).nombre === 'Módulo 0x7B3');
 
   /* ── El escaneo no se pierde ────────────────────────────────────────── */
-  const fuente = leer('js/modulos/operacion/diagnostico_obd.js');
+  const fuente = require('./harness').fuenteOBD();
   ok('el modal del escaneo ya NO lleva el reporte adentro (era lo que lo hacía desaparecer)',
      !/id="obd-result"[\s\S]{0,400}obd-btn-scan/.test(fuente));
   ok('el reporte vive en la página del escaneo activo',

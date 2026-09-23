@@ -8,7 +8,7 @@
    Para forzar actualización: subir CACHE_VERSION.
 ═══════════════════════════════════════════════════════ */
 
-const CACHE_VERSION = 'v5.18.1-20260922-foto-catalogo';
+const CACHE_VERSION = 'v5.19.0-20260922-obd-en-partes';
 const CACHE_NAME = `nexuspro-${CACHE_VERSION}`;
 
 /* App shell — se precachea en install para que funcione offline */
@@ -37,6 +37,14 @@ const PRECACHE = [
   '/js/modulos/operacion/clientes.js',
   '/js/modulos/operacion/vehiculos.js',
   '/js/modulos/operacion/diagnostico_obd.js',
+  '/js/modulos/operacion/diagnostico_obd_lecturas.js',
+  '/js/modulos/operacion/diagnostico_obd_uds.js',
+  '/js/modulos/operacion/diagnostico_obd_barrido.js',
+  '/js/modulos/operacion/diagnostico_obd_camiones.js',
+  '/js/modulos/operacion/diagnostico_obd_catalogo.js',
+  '/js/modulos/operacion/diagnostico_obd_escaneo.js',
+  '/js/modulos/operacion/diagnostico_obd_monitor.js',
+  '/js/modulos/operacion/diagnostico_obd_acciones.js',
   '/js/modulos/operacion/diagnostico_oem.js',
   '/js/modulos/operacion/diagnostico_modulos.js',
   '/js/modulos/operacion/diagnostico_tablero.js',

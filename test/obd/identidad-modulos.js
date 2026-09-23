@@ -158,8 +158,7 @@ const { M, ctx } = cargar();
      /* La DEFINICIÓN del método, no la primera llamada que aparezca: con
         `_iniciarLatido()` a secas el match empezaba en un lugar donde se lo
         invoca y capturaba el bloque equivocado. */
-     /_cmd\('ATI'/.test(require('fs').readFileSync(
-       require('path').join(__dirname, '../../js/modulos/operacion/diagnostico_obd.js'), 'utf8')
+     /_cmd\('ATI'/.test(require('./harness').fuenteOBD()
        .match(/_iniciarLatido\(\) \{[\s\S]*?\n  \},/)[0]));
 
   /* ── El eco del adaptador dejaba el escaneo sin protocolo ──────────────
