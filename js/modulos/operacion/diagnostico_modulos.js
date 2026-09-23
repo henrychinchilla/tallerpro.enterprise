@@ -295,6 +295,7 @@
               <span style="flex:1;font-size:11.5px;line-height:1.45">${UI.esc(c.desc || c.sistema || '')}
                 ${c.activo ? '<b style="color:var(--red)"> · presente ahora</b>' : '<span style="color:var(--text3)"> · guardada</span>'}</span>
             </div>`).join('') : '<div style="color:var(--green)">Sin códigos.</div>'}
+          <div id="ficha-catalogo" style="margin-top:9px"></div>
           ${vivo ? `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:9px">
             <button class="btn btn-sm btn-ghost" onclick="Modulos.diagnostico_obd.releerCodigosModulo(${ecu})">🔄 Leer ahora</button>
             ${cods.length ? `<button class="btn btn-sm btn-danger" onclick="Modulos.diagnostico_obd.borrarCodigosModulo(${ecu})">🧹 Borrar los de este módulo</button>` : ''}
@@ -335,6 +336,42 @@
         <div class="modal-footer">
           <button class="btn btn-ghost" onclick="Modulos.diagnostico_obd.modalCentroModulos()">‹ Volver al resumen</button>
         </div>`, '760px');
+      this._pintarCatalogoFicha(m, veh).catch(() => {});
+    },
+
+    /* El catálogo del módulo: lo que DECLARÓ poder reportar (UDS 19 0A), en
+       este escaneo y en los anteriores del mismo modelo. Descripción solo para
+       los genéricos SAE (segundo carácter 0, o P2): un B1xxx/C1xxx significa
+       algo distinto en cada marca y mostrar el de otra es peor que nada. */
+    async _pintarCatalogoFicha(m, veh) {
+      const zona = document.getElementById('ficha-catalogo');
+      if (!zona) return;
+      const mapa = new Map();
+      for (const c of (m.soportados || [])) mapa.set(c.codigo + (c.ftb ? '-' + c.ftb : ''), c);
+      if (veh && veh.marca && typeof DB !== 'undefined' && typeof DB.getDTCsModulo === 'function') {
+        const guardados = await DB.getDTCsModulo({ marca: veh.marca, modelo: veh.modelo || '', req: m.ecu }).catch(() => []);
+        for (const c of guardados) mapa.set(c.codigo + (c.ftb ? '-' + c.ftb : ''), c);
+      }
+      const lista = [...mapa.values()].sort((a, b) => a.codigo.localeCompare(b.codigo));
+      if (!document.getElementById('ficha-catalogo')) return;   // el usuario ya cerró la ficha
+      if (!lista.length) {
+        zona.innerHTML = '<div style="font-size:11px;color:var(--text3)">📚 Este módulo todavía no declaró su catálogo de códigos (se pide en cada escaneo con 19 0A).</div>';
+        return;
+      }
+      const generico = c => c[1] === '0' || (c[0] === 'P' && c[1] === '2');
+      let cat = null;
+      const gen = [...new Set(lista.map(c => c.codigo).filter(generico))];
+      if (gen.length && typeof DB.getDTCCatalogo === 'function') cat = await DB.getDTCCatalogo(gen).catch(() => null);
+      const conDesc = lista.filter(c => generico(c.codigo)).length;
+      zona.innerHTML = `<details><summary style="cursor:pointer;font-size:12px"><b>📚 Catálogo del módulo: ${lista.length} código(s) que puede reportar</b>
+          <span style="color:var(--text3)"> · ${conDesc} genérico(s) SAE con descripción · lo declaró el propio módulo (19 0A)</span></summary>
+        <div style="max-height:240px;overflow:auto;margin-top:6px">
+          ${lista.map(c => `<div style="display:flex;gap:8px;padding:3px 0;border-bottom:1px solid var(--border);font-size:11.5px">
+            <span style="font-family:ui-monospace,Consolas,monospace;font-weight:700;min-width:78px">${UI.esc(c.codigo)}${c.ftb ? '-' + UI.esc(c.ftb) : ''}</span>
+            <span style="color:${generico(c.codigo) ? 'var(--text2)' : 'var(--text3)'}">${generico(c.codigo)
+              ? UI.esc(this._descModulo(c.codigo, cat) || 'genérico SAE sin descripción en el catálogo')
+              : 'código de fábrica · descripción pendiente (manual de servicio)'}</span></div>`).join('')}
+        </div></details>`;
     },
 
     /* ═══════════ ACCIONES DE LA FICHA ═══════════ */

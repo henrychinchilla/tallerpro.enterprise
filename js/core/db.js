@@ -488,6 +488,30 @@ const DB = {
     if (!data || !data.length) throw new Error('El mapa cambió. Reabre el mapa antes de eliminar.');
   },
 
+  /* Catálogo de DTC por módulo (mig 144): lo que cada módulo DECLARA soportar
+     (UDS 19 0A). Upsert idempotente sobre la clave única: el mismo código del
+     mismo módulo del mismo modelo es una fila, se escanee cuantas veces sea.
+     primera_vez no viaja en el payload, así que un re-escaneo no la pisa. */
+  async upsertDTCsModulo(filas) {
+    const tid = getTID();
+    const ahora = new Date().toISOString();
+    const payload = (filas || []).map(f => ({ ...f, tenant_id: tid, ultima_vez: ahora }));
+    if (!payload.length) return { data: [], error: null };
+    const { error } = await getSB().from('obd_dtc_modulo')
+      .upsert(payload, { onConflict: 'tenant_id,marca,modelo,req,codigo,ftb' });
+    return { data: null, error };
+  },
+
+  async getDTCsModulo({ marca, modelo = '', req }) {
+    if (!marca || req == null) return [];
+    const { data, error } = await getSB().from('obd_dtc_modulo')
+      .select('codigo, ftb, primera_vez, ultima_vez')
+      .eq('tenant_id', getTID()).ilike('marca', marca).eq('modelo', modelo || '').eq('req', Number(req))
+      .order('codigo');
+    if (error) { console.warn('getDTCsModulo:', error.message); return []; }
+    return data || [];
+  },
+
   async getModulosVehiculo({ marca = null, modelo = null, anio = null } = {}) {
     try {
       let q = getSB().from('obd_modulos_vehiculo').select('*')

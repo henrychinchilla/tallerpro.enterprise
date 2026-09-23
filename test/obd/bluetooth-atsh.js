@@ -36,7 +36,7 @@ M._cmd = async (c) => {
   ok('no inventa en direccion vacia', await M._tocarPuerta(0x741) === null);
 
   // UDS por ELM: respuesta multilinea con largo y prefijos 0:/1:
-  const d = await M._udsPedirELM(0x740, [0x19, 0x02, 0xFF]);
+  const d = await M._udsPedirELM(0x740, null, [0x19, 0x02, 0xFF]);
   ok('descarta el largo total y arranca en 59', d[0] === 0x59 && d[1] === 0x02);
   const cods = M._dtcsUDS(d);
   ok('decodifica el codigo del modulo', cods.length === 1 && cods[0].codigo === 'P0171');
@@ -44,10 +44,10 @@ M._cmd = async (c) => {
 
   // respuesta negativa
   M._cmd = async c => c.startsWith('AT') ? 'OK' : '7F 19 11';
-  const neg = await M._udsPedirELM(0x740, [0x19, 0x02, 0xFF]);
+  const neg = await M._udsPedirELM(0x740, null, [0x19, 0x02, 0xFF]);
   ok('reconoce la respuesta negativa 7F', neg && neg[0] === 0x7F);
   M._cmd = async c => c.startsWith('AT') ? 'OK' : 'NO DATA';
-  ok('NO DATA devuelve null', await M._udsPedirELM(0x740, [0x19,0x02,0xFF]) === null);
+  ok('NO DATA devuelve null', await M._udsPedirELM(0x740, null, [0x19,0x02,0xFF]) === null);
 
   // preparacion y restauracion de la cabecera
   enviados.length = 0; cabecera = null;
