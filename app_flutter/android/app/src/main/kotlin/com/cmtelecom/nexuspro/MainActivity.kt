@@ -89,9 +89,34 @@ class MainActivity : FlutterActivity() {
                     resultado.success(null)
                 }
 
+                /* El tablero en vivo dibuja el recorrido con el GPS del
+                 * teléfono (2026-09-22). La página lo pide con
+                 * navigator.geolocation y el WebView se lo pregunta a Dart;
+                 * acá se pide el permiso del sistema en ese momento, no al
+                 * abrir la app. Contesta true si quedó concedido. */
+                "pedirUbicacion" -> pedirUbicacion(resultado)
+
                 else -> resultado.notImplemented()
             }
         }
+    }
+
+    private var respuestaUbicacion: MethodChannel.Result? = null
+
+    private fun pedirUbicacion(resultado: MethodChannel.Result) {
+        val permisos = arrayOf(
+            android.Manifest.permission.ACCESS_FINE_LOCATION,
+            android.Manifest.permission.ACCESS_COARSE_LOCATION
+        )
+        val concedido = permisos.any {
+            checkSelfPermission(it) == android.content.pm.PackageManager.PERMISSION_GRANTED
+        }
+        if (concedido) { resultado.success(true); return }
+        /* Una sola pregunta a la vez: si ya hay una en curso, la anterior
+         * contesta false y queda la nueva. */
+        respuestaUbicacion?.success(false)
+        respuestaUbicacion = resultado
+        requestPermissions(permisos, PIDE_UBICACION)
     }
 
     private fun imprimirHtml(html: String) {
@@ -126,6 +151,16 @@ class MainActivity : FlutterActivity() {
         if (requestCode == PuenteBluetooth.PIDE_PERMISOS) {
             puente?.respuestaPermisos(grantResults)
         }
+        if (requestCode == PIDE_UBICACION) {
+            val alguno = grantResults.any { it == android.content.pm.PackageManager.PERMISSION_GRANTED }
+            respuestaUbicacion?.success(alguno)
+            respuestaUbicacion = null
+        }
+    }
+
+    companion object {
+        /* Distinto del de PuenteBluetooth para que cada respuesta vuelva a quien la pidió. */
+        const val PIDE_UBICACION = 7702
     }
 
     override fun onDestroy() {

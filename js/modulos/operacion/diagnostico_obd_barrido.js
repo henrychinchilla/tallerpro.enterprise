@@ -123,7 +123,14 @@
     const ecu = Number(m.ecu), id = m.ident || {};
     const hex = this._hexDir(ecu);
     const taller = this._nombreDeclarado(ecu);
-    if (taller) return { nombre: taller, origen: 'nombrado por el taller', firme: true };
+    if (taller) {
+      /* La libreta guarda también lo que identificó la IA (origen 'ia'):
+         decir "nombrado por el taller" de eso era atribuírselo a quien no fue. */
+      const fila = (this._modulosDeclarados || []).find(x => Number(x.req) === ecu) || {};
+      const origen = fila.origen === 'ia' ? 'identificado por IA · guardado para el modelo'
+        : fila.origen === 'escaneo' ? 'guardado de un escaneo anterior' : 'nombrado por el taller';
+      return { nombre: taller, origen, firme: true };
+    }
     if (this._UDS_NOMBRES[ecu]) return { nombre: this._UDS_NOMBRES[ecu], origen: 'dirección fijada por la norma ISO 15765-4', firme: true };
     if (id.nombre && !this._nombreGenerico(id.nombre, ecu)) return { nombre: String(id.nombre), origen: 'el módulo declara su nombre (F197)', firme: true };
     const h = id.hmc;
