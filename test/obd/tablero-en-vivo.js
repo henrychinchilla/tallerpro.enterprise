@@ -26,6 +26,7 @@ function dom() {
   const guardado = {};
   const watchers = [];
   const { M, ctx } = cargar({
+    URL,
     document: d,
     localStorage: { getItem: k => guardado[k] || null, setItem: (k, v) => { guardado[k] = v; } },
     navigator: {
@@ -55,6 +56,11 @@ function dom() {
   const html = M._tableroHTML();
   ok('dibuja reloj de RPM y temperatura (soportados)', /tab-g-rpm/.test(html) && /tab-g-temp/.test(html));
   ok('NO dibuja velocidad si el vehículo no la reporta', !/tab-g-vel/.test(html) && !/tab-c-vel/.test(html));
+  M._sop = ['0C', '0D', '05', '04', '2F'];
+  const html5 = M._tableroHTML();
+  ok('con 5 candidatos a reloj, el quinto (combustible) pasa a mosaico y no desaparece',
+     /tab-t-comb/.test(html5) && (html5.match(/id="tab-g-/g) || []).length === 4);
+  M._sop = ['0C', '05', '2F', '42'];
   ok('muestra el VIN y el color de la ficha', /KNAB2512AKT311766/.test(html) && /Rojo/.test(html));
   ok('el mapa arranca oculto', /id="tab-mapa-wrap"[^>]*display:none/.test(html));
 
@@ -90,7 +96,17 @@ function dom() {
   const foto = await M._fotoVehiculo({ marca: 'Kia', modelo: 'Picanto', anio: 2019, color: 'Rojo' });
   ok('elige la foto del modelo, no el interior ni el logo', foto && foto.url === 'picanto.jpg');
   ok('con autor y licencia (lo exige la licencia libre)', foto.autor === 'Vauxford' && foto.licencia === 'CC BY-SA 4.0');
-  ok('queda guardada para no volver a buscarla', Object.keys(guardado).some(k => k.startsWith('obd_foto_kia|picanto')));
+  ok('queda guardada para no volver a buscarla', Object.keys(guardado).some(k => k.startsWith('obd_foto_v2_kia|picanto')));
+
+  /* La foto OFICIAL de catálogo (foto-modelo) gana sobre Wikimedia. */
+  ctx.IA = { fotoModelo: async () => ({ ok: true, url: 'https://x.supabase.co/storage/v1/object/public/fotos-modelo/hyundai/accent/2017/grey.webp',
+                                        pagina: 'https://www.hyundai.com/et/en/find-a-car/accent-solaris/specification' }) };
+  const oficial = await M._fotoVehiculo({ marca: 'Hyundai', modelo: 'Accent', anio: 2017, color: 'Gris' });
+  ok('usa primero la foto de catálogo del fabricante', oficial && oficial.oficial === true && /fotos-modelo/.test(oficial.url));
+  ok('y dice de qué sitio oficial salió', oficial.autor === 'hyundai.com');
+  ctx.IA = { fotoModelo: async () => ({ ok: false }) };
+  const respaldo = await M._fotoVehiculo({ marca: 'Kia', modelo: 'Picanto', anio: 2020, color: 'Azul' });
+  ok('si no hay foto oficial, cae a Wikimedia', respaldo && !respaldo.oficial && respaldo.url === 'picanto.jpg');
 
   fin();
 })();

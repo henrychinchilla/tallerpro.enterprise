@@ -6675,7 +6675,7 @@ Modulos.diagnostico_obd = {
         &nbsp;&nbsp;¿Primera vez en esta PC? <a href="/puente-obd/instalar-puente.bat" download style="color:var(--cyan)">⬇️ Instalar el puente USB</a> (doble clic al archivo descargado, una sola vez).
       </div>
       <div id="obd-panel"></div>
-      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px">
+      <div style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;margin-top:12px">
         <button class="btn btn-ghost" id="obd-btn-test" title="Verifica los canales y busca una respuesta OBD real cuando es posible" onclick="Modulos.diagnostico_obd.probarAdaptador()">🔧 Verificar adaptadores</button>
         <label style="margin-right:auto;display:flex;align-items:center;gap:6px;font-size:11.5px;color:var(--text2)"
           title="Al cerrar, el escáner queda enlazado y se le manda un saludo cada pocos segundos para que no se duerma. No se transmite nada al vehículo.">

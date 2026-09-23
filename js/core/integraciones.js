@@ -121,6 +121,12 @@ const IA = {
   preguntar(mensaje)            { return IA._pedir('chat', mensaje); },
   tecnico(mensaje)              { return IA._pedir('tecnico', mensaje); },
 
+  /* Foto de catálogo del modelo (Edge Function foto-modelo, mig 145): la
+     imagen oficial del fabricante, validada por la IA y guardada para todos. */
+  fotoModelo(veh) {
+    return _invocar('foto-modelo', { marca: veh.marca, modelo: veh.modelo, anio: veh.anio || null, color: veh.color || null });
+  },
+
   /* Quién es cada dirección de módulo de un escaneo OBD. La Edge Function le
      prende la búsqueda web y le exige responder en JSON: el mecánico no tiene
      por qué investigar números de pieza, para eso está la IA.

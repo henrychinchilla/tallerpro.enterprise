@@ -14,9 +14,11 @@
        monitoreó, no un mapa por adorno. Si se graba la sesión, el recorrido
        queda guardado con la grabación.
 
-   La foto es genérica del modelo (Wikimedia Commons, licencia libre, con su
-   autor a la vista como pide la licencia). El color de la foto puede no ser
-   el del vehículo: por eso el color de la ficha va al lado, como dato. */
+   La foto es la de CATÁLOGO del fabricante (Edge Function foto-modelo, mig
+   145: la IA encuentra la página oficial del modelo, la foto se verifica como
+   ese modelo y se guarda para todos). Si no hay, Wikimedia Commons con su
+   autor y licencia. El color de la foto puede no ser el del vehículo: por eso
+   el color de la ficha va al lado, como dato. */
 (() => {
   const M = Modulos.diagnostico_obd;
   if (!M) return;
@@ -70,8 +72,23 @@
       const marca = String(veh.marca || '').trim(), modelo = String(veh.modelo || '').trim();
       if (!marca || !modelo) return null;
       const colorEn = COLORES_EN[String(veh.color || '').trim().toLowerCase()] || '';
-      const clave = `obd_foto_${marca}|${modelo}|${veh.anio || ''}|${colorEn}`.toLowerCase();
+      const clave = `obd_foto_v2_${marca}|${modelo}|${veh.anio || ''}|${colorEn}`.toLowerCase();
       try { const c = JSON.parse(localStorage.getItem(clave) || 'null'); if (c && c.url) return c; } catch (_) {}
+
+      /* 1. La foto OFICIAL de catálogo (Edge Function foto-modelo): la del
+            fabricante, verificada por la IA como ese modelo y guardada para
+            todos los talleres. Henry: «hay muchas fotos de brochures». */
+      if (typeof IA !== 'undefined' && typeof IA.fotoModelo === 'function') {
+        const r = await IA.fotoModelo(veh).catch(() => null);
+        if (r && r.ok && r.url) {
+          let sitio = 'sitio oficial';
+          try { sitio = new URL(r.pagina).hostname.replace(/^www\./, ''); } catch (_) {}
+          const foto = { url: r.url, pagina: r.pagina, autor: sitio, licencia: 'foto de catálogo del fabricante', oficial: true };
+          try { localStorage.setItem(clave, JSON.stringify(foto)); } catch (_) {}
+          return foto;
+        }
+      }
+      /* 2. Respaldo: Wikimedia Commons (licencia libre). */
       /* De lo más parecido a lo más genérico: año y color juntos primero (la
          generación correcta Y el color), después cada uno por separado. */
       const consultas = [
@@ -121,13 +138,23 @@
       const pids = this._pidsTablero();
       const defs = pids.map(p => this._defSensor(p));
       const relojes = defs.filter(d => RELOJES[d.k]).slice(0, 4);
-      const mosaicos = defs.filter(d => !RELOJES[d.k]);
+      /* Lo que no entró como reloj va como mosaico: con 5 candidatos a reloj
+         el quinto (combustible) desaparecía del tablero. */
+      const mosaicos = defs.filter(d => !relojes.includes(d));
       const colorTxt = String(veh.color || '').trim();
       const colorCss = COLORES_CSS[colorTxt.toLowerCase()];
       const tarjeta = (extra = '') => `background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:12px;${extra}`;
       if (!pids.length) return `<div style="grid-column:1/-1;${tarjeta()}">Este vehículo no reportó sensores para el tablero.</div>`;
-      return `<div id="tab-root" style="grid-column:1/-1;display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px">
-        <div style="${tarjeta('grid-column:span 2;display:flex;flex-direction:column;gap:6px;min-width:0')}">
+      /* En teléfono todo va a una columna: un "span 2" fijo en una grilla de
+         UNA columna crea una columna implícita y la página se desborda. */
+      return `<style>
+          #tab-root{grid-column:1/-1;display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;min-width:0}
+          #tab-root .tab-ancho{grid-column:1/-1}
+          @media (min-width:560px){ #tab-root .tab-ancho{grid-column:span 2} }
+          #tab-root svg{max-width:100%}
+        </style>
+        <div id="tab-root">
+        <div class="tab-ancho" style="${tarjeta('display:flex;flex-direction:column;gap:6px;min-width:0')}">
           <div id="tab-foto" style="height:150px;display:flex;align-items:center;justify-content:center;border-radius:8px;overflow:hidden;background:var(--surface)">${this._siluetaSVG()}</div>
           <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">
             <div><b style="font-size:15px">${UI.esc([veh.marca, veh.modelo, veh.anio].filter(Boolean).join(' ') || 'Vehículo')}</b>
@@ -146,7 +173,7 @@
           <div class="tab-ref" style="font-size:10px;color:var(--text3)"></div></div>`).join('')}
         ${['rpm', 'vel', 'acel'].filter(k => defs.some(d => d.k === k)).map(k => {
           const d = defs.find(x => x.k === k);
-          return `<div style="${tarjeta('grid-column:span 2')}">
+          return `<div class="tab-ancho" style="${tarjeta('min-width:0')}">
             <div style="font-size:11px;font-weight:700;color:var(--text2)">${UI.esc(d.l)} · tendencia</div>
             <div id="tab-c-${k}" style="height:90px;margin-top:6px"></div></div>`;
         }).join('')}
@@ -165,11 +192,18 @@
       if (!zona || !foto) { if (cred) cred.textContent = 'Sin foto del modelo en Wikimedia Commons'; return; }
       const img = new Image();
       img.alt = `${veh.marca || ''} ${veh.modelo || ''}`;
-      img.style.cssText = 'width:100%;height:100%;object-fit:cover';
-      img.onload = () => { zona.innerHTML = ''; zona.appendChild(img); };
+      img.style.cssText = 'width:100%;height:100%;object-fit:cover;object-position:center';
+      img.onload = () => {
+        /* Las de catálogo suelen ser banners muy anchos con el auto a la
+           derecha del centro: se encuadra hacia ahí en vez de cortarlo. */
+        if (img.naturalWidth / Math.max(1, img.naturalHeight) > 2.4) img.style.objectPosition = '68% 60%';
+        zona.innerHTML = ''; zona.appendChild(img);
+      };
       img.src = foto.url;
-      if (cred) cred.innerHTML = `Foto genérica del modelo · ${UI.esc(foto.autor)} · ${UI.esc(foto.licencia)} · ` +
-        `<a href="${UI.esc(foto.pagina)}" target="_blank" rel="noopener" style="color:var(--cyan)">Wikimedia Commons</a>`;
+      if (cred) cred.innerHTML = foto.oficial
+        ? `Foto de catálogo del modelo · <a href="${UI.esc(foto.pagina)}" target="_blank" rel="noopener" style="color:var(--cyan)">${UI.esc(foto.autor)}</a>`
+        : `Foto genérica del modelo · ${UI.esc(foto.autor)} · ${UI.esc(foto.licencia)} · ` +
+          `<a href="${UI.esc(foto.pagina)}" target="_blank" rel="noopener" style="color:var(--cyan)">Wikimedia Commons</a>`;
     },
 
     /* ── Cada vuelta del ciclo en vivo: solo números, sin rehacer el DOM ── */
