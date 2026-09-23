@@ -1100,13 +1100,13 @@
       let ref = '';
       /* Un rango "en ralentí" o "motor caliente" contra un motor apagado da
          FUERA en casi todo, y eso era el ruido que la IA convertía en fallas. */
-      if (k === 'volt_ecu' && motorApagado && typeof v === 'number') {
-        ref = ` [batería en reposo: ref 12.4–12.9${v < 12.4 ? ' → BAJA' : ''}]`;
-      } else if (d && d.r && motorApagado && (d.rc || d.cat === 'mezcla')) {
-        ref = ' [no evaluable con motor apagado]';
+      /* La misma evaluación que la pantalla (_evaluar): motor apagado, frío o
+         en marcha no se reportan como falla. */
+      const ev = d && typeof v === 'number' ? this._evaluar(d, v, this._ctxMotor(datos)) : { est: null, nota: null };
+      if (ev.nota) {
+        ref = ` [${ev.nota}${ev.est === 'fuera' ? ' → BAJA' : ' — no evaluable como falla'}]`;
       } else if (d && d.r) {
-        const fuera = typeof v === 'number' && (v < d.r[0] || v > d.r[1]);
-        ref = ` [ref ${d.r[0]}–${d.r[1]}${d.rc ? ` ${d.rc}` : ''}${fuera ? ' → FUERA' : ''}]`;
+        ref = ` [ref ${d.r[0]}–${d.r[1]}${d.rc ? ` ${d.rc}` : ''}${ev.est === 'mal' || ev.est === 'fuera' ? ' → FUERA' : ''}]`;
       }
       return `  - ${nombre}: ${v}${unidad ? ' ' + unidad : ''}${ref}`;
     }).join('\n');

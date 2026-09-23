@@ -211,7 +211,7 @@
       if (!document.getElementById('tab-root')) return;
       for (const p of this._pidsTablero()) {
         const d = this._defSensor(p), v = this._valorTablero(d.k);
-        const est = this._estadoSensor(d, v);
+        const ev = this._evaluar(d, v, this._ctxMotor()), est = ev.est;
         const color = est === 'mal' ? 'red' : est === 'ok' ? 'green' : est === 'fuera' ? 'amber' : 'cyan';
         const g = document.getElementById('tab-g-' + d.k);
         if (g) { const [mn, mx] = RELOJES[d.k]; g.innerHTML = this._gaugeSVG(v, mn, mx, d.l, d.u, color); }
@@ -220,7 +220,7 @@
           t.style.borderTopColor = `var(--${color})`;
           t.querySelector('.tab-num').innerHTML = v === null ? '—'
             : `${Math.round(v * 10) / 10}<span style="font-size:13px;font-weight:600;color:var(--text3);margin-left:2px">${UI.esc((d.u || '').trim())}</span>`;
-          t.querySelector('.tab-ref').textContent = d.r ? `ref ${d.r[0]}–${d.r[1]}${d.rc ? ' · ' + d.rc : ''}` : '';
+          t.querySelector('.tab-ref').textContent = ev.nota ? ev.nota : d.r ? `ref ${d.r[0]}–${d.r[1]}${d.rc ? ' · ' + d.rc : ''}` : '';
         }
         const c = document.getElementById('tab-c-' + d.k);
         if (c) c.innerHTML = this._spark(((this._hist || {})[d.k] || []).filter(x => typeof x === 'number'), d.r, color) ||
