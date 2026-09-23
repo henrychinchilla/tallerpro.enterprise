@@ -14,7 +14,7 @@ const { cargar, ok, fin } = require('./harness');
 const dormir = ms => new Promise(r => setTimeout(r, ms));
 
 /* Puerto doble: `responde` decide si del otro lado hay un ELM327. */
-function puerto(nombre, responde) {
+function puerto(nombre, responde, { demora = 5, cierre = 0 } = {}) {
   const pend = [], cola = [];
   let cerrada = false;
   const bombear = () => {
@@ -24,13 +24,13 @@ function puerto(nombre, responde) {
   const p = {
     nombre, abierto: false, aperturas: 0,
     async open() { p.aperturas++; if (p.abierto) throw new Error('already open'); p.abierto = true; cerrada = false; },
-    async close() { p.abierto = false; },
+    async close() { if (cierre) await dormir(cierre); p.abierto = false; },
     get readable() { return p.abierto && !cerrada ? { getReader: () => ({
       read: () => new Promise(res => { pend.push(res); bombear(); }),
       cancel: async () => { cerrada = true; bombear(); }, releaseLock: () => {} }) } : null; },
     get writable() { return p.abierto ? { getWriter: () => ({
       write: async b => { const t = new TextDecoder().decode(b);
-        if (responde && /ATI/.test(t)) setTimeout(() => { cola.push(new TextEncoder().encode('ATI\rELM327 v2.3\r\r>')); bombear(); }, 5); },
+        if (responde && /ATI/.test(t)) setTimeout(() => { cola.push(new TextEncoder().encode('ATI\rELM327 v2.3\r\r>')); bombear(); }, demora); },
       abort: async () => {}, releaseLock: () => {} }) } : null; },
   };
   return p;
@@ -87,6 +87,23 @@ function entorno(puertos, almacen = {}) {
   await e5.M._serialInit(() => {}, 'elegir');
   ok('elegir otro abre el selector de Windows', e5.pedidos() === 1);
   e5.M._desconectar(); await dormir(250);
+
+  /* ── 2026-09-23: la PC dejó de conectar. Al abrir el COM, Windows recién
+     levanta el SPP y el primer ATI tarda ~3 s; con 2.5 s se daba por mudo. ── */
+  const lento = puerto('COM6 vLinker recien enlazado', true, { demora: 3000 });
+  const e6 = entorno([lento]);
+  await e6.M._serialInit(() => {});
+  ok('un escáner que tarda 3 s en contestar ATI igual se conecta', e6.M._webSerialPort === lento && e6.pedidos() === 0);
+  e6.M._desconectar(); await dormir(250);
+
+  /* ── El cierre es asíncrono: si no se espera, elegir el MISMO puerto en el
+     selector choca con "already open". Y lo que elige la persona se respeta. ── */
+  const mudo = puerto('COM6 cierre lento', false, { cierre: 150 });
+  const e7 = entorno([mudo]);
+  let err7 = null;
+  await e7.M._serialInit(() => {}).catch(x => { err7 = x.message; });
+  ok('reabrir el puerto recién probado no choca con "already open"', !err7 && e7.pedidos() === 1 && e7.M._webSerialPort === mudo);
+  e7.M._desconectar(); await dormir(250);
 
   /* ── VIN: se reintenta y solo vale completo ── */
   const { M } = cargar();
