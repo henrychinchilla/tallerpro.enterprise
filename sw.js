@@ -8,7 +8,7 @@
    Para forzar actualización: subir CACHE_VERSION.
 ═══════════════════════════════════════════════════════ */
 
-const CACHE_VERSION = 'v5.17.7-20260922-catalogo-dtc';
+const CACHE_VERSION = 'v5.18.0-20260922-tablero-en-vivo';
 const CACHE_NAME = `nexuspro-${CACHE_VERSION}`;
 
 /* App shell — se precachea en install para que funcione offline */
@@ -39,6 +39,7 @@ const PRECACHE = [
   '/js/modulos/operacion/diagnostico_obd.js',
   '/js/modulos/operacion/diagnostico_oem.js',
   '/js/modulos/operacion/diagnostico_modulos.js',
+  '/js/modulos/operacion/diagnostico_tablero.js',
   '/js/modulos/operacion/diagnostico_transporte.js',
   '/js/modulos/operacion/bitacora.js',
   '/js/modulos/operacion/ordenes.js',
