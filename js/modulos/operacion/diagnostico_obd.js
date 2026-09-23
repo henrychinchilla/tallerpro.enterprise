@@ -9201,9 +9201,10 @@ Una a tres viñetas con lo que este escaneo NO pudo confirmar.`;
         <p style="color:var(--text3)">Forzar un actuador exige el identificador exacto del fabricante para ESE
           módulo. Sin una definición verificada con su fuente, NexusPro no transmite: un identificador
           equivocado puede accionar algo distinto de lo que se pidió.</p>
-        <p style="color:var(--text3)">Las funciones que sí están verificadas aparecen en
-          <b>🧠 Centro de Módulos → ficha del módulo → Funciones auxiliares</b>.</p>
-        <div style="display:flex;justify-content:flex-end;margin-top:12px">
+        <p style="color:var(--text3)">Lo que sí funciona hoy: el <b>banco de pruebas</b> le manda a este módulo
+          un servicio y muestra la respuesta cruda del vehículo, sin adivinar nada.</p>
+        <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:12px">
+          <button class="btn btn-brand" onclick="Modulos.diagnostico_obd.modalBancoPruebas(${Number(ecu)})">🧪 Abrir banco de pruebas</button>
           <button class="btn btn-ghost" onclick="UI.cerrarModal()">Cerrar</button>
         </div>
       </div>`, '560px');
