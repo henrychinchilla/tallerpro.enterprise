@@ -1137,8 +1137,10 @@ Modulos.diagnostico_obd = {
     const p = this._webSerialPort, r = this._webSerialReader, w = this._webSerialWriter;
     this._webSerialPort = this._webSerialReader = this._webSerialWriter = null;
     this._serialReady = false;
-    if (!p) return;
-    (async () => {
+    /* Devuelve la promesa del cierre: quien vuelve a abrir el MISMO puerto
+       tiene que esperarla, o el open() choca con "already open". */
+    if (!p) return Promise.resolve();
+    return (async () => {
       try { await r?.cancel(); } catch (_) {}
       try { await w?.abort(); } catch (_) {}
       try { w?.releaseLock(); } catch (_) {}
@@ -1169,7 +1171,7 @@ Modulos.diagnostico_obd = {
   /* Abre el puerto y le pregunta ATI. Devuelve lo que contestó si es un
      escáner; si no, lo cierra y devuelve null. El open tiene tope: un COM
      saliente hacia un equipo apagado puede tardar mucho en fallar. */
-  async _probarPuertoSerial(port) {
+  async _probarPuertoSerial(port, aceptarMudo = false) {
     const abrir = port.open({ baudRate: 115200 });
     try {
       await Promise.race([abrir, new Promise((_, no) => setTimeout(() => no(new Error('tiempo')), 7000))]);
@@ -1182,9 +1184,15 @@ Modulos.diagnostico_obd = {
     this._serialReady = true;
     this._buf = '';
     this._bombearWebSerial(port);          // lector permanente → _recibir
-    const ati = await this._cmd('ATI', 2500).catch(() => '');
-    if (/ELM|STN|OBD|vLinker|Vgate/i.test(ati || '')) return ati.replace(/[\r\n>]+/g, ' ').replace(/^\s*ATI\s*/i, '').trim();
-    this._cerrarWebSerial();
+    /* Al abrir el COM saliente, Windows recién levanta el enlace SPP con el
+       dongle y el primer comando puede tardar o perderse (2026-09-23: con un
+       solo ATI de 2.5 s la PC dejó de conectar). Dos intentos de 4 s. */
+    for (let i = 0; i < 2; i++) {
+      const ati = await this._cmd('ATI', 4000).catch(() => '');
+      if (/ELM|STN|OBD|vLinker|Vgate/i.test(ati || '')) return ati.replace(/[\r\n>]+/g, ' ').replace(/^\s*ATI\s*/i, '').trim();
+    }
+    if (aceptarMudo) return 'sin respuesta a ATI';
+    await this._cerrarWebSerial();
     return null;
   },
 
@@ -1211,7 +1219,9 @@ Modulos.diagnostico_obd = {
         if (!port) {
           log('Abriendo selector de puerto COM / Bluetooth de Windows...');
           const elegido = await navigator.serial.requestPort();
-          ati = await this._probarPuertoSerial(elegido);
+          /* Lo eligió la persona: se sigue aunque no conteste ATI, como antes
+             del 2026-09-22. Si es el entrante, falla después con su error. */
+          ati = await this._probarPuertoSerial(elegido, true);
           if (!ati) throw new Error('Ese puerto no contestó como escáner (ATI). Elegí el COM <b>saliente</b> del escáner: ' +
             'los que Windows llama "entrante" nunca sirven.');
           port = elegido;
@@ -1225,7 +1235,7 @@ Modulos.diagnostico_obd = {
       } catch (e) {
         /* Que no quede el puerto medio abierto: si no se limpia acá, el próximo
            intento choca con "already open" y el error cambia de motivo. */
-        this._cerrarWebSerial();
+        await this._cerrarWebSerial();
         if (e && (e.name === 'NotFoundError' || /User cancelled|No port selected/i.test(e.message || '')))
           throw new Error('No se eligió ningún puerto COM. El vLinker tiene que estar emparejado en el Bluetooth de Windows; ' +
             'elegí el COM <b>saliente</b> del escáner (los que Windows llama "entrante" nunca sirven).');
