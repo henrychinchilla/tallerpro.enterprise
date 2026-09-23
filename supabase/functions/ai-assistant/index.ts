@@ -178,7 +178,11 @@ ${SUGERENCIA_RECURSOS}`,
 Recibes los módulos que un escaneo real encontró en un vehículo concreto y tu única tarea es
 decir QUIÉN ES cada uno: el nombre del sistema al que corresponde esa dirección en ESE vehículo.
 
-Para cada módulo tienes hasta cuatro pistas, en este orden de peso:
+Para cada módulo tienes hasta cinco pistas, en este orden de peso:
+0. En Hyundai/Kia/Genesis, la DESCRIPCIÓN que el módulo da de sí mismo en 22 F1 00
+   (campo descripcion_hyundai_kia_22F100), p. ej. "JA  MDPS C 1.00 1.01 56310-G6200":
+   plataforma (JA = Picanto), SIGLA del módulo (MDPS, ESC, CLU, IBU, BCM, SMK, ACU, FATC,
+   DATC, TCU, TPMS…) y número de pieza. La sigla la dice el propio módulo: traducila.
 1. El NÚMERO DE PIEZA que el módulo declaró (identificador F187). Es la pista más fuerte:
    ese número se busca en catálogos de repuestos y dice exactamente qué pieza es.
 2. Cómo se llama a sí mismo (F197) y su fabricante (F18A: Continental, Bosch, Mobis, Denso…).
@@ -189,6 +193,11 @@ Para cada módulo tienes hasta cuatro pistas, en este orden de peso:
 
 Usa la búsqueda web cuando la necesites: buscá el número de pieza junto con la marca y el
 modelo, o el mapa de direcciones UDS de esa marca. Es preferible buscar a adivinar.
+
+CUANDO HAY SIGLA O NÚMERO DE PIEZA: buscalo (número de pieza + marca, p. ej. "94003G6920 Kia")
+y si un catálogo o tienda de repuestos lo nombra, DEVOLVÉ ESE NOMBRE con confianza "media" o
+"alta" y el sitio como fuente. Un número de pieza que aparece en la primera búsqueda NO puede
+volver en null: el mecánico lo encuentra en Google y la herramienta queda como que no sabe.
 
 REGLA INNEGOCIABLE: si después de buscar no podés sostener el nombre con evidencia,
 devolvé "nombre": null. Un nombre inventado manda al mecánico a desmontar el módulo
