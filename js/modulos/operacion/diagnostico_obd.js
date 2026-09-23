@@ -8083,7 +8083,7 @@ Una a tres viñetas con lo que este escaneo NO pudo confirmar.`;
     const sel = document.getElementById('obd-mon-sel');
     if (sel) sel.innerHTML = this._chipsMonitor();
     const el = document.getElementById('obd-vivo');
-    if (el) el.innerHTML = this._tilesMonitor();
+    this._pintarVivo(el);
   },
 
   /* Convierte {clave:valor} a [[etiqueta, valor, unidad]] usando el catálogo de PIDs */
@@ -8267,15 +8267,24 @@ Una a tres viñetas con lo que este escaneo NO pudo confirmar.`;
   _setVistaMon(modo) {
     this._vistaMon = modo;
     const el = document.getElementById('obd-vivo');
-    if (el) el.innerHTML = this._tilesMonitor();
+    this._pintarVivo(el);
     const sel = document.getElementById('obd-mon-sel');
     if (sel) sel.innerHTML = this._chipsMonitor();
+  },
+
+  /* Un solo lugar pinta el área del monitor. El tablero en vivo
+     (diagnostico_tablero.js) devuelve null cuando ya está dibujado: rehacer su
+     HTML en cada vuelta del ciclo borraría el mapa y la foto 6 veces por segundo. */
+  _pintarVivo(el) {
+    if (!el) return;
+    const html = this._tilesMonitor();
+    if (html != null) el.innerHTML = html;
   },
 
   _toggleZoom(pid) {
     this._zoom = this._zoom === pid ? null : pid;
     const el = document.getElementById('obd-vivo');
-    if (el) el.innerHTML = this._tilesMonitor();
+    this._pintarVivo(el);
   },
 
   _spark(vals, ref = null, colorVar = 'cyan') {
@@ -8339,6 +8348,7 @@ Una a tres viñetas con lo que este escaneo NO pudo confirmar.`;
           <button class="btn btn-sm ${modo === 'tarjetas' ? 'btn-brand' : 'btn-ghost'}" style="padding:3px 10px;font-size:11px" onclick="Modulos.diagnostico_obd._setVistaMon('tarjetas')">📊 Tarjetas</button>
           <button class="btn btn-sm ${modo === 'gauges' ? 'btn-brand' : 'btn-ghost'}" style="padding:3px 10px;font-size:11px" onclick="Modulos.diagnostico_obd._setVistaMon('gauges')">⏲️ Relojes (Gauges)</button>
           <button class="btn btn-sm ${modo === 'graficas' ? 'btn-brand' : 'btn-ghost'}" style="padding:3px 10px;font-size:11px" onclick="Modulos.diagnostico_obd._setVistaMon('graficas')">📈 Gráficas</button>
+          <button class="btn btn-sm ${modo === 'tablero' ? 'btn-brand' : 'btn-ghost'}" style="padding:3px 10px;font-size:11px" onclick="Modulos.diagnostico_obd._setVistaMon('tablero')">🎛 Tablero</button>
         </div>
       </div>
       <div>${disp.map(p => {
@@ -8444,7 +8454,7 @@ Una a tres viñetas con lo que este escaneo NO pudo confirmar.`;
       if (this._rec) this._rec.muestras.push({ t: Math.round((Date.now() - this._rec.t0) / 100) / 10, ...d });
       const el = document.getElementById('obd-vivo');
       if (!el) { this._stopLive(); return; }
-      el.innerHTML = this._tilesMonitor();
+      this._pintarVivo(el);
       const info = document.getElementById('obd-rec-info');
       if (info && this._rec) info.textContent = `⏺ Grabando: ${this._rec.muestras.length} muestras · ${Math.round((Date.now() - this._rec.t0) / 1000)}s · ${(this._rec.marcadores||[]).length} marcador(es)`;
       if (this._liveTimer) this._liveTimer = setTimeout(tick, 150);
