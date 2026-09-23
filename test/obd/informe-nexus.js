@@ -26,9 +26,9 @@ ok('los sensores viajan con su nombre, no con la clave interna',
    /Pedal acelerador E: 7 %/.test(p) && !/pedal_e:/.test(p) && !/o2_b1s1/.test(p));
 ok('avisa que el motor estaba apagado', /MOTOR APAGADO/.test(p));
 ok('con motor apagado la sonda lambda no sale como FUERA',
-   /Sonda lambda B1S1: 1\.245 V \[no evaluable con motor apagado\]/.test(p));
+   /Sonda lambda B1S1: 1\.245 V \[Motor apagado — no evaluable como falla\]/.test(p));
 ok('con motor apagado el voltaje se juzga como batería en reposo',
-   /Voltaje ECU: 12\.74 V \[batería en reposo/.test(p));
+   /Voltaje ECU: 12\.74 V \[Motor apagado · batería en reposo/.test(p));
 ok('un borrado reciente no se presenta como reparación',
    /BORRADOS RECIENTEMENTE/.test(p) && /sin verificar/.test(p));
 ok('monitores incompletos se mencionan', /INCOMPLETOS: Catalizador/.test(p));

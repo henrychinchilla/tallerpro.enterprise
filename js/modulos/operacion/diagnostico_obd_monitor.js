@@ -79,7 +79,7 @@
     return Object.values(this._PIDS).find(p => p.k === k) || null;
   },
 
-  _evaluarSensorKey(k, val) {
+  _evaluarSensorKey(k, val, datos) {
     const def = this._findPIDDefByKey(k);
     const lb = this._labels()[k] || [k, ''];
 
@@ -89,9 +89,13 @@
       ? `Ref: ${def.r[0]} – ${def.r[1]}${def.u}${def.rc ? ` (${def.rc})` : ''}`
       : `Ref: ${(def && def.rc) ? def.rc : 'Nominal / Estado normal'}`;
 
-    if (def && typeof val === 'number' && def.r) {
-      if (val < def.r[0] || val > def.r[1]) {
-        if (def.a) {
+    if (def && typeof val === 'number') {
+      const { est, nota } = this._evaluar(def, val, this._ctxMotor(datos));
+      if (nota) ref = nota;
+      if (est === 'ok' && nota && /^Motor apagado/.test(nota))
+        badge = '<span style="font-size:9.5px;padding:2px 6px;border-radius:4px;background:rgba(34,197,94,0.15);color:var(--green);font-weight:700">✓ MOTOR APAGADO</span>';
+      if (est === 'mal' || est === 'fuera') {
+        if (est === 'mal') {
           status = 'critico';
           badge = '<span style="font-size:9.5px;padding:2px 6px;border-radius:4px;background:rgba(239,68,68,0.15);color:var(--red);font-weight:700">🚨 CRÍTICO</span>';
         } else {
@@ -134,7 +138,7 @@
     const grupos = { motor: [], mezcla: [], temp: [], elec: [], chassis: [] };
 
     for (const [k, v] of entries) {
-      const evalData = this._evaluarSensorKey(k, v);
+      const evalData = this._evaluarSensorKey(k, v, d);
       const cat = evalData.cat && grupos[evalData.cat] ? evalData.cat : 'chassis';
       grupos[cat].push({ k, v, ...evalData });
     }
@@ -183,7 +187,7 @@
     const grupos = { motor: [], mezcla: [], temp: [], elec: [], chassis: [] };
 
     for (const [k, v] of entries) {
-      const evalData = this._evaluarSensorKey(k, v);
+      const evalData = this._evaluarSensorKey(k, v, d);
       const cat = evalData.cat && grupos[evalData.cat] ? evalData.cat : 'chassis';
       grupos[cat].push({ k, v, ...evalData });
     }
@@ -295,11 +299,52 @@
     </svg>`;
   },
 
+  /* En qué condición está el motor: RPM, velocidad y temperatura del último
+     dato. Con `datos` (un escaneo guardado) manda ese; si no, el monitor. */
+  _ctxMotor(datos) {
+    const ult = k => {
+      if (datos) return typeof datos[k] === 'number' ? datos[k] : null;
+      const h = (this._hist && this._hist[k]) || [];
+      for (let i = h.length - 1; i >= 0; i--) if (typeof h[i] === 'number') return h[i];
+      const v = ((this._scan && this._scan.datos) || {})[k];
+      return typeof v === 'number' ? v : null;
+    };
+    return { rpm: ult('rpm'), vel: ult('vel'), temp: ult('temp') };
+  },
+
+  /* Sensores que solo dicen algo con el motor girando. */
+  _SOLO_EN_MARCHA: ['rpm', 'maf', 'carga', 'carga_abs', 'map', 'avance', 'lambda', 'o2_b1s1', 'o2_b1s2',
+                    'temp_cat', 'stft1', 'ltft1', 'ltft2s', 'temp', 'temp_aceite'],
+
+  /* Estado de un sensor SEGÚN la condición del motor. Henry, 2026-09-23: con
+     el motor apagado todo salía en rojo o amarillo — un rango "en ralentí"
+     contra un motor parado es ruido, no una falla. Y en marcha los valores
+     de ralentí varían con la carga: tampoco es falla.
+     Devuelve { est: 'ok'|'fuera'|'mal'|null, nota }. */
+  _evaluar(def, v, ctx) {
+    if (!def || typeof v !== 'number') return { est: null, nota: null };
+    const k = def.k, c = ctx || this._ctxMotor();
+    const apagado = c.rpm === 0;
+    if (k === 'volt' || k === 'volt_ecu') {
+      if (apagado) return v >= 12.2
+        ? { est: 'ok', nota: 'Motor apagado · batería en reposo (ref 12.2–12.9 V)' }
+        : { est: 'fuera', nota: 'Motor apagado · batería baja en reposo (ref ≥ 12.2 V)' };
+    }
+    if (apagado && (this._SOLO_EN_MARCHA.includes(k) || def.cat === 'mezcla'))
+      return { est: 'ok', nota: 'Motor apagado' };
+    if (k === 'temp' && v < 80) return { est: 'ok', nota: 'Motor calentando (caliente: 80–105 °C)' };
+    if (c.temp != null && c.temp < 70 && (def.cat === 'mezcla' || k === 'temp_cat'))
+      return { est: 'ok', nota: 'Motor frío: todavía no se evalúa' };
+    if (((c.vel || 0) > 0 || (c.rpm || 0) > 1200) && def.rc && /ralent|pie fuera/.test(def.rc))
+      return { est: 'ok', nota: 'En marcha: varía con la carga' };
+    if (!def.r) return { est: null, nota: null };
+    if (v >= def.r[0] && v <= def.r[1]) return { est: 'ok', nota: null };
+    return { est: def.a ? 'mal' : 'fuera', nota: null };
+  },
+
   /* Cómo está el sensor contra su referencia */
-  _estadoSensor(def, v) {
-    if (!def || !def.r || typeof v !== 'number') return null;
-    if (v >= def.r[0] && v <= def.r[1]) return 'ok';
-    return def.a ? 'mal' : 'fuera';
+  _estadoSensor(def, v, datos) {
+    return this._evaluar(def, v, this._ctxMotor(datos)).est;
   },
 
   _chipsMonitor() {
@@ -345,12 +390,13 @@
       if (!def) return '';
       const vals = (this._hist[def.k] || []).filter(x => typeof x === 'number');
       const v = vals.length ? vals[vals.length - 1] : null;
-      const est = this._estadoSensor(def, v);
-      const color = est === 'mal' ? 'red' : est === 'ok' ? 'green' : 'cyan';
+      const ev = this._evaluar(def, v, this._ctxMotor());
+      const est = ev.est;
+      const color = est === 'mal' ? 'red' : est === 'ok' ? 'green' : est === 'fuera' ? 'amber' : 'cyan';
       const redondo = x => Math.round(x * 100) / 100;
       const mm = vals.length > 0
         ? `Mín: ${redondo(Math.min(...vals))}${def.u||''} | Máx: ${redondo(Math.max(...vals))}${def.u||''}` : '';
-      const ref = def.r
+      const ref = ev.nota ? ev.nota : def.r
         ? `ref ${def.r[0]}–${def.r[1]}${def.u}${def.rc ? ` (${def.rc})` : ''}`
         : 'sin referencia';
       const z = this._zoom === p;
@@ -368,7 +414,7 @@
           style="background:var(--surface2);border-radius:10px;padding:12px;border:1px solid var(--border);border-top:3px solid var(--${color});text-align:center;cursor:pointer${z ? ';grid-column:1/-1' : ''}">
           <div style="font-size:11px;font-weight:600;color:var(--text2);margin-bottom:4px;display:flex;justify-content:space-between">
             <span>${def.l}</span>
-            <span style="font-size:10px;color:var(--${color})">${est === 'mal' ? '⚠ ALERTA' : est === 'ok' ? '✓ NORMAL' : 'EN VIVO'}</span>
+            <span style="font-size:10px;color:var(--${color})">${est === 'mal' ? '⚠ ALERTA' : est === 'ok' ? (/^Motor apagado/.test(ev.nota || '') ? '✓ MOTOR APAGADO' : '✓ NORMAL') : 'EN VIVO'}</span>
           </div>
           ${this._gaugeSVG(v, minVal, maxVal, def.l, def.u, color)}
           <div style="font-size:10px;color:var(--text3);margin-top:4px">${mm ? `<b style="color:var(--text2)">${mm}</b> · ` : ''}${ref}</div>
