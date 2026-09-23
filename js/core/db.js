@@ -345,6 +345,11 @@ const DB = {
     return !error;
   },
 
+  async updateVehiculoFoto(id, foto_url) {
+    const { error } = await getSB().from('vehiculos').update({ foto_url, updated_at: new Date().toISOString() }).eq('id', id);
+    return { error };
+  },
+
   /* ── DIAGNÓSTICO OBD-II ───────────────────────── */
   async getDiagnosticosOBD(ini, fin, limite = null) {
     let q = getSB().from('diagnosticos_obd')

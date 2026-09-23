@@ -69,6 +69,15 @@
 
     /* ── Foto genérica del modelo (Wikimedia Commons) ─────────────────── */
     async _fotoVehiculo(veh) {
+      if (veh && veh.foto_url) {
+        return {
+          url: veh.foto_url,
+          pagina: veh.foto_url,
+          autor: 'Perfil del vehículo',
+          licencia: 'Foto asignada',
+          personalizada: true
+        };
+      }
       const marca = String(veh.marca || '').trim(), modelo = String(veh.modelo || '').trim();
       if (!marca || !modelo) return null;
       const colorEn = COLORES_EN[String(veh.color || '').trim().toLowerCase()] || '';
@@ -154,8 +163,11 @@
           #tab-root svg{max-width:100%}
         </style>
         <div id="tab-root">
-        <div class="tab-ancho" style="${tarjeta('display:flex;flex-direction:column;gap:6px;min-width:0')}">
-          <div id="tab-foto" style="height:150px;display:flex;align-items:center;justify-content:center;border-radius:8px;overflow:hidden;background:var(--surface)">${this._siluetaSVG()}</div>
+        <div class="tab-ancho" style="${tarjeta('display:flex;flex-direction:column;gap:6px;min-width:0;position:relative')}">
+          <div style="position:relative">
+            <div id="tab-foto" style="height:150px;display:flex;align-items:center;justify-content:center;border-radius:8px;overflow:hidden;background:var(--surface);cursor:pointer" onclick="Modulos.diagnostico_obd.cambiarFotoPerfilVehiculo()" title="Clic para buscar o cambiar foto en la web">${this._siluetaSVG()}</div>
+            <button class="btn btn-sm btn-ghost" style="position:absolute;top:8px;right:8px;background:rgba(15,23,42,0.85);color:var(--cyan);border:1px solid rgba(6,182,212,0.5);font-size:11px;padding:3px 9px;border-radius:6px;backdrop-filter:blur(4px);z-index:2;font-weight:700" onclick="event.stopPropagation();Modulos.diagnostico_obd.cambiarFotoPerfilVehiculo()" title="Buscar imagen disponible en la web para este vehículo">🌐 Foto Web</button>
+          </div>
           <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">
             <div><b style="font-size:15px">${UI.esc([veh.marca, veh.modelo, veh.anio].filter(Boolean).join(' ') || 'Vehículo')}</b>
               <div style="font-size:11.5px;color:var(--text3)">${UI.esc(veh.placa || '')}${s.vin ? ` · VIN <span style="font-family:ui-monospace,Consolas,monospace">${UI.esc(s.vin)}</span>` : ''}</div></div>
@@ -189,9 +201,12 @@
       const veh = this._vehTablero();
       const foto = await this._fotoVehiculo(veh).catch(() => null);
       const zona = document.getElementById('tab-foto'), cred = document.getElementById('tab-foto-credito');
-      if (!zona || !foto) { if (cred) cred.textContent = 'Sin foto del modelo en Wikimedia Commons'; return; }
+      if (!zona || !foto) {
+        if (cred) cred.innerHTML = `Sin foto del modelo · <a href="javascript:void(0)" onclick="Modulos.diagnostico_obd.cambiarFotoPerfilVehiculo()" style="color:var(--cyan);font-weight:700">Buscar foto en la web</a>`;
+        return;
+      }
       const img = new Image();
-      img.alt = `${veh.marca || ''} ${veh.modelo || ''}`;
+      img.alt = `${UI.esc(veh.marca || '')} ${UI.esc(veh.modelo || '')}`;
       img.style.cssText = 'width:100%;height:100%;object-fit:cover;object-position:center';
       img.onload = () => {
         /* Las de catálogo suelen ser banners muy anchos con el auto a la
@@ -200,10 +215,17 @@
         zona.innerHTML = ''; zona.appendChild(img);
       };
       img.src = foto.url;
-      if (cred) cred.innerHTML = foto.oficial
-        ? `Foto de catálogo del modelo · <a href="${UI.esc(foto.pagina)}" target="_blank" rel="noopener" style="color:var(--cyan)">${UI.esc(foto.autor)}</a>`
-        : `Foto genérica del modelo · ${UI.esc(foto.autor)} · ${UI.esc(foto.licencia)} · ` +
-          `<a href="${UI.esc(foto.pagina)}" target="_blank" rel="noopener" style="color:var(--cyan)">Wikimedia Commons</a>`;
+      const cambioHtml = ` · <a href="javascript:void(0)" onclick="Modulos.diagnostico_obd.cambiarFotoPerfilVehiculo()" style="color:var(--cyan);font-weight:700">Cambiar foto web</a>`;
+      if (cred) {
+        if (foto.personalizada) {
+          cred.innerHTML = `Foto de perfil asignada al vehículo${cambioHtml}`;
+        } else if (foto.oficial) {
+          cred.innerHTML = `Foto de catálogo del modelo · <a href="${UI.esc(foto.pagina)}" target="_blank" rel="noopener" style="color:var(--cyan)">${UI.esc(foto.autor)}</a>${cambioHtml}`;
+        } else {
+          cred.innerHTML = `Foto genérica del modelo · ${UI.esc(foto.autor)} · ${UI.esc(foto.licencia)} · ` +
+            `<a href="${UI.esc(foto.pagina)}" target="_blank" rel="noopener" style="color:var(--cyan)">Wikimedia Commons</a>${cambioHtml}`;
+        }
+      }
     },
 
     /* ── Cada vuelta del ciclo en vivo: solo números, sin rehacer el DOM ── */
@@ -306,6 +328,57 @@
       else this._mapa.fitBounds(this._mapaLinea.getBounds(), { padding: [20, 20], maxZoom: 17 });
       const info = document.getElementById('tab-mapa-info');
       if (info) info.textContent = `${pts.length} punto(s)${this._rec ? ' · se guarda con la grabación' : ''}`;
+    },
+
+    async cambiarFotoPerfilVehiculo() {
+      const s = this._scan;
+      const v = this._vehTablero();
+      const marca = s?.nhtsa?.marca || v.marca || '';
+      const modelo = s?.nhtsa?.modelo || v.modelo || '';
+      const anio = s?.nhtsa?.anio || v.anio || '';
+      const valorActual = v.foto_url || s?.foto_url || '';
+
+      if (typeof Modulos.vehiculos?.modalSelectorFotoWeb !== 'function') {
+        UI.toast('El selector de fotos web no está cargado', 'error');
+        return;
+      }
+
+      Modulos.vehiculos.modalSelectorFotoWeb({
+        marca,
+        modelo,
+        anio,
+        valorActual,
+        vehiculo: v.id ? v : null,
+        onSelect: async (nuevaUrl) => {
+          if (v.id) {
+            await DB.updateVehiculoFoto(v.id, nuevaUrl || null);
+            v.foto_url = nuevaUrl || null;
+          }
+          if (s) {
+            s.foto_url = nuevaUrl || null;
+          }
+          const colorEn = COLORES_EN[String(v.color || '').trim().toLowerCase()] || '';
+          const clave = `obd_foto_v2_${marca}|${modelo}|${v.anio || ''}|${colorEn}`.toLowerCase();
+          try {
+            if (nuevaUrl) {
+              localStorage.setItem(clave, JSON.stringify({
+                url: nuevaUrl,
+                pagina: nuevaUrl,
+                autor: 'Perfil del vehículo',
+                licencia: 'Foto web asignada',
+                personalizada: true
+              }));
+            } else {
+              localStorage.removeItem(clave);
+            }
+          } catch (_) {}
+
+          if (typeof this._pintarFotoTablero === 'function') {
+            await this._pintarFotoTablero();
+          }
+          UI.toast('Foto de perfil del vehículo actualizada en el tablero ✓');
+        }
+      });
     },
   });
 

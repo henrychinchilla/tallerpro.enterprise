@@ -108,5 +108,9 @@ function dom() {
   const respaldo = await M._fotoVehiculo({ marca: 'Kia', modelo: 'Picanto', anio: 2020, color: 'Azul' });
   ok('si no hay foto oficial, cae a Wikimedia', respaldo && !respaldo.oficial && respaldo.url === 'picanto.jpg');
 
+  /* La foto de PERFIL asignada al vehículo tiene prioridad máxima */
+  const personalizada = await M._fotoVehiculo({ marca: 'Kia', modelo: 'Picanto', anio: 2020, color: 'Azul', foto_url: 'https://cdn.taller.pro/foto-perfil-real.jpg' });
+  ok('la foto de perfil asignada al vehículo gana sobre catálogo y Wikimedia', personalizada && personalizada.personalizada === true && personalizada.url === 'https://cdn.taller.pro/foto-perfil-real.jpg');
+
   fin();
 })();

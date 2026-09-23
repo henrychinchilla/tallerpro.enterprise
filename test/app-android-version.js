@@ -437,5 +437,5 @@ const publicada = JSON.parse(fs.readFileSync(VERSION_JSON, 'utf8')).android;
   }
 
   console.log(`\n   ${pasadas} pasadas, ${fallidas} fallidas`);
-  if (fallidas) process.exitCode = 1;
+  process.exit(fallidas ? 1 : 0);
 })();

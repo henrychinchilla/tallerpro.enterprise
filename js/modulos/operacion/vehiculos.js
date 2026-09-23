@@ -369,17 +369,32 @@ Modulos.vehiculos = {
             <tbody>
               ${this._data.map(v=>`<tr>
                 <td class="mono-sm"><b>${v.placa}</b></td>
-                <td>${v.marca} ${v.modelo}<br><small style="color:var(--text3)">${[v.tipo,v.anio,v.color].filter(Boolean).join(' · ')}</small></td>
-                <td>${v.clientes?.nombre||'—'}</td>
+                <td>
+                  <div style="display:flex;align-items:center;gap:10px">
+                    <div style="position:relative;width:52px;height:38px;border-radius:6px;overflow:hidden;background:var(--surface2);border:1px solid var(--border);flex-shrink:0;cursor:pointer"
+                         onclick="Modulos.vehiculos.modalSelectorFotoWeb({vehiculo:Modulos.vehiculos._data.find(x=>x.id==='${v.id}')})"
+                         title="Clic para ver o cambiar foto de perfil desde la web">
+                      ${v.foto_url
+                        ? `<img src="${v.foto_url}" alt="${UI.esc(v.marca||'')}" style="width:100%;height:100%;object-fit:cover;display:block">`
+                        : `<div style="width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:14px;color:var(--text3)" title="Sin foto — clic para buscar en la web">🚘<span style="font-size:7px;color:var(--cyan);font-weight:800;line-height:1">WEB</span></div>`}
+                    </div>
+                    <div>
+                      <b>${UI.esc(v.marca)} ${UI.esc(v.modelo)}</b>
+                      <br><small style="color:var(--text3)">${[v.tipo,v.anio,v.color].filter(Boolean).join(' · ')}</small>
+                    </div>
+                  </div>
+                </td>
+                <td>${UI.esc(v.clientes?.nombre||'—')}</td>
                 <td class="mono-sm">${(v.kilometraje||0).toLocaleString()} km</td>
                 <td>${v.motor||'—'}</td>
                 <td onclick="event.stopPropagation()">
-                  <div style="display:flex;gap:4px;flex-wrap:wrap">
+                  <div style="display:flex;gap:4px;flex-wrap:wrap;align-items:center">
+                    <button class="btn btn-sm btn-ghost" onclick="Modulos.vehiculos.modalSelectorFotoWeb({vehiculo:Modulos.vehiculos._data.find(x=>x.id==='${v.id}')})" title="Buscar foto web del vehículo">🌐 Foto</button>
                     <button class="btn btn-sm btn-ghost" onclick="Modulos.vehiculos.planMantenimiento('${v.id}')" title="Plan de mantenimiento preventivo">🔧 Mant.</button>
                     <button class="btn btn-sm btn-ghost" onclick="Modulos.vehiculos.diagnosticar('${v.id}')" title="Escanear este vehículo con el adaptador OBD">🩺 Diagnosticar</button>
-                    <button class="btn btn-sm btn-cyan" onclick="Modulos.vehiculos.modalForm('${v.id}')" title="Editar">✏️ Editar</button>
                     <button class="btn btn-sm btn-amber" onclick="Modulos.ordenes?.modalForm(null,'${v.id}')" title="Nueva OT">＋ OT</button>
-                    <button class="btn btn-sm btn-danger" onclick="Modulos.vehiculos.eliminar('${v.id}','${v.placa}')" title="Eliminar">🗑️</button>
+                    ${Modulos.btnAccion('editar', `Modulos.vehiculos.modalForm('${v.id}')`)}
+                    ${Modulos.btnAccion('eliminar', `Modulos.vehiculos.eliminar('${v.id}','${v.placa}')`)}
                   </div>
                 </td>
               </tr>`).join('')||'<tr><td colspan="6" style="text-align:center;color:var(--text3);padding:24px">Sin vehículos registrados</td></tr>'}
@@ -432,6 +447,340 @@ Modulos.vehiculos = {
     ov.onclick = () => ov.remove();
     ov.innerHTML = `<img src="${this._tarjetaImg}" style="max-width:92vw;max-height:92vh;border-radius:10px;box-shadow:0 8px 40px rgba(0,0,0,.6)">`;
     document.body.appendChild(ov);
+  },
+
+  /* ── FOTO DE PERFIL DEL VEHÍCULO (WEB / ARCHIVO) ── */
+  _fotoUrl: '',
+  _ultimasFotosWeb: [],
+  _fotoWebCallback: null,
+  _fotoWebVehiculo: null,
+
+  _renderFotoBox(v = {}) {
+    if (this._fotoUrl) {
+      return `
+        <div style="position:relative;width:100%;max-width:280px;margin:0 auto;border-radius:8px;overflow:hidden;border:1px solid var(--border);box-shadow:0 2px 8px rgba(0,0,0,0.15)">
+          <img src="${this._fotoUrl}" alt="Foto del vehículo" onclick="Modulos.vehiculos._lightboxFoto()"
+               style="width:100%;height:130px;object-fit:cover;display:block;cursor:zoom-in">
+          <div style="position:absolute;bottom:0;inset-inline:0;background:rgba(15,23,42,0.85);backdrop-filter:blur(2px);padding:5px 8px;display:flex;justify-content:space-between;align-items:center">
+            <button type="button" class="btn btn-xs btn-cyan" onclick="Modulos.vehiculos.abrirSelectorWebForm()" style="font-size:10.5px;padding:2px 8px">🌐 Cambiar web</button>
+            <button type="button" class="btn btn-xs btn-danger" onclick="Modulos.vehiculos._quitarFoto()" style="font-size:10.5px;padding:2px 8px">🗑️ Quitar</button>
+          </div>
+        </div>`;
+    }
+    return `
+      <div style="width:100%;display:flex;flex-direction:column;align-items:center;gap:8px;padding:8px 0">
+        <div style="font-size:32px;color:var(--text3)">🚘</div>
+        <div style="font-size:11.5px;color:var(--text2);font-weight:600">Foto real de catálogo / disponible en la web</div>
+        <div style="display:flex;gap:8px;width:100%;justify-content:center;flex-wrap:wrap">
+          <button type="button" class="btn btn-sm btn-cyan" onclick="Modulos.vehiculos.abrirSelectorWebForm()" style="display:flex;align-items:center;gap:5px">
+            🌐 Buscar en la Web
+          </button>
+          <button type="button" class="btn btn-sm btn-ghost" onclick="document.getElementById('veh-foto-file').click()" style="display:flex;align-items:center;gap:5px;border:1px solid var(--border)">
+            📁 Subir / Tomar
+          </button>
+        </div>
+        <input type="file" id="veh-foto-file" accept="image/*" style="display:none" onchange="Modulos.vehiculos.subirFotoArchivo(this)">
+      </div>`;
+  },
+
+  _refreshFotoBox() {
+    const b = document.getElementById('veh-foto-box');
+    if (b) b.innerHTML = this._renderFotoBox();
+  },
+
+  _quitarFoto() {
+    this._fotoUrl = '';
+    this._refreshFotoBox();
+  },
+
+  _lightboxFoto() {
+    if (!this._fotoUrl) return;
+    const ov = document.createElement('div');
+    ov.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.85);display:flex;align-items:center;justify-content:center;cursor:zoom-out';
+    ov.onclick = () => ov.remove();
+    ov.innerHTML = `<img src="${this._fotoUrl}" style="max-width:92vw;max-height:92vh;border-radius:10px;box-shadow:0 8px 40px rgba(0,0,0,.6)">`;
+    document.body.appendChild(ov);
+  },
+
+  abrirSelectorWebForm() {
+    const marca = document.getElementById('veh-marca')?.value || '';
+    const modelo = document.getElementById('veh-modelo')?.value || document.getElementById('veh-linea')?.value || '';
+    const anio = document.getElementById('veh-anio')?.value || '';
+    const color = document.getElementById('veh-color')?.value || '';
+    const placa = document.getElementById('veh-placa')?.value || '';
+    this.modalSelectorFotoWeb({
+      vehiculo: { marca, modelo, anio, color, placa },
+      fotoActual: this._fotoUrl,
+      onSelect: url => {
+        this._fotoUrl = url;
+        this._refreshFotoBox();
+      }
+    });
+  },
+
+  subirFotoArchivo(input) {
+    const file = input?.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith('image/')) { UI.toast('Selecciona una imagen válida', 'error'); return; }
+    const reader = new FileReader();
+    reader.onload = e => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const MAX_W = 1000, MAX_H = 750;
+        let w = img.width, h = img.height;
+        if (w > MAX_W) { h = Math.round(h * MAX_W / w); w = MAX_W; }
+        if (h > MAX_H) { w = Math.round(w * MAX_H / h); h = MAX_H; }
+        canvas.width = w; canvas.height = h;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, w, h);
+        this._fotoUrl = canvas.toDataURL('image/jpeg', 0.85);
+        this._refreshFotoBox();
+        UI.toast('Foto cargada ✓');
+      };
+      img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+  },
+
+  async buscarFotosWeb(termino) {
+    if (!termino || !termino.trim()) return [];
+    const fotos = [];
+    const q = termino.trim();
+
+    // 1. Wikipedia Summary API
+    try {
+      const partes = q.split(/\s+/).filter(Boolean);
+      const wikiSlug = partes.slice(0, 2).join('_');
+      const r = await fetch('https://en.wikipedia.org/api/rest_v1/page/summary/' + encodeURIComponent(wikiSlug));
+      if (r.ok) {
+        const d = await r.json();
+        const img = d.originalimage?.source || d.thumbnail?.source;
+        if (img && /\.(jpg|jpeg|png|webp)/i.test(img)) {
+          fotos.push({
+            url: img,
+            thumb: d.thumbnail?.source || img,
+            titulo: d.title || wikiSlug.replace(/_/g, ' '),
+            fuente: 'Wikipedia Oficial'
+          });
+        }
+      }
+    } catch (_) {}
+
+    // 2. Wikimedia Commons API con término completo
+    try {
+      const url = 'https://commons.wikimedia.org/w/api.php?action=query&generator=search&gsrnamespace=6&gsrsearch=' + 
+        encodeURIComponent(q) + '&gsrlimit=16&prop=imageinfo&iiprop=url&iiurlwidth=800&format=json&origin=*';
+      const r = await fetch(url);
+      if (r.ok) {
+        const d = await r.json();
+        const pages = Object.values(d.query?.pages || {});
+        for (const p of pages) {
+          const info = p.imageinfo?.[0];
+          const u = info?.url;
+          const thumb = info?.thumburl || u;
+          if (u && /\.(jpg|jpeg|png|webp)/i.test(u) && !/logo|icon|diagram|map|flag|sign|emblem|interior|engine|motor|chassis|cutaway|badge/i.test(p.title)) {
+            if (!fotos.some(f => f.url === u)) {
+              fotos.push({
+                url: u,
+                thumb: thumb,
+                titulo: (p.title || '').replace(/^File:/i, '').replace(/\.[^.]+$/, '').replace(/_/g, ' '),
+                fuente: 'Wikimedia Commons'
+              });
+            }
+          }
+        }
+      }
+    } catch (_) {}
+
+    // 3. Fallback con término + ' car' si pocos resultados
+    if (fotos.length < 3 && !/camion|moto|truck|bike/i.test(q)) {
+      try {
+        const url2 = 'https://commons.wikimedia.org/w/api.php?action=query&generator=search&gsrnamespace=6&gsrsearch=' + 
+          encodeURIComponent(q + ' car') + '&gsrlimit=12&prop=imageinfo&iiprop=url&iiurlwidth=800&format=json&origin=*';
+        const r2 = await fetch(url2);
+        if (r2.ok) {
+          const d2 = await r2.json();
+          const pages2 = Object.values(d2.query?.pages || {});
+          for (const p of pages2) {
+            const info = p.imageinfo?.[0];
+            const u = info?.url;
+            const thumb = info?.thumburl || u;
+            if (u && /\.(jpg|jpeg|png|webp)/i.test(u) && !/logo|icon|diagram|map|flag|sign|emblem/i.test(p.title)) {
+              if (!fotos.some(f => f.url === u)) {
+                fotos.push({
+                  url: u,
+                  thumb: thumb,
+                  titulo: (p.title || '').replace(/^File:/i, '').replace(/\.[^.]+$/, '').replace(/_/g, ' '),
+                  fuente: 'Wikimedia Commons'
+                });
+              }
+            }
+          }
+        }
+      } catch (_) {}
+    }
+
+    return fotos;
+  },
+
+  modalSelectorFotoWeb(opts = {}) {
+    const veh = opts.vehiculo || {};
+    const vehId = veh.id || null;
+    const inicial = [veh.marca, veh.modelo, veh.anio].filter(Boolean).join(' ').trim() || 'Toyota Hilux';
+    const callback = opts.onSelect || null;
+
+    UI.modal('🌐 Seleccionar Foto del Vehículo desde la Web', `
+      <div style="font-size:12px;color:var(--text2);margin-bottom:12px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+        <div>
+          Vehículo: <b>${UI.esc(veh.marca||'')} ${UI.esc(veh.modelo||'')} ${veh.anio ? `(${veh.anio})` : ''}</b>
+          ${veh.placa ? ` · <span style="font-family:monospace;color:var(--cyan);font-weight:700">${UI.esc(veh.placa)}</span>` : ''}
+          ${veh.color ? ` · Color: ${UI.esc(veh.color)}` : ''}
+        </div>
+        ${opts.fotoActual ? `<button class="btn btn-sm btn-ghost text-red" onclick="Modulos.vehiculos._quitarFotoDesdeModal('${vehId||''}')">🗑️ Quitar foto actual</button>` : ''}
+      </div>
+
+      <div style="display:flex;gap:8px;margin-bottom:12px">
+        <input class="form-input" id="veh-web-search-query" value="${UI.esc(inicial)}" placeholder="Ej. Hyundai Elantra 2024, Toyota Hilux..." style="flex:1"
+               onkeydown="if(event.key==='Enter')Modulos.vehiculos._ejecutarBusquedaFotosWeb()">
+        <button class="btn btn-cyan" onclick="Modulos.vehiculos._ejecutarBusquedaFotosWeb()" style="display:flex;align-items:center;gap:6px">
+          🔎 Buscar
+        </button>
+      </div>
+
+      <div style="font-size:11px;color:var(--text3);margin-bottom:8px;display:flex;justify-content:space-between;align-items:center">
+        <span>Haz clic en cualquier imagen disponible en la web para seleccionarla como foto de perfil:</span>
+        <span id="veh-web-foto-count"></span>
+      </div>
+
+      <div id="veh-web-fotos-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px;max-height:50vh;overflow-y:auto;padding:4px">
+        <div style="grid-column:1/-1;text-align:center;padding:28px 0;color:var(--text3)">
+          ⏳ Buscando fotos en la web...
+        </div>
+      </div>
+
+      <div style="border-top:1px solid var(--border);margin-top:12px;padding-top:10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <span style="font-size:11.5px;color:var(--text3)">🔗 O ingresa URL directa:</span>
+        <input class="form-input form-input-sm" id="veh-web-url-directa" placeholder="https://ejemplo.com/foto.jpg" style="flex:1;min-width:200px">
+        <button class="btn btn-sm btn-ghost" onclick="Modulos.vehiculos._aplicarUrlDirecta('${vehId||''}')">Aplicar URL</button>
+      </div>
+
+      <div class="modal-footer" style="margin-top:12px">
+        <button class="btn btn-ghost" onclick="UI.cerrarModal()">Cancelar</button>
+      </div>
+    `, '760px');
+
+    this._fotoWebCallback = callback;
+    this._fotoWebVehiculo = veh;
+    setTimeout(() => this._ejecutarBusquedaFotosWeb(), 60);
+  },
+
+  async _ejecutarBusquedaFotosWeb() {
+    const input = document.getElementById('veh-web-search-query');
+    const grid = document.getElementById('veh-web-fotos-grid');
+    const countEl = document.getElementById('veh-web-foto-count');
+    if (!grid) return;
+    const query = input?.value.trim() || '';
+    if (!query) { grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;color:var(--text3)">Escribe una marca y modelo para buscar</div>'; return; }
+
+    grid.innerHTML = `
+      <div style="grid-column:1/-1;text-align:center;padding:32px 0;color:var(--cyan);font-weight:600">
+        <span style="display:inline-block;animation:spin 1s infinite linear">⏳</span> Buscando fotos del vehículo en la web...
+      </div>`;
+    if (countEl) countEl.textContent = '';
+
+    const fotos = await this.buscarFotosWeb(query);
+    if (!fotos.length) {
+      grid.innerHTML = `
+        <div style="grid-column:1/-1;text-align:center;padding:30px 10px;color:var(--text3)">
+          <div style="font-size:28px;margin-bottom:6px">🔍</div>
+          No se encontraron imágenes en la web para "<b>${UI.esc(query)}</b>".<br>
+          <small>Prueba simplificando el término de búsqueda (ej. sólo marca y modelo) o ingresa una URL directa abajo.</small>
+        </div>`;
+      return;
+    }
+
+    if (countEl) countEl.textContent = `${fotos.length} foto(s) disponible(s)`;
+    grid.innerHTML = fotos.map((f, i) => `
+      <div onclick="Modulos.vehiculos._seleccionarFotoWeb(${i})"
+           title="${UI.esc(f.titulo)} (${f.fuente})"
+           style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;overflow:hidden;cursor:pointer;transition:transform 0.15s, border-color 0.15s;display:flex;flex-direction:column;position:relative"
+           onmouseover="this.style.borderColor='var(--cyan)';this.style.transform='translateY(-2px)'"
+           onmouseout="this.style.borderColor='var(--border)';this.style.transform='none'">
+        <div style="height:120px;overflow:hidden;background:#090d16;display:flex;align-items:center;justify-content:center">
+          <img src="${f.thumb || f.url}" alt="${UI.esc(f.titulo)}" loading="lazy"
+               style="width:100%;height:100%;object-fit:cover;display:block"
+               onerror="this.parentElement.innerHTML='<span style=\\'font-size:11px;color:var(--text3)\\'>Error de imagen</span>'">
+        </div>
+        <div style="padding:6px 8px;font-size:11px;flex:1;display:flex;flex-direction:column;justify-content:space-between">
+          <div style="font-weight:600;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;line-height:1.3" title="${UI.esc(f.titulo)}">
+            ${UI.esc(f.titulo)}
+          </div>
+          <div style="font-size:9.5px;color:var(--text3);margin-top:4px;display:flex;justify-content:space-between;align-items:center">
+            <span>${UI.esc(f.fuente)}</span>
+            <span style="color:var(--cyan);font-weight:700">Elegir ›</span>
+          </div>
+        </div>
+      </div>
+    `).join('');
+
+    this._ultimasFotosWeb = fotos;
+  },
+
+  async _seleccionarFotoWeb(index) {
+    const f = (this._ultimasFotosWeb || [])[index];
+    if (!f) return;
+    const url = f.url || f.thumb;
+    const veh = this._fotoWebVehiculo || {};
+    const vehId = veh.id || null;
+
+    if (vehId) {
+      await DB.updateVehiculoFoto(vehId, url);
+      veh.foto_url = url;
+      const v = (this._data || []).find(x => x.id === vehId);
+      if (v) v.foto_url = url;
+    }
+
+    if (typeof this._fotoWebCallback === 'function') {
+      try { this._fotoWebCallback(url); } catch (_) {}
+    }
+
+    UI.cerrarModal();
+    UI.toast('Foto de perfil del vehículo actualizada ✓');
+  },
+
+  async _aplicarUrlDirecta(vehId) {
+    const input = document.getElementById('veh-web-url-directa');
+    const url = input?.value.trim() || '';
+    if (!url || !/^https?:\/\//i.test(url)) { UI.toast('Ingresa una URL válida que empiece con http:// o https://', 'warn'); return; }
+    
+    const veh = this._fotoWebVehiculo || {};
+    if (vehId) {
+      await DB.updateVehiculoFoto(vehId, url);
+      veh.foto_url = url;
+      const v = (this._data || []).find(x => x.id === vehId);
+      if (v) v.foto_url = url;
+    }
+    if (typeof this._fotoWebCallback === 'function') {
+      try { this._fotoWebCallback(url); } catch (_) {}
+    }
+    UI.cerrarModal();
+    UI.toast('Foto asignada ✓');
+  },
+
+  async _quitarFotoDesdeModal(vehId) {
+    const veh = this._fotoWebVehiculo || {};
+    if (vehId) {
+      await DB.updateVehiculoFoto(vehId, null);
+      veh.foto_url = null;
+      const v = (this._data || []).find(x => x.id === vehId);
+      if (v) v.foto_url = null;
+    }
+    if (typeof this._fotoWebCallback === 'function') {
+      try { this._fotoWebCallback(''); } catch (_) {}
+    }
+    UI.cerrarModal();
+    UI.toast('Foto de perfil eliminada');
   },
 
   async procesarTarjeta(input) {
@@ -574,17 +923,34 @@ Modulos.vehiculos = {
     const tipoInicial = v.tipo || 'Liviano';
     const marcaInicial = v.marca || '';
     this._tarjetaImg = v.tarjeta_base64 || '';
+    this._fotoUrl = v.foto_url || '';
 
     UI.modal(`${esEdicion?'✏️ Editar':'＋ Nuevo'} Vehículo`, `
       ${esEdicion?'<div class="alert alert-amber" style="margin-bottom:12px"><div class="alert-icon">⚠️</div><div class="alert-body" style="font-size:11px">Los cambios reemplazarán la información actual del vehículo.</div></div>':''}
       
-      <!-- Escaneo/Carga de tarjeta de circulación -->
-      <div style="background:var(--surface2);border:1px dashed var(--border);border-radius:10px;padding:14px;margin-bottom:16px;text-align:center">
-        <div id="veh-tarjeta-box" style="display:flex;justify-content:center;align-items:center;min-height:90px">
-          ${this._renderTarjetaBox()}
+      <!-- Foto de Perfil del Vehículo y Tarjeta de Circulación -->
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px;margin-bottom:16px">
+        <!-- Foto de Perfil del Vehículo -->
+        <div style="background:var(--surface2);border:1px dashed var(--border);border-radius:10px;padding:12px;text-align:center">
+          <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px">
+            📸 Foto de Perfil del Vehículo
+          </div>
+          <div id="veh-foto-box" style="display:flex;justify-content:center;align-items:center;min-height:90px">
+            ${this._renderFotoBox(v)}
+          </div>
         </div>
-        <div id="veh-tarjeta-loading" style="display:none;font-size:12px;margin-top:8px;color:var(--amber);font-weight:700">
-          ⏳ Analizando tarjeta con Nexus AI...
+
+        <!-- Escaneo/Carga de tarjeta de circulación -->
+        <div style="background:var(--surface2);border:1px dashed var(--border);border-radius:10px;padding:12px;text-align:center">
+          <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px">
+            🪪 Tarjeta de Circulación (IA)
+          </div>
+          <div id="veh-tarjeta-box" style="display:flex;justify-content:center;align-items:center;min-height:90px">
+            ${this._renderTarjetaBox()}
+          </div>
+          <div id="veh-tarjeta-loading" style="display:none;font-size:12px;margin-top:8px;color:var(--amber);font-weight:700">
+            ⏳ Analizando tarjeta con Nexus AI...
+          </div>
         </div>
       </div>
 
@@ -723,7 +1089,8 @@ Modulos.vehiculos = {
       linea:       document.getElementById('veh-linea')?.value||null,
       cui:         (document.getElementById('veh-cui')?.value||'').trim()||null,
       nit:         (document.getElementById('veh-nit')?.value||'').trim()||null,
-      tarjeta_base64: this._tarjetaImg || null
+      tarjeta_base64: this._tarjetaImg || null,
+      foto_url:    this._fotoUrl || null
     };
     if (id) fields.id = id;
 

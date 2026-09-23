@@ -74,7 +74,7 @@ function ok(nombre, condicion) {
    saldría en 0 y nadie se enteraría. */
 function fin() {
   console.log(`   ${pasadas} pasadas, ${fallidas} fallidas`);
-  if (fallidas) process.exitCode = 1;
+  process.exit(fallidas ? 1 : 0);
 }
 
 /* Una promesa que revienta el proceso en vez de quedarse colgada en silencio:
