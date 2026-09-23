@@ -18,7 +18,19 @@ const fs = require('fs');
 const vm = require('vm');
 const path = require('path');
 
-const RUTA = path.join(__dirname, '..', '..', 'js', 'modulos', 'operacion', 'diagnostico_obd.js');
+/* El módulo se dividió en partes el 2026-09-22 (el archivo único pasaba de
+   9.000 líneas). Mismo orden que index.html: el núcleo define el objeto y cada
+   parte le agrega sus métodos. */
+const PARTES_OBD = ['diagnostico_obd.js', 'diagnostico_obd_lecturas.js', 'diagnostico_obd_uds.js',
+  'diagnostico_obd_barrido.js', 'diagnostico_obd_camiones.js', 'diagnostico_obd_catalogo.js',
+  'diagnostico_obd_escaneo.js', 'diagnostico_obd_monitor.js', 'diagnostico_obd_acciones.js'];
+const DIR_OBD = path.join(__dirname, '..', '..', 'js', 'modulos', 'operacion');
+
+/* Todo el código del módulo, en orden de carga. Sirve para ejecutarlo en un
+   sandbox y para las pruebas que buscan algo en el texto de la fuente. */
+function fuenteOBD() {
+  return PARTES_OBD.map(p => fs.readFileSync(path.join(DIR_OBD, p), 'utf8')).join('\n;\n');
+}
 
 /* Carga el módulo en un sandbox nuevo. `extra` reemplaza o agrega globales.
    Los dobles cubren lo que el módulo usa en el navegador; cada prueba redefine
@@ -46,7 +58,7 @@ function cargar(extra = {}) {
   };
   Object.assign(ctx, extra);
   vm.createContext(ctx);
-  vm.runInContext(fs.readFileSync(RUTA, 'utf8'), ctx);
+  vm.runInContext(fuenteOBD(), ctx);
   return { M: ctx.Modulos.diagnostico_obd, ctx };
 }
 
@@ -73,4 +85,4 @@ process.on('unhandledRejection', e => {
   process.exit(1);
 });
 
-module.exports = { cargar, ok, fin };
+module.exports = { cargar, ok, fin, fuenteOBD, PARTES_OBD };

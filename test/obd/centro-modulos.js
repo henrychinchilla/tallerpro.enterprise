@@ -51,7 +51,7 @@ const ctx = {
 };
 ctx.globalThis = ctx;
 vm.createContext(ctx);
-vm.runInContext(leer('js/modulos/operacion/diagnostico_obd.js'), ctx);
+vm.runInContext(require('./harness').fuenteOBD(), ctx);
 ctx.Modulos.btnAccion = (a, onclick) => `<button onclick="${onclick}">${a}</button>`;
 ctx.Modulos.eliminarRegistro = () => {};
 vm.runInContext(leer('js/modulos/operacion/diagnostico_oem.js'), ctx);
@@ -162,7 +162,7 @@ const escaneo = {
   M._modulosDeclarados = [];
 
   /* Los dos botones que Henry pidió fuera de la barra. */
-  const fuenteObd = leer('js/modulos/operacion/diagnostico_obd.js');
+  const fuenteObd = require('./harness').fuenteOBD();
   ok('la barra ya no tiene el botón "🧩 Módulos"',
      !/modalModulosVehiculo\(\)">🧩/.test(fuenteObd));
   ok('la barra ya no tiene el botón "🧠 Catálogo OEM"',

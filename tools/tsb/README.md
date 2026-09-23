@@ -48,7 +48,7 @@ Los zips quedan cacheados en `tools/tsb/.cache/` (62 MB, fuera de git). Conviene
 correrlo una o dos veces al año: NHTSA agrega boletines nuevos continuamente.
 
 Si cambia el nombre de los archivos hay que cambiar también `_tsbSlug()` en
-`js/modulos/operacion/diagnostico_obd.js`, que arma la misma ruta.
+`js/modulos/operacion/diagnostico_obd_lecturas.js` (`_tsbModelo`), que arma la misma ruta.
 
 ## Límite importante
 

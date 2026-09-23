@@ -42,7 +42,7 @@ ok('reset sin objetivo guiado se rechaza',O.validar({...base,tipo:'reset',riesgo
 ok('el ejecutor de lecturas DID no transmite un reset: tiene su propia puerta',!O.puedeEjecutar({...base,tipo:'reset',riesgo:'alto',definicion:{objetivo_reset:'ecu_reinicio'}}).ok);
 ok('y esa puerta exige direccion de modulo, no solo estar verificado',!O.puedeEjecutarReset({...base,tipo:'reset',riesgo:'alto',definicion:{objetivo_reset:'ecu_reinicio'}},{contacto:true,velocidad:0}).ok);
 ok('reporte de parámetros ofrece guardar PDF',fuenteOEM.includes('Guardar PDF / imprimir')&&fuenteOEM.includes('imprimirParametrosOEM'));
-const fuenteOBD=fs.readFileSync(path.join(__dirname,'../../js/modulos/operacion/diagnostico_obd.js'),'utf8');
+const fuenteOBD=require('./harness').fuenteOBD();
 ok('borrado general exige copia previa',/borrarDTCs[\s\S]*?_guardarAntesDeBorrar\(\)[\s\S]*?if \(!guardado\)/.test(fuenteOBD));
 ok('borrado por módulo cancela si falla el historial',/borrarPorModulo[\s\S]*?_guardarAntesDeBorrar\(\)[\s\S]*?if \(!guardado\)/.test(fuenteOBD));
 ok('IMMO ofrece diagnóstico y aprendizaje autorizado',O.objetivosImmo.some(x=>x.id==='estado_llave')&&O.objetivosImmo.some(x=>x.id==='reaprendizaje_oem'));

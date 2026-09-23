@@ -1,6 +1,6 @@
 # Catálogo DTC — de dónde sale y cómo regenerarlo
 
-El diccionario `_DTCS` de `js/modulos/operacion/diagnostico_obd.js` **se genera**, no se
+El diccionario `_DTCS` de `js/modulos/operacion/diagnostico_obd_catalogo.js` **se genera**, no se
 escribe a mano. Este directorio tiene todo lo necesario para auditarlo o rehacerlo.
 
 ## Por qué existe

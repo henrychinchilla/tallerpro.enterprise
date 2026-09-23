@@ -2,7 +2,7 @@
    el bloque _DTCS. Las entradas escritas a mano ganan: están mejor redactadas. */
 const fs = require('fs');
 const T = __dirname + '/';
-const F = require('path').join(__dirname, '..', '..', 'js', 'modulos', 'operacion', 'diagnostico_obd.js');
+const F = require('path').join(__dirname, '..', '..', 'js', 'modulos', 'operacion', 'diagnostico_obd_catalogo.js');   // _DTCS vive ahí desde la división del 2026-09-22
 
 const generado = JSON.parse(fs.readFileSync(T + 'dtc_es.json', 'utf8'));
 let src = fs.readFileSync(F, 'utf8');
