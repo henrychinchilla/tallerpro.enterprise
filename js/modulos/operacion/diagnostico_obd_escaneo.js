@@ -821,7 +821,9 @@
           const total = conFallas.reduce((n, m) => n + m.codigos.length, 0);
           log(total
             ? `<b style="color:var(--amber)">${total} código(s) en ${conFallas.length} módulo(s)</b> además de los de emisiones`
-            : `Los ${porModulo.length} módulos respondieron sin códigos`);
+            : `Ningún módulo entregó códigos`);
+          const rech = porModulo.filter(m => m.lectura === 'rechazada').length;
+          if (rech) log(`<b style="color:var(--amber)">${rech} módulo(s) rechazaron la lectura de códigos</b> (contestan "servicio no soportado"): de esos NO se sabe si tienen fallas.`);
         }
        } finally {
         /* En finally y no al final del bloque: si esto se saltea, la cabecera
@@ -1119,7 +1121,9 @@
     const mods = (s.por_modulo || []).map(m => {
       const nom = this._nombreGenerico(m.nombre, m.ecu) ? 'sin identificar' : m.nombre;
       const cods = (m.codigos || []).map(x => `${x.codigo} (${x.desc || 'sin descripción'})`).join(', ');
-      return `  - 0x${m.ecu.toString(16).toUpperCase()} · ${nom}: ${cods || 'sin códigos'}`;
+      return `  - 0x${m.ecu.toString(16).toUpperCase()} · ${nom}: ${cods || (m.lectura === 'rechazada'
+        ? 'NO SE PUDIERON LEER sus códigos (rechazó el servicio) — no afirmes que está sano'
+        : 'sin códigos')}`;
     }).join('\n');
     const lista = arr => (arr || []).map(d => `${d.codigo}${d.desc ? ` (${d.desc})` : ''}`).join('; ') || 'ninguno';
 

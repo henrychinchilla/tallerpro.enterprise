@@ -269,12 +269,18 @@
          KWP2000, se empieza por ahi: probar primero lo que la vez pasada no
          funciono es gastar dos consultas por gusto. */
       let d = null, cods = [];
+      /* ¿Algún servicio de códigos contestó en POSITIVO (59 = UDS, 58 = KWP)?
+         Nissan Juke 2017 (2026-09-23): los 10 módulos contestaron 7F xx 11/12
+         —"no soportado"— a todo, y el reporte los dio "sin códigos" mientras
+         el tablero tenía la alarma de TPMS prendida. Un rechazo NO es un sano. */
+      let leido = false;
+      const pos = x => { if (x && (x[0] === 0x59 || x[0] === 0x58)) leido = true; return x; };
       if (m.servicio && m.servicio.indexOf('KWP') >= 0) {
-        d = await this._udsPedir(m.req, m.resp, [0x18, 0x00, 0xFF, 0x00], 2000);
+        d = pos(await this._udsPedir(m.req, m.resp, [0x18, 0x00, 0xFF, 0x00], 2000));
         cods = this._dtcsKWP(d);
       }
       if (!cods.length) {
-        d = await this._udsPedir(m.req, m.resp, [0x19, 0x02, 0xFF], 2500);
+        d = pos(await this._udsPedir(m.req, m.resp, [0x19, 0x02, 0xFF], 2500));
         cods = this._dtcsUDS(d);
       }
       /* Con qué se le sacaron los códigos: al guardarlo en el mapa, el próximo
@@ -292,7 +298,7 @@
         const s = await this._udsPedir(m.req, m.resp, [0x10, 0x03], 1500);
         if (s && s[0] === 0x50) {
           sesionAbierta = true;
-          const d2 = await this._udsPedir(m.req, m.resp, [0x19, 0x02, 0xFF], 2500);
+          const d2 = pos(await this._udsPedir(m.req, m.resp, [0x19, 0x02, 0xFF], 2500));
           const c2 = this._dtcsUDS(d2);
           if (c2.length) { d = d2; cods = c2; servicio = '19 02 (sesión extendida)'; }
         }
@@ -307,7 +313,7 @@
          el problema del TCM del Rogue, que contesto ~60 entradas con el monitor
          sin correr. */
       if (!cods.length) {
-        const dA = await this._udsPedir(m.req, m.resp, [0x19, 0x0A], 2000);
+        const dA = pos(await this._udsPedir(m.req, m.resp, [0x19, 0x0A], 2000));
         const cA = this._dtcsUDS(dA);
         if (cA.length) { d = dA; cods = cA; servicio = '19 0A'; }
       }
@@ -315,9 +321,31 @@
          lectura, y a un modulo que si habla UDS le resbala (contesta "servicio
          no soportado"). */
       if (!cods.length) {
-        const dK = await this._udsPedir(m.req, m.resp, [0x18, 0x00, 0xFF, 0x00], 2000);
+        const dK = pos(await this._udsPedir(m.req, m.resp, [0x18, 0x00, 0xFF, 0x00], 2000));
         const cK = this._dtcsKWP(dK);
         if (cK.length) { d = dK; cods = cK; servicio = '18 00 FF 00 (KWP2000)'; }
+      }
+      /* Nissan/Infiniti: la sesión de diagnóstico es 10 C0 (CONSULT), no la
+         10 03 de UDS — documentado para el BCM 0x745/0x765 en
+         github.com/balrog-kun/nissan-qashqai-can-info. Juke 2017: sin ella los
+         10 módulos rechazaron todo y el TPMS del BCM quedó sin leer. Qué
+         servicio entrega los códigos DENTRO de esa sesión no está publicado:
+         se prueban solo LECTURAS (19 02 / 18 02 / 18 00) y la traza deja
+         escrito cuál contestó. Se devuelve con 10 81 (sesión normal KWP). */
+      if (!cods.length && !leido && /nissan|infiniti|datsun/i.test(this._marcaBarrido || '')) {
+        const sC0 = await this._udsPedir(m.req, m.resp, [0x10, 0xC0], 1500);
+        if (sC0 && sC0[0] === 0x50) {
+          for (const [tx, parse, nom] of [
+            [[0x19, 0x02, 0xFF], x => this._dtcsUDS(x), '19 02 (sesión Nissan 10 C0)'],
+            [[0x18, 0x02, 0xFF, 0x00], x => this._dtcsKWP(x), '18 02 FF 00 (sesión Nissan 10 C0)'],
+            [[0x18, 0x00, 0xFF, 0x00], x => this._dtcsKWP(x), '18 00 FF 00 (sesión Nissan 10 C0)'],
+          ]) {
+            const dN = pos(await this._udsPedir(m.req, m.resp, tx, 2500));
+            const cN = parse(dN);
+            if (cN.length || (dN && dN[0] !== 0x7F)) { d = dN; cods = cN; servicio = nom; break; }
+          }
+          await this._udsPedir(m.req, m.resp, [0x10, 0x81], 1200).catch(() => {});
+        }
       }
 
       /* El nombre propio del modulo gana sobre la deduccion por direccion,
@@ -357,6 +385,7 @@
       const nombre = this._nombreResuelto({ ecu: m.req, ident, codigos: cods }, this._marcaBarrido).nombre;
       const respReal = m.resp != null ? m.resp : (this._respAprendida[m.req] != null ? this._respAprendida[m.req] : null);
       res.push({ ecu: m.req, resp: respReal, ext: !!m.ext, nombre, codigos: cods, respondio: !!d, servicio,
+                 lectura: cods.length || leido ? 'ok' : (d ? 'rechazada' : 'sin_respuesta'),
                  soportados: soportados.length ? soportados : undefined,
                  ident: ident || null, params_oem: paramsEsp, sesion_devuelta: sesionAbierta || undefined,
                  nuevo: !!conocidas.length && !conocidas.some(c => c.req === m.req) });
