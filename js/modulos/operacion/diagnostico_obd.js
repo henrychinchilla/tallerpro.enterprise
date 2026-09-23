@@ -2472,6 +2472,46 @@ Modulos.diagnostico_obd = {
     return txt;
   },
 
+  /* Siglas con que los módulos Hyundai/Kia se nombran a sí mismos en 22 F1 00.
+     SOLO las que aparecen en las huellas reales de opendbc
+     (car/hyundai/fingerprints.py, consultado 2026-09-22), cada una en la
+     dirección y con el prefijo de pieza que le corresponde: ESC/IEB en 0x7D1
+     (589/585), MDPS en 0x7D4 (563/577), MFC/LKAS/LKA/LDWS/FR_CMR en 0x7C4
+     (992/957/958), SCC/RDR/FCA en 0x7D0 (991/964). Una sigla que no esté acá
+     se muestra tal cual la dice el módulo y se le pasa a la IA para traducirla. */
+  _SIGLAS_HMC: {
+    ESC: 'Frenos / ABS / ESC', IEB: 'Freno electrónico integrado (IEB)',
+    MDPS: 'Dirección asistida (MDPS)',
+    MFC: 'Cámara frontal', LKAS: 'Cámara frontal (LKAS)', LKA: 'Cámara frontal (LKA)',
+    LDWS: 'Cámara frontal (LDWS)', FR_CMR: 'Cámara frontal',
+    SCC: 'Radar frontal (SCC)', RDR: 'Radar frontal', FCA: 'Radar frontal (FCA)',
+  },
+
+  /* "IG  MDPS C 1.00 1.02 56310G8510\0 4IGSC103" → plataforma IG, sigla MDPS,
+     pieza 56310-G8510. Lo no imprimible se vuelve espacio (la fecha viaja en
+     binario dentro de la cadena del ESC). */
+  _leerDescripcionHMC(bytes) {
+    if (!bytes || !bytes.length) return null;
+    const txt = bytes.map(x => (x >= 32 && x < 127) ? String.fromCharCode(x) : ' ').join('')
+      .replace(/\s+/g, ' ').trim();
+    if (txt.length < 4 || txt.length > 90 || !/[A-Z]{2}/.test(txt)) return null;
+    const tok = txt.split(' ');
+    const pn = txt.match(/\b([0-9]{5})[-\/]?([A-Z][A-Z0-9]{3}[0-9])\b/);
+    return {
+      texto: txt,
+      plataforma: /^[A-Z]{2}[A-Za-z0-9]{0,2}$/.test(tok[0]) ? tok[0] : null,
+      sigla: tok.length > 1 && /^[A-Z][A-Z0-9_]{1,9}$/.test(tok[1]) ? tok[1] : null,
+      pieza: pn ? `${pn[1]}-${pn[2]}` : null,
+    };
+  },
+
+  /* La marca del vehículo que se está diagnosticando, venga de donde venga. */
+  _marcaActual() {
+    const s = this._centroScan || this._scan;
+    const v = s && ((s.vehiculos) || (this._vehiculos || []).find(x => x.id === s.vehiculo_id));
+    return this._marcaBarrido || (s && s.nhtsa && s.nhtsa.marca) || (v && v.marca) || null;
+  },
+
   /* Lo que el módulo dice de SÍ MISMO. Son los identificadores normalizados de
      ISO 14229-1, iguales en cualquier marca:
 
@@ -2495,8 +2535,21 @@ Modulos.diagnostico_obd = {
       if (!d || d[0] !== 0x62) return null;
       return this._textoDID(d.slice(3));            // 62 + los 2 bytes del DID
     };
-    try { out.nombre = await pedir(0xF197); } catch (_) {}
-    try { out.referencia = await pedir(0xF187); } catch (_) {}
+    /* Hyundai/Kia/Genesis contestan 22 F1 00 con su descripción larga, que
+       dice QUÉ ES el módulo: "JA  MDPS C 1.00 1.01 56310-G6200". Es lo que usa
+       opendbc (HYUNDAI_VERSION_REQUEST_LONG; F1 10 es la alternativa) para
+       reconocer cada módulo. Lectura pura, no cambia nada en el vehículo. */
+    if (/^(HYUNDAI|KIA|GENESIS)/i.test(this._marcaActual() || '')) {
+      for (const did of [0xF100, 0xF110]) {
+        try {
+          const d = await this._udsPedir(m.req, m.resp, [0x22, did >> 8, did & 0xFF], 1500);
+          const h = d && d[0] === 0x62 ? this._leerDescripcionHMC(d.slice(3)) : null;
+          if (h) { out.hmc = h; if (h.pieza) out.referencia = h.pieza; break; }
+        } catch (_) {}
+      }
+    }
+    if (!(out.hmc && out.hmc.sigla)) { try { out.nombre = await pedir(0xF197); } catch (_) {} }
+    if (!out.referencia) { try { out.referencia = await pedir(0xF187); } catch (_) {} }
     if (!out.nombre && !out.referencia) {
       try { out.proveedor = await pedir(0xF18A); } catch (_) {}
     }
@@ -3427,19 +3480,25 @@ Modulos.diagnostico_obd = {
     const ecu = Number(m.ecu), id = m.ident || {};
     const hex = this._hexDir(ecu);
     const taller = this._nombreDeclarado(ecu);
-    if (taller) return { nombre: taller, origen: 'nombrado por el taller' };
-    if (this._UDS_NOMBRES[ecu]) return { nombre: this._UDS_NOMBRES[ecu], origen: 'dirección fijada por la norma ISO 15765-4' };
-    if (id.nombre && !this._nombreGenerico(id.nombre, ecu)) return { nombre: String(id.nombre), origen: 'el módulo declara su nombre (F197)' };
+    if (taller) return { nombre: taller, origen: 'nombrado por el taller', firme: true };
+    if (this._UDS_NOMBRES[ecu]) return { nombre: this._UDS_NOMBRES[ecu], origen: 'dirección fijada por la norma ISO 15765-4', firme: true };
+    if (id.nombre && !this._nombreGenerico(id.nombre, ecu)) return { nombre: String(id.nombre), origen: 'el módulo declara su nombre (F197)', firme: true };
+    const h = id.hmc;
+    if (h && h.sigla && this._SIGLAS_HMC[h.sigla])
+      return { nombre: this._SIGLAS_HMC[h.sigla], origen: `el módulo se identifica como «${h.sigla}» (22 F1 00: ${h.texto})`, firme: true };
     if (id.ia && id.ia.nombre && !this._nombreGenerico(id.ia.nombre, ecu))
-      return { nombre: id.ia.nombre, origen: `identificado por IA · confianza ${id.ia.confianza || '—'}` };
+      return { nombre: id.ia.nombre, origen: `identificado por IA · confianza ${id.ia.confianza || '—'}${id.ia.fuente ? ` · ${id.ia.fuente}` : ''}`, firme: true };
     const dir = this._sugerenciaPorDireccion(ecu, marca);
-    if (dir) return { nombre: dir.nombre, origen: `por su dirección ${hex} en ${marca} (${dir.fuente})` };
+    if (dir) return { nombre: dir.nombre, origen: `por su dirección ${hex} en ${marca} (${dir.fuente})`, firme: true };
+    /* De acá para abajo el nombre es PROVISIONAL: sirve para no mostrar una
+       dirección pelada, pero la IA igual lo investiga con la evidencia. */
+    if (h && h.sigla) return { nombre: `Módulo ${h.sigla}`, origen: `el módulo se identifica como «${h.sigla}» (22 F1 00: ${h.texto})`, firme: false };
     const ref = id.referencia ? this._sugerenciaPorReferencia(id.referencia) : null;
-    if (ref) return { nombre: ref.sistema, origen: `por su número de pieza ${id.referencia} (grupo ${ref.grupo})` };
+    if (ref) return { nombre: ref.sistema, origen: `por su número de pieza ${id.referencia} (grupo ${ref.grupo})`, firme: false };
     const l = (m.codigos || []).map(c => String(c.codigo || '')[0]);
     const fam = l.length && l.every(x => x === l[0]) ? ({ C:'Chasis / frenos', B:'Carrocería', U:'Red de comunicación' })[l[0]] : null;
-    if (fam) return { nombre: fam, origen: 'por el tipo de códigos que reporta' };
-    return { nombre: `Sin identificar ${hex}`, origen: 'no publicó identificación y su dirección no está documentada para esta marca' };
+    if (fam) return { nombre: fam, origen: 'por el tipo de códigos que reporta', firme: false };
+    return { nombre: `Sin identificar ${hex}`, origen: 'no publicó identificación y su dirección no está documentada para esta marca', firme: false };
   },
 
   /* Parámetros en vivo de un módulo por UDS 22. APAGADO a propósito.
@@ -4320,6 +4379,7 @@ Modulos.diagnostico_obd = {
       numero_de_pieza_F187: id.referencia || null,
       se_llama_a_si_mismo_F197: id.nombre || null,
       fabricante_F18A: id.proveedor || null,
+      descripcion_hyundai_kia_22F100: id.hmc ? `${id.hmc.texto} (plataforma ${id.hmc.plataforma || '?'}, sigla del módulo ${id.hmc.sigla || '?'})` : null,
       codigos_que_reporta: (m.codigos || []).map(c => c.codigo),
       nombre_actual: m.nombre || null,
       pista_por_direccion: sugDir ? `${sugDir.nombre} (según ${sugDir.fuente})` : null,
@@ -4332,11 +4392,18 @@ Modulos.diagnostico_obd = {
      respuesta — hacerlos identificar es gastar una búsqueda en algo que no es
      un módulo (y pedirle a la IA que le invente nombre a la nada). */
   _modulosSinNombre(scan, soloEcu) {
+    const v = scan && (scan.vehiculos || (this._vehiculos || []).find(x => x.id === scan.vehiculo_id));
+    const marca = (scan && scan.nhtsa && scan.nhtsa.marca) || (v && v.marca) || null;
+    /* También los de nombre PROVISIONAL ("Instrumentos / tablero" por el grupo
+       de pieza, "Carrocería" por sus códigos, "Módulo CLU" por su sigla): Henry,
+       2026-09-22 — «si lo encuentro en la primera búsqueda de Google, la app
+       no puede decir que no lo conoce». */
     return ((scan && scan.por_modulo) || []).filter(m =>
       (soloEcu == null || Number(m.ecu) === Number(soloEcu)) &&
       !(!m.ext && this._DIR_NO_ES_MODULO(m.ecu)) &&
       !this._nombreDeclarado(m.ecu) &&
-      this._nombreGenerico(m.nombre, m.ecu));
+      (this._nombreGenerico(m.nombre, m.ecu) ||
+       (!m.ext && m.ecu <= 0x7FF && !this._nombreResuelto(m, marca).firme)));
   },
 
   /* El mismo trabajo, pedido a mano desde el Centro de módulos. Existe para el
@@ -6950,6 +7017,7 @@ Modulos.diagnostico_obd = {
         const mapaPrev = await this._mapaConocido(vehId);
         this._marcaBarrido = ((this._vehiculos || []).find(x => x.id === vehId) || {}).marca || null;
         porModulo = await this._escanearModulos(log, mapaPrev).catch(e => { log(`No se pudo barrer módulos: ${e.message}`); return null; });
+        this._marcaBarrido = null;   // vale solo durante el barrido; después manda la marca del escaneo abierto
         /* Antes de armar el mapa: si el mapa se guarda con "Módulo 0x7B3", el
            próximo escaneo de este modelo vuelve a arrancar sin nombres. */
         if (porModulo && porModulo.length && (typeof moduloEnPlan !== 'function' || moduloEnPlan('ia'))) {
