@@ -2496,7 +2496,10 @@ Modulos.diagnostico_obd = {
       .replace(/\s+/g, ' ').trim();
     if (txt.length < 4 || txt.length > 90 || !/[A-Z]{2}/.test(txt)) return null;
     const tok = txt.split(' ');
-    const pn = txt.match(/\b([0-9]{5})[-\/]?([A-Z][A-Z0-9]{3}[0-9])\b/);
+    /* Sin \b al final: el airbag del Picanto contesta "JA 95910-G60101XXXXXX…",
+       con la pieza pegada al resto. El patrón es el de opendbc
+       (PART_NUMBER_FW_PATTERN): 5 dígitos, guion opcional, letra y 4 más. */
+    const pn = txt.match(/\b([0-9]{5})[-\/]?([A-Z][A-Z0-9]{3}[0-9])/);
     return {
       texto: txt,
       plataforma: /^[A-Z]{2}[A-Za-z0-9]{0,2}$/.test(tok[0]) ? tok[0] : null,

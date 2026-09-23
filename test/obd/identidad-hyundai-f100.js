@@ -21,6 +21,11 @@ const bytes = s => [...s].map(c => c.charCodeAt(0));
   ok('lee el número de pieza y lo normaliza', mdps.pieza === '56310-G8510');
   const esc = M._leerDescripcionHMC(bytes('DN ESC \x01 102\x19\x04\x13 58910-L1300'));
   ok('la cadena del ESC trae binario adentro y aun así se lee', esc.sigla === 'ESC' && esc.pieza === '58910-L1300');
+  /* Respuestas REALES del Picanto 2019 (escaneo del 2026-09-23 00:27 UTC). */
+  const srs = M._leerDescripcionHMC(bytes('JA 95910-G60101XXXXXX2XXXDXXXXXXXX201805261.001.012.004.02G6DF7P G6DS8F G6DO9C 0100'));
+  ok('Picanto 0x7D2: saca la pieza 95910-G6010 aunque venga pegada al resto', srs.pieza === '95910-G6010');
+  const mdpsJA = M._leerDescripcionHMC(bytes('JA MDPS C 1.00 1.05 56340-G6000 7711'));
+  ok('Picanto 0x7D4: el módulo dice MDPS y pieza 56340-G6000', mdpsJA.sigla === 'MDPS' && mdpsJA.pieza === '56340-G6000');
   ok('basura binaria no es una descripción', M._leerDescripcionHMC([0, 1, 2, 255, 0]) === null);
 
   /* ── Se pide solo en Hyundai/Kia/Genesis, y antes que F197 ── */
