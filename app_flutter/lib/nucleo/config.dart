@@ -19,6 +19,6 @@ const String nombreApp = 'NexusPro';
 const String urlSitioWeb = 'https://nexuspro.cmtelecommgt.com';
 
 /// Versión oficial sincronizada con la plataforma Web.
-const String versionApp = '5.16.0';
+const String versionApp = '5.19.0';
 const int buildApp = 8;
 

@@ -32,8 +32,8 @@
     "Va como release de GitHub, igual que el instalador de Windows."
   ],
   "android": {
-    "versionCode": 8,
-    "versionName": "5.16.0",
+    "versionCode": 9,
+    "versionName": "5.19.0",
     "fecha": "2026-09-22",
     "paquete": "com.cmtelecom.nexuspro.nativa",
     "minAndroid": "7.0",
@@ -47,10 +47,11 @@
     "enPlayStore": false,
     "playUrl": "https://play.google.com/store/apps/details?id=com.cmtelecom.nexuspro.nativa",
     "novedades": [
-      "El escaneo ya NO se pierde: entrar al Centro de módulos, a una ficha o a cualquier ventana deja el reporte donde estaba. Solo se sale al Guardar o al pedir el Historial, y si hay algo sin guardar avisa antes",
-      "La IA identifica sola los módulos sin nombre: busca el número de pieza que declara cada uno y le pone el nombre, que queda guardado para todos los escaneos de ese modelo. Ya no hay que renombrarlos a mano",
-      "Un módulo que la IA no puede sostener con evidencia se queda sin nombre a propósito, con su fuente a la vista cuando sí lo identificó",
-      "El análisis de Nexus al terminar el escaneo vuelve a verse (leía el campo equivocado de la respuesta y salía siempre en blanco)"
+      "Tablero en vivo: foto de catálogo del modelo, relojes, mosaicos de color, tendencias y el recorrido en el mapa con el GPS del teléfono (la app ahora le da la ubicación al tablero, solo mientras hay datos en vivo)",
+      "Los módulos Hyundai/Kia se identifican solos (dirección, frenos, airbag, tablero…) y cada módulo tiene UN nombre, igual en todas las pantallas",
+      "Se eliminaron los datos inventados: nada de presión de llantas en un carro sin TPMS ni pruebas de actuadores falsas. Solo se muestra lo que el vehículo contestó",
+      "Cada módulo contesta solo por lo suyo: ya no aparecen códigos de motor en la dirección asistida",
+      "El VIN se reintenta y se ve siempre; el informe de Nexus sale ordenado; se puede imprimir el escaneo activo; el reporte ya no muestra el costo"
     ]
   }
 }

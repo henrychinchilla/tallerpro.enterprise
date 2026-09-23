@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:webview_flutter/webview_flutter.dart';
+import 'package:webview_flutter_android/webview_flutter_android.dart';
 
 import '../bluetooth/puente_bt.dart';
 import '../nucleo/config.dart';
@@ -102,6 +103,26 @@ class _PantallaModuloWebState extends State<PantallaModuloWeb> {
         ),
       )
       ..loadRequest(Uri.parse(urlBase));
+
+    /* GPS para el tablero en vivo (2026-09-22): la página pide la ubicación
+       con navigator.geolocation para dibujar el recorrido monitoreado. Sin este
+       callback el WebView de Android la niega siempre, sin preguntar. Solo se
+       le concede al sitio de NexusPro, y el permiso del sistema se pide en ese
+       momento (no al abrir la app). */
+    final plataforma = _controller.platform;
+    if (plataforma is AndroidWebViewController) {
+      plataforma.setGeolocationPermissionsPromptCallbacks(
+        onShowPrompt: (pedido) async {
+          final propio = Uri.tryParse(pedido.origin)?.host == Uri.parse(urlSitioWeb).host;
+          if (!propio) return const GeolocationPermissionsResponse(allow: false, retain: false);
+          var ok = false;
+          try {
+            ok = await _metodos.invokeMethod<bool>('pedirUbicacion') ?? false;
+          } catch (_) {}
+          return GeolocationPermissionsResponse(allow: ok, retain: ok);
+        },
+      );
+    }
 
     // Suscribir eventos de recepción de bytes e hilo de eventos Bluetooth
     _subRx = PuenteBT.rx.listen((datos) {
