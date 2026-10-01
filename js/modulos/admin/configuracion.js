@@ -113,12 +113,12 @@ Modulos.configuracion = {
                   const waOk    = !!(t.whatsapp_tel);
                   const felLabel = infile.modo === 'propio'
                     ? '<span class="badge badge-blue">Credenciales propias</span>'
-                    : '<span class="badge badge-green">NexusPro gestiona</span>';
+                    : '<span class="badge badge-gray">Sin conectar</span>';
                   return `
                 <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--border)">
                   <div>
                     <div style="font-size:13px;font-weight:600">🧾 FEL — ${(infile.certificador_nombre||'INFILE').split('—')[0].split('(')[0].trim()}</div>
-                    <div style="font-size:11px;color:var(--text3)">${infile.modo==='propio'?(infile.nit_emisor||'NIT no configurado'):'Servicio gestionado por NexusPro'}</div>
+                    <div style="font-size:11px;color:var(--text3)">${infile.modo==='propio'?UI.esc(infile.nit_emisor||'NIT no configurado'):'Sin certificador: el comercio contrata el suyo'}</div>
                   </div>
                   <div style="display:flex;align-items:center;gap:8px">
                     ${felLabel}
@@ -146,11 +146,111 @@ Modulos.configuracion = {
                   </div>
                 </div>`;
                 })()}
+                <div id="cfg-pagos-byo"></div>
               </div>
             </div>
           </div>
         </div>
       </div>`;
+    this._cargarPagosByo();
+  },
+
+  /* ── PASARELA DE PAGOS PROPIA (Canal B, mig 153) ──
+     El comercio conecta SU pasarela para cobrarle a SUS clientes. Detrás del
+     flag saas_config.integraciones_byo (apagado: solo la ve el superadmin).
+     Ningún proveedor tiene conector todavía: se guarda cifrado y "Probar"
+     lo dice. Los campos son los típicos de cada pasarela; se ajustan al
+     implementar su conector. */
+  PASARELAS_PAGO: {
+    credomatic:  { nombre: 'BAC Credomatic',          publico: ['key_id'],          secretos: ['api_key'] },
+    visanet:     { nombre: 'VisaNet Guatemala',       publico: ['merchant_id'],     secretos: ['api_key'] },
+    cybersource: { nombre: 'CyberSource',             publico: ['merchant_id', 'key_id'], secretos: ['shared_secret'] },
+    recurrente:  { nombre: 'Recurrente',              publico: ['public_key'],      secretos: ['secret_key'] },
+    stripe:      { nombre: 'Stripe',                  publico: ['publishable_key'], secretos: ['secret_key', 'webhook_secret'] },
+  },
+
+  async _cargarPagosByo() {
+    const el = document.getElementById('cfg-pagos-byo');
+    if (!el) return;
+    const [flag, integ] = await Promise.all([
+      getSB().from('saas_config').select('valor').eq('clave','integraciones_byo').maybeSingle().then(r => r.data?.valor || {}).catch(() => ({})),
+      DB.getIntegracion('pagos').catch(() => null),
+    ]);
+    if (!flag.activo && Auth.user?.rol !== 'superadmin') { el.innerHTML = ''; return; }
+    this._integPagos = integ;
+    const prov = integ ? (this.PASARELAS_PAGO[integ.proveedor]?.nombre || integ.proveedor) : null;
+    el.innerHTML = `
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-top:1px solid var(--border)">
+        <div>
+          <div style="font-size:13px;font-weight:600">💳 Pasarela de pagos propia ${flag.activo ? '' : '<span class="badge badge-gray" style="font-size:9px">oculto a comercios (flag apagado)</span>'}</div>
+          <div style="font-size:11px;color:var(--text3)">${integ
+            ? `${UI.esc(prov)} · ${integ.ambiente === 'live' ? 'producción' : 'pruebas'}${integ.secreto_pista ? ' · 🔒 ' + UI.esc(integ.secreto_pista) : ''}${integ.ultimo_error ? ` · <span style="color:var(--amber)">${UI.esc(integ.ultimo_error)}</span>` : ''}`
+            : 'Cobra con tarjeta a tus clientes usando tu propia cuenta'}</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px">
+          ${integ ? '<span class="badge badge-blue">Guardada</span>' : '<span class="badge badge-gray">Sin conectar</span>'}
+          <button class="btn btn-sm btn-ghost" onclick="Modulos.configuracion.modalPagosByo()">${integ ? 'Editar' : 'Conectar'}</button>
+        </div>
+      </div>`;
+  },
+
+  modalPagosByo() {
+    const i = this._integPagos || {};
+    const sel = i.proveedor || 'credomatic';
+    const campos = p => {
+      const d = this.PASARELAS_PAGO[p];
+      return [...d.publico.map(c => `<div class="form-group"><label class="form-label">${c}</label>
+          <input class="form-input mono-sm" data-pub="${c}" value="${UI.esc(i.proveedor === p ? (i.publico?.[c] || '') : '')}"></div>`),
+        ...d.secretos.map(c => `<div class="form-group"><label class="form-label">${c} 🔒</label>
+          <input class="form-input mono-sm" type="password" autocomplete="new-password" data-sec="${c}"
+            placeholder="${i.proveedor === p && i.secreto_pista ? 'guardado (' + UI.esc(i.secreto_pista) + ') — vacío = conservar' : ''}"></div>`)].join('');
+    };
+    UI.modal('💳 Conectar pasarela de pagos (tu cuenta)', `
+      <div class="alert alert-cyan" style="margin-bottom:12px"><div class="alert-icon">🔒</div><div class="alert-body" style="font-size:12px">
+        Son las credenciales de <b>tu</b> cuenta con la pasarela. Se guardan cifradas y nadie (ni NexusPro) puede volver a verlas.
+        Aún no hay conector activo: queda guardado y <b>Probar</b> te dirá el estado.</div></div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Pasarela</label>
+          <select class="form-select" id="pb-prov" onchange="document.getElementById('pb-campos').innerHTML=Modulos.configuracion._camposPagos(this.value)">
+            ${Object.entries(this.PASARELAS_PAGO).map(([k, v]) => `<option value="${k}" ${k === sel ? 'selected' : ''}>${v.nombre}</option>`).join('')}</select></div>
+        <div class="form-group"><label class="form-label">Ambiente</label>
+          <select class="form-select" id="pb-amb"><option value="test" ${i.ambiente !== 'live' ? 'selected' : ''}>Pruebas</option>
+            <option value="live" ${i.ambiente === 'live' ? 'selected' : ''}>Producción</option></select></div>
+      </div>
+      <div id="pb-campos" class="grid-2">${campos(sel)}</div>
+      <div class="modal-footer">
+        ${i.proveedor ? '<button class="btn btn-ghost" style="margin-right:auto;color:var(--red)" onclick="Modulos.configuracion.desconectarPagosByo()">Desconectar</button>' : ''}
+        <button class="btn btn-ghost" onclick="Modulos.configuracion.probarPagosByo()">🔌 Probar</button>
+        <button class="btn btn-amber" onclick="Modulos.configuracion.guardarPagosByo()">Guardar</button>
+      </div>`, '640px');
+    this._camposPagos = campos;
+  },
+
+  async guardarPagosByo() {
+    const proveedor = document.getElementById('pb-prov')?.value;
+    const publico = {}, secretos = {};
+    document.querySelectorAll('#pb-campos [data-pub]').forEach(x => { if (x.value.trim()) publico[x.dataset.pub] = x.value.trim(); });
+    document.querySelectorAll('#pb-campos [data-sec]').forEach(x => { if (x.value) secretos[x.dataset.sec] = x.value; });
+    const cambiaProv = this._integPagos?.proveedor && this._integPagos.proveedor !== proveedor;
+    if (!Object.keys(secretos).length && (!this._integPagos?.secreto_pista || cambiaProv)) {
+      UI.toast('Ingresa las llaves secretas de la pasarela', 'error'); return;
+    }
+    const r = await DB.guardarIntegracion('pagos', { proveedor, ambiente: document.getElementById('pb-amb')?.value,
+      publico, secretos: Object.keys(secretos).length ? secretos : null });
+    if (!r.ok) { UI.toast('No se guardó: ' + r.error, 'error', 8000); return; }
+    UI.cerrarModal(); UI.toast('Pasarela guardada (cifrada) ✓'); this._cargarPagosByo();
+  },
+
+  async probarPagosByo() {
+    const r = await DB.probarIntegracion('pagos');
+    UI.toast(r?.ok ? '✓ ' + r.detalle : (r?.error || 'Sin respuesta'), r?.ok ? 'success' : 'warn', 10000);
+  },
+
+  async desconectarPagosByo() {
+    if (!await UI.confirmar('¿Desconectar la pasarela? Se borran las credenciales guardadas (no se pueden recuperar).', 'Desconectar')) return;
+    const r = await DB.borrarIntegracion('pagos');
+    if (!r.ok) { UI.toast('No se pudo: ' + r.error, 'error'); return; }
+    UI.cerrarModal(); UI.toast('Pasarela desconectada'); this._cargarPagosByo();
   },
 
   async guardar() {

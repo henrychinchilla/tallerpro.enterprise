@@ -213,14 +213,13 @@ Modulos.comunicaciones = {
             </div>
             <div class="form-group">
               <label class="form-label">Certificador FEL (autorizados por SAT)</label>
-              <select class="form-select" id="cfg-fel-cert"
-                      onchange="Modulos.comunicaciones._toggleCertificador(this.value)">
+              <select class="form-select" id="cfg-fel-cert">
                 ${Modulos.comunicaciones.CERTIFICADORES_FEL.map(c=>`<option value="${c.id}" ${(infile.certificador||'infile')===c.id?'selected':''}>${c.nombre}</option>`).join('')}
               </select>
               <div style="font-size:11px;color:var(--text3);margin-top:4px">
                 Lista oficial: portal.sat.gob.gt → Factura Electrónica en Línea → Certificador de DTE</div>
             </div>
-            <div id="fel-aviso-cert" ${(infile.certificador||'infile')==='infile'?'style="display:none"':''}>
+            <div id="fel-aviso-cert">
               <div class="alert alert-cyan" style="margin-bottom:12px">
                 <div class="alert-icon">ℹ️</div>
                 <div class="alert-body" style="font-size:12px">
@@ -234,38 +233,44 @@ Modulos.comunicaciones = {
               <label class="form-label">Modo de Facturación Electrónica (FEL)</label>
               <select class="form-select" id="cfg-infile-modo"
                       onchange="Modulos.comunicaciones._toggleInfileMode(this.value)">
-                <option value="nexuspro" ${infile.modo==='nexuspro'?'selected':''}>🏢 Gestionado por NexusPro (add-on — incluido en plan Empresarial)</option>
+                <option value="nexuspro" ${infile.modo==='nexuspro'?'selected':''}>⏸️ Sin certificador conectado</option>
                 <option value="propio"    ${infile.modo==='propio'   ?'selected':''}>🔑 Mis propias credenciales del certificador</option>
               </select>
             </div>
             <div id="infile-info-nexuspro" ${infile.modo==='propio'?'style="display:none"':''}>
-              <div class="alert alert-green">
-                <div class="alert-icon">✅</div>
+              <div class="alert alert-amber">
+                <div class="alert-icon">ℹ️</div>
                 <div class="alert-body" style="font-size:12px">
-                  <strong>NexusPro gestiona tu FEL.</strong><br>
-                  Las facturas se certifican automáticamente a través del contrato INFILE de NexusPro.
-                  No necesitas contrato propio con un certificador. Para activar este servicio, comunícate con soporte NexusPro.
+                  <strong>Tu FEL no está conectado.</strong><br>
+                  NexusPro <b>no certifica</b> facturas ante la SAT por su cuenta: el certificador lo contrata cada comercio.
+                  Mientras tanto emite desde la plataforma de tu certificador (o la App gratuita de la SAT) y registra tus facturas aquí.
                 </div>
               </div>
             </div>
             <div id="infile-campos-propios" ${infile.modo!=='propio'?'style="display:none"':''}>
               <div class="grid-2">
                 <div class="form-group"><label class="form-label">Usuario del certificador *</label>
-                  <input class="form-input" id="cfg-infile-user" placeholder="tu_usuario" value="${infile.usuario||''}"></div>
+                  <input class="form-input" id="cfg-infile-user" placeholder="tu_usuario" value="${UI.esc(infile.usuario||'')}"></div>
                 <div class="form-group"><label class="form-label">Contraseña / llave API *</label>
-                  <input class="form-input" id="cfg-infile-pass" type="password" placeholder="••••••••" value="${infile.password||''}"></div>
+                  <!-- Nunca se vuelve a mostrar: se guarda cifrada (mig 153). -->
+                  <input class="form-input" id="cfg-infile-pass" type="password" autocomplete="new-password" placeholder="••••••••">
+                  <div id="fel-pista" style="font-size:11px;color:var(--text3);margin-top:3px"></div></div>
               </div>
               <div class="grid-2">
                 <div class="form-group"><label class="form-label">NIT del emisor *</label>
-                  <input class="form-input" id="cfg-infile-nit" placeholder="123456789" value="${infile.nit_emisor||t.nit||''}"></div>
+                  <input class="form-input" id="cfg-infile-nit" placeholder="123456789" value="${UI.esc(infile.nit_emisor||t.nit||'')}"></div>
                 <div class="form-group"><label class="form-label">Alias / Firma electrónica</label>
-                  <input class="form-input" id="cfg-infile-firma" placeholder="firma_taller" value="${infile.alias_firma||''}"></div>
+                  <input class="form-input" id="cfg-infile-firma" placeholder="firma_taller" value="${UI.esc(infile.alias_firma||'')}"></div>
               </div>
             </div>
-            <button class="btn btn-amber" onclick="Modulos.comunicaciones.guardarInfile()">💾 Guardar configuración FEL</button>
+            <div style="display:flex;gap:8px;flex-wrap:wrap">
+              <button class="btn btn-amber" onclick="Modulos.comunicaciones.guardarInfile()">💾 Guardar configuración FEL</button>
+              <button class="btn btn-ghost" onclick="Modulos.comunicaciones.probarFel()">🔌 Probar conexión</button>
+            </div>
           </div>
 
         </div>`;
+      this._cargarPistaFel();
     }
   },
 
@@ -324,7 +329,7 @@ Modulos.comunicaciones = {
      Certificador de DTE). La integración automática de NexusPro es con
      INFILE; el resto se guarda como elección + credenciales del comercio. */
   CERTIFICADORES_FEL: [
-    { id:'infile',        nombre:'INFILE, S.A. — integrado con NexusPro' },
+    { id:'infile',        nombre:'INFILE, S.A.' },
     { id:'sat',           nombre:'SAT — App gratuita FEL (sin costo, manual)' },
     { id:'digifact',      nombre:'DIGIFACT (Digifact Servicios, S.A.)' },
     { id:'guatefacturas', nombre:'GUATEFACTURAS, S.A.' },
@@ -342,11 +347,6 @@ Modulos.comunicaciones = {
     { id:'otro',          nombre:'Otro certificador autorizado por SAT' },
   ],
 
-  _toggleCertificador(id) {
-    const aviso = document.getElementById('fel-aviso-cert');
-    if (aviso) aviso.style.display = id === 'infile' ? 'none' : '';
-  },
-
   _toggleInfileMode(modo) {
     const info   = document.getElementById('infile-info-nexuspro');
     const campos = document.getElementById('infile-campos-propios');
@@ -361,15 +361,38 @@ Modulos.comunicaciones = {
     const cfg  = { modo, certificador: certId, certificador_nombre: cert?.nombre || certId };
     if (modo === 'propio') {
       cfg.usuario    = document.getElementById('cfg-infile-user')?.value.trim();
-      cfg.password   = document.getElementById('cfg-infile-pass')?.value;
       cfg.nit_emisor = document.getElementById('cfg-infile-nit')?.value.trim();
       cfg.alias_firma= document.getElementById('cfg-infile-firma')?.value.trim();
-      if (!cfg.usuario || !cfg.password || !cfg.nit_emisor) {
+      /* La contraseña NO va a config_infile (la lee cualquier usuario del
+         comercio): va cifrada a tenant_integraciones. Vacía = conservar. */
+      const pass = document.getElementById('cfg-infile-pass')?.value || '';
+      const previa = await DB.getIntegracion('fel');
+      if (!cfg.usuario || !cfg.nit_emisor || (!pass && !previa?.secreto_pista)) {
         UI.toast('Usuario, contraseña y NIT del emisor son obligatorios','error'); return;
       }
+      const r = await DB.guardarIntegracion('fel', {
+        proveedor: certId, ambiente: 'test',
+        publico: { usuario: cfg.usuario, nit_emisor: cfg.nit_emisor, alias_firma: cfg.alias_firma || null },
+        secretos: pass ? { password: pass } : null });
+      if (!r.ok) { UI.toast('No se guardaron las credenciales: ' + r.error, 'error', 8000); return; }
     }
     const ok = await DB.updateTenant({ config_infile: cfg, updated_at: new Date().toISOString() });
-    if (ok) { Auth.tenant.config_infile = cfg; UI.toast('Configuración FEL guardada ✓'); }
+    if (ok) { Auth.tenant.config_infile = cfg; UI.toast('Configuración FEL guardada ✓'); this._cargarPistaFel(); }
     else UI.toast('Error al guardar','error');
+  },
+
+  async _cargarPistaFel() {
+    const el = document.getElementById('fel-pista');
+    if (!el) return;
+    const i = await DB.getIntegracion('fel').catch(() => null);
+    el.textContent = i?.secreto_pista
+      ? `🔒 Guardada cifrada (${i.secreto_pista}) · ${i.proveedor} · ${i.ambiente}. Déjala vacía para conservarla.`
+      : '';
+  },
+
+  async probarFel() {
+    UI.toast('Probando conexión con el certificador…', 'info');
+    const r = await DB.probarIntegracion('fel');
+    UI.toast(r?.ok ? '✓ ' + r.detalle : (r?.error || 'Sin respuesta'), r?.ok ? 'success' : 'warn', 10000);
   },
 };
