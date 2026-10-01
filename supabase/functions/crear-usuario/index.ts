@@ -60,14 +60,17 @@ Deno.serve(async (req) => {
   const admin = createClient(url, serviceKey);
   const { data: perfil, error: perfilErr } = await admin
     .from("usuarios")
-    .select("rol, tenant_id, activo")
+    .select("rol, tenant_id, activo, permisos_custom")
     .eq("id", callerId)
     .maybeSingle();
 
   // Igual que is_superadmin() en la BD: el dueño, o un colaborador del
   // equipo SaaS (rol superadmin) que siga activo.
-  const esSuperadmin = userData.user.email === "henry.chinchilla@gmail.com" ||
-    (perfil?.rol === "superadmin" && perfil?.activo !== false);
+  const esDueno = userData.user.email === "henry.chinchilla@gmail.com";
+  const esSuperadmin = esDueno || (perfil?.rol === "superadmin" && perfil?.activo !== false);
+  // Igual que is_superadmin_total(): gestionar el equipo SaaS exige rol total.
+  const esSuperadminTotal = esDueno ||
+    (esSuperadmin && ((perfil?.permisos_custom as any)?.saas_rol ?? "soporte") === "total");
 
   if (perfilErr) return json({ error: "Error leyendo perfil" }, 500);
   if (!esSuperadmin && (!perfil || !ROLES_QUE_CREAN.includes(perfil.rol))) {
@@ -105,7 +108,7 @@ Deno.serve(async (req) => {
   if (!tenantDestino && !esUsuarioSaas) return json({ error: "No se pudo determinar el taller de destino. Recarga e intenta de nuevo." }, 400);
 
   // Un admin no puede crear superadmins
-  if (rol === "superadmin" && !esSuperadmin) {
+  if (rol === "superadmin" && !esSuperadminTotal) {
     return json({ error: "No puedes crear superadministradores" }, 403);
   }
 

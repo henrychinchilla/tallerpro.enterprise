@@ -44,10 +44,12 @@ Deno.serve(async (req) => {
 
   const admin = createClient(url, serviceKey);
   const { data: perfil } = await admin.from("usuarios")
-    .select("rol, tenant_id, activo").eq("id", userData.user.id).maybeSingle();
+    .select("rol, tenant_id, activo, permisos_custom").eq("id", userData.user.id).maybeSingle();
   const esDueno = userData.user.email === "henry.chinchilla@gmail.com";
   const esSuperadmin = esDueno ||
     ((perfil as any)?.rol === "superadmin" && (perfil as any)?.activo !== false);
+  const esSuperadminTotal = esDueno ||
+    (esSuperadmin && ((perfil as any)?.permisos_custom?.saas_rol ?? "soporte") === "total");
   if (!esSuperadmin && (!perfil || !ROLES_QUE_RESETEAN.includes((perfil as any).rol))) {
     return json({ error: "No tienes permiso para resetear contraseñas" }, 403);
   }
@@ -65,7 +67,7 @@ Deno.serve(async (req) => {
   if (!target) return json({ error: "Usuario no encontrado" }, 404);
   // Resetear la clave de un superadmin es tomar su cuenta: solo otro
   // superadmin, y la del dueño solo el dueño.
-  if ((target as any).rol === "superadmin" && !esSuperadmin) {
+  if ((target as any).rol === "superadmin" && !esSuperadminTotal) {
     return json({ error: "No puedes resetear la contraseña de un superadministrador" }, 403);
   }
   if ((target as any).email === "henry.chinchilla@gmail.com" && !esDueno) {
