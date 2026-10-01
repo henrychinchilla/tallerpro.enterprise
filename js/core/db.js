@@ -265,6 +265,34 @@ const DB = {
      él dependen el menú y los permisos, y en localStorage sólo queda el id.
      Devuelve null si ya no existe — mejor eso que dejar la sesión apuntando a
      un comercio borrado. */
+  /* ── INTEGRACIONES PROPIAS DEL COMERCIO (Canal B, mig 153) ──
+     El secreto viaja una sola vez al RPC y se cifra en la BD; de vuelta solo
+     llegan proveedor, ambiente, datos públicos y la pista "…a1b2". */
+  async getIntegracion(tipo) {
+    const { data } = await getSB().from('tenant_integraciones')
+      .select('tipo, proveedor, ambiente, publico, secreto_pista, activo, ultimo_error, updated_at')
+      .eq('tenant_id', getTID()).eq('tipo', tipo).maybeSingle();
+    return data || null;
+  },
+
+  async guardarIntegracion(tipo, { proveedor, ambiente = 'test', publico = {}, secretos = null, activo = true }) {
+    const { error } = await getSB().rpc('guardar_integracion', {
+      p_tenant_id: getTID(), p_tipo: tipo, p_proveedor: proveedor, p_ambiente: ambiente,
+      p_publico: publico, p_secretos: secretos, p_activo: activo });
+    return { ok: !error, error: error?.message || null };
+  },
+
+  async borrarIntegracion(tipo) {
+    const { error } = await getSB().rpc('borrar_integracion', { p_tenant_id: getTID(), p_tipo: tipo });
+    return { ok: !error, error: error?.message || null };
+  },
+
+  async probarIntegracion(tipo) {
+    const { data, error } = await getSB().functions.invoke('integracion-tenant', { body: { op: 'probar', tipo, tenant_id: getTID() } });
+    if (error) return { ok: false, error: error.message };
+    return data;
+  },
+
   async getTenantPorId(id) {
     if (!id) return null;
     const { data } = await getSB().from('tenants').select('*').eq('id', id).maybeSingle();
