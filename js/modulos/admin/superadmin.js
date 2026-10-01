@@ -165,6 +165,7 @@ Modulos.superadmin = {
                   <td><div style="display:flex;gap:4px;flex-wrap:wrap">
                     <button class="btn btn-sm btn-amber" onclick="Modulos.superadmin.entrarComercio('${t.id}')" title="Entrar a este comercio para dar soporte">🛟 Entrar</button>
                     <button class="btn btn-sm btn-cyan" onclick="Modulos.superadmin.modalTaller('${t.id}')" title="Plan y módulos">⚙️</button>
+                    <button class="btn btn-sm btn-ghost" onclick="Modulos.superadmin.modalUsuariosComercio('${t.id}')" title="Usuarios del comercio (resetear contraseña)">👥</button>
                     ${pend ? `
                     <button class="btn btn-sm btn-green" onclick="Modulos.superadmin.aprobar('${t.id}')" title="Aprobar: activa el demo y avisa al cliente por correo">✅ Aprobar</button>
                     <button class="btn btn-sm btn-danger" onclick="Modulos.superadmin.rechazar('${t.id}')" title="Rechazar: borra el comercio (queda la solicitud como evidencia)">❌ Rechazar</button>
@@ -462,9 +463,31 @@ Modulos.superadmin = {
     this._refrescarEquipo();
   },
 
+  /* Usuarios de un comercio, para resetearles la contraseña desde el panel. */
+  async modalUsuariosComercio(tid) {
+    const t = this._tenants.find(x=>x.id===tid);
+    const { data, error } = await getSB().from('usuarios')
+      .select('id, nombre, email, rol, activo').eq('tenant_id', tid).order('nombre');
+    if (error) { UI.toast('No se pudieron cargar los usuarios: ' + error.message, 'error', 8000); return; }
+    this._usrComercio = data || [];
+    UI.modal('👥 Usuarios — ' + UI.esc(t?.name || t?.slug || ''), `
+      <div class="table-wrap"><table class="data-table">
+        <thead><tr><th>Nombre</th><th>Correo</th><th>Rol</th><th>Estado</th><th></th></tr></thead>
+        <tbody>${this._usrComercio.map(u=>`<tr>
+          <td>${UI.esc(u.nombre||'')}</td><td>${UI.esc(u.email||'')}</td>
+          <td>${UI.esc(ROLES[u.rol]?.label || u.rol || '')}</td>
+          <td>${u.activo===false?'<span class="badge badge-red">Inactivo</span>':'<span class="badge badge-green">Activo</span>'}</td>
+          <td>${u.email===SA_DUENO?'':`<button class="btn btn-sm btn-ghost" title="Resetear contraseña" onclick="Modulos.superadmin.modalResetColaborador('${u.id}')">🔑</button>`}</td>
+        </tr>`).join('') || '<tr><td colspan="5" class="empty-state">Sin usuarios</td></tr>'}</tbody>
+      </table></div>
+      <div class="modal-footer"><button class="btn btn-ghost" onclick="UI.cerrarModal()">Cerrar</button></div>`, '720px');
+  },
+
+  /* Sirve para el equipo y para usuarios de comercios. La cuenta del dueño
+     nunca: la Edge Function también lo rechaza. */
   modalResetColaborador(id) {
-    const u = this._equipo.find(x=>x.id===id);
-    if (!u) return;
+    const u = this._equipo.find(x=>x.id===id) || (this._usrComercio||[]).find(x=>x.id===id);
+    if (!u || u.email === SA_DUENO) return;
     UI.modal('🔑 Resetear contraseña — ' + UI.esc(u.nombre), `
       <div class="form-group"><label class="form-label">Nueva contraseña temporal *</label>
         <input class="form-input" id="sc-rpass" type="password" placeholder="Mínimo 8 caracteres"></div>
