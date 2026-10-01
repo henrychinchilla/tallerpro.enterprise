@@ -21,7 +21,7 @@ Modulos.superadmin = {
     const el = document.getElementById('page-content');
     if (Auth.user?.rol !== 'superadmin') { el.innerHTML = '<div class="empty-state">Sin acceso</div>'; return; }
     UI.loading(el);
-    [this._tenants, this._pagos, this._solicitudes, this._tarjetas, this._vouchers, this._equipo] = await Promise.all([
+    [this._tenants, this._pagos, this._solicitudes, this._tarjetas, this._vouchers, this._equipo, this._billing] = await Promise.all([
       DB.getTenantsAdmin().catch(()=>[]),
       DB.getTenantPagos().catch(()=>[]),
       DB.getSolicitudes().catch(()=>[]),
@@ -30,7 +30,9 @@ Modulos.superadmin = {
         .select('id, tenant_id, monto, banco, referencia, referencia_detectada, estado, analisis, motivo_rechazo, created_at')
         .order('created_at',{ascending:false}).limit(100)
         .then(r=>r.data||[]).catch(()=>[]),
-      this._cargarEquipo().catch(()=>[])
+      this._cargarEquipo().catch(()=>[]),
+      getSB().from('saas_config').select('valor').eq('clave','billing_auto').maybeSingle()
+        .then(r=>r.data?.valor||{}).catch(()=>({}))
     ]);
     /* Comercios que verificaron su correo y esperan aprobación */
     this._pendMap = new Map(this._solicitudes.filter(s=>s.estado==='verificado'&&s.tenant_id).map(s=>[s.tenant_id, s]));
@@ -248,6 +250,25 @@ Modulos.superadmin = {
           ${UI.kpiCard({ icon:'⏳', clase:'amber', label:'Pendiente este mes', value: pendienteMes, money:true })}
           ${UI.kpiCard({ icon:'⚠️', clase: sinCobrar.length?'red':'gray', label:`Sin cobrar (${mesAct})`, value: sinCobrar.length, trend:'comercios activos' })}
         </div>
+        ${(()=>{
+          const b = this._billing || {};
+          return `<div class="card" style="margin-bottom:16px;border-left:3px solid var(--${b.activo?'green':'text3'})">
+            <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
+              <div>
+                <div class="card-sub">🤖 Cobro automático (Canal A — CM cobra la suscripción)</div>
+                <div style="font-size:12px;margin-top:4px">
+                  ${b.activo ? '<span class="badge badge-green">ENCENDIDO</span>' : '<span class="badge badge-gray">APAGADO — solo simula</span>'}
+                  · pasarela: <b>${UI.esc(b.gateway || 'ninguna')}</b> · gracia: <b>${Number(b.gracia_dias ?? 5)} días</b>
+                  · intentos D−${(b.dias_previos||[3,1,0]).join('/D−')} · reintentos D+${(b.reintentos_dias||[1,3]).join('/D+')}
+                </div>
+              </div>
+              <div style="display:flex;gap:6px">
+                <button class="btn btn-sm btn-ghost" onclick="Modulos.superadmin.simularCobroAuto()">🔎 Simular hoy</button>
+                <button class="btn btn-sm btn-ghost" onclick="Modulos.superadmin.modalBillingAuto()">⚙️ Configurar</button>
+              </div>
+            </div>
+          </div>`;
+        })()}
         ${(()=>{
           const autos = sinCobrar.filter(t=>this._tarjetas.find(x=>x.tenant_id===t.id && x.cargo_automatico));
           return autos.length?`<div class="alert alert-cyan" style="margin-bottom:12px"><div class="alert-icon">💳</div><div class="alert-body" style="font-size:12px;display:flex;justify-content:space-between;align-items:center;gap:10px">
@@ -1174,6 +1195,79 @@ Modulos.superadmin = {
     }
     UI.toast(`Cargos generados: ${ok} ✓${fail?` · ${fail} con error`:''}`);
     this.render();
+  },
+
+  /* ── COBRO AUTOMÁTICO (Canal A, Edge saas-cobrar, mig 152) ──
+     Usa la tarjeta del comercio (tenant_tarjetas) y credenciales de CM; el
+     éxito pasa por registrar_cobro_saas, igual que el cobro manual. */
+  modalBillingAuto() {
+    const b = this._billing || {};
+    const pasarelas = ['credomatic','visanet','stripe','recurrente'];
+    UI.modal('🤖 Cobro automático — Canal A', `
+      <div class="alert alert-amber" style="margin-bottom:12px"><div class="alert-icon">⚠️</div><div class="alert-body" style="font-size:12px">
+        Hoy <b>ninguna pasarela tiene conector</b>: CM aún no contrató. Encendido, cada intento falla con un error claro y
+        <b>nunca</b> renueva sin cobro real. Pero el <b>corte por gracia sí se aplica</b>: un comercio vencido más de la gracia
+        queda <b>Suspendido</b>. Usa 🔎 Simular antes de encender.
+      </div></div>
+      <label style="display:flex;align-items:center;gap:8px;margin-bottom:12px;cursor:pointer">
+        <input type="checkbox" id="ba-activo" ${b.activo?'checked':''}> <b>Encendido</b> (el cron diario cobra y corta de verdad)</label>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Pasarela de CM</label>
+          <select class="form-select" id="ba-gateway"><option value="">— ninguna —</option>
+            ${pasarelas.map(p=>`<option value="${p}" ${b.gateway===p?'selected':''}>${p}</option>`).join('')}</select></div>
+        <div class="form-group"><label class="form-label">Días de gracia tras vencer</label>
+          <input class="form-input" id="ba-gracia" type="number" min="0" max="60" value="${Number(b.gracia_dias ?? 5)}"></div>
+      </div>
+      <div style="font-size:11px;color:var(--text3)">Credenciales de la pasarela: secrets de la plataforma (Edge), nunca aquí.</div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" onclick="UI.cerrarModal()">Cancelar</button>
+        <button class="btn btn-amber" onclick="Modulos.superadmin.guardarBillingAuto()">Guardar</button>
+      </div>`, '560px');
+  },
+
+  async guardarBillingAuto() {
+    const activo = !!document.getElementById('ba-activo')?.checked;
+    if (activo && !this._billing?.activo &&
+        !await UI.confirmar('¿Encender el cobro automático? Desde mañana el cron intenta cargos y <b>suspende</b> a los comercios vencidos más allá de la gracia.', 'Encender')) return;
+    const valor = { ...(this._billing||{}), activo,
+      gateway: document.getElementById('ba-gateway')?.value || null,
+      gracia_dias: Math.max(0, parseInt(document.getElementById('ba-gracia')?.value, 10) || 0) };
+    const { error } = await getSB().from('saas_config')
+      .upsert({ clave:'billing_auto', valor, updated_at: new Date().toISOString() }, { onConflict:'clave' });
+    if (error) { UI.toast('No se guardó: ' + error.message, 'error', 8000); return; }
+    this._billing = valor; UI.cerrarModal(); UI.toast('Cobro automático guardado ✓'); this._renderTab();
+  },
+
+  async simularCobroAuto(tenantId = null) {
+    UI.toast(tenantId ? 'Intentando cobro…' : 'Simulando…', 'info');
+    const body = tenantId ? { tenant_id: tenantId } : { dry_run: true };
+    const { data, error } = await getSB().functions.invoke('saas-cobrar', { body });
+    if (error || data?.error) { UI.toast('Error: ' + (data?.error || error.message), 'error', 8000); return; }
+    const etiqueta = { cobrar:'💳 Cobrar', cortar:'⛔ Suspender', omitido:'— Omitido' };
+    const res = { simulado:'simulado', cobrado:'✅ cobrado', fallido:'❌ fallido', suspendido:'⛔ suspendido', cobrado_sin_registrar:'⚠️ cobrado SIN registrar' };
+    UI.modal(`🔎 Cobro automático — ${data.simulado ? 'simulación' : 'ejecución'} (${data.hoy})`, `
+      <div style="font-size:12px;margin-bottom:10px">${data.simulado ? 'Nada se cobró ni se suspendió.' : ''}
+        Conectores disponibles: <b>${data.con_conector.length ? data.con_conector.join(', ') : 'ninguno'}</b>.</div>
+      <div class="table-wrap"><table class="data-table">
+        <thead><tr><th>Comercio</th><th>Días</th><th>Acción</th><th>Monto</th><th>Resultado</th><th></th></tr></thead>
+        <tbody>${(data.plan||[]).map(p=>`<tr>
+          <td>${UI.esc(p.tenant||'')}</td>
+          <td>${p.dias>=0?`vence en ${p.dias}`:`vencido hace ${-p.dias}`}</td>
+          <td>${etiqueta[p.accion]||p.accion}${p.motivo?`<div style="font-size:10px;color:var(--text3)">${UI.esc(p.motivo)}</div>`:''}</td>
+          <td>${p.monto?UI.q(p.monto):'—'}</td>
+          <td>${res[p.resultado]||'—'}${p.error?`<div style="font-size:10px;color:var(--red)">${UI.esc(p.error)}</div>`:''}</td>
+          <td style="white-space:nowrap">
+            <button class="btn btn-sm btn-ghost" title="Cobrar ahora" onclick="Modulos.superadmin.simularCobroAuto('${p.id}')">💳</button>
+            <button class="btn btn-sm btn-ghost" title="Reiniciar intentos fallidos" onclick="Modulos.superadmin.reiniciarIntentos('${p.id}')">↺</button></td>
+        </tr>`).join('') || '<tr><td colspan="6" class="empty-state">Hoy no toca cobrar ni suspender a nadie</td></tr>'}</tbody>
+      </table></div>
+      <div class="modal-footer"><button class="btn btn-ghost" onclick="UI.cerrarModal()">Cerrar</button></div>`, '820px');
+  },
+
+  async reiniciarIntentos(tenantId) {
+    const { error } = await getSB().from('tenants')
+      .update({ billing_intentos: 0, billing_ultimo_error: null }).eq('id', tenantId);
+    UI.toast(error ? 'No se pudo: ' + error.message : 'Intentos reiniciados ✓', error ? 'error' : 'success');
   },
 
   /* ── OPERACIONES SaaS (Edge Functions; el cron diario hace esto solo) ── */
