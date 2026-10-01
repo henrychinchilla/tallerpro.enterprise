@@ -683,7 +683,9 @@ Modulos.ordenes = {
       'Cerrar garantía'
     );
     if (!ok) return;
-    const descontados = await DB.descontarInventarioVenta(itemsList, `Garantía ${o.num}`);
+    let descontados = 0;
+    try { descontados = await DB.descontarInventarioVenta(itemsList, `Garantía ${o.num}`, 'Garantía (costo del taller)'); }
+    catch (e) { UI.toast('No se cerró la garantía: ' + e.message, 'error', 10000); return; }
     if (total > 0) {
       await DB.upsertEgreso({
         concepto: `Garantía ${o.num} — costo del taller`, categoria: 'Garantías',
@@ -734,6 +736,12 @@ Modulos.ordenes = {
     const subtotal = Math.round(total/1.12*100)/100;
     const iva      = Math.round((total-subtotal)*100)/100;
 
+    /* Stock PRIMERO y atómico: si un repuesto no alcanza, no se factura. */
+    const refProv = `OT ${o.num} en facturación ${new Date().toISOString()}`;
+    let descontados = 0;
+    try { descontados = await DB.descontarInventarioVenta(itemsList, refProv); }
+    catch (e) { UI.toast('No se facturó: ' + e.message, 'error', 10000); return; }
+
     /* Crear factura (num/nit los completa DB.upsertFactura) */
     const cli = o.clientes || {};
     const { data: factura, error } = await DB.upsertFactura({
@@ -750,15 +758,18 @@ Modulos.ordenes = {
       descripcion: descripcionFEL.slice(0,500)
     });
 
-    if (error || !factura) { UI.toast('Error al crear factura: '+(error?.message||'desconocido'),'error'); return; }
+    if (error || !factura) {
+      await DB.devolverInventarioVenta(itemsList, refProv).catch(e => console.error('No se pudo devolver el stock', e));
+      UI.toast('Error al crear factura: '+(error?.message||'desconocido'),'error'); return;
+    }
 
-    /* Desglose de la factura + descuento de inventario de los repuestos */
+    /* Desglose de la factura */
     const nro = `Factura ${factura.num||factura.id.slice(0,8)}`;
     await DB.insertFacturaItems(factura.id, itemsList.map(i=>({
       descripcion: i.descripcion, cantidad: i.cantidad,
       precio_unit: i.precio_unit, total: i.total, inventario_id: i.inventario_id || null
     })));
-    const descontados = await DB.descontarInventarioVenta(itemsList, nro);
+    DB.renombrarReferenciaStock(refProv, nro);
 
     /* Fidelización: acumula según la política del taller */
     if (cli?.programa_puntos) {
