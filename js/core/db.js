@@ -1059,6 +1059,30 @@ const DB = {
       descripcion, total: cot.total, saldo: cot.total
     });
     if (error) return { error };
+
+    /* Las líneas pasan a ot_items: antes la OT nacía vacía y al facturarla
+       no había desglose. El precio unitario va ya con el descuento de la
+       línea (ot_items no tiene descuento), y el descuento global de la
+       cotización va como línea negativa: facturar suma ot_items.total, y sin
+       ella se cobraría más de lo cotizado. */
+    const r2 = n => Math.round((Number(n) || 0) * 100) / 100;
+    const filas = (cot.cotizacion_items || []).map((it, k) => {
+      const cant = Number(it.cantidad) || 1;
+      return { tenant_id: getTID(), orden_id: orden.id, descripcion: it.descripcion,
+        cantidad: cant, precio_unit: r2((Number(it.total) || 0) / cant), total: r2(it.total), orden_pos: k };
+    });
+    const dif = r2(filas.reduce((s, f) => s + f.total, 0) - (Number(cot.total) || 0));
+    if (filas.length && dif > 0) filas.push({ tenant_id: getTID(), orden_id: orden.id, tipo: 'descuento',
+      descripcion: `Descuento de la cotización ${cot.num || ''}`.trim(), cantidad: 1,
+      precio_unit: -dif, total: -dif, orden_pos: filas.length });
+    if (filas.length) {
+      const { error: errItems } = await getSB().from('ot_items').insert(filas);
+      if (errItems) {
+        await getSB().from('ordenes').delete().eq('id', orden.id);
+        return { error: { message: 'No se pudieron copiar los ítems a la OT: ' + errItems.message } };
+      }
+    }
+
     await getSB().from('cotizaciones').update({
       estado:'convertida', convertida_orden_id: orden.id, updated_at: new Date().toISOString()
     }).eq('id', id);
