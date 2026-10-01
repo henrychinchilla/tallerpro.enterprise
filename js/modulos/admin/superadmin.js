@@ -9,7 +9,8 @@ const SAAS_ROLES = {
   soporte: { label:'🛟 Soporte',          tabs:['comercios','solicitudes'] },
   cobros:  { label:'💵 Cobros',           tabs:['cobros','planes'] }
 };
-const saasRol = u => u?.email === SA_DUENO ? 'total' : (SAAS_ROLES[u?.permisos_custom?.saas_rol] ? u.permisos_custom.saas_rol : 'total');
+/* Sin saas_rol = soporte (mínimo privilegio), igual que is_superadmin_total() en la BD. */
+const saasRol = u => u?.email === SA_DUENO ? 'total' : (SAAS_ROLES[u?.permisos_custom?.saas_rol] ? u.permisos_custom.saas_rol : 'soporte');
 const saasPuede = tab => { const t = SAAS_ROLES[saasRol(Auth.user)].tabs; return !t || t.includes(tab); };
 Modulos.superadmin = {
   _tab: 'comercios',
