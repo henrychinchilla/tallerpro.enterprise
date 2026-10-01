@@ -29,6 +29,8 @@ const POS = {
       Auth.supaUser = session.user;
       const esGoogle = (session.user.identities || []).some(i => i.provider === 'google');
       await Auth._cargarPerfil(session.user.id, session.user.email, null, { permitir_registro_google: esGoogle });
+      const pendiente = await this._seguridadPendiente();
+      if (pendiente) return this.renderVerificacionPendiente(pendiente);
       /* Superadmin: opera el POS del comercio que está soportando (lo marcó
          el Panel SaaS en tp_soporte_tenant). NO pasa por seleccionar_taller_pos:
          ese RPC pisa usuarios.tenant_id y rol con los de una membresía. */
@@ -128,6 +130,34 @@ const POS = {
 
   renderErrorAcceso(titulo, detalle) {
     document.getElementById('pos-root').innerHTML = `<div class="pos-login-shell"><div class="pos-login-card"><div class="pos-login-brand"><div class="pos-brand-mark">N</div><div><strong>NexusPro</strong> <em>POS</em><span>No se pudo continuar</span></div></div><h1>${this._seguro(titulo)}</h1><p>${this._seguro(detalle || 'Intenta de nuevo. Si sigue igual, avisa al administrador.')}</p><div class="pos-select-list"><button class="pos-select-option" onclick="POS._procesarSesion({user:Auth.supaUser})"><b>Reintentar</b><span>Volver a cargar tus negocios</span></button></div><div class="pos-login-back"><button class="btn btn-ghost btn-sm" onclick="POS.salir()">Cerrar sesión</button></div></div></div>`;
+  },
+
+  /* Paridad con login.js: el POS no puede ser la puerta trasera que salta el
+     cambio de contraseña del primer ingreso ni el 2FA. Misma regla que
+     loginVerificarMFAYContinuar, y fail-closed. Devuelve qué falta o null. */
+  async _seguridadPendiente() {
+    if (Auth.user?.debe_cambiar_password) return 'cambiar-pass';
+    try {
+      const mfa = await Auth.getMFAStatus();
+      if (mfa.currentLevel === 'aal2') return null;
+      if (mfa.nextLevel === 'aal2' && !Auth.mfaPausado()) return 'mfa';
+      const factors = await Auth.listMFAFactors();
+      if (factors.some(f => f.status === 'verified')) return Auth.mfaPausado() ? null : 'mfa';
+      /* Sin factor: igual que en la web, activarlo se puede posponer. */
+      return localStorage.getItem('mfa_enroll_later') === 'true' ? null : 'mfa-enroll';
+    } catch (e) {
+      console.error('POS: no se pudo verificar el 2FA', e);
+      return 'mfa';
+    }
+  },
+
+  renderVerificacionPendiente(que) {
+    const t = {
+      'cambiar-pass': ['Cambia tu contraseña temporal', 'Es tu primer ingreso: antes de cobrar tienes que definir tu propia contraseña.'],
+      'mfa':          ['Verifica tu código 2FA', 'Tu cuenta tiene verificación en dos pasos: ingresa el código de tu autenticador para continuar.'],
+      'mfa-enroll':   ['Configura la verificación en dos pasos', 'Antes de usar el POS, activa (o pospón) el 2FA de tu cuenta.'],
+    }[que];
+    document.getElementById('pos-root').innerHTML = `<div class="pos-login-shell"><div class="pos-login-card"><div class="pos-login-brand"><div class="pos-brand-mark">N</div><div><strong>NexusPro</strong> <em>POS</em><span>Verificación pendiente</span></div></div><h1>${t[0]}</h1><p>${t[1]}</p><div class="pos-login-back" style="display:flex;gap:8px;justify-content:center"><a class="btn btn-amber" href="/">Continuar en NexusPro →</a><button class="btn btn-ghost" onclick="POS.salir()">Cerrar sesión</button></div></div></div>`;
   },
 
   async _entrarComoSoporte() {
