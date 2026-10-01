@@ -70,10 +70,11 @@ Deno.serve(async (req) => {
 
   const admin = createClient(url, serviceKey);
   const { data: perfil, error: perfilErr } = await admin
-    .from("usuarios").select("rol, tenant_id").eq("id", callerId).maybeSingle();
+    .from("usuarios").select("rol, tenant_id, activo").eq("id", callerId).maybeSingle();
   if (perfilErr) return json({ error: "Error leyendo tu perfil" }, 500);
 
-  const esSuperadmin = userData.user.email === SUPERADMIN_EMAIL || perfil?.rol === "superadmin";
+  const esSuperadmin = userData.user.email === SUPERADMIN_EMAIL ||
+    (perfil?.rol === "superadmin" && perfil?.activo !== false);
   if (!esSuperadmin && (!perfil || !ROLES_QUE_BORRAN.includes(perfil.rol))) {
     return json({ error: "No tienes permiso para eliminar usuarios" }, 403);
   }
@@ -99,6 +100,9 @@ Deno.serve(async (req) => {
   }
   if (objetivo.rol === "superadmin" && !esSuperadmin) {
     return json({ error: "No podés eliminar a un superadministrador" }, 403);
+  }
+  if (objetivo.email === SUPERADMIN_EMAIL) {
+    return json({ error: "La cuenta del dueño no se puede eliminar" }, 403);
   }
 
   // ── 3. Borrar el perfil (usuario_tenants y usuario_permisos van en cascada) ──

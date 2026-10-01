@@ -182,7 +182,8 @@ const MODULOS = [
     subnav:[
       { tab:'comercios', icon:'🏪', label:'Comercios' },
       { tab:'cobros',    icon:'💵', label:'Cobros'    },
-      { tab:'planes',    icon:'🎚️', label:'Planes'    }
+      { tab:'planes',    icon:'🎚️', label:'Planes'    },
+      { tab:'equipo',    icon:'👥', label:'Equipo'    }
     ] },
   { id:'mi_ot',          icon:'🔍', label:'Mis Órdenes',       grupo:'cliente'    }
 ];

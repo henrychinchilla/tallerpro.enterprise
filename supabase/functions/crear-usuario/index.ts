@@ -60,11 +60,14 @@ Deno.serve(async (req) => {
   const admin = createClient(url, serviceKey);
   const { data: perfil, error: perfilErr } = await admin
     .from("usuarios")
-    .select("rol, tenant_id")
+    .select("rol, tenant_id, activo")
     .eq("id", callerId)
     .maybeSingle();
 
-  const esSuperadmin = userData.user.email === "henry.chinchilla@gmail.com";
+  // Igual que is_superadmin() en la BD: el dueño, o un colaborador del
+  // equipo SaaS (rol superadmin) que siga activo.
+  const esSuperadmin = userData.user.email === "henry.chinchilla@gmail.com" ||
+    (perfil?.rol === "superadmin" && perfil?.activo !== false);
 
   if (perfilErr) return json({ error: "Error leyendo perfil" }, 500);
   if (!esSuperadmin && (!perfil || !ROLES_QUE_CREAN.includes(perfil.rol))) {
@@ -94,8 +97,12 @@ Deno.serve(async (req) => {
   }
 
   // El tenant destino: superadmin puede especificarlo; si no, usa el tenant del perfil del admin.
-  const tenantDestino = (esSuperadmin && tenant_id) ? tenant_id : (perfil?.tenant_id ?? tenant_id);
-  if (!tenantDestino) return json({ error: "No se pudo determinar el taller de destino. Recarga e intenta de nuevo." }, 400);
+  // Un usuario del equipo SaaS no pertenece a ningún comercio: entra directo
+  // al Panel SaaS y a los comercios solo en modo soporte.
+  const esUsuarioSaas = rol === "superadmin";
+  const tenantDestino = esUsuarioSaas ? null
+    : (esSuperadmin && tenant_id) ? tenant_id : (perfil?.tenant_id ?? tenant_id);
+  if (!tenantDestino && !esUsuarioSaas) return json({ error: "No se pudo determinar el taller de destino. Recarga e intenta de nuevo." }, 400);
 
   // Un admin no puede crear superadmins
   if (rol === "superadmin" && !esSuperadmin) {
