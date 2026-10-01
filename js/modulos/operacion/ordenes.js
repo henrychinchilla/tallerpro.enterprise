@@ -394,6 +394,10 @@ Modulos.ordenes = {
   },
 
   async eliminarItem(itemId, ordenId) {
+    /* Era el único borrado sin confirmación: un clic de más quitaba la línea
+       y recalculaba el total de la OT sin vuelta atrás. */
+    const ok = await UI.confirmar('¿Quitar esta línea de la OT? El total se recalcula y no se puede deshacer.', 'Quitar');
+    if (!ok) return;
     await getSB().from('ot_items').delete().eq('id', itemId);
     const { data: allItems } = await getSB().from('ot_items').select('total').eq('orden_id', ordenId);
     const nuevoTotal = (allItems||[]).reduce((s,i)=>s+(i.total||0),0);
