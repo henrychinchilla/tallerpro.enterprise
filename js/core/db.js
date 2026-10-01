@@ -8,7 +8,29 @@ let _sb = null;
 function getSB() {
   if (_sb) return _sb;
   _sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+  _blindarFiltroTenant(_sb);
   return _sb;
+}
+
+/* Sin negocio activo, `.eq('tenant_id', getTID())` viajaba como el texto
+   "null" y Postgres respondía 400 (uuid inválido) en cada pantalla. Un solo
+   guard para todos los llamadores: el filtro apunta a un UUID que no existe,
+   la consulta vuelve VACÍA (nunca de otro comercio) y queda el aviso. */
+const TENANT_INEXISTENTE = '00000000-0000-0000-0000-000000000000';
+function _blindarFiltroTenant(sb) {
+  try {
+    const proto = Object.getPrototypeOf(sb.from('tenants').select('id'));
+    if (!proto || proto.__tenantBlindado) return;
+    const eq = proto.eq;
+    proto.eq = function (col, val) {
+      if (col === 'tenant_id' && (val == null || val === 'null' || val === 'undefined')) {
+        console.warn('Consulta sin negocio activo (tenant_id vacío): se devuelve vacía');
+        val = TENANT_INEXISTENTE;
+      }
+      return eq.call(this, col, val);
+    };
+    proto.__tenantBlindado = true;
+  } catch (e) { console.warn('No se pudo blindar el filtro de tenant', e); }
 }
 
 function getTID() {
@@ -56,7 +78,9 @@ const DB = {
       if (id)   q = q.eq('id', id);
       else if (slug) q = q.eq('slug', slug);
       else if (getTID()) q = q.eq('id', getTID());
-      else q = q.limit(1);
+      /* Antes: limit(1) = un comercio CUALQUIERA. Para el superadmin sin
+         negocio eso eran los datos fiscales de otro. */
+      else return null;
       const { data } = await q.maybeSingle();
       return data;
     } catch(e) { return null; }

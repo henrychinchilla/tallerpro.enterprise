@@ -29,6 +29,10 @@ const POS = {
       Auth.supaUser = session.user;
       const esGoogle = (session.user.identities || []).some(i => i.provider === 'google');
       await Auth._cargarPerfil(session.user.id, session.user.email, null, { permitir_registro_google: esGoogle });
+      /* Superadmin: opera el POS del comercio que está soportando (lo marcó
+         el Panel SaaS en tp_soporte_tenant). NO pasa por seleccionar_taller_pos:
+         ese RPC pisa usuarios.tenant_id y rol con los de una membresía. */
+      if (Auth.user?.rol === 'superadmin') return this._entrarComoSoporte();
       const acceso = await DB.getMisTalleresPOS();
       if (acceso.error) throw acceso.error;
       if (!acceso.data.length) return this.renderSinTaller();
@@ -124,6 +128,19 @@ const POS = {
 
   renderErrorAcceso(titulo, detalle) {
     document.getElementById('pos-root').innerHTML = `<div class="pos-login-shell"><div class="pos-login-card"><div class="pos-login-brand"><div class="pos-brand-mark">N</div><div><strong>NexusPro</strong> <em>POS</em><span>No se pudo continuar</span></div></div><h1>${this._seguro(titulo)}</h1><p>${this._seguro(detalle || 'Intenta de nuevo. Si sigue igual, avisa al administrador.')}</p><div class="pos-select-list"><button class="pos-select-option" onclick="POS._procesarSesion({user:Auth.supaUser})"><b>Reintentar</b><span>Volver a cargar tus negocios</span></button></div><div class="pos-login-back"><button class="btn btn-ghost btn-sm" onclick="POS.salir()">Cerrar sesión</button></div></div></div>`;
+  },
+
+  async _entrarComoSoporte() {
+    const id = localStorage.getItem('tp_soporte_tenant') || Auth.user?.tenant_id;
+    const t = id ? await DB.getTenantPorId(id) : null;
+    if (!t) return this.renderErrorAcceso('Sin comercio en soporte',
+      'Entra primero al comercio desde el Panel SaaS (🛟 Entrar) y luego abre el POS.');
+    Auth.tenant = t; setTenantCache(t.id);
+    if (localStorage.getItem('pos_tenant_id') !== t.id) {
+      this._terminal = null; localStorage.removeItem('pos_terminal_id');
+    }
+    localStorage.setItem('pos_tenant_id', t.id);
+    return this.renderSelectorTerminales();
   },
 
   renderSinTaller() {
