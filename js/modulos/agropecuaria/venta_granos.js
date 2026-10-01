@@ -37,21 +37,31 @@ Modulos.venta_granos = {
       .map(([tipo, nombre]) => ({ tipo, nombre, r: this._ref?.[nombre] }))
       .filter(x => x.r);
     if (!filas.length) return '';
-    const fecha = filas[0].r.fecha;
-    return `<div class="card" style="padding:10px 12px;margin-bottom:14px;border-left:3px solid var(--green)">
+    /* La fecha REAL del dato, no la de hoy: cada grano tiene su último día
+       publicado, y si el MAGA dejó de publicar hay que decirlo en vez de
+       presentar un precio de hace semanas como "del día". */
+    const fechas = filas.map(x => x.r.fecha).sort();
+    const fecha = fechas[fechas.length - 1];
+    const mixtas = fechas[0] !== fecha;
+    const atraso = Math.round((new Date(hoyLocal() + 'T00:00:00') - new Date(fecha + 'T00:00:00')) / 86400000);
+    const viejo = atraso > 2;
+    return `<div class="card" style="padding:10px 12px;margin-bottom:14px;border-left:3px solid var(--${viejo ? 'amber' : 'green'})">
       <div style="font-size:12px;font-weight:800;margin-bottom:6px">
-        🌾 Referencia mayorista MAGA · ${UI.fecha(fecha)}
-        <span style="font-weight:400;color:var(--text3)">— el más barato del día entre La Terminal y el CENMA</span>
+        🌾 Referencia mayorista MAGA · ${mixtas ? 'último dato ' : ''}${UI.fecha(fecha)}
+        ${viejo ? `<span class="badge badge-amber" style="font-size:10px">⚠️ sin datos nuevos hace ${atraso} días</span>` : ''}
+        <span style="font-weight:400;color:var(--text3)">— el más barato de ese día entre La Terminal y el CENMA</span>
       </div>
       <div style="display:flex;gap:14px;flex-wrap:wrap">
         ${filas.map(x => `<div style="font-size:12px">
           <b>${UI.esc(this._TIPOS_GRANO[x.tipo] || x.tipo)}</b>
           <span style="color:var(--green);font-weight:700">Q${x.r.precio.toLocaleString('es-GT',{minimumFractionDigits:2})}</span>
-          <span style="color:var(--text3)">/${UI.esc(x.r.medida)} · ${UI.esc(x.r.mercado)}</span>
+          <span style="color:var(--text3)">/${UI.esc(x.r.medida)} · ${UI.esc(x.r.mercado)}${mixtas && x.r.fecha !== fecha ? ' · ' + UI.fecha(x.r.fecha) : ''}</span>
         </div>`).join('')}
       </div>
       <div style="font-size:11px;color:var(--text3);margin-top:6px">
-        El MAGA no publica trigo. Los precios diarios entran cada mañana.
+        El MAGA no publica trigo. ${viejo
+          ? 'El MAGA no ha publicado precios nuevos desde esa fecha: úsalos con cautela para negociar.'
+          : 'Los precios diarios entran cada mañana.'}
       </div>
     </div>`;
   },

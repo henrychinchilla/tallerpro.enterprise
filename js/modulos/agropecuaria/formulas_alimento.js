@@ -225,7 +225,12 @@ Modulos.formulas_alimento = {
       <div class="page-header">
         <div>
           <h1 class="page-title">🧪 Fórmulas de alimentación</h1>
-          <p class="page-subtitle">// Costeadas con el precio mayorista del día · maíz, maicillo y soya desde el MAGA</p>
+          <p class="page-subtitle">// Costeadas con el último precio mayorista del MAGA (maíz, maicillo y soya)${(() => {
+            const f = Object.values(this._ref || {}).map(r => r.fecha).sort().pop();
+            if (!f) return '';
+            const dias = Math.round((new Date(hoyLocal() + 'T00:00:00') - new Date(f + 'T00:00:00')) / 86400000);
+            return ` · al ${UI.fecha(f)}${dias > 2 ? ` <span class="badge badge-amber" style="font-size:10px">⚠️ hace ${dias} días</span>` : ''}`;
+          })()}</p>
         </div>
         <div class="page-actions">
           <button class="btn btn-ghost" onclick="Modulos.formulas_alimento.modalInsumo()">＋ Precio de insumo</button>
