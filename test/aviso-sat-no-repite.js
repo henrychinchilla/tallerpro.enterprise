@@ -38,6 +38,8 @@ function cargar(obligaciones) {
     console, setTimeout, clearTimeout, Promise, JSON, Math, Date, Number, Array,
     String, Object, URLSearchParams, isNaN, parseInt, parseFloat, encodeURIComponent,
     localStorage, sessionStorage: localStorage,
+    /* En el navegador viene de config.js, que carga antes que app.js. */
+    hoyLocal: (d = new Date()) => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Guatemala' }).format(d),
     addEventListener: () => {},
     matchMedia: () => ({ matches: false, addEventListener: () => {} }),
     navigator: { userAgent: 'node' },

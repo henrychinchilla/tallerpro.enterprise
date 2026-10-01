@@ -345,13 +345,27 @@ function fidelizacionCfg() {
   return { ...FIDELIZACION_DEFAULTS, ...(window.Auth?.tenant?.fidelizacion || {}) };
 }
 
+/* Fecha de HOY en Guatemala (YYYY-MM-DD). toISOString() es UTC: de 18:00 a
+   medianoche ya da mañana, y un vencimiento de hoy salía vencido. */
+function hoyLocal(d = new Date()) {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Guatemala' }).format(d);
+}
+
+/* Estado comercial de un tenant: 'suspendido' (bloqueo duro: active=false),
+   'vencido' (en mora: la fecha pasó pero sigue activo = bloqueo suave,
+   solo lectura) o 'activo' (vigente). */
+function estadoComercial(t, hoy = hoyLocal()) {
+  if (!t) return 'activo';
+  if (t.active === false) return 'suspendido';
+  if (t.suscripcion_vence && t.suscripcion_vence < hoy) return 'vencido';
+  return 'activo';
+}
+
 /* ¿La suscripción del negocio está vigente? (vencida = solo lectura/bloqueo suave) */
 function suscripcionVigente() {
   const t = window.Auth?.tenant;
   if (!t) return true;
-  if (t.active === false) return false;
-  if (!t.suscripcion_vence) return true;
-  return t.suscripcion_vence >= new Date().toISOString().slice(0,10);
+  return estadoComercial(t) === 'activo';
 }
 
 /* ── FUNCIONES DE PERMISOS ────────────────────────── */

@@ -128,12 +128,12 @@ Modulos.superadmin = {
     const el = document.getElementById('sa-content');
     if (!el) return;
     if (!saasPuede(this._tab)) this._tab = SAAS_ROLES[saasRol(Auth.user)].tabs[0];
-    const hoy = new Date().toISOString().slice(0,10);
+    const hoy = hoyLocal();
     const activos = this._tenants.filter(t=>t.active!==false);
 
     if (this._tab==='comercios') {
       const mrr = activos.reduce((s,t)=>s+(Number(t.precio_mensual)||0),0);
-      const vencidos = this._tenants.filter(t=>t.suscripcion_vence && t.suscripcion_vence < hoy && t.active!==false);
+      const vencidos = this._tenants.filter(t=>estadoComercial(t, hoy)==='vencido');
       el.innerHTML = `
         <div class="kpi-grid" style="margin-bottom:20px">
           ${UI.kpiCard({ icon:'🏢', clase:'amber', label:'Comercios totales', value: this._tenants.length })}
@@ -146,13 +146,16 @@ Modulos.superadmin = {
             <thead><tr><th>Comercio</th><th>Plan</th><th>Precio</th><th>Vence</th><th>Estado</th><th>Acciones</th></tr></thead>
             <tbody>
               ${this._tenants.map(t=>{
-                const venc = t.suscripcion_vence && t.suscripcion_vence < hoy;
-                const susp = t.active===false;
+                const estado = estadoComercial(t, hoy);
+                const venc = estado==='vencido';
+                const susp = estado==='suspendido';
                 const pend = this._pendMap?.has(t.id);   // verificó correo, espera aprobación
                 const esDemo = (Number(t.precio_mensual)||0)===0 || /prueba/i.test(t.notas_admin||'');
                 const estadoBadge = pend
                   ? '<span class="badge badge-amber">⏳ Por aprobar</span>'
-                  : `<span class="badge badge-${susp?'red':'green'}">${susp?'Suspendido':'Activo'}</span>`;
+                  : susp ? '<span class="badge badge-red">Suspendido</span>'
+                  : venc ? '<span class="badge badge-amber" title="La suscripción venció y no hay cobro registrado: el comercio entra en solo lectura">⚠️ Vencido · en mora</span>'
+                  : '<span class="badge badge-green">Activo</span>';
                 const planBadge = esDemo
                   ? `<span class="badge badge-purple">🎁 DEMO</span>`
                   : `<span class="badge badge-${PLANES[t.plan]?.color||'gray'}">${this._planLabel(t.plan)}</span>`;
@@ -594,7 +597,7 @@ Modulos.superadmin = {
 
   /* ── NUEVO NEGOCIO: tenant + usuario admin en un paso ── */
   modalNuevoTaller() {
-    const venceDefault = (()=>{ const d=new Date(); d.setMonth(d.getMonth()+1); return d.toISOString().slice(0,10); })();
+    const venceDefault = (()=>{ const d=new Date(); d.setMonth(d.getMonth()+1); return hoyLocal(d); })();
     UI.modal('➕ Nuevo comercio', `
       <div style="font-weight:700;font-size:13px;color:var(--amber);margin-bottom:8px">Datos del comercio</div>
       <div class="form-row">
@@ -660,7 +663,7 @@ Modulos.superadmin = {
     const vence = document.getElementById('nt-vence');
     if (demo) {
       if (precio) { precio.value = 0; precio.disabled = true; }
-      if (vence) { vence.value = new Date(Date.now()+30*86400000).toISOString().slice(0,10); vence.disabled = true; }
+      if (vence) { vence.value = hoyLocal(new Date(Date.now()+30*86400000)); vence.disabled = true; }
     } else {
       if (precio) { precio.disabled = false; this._precioDePlan(document.getElementById('nt-plan')?.value); }
       if (vence) { vence.disabled = false; }
@@ -687,7 +690,7 @@ Modulos.superadmin = {
 
     /* 1. Crear el tenant (DEMO = precio 0 + vence +30 + notas de prueba) */
     const demo = document.getElementById('nt-demo')?.checked;
-    const venceDemo = new Date(Date.now()+30*86400000).toISOString().slice(0,10);
+    const venceDemo = hoyLocal(new Date(Date.now()+30*86400000));
     const { data: tenant, error: tErr } = await DB.crearTenant({
       slug: this._slug(nombre),
       name: nombre,
@@ -729,7 +732,7 @@ Modulos.superadmin = {
   modalTaller(id) {
     const t = this._tenants.find(x=>x.id===id); if (!t) return;
     const activos = Array.isArray(t.modulos_activos)&&t.modulos_activos.length ? t.modulos_activos : (PLANES[t.plan]?.modulos||[]);
-    const hoy = new Date().toISOString().slice(0,10);
+    const hoy = hoyLocal();
     UI.modal(`⚙️ ${t.name||t.slug}`, `
       <div class="form-row">
         <div class="form-group"><label class="form-label">Plan</label>
@@ -827,7 +830,7 @@ Modulos.superadmin = {
     const vence = document.getElementById('sa-vence');
     const notas = document.getElementById('sa-notas');
     if (precio) precio.value = 0;
-    if (vence) vence.value = new Date(Date.now()+30*86400000).toISOString().slice(0,10);
+    if (vence) vence.value = hoyLocal(new Date(Date.now()+30*86400000));
     if (notas && !/prueba/i.test(notas.value)) {
       notas.value = (notas.value ? notas.value.trim()+' ' : '') + 'Prueba gratis 30 días.';
     }
@@ -1024,7 +1027,7 @@ Modulos.superadmin = {
       metodo,
       estado: document.getElementById('co-estado')?.value||'pagado',
       referencia,
-      fecha: new Date().toISOString().slice(0,10)
+      fecha: hoyLocal()
     };
     const { error } = await DB.upsertTenantPago(fields);
     if (error) { UI.toast('Error: '+error.message,'error'); return; }
@@ -1160,7 +1163,7 @@ Modulos.superadmin = {
         tenant_id: t.id, periodo: mesAct, monto: Number(t.precio_mensual)||0,
         metodo: 'Tarjeta', estado: 'pendiente',
         referencia: `Cargo automático ${tj?.marca||''}${tj?.ultimos4?` ****${tj.ultimos4}`:''}`.trim(),
-        fecha: new Date().toISOString().slice(0,10)
+        fecha: hoyLocal()
       });
       if (error) fail++; else ok++;
     }
