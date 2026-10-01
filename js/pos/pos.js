@@ -1414,6 +1414,13 @@ const POS = {
     const progEnvio = !!this._envioData;
     const cli = this._cliente;
 
+    /* Stock PRIMERO y atómico: si no alcanza, no se cobra nada. Si después
+       falla la factura, se devuelve lo descontado. */
+    const items = this._cart.map(l=>({ descripcion:l.nombre, cantidad:l.cant, precio_unit:l.precio, total:l.cant*l.precio, inventario_id:l.id }));
+    const refVenta = `Venta POS ${new Date().toISOString()}`;
+    try { await DB.descontarInventarioVenta(items, refVenta); }
+    catch (e) { UI.toast('No se cobró: ' + e.message, 'error', 10000); return; }
+
     const res = await DB.upsertFactura({
       tarjeta_datos: this._metodo === 'Tarjeta' ? (this._tarjetaDatos||null) : null,
       cliente_id: cli?.id || null,
@@ -1425,12 +1432,13 @@ const POS = {
       fecha: new Date().toISOString().slice(0,10),
       descripcion: 'Venta POS: ' + this._cart.map(l=>`${l.nombre} x${l.cant}`).join(', ').slice(0,480)
     });
-    if (res.error || !res.data) { UI.toast('Error al cobrar: '+(res.error?.message||''),'error'); return; }
+    if (res.error || !res.data) {
+      await DB.devolverInventarioVenta(items, refVenta).catch(e => console.error('No se pudo devolver el stock', e));
+      UI.toast('Error al cobrar: '+(res.error?.message||''),'error'); return;
+    }
     const factura = res.data;
-
-    const items = this._cart.map(l=>({ descripcion:l.nombre, cantidad:l.cant, precio_unit:l.precio, total:l.cant*l.precio, inventario_id:l.id }));
     await DB.insertFacturaItems(factura.id, items);
-    await DB.descontarInventarioVenta(items, `Factura ${factura.num||factura.id.slice(0,8)}`);
+    DB.renombrarReferenciaStock(refVenta, `Factura ${factura.num||factura.id.slice(0,8)}`);
 
     /* Fidelización: canje (descuento) y acumulación según política del negocio */
     const fid = fidelizacionCfg();

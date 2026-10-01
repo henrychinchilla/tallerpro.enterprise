@@ -1408,26 +1408,12 @@ const DB = {
     if (!op?.inventario_id) return false;
     const cant = Number(op.cantidad) || 0;
     if (cant <= 0) return false;
-    const { data: inv } = await getSB().from('inventario')
-      .select('stock').eq('id', op.inventario_id).eq('tenant_id', getTID()).maybeSingle();
-    if (!inv) return false;
-
     const esSalida = (op.tipo === 'venta') !== revertir;   // revertir invierte el signo
-    const nuevo = esSalida
-      ? Math.max(0, Number(inv.stock) - cant)
-      : Number(inv.stock) + cant;
-
-    await getSB().from('inventario')
-      .update({ stock: nuevo, updated_at: new Date().toISOString() })
-      .eq('id', op.inventario_id);
-    await this.movimientoInventario({
-      inventario_id: op.inventario_id,
-      tipo: esSalida ? 'salida' : 'entrada',
-      cantidad: cant,
-      referencia: op.num || 'ARM',
-      notas: `${revertir ? 'Reversión de ' : ''}${op.tipo === 'venta' ? 'venta' : 'compra'} de armería${op.numero_serie ? ' · serie ' + op.numero_serie : ''}`,
-      fecha: new Date().toISOString().slice(0, 10),
-    });
+    /* Atómico: una venta sin stock suficiente LANZA (art. 58: el físico
+       tiene que cuadrar; antes quedaba en 0 y descuadraba el libro). */
+    await this._moverStock([{ inventario_id: op.inventario_id, cantidad: cant }],
+      esSalida ? 'salida' : 'entrada', op.num || 'ARM',
+      `${revertir ? 'Reversión de ' : ''}${op.tipo === 'venta' ? 'venta' : 'compra'} de armería${op.numero_serie ? ' · serie ' + op.numero_serie : ''}`);
     return true;
   },
 
@@ -2061,26 +2047,36 @@ const DB = {
 
   /* Descuenta del inventario los repuestos vendidos en una factura y
      registra el movimiento de salida. Solo afecta líneas con inventario_id. */
-  async descontarInventarioVenta(items, referencia) {
-    const fecha = new Date().toISOString().slice(0, 10);
-    let afectados = 0;
-    for (const it of (items || [])) {
-      const cant = Number(it.cantidad) || 0;
-      if (!it.inventario_id || cant <= 0) continue;
-      const { data: inv } = await getSB().from('inventario')
-        .select('stock').eq('id', it.inventario_id).eq('tenant_id', getTID()).maybeSingle();
-      if (!inv) continue;
-      const nuevo = Math.max(0, Number(inv.stock) - cant);
-      await getSB().from('inventario')
-        .update({ stock: nuevo, updated_at: new Date().toISOString() })
-        .eq('id', it.inventario_id);
-      await this.movimientoInventario({
-        inventario_id: it.inventario_id, tipo: 'salida', cantidad: cant,
-        referencia, notas: 'Venta en factura', fecha
-      });
-      afectados++;
-    }
-    return afectados;
+  /* Atómico (RPC mover_stock, mig 149): todo o nada. Si a un ítem no le
+     alcanza el stock LANZA y no descuenta ninguno — por eso los llamadores
+     descuentan ANTES de crear la factura y devuelven si la factura falla. */
+  async descontarInventarioVenta(items, referencia, notas = 'Venta en factura') {
+    return this._moverStock(items, 'salida', referencia, notas);
+  },
+
+  /* Compensación: devuelve lo descontado si el paso siguiente falló. */
+  async devolverInventarioVenta(items, referencia, notas = 'Reversión: la venta no se completó') {
+    return this._moverStock(items, 'entrada', referencia, notas);
+  },
+
+  /* El stock se descuenta antes de que exista la factura; cuando ya tiene
+     número, el historial pasa a decir "Factura N". Best-effort. */
+  async renombrarReferenciaStock(provisional, definitiva) {
+    const { error } = await getSB().from('inventario_movimientos')
+      .update({ referencia: definitiva }).eq('tenant_id', getTID()).eq('referencia', provisional);
+    if (error) console.warn('No se pudo renombrar la referencia del stock', error.message);
+  },
+
+  async _moverStock(items, tipo, referencia, notas) {
+    const lista = (items || [])
+      .filter(i => i.inventario_id && Number(i.cantidad) > 0)
+      .map(i => ({ inventario_id: i.inventario_id, cantidad: Number(i.cantidad) }));
+    if (!lista.length) return 0;
+    const { data, error } = await getSB().rpc('mover_stock', {
+      p_items: lista, p_tipo: tipo, p_referencia: referencia || null, p_notas: notas || null
+    });
+    if (error) throw new Error(error.message);
+    return data || 0;
   },
 
   /* ── EMPLEADOS ────────────────────────────────── */

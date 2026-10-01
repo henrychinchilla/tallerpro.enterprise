@@ -1293,15 +1293,28 @@ Modulos.armeria = {
 
     const previa = id ? this._data.find(x => x.id === id) : null;
     if (id) fields.id = id;
-    const { data: saved, error } = await DB.upsertArmeriaOperacion(fields);
-    if (error) { UI.toast('Error: ' + error.message, 'error'); return; }
 
-    /* Trazabilidad: mueve el stock. Al editar se revierte el movimiento
-       anterior antes de aplicar el nuevo, si no una corrección de cantidad
-       descuadraría el inventario — justo lo que el art. 58 castiga. */
-    if (previa?.inventario_id) await DB.moverStockArmeria(previa, true);
-    const op = { ...fields, num: saved?.num || previa?.num };
-    if (op.inventario_id) await DB.moverStockArmeria(op, false);
+    /* Trazabilidad: el stock se mueve ANTES de guardar y de forma atómica.
+       Al editar se revierte el movimiento anterior antes de aplicar el nuevo,
+       si no una corrección de cantidad descuadraría el inventario — justo lo
+       que el art. 58 castiga. Si no alcanza, se deshace lo hecho y no se guarda. */
+    const refProv = `ARM en registro ${new Date().toISOString()}`;
+    const op = { ...fields, num: previa?.num || refProv };
+    let revertida = false, aplicada = false;
+    try {
+      if (previa?.inventario_id) { await DB.moverStockArmeria(previa, true); revertida = true; }
+      if (op.inventario_id) { await DB.moverStockArmeria(op, false); aplicada = true; }
+    } catch (e) {
+      if (revertida) await DB.moverStockArmeria(previa, false).catch(() => {});
+      UI.toast('No se guardó: ' + e.message, 'error', 10000); return;
+    }
+    const { data: saved, error } = await DB.upsertArmeriaOperacion(fields);
+    if (error) {
+      if (aplicada) await DB.moverStockArmeria(op, true).catch(() => {});
+      if (revertida) await DB.moverStockArmeria(previa, false).catch(() => {});
+      UI.toast('Error: ' + error.message, 'error'); return;
+    }
+    if (!previa?.num && saved?.num && aplicada) DB.renombrarReferenciaStock(refProv, saved.num);
 
     /* Lo que el usuario escribió y no estaba en el catálogo, queda para la
        próxima vez. Es lo que evita el "Glock / GLOCK / glock". */
@@ -1324,10 +1337,17 @@ Modulos.armeria = {
       `¿Eliminar la operación <b>${o.num || ''}</b>?${o.inventario_id ? ' Se revertirá el movimiento de inventario.' : ''} Esta acción no se puede deshacer.`,
       'Eliminar');
     if (!ok) return;
-    if (o.inventario_id) await DB.moverStockArmeria(o, true);
+    /* Revertir una COMPRA saca stock: si ya se vendió, no alcanza y no se borra. */
+    if (o.inventario_id) {
+      try { await DB.moverStockArmeria(o, true); }
+      catch (e) { UI.toast('No se eliminó: ' + e.message, 'error', 10000); return; }
+    }
     const exito = await DB.deleteRegistro('armeria_operaciones', id);
     if (exito) { UI.toast('Eliminado ✓'); this.render(this._filtroTipo); }
-    else UI.toast('No se pudo eliminar', 'error');
+    else {
+      if (o.inventario_id) await DB.moverStockArmeria(o, false).catch(() => {});
+      UI.toast('No se pudo eliminar', 'error');
+    }
   },
 
   async _accionNotificar(id) {

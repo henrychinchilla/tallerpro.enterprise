@@ -377,15 +377,24 @@ Modulos.facturacion = {
       if (yaFact) { UI.toast(`Esa cotización ya tiene factura (${yaFact.num||'—'})`,'error'); return; }
     }
     if (id) fields.id = id;
-    const res = await DB.upsertFactura(fields);
-    if (res.error) { UI.toast('Error: '+res.error.message,'error'); return; }
-    /* Persistir el desglose en una factura nueva creada desde una OT o
-       cotización, y descontar del inventario los repuestos vendidos. */
+    /* Factura nueva con repuestos: el stock se descuenta PRIMERO (atómico).
+       Si no alcanza, no se emite; si la factura falla, se devuelve. */
+    const conStock = !id && this._itemsImportados.length;
+    const refProv = `Factura en emisión ${new Date().toISOString()}`;
     let descontados = 0;
-    if (!id && res.data?.id && this._itemsImportados.length) {
+    if (conStock) {
+      try { descontados = await DB.descontarInventarioVenta(this._itemsImportados, refProv); }
+      catch (e) { UI.toast('No se emitió: ' + e.message, 'error', 10000); return; }
+    }
+    const res = await DB.upsertFactura(fields);
+    if (res.error) {
+      if (conStock) await DB.devolverInventarioVenta(this._itemsImportados, refProv).catch(e => console.error('No se pudo devolver el stock', e));
+      UI.toast('Error: '+res.error.message,'error'); return;
+    }
+    /* Persistir el desglose en una factura nueva creada desde una OT o cotización. */
+    if (conStock && res.data?.id) {
       await DB.insertFacturaItems(res.data.id, this._itemsImportados);
-      const nro = res.data.num || res.data.id.slice(0,8);
-      descontados = await DB.descontarInventarioVenta(this._itemsImportados, `Factura ${nro}`);
+      DB.renombrarReferenciaStock(refProv, `Factura ${res.data.num || res.data.id.slice(0,8)}`);
     }
     /* Marcar la cotización como convertida (igual que al pasar por una OT) */
     if (!id && res.data?.id && fields.cotizacion_id) {
