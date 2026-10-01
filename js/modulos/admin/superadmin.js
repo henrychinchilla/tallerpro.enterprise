@@ -1,16 +1,26 @@
 /* Panel SaaS — solo superadmin (dueño del producto).
    Gestiona comercios (planes, módulos, suscripción, suspensión),
    cobros mensuales (MRR, pendientes) y supervisa respaldos. */
+/* El dueño del producto: no se edita ni se borra desde el equipo. */
+const SA_DUENO = 'henry.chinchilla@gmail.com';
+/* Rol dentro del Panel SaaS (va en permisos_custom.saas_rol). tabs:null = todas. */
+const SAAS_ROLES = {
+  total:   { label:'⚡ Superadmin (todo)', tabs:null },
+  soporte: { label:'🛟 Soporte',          tabs:['comercios','solicitudes'] },
+  cobros:  { label:'💵 Cobros',           tabs:['cobros','planes'] }
+};
+const saasRol = u => u?.email === SA_DUENO ? 'total' : (SAAS_ROLES[u?.permisos_custom?.saas_rol] ? u.permisos_custom.saas_rol : 'total');
+const saasPuede = tab => { const t = SAAS_ROLES[saasRol(Auth.user)].tabs; return !t || t.includes(tab); };
 Modulos.superadmin = {
   _tab: 'comercios',
-  _tenants: [], _pagos: [], _solicitudes: [], _tarjetas: [], _vouchers: [],
+  _tenants: [], _pagos: [], _solicitudes: [], _tarjetas: [], _vouchers: [], _equipo: [],
   _dbTenantId: null, _dbBackups: [],
 
   async render() {
     const el = document.getElementById('page-content');
     if (Auth.user?.rol !== 'superadmin') { el.innerHTML = '<div class="empty-state">Sin acceso</div>'; return; }
     UI.loading(el);
-    [this._tenants, this._pagos, this._solicitudes, this._tarjetas, this._vouchers] = await Promise.all([
+    [this._tenants, this._pagos, this._solicitudes, this._tarjetas, this._vouchers, this._equipo] = await Promise.all([
       DB.getTenantsAdmin().catch(()=>[]),
       DB.getTenantPagos().catch(()=>[]),
       DB.getSolicitudes().catch(()=>[]),
@@ -18,7 +28,8 @@ Modulos.superadmin = {
       getSB().from('vouchers_pago')
         .select('id, tenant_id, monto, banco, referencia, referencia_detectada, estado, analisis, motivo_rechazo, created_at')
         .order('created_at',{ascending:false}).limit(100)
-        .then(r=>r.data||[]).catch(()=>[])
+        .then(r=>r.data||[]).catch(()=>[]),
+      this._cargarEquipo().catch(()=>[])
     ]);
     /* Comercios que verificaron su correo y esperan aprobación */
     this._pendMap = new Map(this._solicitudes.filter(s=>s.estado==='verificado'&&s.tenant_id).map(s=>[s.tenant_id, s]));
@@ -40,9 +51,16 @@ Modulos.superadmin = {
           <button class="tab-btn ${this._tab==='cobros'?'active':''}" onclick="Modulos.superadmin._ir('cobros')">💵 Cobros${(n=>n?` <span class="badge badge-amber" style="font-size:10px">${n}</span>`:'')(this._vouchers.filter(v=>v.estado==='revision').length)}</button>
           <button class="tab-btn ${this._tab==='planes'?'active':''}" onclick="Modulos.superadmin._ir('planes')">🎚️ Planes</button>
           <button class="tab-btn ${this._tab==='basedatos'?'active':''}" onclick="Modulos.superadmin._ir('basedatos')">🗄️ Base de datos</button>
+          <button class="tab-btn ${this._tab==='equipo'?'active':''}" onclick="Modulos.superadmin._ir('equipo')">👥 Equipo</button>
         </div>
         <div id="sa-content"></div>
       </div>`;
+    /* El rol SaaS recorta pestañas y acciones globales. */
+    el.querySelectorAll('.tabs .tab-btn').forEach(b => {
+      const t = (b.getAttribute('onclick')||'').match(/_ir\('(\w+)'\)/)?.[1];
+      if (t && !saasPuede(t)) b.remove();
+    });
+    if (saasRol(Auth.user) !== 'total') el.querySelector('.page-actions')?.remove();
     this._renderTab();
   },
 
@@ -109,6 +127,7 @@ Modulos.superadmin = {
   _renderTab() {
     const el = document.getElementById('sa-content');
     if (!el) return;
+    if (!saasPuede(this._tab)) this._tab = SAAS_ROLES[saasRol(Auth.user)].tabs[0];
     const hoy = new Date().toISOString().slice(0,10);
     const activos = this._tenants.filter(t=>t.active!==false);
 
@@ -338,6 +357,144 @@ Modulos.superadmin = {
         <div id="db-detalle"></div>`;
       if (this._dbTenantId) this._dbRenderDetalle();
     }
+
+    else if (this._tab==='equipo') {
+      el.innerHTML = `
+        <div class="alert alert-amber" style="margin-bottom:16px">
+          <div class="alert-icon">⚡</div>
+          <div class="alert-body" style="font-size:12px">
+            Colaboradores con acceso al <b>Panel SaaS</b>: ven y administran <b>todos los comercios</b>,
+            cobros, planes y respaldos, y pueden entrar a cualquier comercio en modo soporte.
+            Dale este acceso solo a gente de confianza. Al primer ingreso cambian la contraseña y activan 2FA.
+          </div>
+        </div>
+        <div style="display:flex;justify-content:flex-end;margin-bottom:12px">
+          <button class="btn btn-amber" onclick="Modulos.superadmin.modalColaborador()">➕ Nuevo colaborador</button>
+        </div>
+        <div class="table-wrap"><table class="data-table">
+          <thead><tr><th>Nombre</th><th>Correo</th><th>Rol</th><th>Teléfono</th><th>Estado</th><th>Acciones</th></tr></thead>
+          <tbody>${this._equipo.map(u=>{
+            const dueno = u.email === SA_DUENO;
+            return `<tr>
+              <td>${UI.esc(u.avatar||'👤')} <b>${UI.esc(u.nombre||'')}</b>${dueno?' <span class="badge badge-amber" style="font-size:10px">Dueño</span>':''}</td>
+              <td>${UI.esc(u.email||'')}</td>
+              <td>${SAAS_ROLES[saasRol(u)].label}</td>
+              <td>${UI.esc(u.telefono||'—')}</td>
+              <td>${u.activo===false?'<span class="badge badge-red">Inactivo</span>':'<span class="badge badge-green">Activo</span>'}</td>
+              <td>${dueno?'<span style="color:var(--text3);font-size:11px">—</span>':`
+                ${Modulos.btnAccion('ver', `Modulos.superadmin.modalColaborador('${u.id}',true)`)}
+                ${Modulos.btnAccion('editar', `Modulos.superadmin.modalColaborador('${u.id}')`)}
+                <button class="btn btn-sm btn-ghost" title="Resetear contraseña" onclick="Modulos.superadmin.modalResetColaborador('${u.id}')">🔑</button>
+                ${Modulos.btnAccion('eliminar', `Modulos.superadmin.eliminarColaborador('${u.id}')`)}`}</td>
+            </tr>`;}).join('') || '<tr><td colspan="6" class="empty-state">Sin colaboradores</td></tr>'}</tbody>
+        </table></div>`;
+    }
+  },
+
+  /* ── EQUIPO: colaboradores superadmin del Panel SaaS ── */
+  async _cargarEquipo() {
+    const { data } = await getSB().from('usuarios')
+      .select('id, nombre, email, telefono, avatar, activo, permisos_custom')
+      .eq('rol','superadmin').order('nombre');
+    return data || [];
+  },
+
+  async _refrescarEquipo() {
+    this._equipo = await this._cargarEquipo().catch(()=>this._equipo);
+    this._renderTab();
+  },
+
+  modalColaborador(id, soloVer=false) {
+    const u = id ? this._equipo.find(x=>x.id===id) : null;
+    if (id && !u) return;
+    const dis = soloVer ? 'disabled' : '';
+    UI.modal(soloVer ? '👁 Colaborador' : u ? '✏️ Editar colaborador' : '➕ Nuevo colaborador del Panel SaaS', `
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Nombre *</label>
+          <input class="form-input" id="sc-nombre" value="${UI.esc(u?.nombre||'')}" ${dis}></div>
+        <div class="form-group"><label class="form-label">Teléfono *</label>
+          <input class="form-input" id="sc-tel" value="${UI.esc(u?.telefono||'')}" placeholder="5540-1234" ${dis}></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Correo *</label>
+          <input class="form-input" id="sc-email" type="email" value="${UI.esc(u?.email||'')}" ${u?'disabled':''}></div>
+        <div class="form-group"><label class="form-label">Avatar (emoji)</label>
+          <input class="form-input" id="sc-avatar" value="${UI.esc(u?.avatar||'👤')}" maxlength="2" ${dis}></div>
+      </div>
+      <div class="form-group"><label class="form-label">Rol en el Panel SaaS *</label>
+        <select class="form-select" id="sc-rol" ${dis}>
+          ${Object.entries(SAAS_ROLES).map(([k,r])=>`<option value="${k}" ${(u?saasRol(u):'soporte')===k?'selected':''}>${r.label} — ${r.tabs?r.tabs.join(', '):'todas las pestañas'}</option>`).join('')}
+        </select></div>
+      ${u ? `<label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+          <input type="checkbox" id="sc-activo" ${u.activo!==false?'checked':''} ${dis}> <span class="form-label" style="margin:0">Activo (puede entrar)</span></label>`
+        : `<div class="form-group"><label class="form-label">Contraseña temporal *</label>
+          <input class="form-input" id="sc-pass" type="password" placeholder="Mínimo 8 caracteres"></div>`}
+      <div class="modal-footer">
+        <button class="btn btn-ghost" onclick="UI.cerrarModal()">${soloVer?'Cerrar':'Cancelar'}</button>
+        ${soloVer?'':`<button class="btn btn-amber" onclick="Modulos.superadmin.guardarColaborador(${u?`'${u.id}'`:''})">${u?'Guardar':'Crear colaborador'}</button>`}
+      </div>`, '560px');
+  },
+
+  async guardarColaborador(id) {
+    const v = k => (document.getElementById(k)?.value || '').trim();
+    const nombre = v('sc-nombre'), telefono = v('sc-tel'), avatar = v('sc-avatar') || '👤';
+    if (!nombre) { UI.toast('El nombre es obligatorio','error'); return; }
+    if (!/^\+?[\d\s-]{8,15}$/.test(telefono)) { UI.toast('Teléfono obligatorio (mínimo 8 dígitos)','error'); return; }
+    const saas_rol = v('sc-rol') || 'soporte';
+    const previo = id ? (this._equipo.find(x=>x.id===id)?.permisos_custom || {}) : {};
+    let r;
+    if (id) {
+      r = await DB.upsertUsuario({ id, nombre, telefono, avatar, permisos_custom: { ...previo, saas_rol },
+        activo: !!document.getElementById('sc-activo')?.checked, updated_at: new Date().toISOString() });
+    } else {
+      const email = v('sc-email'), password = document.getElementById('sc-pass')?.value || '';
+      if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { UI.toast('El correo no es válido','error'); return; }
+      if (password.length < 8) { UI.toast('Contraseña mínimo 8 caracteres','error'); return; }
+      UI.toast('Creando colaborador…','info');
+      /* Sin comercio: la Edge Function lo crea con tenant_id null por ser
+         rol superadmin; entra directo al Panel SaaS. */
+      r = await Auth.crearUsuario({ nombre, email, password, telefono, avatar, rol:'superadmin' });
+      if (r.ok && r.id) r = await DB.upsertUsuario({ id: r.id, permisos_custom: { saas_rol } });
+    }
+    if (!r.ok) { UI.toast('No se pudo guardar: ' + (r.error||'error desconocido'), 'error', 8000); return; }
+    UI.cerrarModal();
+    UI.toast(id ? 'Colaborador actualizado ✓' : `✓ ${UI.esc(nombre)} creado — entrégale la contraseña temporal`);
+    this._refrescarEquipo();
+  },
+
+  modalResetColaborador(id) {
+    const u = this._equipo.find(x=>x.id===id);
+    if (!u) return;
+    UI.modal('🔑 Resetear contraseña — ' + UI.esc(u.nombre), `
+      <div class="form-group"><label class="form-label">Nueva contraseña temporal *</label>
+        <input class="form-input" id="sc-rpass" type="password" placeholder="Mínimo 8 caracteres"></div>
+      <div style="font-size:11px;color:var(--text3)">Deberá cambiarla en su próximo ingreso.</div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" onclick="UI.cerrarModal()">Cancelar</button>
+        <button class="btn btn-amber" onclick="Modulos.superadmin.resetColaborador('${u.id}')">Resetear</button>
+      </div>`);
+  },
+
+  async resetColaborador(id) {
+    const pass = document.getElementById('sc-rpass')?.value || '';
+    if (pass.length < 8) { UI.toast('Mínimo 8 caracteres','error'); return; }
+    const r = await Auth.resetPassword(id, pass);
+    if (!r.ok) { UI.toast('Error: ' + r.error, 'error', 8000); return; }
+    UI.cerrarModal();
+    UI.toast('Contraseña reseteada ✓');
+  },
+
+  async eliminarColaborador(id) {
+    const u = this._equipo.find(x=>x.id===id);
+    if (!u || u.email === SA_DUENO) return;
+    const ok = await UI.confirmar(`¿Quitar a <b>${UI.esc(u.nombre)}</b> del equipo?<br><br>
+      Se borra su perfil <b>y su acceso</b>. No se puede deshacer. Para quitarle el acceso por un tiempo, edítalo y desmarca <b>Activo</b>.`,
+      'Eliminar definitivamente');
+    if (!ok) return;
+    const r = await Auth.eliminarUsuario(id);
+    if (!r.ok) { UI.toast(r.error || 'No se pudo eliminar', 'error', 10000); return; }
+    UI.toast(r.advertencia || `${UI.esc(u.nombre)} eliminado ✓`, r.advertencia ? 'warn' : 'success', r.advertencia ? 12000 : 4000);
+    this._refrescarEquipo();
   },
 
   /* ── BASE DE DATOS (superadmin): respaldos por comercio, restaurar, borrar ── */

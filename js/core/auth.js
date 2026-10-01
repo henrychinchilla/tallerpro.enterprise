@@ -156,6 +156,12 @@ const Auth = {
 
       if (pErr) throw pErr;
 
+      /* Inactivar tiene que quitar el acceso de verdad: sin esto el botón
+         ⏸️ solo cambiaba una etiqueta y la persona seguía entrando. */
+      if (perfil && perfil.activo === false) {
+        throw Object.assign(new Error('Tu usuario está inactivo. Contacta al administrador para reactivarlo.'), { inactivo: true });
+      }
+
       if (perfil) {
         Auth.user = perfil;
         /* Cargar tenant */
@@ -194,6 +200,7 @@ const Auth = {
       await getSB().auth.signOut().catch(() => {});
       Auth.user = Auth.tenant = Auth.supaUser = Auth.licencia = null;
       window._cachedTenantId = null;
+      if (err?.inactivo) throw err;
       throw new Error('No se pudo validar el perfil de acceso. Inicia sesión de nuevo o contacta al administrador.');
     }
   },

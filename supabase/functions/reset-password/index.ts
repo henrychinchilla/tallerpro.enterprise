@@ -44,8 +44,10 @@ Deno.serve(async (req) => {
 
   const admin = createClient(url, serviceKey);
   const { data: perfil } = await admin.from("usuarios")
-    .select("rol, tenant_id").eq("id", userData.user.id).maybeSingle();
-  const esSuperadmin = userData.user.email === "henry.chinchilla@gmail.com";
+    .select("rol, tenant_id, activo").eq("id", userData.user.id).maybeSingle();
+  const esDueno = userData.user.email === "henry.chinchilla@gmail.com";
+  const esSuperadmin = esDueno ||
+    ((perfil as any)?.rol === "superadmin" && (perfil as any)?.activo !== false);
   if (!esSuperadmin && (!perfil || !ROLES_QUE_RESETEAN.includes((perfil as any).rol))) {
     return json({ error: "No tienes permiso para resetear contraseñas" }, 403);
   }
@@ -59,8 +61,16 @@ Deno.serve(async (req) => {
 
   // El usuario objetivo debe ser del mismo tenant (salvo superadmin)
   const { data: target } = await admin.from("usuarios")
-    .select("tenant_id").eq("id", userId).maybeSingle();
+    .select("tenant_id, rol, email").eq("id", userId).maybeSingle();
   if (!target) return json({ error: "Usuario no encontrado" }, 404);
+  // Resetear la clave de un superadmin es tomar su cuenta: solo otro
+  // superadmin, y la del dueño solo el dueño.
+  if ((target as any).rol === "superadmin" && !esSuperadmin) {
+    return json({ error: "No puedes resetear la contraseña de un superadministrador" }, 403);
+  }
+  if ((target as any).email === "henry.chinchilla@gmail.com" && !esDueno) {
+    return json({ error: "La cuenta del dueño solo la puede cambiar el dueño" }, 403);
+  }
   if (!esSuperadmin && (target as any).tenant_id !== (perfil as any)?.tenant_id) {
     return json({ error: "Ese usuario no pertenece a tu taller" }, 403);
   }
