@@ -61,6 +61,7 @@ Modulos.calendario = {
       Promise.all([DB.getObligaciones(ini.getFullYear()).catch(()=>[]),
                    DB.getObligaciones(fin.getFullYear()).catch(()=>[])]).then(r=>[...r[0],...r[1]])
     ]);
+    if (!el?.isConnected) return;   // se cambió de pantalla mientras cargaba
 
     /* ── Eventos del rango visible ── */
     const enRango = f => f && f >= iniStr && f <= finStr;
@@ -121,7 +122,10 @@ Modulos.calendario = {
         ${this._vista==='mes' ? `<div style="margin-top:16px">${this._renderSeguimiento(vencDocs, recurrentes, hoyStr)}</div>` : ''}
       </div>`;
 
-    const body = document.getElementById('cal-body');
+    /* Render rezagado: si mientras cargaba se cambió de pantalla, `el` quedó
+       fuera del documento y #cal-body no existe (TypeError en innerHTML). */
+    const body = el.querySelector('#cal-body');
+    if (!body || !el.isConnected) return;
     if (this._vista === 'mes') body.innerHTML = this._htmlMes(eventos);
     else if (this._vista === 'semana') body.innerHTML = this._htmlSemana(eventos);
     else body.innerHTML = this._htmlDia(eventos);
