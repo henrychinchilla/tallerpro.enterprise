@@ -23,7 +23,7 @@ Modulos.facturacion = {
     el.innerHTML = `
       <div class="page-header">
         <div><h1 class="page-title">🧾 Facturación FEL</h1>
-        <p class="page-subtitle">// ${this._data.length} facturas · ${UI.q(totalFEL)}</p></div>
+        <p class="page-subtitle">// ${this._data.length} facturas del período · ${UI.q(totalFEL)}</p></div>
         <div class="page-actions">
           <input type="date" class="form-input" style="width:140px" value="${this._ini}" onchange="Modulos.facturacion._ini=this.value;Modulos.facturacion.render()">
           <input type="date" class="form-input" style="width:140px" value="${this._fin}" onchange="Modulos.facturacion._fin=this.value;Modulos.facturacion.render()">
