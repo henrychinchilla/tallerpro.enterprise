@@ -120,8 +120,8 @@ const App = {
         DB.getObligaciones(anio).catch(()=>[]),
         DB.getObligaciones(anio-1).catch(()=>[])   // dic. del año pasado vence en enero
       ]);
-      const hoyStr = new Date().toISOString().slice(0,10);
-      const limite = new Date(Date.now() + 2*86400000).toISOString().slice(0,10);
+      const hoyStr = hoyLocal();
+      const limite = hoyLocal(new Date(Date.now() + 2*86400000));
       const proximas = [...o1, ...o2]
         .filter(o => o.estado !== 'pagado' && o.fecha_vencimiento && o.fecha_vencimiento <= limite)
         .sort((a,b) => (a.fecha_vencimiento||'').localeCompare(b.fecha_vencimiento||''));
@@ -398,7 +398,7 @@ const App = {
   },
   _trialVencido(t = Auth.tenant) {
     if (!t?.suscripcion_vence) return false;
-    const hoy = new Date().toISOString().slice(0, 10);
+    const hoy = hoyLocal();
     return t.suscripcion_vence < hoy && App._esTrial(t);
   },
   _bloqueadoPorSuscripcion() {
