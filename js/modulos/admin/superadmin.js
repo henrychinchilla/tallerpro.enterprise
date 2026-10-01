@@ -975,6 +975,8 @@ Modulos.superadmin = {
           <select class="form-select" id="co-metodo" onchange="Modulos.superadmin._toggleCobroTarjeta()">${['Transferencia','Depósito','Efectivo','Tarjeta','Cheque'].map(m=>`<option>${m}</option>`).join('')}</select></div>
         <div class="form-group"><label class="form-label">Estado</label>
           <select class="form-select" id="co-estado"><option value="pagado">Pagado</option><option value="pendiente">Pendiente</option></select></div>
+        <div class="form-group"><label class="form-label" title="Si está Pagado, la suscripción se extiende estos meses y el comercio se reactiva">Meses que cubre</label>
+          <input class="form-input" id="co-meses" type="number" min="1" max="24" value="1"></div>
       </div>
       <div id="co-tarjeta" style="display:none">
         <div class="form-row">
@@ -1020,18 +1022,20 @@ Modulos.superadmin = {
       if (/\d{13,19}/.test(aut.replace(/[\s\-]/g,''))) { UI.toast('Seguridad: eso parece un número de tarjeta. Ingresa solo la autorización.','error'); return; }
       referencia = `Aut. ${aut}${u4?` · ****${u4}`:''}${referencia?` · ${referencia}`:''}`;
     }
-    const fields = {
-      tenant_id,
-      periodo: document.getElementById('co-periodo')?.value||this._mesActual(),
-      monto,
-      metodo,
-      estado: document.getElementById('co-estado')?.value||'pagado',
-      referencia,
-      fecha: hoyLocal()
-    };
-    const { error } = await DB.upsertTenantPago(fields);
-    if (error) { UI.toast('Error: '+error.message,'error'); return; }
-    UI.cerrarModal(); UI.toast('Cobro registrado ✓');
+    const estado = document.getElementById('co-estado')?.value||'pagado';
+    const meses = parseInt(document.getElementById('co-meses')?.value, 10) || 1;
+    /* RPC: registra el pago y, si está pagado, extiende suscripcion_vence y
+       reactiva en la misma transacción (igual que aprobar_voucher). */
+    const { data, error } = await getSB().rpc('registrar_cobro_saas', {
+      p_tenant_id: tenant_id, p_monto: monto, p_metodo: metodo, p_estado: estado,
+      p_periodo: document.getElementById('co-periodo')?.value||this._mesActual(),
+      p_referencia: referencia, p_meses: meses
+    });
+    if (error) { UI.toast('Error: '+error.message,'error', 8000); return; }
+    UI.cerrarModal();
+    UI.toast(estado === 'pagado' && data?.suscripcion_vence
+      ? `Cobro registrado ✓ — vigente hasta ${UI.fecha ? UI.fecha(data.suscripcion_vence) : data.suscripcion_vence}`
+      : 'Cobro registrado ✓ (pendiente: no renueva)');
     this.render();
   },
 
