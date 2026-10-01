@@ -117,7 +117,7 @@ Modulos.admin = {
           <div style="font-size:11px;color:var(--text3)">El régimen fiscal se cambia desde <b>Contabilidad → Formularios SAT → Cambiar régimen</b>. El campo "Importadora" activa campos DUA/DAI en el módulo de Compras.</div>
         </div>
         <div class="card">
-          <div class="card-sub mb-3">📊 Registros en Base de Datos</div>
+          <div class="card-sub mb-3">📊 Registros en Base de Datos <span style="font-weight:400;text-transform:none;letter-spacing:0">· histórico, todos los meses (Facturación y Finanzas muestran el mes activo)</span></div>
           <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px">
             ${counts.map(([label,icon,count])=>`
               <div style="text-align:center;padding:12px;background:var(--surface2);border-radius:8px">

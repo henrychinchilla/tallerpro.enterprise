@@ -2006,6 +2006,10 @@ const DB = {
       });
       if (data.cliente_id) await this._retencionAutoFactura(data);
     }
+    /* Mig 151: una factura viva por OT. Dos clics o dos pestañas ya no
+       emiten dos; se traduce el 23505 para que se entienda. */
+    if (error?.code === '23505' && /facturas_una_por_ot_idx/.test(error.message || ''))
+      return { data: null, error: { ...error, message: 'Esa OT ya tiene una factura emitida (no se emitió otra).' } };
     return { data, error };
   },
 
