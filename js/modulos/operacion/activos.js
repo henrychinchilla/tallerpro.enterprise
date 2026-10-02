@@ -34,7 +34,7 @@ Modulos.activos = {
   _ir(t){ this._tab=t; App._subActivo=t; App._guardarRuta(); App.renderSidebar(); this.render(); },
 
   _renderActivos() {
-    const hoy = new Date().toISOString().slice(0,10);
+    const hoy = hoyLocal();
     const activos = this._data.filter(a=>a.estado==='activo');
     const totalCosto  = this._data.reduce((s,a)=>s+(Number(a.costo)||0),0);
     const totalLibros = this._data.reduce((s,a)=>s+valorEnLibros(a, hoy).libros,0);
@@ -156,7 +156,7 @@ Modulos.activos = {
       </div>
       <div class="form-row">
         <div class="form-group"><label class="form-label">Fecha de adquisición</label>
-          <input class="form-input" id="act-fecha" type="date" value="${a.fecha_adquisicion||new Date().toISOString().slice(0,10)}"></div>
+          <input class="form-input" id="act-fecha" type="date" value="${a.fecha_adquisicion||hoyLocal()}"></div>
         <div class="form-group"><label class="form-label">Ubicación</label>
           <input class="form-input" id="act-ubic" value="${a.ubicacion||''}" placeholder="Taller / Bodega 1"></div>
       </div>
@@ -230,7 +230,7 @@ Modulos.activos = {
   modalBaja(id) {
     const a = this._data.find(x=>x.id===id);
     if (!a) return;
-    const vl = valorEnLibros(a, new Date().toISOString().slice(0,10));
+    const vl = valorEnLibros(a, hoyLocal());
     UI.modal(`📤 Dar de baja — ${a.nombre}`, `
       <div class="alert alert-amber" style="margin-bottom:12px"><div class="alert-icon">ℹ️</div>
         <div class="alert-body" style="font-size:11px">Valor en libros actual: <b>${UI.q(vl.libros)}</b>. La depreciación se detiene en la fecha de baja.</div></div>
@@ -241,7 +241,7 @@ Modulos.activos = {
             <option value="vendido">Vendido</option>
           </select></div>
         <div class="form-group"><label class="form-label">Fecha</label>
-          <input class="form-input" id="baja-fecha" type="date" value="${new Date().toISOString().slice(0,10)}"></div>
+          <input class="form-input" id="baja-fecha" type="date" value="${hoyLocal()}"></div>
       </div>
       <div class="form-group"><label class="form-label">Valor de venta (Q, si aplica)</label>
         <input class="form-input" id="baja-valor" type="number" min="0" step="0.01"></div>
@@ -255,7 +255,7 @@ Modulos.activos = {
     const fields = {
       id,
       estado:      document.getElementById('baja-estado')?.value||'baja',
-      fecha_baja:  document.getElementById('baja-fecha')?.value||new Date().toISOString().slice(0,10),
+      fecha_baja:  document.getElementById('baja-fecha')?.value||hoyLocal(),
       valor_venta: parseFloat(document.getElementById('baja-valor')?.value)||null
     };
     const { error } = await DB.upsertActivo(fields);

@@ -334,7 +334,7 @@ Modulos.armeria = {
         </div>
         <div class="form-group">
           <label class="form-label">Fecha *</label>
-          <input class="form-input" id="ent-fecha" type="date" value="${new Date().toISOString().slice(0,10)}">
+          <input class="form-input" id="ent-fecha" type="date" value="${hoyLocal()}">
         </div>
       </div>
       <div class="form-row">
@@ -409,7 +409,7 @@ Modulos.armeria = {
       cliente_id: clienteId,
       calibre,
       cantidad,
-      fecha: v('ent-fecha') || new Date().toISOString().slice(0, 10),
+      fecha: v('ent-fecha') || hoyLocal(),
       licencia_tipo: v('ent-lic') || 'tenencia',
       licencia_num: v('ent-licnum') || null,
       licencia_vencimiento: v('ent-licvence') || null,
@@ -1359,7 +1359,7 @@ Modulos.armeria = {
       </div>
       <div class="form-row">
         <div class="form-group"><label class="form-label">Fecha de notificación</label>
-          <input class="form-input" id="arm-not-fecha" type="date" value="${new Date().toISOString().slice(0, 10)}"></div>
+          <input class="form-input" id="arm-not-fecha" type="date" value="${hoyLocal()}"></div>
         <div class="form-group"><label class="form-label">Folio / referencia</label>
           <input class="form-input" id="arm-not-folio" placeholder="Número de trámite, folio DIGECAM..."></div>
       </div>

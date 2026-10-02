@@ -28,7 +28,7 @@ Modulos.refrigeracion = {
     const saldoPorCobrar = this._data.reduce((s,r)=>s+(Number(r.saldo)||0),0);
 
     /* Mantenimiento preventivo: proxima_revision se guardaba pero nadie la leía */
-    const hoy    = new Date().toISOString().slice(0,10);
+    const hoy    = hoyLocal();
     const en30   = new Date(Date.now()+30*86400000).toISOString().slice(0,10);
     const proximos = this._data.filter(s=>s.proxima_revision && s.proxima_revision<=en30 && s.estado!=='cancelado');
     const vencidos = proximos.filter(s=>s.proxima_revision < hoy).length;
@@ -191,7 +191,7 @@ Modulos.refrigeracion = {
       </div>
       <div class="form-row">
         <div class="form-group"><label class="form-label">Fecha del servicio</label>
-          <input class="form-input" id="ref-fecha" type="date" value="${s.fecha_servicio||new Date().toISOString().slice(0,10)}"></div>
+          <input class="form-input" id="ref-fecha" type="date" value="${s.fecha_servicio||hoyLocal()}"></div>
         <div class="form-group"><label class="form-label">Próxima revisión</label>
           <input class="form-input" id="ref-proxima" type="date" value="${s.proxima_revision||''}"></div>
         <div class="form-group"><label class="form-label">Garantía (días)</label>

@@ -204,7 +204,7 @@ const App = {
         sessionStorage.setItem('np_twa', '1');
         const vc = parseInt(p.get('appvc') || '', 10);
         if (Number.isFinite(vc)) {
-          info = { vc, vn: p.get('appvn') || '', visto: new Date().toISOString().slice(0, 10) };
+          info = { vc, vn: p.get('appvn') || '', visto: hoyLocal() };
           localStorage.setItem(App._APP_LS, JSON.stringify(info));
         }
         /* Limpiar la URL: los parámetros ya cumplieron y no deben viajar en los
@@ -290,7 +290,7 @@ const App = {
       try {
         const prev = JSON.parse(localStorage.getItem(App._APP_LS_AVISO) || 'null');
         if (prev && prev.vc === ultima.versionCode &&
-            prev.hasta > new Date().toISOString().slice(0, 10)) return;
+            prev.hasta > hoyLocal()) return;
       } catch (_) { /* dato corrupto: mostrar el aviso */ }
 
       /* No pisar otro modal (p. ej. el aviso SAT): esperar a que se cierre. */

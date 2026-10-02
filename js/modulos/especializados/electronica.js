@@ -148,7 +148,7 @@ Modulos.electronica = {
       </div>
       <div class="form-row">
         <div class="form-group"><label class="form-label">Fecha recibido</label>
-          <input class="form-input" id="ele-fecha-recibido" type="date" value="${r.fecha_recibido||new Date().toISOString().slice(0,10)}"></div>
+          <input class="form-input" id="ele-fecha-recibido" type="date" value="${r.fecha_recibido||hoyLocal()}"></div>
         <div class="form-group"><label class="form-label">Fecha de entrega</label>
           <input class="form-input" id="ele-fecha-entrega" type="date" value="${r.fecha_entrega||''}"></div>
         <div class="form-group"><label class="form-label">Garantía (días)</label>

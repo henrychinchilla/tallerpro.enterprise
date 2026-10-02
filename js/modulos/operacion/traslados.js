@@ -207,7 +207,7 @@ Modulos.traslados = {
       const { data: inv } = await getSB().from('inventario').select('stock').eq('id', it.inventario_id).maybeSingle();
       if (!inv) continue;
       await getSB().from('inventario').update({ stock: Math.max(0, Number(inv.stock)-Number(it.cantidad)), updated_at:new Date().toISOString() }).eq('id', it.inventario_id);
-      await DB.movimientoInventario({ inventario_id: it.inventario_id, tipo:'traslado', cantidad: it.cantidad, referencia:`Traslado ${t.num} (envío)`, notas:t.motivo||null, fecha:new Date().toISOString().slice(0,10) });
+      await DB.movimientoInventario({ inventario_id: it.inventario_id, tipo:'traslado', cantidad: it.cantidad, referencia:`Traslado ${t.num} (envío)`, notas:t.motivo||null, fecha:hoyLocal() });
     }
     await DB.upsertTraslado({ id, estado:'enviado', fecha_envio:new Date().toISOString(), responsable_envia: doc.firmantes?.find(f=>/env/i.test(f.rol))?.nombre || null, doc_envio_id: doc.id });
     UI.cerrarModal(); UI.toast('Traslado enviado y firmado ✓'); this.render();

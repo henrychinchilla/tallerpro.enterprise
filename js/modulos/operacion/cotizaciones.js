@@ -18,7 +18,7 @@ Modulos.cotizaciones = {
       DB.getClientes()
     ]);
 
-    const hoy = new Date().toISOString().slice(0,10);
+    const hoy = hoyLocal();
     const pendientes = this._data.filter(c=>c.estado==='pendiente');
     const aprobadas  = this._data.filter(c=>c.estado==='aprobada');
     const montoPendiente = pendientes.reduce((s,c)=>s+(Number(c.total)||0),0);

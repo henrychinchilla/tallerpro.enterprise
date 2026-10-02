@@ -1521,7 +1521,7 @@ const DB = {
       nit: cliente?.nit || 'CF',
       serie_factura: 'GRANO',
       numero: Math.floor(Math.random()*999999),
-      fecha: new Date().toISOString().slice(0,10),
+      fecha: hoyLocal(),
       subtotal: v.data.total,
       descuentos: 0,
       impuestos: v.data.total * 0.12,
@@ -1548,7 +1548,7 @@ const DB = {
     if (!clienteId || !puntos) return null;
     await getSB().from('puntos_movimientos').insert({
       tenant_id: getTID(), cliente_id: clienteId, tipo, puntos,
-      motivo, referencia, factura_id, fecha: new Date().toISOString().slice(0,10)
+      motivo, referencia, factura_id, fecha: hoyLocal()
     });
     const { data: c } = await getSB().from('clientes').select('puntos_saldo').eq('id', clienteId).maybeSingle();
     const nuevo = Math.max(0, (Number(c?.puntos_saldo)||0) + Number(puntos));
@@ -1723,7 +1723,7 @@ const DB = {
     const total = items.reduce((s,i)=>s+(Number(i.total)||0),0);
     const subtotal = Math.round(total/1.12*100)/100;
     const iva = Math.round((total-subtotal)*100)/100;
-    const fecha = cabecera.fecha || new Date().toISOString().slice(0,10);
+    const fecha = cabecera.fecha || hoyLocal();
     const { data: compra, error } = await getSB().from('compras').insert({
       tenant_id:tid, num, proveedor_id:cabecera.proveedor_id||null, proveedor_nombre:cabecera.proveedor_nombre||null,
       num_factura:cabecera.num_factura||null, fecha, subtotal, iva, total, estado:'recibida', notas:cabecera.notas||null,

@@ -270,7 +270,7 @@ Modulos.bancos = {
         <input class="form-input" id="mov-concepto" placeholder="Pago a proveedor / Depósito de cliente"></div>
       <div class="form-row">
         <div class="form-group"><label class="form-label">Fecha *</label>
-          <input class="form-input" id="mov-fecha" type="date" value="${new Date().toISOString().slice(0,10)}"></div>
+          <input class="form-input" id="mov-fecha" type="date" value="${hoyLocal()}"></div>
         <div class="form-group"><label class="form-label">No. Referencia / Cheque</label>
           <input class="form-input" id="mov-ref" placeholder="CHQ-001 / TRF-2026"></div>
       </div>

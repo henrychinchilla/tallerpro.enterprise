@@ -498,7 +498,7 @@ Modulos.rrhh = {
     const { error } = await DB.upsertPagoNomina({
       id: pagoId,
       pagado: true,
-      fecha_pago: new Date().toISOString().slice(0,10)
+      fecha_pago: hoyLocal()
     });
     if (error) { UI.toast('Error: '+error.message,'error'); return; }
 
@@ -507,7 +507,7 @@ Modulos.rrhh = {
       concepto: `Pago Planilla: ${p.empleados?.nombre || 'Empleado'} (Mes ${p.periodo_mes}/${p.periodo_anio})`,
       monto: p.liquido,
       categoria: 'Nómina',
-      fecha: new Date().toISOString().slice(0,10),
+      fecha: hoyLocal(),
       referencia: `NOM-${pagoId.slice(0,8)}`
     });
 
@@ -1367,7 +1367,7 @@ Modulos.rrhh = {
         <input class="form-input" id="cap-titulo" value="${UI.esc(c.titulo||'')}" placeholder="Diagnóstico de inyección electrónica"></div>
       <div class="form-row">
         <div class="form-group"><label class="form-label">Inicio *</label>
-          <input class="form-input" id="cap-ini" type="date" value="${c.fecha_inicio||new Date().toISOString().slice(0,10)}"></div>
+          <input class="form-input" id="cap-ini" type="date" value="${c.fecha_inicio||hoyLocal()}"></div>
         <div class="form-group"><label class="form-label">Fin</label>
           <input class="form-input" id="cap-fin" type="date" value="${c.fecha_fin||''}"></div>
         <div class="form-group"><label class="form-label">Horas</label>
@@ -1498,7 +1498,7 @@ Modulos.rrhh = {
         <div class="form-group"><label class="form-label">Identificador (serie, placa, usuario)</label>
           <input class="form-input" id="asig-ident" placeholder="No. serie / P-123ABC / usuario@app"></div>
         <div class="form-group"><label class="form-label">Fecha de entrega</label>
-          <input class="form-input" id="asig-fecha" type="date" value="${new Date().toISOString().slice(0,10)}"></div>
+          <input class="form-input" id="asig-fecha" type="date" value="${hoyLocal()}"></div>
       </div>
       <div class="form-group"><label class="form-label">Estado al entregar</label>
         <textarea class="form-input" id="asig-estado" rows="2" placeholder="Nuevo / Usado en buen estado, rayón en puerta izquierda..."></textarea></div>
@@ -1547,7 +1547,7 @@ Modulos.rrhh = {
       empleado_id, descripcion,
       tipo: document.getElementById('asig-tipo')?.value||'herramienta',
       identificador: document.getElementById('asig-ident')?.value||null,
-      fecha_entrega: document.getElementById('asig-fecha')?.value||new Date().toISOString().slice(0,10),
+      fecha_entrega: document.getElementById('asig-fecha')?.value||hoyLocal(),
       estado_entrega: document.getElementById('asig-estado')?.value||null,
       fotos: this._asigFotos.length ? this._asigFotos : null,
       notas: document.getElementById('asig-notas')?.value||null,
@@ -1594,7 +1594,7 @@ Modulos.rrhh = {
     UI.modal('↩️ Registrar devolución', `
       <div style="font-size:13px;margin-bottom:10px"><b>${UI.esc(a.descripcion)}</b> — ${UI.esc(a.empleados?.nombre)}</div>
       <div class="form-group"><label class="form-label">Fecha de devolución</label>
-        <input class="form-input" id="dev-fecha" type="date" value="${new Date().toISOString().slice(0,10)}"></div>
+        <input class="form-input" id="dev-fecha" type="date" value="${hoyLocal()}"></div>
       <div class="form-group"><label class="form-label">Estado al devolver / observaciones</label>
         <textarea class="form-input" id="dev-notas" rows="3" placeholder="Completo y en buen estado / Faltante: ..."></textarea></div>
       <div class="modal-footer">
@@ -1606,7 +1606,7 @@ Modulos.rrhh = {
   async _confirmarDevolucion(id) {
     const { error } = await DB.upsertAsignacion({
       id, estado:'devuelto',
-      fecha_devolucion: document.getElementById('dev-fecha')?.value||new Date().toISOString().slice(0,10),
+      fecha_devolucion: document.getElementById('dev-fecha')?.value||hoyLocal(),
       devolucion_notas: document.getElementById('dev-notas')?.value||null
     });
     if (error) { UI.toast('Error: '+error.message,'error'); return; }
@@ -2763,7 +2763,7 @@ Modulos.rrhh = {
       </div>
       <div class="form-row">
         <div class="form-group"><label class="form-label">Fecha *</label>
-          <input class="form-input" id="disc-fecha" type="date" value="${r.fecha||new Date().toISOString().slice(0,10)}"></div>
+          <input class="form-input" id="disc-fecha" type="date" value="${r.fecha||hoyLocal()}"></div>
         <div class="form-group"><label class="form-label">Artículo (Código de Trabajo)</label>
           <input class="form-input" id="disc-articulo" value="${r.articulo||this._DISC_ARTICULOS[tipoIni]||''}"></div>
       </div>
@@ -2901,9 +2901,9 @@ Modulos.rrhh = {
       ${tipo==='goce' ? `
       <div class="form-row">
         <div class="form-group"><label class="form-label">Inicio *</label>
-          <input class="form-input" id="vac-ini" type="date" value="${new Date().toISOString().slice(0,10)}" onchange="Modulos.rrhh._calcDiasVac()"></div>
+          <input class="form-input" id="vac-ini" type="date" value="${hoyLocal()}" onchange="Modulos.rrhh._calcDiasVac()"></div>
         <div class="form-group"><label class="form-label">Fin *</label>
-          <input class="form-input" id="vac-fin" type="date" value="${new Date().toISOString().slice(0,10)}" onchange="Modulos.rrhh._calcDiasVac()"></div>
+          <input class="form-input" id="vac-fin" type="date" value="${hoyLocal()}" onchange="Modulos.rrhh._calcDiasVac()"></div>
       </div>` : ''}
       <div class="form-row">
         <div class="form-group"><label class="form-label">Días *</label>
@@ -3023,7 +3023,7 @@ Modulos.rrhh = {
             ${this._empleados.filter(e=>e.activo||e.id===r.empleado_id).map(e=>`<option value="${e.id}" ${r.empleado_id===e.id?'selected':''}>${e.nombre}</option>`).join('')}
           </select></div>
         <div class="form-group"><label class="form-label">Fecha *</label>
-          <input class="form-input" id="he-fecha" type="date" value="${r.fecha||new Date().toISOString().slice(0,10)}"></div>
+          <input class="form-input" id="he-fecha" type="date" value="${r.fecha||hoyLocal()}"></div>
       </div>
       <div class="form-row">
         <div class="form-group"><label class="form-label">Tipo *</label>

@@ -67,7 +67,7 @@ Modulos.envios = {
     const [tc,tl] = this._TIPOS[e.tipo] || ['gray', e.tipo];
     const [ec,el] = this._ESTADOS[e.estado] || ['gray', e.estado];
     const venc = e.fecha_entrega_estimada && !['entregado','cerrado'].includes(e.estado)
-      && e.fecha_entrega_estimada < new Date().toISOString().slice(0,10);
+      && e.fecha_entrega_estimada < hoyLocal();
     const destino = e.destinatario || e.empresa_transporte || '—';
     const contacto = [e.telefono, [e.direccion, e.municipio].filter(Boolean).join(', ')].filter(Boolean).join(' · ');
     return `<tr>
@@ -167,7 +167,7 @@ Modulos.envios = {
 
       <div class="form-row">
         <div class="form-group"><label class="form-label">Fecha de envío</label>
-          <input class="form-input" id="env-fecha" type="date" value="${e.fecha_envio||new Date().toISOString().slice(0,10)}"></div>
+          <input class="form-input" id="env-fecha" type="date" value="${e.fecha_envio||hoyLocal()}"></div>
         <div class="form-group"><label class="form-label">Entrega estimada (seguimiento)</label>
           <input class="form-input" id="env-est" type="date" value="${e.fecha_entrega_estimada||''}"></div>
       </div>
@@ -238,7 +238,7 @@ Modulos.envios = {
 
   async marcar(id, estado) {
     const fields = { id, estado };
-    if (estado==='entregado') fields.fecha_entrega_real = new Date().toISOString().slice(0,10);
+    if (estado==='entregado') fields.fecha_entrega_real = hoyLocal();
     const { error } = await DB.upsertEnvio(fields);
     if (error) { UI.toast('Error: '+error.message,'error'); return; }
     UI.toast(estado==='cerrado'?'Envío cerrado ✓':estado==='entregado'?'Marcado como entregado ✓':'En tránsito ✓');

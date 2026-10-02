@@ -693,7 +693,7 @@ Modulos.ordenes = {
     if (total > 0) {
       await DB.upsertEgreso({
         concepto: `Garantía ${o.num} — costo del taller`, categoria: 'Garantías',
-        monto: total, fecha: new Date().toISOString().slice(0,10), referencia: `GAR-${o.num}`,
+        monto: total, fecha: hoyLocal(), referencia: `GAR-${o.num}`,
         notas: o.descripcion || null
       });
     }
@@ -758,7 +758,7 @@ Modulos.ordenes = {
       iva,
       total,
       estado:     'pendiente',
-      fecha:      new Date().toISOString().slice(0,10),
+      fecha:      hoyLocal(),
       descripcion: descripcionFEL.slice(0,500)
     });
 

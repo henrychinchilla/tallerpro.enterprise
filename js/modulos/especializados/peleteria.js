@@ -21,7 +21,7 @@ Modulos.peleteria = {
     const activos = this._data.filter(p=>!['entregado','cancelado'].includes(p.estado));
     const enProceso = this._data.filter(p=>p.estado==='en_proceso').length;
     const saldoPorCobrar = this._data.reduce((s,p)=>s+(Number(p.saldo)||0),0);
-    const hoy = new Date().toISOString().slice(0,10);
+    const hoy = hoyLocal();
     const atrasados = this._data.filter(p=>p.fecha_entrega && p.fecha_entrega<hoy && !['entregado','cancelado'].includes(p.estado)).length;
 
     el.innerHTML = `

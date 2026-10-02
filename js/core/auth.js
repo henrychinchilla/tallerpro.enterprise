@@ -301,7 +301,7 @@ const Auth = {
 
     await sb.from('licencias').insert({
       tenant_id: tenant.id, tipo: 'demo',
-      fecha_inicio: new Date().toISOString().slice(0, 10),
+      fecha_inicio: hoyLocal(),
       fecha_vencimiento: new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10)
     });
     await sb.from('config_fiscal').insert({

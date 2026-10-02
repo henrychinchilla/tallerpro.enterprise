@@ -366,7 +366,7 @@ const POS = {
   async _terminarTurnoLegacy() {
     UI.cerrarModal();
     UI.toast('Generando cierre de caja...','info');
-    const hoy = new Date().toISOString().slice(0,10);
+    const hoy = hoyLocal();
     const facturas = await DB.getFacturas(hoy, hoy);
     const vivas = facturas.filter(f=>f.estado!=='anulada');
     const total = vivas.reduce((s,f)=>s+(Number(f.total)||0),0);
@@ -404,7 +404,7 @@ const POS = {
   async render() {
     const root = document.getElementById('pos-root');
     root.innerHTML = `<div class="empty-state"><div class="empty-state-sm">⏳</div>Cargando productos...</div>`;
-    const hoy = new Date().toISOString().slice(0,10);
+    const hoy = hoyLocal();
     [this._prod, this._clientes, this._ventasHoy] = await Promise.all([
       DB.getInventario(), DB.getClientes(), DB.getFacturas(hoy, hoy)
     ]);
@@ -1355,7 +1355,7 @@ const POS = {
   modalEnvio() {
     const e = this._envioData || {};
     const cli = this._cliente;
-    const hoy = new Date().toISOString().slice(0,10);
+    const hoy = hoyLocal();
     UI.modal('🚚 Datos del envío al cliente', `
       <div class="form-row">
         <div class="form-group"><label class="form-label">Destinatario *</label>
@@ -1459,7 +1459,7 @@ const POS = {
       tipo_cliente: (cli?.nit && cli.nit.toUpperCase()!=='CF') ? 'NIT' : 'CF',
       subtotal: t.subtotal, iva: t.iva, total: t.total,
       metodo_pago: this._metodo, estado: 'certificada',
-      fecha: new Date().toISOString().slice(0,10),
+      fecha: hoyLocal(),
       descripcion: 'Venta POS: ' + this._cart.map(l=>`${l.nombre} x${l.cant}`).join(', ').slice(0,480)
     });
     if (res.error || !res.data) {
@@ -1500,7 +1500,7 @@ const POS = {
         costo_total: e.costo || 0,
         num_factura: factura.num || null,
         orden_id: null,
-        fecha_envio: new Date().toISOString().slice(0,10),
+        fecha_envio: hoyLocal(),
         fecha_entrega_estimada: e.fecha_entrega || null,
         estado: 'programado'
       }).catch(()=>{});
@@ -1574,7 +1574,7 @@ const POS = {
 
   /* ── CORTE DIARIO ────────────────────────────────── */
   async corteDiario() {
-    const hoy = new Date().toISOString().slice(0,10);
+    const hoy = hoyLocal();
     const facturas = await DB.getFacturas(hoy, hoy);
     const vivas = facturas.filter(f=>f.estado!=='anulada');
     const total = vivas.reduce((s,f)=>s+(Number(f.total)||0),0);
