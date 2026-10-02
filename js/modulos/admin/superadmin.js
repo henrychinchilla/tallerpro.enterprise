@@ -41,6 +41,9 @@ Modulos.superadmin = {
       <div class="page-header">
         <div><h1 class="page-title">⚡ Panel SaaS</h1>
         <p class="page-subtitle">// gestión comercial de NexusPro</p></div>
+        <!-- Fuera de .page-actions: esa barra se quita a los roles SaaS no totales, y
+             cambiar la contraseña PROPIA es de todo superadmin. -->
+        <button class="btn btn-ghost" style="margin-left:auto" onclick="Modulos.superadmin.modalMiPassword()" title="Cambiar mi contraseña">🔑 Mi contraseña</button>
         <div class="page-actions">
           <button class="btn btn-ghost" onclick="Modulos.superadmin.respaldarTodos()" title="Respaldo inmediato de todos los comercios a Storage">💾 Respaldar todos</button>
           <button class="btn btn-ghost" onclick="Modulos.superadmin.enviarRecordatorios()" title="Enviar recordatorios de cobro/vencimiento por email">📧 Recordatorios</button>
@@ -415,6 +418,33 @@ Modulos.superadmin = {
             </tr>`;}).join('') || '<tr><td colspan="6" class="empty-state">Sin colaboradores</td></tr>'}</tbody>
         </table></div>`;
     }
+  },
+
+  /* ── MI CONTRASEÑA: el superadmin cambia SOLO la suya, sobre su propia
+     sesión (que ya pasó el 2FA). La del dueño nadie más la puede cambiar:
+     no tiene 🔑 en ninguna lista y reset-password la rechaza. */
+  modalMiPassword() {
+    if (Auth.user?.rol !== 'superadmin') return;
+    UI.modal('🔑 Cambiar mi contraseña', `
+      <div style="font-size:12px;color:var(--text3);margin-bottom:10px">${UI.esc(Auth.user?.email || '')}</div>
+      <div class="form-group"><label class="form-label">Nueva contraseña *</label>
+        <input class="form-input" id="mp-1" type="password" autocomplete="new-password" placeholder="Mínimo 8 caracteres"></div>
+      <div class="form-group"><label class="form-label">Repítela *</label>
+        <input class="form-input" id="mp-2" type="password" autocomplete="new-password"></div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" onclick="UI.cerrarModal()">Cancelar</button>
+        <button class="btn btn-amber" onclick="Modulos.superadmin.guardarMiPassword()">Cambiar</button>
+      </div>`, '440px');
+  },
+
+  async guardarMiPassword() {
+    const p1 = document.getElementById('mp-1')?.value || '';
+    const p2 = document.getElementById('mp-2')?.value || '';
+    if (p1.length < 8) { UI.toast('Mínimo 8 caracteres', 'error'); return; }
+    if (p1 !== p2) { UI.toast('Las contraseñas no coinciden', 'error'); return; }
+    const r = await Auth.cambiarPassword(p1);
+    if (!r.ok) { UI.toast('No se cambió: ' + r.error, 'error', 8000); return; }
+    UI.cerrarModal(); UI.toast('Contraseña cambiada ✓');
   },
 
   /* ── EQUIPO: colaboradores superadmin del Panel SaaS ── */
