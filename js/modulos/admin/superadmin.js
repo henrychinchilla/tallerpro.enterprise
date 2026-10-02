@@ -92,8 +92,7 @@ Modulos.superadmin = {
     } catch (_) {}
     this._pintarBarraSoporte(t);
     UI.toast(`Entraste a "${t.name||t.slug}" en modo soporte`, 'success');
-    App.paginaActual = 'dashboard'; App._subActivo = null; App._guardarRuta();
-    App.renderSidebar(); App.navegarA('dashboard');
+    App.navegarA('dashboard');   // ver salirSoporte: navegarA fija la página, no antes
   },
   async salirSoporte(){
     /* Tras un F5, _soporteReturn se perdió con la memoria: el comercio propio
@@ -113,8 +112,12 @@ Modulos.superadmin = {
       localStorage.removeItem('tp_soporte_volver');
     } catch (_) {}
     document.getElementById('sa-soporte-bar')?.remove();
-    this._tab = 'comercios'; App.paginaActual = 'superadmin'; App._subActivo = 'comercios'; App._guardarRuta();
-    App.renderSidebar(); App.navegarA('superadmin');
+    /* NO se fija App.paginaActual antes: navegarA() ve "ya estoy en el Panel
+       SaaS", y como tiene sub-menú lo toma por un clic para contraerlo y NO
+       repinta. Se quedaba el Dashboard del comercio con la ruta del panel
+       (encontrado corriendo la demo E2E, 2026-10-01). navegarA hace el resto. */
+    this._tab = 'comercios';
+    App.navegarA('superadmin');
   },
   _pintarBarraSoporte(t){
     let bar = document.getElementById('sa-soporte-bar');
