@@ -984,7 +984,7 @@ const DB = {
   /* ── ÓRDENES DE TRABAJO ───────────────────────── */
   async getOrdenes(filtros={}) {
     let q = getSB().from('ordenes')
-      .select('*, vehiculos(placa,marca,modelo,anio,color), clientes(nombre,tel,email), empleados(nombre)')
+      .select('*, vehiculos(placa,marca,modelo,anio,color), clientes(nombre,tel,email), empleados!ordenes_mecanico_id_fkey(nombre)')
       .eq('tenant_id', getTID()).order('created_at',{ascending:false});
     if (filtros.estado)     q = q.eq('estado', filtros.estado);
     if (filtros.mecanico)   q = q.eq('mecanico_id', filtros.mecanico);
@@ -992,14 +992,19 @@ const DB = {
     if (filtros.vehiculo)   q = q.eq('vehiculo_id', filtros.vehiculo);
     if (filtros.fecha_ini)  q = q.gte('fecha_ingreso', filtros.fecha_ini);
     if (filtros.fecha_fin)  q = q.lte('fecha_ingreso', filtros.fecha_fin);
-    const { data } = await q;
+    const { data, error } = await q;
+    if (error) console.error('getOrdenes:', error.code, error.message);   // ver getOrden
     return data || [];
   },
 
   async getOrden(id) {
-    const { data } = await getSB().from('ordenes')
-      .select('*, vehiculos(*), clientes(*), empleados(nombre), ot_servicios(*)')
+    const { data, error } = await getSB().from('ordenes')
+      .select('*, vehiculos(*), clientes(*), empleados!ordenes_mecanico_id_fkey(nombre), ot_servicios(*)')
       .eq('id', id).maybeSingle();
+    /* El error ya no se traga: el embed ambiguo (PGRST201, que llega como
+       HTTP 300 y no como 4xx) dejaba getOrden en null para TODA OT y
+       Facturar no hacía nada, sin un aviso. Así lo ve la consola y el humo. */
+    if (error) console.error('getOrden:', error.code, error.message);
     return data;
   },
 
@@ -1081,6 +1086,10 @@ const DB = {
   async convertirCotizacionAOrden(id) {
     const cot = await this.getCotizacion(id);
     if (!cot) return { error: { message: 'Cotización no encontrada' } };
+    /* La cotización deja el vehículo opcional, pero toda OT lleva uno
+       (ordenes.vehiculo_id NOT NULL): sin esto el usuario veía el error crudo
+       de Postgres "violates not-null constraint". Se avisa antes de crear nada. */
+    if (!cot.vehiculo_id) return { error: { message: 'Esta cotización no tiene vehículo. Edítala, asígnale uno y vuelve a convertirla en OT.' } };
     const descripcion = (cot.cotizacion_items||[]).map(i=>`${i.cantidad}x ${i.descripcion}`).join('; ') || cot.notas || 'Generado desde cotización';
     const { data: orden, error } = await this.upsertOrden({
       cliente_id: cot.cliente_id, vehiculo_id: cot.vehiculo_id,
@@ -1227,7 +1236,7 @@ const DB = {
 
   /* ── AGROSERVICIO ────────────────────────────────── */
   async getAgroservicioPedidos(filtros={}) {
-    let q = getSB().from('agroservicio_servicios').select('*, clientes(nombre,tel,email), ordenes(num)')
+    let q = getSB().from('agroservicio_servicios').select('*, clientes(nombre,tel,email), ordenes!agroservicio_servicios_orden_id_fkey(num)')
       .eq('tenant_id', getTID()).order('created_at',{ascending:false});
     if (filtros.estado) q = q.eq('estado', filtros.estado);
     const { data } = await q;
@@ -2064,7 +2073,8 @@ const DB = {
   async facturaDeOrden(ordenId) {
     if (!ordenId) return null;
     const { data } = await getSB().from('facturas')
-      .select('id,num,fel_serie,fel_numero,ot_id').eq('tenant_id', getTID()).eq('ot_id', ordenId).limit(1);
+      .select('id,num,fel_serie,fel_numero,ot_id').eq('tenant_id', getTID()).eq('ot_id', ordenId)
+      .neq('estado', 'anulada').limit(1);   // igual que el índice de la mig 151: una anulada no bloquea refacturar
     return data?.[0] || null;
   },
 
@@ -2154,7 +2164,7 @@ const DB = {
 
   async getViaticos(empleadoId=null, ini=null, fin=null) {
     const m = mesActual();
-    let q = getSB().from('viaticos').select('*,empleados(nombre)')
+    let q = getSB().from('viaticos').select('*,empleados!viaticos_empleado_id_fkey(nombre)')
       .eq('tenant_id', getTID())
       .gte('fecha', ini||m.ini).lte('fecha', fin||m.fin)
       .order('fecha',{ascending:false});

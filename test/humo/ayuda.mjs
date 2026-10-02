@@ -79,7 +79,10 @@ export async function abrirSesion({ viewport = { width: 1440, height: 900 }, ...
      anota la tabla o función que respondió mal, que es lo que se necesita para
      ir a mirar los permisos. */
   pagina.on('response', (r) => {
-    if (r.status() < 400) return;
+    /* 300 también: PostgREST responde 300 "Multiple Choices" a un embed
+       ambiguo (PGRST201). Así pasó semanas sin verse que getOrdenes/getOrden
+       fallaban siempre. Las redirecciones normales (301/302…) no cuentan. */
+    if (r.status() < 400 && r.status() !== 300) return;
     const u = r.url();
     if (esRuido(u)) return;
     const corto = u.replace(/^https?:\/\/[^/]+/, '').split('?')[0];

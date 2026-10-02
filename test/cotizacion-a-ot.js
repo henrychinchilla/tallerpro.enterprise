@@ -45,6 +45,15 @@ DB.upsertOrden = async () => ({ data: { id: 'OT1' }, error: null });
   const suma = Math.round(filas.reduce((s, f) => s + f.total, 0) * 100) / 100;
   ok('la suma de ot_items es igual al total cotizado', suma === total);
   ok('la cotización queda marcada convertida', updates.some(u => u[0] === 'cotizaciones' && u[1].convertida_orden_id === 'OT1'));
+  /* Sin vehículo: aviso claro y nada creado (antes: error crudo de Postgres). */
+  inserts.length = 0;
+  let creoOrden = false;
+  DB.getCotizacion = async () => ({ id: 'C2', cliente_id: 'CL', vehiculo_id: null, total: 10, cotizacion_items: items });
+  DB.upsertOrden = async () => { creoOrden = true; return { data: { id: 'OT2' }, error: null }; };
+  const r2 = await DB.convertirCotizacionAOrden('C2');
+  ok('sin vehículo: aviso claro', /no tiene vehículo/.test(r2.error?.message || ''));
+  ok('sin vehículo: no crea OT ni ítems', !creoOrden && !inserts.length);
+
   console.log(`\n${pasadas} pasadas, ${fallidas} fallidas`);
   process.exitCode = fallidas ? 1 : 0;
 })();

@@ -23,7 +23,7 @@ Modulos.mi_ot = {
 
     /* Solo órdenes activas: no entregadas ni canceladas (aún no recibidas/pagadas) */
     const { data: ordenes } = await getSB().from('ordenes')
-      .select('*, vehiculos(placa,marca,modelo,anio), empleados(nombre)')
+      .select('*, vehiculos(placa,marca,modelo,anio), empleados!ordenes_mecanico_id_fkey(nombre)')
       .eq('tenant_id', getTID()).eq('cliente_id', cliente.id)
       .not('estado','in','("entregado","cancelado")')
       .order('created_at', { ascending: false });
