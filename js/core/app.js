@@ -1003,6 +1003,12 @@ const App = {
         <button class="btn btn-cyan btn-sm" onclick="App.instalarApp()" style="width:100%;margin-bottom:8px">
           📲 Instalar como App
         </button>` : ''}
+        ${Auth.user?.rol === 'superadmin' ? `
+        <!-- Visible desde cualquier pantalla: solo en el encabezado del Panel
+             SaaS no se encontraba (Henry, 2026-10-01). -->
+        <button class="btn btn-ghost btn-sm" onclick="Modulos.superadmin?.modalMiPassword()" style="width:100%;margin-bottom:8px">
+          🔑 Mi contraseña
+        </button>` : ''}
         <button class="btn btn-ghost btn-sm" onclick="App.cerrarSesion()" style="width:100%">
           ⏻ Cerrar sesión
         </button>
