@@ -554,7 +554,7 @@ Modulos.clientesArmeria = {
             <input class="form-input" id="cli-dpi" value="${c.dpi||''}" placeholder="0000 00000 0000" style="font-family:monospace"></div>
           <div class="form-group"><label class="form-label">Fecha de nacimiento</label>
             <input class="form-input" id="cli-fnac" type="date" value="${c.fecha_nacimiento||''}"
-                   max="${new Date().toISOString().slice(0,10)}" onchange="Modulos.clientesArmeria._mostrarEdad()">
+                   max="${hoyLocal()}" onchange="Modulos.clientesArmeria._mostrarEdad()">
             <div id="cli-edad" style="font-size:11px;color:var(--cyan);margin-top:2px"></div></div>
           <div class="form-group"><label class="form-label">Estado civil</label>
             <select class="form-select" id="cli-estado-civil">

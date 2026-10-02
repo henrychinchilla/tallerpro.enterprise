@@ -159,7 +159,7 @@ Modulos.compras = {
           <input class="form-input" id="cmp-factura" placeholder="${esImportadora?'DUA o Serie-Número':'Serie-Número'}"></div>
       </div>
       <div class="form-group"><label class="form-label">Fecha</label>
-        <input class="form-input" id="cmp-fecha" type="date" value="${new Date().toISOString().slice(0,10)}" style="max-width:200px"></div>
+        <input class="form-input" id="cmp-fecha" type="date" value="${hoyLocal()}" style="max-width:200px"></div>
       ${esImportadora ? `
       <div style="border:1px solid var(--cyan,#0e7490);border-radius:8px;padding:12px 14px;margin-bottom:12px;background:var(--cyan-dim,#083344)">
         <div style="font-weight:800;font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--cyan,#22d3ee);margin-bottom:8px">📦 Importación — campos DUA/DAI</div>

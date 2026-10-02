@@ -233,7 +233,7 @@ Modulos.bodegas = {
     await DB.movimientoInventario({
       inventario_id: invId, tipo, cantidad: cant,
       notas: document.getElementById('mov-notas')?.value || null,
-      fecha: new Date().toISOString().slice(0,10)
+      fecha: hoyLocal()
     });
     UI.cerrarModal(); UI.toast('Movimiento registrado ✓');
     this.verInventario(this._bodegaActiva || null, this._bodegaActiva ? (this._bodegas.find(b=>b.id===this._bodegaActiva)?.nombre||'Bodega') : 'Negocio Principal');
@@ -348,7 +348,7 @@ Modulos.bodegas = {
     if (!lineas.length) { UI.toast('Indica la cantidad de al menos un artículo','error'); return; }
     if (lineas.some(l => l.cant > l.stock)) { UI.toast('Una cantidad supera el stock disponible','error'); return; }
 
-    const fecha = new Date().toISOString().slice(0,10);
+    const fecha = hoyLocal();
     let trasladados = 0;
     for (const l of lineas) {
       const { data: origen } = await getSB().from('inventario').select('*').eq('id', l.id).maybeSingle();
@@ -471,7 +471,7 @@ Modulos.bodegas = {
     this._bodegas.forEach(b => rows.push([
       b.nombre, b.direccion||'', b.responsable||'', b.activa===false?'No':'Sí'
     ]));
-    Modulos._descargarCSV(rows, `bodegas-${new Date().toISOString().slice(0,10)}.csv`);
+    Modulos._descargarCSV(rows, `bodegas-${hoyLocal()}.csv`);
   },
 
   /* ── IMPORTAR BODEGAS (CSV) ────────────────────────── */

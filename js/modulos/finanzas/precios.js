@@ -368,7 +368,7 @@ Modulos.precios = {
         tarifa_hora: Math.round(k.tarifaHora||0),
         punto_equilibrio: Math.round(k.breakEven||0),
         costo_dir_pct: Math.round(this._costoDirPct*100)/100,
-        actualizado: new Date().toISOString().slice(0,10)
+        actualizado: hoyLocal()
       }
     };
     const ok = await DB.updateTenant({ config_precios: cfg, updated_at: new Date().toISOString() });

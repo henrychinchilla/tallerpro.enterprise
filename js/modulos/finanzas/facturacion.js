@@ -119,7 +119,7 @@ Modulos.facturacion = {
         <div class="form-group"><label class="form-label">Serie FEL (opcional)</label>
           <input class="form-input" id="fel-serie" value="${f.fel_serie||''}" maxlength="10" placeholder="Serie autorizada FEL"></div>
         <div class="form-group"><label class="form-label">Fecha *</label>
-          <input class="form-input" id="fel-fecha" type="date" value="${f.fecha||new Date().toISOString().slice(0,10)}"></div>
+          <input class="form-input" id="fel-fecha" type="date" value="${f.fecha||hoyLocal()}"></div>
         <div class="form-group"><label class="form-label">Método de Pago</label>
           <select class="form-select" id="fel-metodo">
             ${['Efectivo','Tarjeta','Transferencia','Cheque','Depósito','Crédito'].map(m=>`<option ${(f.metodo_pago||'Efectivo')===m?'selected':''}>${m}</option>`).join('')}

@@ -282,7 +282,7 @@ Modulos.venta_granos = {
 
         <div class="form-group">
           <label class="form-label">Fecha *</label>
-          <input class="form-input" type="date" id="form-fecha" value="${v?.fecha||new Date().toISOString().slice(0,10)}">
+          <input class="form-input" type="date" id="form-fecha" value="${v?.fecha||hoyLocal()}">
         </div>
 
         <div class="form-group">

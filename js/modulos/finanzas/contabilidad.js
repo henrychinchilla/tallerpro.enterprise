@@ -434,7 +434,7 @@ Modulos.contabilidad = {
     /* ── OBLIGACIONES ────────────────────────────── */
     else if (this._tab === 'obligaciones') {
       const obligaciones = await DB.getObligaciones(anio);
-      const hoy = new Date().toISOString().slice(0,10);
+      const hoy = hoyLocal();
       const utilidades = (Number(this._fiscal?.tasa_isr)||0.05) >= 0.2;
       const pequeno    = regimenSimplificado(this._fiscal?.regimen_iva||'general');
       /* ISR anual: vence 31 de marzo del año siguiente */
@@ -555,7 +555,7 @@ Modulos.contabilidad = {
     const o = obligaciones.find(x=>x.id===id); if (!o) return;
     const ok = await UI.confirmar(`¿Marcar como pagada la obligación <b>${o.tipo} ${o.periodo}</b> por <b>${UI.q(o.monto_calculado)}</b>?`, 'Confirmar');
     if (!ok) return;
-    const { error } = await DB.upsertObligacion({ id, estado:'pagado', monto_pagado:o.monto_calculado, fecha_pago: new Date().toISOString().slice(0,10) });
+    const { error } = await DB.upsertObligacion({ id, estado:'pagado', monto_pagado:o.monto_calculado, fecha_pago: hoyLocal() });
     if (error) { UI.toast('Error: '+error.message,'error'); return; }
     UI.toast('Obligación pagada ✓');
     this._renderTab();
@@ -589,7 +589,7 @@ Modulos.contabilidad = {
       </div>
       <div class="form-row">
         <div class="form-group"><label class="form-label">Fecha *</label>
-          <input class="form-input" type="date" id="fel-import-fecha" value="${f.fecha || new Date().toISOString().slice(0,10)}"></div>
+          <input class="form-input" type="date" id="fel-import-fecha" value="${f.fecha || hoyLocal()}"></div>
         <div class="form-group"><label class="form-label">Estado *</label>
           <select class="form-select" id="fel-import-estado">
             <option value="vigente" ${estado==='vigente'?'selected':''}>Vigente</option>
@@ -744,7 +744,7 @@ Modulos.contabilidad = {
       monto_pagado: mPag || (estado==='pagado' ? mCalc : 0),
       fecha_vencimiento: venc,
       estado,
-      fecha_pago: fPago || (estado==='pagado' ? new Date().toISOString().slice(0,10) : null),
+      fecha_pago: fPago || (estado==='pagado' ? hoyLocal() : null),
       notas
     };
     if (id) fields.id = id;
@@ -776,7 +776,7 @@ Modulos.contabilidad = {
       </div>
       <div class="form-row">
         <div class="form-group"><label class="form-label">Fecha *</label>
-          <input class="form-input" id="ret-fecha" type="date" value="${r.fecha||new Date().toISOString().slice(0,10)}"></div>
+          <input class="form-input" id="ret-fecha" type="date" value="${r.fecha||hoyLocal()}"></div>
         <div class="form-group"><label class="form-label">Documento / constancia</label>
           <input class="form-input" id="ret-doc" placeholder="No. de constancia o factura" value="${(r.documento||'').replace(/"/g,'&quot;')}"></div>
       </div>
@@ -810,7 +810,7 @@ Modulos.contabilidad = {
     const payload = {
       tipo: document.getElementById('ret-tipo')?.value||'IVA',
       naturaleza: document.getElementById('ret-nat')?.value||'recibida',
-      fecha: document.getElementById('ret-fecha')?.value||new Date().toISOString().slice(0,10),
+      fecha: document.getElementById('ret-fecha')?.value||hoyLocal(),
       documento: document.getElementById('ret-doc')?.value||null,
       contraparte: document.getElementById('ret-contra')?.value||null,
       base: parseFloat(document.getElementById('ret-base')?.value)||null,

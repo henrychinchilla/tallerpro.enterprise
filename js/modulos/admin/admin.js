@@ -553,7 +553,7 @@ Modulos.admin = {
     }).join(','))].join('\n');
     const a = document.createElement('a');
     a.href = 'data:text/csv;charset=utf-8,\uFEFF'+encodeURIComponent(csv);
-    a.download = `${tabla}-${new Date().toISOString().slice(0,10)}.csv`;
+    a.download = `${tabla}-${hoyLocal()}.csv`;
     a.click();
     UI.toast(`${label} exportado ✓`);
   },
@@ -569,7 +569,7 @@ Modulos.admin = {
       const encrypted = await this._encrypt({ tabla, data, exportado: new Date().toISOString(), negocio: Auth.tenant?.name }, password);
       const a = document.createElement('a');
       a.href = 'data:application/octet-stream;base64,'+encrypted;
-      a.download = `${tabla}-${new Date().toISOString().slice(0,10)}.tpro`;
+      a.download = `${tabla}-${hoyLocal()}.tpro`;
       a.click();
       UI.toast(`${label} exportado y encriptado ✓`);
     } catch(e) { UI.toast('Error al encriptar: '+e.message,'error'); }
@@ -596,7 +596,7 @@ Modulos.admin = {
       const encrypted = await this._encrypt(backup, password);
       const a = document.createElement('a');
       a.href = 'data:application/octet-stream;base64,'+encrypted;
-      a.download = `backup-${Auth.tenant?.name?.replace(/\s/g,'-')}-${new Date().toISOString().slice(0,10)}.tpro`;
+      a.download = `backup-${Auth.tenant?.name?.replace(/\s/g,'-')}-${hoyLocal()}.tpro`;
       a.click();
       UI.toast('Backup completo generado ✓');
     } catch(e) { UI.toast('Error: '+e.message,'error'); }

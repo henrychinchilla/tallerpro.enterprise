@@ -331,7 +331,7 @@ Modulos.finanzas = {
         <div class="form-group"><label class="form-label">Monto (Q) *</label>
           <input class="form-input" id="egr-monto" type="number" min="0" step="0.01"></div>
         <div class="form-group"><label class="form-label">Fecha *</label>
-          <input class="form-input" id="egr-fecha" type="date" value="${new Date().toISOString().slice(0,10)}"></div>
+          <input class="form-input" id="egr-fecha" type="date" value="${hoyLocal()}"></div>
       </div>
       <div class="form-group"><label class="form-label">Referencia</label>
         <input class="form-input" id="egr-ref" placeholder="No. factura proveedor"></div>
@@ -431,7 +431,7 @@ Modulos.finanzas = {
       <div id="via-desglose"></div>
       <div class="form-row">
         <div class="form-group"><label class="form-label">Fecha</label>
-          <input class="form-input" id="via-fecha" type="date" value="${new Date().toISOString().slice(0,10)}"></div>
+          <input class="form-input" id="via-fecha" type="date" value="${hoyLocal()}"></div>
         <div class="form-group"><label class="form-label">Referencia / Factura</label>
           <input class="form-input" id="via-ref"></div>
       </div>
@@ -540,7 +540,7 @@ Modulos.finanzas = {
       concepto:   `Viático: ${v.concepto}${v.empleados?.nombre?` — ${v.empleados.nombre}`:''}`,
       monto:      v.monto,
       categoria:  'Viáticos',
-      fecha:      v.fecha || new Date().toISOString().slice(0,10),
+      fecha:      v.fecha || hoyLocal(),
       referencia: v.referencia || `VIA-${id.slice(0,8)}`
     });
     UI.toast('Viático aprobado y cargado a egresos ✓');

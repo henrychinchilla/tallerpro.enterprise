@@ -742,7 +742,7 @@ function valorEnLibros(a, hasta) {
   let endIdx = adq + (Number(a.vida_util_meses)||0) - 1;
   if ((a.estado==='baja'||a.estado==='vendido') && a.fecha_baja)
     endIdx = Math.min(endIdx, _mesIdx(a.fecha_baja));
-  const hastaIdx = _mesIdx(hasta || new Date().toISOString().slice(0,10));
+  const hastaIdx = _mesIdx(hasta || hoyLocal());
   const meses = Math.max(0, Math.min(endIdx, hastaIdx) - adq + 1);
   const acumulada = Math.min(meses*dm, costo - (Number(a.valor_residual)||0));
   return { acumulada, libros: Math.max(Number(a.valor_residual)||0, costo - acumulada) };

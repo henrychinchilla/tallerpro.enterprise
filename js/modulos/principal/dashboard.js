@@ -12,7 +12,7 @@ Modulos.dashboard = {
     if (!this._mes) this._mes = `${ahora.getFullYear()}-${String(ahora.getMonth()+1).padStart(2,'0')}`;
     const esMesActual = this._mes === `${ahora.getFullYear()}-${String(ahora.getMonth()+1).padStart(2,'0')}`;
 
-    const hoyStr = new Date().toISOString().slice(0, 10);
+    const hoyStr = hoyLocal();
     const [kpi, dd, citas, ordenes, fb] = await Promise.all([
       DB.getKPIs(this._mes),
       DB.getDashboardData(this._mes),

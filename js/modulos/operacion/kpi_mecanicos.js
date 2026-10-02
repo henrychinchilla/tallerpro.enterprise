@@ -235,7 +235,7 @@ Modulos.kpi_mecanicos = {
       e.rol === 'mecanico'
     );
     const ordenes = ordenesBrut.filter(o => !['entregado','cancelado'].includes(o.estado));
-    const hoy = new Date().toISOString().slice(0, 10);
+    const hoy = hoyLocal();
 
     Modulos.modalForm(`
       <h2 style="margin:0 0 20px;font-size:22px">⏱ Registrar Horas en OT</h2>

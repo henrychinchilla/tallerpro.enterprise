@@ -486,7 +486,7 @@ Modulos.inventario = {
       inventario_id: invId, tipo, cantidad:cant,
       referencia: document.getElementById('mov-ref')?.value||null,
       notas:      document.getElementById('mov-notas')?.value||null,
-      fecha:      new Date().toISOString().slice(0,10)
+      fecha:      hoyLocal()
     });
 
     await DB.upsertInventario({ id:invId, stock:nuevoStock });
@@ -515,7 +515,7 @@ Modulos.inventario = {
       r.push(i.precio_venta, i.descripcion||'');
       rows.push(r);
     });
-    Modulos._descargarCSV(rows, `inventario-${new Date().toISOString().slice(0,10)}.csv`);
+    Modulos._descargarCSV(rows, `inventario-${hoyLocal()}.csv`);
   },
 
   /* ── HISTORIAL DE MOVIMIENTOS (trazabilidad / auditoría) ─── */

@@ -58,7 +58,7 @@ Modulos.marketing = {
 
     else if (this._tab==='promos') {
       this._promos = await DB.getPromociones();
-      const hoy = new Date().toISOString().slice(0,10);
+      const hoy = hoyLocal();
       el.innerHTML = `
         <div style="display:flex;justify-content:flex-end;margin-bottom:16px">
           <button class="btn btn-amber" onclick="Modulos.marketing.modalPromo()">＋ Nueva Promoción</button>
@@ -539,7 +539,7 @@ Modulos.marketing = {
       </div>
       <div class="form-row">
         <div class="form-group"><label class="form-label">Fecha Inicio</label>
-          <input class="form-input" id="prm-ini" type="date" value="${p.fecha_inicio||new Date().toISOString().slice(0,10)}"></div>
+          <input class="form-input" id="prm-ini" type="date" value="${p.fecha_inicio||hoyLocal()}"></div>
         <div class="form-group"><label class="form-label">Fecha Fin (opcional)</label>
           <input class="form-input" id="prm-fin" type="date" value="${p.fecha_fin||''}"></div>
       </div>

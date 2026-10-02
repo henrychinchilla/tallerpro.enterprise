@@ -31,6 +31,8 @@ const campos = {};   // simula el DOM: sólo existe lo que el formulario dibujó
 
 const ctx = {
   console,
+  /* En el navegador viene de config.js. */
+  hoyLocal: (d = new Date()) => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Guatemala' }).format(d),
   Modulos: { btnAccion: () => '' },
   UI: { esc: v => String(v ?? ''), modal: (t, h) => { htmlModal = h; }, cerrarModal() {}, toast() {},
         fecha: v => String(v ?? ''), fechaHora: v => String(v ?? '') },

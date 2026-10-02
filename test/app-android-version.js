@@ -87,6 +87,8 @@ function cargar({ ua = 'Mozilla/5.0 (Linux; Android 13) Chrome/120', referrer = 
   const historial = [];
 
   const ctx = {
+    /* En el navegador viene de config.js, que carga antes que app.js. */
+    hoyLocal: (d = new Date()) => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Guatemala' }).format(d),
     console, setTimeout, clearTimeout, Promise, JSON, Math, Date, Number, Array,
     String, Object, URLSearchParams, isNaN, parseInt, parseFloat, encodeURIComponent,
     localStorage, sessionStorage,

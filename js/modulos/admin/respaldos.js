@@ -61,7 +61,7 @@ Modulos.respaldos = {
       const json = JSON.stringify(dump, null, 2);
       const kb = Math.round(new Blob([json]).size / 1024);
       const nombre = (Auth.tenant?.slug || Auth.tenant?.name || 'negocio').replace(/\s+/g,'_').toLowerCase();
-      const fecha = new Date().toISOString().slice(0,10);
+      const fecha = hoyLocal();
 
       /* Descargar archivo */
       const blob = new Blob([json], { type:'application/json' });
